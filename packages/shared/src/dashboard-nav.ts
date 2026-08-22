@@ -16,36 +16,41 @@ const NAV_ICONS = {
 
 const GEAR_ICON = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
 
-// The rail is the one primary product navigation. Items are grouped so a
-// creator can scan scope at a glance: the workspace entry point, everything
-// that belongs to the selected site, then settings. Group labels are visual
-// hierarchy only — they are not links and collapse nothing.
+// The rail is the one primary product navigation. Grouping expresses DATA
+// SCOPE, not feature category: ungrouped entries belong to the creator
+// account (or manage the whole collection of sites), while the single
+// "Current site" group holds only destinations whose data and actions are
+// keyed by the site chosen in the topbar selector. Scope evidence:
+//   - players/archives, giveaway events, games, credit mappings/shop/
+//     redemptions, site_viewers and site_stats are all keyed by site_id.
+//   - Sites manages the collection itself (handlers/sites.js lists every
+//     site for the user), so it cannot live under the selected site.
+//   - Telegram bots, offers, broadcasts and commands are keyed by owner_id
+//     (the creator), plan limits are per-owner, and no bot/offer row carries
+//     a site_id — so Telegram is an account-owned product, not site data.
+//   - Account is creator-global; Site settings is selected-site by
+//     definition, so they do not share a group.
+// Group labels are visual hierarchy only — they are not links and collapse
+// nothing.
 const DASHBOARD_NAV: NavItem[] = [
   { key: "home", label: "Home", href: "/dashboard", icon: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>', productKey: "sites" },
+  { key: "sites", label: "Sites", href: "/dashboard/leaderboards", icon: NAV_ICONS.boards, productKey: "sites" },
   {
     key: "site-scope",
-    label: "Your site",
+    label: "Current site",
     kind: "group",
     children: [
-      { key: "sites", label: "Sites", href: "/dashboard/leaderboards", icon: NAV_ICONS.boards, productKey: "sites" },
       { key: "board", label: "Leaderboard", href: "/dashboard/leaderboard", icon: NAV_ICONS.players },
       { key: "engage", label: "Engagement", href: "/dashboard/giveaways", icon: NAV_ICONS.giveaways },
       { key: "games", label: "Games", href: "/dashboard/games", icon: NAV_ICONS.games },
       { key: "redemptions", label: "Rewards", href: "/dashboard/rewards", icon: NAV_ICONS.shop, productKey: "credits" },
       { key: "audience", label: "Audience", href: "/dashboard/audience/members", icon: NAV_ICONS.audience },
       { key: "performance", label: "Analytics", href: "/dashboard/analytics", icon: NAV_ICONS.analytics },
-      { key: "telegram", label: "Telegram", href: "/dashboard/telegram", icon: NAV_ICONS.share, productKey: "telegram" },
-    ],
-  },
-  {
-    key: "settings-scope",
-    label: "Settings",
-    kind: "group",
-    children: [
       { key: "site", label: "Site settings", href: "/dashboard/site", icon: NAV_ICONS.siteSettings },
-      { key: "settings", label: "Account", href: "/dashboard/settings", icon: GEAR_ICON },
     ],
   },
+  { key: "telegram", label: "Telegram", href: "/dashboard/telegram", icon: NAV_ICONS.share, productKey: "telegram" },
+  { key: "settings", label: "Account", href: "/dashboard/settings", icon: GEAR_ICON },
 ];
 
 export const NAV_OWNER_MAP = {

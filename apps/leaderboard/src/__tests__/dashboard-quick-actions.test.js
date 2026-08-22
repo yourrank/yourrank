@@ -245,11 +245,13 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('data-nav="board"');
     expect(html).toContain('data-nav="settings"');
     expect(html).toContain('lb-side-group');
-    // The rail groups scope visually: workspace entry, the selected site's
-    // products, then settings. Group labels are hierarchy, not links.
+    // The rail has exactly one scope group: "Current site". Everything outside
+    // it (Home, Sites, Telegram, Account) is account-global or manages the
+    // whole site collection. Group labels are hierarchy, not links.
     expect(html).toContain("lb-nav-group");
-    expect(html).toContain(">Your site</div>");
-    expect(html).toContain(">Settings</div>");
+    expect(html).toContain(">Current site</div>");
+    expect(html).not.toContain(">Your site</div>");
+    expect(html).not.toContain(">Settings</div>");
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
     expect(html).toContain('>Home</a>');
     for (const label of [

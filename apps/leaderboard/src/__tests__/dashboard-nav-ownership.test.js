@@ -36,6 +36,65 @@ function flattenNav(items) {
 }
 
 describe("dashboard navigation ownership", () => {
+  it("groups the rail by data scope, not feature category", () => {
+    // Scope evidence (see packages/shared/src/dashboard-nav.ts header):
+    // CURRENT-SITE rows are keyed by site_id in the database and follow the
+    // topbar selector; GLOBAL/ACCOUNT-OWNED rows are keyed by the user.
+    const items = dashboardNavItems();
+    const groups = items.filter((item) => "kind" in item && item.kind === "group");
+    const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
+
+    // One meaningful scope label only — no decorative grouping.
+    expect(groups.length).toBe(1);
+    expect(groups[0].label).toBe("Current site");
+
+    const currentSiteKeys = groups[0].children.map((child) => child.key);
+    const topLevelKeys = topLevel.map((item) => item.key);
+
+    // Sites manages the creator's whole collection of sites
+    // (handlers/sites.js lists every site for the user), so it must NOT sit
+    // under the selected site.
+    expect(currentSiteKeys).not.toContain("sites");
+    expect(topLevelKeys).toContain("sites");
+
+    // Telegram bots/offers/broadcasts/commands are keyed by owner_id with no
+    // site_id column, so switching the current site cannot own them.
+    expect(currentSiteKeys).not.toContain("telegram");
+    expect(topLevelKeys).toContain("telegram");
+
+    // Account is creator-global; it must not read as selected-site data.
+    expect(currentSiteKeys).not.toContain("settings");
+    expect(topLevelKeys).toContain("settings");
+
+    // Only confirmed site_id-scoped destinations live in the group, and Site
+    // settings (selected-site by definition) belongs with them — not in a
+    // generic Settings group next to Account.
+    expect([...currentSiteKeys].sort()).toEqual(
+      ["audience", "board", "engage", "games", "performance", "redemptions", "site"].sort()
+    );
+
+    // Home stays the global dashboard entry, never inside Current site.
+    expect(currentSiteKeys).not.toContain("home");
+    expect(topLevelKeys[0]).toBe("home");
+  });
+
+  it("keeps the route owner map consistent with the scope grouping", () => {
+    // Route ownership is independent of visual grouping: every route still
+    // resolves to exactly one rendered rail key.
+    const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
+    for (const route of Object.keys(NAV_OWNER_MAP)) {
+      expect(keys.has(navOwner(route))).toBe(true);
+    }
+    for (const item of flattenNav(dashboardNavItems())) {
+      expect(keys.has(item.key)).toBe(true);
+    }
+    // Kick channel management stays owned by Site settings (Phase 4).
+    expect(navOwner("channel")).toBe("site");
+    expect(navOwner("siteConnections")).toBe("site");
+    // Sites routes still resolve to the Sites rail owner.
+    expect(navOwner("boards")).toBe("sites");
+  });
+
   it("keeps every rendered destination owned by one shell area", () => {
     for (const path of ["/dashboard", "/dashboard/leaderboards", "/dashboard/site"]) {
       const html = dashboardHtml(path);
