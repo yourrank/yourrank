@@ -75,7 +75,7 @@ export function offersPanel(publicBaseUrl: string): string {
             <div><dt class="font-600 d-inline">Visit rate:</dt> <dd class="d-inline muted m-0">People reached divided by total visits.</dd></div>
             <div><dt class="font-600 d-inline">Sign-up rate:</dt> <dd class="d-inline muted m-0">People who signed up divided by people reached.</dd></div>
             <div><dt class="font-600 d-inline">Sign-ups:</dt> <dd class="d-inline muted m-0">People reported as signing up after visiting this offer.</dd></div>
-            <div><dt class="font-600 d-inline">Revenue:</dt> <dd class="d-inline muted m-0">Amounts reported through deposit or postback tracking, shown separately by currency. This is not verified receipt.</dd></div>
+            <div><dt class="font-600 d-inline">Revenue:</dt> <dd class="d-inline muted m-0">Amounts reported through deposit or partner conversion tracking, shown separately by currency. This is not verified receipt.</dd></div>
             <div><dt class="font-600 d-inline">Last activity:</dt> <dd class="d-inline muted m-0">Most recent retained click or reported conversion.</dd></div>
           </dl>
         </div>

@@ -504,8 +504,8 @@ function renderPlanState(plan){
   const bcState = $('bcPlanState');
   if (bcState) {
     bcState.innerHTML = __canBroadcast
-      ? '<b>'+label+' plan:</b> Broadcast messages are included.'
-      : '<b>'+label+' plan:</b> Broadcast messages require a plan with broadcast access. <a href="'+manageUrl+'">Upgrade to compose a broadcast.</a>';
+      ? '<b>'+label+' plan:</b> Broadcasts are included.'
+      : '<b>'+label+' plan:</b> Broadcasts require a plan with broadcast access. <a href="'+manageUrl+'">Upgrade to compose a broadcast.</a>';
     if (plan.warning) bcState.innerHTML += ' '+esc(plan.warning);
   }
   setBroadcastAvailability(activeBots.length > 0);

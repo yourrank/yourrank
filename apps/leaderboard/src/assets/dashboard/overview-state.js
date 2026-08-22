@@ -79,8 +79,8 @@ export function nextStepAction({
   if (Number(pendingOrders) > 0) {
     return {
       key: "pendingOrders",
-      title: "Review pending prize orders",
-      body: "Viewers are waiting on reward requests for this site.",
+      title: "Review pending orders",
+      body: "Viewers are waiting on orders for this site.",
       label: Number(pendingOrders) === 1 ? "Review order" : "Review orders",
       href: "/dashboard/rewards/redemptions",
     };

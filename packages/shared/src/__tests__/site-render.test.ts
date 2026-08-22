@@ -53,7 +53,7 @@ describe("shared public board renderer", () => {
     expect(html).toContain("/board%20fixture/leaderboard");
     expect(html).toContain("Ampersand &amp; Board");
     expect(html).not.toContain("Ampersand &amp;amp; Board");
-    expect(html).toContain("Q&amp;A BOARD");
+    expect(html).toContain("Q&amp;A LEADERBOARD");
     expect(html).not.toContain("Join sponsor");
     expect(html).not.toContain("U-09");
     expect(html).not.toContain("// Alignment is preserved");

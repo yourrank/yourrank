@@ -115,7 +115,7 @@ export function buildTop3Embed(
 }
 
 /**
- * Build a Discord embed for a shop redemption event.
+ * Build a Discord embed for a shop order event.
  */
 export function buildRedemptionEmbed(
   siteName: string,
@@ -124,12 +124,12 @@ export function buildRedemptionEmbed(
   cost: number
 ): Record<string, unknown> {
   return {
-    title: "🎁 New Reward Redeemed!",
-    description: `**${viewerName}** redeemed **${itemName}** on **${siteName}**`,
+    title: "🎁 New Order!",
+    description: `**${viewerName}** ordered **${itemName}** on **${siteName}**`,
     color: 0x315cff, // Cobalt
     fields: [
-      { name: "Reward Item", value: itemName, inline: true },
-      { name: "Cost", value: `${Number(cost).toLocaleString("en-US")} pts`, inline: true },
+      { name: "Item", value: itemName, inline: true },
+      { name: "Cost", value: `${Number(cost).toLocaleString("en-US")} credits`, inline: true },
     ],
     timestamp: new Date().toISOString(),
     footer: { text: "YourRank Rewards" },

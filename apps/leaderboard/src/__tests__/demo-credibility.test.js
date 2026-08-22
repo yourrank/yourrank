@@ -60,7 +60,7 @@ describe("demo credibility invariants", () => {
       leaderboard: "Leaderboard",
       shop: "Rewards",
       games: "Games",
-      me: "Board credits",
+      me: "Credits",
     };
 
     for (const [section, label] of Object.entries(expected)) {

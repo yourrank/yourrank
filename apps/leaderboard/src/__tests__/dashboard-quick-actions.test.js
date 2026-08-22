@@ -53,9 +53,9 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('id="ovLblCredits">Credits used</span>');
     expect(html).toContain('id="ovCreditsCard" hidden');
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
-    expect(overviewJs).toContain('pendingOrders === 1 ? "pending credit order needs review." : "pending credit orders need review."');
+    expect(overviewJs).toContain('pendingOrders === 1 ? "pending order needs review." : "pending orders need review."');
     expect(overviewJs).toContain('pendingOrders === 1 ? "Review order" : "Review orders"');
-    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending credit orders need review.</span>');
+    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending orders need review.</span>');
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAction"');
     expect(html).toContain('id="ovKpiRow"');
   });

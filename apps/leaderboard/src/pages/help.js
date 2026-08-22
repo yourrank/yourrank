@@ -62,17 +62,17 @@ function hubSectionsHtml() {
   <p>Manage how credits are earned, what members can unlock, and pending orders.</p>
   <ul class="operator-help-list">
     <li><a href="/dashboard/site/connections">Connect Kick</a><span>Link the Kick channel used for credit rewards.</span></li>
-    <li><a href="/dashboard/rewards/rules">Create a credit rule</a><span>Choose a Kick reward and set how many credits it awards.</span></li>
+    <li><a href="/dashboard/rewards/rules">Create a way to earn</a><span>Choose a Kick reward and set how many credits it awards.</span></li>
     <li><a href="/dashboard/rewards/shop">Add a shop item</a><span>Create something members can unlock with their credits.</span></li>
-    <li><a href="/dashboard/rewards/redemptions">Process prize orders</a><span>Review pending member orders and approve or cancel them.</span></li>
+    <li><a href="/dashboard/rewards/redemptions">Process orders</a><span>Review pending member orders and approve or cancel them.</span></li>
     <li><a href="/dashboard/audience/members">Check member balances</a><span>See member balances and recent earning activity.</span></li>
-    <li><a href="/dashboard/rewards/activity">Review credit activity</a><span>Filter credit events by member and event type.</span></li>
+    <li><a href="/dashboard/rewards/activity">Review credit activity</a><span>Filter credit activity by member and activity type.</span></li>
   </ul>
 </section>
 
 <section class="operator-help-section" aria-labelledby="help-telegram">
   <h2 id="help-telegram">Telegram</h2>
-  <p>Connect your Telegram bot, manage replies, and send messages to subscribers.</p>
+  <p>Connect your Telegram bot, manage commands, and send broadcasts to subscribers.</p>
   <ul class="operator-help-list">
     <li><a href="/dashboard/telegram/bots">Connect a Telegram bot</a><span>Add the connect code, then manage the connected bot.</span></li>
     <li><a href="/dashboard/telegram/commands">Edit commands</a><span>Change the replies your bot sends when viewers type a command.</span></li>

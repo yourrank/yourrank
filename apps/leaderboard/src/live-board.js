@@ -50,7 +50,7 @@ export class LiveBoard {
     const slug = url.searchParams.get("slug") || request.headers.get("x-live-board-slug");
     if (!siteId || !slug) return new Response("not found", { status: 404 });
     if (this.subscribers.size >= liveBoardMaxSubscribers(this.env)) {
-      return new Response("Board stream is busy. Try again shortly.", {
+      return new Response("Leaderboard stream is busy. Try again shortly.", {
         status: 503,
         headers: { "retry-after": String(liveBoardRetryAfter()) },
       });

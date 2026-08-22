@@ -25,7 +25,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "—";
 const relative = (iso) => { const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)); return mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`; };
-const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", redeem: "Redeemed", revoke: "Refunded spend", refund: "Reversed earn" });
+const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", revoke: "Refunded spend", refund: "Reversed earn" });
 async function api(method, path, body) {
   const opts = { method, credentials: "same-origin", headers: { "x-csrf-token": csrf() } };
   if (body) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
@@ -210,7 +210,7 @@ function wireShell() {
 }
 const metric = (value) => value == null ? UNKNOWN : value;
 function renderRewardRow(m) {
-  return `<td><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td class="hint">Kick reward redeemed · ${m.kick_reward_cost} points</td><td class="num"><b>+${m.credits} credits</b></td><td><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" /></td><td class="ta-r"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger" data-del-reward="${esc(m.id)}">Delete</button></td>`;
+  return `<td><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td class="hint">Kick reward used · ${m.kick_reward_cost} points</td><td class="num"><b>+${m.credits} credits</b></td><td><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" /></td><td class="ta-r"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger" data-del-reward="${esc(m.id)}">Delete</button></td>`;
 }
 function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
@@ -226,7 +226,7 @@ function renderViewerRow(v) {
   const history = v.kick_username
     ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(v.kick_username)}">History</a> `
     : "";
-  return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip points to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
+  return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
 }
 function renderRedemptionRow(r) { return `<td><b>${esc(r.kick_username || r.kick_user_id)}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
@@ -243,7 +243,7 @@ function renderShopCards(items) {
     renderEmpty($("cr-shop-empty"), {
       kind: "empty",
       title: "No shop items yet",
-      body: "Create a shop item members can redeem with credits.",
+      body: "Create a shop item members can order with credits.",
       compact: true,
       actions: [{ label: "Create shop item", id: "crShopEmptyCreate", accent: true }],
     });
@@ -261,11 +261,11 @@ function render() {
   const rewardAtLimit = usage.rewardMappings != null && limits.rewardMappings != null && usage.rewardMappings >= limits.rewardMappings;
   const shopAtLimit = usage.shopItems != null && limits.shopItems != null && usage.shopItems >= limits.shopItems;
   const rewardUsage = $("cr-reward-usage");
-  if (rewardUsage) rewardUsage.innerHTML = `${metric(usage.rewardMappings)} / ${metric(limits.rewardMappings)} credit rules${rewardAtLimit ? ' · <a href="/dashboard/settings/billing">Billing limit reached — upgrade plan</a>' : ""}`;
+  if (rewardUsage) rewardUsage.innerHTML = `${metric(usage.rewardMappings)} / ${metric(limits.rewardMappings)} ways to earn${rewardAtLimit ? ' · <a href="/dashboard/settings/billing">Billing limit reached — upgrade plan</a>' : ""}`;
   const addMapping = $("cr-add-mapping");
   if (addMapping) {
     addMapping.classList.toggle("is-disabled", rewardAtLimit);
-    addMapping.title = rewardAtLimit ? "Upgrade your plan to add more credit rules" : "";
+    addMapping.title = rewardAtLimit ? "Upgrade your plan to add more ways to earn" : "";
     addMapping.setAttribute("aria-disabled", rewardAtLimit ? "true" : "false");
     addMapping.onclick = rewardAtLimit ? (e) => e.preventDefault() : (e) => {
       e.preventDefault();
@@ -280,14 +280,14 @@ function render() {
     const expiryDate = expiry ? new Date(expiry) : null;
     const tokenExpired = connected && (!expiryDate || expiryDate <= new Date());
     renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt: state.channel?.linkedAt });
-    $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "credit rules"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending prize orders"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "prize orders / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
+    $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending orders"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "orders / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
     $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; $("cr-viewer-auth-public").checked = auth.public !== false;
   }
   if (current === "rules") {
-    for (const id of ["cr-reward-submit", "cr-reward-create-submit"]) { const el = $(id); if (el) { el.disabled = rewardAtLimit; el.title = rewardAtLimit ? "Upgrade your plan to add more credit rules" : ""; } }
+    for (const id of ["cr-reward-submit", "cr-reward-create-submit"]) { const el = $(id); if (el) { el.disabled = rewardAtLimit; el.title = rewardAtLimit ? "Upgrade your plan to add more ways to earn" : ""; } }
     const mappings = state.mappings || [];
-    if (!rewardCtrl) { rewardCtrl = new ListController({ root: $("cr-rewards"), tbody: "cr-reward-list", emptyEl: $("cr-reward-empty"), emptySpec: { kind: "empty", title: "No credit rules yet", body: "Set how Kick rewards award credits to your members.", compact: true, actions: [{ label: "Create Kick reward", href: "/dashboard/rewards/rules#cr-reward-create-form", accent: true }] }, items: mappings, perPage: 10, searchFn: (m) => `${m.kick_reward_title} ${m.kick_reward_id} ${m.kick_reward_cost} ${m.credits}`, sortOptions: [{ key: "cost", label: "Kick cost", fn: (a, b) => (b.kick_reward_cost || 0) - (a.kick_reward_cost || 0) }, { key: "credits", label: "Credits", fn: (a, b) => (b.credits || 0) - (a.credits || 0) }, { key: "active", label: "Active first", fn: (a, b) => Number(b.active) - Number(a.active) }], emptyAllText: "No credit rules yet.", emptyText: "No matching credit rules.", renderItem: (m) => renderRewardRow(m), onRender: () => wireDynamicActions() }); mountListControls($("cr-rewards"), $("cr-mapping-toolbar"), $("cr-mapping-foot")); }
+    if (!rewardCtrl) { rewardCtrl = new ListController({ root: $("cr-rewards"), tbody: "cr-reward-list", emptyEl: $("cr-reward-empty"), emptySpec: { kind: "empty", title: "No ways to earn yet", body: "Set how Kick rewards award credits to your members.", compact: true, actions: [{ label: "Create Kick reward", href: "/dashboard/rewards/rules#cr-reward-create-form", accent: true }] }, items: mappings, perPage: 10, searchFn: (m) => `${m.kick_reward_title} ${m.kick_reward_id} ${m.kick_reward_cost} ${m.credits}`, sortOptions: [{ key: "cost", label: "Kick cost", fn: (a, b) => (b.kick_reward_cost || 0) - (a.kick_reward_cost || 0) }, { key: "credits", label: "Credits", fn: (a, b) => (b.credits || 0) - (a.credits || 0) }, { key: "active", label: "Active first", fn: (a, b) => Number(b.active) - Number(a.active) }], emptyAllText: "No ways to earn yet.", emptyText: "No matching ways to earn.", renderItem: (m) => renderRewardRow(m), onRender: () => wireDynamicActions() }); mountListControls($("cr-rewards"), $("cr-mapping-toolbar"), $("cr-mapping-foot")); }
     else rewardCtrl.setItems(mappings);
     prefillEditFromQuery();
     revealRewardFromHash();
@@ -312,7 +312,7 @@ function render() {
   }
   if (current === "redemptions") {
     const redemptions = state.redemptions || [];
-    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No prize orders yet", body: "Orders will appear after a member redeems a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No prize orders yet.", emptyText: "No matching prize orders.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
+    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No orders yet", body: "Orders will appear after a member orders a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No orders yet.", emptyText: "No matching orders.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
     else redemptionCtrl.setItems(redemptions);
   }
   if (current === "history") {
@@ -377,7 +377,7 @@ function renderAnalytics() {
   $("cr-top-items-list").innerHTML = items.map((i) => `<tr><td>${esc(i.name)}</td><td class="num">${i.redemptions}</td><td class="num">${i.credits_spent}</td></tr>`).join("");
   const topEmpty = $("cr-top-items-empty");
   if (items.length) topEmpty.hidden = true;
-  else renderEmpty(topEmpty, { kind: "empty", title: "No items redeemed yet", body: "Orders will appear after members redeem a shop item.", compact: true });
+  else renderEmpty(topEmpty, { kind: "empty", title: "No items ordered yet", body: "Orders will appear after members order a shop item.", compact: true });
   renderCreditsByDay(a.creditsByDay || []);
 }
 function renderCreditsByDay(rows) {
@@ -422,7 +422,7 @@ function prefillEditFromQuery() {
   const m = (state.mappings || []).find((x) => String(x.id) === String(id));
   if (!m) return;
   $("cr-reward-id").value = m.id; $("cr-reward-kick-id").value = m.kick_reward_id; $("cr-reward-title").value = m.kick_reward_title; $("cr-reward-cost").value = m.kick_reward_cost; $("cr-reward-credits").value = m.credits;
-  setStatus("cr-reward-status", "Editing credit rule.");
+  setStatus("cr-reward-status", "Editing way to earn.");
 }
 function editReward(id) {
   const q = new URLSearchParams(); q.set("edit", id); if (siteQuery()) q.set("siteId", siteQuery());
@@ -436,14 +436,14 @@ function editReward(id) {
   }
 }
 async function delReward(id, trigger) {
-  const confirmed = await confirmPopover(trigger, "Disable credit rule", "This disables the credit rule; credit activity is retained.");
+  const confirmed = await confirmPopover(trigger, "Disable way to earn", "This disables the way to earn; credit activity is retained.");
   if (!confirmed) return;
   setLoading(trigger, true, "Deleting…");
   try { await api("DELETE", sitePath(`/api/credits/rewards/${encodeURIComponent(id)}`)); await load(); }
   catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function delShop(id, trigger) {
-  if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past prize orders stay in credit activity.", "Disable", true)) return;
+  if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past orders stay in credit activity.", "Disable", true)) return;
   setLoading(trigger, true, "Deleting…");
   try { await api("DELETE", sitePath(`/api/credits/shop/${encodeURIComponent(id)}`)); await load(); }
   catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
@@ -557,7 +557,7 @@ function confirmPopover(trigger, title, body) {
 }
 async function updateRedemption(id, status, trigger) {
   const body = status === "cancelled" ? "This restores the member’s credits and returns one item to stock." : "This marks the item as fulfilled.";
-  if (!await confirmPopover(trigger, status === "cancelled" ? "Cancel prize order" : "Fulfil prize order", body)) return;
+  if (!await confirmPopover(trigger, status === "cancelled" ? "Cancel order" : "Fulfil order", body)) return;
   setLoading(trigger, true, "Saving…");
   try { await api("POST", sitePath(`/api/credits/redemptions/${encodeURIComponent(id)}`), { status }); await load(); }
   catch (err) { setStatus("cr-redemption-status", err.message, true); } finally { setLoading(trigger, false); }
@@ -573,7 +573,7 @@ async function toggleReward(id, trigger) {
   setLoading(trigger, true, "Saving…");
   try {
     if (trigger.checked) await api("POST", sitePath("/api/credits/rewards"), { id: m.id, kickRewardId: m.kick_reward_id, kickRewardTitle: m.kick_reward_title, kickRewardCost: m.kick_reward_cost, credits: m.credits });
-    else if (await confirmPopover(trigger, "Disable credit rule", "This disables the credit rule; credit activity is retained.")) await api("DELETE", sitePath(`/api/credits/rewards/${m.id}`));
+    else if (await confirmPopover(trigger, "Disable way to earn", "This disables the way to earn; credit activity is retained.")) await api("DELETE", sitePath(`/api/credits/rewards/${m.id}`));
     else { trigger.checked = true; return; }
     await load();
   } catch (err) { trigger.checked = m.active; setStatus("cr-reward-status", err.message, true); } finally { setLoading(trigger, false); }
@@ -632,12 +632,12 @@ function wireActions() {
   });
   $("cr-reward-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-reward-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/rewards"), { id: $("cr-reward-id").value || undefined, kickRewardId: $("cr-reward-kick-id").value.trim(), kickRewardTitle: $("cr-reward-title").value.trim(), kickRewardCost: Number($("cr-reward-cost").value), credits: Number($("cr-reward-credits").value) }); setStatus("cr-reward-status", "Credit rule saved."); $("cr-reward-form").reset(); $("cr-reward-id").value = ""; await load(); }
+    try { await api("POST", sitePath("/api/credits/rewards"), { id: $("cr-reward-id").value || undefined, kickRewardId: $("cr-reward-kick-id").value.trim(), kickRewardTitle: $("cr-reward-title").value.trim(), kickRewardCost: Number($("cr-reward-cost").value), credits: Number($("cr-reward-credits").value) }); setStatus("cr-reward-status", "Way to earn saved."); $("cr-reward-form").reset(); $("cr-reward-id").value = ""; await load(); }
     catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-reward-create-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-reward-create-submit"); setLoading(btn, true, "Creating…");
-    try { await api("POST", sitePath("/api/credits/rewards/create"), { title: $("cr-reward-create-title").value.trim(), cost: Number($("cr-reward-create-cost").value), credits: Number($("cr-reward-create-credits").value), description: $("cr-reward-create-desc").value.trim(), backgroundColor: $("cr-reward-create-color").value }); setStatus("cr-reward-create-status", "Kick reward created and mapped to a credit rule."); $("cr-reward-create-form").reset(); $("cr-reward-create-color").value = "#00e701"; await load(); }
+    try { await api("POST", sitePath("/api/credits/rewards/create"), { title: $("cr-reward-create-title").value.trim(), cost: Number($("cr-reward-create-cost").value), credits: Number($("cr-reward-create-credits").value), description: $("cr-reward-create-desc").value.trim(), backgroundColor: $("cr-reward-create-color").value }); setStatus("cr-reward-create-status", "Kick reward created and linked to credits."); $("cr-reward-create-form").reset(); $("cr-reward-create-color").value = "#00e701"; await load(); }
     catch (err) { if (err?.code === "kick_reconnect_required") markKickNeedsAttention(); setStatus("cr-reward-create-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
@@ -735,7 +735,7 @@ function wireActions() {
     const reason = $("cr-tip-reason").value.trim();
 
     if (!amount || amount <= 0) {
-      setStatus("cr-tip-status", "Please enter a positive amount of points.", true);
+      setStatus("cr-tip-status", "Please enter a positive amount of credits.", true);
       return;
     }
     if (!reason) {
@@ -821,7 +821,7 @@ async function loadActivity({ reset }) {
     activityEvents = reset ? data.events || [] : activityEvents.concat(data.events || []);
     activityCursor = data.nextCursor || null;
     renderActivity();
-    setStatus("cr-history-status", `${activityEvents.length} event(s) loaded.`);
+    setStatus("cr-history-status", `${activityEvents.length} activity(s) loaded.`);
   } finally {
     activityLoading = false;
     setLoading(btn, false);
@@ -837,7 +837,7 @@ function renderActivity() {
   if (!activityEvents.length) {
     list.innerHTML = "";
     if (empty) {
-      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: "This member has signed in but has not earned or spent credits yet. Try another member or event type." });
+      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: "This member has signed in but has not earned or spent credits yet. Try another member or activity type." });
       empty.hidden = false;
     }
   } else {

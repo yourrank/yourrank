@@ -101,9 +101,9 @@ describe("new-shell auxiliary renderers", () => {
       viewerData: null,
       opts,
     });
-    expect(html).toContain("This board has no players or rewards yet");
+    expect(html).toContain("This site has no players or rewards yet");
     expect(html).not.toContain("How credits work");
-    expect(html).not.toContain("Top of the board");
+    expect(html).not.toContain("Top of the leaderboard");
     expect(html).not.toContain("Prize pool");
   });
 
@@ -130,7 +130,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(shop).toContain("Rewards will appear here when the streamer adds them.");
     expect(shop).toContain("No rewards available right now");
     expect(shop).not.toContain("All rewards");
-    expect(me).toContain("No credit activity or redemptions yet");
+    expect(me).toContain("No credit activity or orders yet");
     expect(me).not.toContain("Credits / 7d");
   });
 

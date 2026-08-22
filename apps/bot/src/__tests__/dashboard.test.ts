@@ -376,7 +376,7 @@ describe("buildDashboard", () => {
       headers: { cookie: "yr_session=token123" },
     }), testEnv);
     expect(page.status).toBe(200);
-    expect((await page.text())).toContain(">Bot<");
+    expect((await page.text())).toContain(">Bots<");
     const canonicalDevLogin = await canonical.fetch(new Request("http://localhost:8788/auth/dev", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://localhost:8788" },

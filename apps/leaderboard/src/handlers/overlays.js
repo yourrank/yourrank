@@ -461,7 +461,7 @@ export async function handleGetActiveEvents(request, env, deps = {}) {
   if (latestRedemption) {
     latestAlert = {
       id: latestRedemption.id,
-      title: "Reward Redeemed!",
+      title: "New Order!",
       username: latestRedemption.kick_username,
       description: latestRedemption.item_name,
       icon: "🎁",

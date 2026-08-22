@@ -64,7 +64,7 @@ export function renderNewLegalPage(data, page, opts) {
   })[page] || page;
   // A-01: <i> is decorative; aria-hidden prevents screen readers announcing the empty element.
   // A-05: <aside> now has aria-label; <p class="yr-label"> promoted to <h3> for heading semantics.
-  const content = `<div class="yr-hero"><p class="yr-eyebrow"><i aria-hidden="true"></i>BOARD INFORMATION</p><h1 class="yr-h1">${esc(title)}</h1><p class="yr-lede">${esc(r.data.brand?.name || r.slug)} · Public information and policies.</p></div><div class="yr-g12"><article class="yr-c8 yr-card yr-lb"><div class="yr-prose">${legalBody(r.data, page)}</div></article><aside class="yr-c4 yr-card yr-lb" aria-label="Board help"><h3 class="yr-label">Need help?</h3><p class="yr-note">Return to the board or use the streamer's configured channel links.</p></aside></div>`;
+  const content = `<div class="yr-hero"><p class="yr-eyebrow"><i aria-hidden="true"></i>LEADERBOARD INFORMATION</p><h1 class="yr-h1">${esc(title)}</h1><p class="yr-lede">${esc(r.data.brand?.name || r.slug)} · Public information and policies.</p></div><div class="yr-g12"><article class="yr-c8 yr-card yr-lb"><div class="yr-prose">${legalBody(r.data, page)}</div></article><aside class="yr-c4 yr-card yr-lb" aria-label="Leaderboard help"><h3 class="yr-label">Need help?</h3><p class="yr-note">Return to the leaderboard or use the streamer's configured channel links.</p></aside></div>`;
   return shell({ r, ...opts, contentHtml: content, title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
 }
 

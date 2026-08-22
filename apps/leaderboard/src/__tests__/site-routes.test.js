@@ -297,13 +297,13 @@ describe("logged-out vs logged-in rendering", () => {
     expect(rowBodies.join("")).not.toContain("//");
   });
 
-  it("shop is browsable logged out with sign-in CTAs instead of redeem buttons", async () => {
+  it("shop is browsable logged out with sign-in CTAs instead of order buttons", async () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/shop"), env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Shoutout");
     expect(html).toContain("Sign in with Kick");
-    expect(html).not.toContain(">Redeem<");
+    expect(html).not.toContain(">Order<");
   });
 
   it("games shows a locked panel with a sign-in CTA when logged out", async () => {
@@ -322,34 +322,34 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("returnTo=https%3A%2F%2Fstreamer.example%2Fstreamer%2Fgames");
   });
 
-  it("Board credits is a sign-in prompt when logged out", async () => {
+  it("Credits is a sign-in prompt when logged out", async () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Board credits");
+    expect(html).toContain("Credits");
     expect(html).toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see their balance and redeem buttons on shop", async () => {
+  it("logged-in viewers see their balance and order buttons on shop", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/shop", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain(">500</p>"); // balance in the shop hero
-    expect(html).toContain(">Redeem<");
+    expect(html).toContain(">Order<");
     expect(html).not.toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see history and redemptions on Board credits", async () => {
+  it("logged-in viewers see history and orders on Credits", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/me", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Board credits");
+    expect(html).toContain("Credits");
     expect(html).toContain(">500</p>"); // balance in the hero
-    expect(html).toContain("Shoutout"); // redemption
+    expect(html).toContain("Shoutout"); // order
     expect(html).toContain("Stream"); // ledger description
   });
 

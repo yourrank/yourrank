@@ -96,8 +96,8 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
           <ul class="hint plan-cancel-list">
             <li>You keep your current plan features until the expiry date shown above.</li>
             <li>After expiry, your account reverts to Free and paid features stop working.</li>
-            <li>If you are over Free limits (boards, players, credit rules, items), you won't be able to add more until you upgrade again.</li>
-            <li>Existing leaderboard data, viewers and prize orders are never deleted by a downgrade.</li>
+            <li>If you are over Free limits (sites, players, ways to earn, items), you won't be able to add more until you upgrade again.</li>
+            <li>Existing leaderboard data, viewers and orders are never deleted by a downgrade.</li>
           </ul>
           <p class="hint" id="cancelStatus" role="status" aria-live="polite"></p>
           <button class="btn btn--sm btn--danger" id="cancelBtn" type="button">Cancel subscription</button>
@@ -275,13 +275,13 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
                   <td><span class="pill pill--good">Full access</span></td>
                 </tr>
                 <tr>
-                  <td><strong>Credits &amp; shop fulfilment</strong><br/><span class="hint">Approve and fulfil member prize orders</span></td>
+                  <td><strong>Rewards fulfilment</strong><br/><span class="hint">Approve and fulfil member orders</span></td>
                   <td><span class="pill pill--good">Full access</span></td>
                   <td><span class="pill pill--good">Full access</span></td>
                   <td><span class="pill pill--good">Full access</span></td>
                 </tr>
                 <tr>
-                  <td><strong>Telegram Bot</strong><br/><span class="hint">Manage commands, promo offers, broadcasts</span></td>
+                  <td><strong>Telegram</strong><br/><span class="hint">Manage commands, offers, and broadcasts</span></td>
                   <td><span class="pill pill--good">Full access</span></td>
                   <td><span class="pill pill--good">Full access</span></td>
                   <td><span class="pill pill--muted">No access</span></td>

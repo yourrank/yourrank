@@ -320,9 +320,9 @@ export async function loadPlanUsage() {
     rows.push({ label: "Leaderboards", product: "Leaderboard", used: d.leaderboard.boards.used, limit: d.leaderboard.boards.limit });
     rows.push({ label: "Players", product: "Leaderboard", used: d.leaderboard.players.used, limit: d.leaderboard.players.limit });
     if (d.credits) {
-      rows.push({ label: "Credit rules", product: "Credits", used: d.credits.rewardMappings.used, limit: d.credits.rewardMappings.limit });
+      rows.push({ label: "Ways to earn", product: "Credits", used: d.credits.rewardMappings.used, limit: d.credits.rewardMappings.limit });
       rows.push({ label: "Shop items", product: "Credits", used: d.credits.shopItems.used, limit: d.credits.shopItems.limit });
-      rows.push({ label: "Pending prize orders", product: "Credits", used: d.credits.pendingRedemptions.used, limit: d.credits.pendingRedemptions.limit });
+      rows.push({ label: "Pending orders", product: "Credits", used: d.credits.pendingRedemptions.used, limit: d.credits.pendingRedemptions.limit });
       rows.push({ label: "Orders / 30 days", product: "Credits", used: d.credits.redemptionsPer30Days.used, limit: d.credits.redemptionsPer30Days.limit });
       rows.push({ label: "New members / 30 days", product: "Credits", used: d.credits.newViewersPer30Days.used, limit: d.credits.newViewersPer30Days.limit });
     }
@@ -1427,7 +1427,7 @@ export async function loadCreditsStatus() {
     renderOverviewSummary();
     const connected = Boolean(data.channel?.externalId);
     if (statusEl) statusEl.textContent = connected
-      ? `Connected to ${data.channel?.name || "your Kick channel"}. ${data.usage?.rewardMappings == null ? "—" : data.usage.rewardMappings} credit rules active.`
+      ? `Connected to ${data.channel?.name || "your Kick channel"}. ${data.usage?.rewardMappings == null ? "—" : data.usage.rewardMappings} ways to earn active.`
       : "Connect your Kick channel in Rewards to start giving members credits.";
     if (linkEl) linkEl.textContent = connected ? "Manage connected apps →" : "Open connected apps →";
   } catch (err) {
