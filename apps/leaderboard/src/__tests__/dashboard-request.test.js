@@ -17,6 +17,12 @@ describe("dashboard startup requests", () => {
     expect(result.body.user.id).toBe("user-1");
   });
 
+  it("classifies a forbidden response as FORBIDDEN, not AUTH", async () => {
+    await expect(fetchDashboardJson("/api/site", {}, {
+      fetchFn: async () => response({ ok: false, error: "Your account role is not permitted to perform this action." }, 403),
+    })).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
   it("classifies an unauthenticated response and preserves the destination", async () => {
     await expect(fetchDashboardJson("/api/auth/me", {}, {
       fetchFn: async () => response({ ok: false, error: "unauthorized" }, 401),

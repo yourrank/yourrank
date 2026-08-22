@@ -1,5 +1,6 @@
 // Account settings: password, sessions, data export.
 import { $, getCsrf, logError, showConfirmModal } from "./utils.js";
+import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
@@ -145,7 +146,7 @@ function wireSignOut() {
       const result = await jsonPost("/api/auth/logout", {});
       if (!result.ok) throw new Error(result.data?.error || "Could not sign out.");
       try { localStorage.setItem("yr:logout", String(Date.now())); } catch { /* storage unavailable */ }
-      location.href = "/login";
+      location.href = loginRedirectPath(location);
     } catch (error) {
       button.disabled = false;
       button.textContent = original;

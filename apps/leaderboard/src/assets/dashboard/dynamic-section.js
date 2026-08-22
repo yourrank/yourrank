@@ -98,6 +98,10 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
         if (myToken === navToken) location.href = loginRedirectPath(location);
         return false;
       }
+      if (res.status === 403) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "You don't have permission to view this section.");
+      }
       throw new Error(`Failed to load section (HTTP ${res.status})`);
     }
     const data = await res.json();

@@ -151,7 +151,7 @@ describe("dashboard views", () => {
     expect(overview).toContain('<script src="/bot/dash/client.js"></script>');
     // Signing out is the dashboard shell's account menu (a POST form) now that
     // /bot/* renders in that shell instead of its own rail.
-    expect(overview).toContain('action="/bot/auth/logout"');
+    expect(overview).toContain('action="/bot/auth/logout?next=%2Fdashboard%2Ftelegram"');
     expect(overview).not.toContain('<div class="panel" data-page="settings">');
     expect(overview).toContain('nonce="nonce123"');
     expect(overview).not.toContain("gm-shell-nav");
@@ -357,7 +357,7 @@ describe("buildDashboard", () => {
     expect(html).toContain('<script src="/bot/dash/client.js"></script>');
     // The overview route renders the overview panel; connecting a bot lives on
     // the Bots page, so assert the shell + account menu here instead.
-    expect(html).toContain('action="/bot/auth/logout"');
+    expect(html).toContain('action="/bot/auth/logout?next=%2Fdashboard%2Ftelegram"');
     expect(html).not.toContain("onclick=");
 
     const csp = res.headers.get("content-security-policy") || "";

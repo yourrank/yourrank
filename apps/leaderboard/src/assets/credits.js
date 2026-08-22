@@ -1,6 +1,7 @@
 import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
 import { openDrawer, closeDrawer } from "./dashboard/shell.js";
-import { setState, state } from "./dashboard/state.js";
+import { setState } from "./dashboard/state.js";
+import { clearSession } from "./dashboard/session.js";
 import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricLoading, setMetricUnknown, setRowsLoading } from "./dashboard/states.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
@@ -8,6 +9,18 @@ import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
 
 const $ = (id) => document.getElementById(id);
+
+// Cross-tab sign-out: when another tab logs out, this standalone page must
+// leave the dashboard too. The persistent SPA shell installs the same listener
+// in dashboard.js; guard with !window.__yrSpaShell to avoid duplicate redirects.
+if (!window.__yrSpaShell) {
+  window.addEventListener("storage", (event) => {
+    if (event.key === "yr:logout") {
+      clearSession();
+      location.href = loginRedirectPath(location);
+    }
+  });
+}
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "—";
@@ -24,7 +37,7 @@ async function api(method, path, body) {
     throw error;
   }
 }
-let state = {};
+let state = {}; // local credits page state (not dashboard/state.js)
 let viewerCtrl, redemptionCtrl, rewardCtrl;
 let activeSiteId = "";
 let pendingOAuthFeedback = null;

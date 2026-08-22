@@ -23,7 +23,7 @@ import "./dashboard/command-palette.js";
 // localStorage; the storage event fires only in *other* tabs, which then
 // leave the dashboard instead of sitting on a stale authenticated view.
 window.addEventListener("storage", (event) => {
-  if (event.key === "yr:logout") { clearSession(); location.href = "/login"; }
+  if (event.key === "yr:logout") { clearSession(); location.href = loginRedirectPath(location); }
 });
 
 // Mark that the persistent SPA shell is active. The dynamic-section boot

@@ -693,7 +693,10 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // already hit POST /api/auth/logout; the nav link should use a form POST.
       if ((path === "/logout" || path === "/logout.html") && method === "POST") {
         await destroySession(env, readToken(request));
-        return new Response(null, { status: 302, headers: { "set-cookie": cookieClear(env), location: "/login" } });
+        const next = safeNextPath(url.searchParams.get("next") || "", "/dashboard");
+        const loginUrl = new URL("/login", url);
+        if (next) loginUrl.searchParams.set("next", next);
+        return new Response(null, { status: 302, headers: { "set-cookie": cookieClear(env), location: String(loginUrl) } });
       }
       if (path === "/signup" || path === "/signup.html") return new Response(addCookieConsent(await renderHtmlPage(PAGES.signup)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       if (path === "/verify-email" || path === "/verify-email.html") {

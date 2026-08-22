@@ -1,5 +1,6 @@
 import { loadBoardShell, sitePath } from "./dashboard/board-shell.js";
-import { withDashboardTimeout } from "./dashboard/request.js";
+import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js";
+import { clearSession } from "./dashboard/session.js";
 import { inlineStateHtml } from "./dashboard/states.js";
 import { showConfirmModal } from "./dashboard/utils.js";
 import { computeTrustScore, connectKickChat } from "./chat-entry.js";
@@ -13,6 +14,18 @@ let _giveawaysEnter = null;
 let _giveawaysLeave = null;
 export function enter() { _giveawaysEnter?.(); }
 export function leave() { _giveawaysLeave?.(); }
+
+// Cross-tab sign-out: when another tab logs out, this standalone page must
+// leave the dashboard too. The persistent SPA shell installs the same listener
+// in dashboard.js; guard with !window.__yrSpaShell to avoid duplicate redirects.
+if (!window.__yrSpaShell) {
+  window.addEventListener("storage", (event) => {
+    if (event.key === "yr:logout") {
+      clearSession();
+      location.href = loginRedirectPath(location);
+    }
+  });
+}
 
 (function () {
   // State

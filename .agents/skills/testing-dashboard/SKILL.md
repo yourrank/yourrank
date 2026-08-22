@@ -289,6 +289,33 @@ The v4 dashboard shell (`src/pages/dashboard-shell.jsx` +
 - Adding a player with only name+amount can persist a derived
   `net profit = -amount`; verify whether that is intended before filing.
 
+## Auth / authorization regression testing
+
+- `handlePutSite` Zod schema in `packages/shared/src/validation.ts` must accept
+  `startsAt` and `rankBy` (sent by `collect()` in `apps/leaderboard/src/assets/dashboard/site.js`);
+  without them, every editor save returns `400` before auth/403/409 branching can run.
+- Editor save error branching lives in `apps/leaderboard/src/assets/dashboard/site.js`:
+  - `err.code === "AUTH"` → session-ended message, draft preserved, no redirect.
+  - `err.code === "FORBIDDEN"` → role permission message, draft preserved.
+  - `err.code === "concurrency_conflict"` / `err.status === 409` → reconciliation message.
+- `request.js` classifies `401` as `AUTH` and `403` as `FORBIDDEN`; dynamic-section
+  loader (`dynamic-section.js`) redirects on `401` and renders the server error in
+  the `#lbDynamic` region on `403`.
+- The dashboard sign-out button in the account menu is a `<button class="gm-logout">`
+  inside a `<form action="/logout" method="POST">`; `site.js` wires `$("logout")`
+  which is not present in the DOM, so the form POST is used instead. That POST
+  clears the server session and redirects the active tab to `/login` but does **not**
+  set the `yr:logout` `localStorage` stamp, so other open tabs are not notified.
+- To test cross-tab sign-out manually, open a second tab on the same origin and run
+  `javascript:localStorage.setItem('yr:logout', Date.now()); void 0;` — the dashboard
+  listener (`window.addEventListener("storage", ...)`) will then redirect all tabs
+  to `/login?next=<current-path>`. `localStorage` changes made from CDP-created
+  background targets do not always fire the `storage` event in other tabs, so use a
+  real second browser tab for this flow.
+- Creating test accounts quickly can hit the per-account login rate limit
+  (`login-email:<email>` 10/15min and `login:<ip>` 20/10min). Reuse an existing
+  session token or sign up another user to avoid the login rate limit.
+
 ## Collecting console errors and Worker 4xx/5xx
 
 - The wrangler dev log is at `/tmp/wrangler-leaderboard.log` (also

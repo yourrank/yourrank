@@ -8,7 +8,7 @@ import { renderOverviewSummary } from "./overview.js";
 import { renderPerformance, renderPerformanceLoading } from "./performance.js";
 import { clearPlayersDraft, collectPlayers, commitDraftMutation, renderPlayers, renumber, toggleEmpty } from "./players.js";
 import { requestPublicationChange } from "./publication.js";
-import { withDashboardTimeout } from "./request.js";
+import { DashboardRequestError, fetchDashboardJson, loginRedirectPath, withDashboardTimeout } from "./request.js";
 import { clearSession } from "./session.js";
 
 export const DEFAULT_SECTIONS = {
@@ -1507,15 +1507,21 @@ export function renderArchives(list) {
   });
 }
 
-$("a_go")?.addEventListener("click", async () => {
+$("a_go")?.addEventListener("click", () => { closeOutPeriod(); });
+
+export async function closeOutPeriod({
+  collectImpl = collect,
+  fetchJsonImpl = fetchDashboardJson,
+  confirmImpl = showConfirmModal,
+} = {}) {
   const btn = $("a_go"), status = $("status");
   if (![...$("rows").children].length) { status.textContent = "The board is empty — nothing to close out."; return; }
   const clear = $("a_clear").value;
   const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "wagers" ? "save the current board as past winners, then reset every wager to 0" : "save the current board as past winners";
-  if (!await showConfirmModal("Close out period", `This will ${warn}. Continue?`, "Close out", true)) return;
+  if (!await confirmImpl("Close out period", `This will ${warn}. Continue?`, "Close out", true)) return;
   btn.disabled = true; btn.textContent = "Closing out…";
   try {
-    const { payload: savePayload, invalid } = collect();
+    const { payload: savePayload, invalid } = collectImpl();
     if (invalid.length) {
       const first = invalid[0];
       $("status").textContent = `Fix the invalid ${first.label.toLowerCase()} before closing out.`;
@@ -1524,29 +1530,49 @@ $("a_go")?.addEventListener("click", async () => {
       btn.textContent = "Close out period";
       return;
     }
-    const saveRes = await fetch("/api/site", { method: "PUT", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(savePayload) });
-    if (saveRes.status === 401 || saveRes.status === 403) { status.textContent = "Your session ended — your changes are still here. Sign in again in a new tab, then retry."; btn.disabled = false; btn.textContent = "Close out period"; return; }
-    const saved = await saveRes.json().catch(() => ({}));
-    if (!saveRes.ok || !saved.ok) { status.textContent = saved.error || "Couldn't save before archiving. Your changes are still here — try again."; btn.disabled = false; btn.textContent = "Close out period"; return; }
+    await fetchJsonImpl("/api/site", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+      body: JSON.stringify(savePayload),
+    }, { timeoutMs: 20_000 });
     const archiveBody = { label: $("a_label").value.trim(), clear };
     if (state.ACTIVE_SITE_ID) archiveBody.siteId = state.ACTIVE_SITE_ID;
-    const res = await fetch("/api/site/archive", { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(archiveBody) });
-    const d = await res.json();
-    if (res.ok && d.ok) {
-      const apiUrl2 = state.ACTIVE_SITE_ID ? `/api/site?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "/api/site";
-      const p = await (await fetch(apiUrl2)).json();
-      if (p.ok) {
-        commitDraftMutation(() => {
-          renderPlayers(p.data.players || []);
-          renderArchives(p.archives || []);
-        }, `"${d.label}" closed out. Save to publish.`);
-      }
+    const { body: d } = await fetchJsonImpl("/api/site/archive", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+      body: JSON.stringify(archiveBody),
+    }, { timeoutMs: 20_000 });
+    const apiUrl2 = state.ACTIVE_SITE_ID ? `/api/site?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "/api/site";
+    const { body: p } = await fetchJsonImpl(apiUrl2, { credentials: "same-origin" });
+    if (p?.ok) {
+      commitDraftMutation(() => {
+        renderPlayers(p.data.players || []);
+        renderArchives(p.archives || []);
+      }, `"${d.label}" closed out. Save to publish.`);
       $("a_label").value = "";
       status.textContent = `"${d.label}" closed out — it's on your page now.`;
-    } else status.textContent = d.error || "Couldn't close out the period.";
-  } catch (err) { logError("archive", err); status.textContent = "Couldn't close out — your changes are still here. Check your connection and try again."; }
+    } else {
+      throw new DashboardRequestError(p?.error || "Couldn't refresh the board after closing out.", { code: "SERVER" });
+    }
+  } catch (err) {
+    logError("archive", err);
+    status.setAttribute("role", "alert");
+    status.setAttribute("aria-live", "assertive");
+    status.textContent = closeOutErrorMessage(err);
+  }
   btn.disabled = false; btn.textContent = "Close out period";
-});
+}
+
+function closeOutErrorMessage(err) {
+  if (err?.code === "AUTH") return "Your session ended — your changes are still here. Sign in again in a new tab, then retry.";
+  if (err?.code === "FORBIDDEN") return err.message || "You don't have access to do that.";
+  if (err?.code === "concurrency_conflict" || err?.status === 409) return "Another session saved this leaderboard. Your draft is still here — reload to review their version, or save again after reconciling.";
+  if (err?.code === "TIMEOUT") return "Closing out timed out. Your changes are still here — try again.";
+  if (err?.code === "NETWORK") return "Couldn't close out — your changes are still here. Check your connection and try again.";
+  return err?.message || "Couldn't close out — your changes are still here. Check your connection and try again.";
+}
 
 export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect } = {}) {
   const btn = $("save"), status = $("status"), publishAction = $("publishAction");
@@ -1568,69 +1594,73 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   try {
     // AUDIT-B5: raw fetch had no timeout — a hung connection left the button
     // at "Saving…" forever. Run the save through the shared timeout wrapper.
-    // A 401/403 means the session ended mid-edit — keep the draft on screen so
+    // A 401 means the session ended mid-edit — keep the draft on screen so
     // the user can re-auth in another tab instead of being bounced to /login.
-    const res = await withDashboardTimeout(
-      (signal) => fetchImpl("/api/site", { method: "PUT", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(payload), signal }),
-      { timeoutMs: 20_000 },
-    );
-    const d = await res.json().catch(() => ({}));
-    if (res.ok && d.ok) {
-      justPublished = !!payload.published && !state.PUBLISHED;
-      if (Array.isArray(payload.players)) state.SAMPLE_PLAYERS = false;
-      state.SAVED_PLAYERS = Array.isArray(payload.players) ? payload.players.map((player) => ({ ...player })) : [];
-      clearPlayersDraft();
-      const restoredNotice = $("playersDraftNotice");
-      if (restoredNotice) restoredNotice.hidden = true;
-      setState({ _dirty: false, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "score" ? "score" : "wagered" });
-      status.textContent = justPublished && !boardStatus().emailVerified
-        ? "Published — Your leaderboard will open to visitors after you confirm your email."
-        : "Saved";
-      if (d.updatedAt) setState({ SITE_UPDATED_AT: d.updatedAt });
-      if (d.publishedAt) setState({ PUBLISHED_AT: d.publishedAt });
-      const saveBtn = $("save"); if (saveBtn) saveBtn.textContent = "Save changes";
-      renderSavebarCopy();
-      renderEditorTimestamps();
-      renderBoardStatus();
-      renderOverviewSummary();
-      const active = state.BOARDS.find((b) => b.id === state.ACTIVE_SITE_ID);
-      if (active) { active.name = payload.name; active.casino = payload.brand?.casino || active.casino; active.code = payload.brand?.code || active.code; active.published = !!payload.published; }
-      renderBoardSwitcher();
-      renderBoardSelect();
-      renderBoardsPage();
-      if (justPublished && boardStatus().live) {
-        const publicUrl = `${location.origin}/${state.SLUG}`;
-        const handoff = $("publishHandoff");
-        if (handoff) {
-          handoff.hidden = false;
-          if ($("publishHandoffUrl")) $("publishHandoffUrl").textContent = publicUrl;
-          if ($("publishHandoffOpen")) $("publishHandoffOpen").href = publicUrl;
-          const copy = $("publishHandoffCopy");
-          if (copy) copy.onclick = async () => {
-            const copied = await copyToClipboard(publicUrl);
-            flashButton(copy, copied ? "Copied!" : "Copy failed");
-          };
-        }
-        showToast(`Published at ${publicUrl}`, "success");
+    // A 403 means the signed-in user is not allowed to save this board; keep
+    // the draft on screen and show the server's permission message.
+    const { body: d } = await fetchDashboardJson("/api/site", {
+      method: "PUT",
+      credentials: "include",
+      headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+      body: JSON.stringify(payload),
+    }, { fetchFn: fetchImpl, timeoutMs: 20_000 });
+    justPublished = !!payload.published && !state.PUBLISHED;
+    if (Array.isArray(payload.players)) state.SAMPLE_PLAYERS = false;
+    state.SAVED_PLAYERS = Array.isArray(payload.players) ? payload.players.map((player) => ({ ...player })) : [];
+    clearPlayersDraft();
+    const restoredNotice = $("playersDraftNotice");
+    if (restoredNotice) restoredNotice.hidden = true;
+    setState({ _dirty: false, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "score" ? "score" : "wagered" });
+    status.textContent = justPublished && !boardStatus().emailVerified
+      ? "Published — Your leaderboard will open to visitors after you confirm your email."
+      : "Saved";
+    if (d.updatedAt) setState({ SITE_UPDATED_AT: d.updatedAt });
+    if (d.publishedAt) setState({ PUBLISHED_AT: d.publishedAt });
+    const saveBtn = $("save"); if (saveBtn) saveBtn.textContent = "Save changes";
+    renderSavebarCopy();
+    renderEditorTimestamps();
+    renderBoardStatus();
+    renderOverviewSummary();
+    const active = state.BOARDS.find((b) => b.id === state.ACTIVE_SITE_ID);
+    if (active) { active.name = payload.name; active.casino = payload.brand?.casino || active.casino; active.code = payload.brand?.code || active.code; active.published = !!payload.published; }
+    renderBoardSwitcher();
+    renderBoardSelect();
+    renderBoardsPage();
+    if (justPublished && boardStatus().live) {
+      const publicUrl = `${location.origin}/${state.SLUG}`;
+      const handoff = $("publishHandoff");
+      if (handoff) {
+        handoff.hidden = false;
+        if ($("publishHandoffUrl")) $("publishHandoffUrl").textContent = publicUrl;
+        if ($("publishHandoffOpen")) $("publishHandoffOpen").href = publicUrl;
+        const copy = $("publishHandoffCopy");
+        if (copy) copy.onclick = async () => {
+          const copied = await copyToClipboard(publicUrl);
+          flashButton(copy, copied ? "Copied!" : "Copy failed");
+        };
       }
-      // Close the 2-click loop: refresh the live preview so the edit shows immediately.
-      updateDesignPreview();
-    } else if (res.status === 401 || res.status === 403) {
-      status.setAttribute("role", "alert");
-      status.textContent = "Your session ended — your changes are still here. Sign in again in a new tab, then retry.";
-    } else {
-      status.setAttribute("role", "alert");
-      status.setAttribute("aria-live", "assertive");
-      status.textContent = d.code === "concurrency_conflict"
-        ? "Another session saved this leaderboard. Your draft is still here — reload to review their version, or save again after reconciling."
-        : d.error || "Save failed.";
+      showToast(`Published at ${publicUrl}`, "success");
     }
+    // Close the 2-click loop: refresh the live preview so the edit shows immediately.
+    updateDesignPreview();
   } catch (err) {
     logError("save", err);
-    // AUDIT-B5: the draft is intentionally NOT cleared on failure — say so.
-    status.textContent = err?.code === "TIMEOUT"
-      ? "Saving timed out. Your changes are still here — try again."
-      : "Couldn't save. Your changes are still here — try again.";
+    // The draft is intentionally NOT cleared on any failure — say so.
+    status.setAttribute("role", "alert");
+    status.setAttribute("aria-live", "assertive");
+    if (err?.code === "AUTH") {
+      status.textContent = "Your session ended — your changes are still here. Sign in again in a new tab, then retry.";
+    } else if (err?.code === "FORBIDDEN") {
+      status.textContent = err.message || "You don't have access to do that.";
+    } else if (err?.code === "concurrency_conflict" || err?.status === 409) {
+      status.textContent = "Another session saved this leaderboard. Your draft is still here — reload to review their version, or save again after reconciling.";
+    } else if (err?.code === "TIMEOUT") {
+      status.textContent = "Saving timed out. Your changes are still here — try again.";
+    } else if (err?.code === "NETWORK") {
+      status.textContent = "Couldn't save. Your changes are still here — try again.";
+    } else {
+      status.textContent = err?.message || "Couldn't save. Your changes are still here — try again.";
+    }
   }
   btn.disabled = false; btn.textContent = "Save changes";
   if (publishAction) { publishAction.disabled = false; publishAction.removeAttribute("aria-busy"); }
@@ -1802,9 +1832,12 @@ export async function loadStats() {
 // rejected the promise and location.href never ran, so "Sign out" appeared
 // to do nothing. Now a failure keeps the user in place with an explanation,
 // and a success pings other tabs (AUDIT-B4) so they sign out too.
-$("logout")?.addEventListener("click", async (e) => {
+// The sign-out button is a `<form class="gm-logout-form"><button class="gm-logout">`
+// rendered by the shared shell, not `#logout`.
+document.querySelector(".gm-logout-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const btn = e.currentTarget;
+  const form = e.currentTarget;
+  const btn = form?.querySelector(".gm-logout");
   if (btn) btn.disabled = true;
   try {
     const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
@@ -1813,7 +1846,7 @@ $("logout")?.addEventListener("click", async (e) => {
     // shell look authenticated after the session is destroyed.
     clearSession();
     try { localStorage.setItem("yr:logout", String(Date.now())); } catch { /* storage unavailable */ }
-    location.href = "/login";
+    location.href = loginRedirectPath(location);
   } catch (err) {
     logError("logout", err);
     showToast("Couldn't sign you out. Check your connection and try again.");
