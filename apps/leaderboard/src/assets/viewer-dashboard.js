@@ -82,7 +82,7 @@ function render() {
   $("vd-boards-card").hidden = false;
   $("vd-site-card").hidden = true;
 
-  const name = v.discordUsername || v.kickUsername || "Viewer";
+  const name = v.discordUsername || v.kickUsername || "Member";
   $("vd-username").textContent = name;
   if (v.avatarUrl) {
     $("vd-avatar").src = v.avatarUrl;
@@ -140,7 +140,7 @@ function renderSite() {
   $("vd-site-name").textContent = data.site.name || data.site.slug;
   const channel = data.site.kickChannelName;
   $("vd-site-streamer").textContent = channel
-    ? `Kick channel: @${channel}${data.site.kickChannelExternalId ? " · " + data.site.kickChannelExternalId : ""}`
+    ? `Kick channel: @${channel}`
     : "Streamer site";
 
   const v = data.viewer;
@@ -149,8 +149,8 @@ function renderSite() {
   const earnHint = $("vd-earn-hint");
   if (earnHint) {
     earnHint.textContent = channel
-      ? `Earn credits by redeeming @${channel}'s mapped Kick channel rewards during a live stream.`
-      : "Earn credits by redeeming the streamer's mapped Kick channel rewards during a live stream.";
+      ? `Earn credits by using @${channel}'s linked Kick rewards during a live stream.`
+      : "Earn credits by using the streamer's linked Kick rewards during a live stream.";
   }
 
   const items = data.shopItems || [];

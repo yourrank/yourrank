@@ -97,7 +97,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
             <li>You keep your current plan features until the expiry date shown above.</li>
             <li>After expiry, your account reverts to Free and paid features stop working.</li>
             <li>If you are over Free limits (sites, players, ways to earn, items), you won't be able to add more until you upgrade again.</li>
-            <li>Existing leaderboard data, viewers and orders are never deleted by a downgrade.</li>
+            <li>Existing site data, members, and orders are never deleted by a downgrade.</li>
           </ul>
           <p class="hint" id="cancelStatus" role="status" aria-live="polite"></p>
           <button class="btn btn--sm btn--danger" id="cancelBtn" type="button">Cancel subscription</button>
@@ -114,7 +114,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
 
 const postbacksWidget = `<div class="lb-widget lb-widget--full" id="postbacks">
         <h2>Automatic sponsor score updates</h2>
-        <p class="card-sub">Automatically update player scores and track viewer sign-ups directly from your casino or brand sponsor.</p>
+        <p class="card-sub">Automatically update player scores and track member sign-ups directly from your casino or brand sponsor.</p>
 
         <div id="postbackStatusCard" class="card card--status" hidden>
           <div class="d-flex items-center gap-8">

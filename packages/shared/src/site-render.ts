@@ -210,7 +210,7 @@ ${resources}
 }
 
 function viewerName(viewer) {
-  return viewer?.kick_username || viewer?.discord_username || "Viewer";
+  return viewer?.kick_username || viewer?.discord_username || "Member";
 }
 
 function avatarHtml(viewer) {
@@ -225,11 +225,11 @@ function header({ r, viewer, balance, returnTo, searchable, section, homeUrl, sl
   // L-03 / 1.13: Removed the floating bare ${ICONS.search} SVG between the menu
   // button and the search input — it had no wrapper and produced a stray flex item.
   const search = searchable
-    ? `<label class="yr-search-label yr-sr" for="yr-search">Search the site</label><input class="yr-search" id="yr-search" type="search" placeholder="Search the site…" aria-label="Search the site" autocomplete="off" />`
+    ? `<label class="yr-search-label yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players…" aria-label="Search players" autocomplete="off" />`
     : `<a class="yr-search-link" href="${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}" aria-label="Go to leaderboard">${ICONS.search}<span>${esc(SECTION_LABELS[section] || "Leaderboard")}</span></a>`;
 
   const right = viewer
-    ? `<a class="yr-account-link" href="/me" aria-label="All sites and global viewer account">${ICONS.account}<span>All sites</span></a>
+    ? `<a class="yr-account-link" href="/me" aria-label="All sites and account">${ICONS.account}<span>All sites</span></a>
 <span class="yr-vr"></span>
 <a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="Credits on this site: ${formatNumber(balance)}"><span class="yr-bal-txt"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></span><span class="yr-ava">${avatarHtml(viewer)}</span></a>`
     : signInLink(r, returnTo, "yr-btn yr-btn--ghost");
@@ -474,8 +474,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     ? `${titleBase} — ${esc(b.tagline || "Leaderboard & Rewards")}`
     : `${sectionTitle} · ${titleBase}`);
   const rawDesc = opts.pageDescription || (section === "home"
-    ? `${rawTitleBase}'s viewer site — ${b.tagline || "compete on the leaderboard, earn free credits and order rewards."}`
-    : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s viewer site.`);
+    ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and order rewards."}`
+    : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s public site.`);
   const desc = esc(rawDesc);
   const ogImageUrl = logoUrl ? esc(logoUrl) : `${homeUrl}/og.png`;
 
@@ -523,7 +523,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
 <!-- PUBLIC-VIEWER-DIRECTION
 THESIS: A production cue sheet for following one board, not a generic gaming dashboard.
 OWN-WORLD: Asphalt surfaces, fog-white type, cobalt actions, board-accent credentials, orange warnings, mint success, 6–10px geometry.
-STORY: Identify the board, follow standings, use board credits, and reach the global viewer account without losing scope.
+STORY: Identify the board, follow standings, use board credits, and reach the account without losing scope.
 FIRST VIEWPORT: Board credential rail, operational header, then one bordered briefing field with the current page task and action.
 FORM: Brief-pinned live-production credential system; no concept roll.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
@@ -610,7 +610,7 @@ function homeMain(ctx) {
       : `<div class="yr-hero-r">${heroStat(pool ? "Prize pool" : "Players", pool ? esc(pool) : formatNumber(players.length))}${signInButton(r, returnTo)}</div>`;
 
   const lede = viewer
-    ? `Redeem a channel-point reward on Kick and credits land here automatically.${nextReward ? ` <b>${formatNumber(Number(nextReward.cost) - balance)}</b> more credits unlocks ${esc(nextReward.name)}.` : ""}`
+    ? `Use a channel-point reward on Kick and credits land here automatically.${nextReward ? ` <b>${formatNumber(Number(nextReward.cost) - balance)}</b> more credits unlocks ${esc(nextReward.name)}.` : ""}`
     : esc(b.tagline || `Compete on the ${period.toLowerCase()} leaderboard and turn free channel-point credits into real rewards.`);
 
   const heroHtml = hero({
@@ -624,7 +624,7 @@ function homeMain(ctx) {
     ? [
         kpi("Credits / 7d", "chart", `+${formatNumber(dailyEarned(ledger).reduce((a, d) => a + d.value, 0))}`, `${ledger.length} recent entries`, { accent: true }),
         kpi("Earned all time", "trophy", formatNumber(viewerOnSite?.total_earned || 0), `${formatNumber(viewerOnSite?.total_spent || 0)} spent so far`),
-        kpi("Pending rewards", "hourglass", formatNumber(pending), pending ? `${esc(b.name || slug)} fulfils by hand` : "Nothing waiting"),
+        kpi("Pending orders", "hourglass", formatNumber(pending), pending ? `${esc(b.name || slug)} fulfils by hand` : "Nothing waiting"),
       ].join("")
     : [
         pool ? null : kpi("Leaderboard", "trophy", period, `${period} leaderboard`),
@@ -643,9 +643,9 @@ ${creditsChart(series)}
         meta: "Free · no purchase",
         pad: true,
         body: `<ol class="yr-lede yr-steps">
-<li>Watch on Kick and redeem one of the channel-point rewards.</li>
+<li>Watch on Kick and use one of the channel-point rewards.</li>
 <li>Credits land on this site automatically — nothing to type in, no codes.</li>
-<li>Spend them on rewards. The streamer fulfils every reward by hand, and cancelled rewards are refunded in full.</li>
+<li>Spend them on rewards. The streamer fulfils every order by hand, and cancelled orders are refunded in full.</li>
 </ol>`,
       })}</div>`;
 
@@ -811,7 +811,7 @@ function redemptionRow(row) {
       ? `${formatDate(row.created_at)} · cancelled, ${formatNumber(row.cost)} credits returned`
       : `${formatDate(row.created_at)} · ${formatNumber(row.cost)} credits deducted`;
   return `<div class="yr-list-item">
-<div><p class="yr-list-h">${esc(row.item_name || "Reward")}</p><p class="yr-list-p">${esc(detail)}</p></div>
+<div><p class="yr-list-h">${esc(row.item_name || "Order")}</p><p class="yr-list-p">${esc(detail)}</p></div>
 <span class="${tagCls}">${esc(status)}</span>
 </div>`;
 }
@@ -906,7 +906,7 @@ function meMain(ctx) {
   const heroHtml = hero({
     eyebrow: "THIS SITE ONLY",
     title: "Credits",
-    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Every credit here came from ${esc(b.name || slug)}'s Kick channel-point rewards. <a class="yr-inline-link" href="/me">View all sites and your global account</a>. ${esc(CREDITS_DISCLAIMER)}`,
+    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Every credit here came from ${esc(b.name || slug)}'s Kick channel-point rewards. <a class="yr-inline-link" href="/me">View all sites and your account</a>. ${esc(CREDITS_DISCLAIMER)}`,
     right: `<div class="yr-hero-r">${heroStat("Balance on this site", formatNumber(balance))}${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Spend credits</a>` : ""}</div>`,
   });
 

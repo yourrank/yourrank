@@ -25,7 +25,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "—";
 const relative = (iso) => { const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)); return mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`; };
-const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", revoke: "Refunded spend", refund: "Reversed earn" });
+const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", redeem: "Ordered", revoke: "Refunded spend", refund: "Reversed earn" });
 async function api(method, path, body) {
   const opts = { method, credentials: "same-origin", headers: { "x-csrf-token": csrf() } };
   if (body) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
@@ -747,7 +747,7 @@ function wireActions() {
     try {
       const endpoint = viewerId ? sitePath(`/api/credits/viewers/${encodeURIComponent(viewerId)}/balance`) : sitePath("/api/credits/tip");
       await api("POST", endpoint, { delta: amount, reason, kickUsername: username });
-      setStatus("cr-tip-status", `Successfully sent +${amount} credits to @${username || "viewer"}!`);
+      setStatus("cr-tip-status", `Successfully sent +${amount} credits to @${username || "member"}!`);
       setTimeout(() => {
         closeTip();
         load();
@@ -761,7 +761,7 @@ function wireActions() {
 
   $("cr-viewer-auth-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-viewer-auth-submit"); setLoading(btn, true, "Saving…");
-    try { state.viewerAuth = await api("POST", "/api/credits/viewer-auth", { kick: $("cr-viewer-auth-kick").checked, discord: $("cr-viewer-auth-discord").checked, public: $("cr-viewer-auth-public").checked }); setStatus("cr-viewer-auth-status", "Viewer login settings saved."); }
+    try { state.viewerAuth = await api("POST", "/api/credits/viewer-auth", { kick: $("cr-viewer-auth-kick").checked, discord: $("cr-viewer-auth-discord").checked, public: $("cr-viewer-auth-public").checked }); setStatus("cr-viewer-auth-status", "Member login settings saved."); }
     catch (err) { setStatus("cr-viewer-auth-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-history-form")?.addEventListener("submit", (e) => {
@@ -821,7 +821,7 @@ async function loadActivity({ reset }) {
     activityEvents = reset ? data.events || [] : activityEvents.concat(data.events || []);
     activityCursor = data.nextCursor || null;
     renderActivity();
-    setStatus("cr-history-status", `${activityEvents.length} activity(s) loaded.`);
+    setStatus("cr-history-status", `${activityEvents.length} entries loaded.`);
   } finally {
     activityLoading = false;
     setLoading(btn, false);

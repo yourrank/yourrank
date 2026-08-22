@@ -80,7 +80,7 @@ export function nextStepAction({
     return {
       key: "pendingOrders",
       title: "Review pending orders",
-      body: "Viewers are waiting on orders for this site.",
+      body: "Members are waiting on orders for this site.",
       label: Number(pendingOrders) === 1 ? "Review order" : "Review orders",
       href: "/dashboard/rewards/redemptions",
     };
@@ -89,7 +89,7 @@ export function nextStepAction({
     return {
       key: "connectKick",
       title: "Connect Kick",
-      body: "Connect your channel before viewers can earn credits from Kick rewards.",
+      body: "Connect your channel before members can earn credits from Kick rewards.",
       label: "Connect Kick",
       href: "/dashboard/site/connections",
     };
@@ -98,7 +98,7 @@ export function nextStepAction({
     return {
       key: "addReward",
       title: "Add your first reward",
-      body: "Create the shop item viewers can redeem with the credits they earn.",
+      body: "Create the shop item members can order with the credits they earn.",
       label: "Add reward",
       href: "/dashboard/rewards/shop",
     };
