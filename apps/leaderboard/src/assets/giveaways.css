@@ -336,11 +336,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--v4-navy);
-  color: var(--v4-navy-ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--v4-surface-soft);
+  border-top: 1px solid var(--v4-line);
+  color: var(--v4-ink);
+  font-family: var(--v4-font-mono, ui-monospace, monospace);
   font-size: 13px;
-  line-height: 1.4;
+  line-height: 1.5;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
 }
@@ -351,7 +352,6 @@
   justify-content: center;
   height: 100%;
   color: var(--v4-ink-mute);
-  font-style: italic;
   font-size: 12px;
 }
 
@@ -369,26 +369,26 @@
 
 .gw-chat-user {
   font-weight: 600;
-  color: var(--v4-cobalt-on-chrome);
+  color: var(--v4-cobalt);
   flex-shrink: 0;
 }
 
 .gw-chat-text {
-  color: var(--v4-navy-soft);
+  color: var(--v4-ink-soft);
 }
 
 .gw-chat-msg--match {
-  background: rgba(34, 197, 94, 0.15);
-  border-left: 1px solid #22c55e;
+  background: var(--v4-success-soft);
+  border-left: 1px solid var(--v4-success);
   padding: 4px 8px;
   border-radius: var(--v4-radius-control);
 }
 .gw-chat-msg--match .gw-chat-user {
-  color: #4ade80;
+  color: var(--v4-success);
 }
 .gw-chat-msg--match .gw-chat-text mark {
-  background: #22c55e;
-  color: #000000;
+  background: var(--v4-success);
+  color: #ffffff;
   font-weight: 700;
   padding: 0 4px;
   border-radius: var(--v4-radius-control);
@@ -461,33 +461,27 @@
 .gw-roller {
   margin: 16px 20px 20px;
   padding: 24px;
-  background: var(--v4-navy);
+  background: var(--v4-surface-soft);
+  border: 1px solid var(--v4-line);
   border-radius: var(--v4-radius);
   text-align: center;
-  color: #ffffff;
+  color: var(--v4-ink);
 }
 
 .v3-dash[data-auth-workspace] .gw-roller h3 {
-  color: var(--v4-navy-ink);
+  color: var(--v4-ink);
 }
 
 .v3-dash[data-auth-workspace] .gw-roller p {
-  color: var(--v4-navy-soft);
-}
-
-.gw-roller .btn:disabled {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: var(--v4-navy-raised);
-  color: var(--v4-navy-soft);
-  opacity: 1;
+  color: var(--v4-ink-soft);
 }
 
 .gw-roller-track {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--v4-success);
+  font-family: var(--v4-font-mono, ui-monospace, monospace);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--v4-cobalt);
 }
 
 .gw-roller-track--spinning {
@@ -504,7 +498,7 @@
 .gw-winner-stage {
   margin: 16px 20px 20px;
   padding: 28px 24px;
-  background: var(--v4-navy);
+  background: var(--v4-success-soft);
   border: 1px solid var(--v4-success);
   border-radius: var(--v4-radius);
   display: flex;
@@ -513,7 +507,6 @@
   text-align: center;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--v4-shadow-overlay);
   animation: gw-winner-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -566,7 +559,7 @@
 .gw-winner-badge {
   display: inline-block;
   background: var(--v4-success);
-  color: var(--v4-navy-ink);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -582,14 +575,13 @@
 .gw-winner-username {
   font-size: 24px;
   font-weight: 800;
-  color: var(--v4-navy-ink);
+  color: var(--v4-ink);
   margin: 0 0 4px;
 }
 
 .gw-winner-msg {
   font-size: 14px;
-  color: var(--v4-success-soft);
-  font-style: italic;
+  color: var(--v4-ink-soft);
   margin: 0 0 12px;
 }
 
@@ -627,7 +619,7 @@
 
 .gw-entrant-name:hover {
   text-decoration: underline;
-  color: #0284c7;
+  color: var(--v4-cobalt);
 }
 
 .gw-entrant-msg {
