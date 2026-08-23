@@ -114,7 +114,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
 
 const postbacksWidget = `<div class="lb-widget lb-widget--full" id="postbacks">
         <h2>Automatic sponsor score updates</h2>
-        <p class="card-sub">Automatically update player scores and track member sign-ups directly from your casino or brand sponsor.</p>
+        <p class="card-sub">Automatically update player scores and track sponsor-reported sign-ups and deposits directly from your casino or brand sponsor.</p>
 
         <div id="postbackStatusCard" class="card card--status" hidden>
           <div class="d-flex items-center gap-8">
