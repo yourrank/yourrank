@@ -305,7 +305,7 @@ ${tabs}
               <span class="gw-advanced-summary-state">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <span id="gw-shield-summary">Fair play active</span>
-                <span class="pill pill--good" id="gw-shield-status" aria-live="polite">Active</span>
+                <span class="gw-event-badge gw-event-badge--live" id="gw-shield-status" aria-live="polite">Active</span>
               </span>
             </summary>
             <div class="gw-setup-advanced-body">
@@ -433,11 +433,11 @@ ${tabs}
             <h2>Live Stream Chat</h2>
             <p class="v3-head-sub">Real-time messages from your Kick channel.</p>
           </div>
-          <span class="pill pill--info" id="gw-feed-counter">0 msgs</span>
+          <span class="gw-event-badge" id="gw-feed-counter">0 messages</span>
         </div>
         <div class="gw-feed-container" id="gw-chat-feed" aria-live="polite">
           <div class="gw-feed-empty" id="gw-feed-empty">
-            Kick connection needed to view incoming stream chat messages.
+            Connect your Kick channel to watch chat messages land here in real time.
           </div>
         </div>
       </section>
@@ -512,8 +512,7 @@ ${tabs}
               <div class="gw-idle-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="7" rx="2"/><path d="M12 7v14M3 11h18M12 7H8.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7Zm0 0h3.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7Z"/></svg></div>
             </div>
             <div class="gw-roller-track" id="gw-roller-track" aria-hidden="true">Ready to draw</div>
-            <h3>Ready to pick a winner</h3>
-            <p>Wait for your viewers to enter, then roll the random selector.</p>
+            <p>Everyone who types your keyword lands here. Roll once chat is in.</p>
             <button class="btn btn--accent btn--lg" id="gw-btn-roll" type="button" disabled>
               Draw Random Winner
             </button>
@@ -522,7 +521,7 @@ ${tabs}
       </section>
 
       <!-- Entrants Live Roster -->
-      <section class="v3-table-card gw-card" id="gw-entrants-card">
+      <section class="v3-table-card gw-card gw-card--table" id="gw-entrants-card">
         <div class="v3-section-head">
           <div>
             <h2>Verified Entrants (<span id="gw-count-header">0</span>)</h2>
@@ -581,7 +580,7 @@ ${tabs}
       </div>
     </section>
 
-    <section class="v3-table-card gw-card">
+    <section class="v3-table-card gw-card gw-card--table">
       <div class="v3-section-head">
         <div>
           <h2>Past &amp; Drawn Raffles</h2>
@@ -632,7 +631,7 @@ ${tabs}
       </div>
     </section>
 
-    <section class="v3-table-card gw-card">
+    <section class="v3-table-card gw-card gw-card--table">
       <div class="v3-section-head">
         <div>
           <h2>Drop History &amp; Claims</h2>
@@ -683,7 +682,7 @@ ${tabs}
       </div>
     </section>
 
-    <section class="v3-table-card gw-card">
+    <section class="v3-table-card gw-card gw-card--table">
       <div class="v3-section-head">
         <div>
           <h2>Prediction History &amp; Settlements</h2>
@@ -717,30 +716,41 @@ ${tabs}
      ========================================================================= -->
 <div class="gw-tab-pane${active === "tournaments" ? " is-active" : ""}" id="pane-tournaments"${active === "tournaments" ? "" : " hidden"}>
   <div id="tournament-app" class="tournament-app">
-    <div class="tournament-toolbar">
-      <div>
-        <p class="tournament-step-label" id="tournament-step-label">Ready when you are</p>
-        <p class="tournament-count" id="tournament-count" aria-live="polite">No tournament yet</p>
-        <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
+    <section class="tournament-status-card" aria-label="Tournament status">
+      <div class="tournament-status-head">
+        <div class="tournament-status-ident">
+          <h2 class="tournament-title-display" id="tournament-title-display" hidden></h2>
+          <p class="tournament-game-display" id="tournament-game-display" hidden></p>
+          <div class="tournament-status-meta">
+            <p class="tournament-step-label" id="tournament-step-label">Ready when you are</p>
+            <p class="tournament-count" id="tournament-count" aria-live="polite">No tournament yet</p>
+          </div>
+          <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
+        </div>
+        <div class="tournament-primary-wrap">
+          <label class="tournament-pick-count" id="tournament-pick-count-wrap" hidden>
+            <span>Pick</span>
+            <input id="tournament-pick-count" type="number" min="1" value="1" inputmode="numeric" />
+          </label>
+          <button class="btn btn--accent" id="tournament-primary" type="button">Set up a tournament</button>
+          <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
+          <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>Start new tournament</button>
+        </div>
+      </div>
+
+      <div id="tournament-empty" hidden></div>
+
+      <div class="tournament-status-foot">
         <label class="tournament-channel-field" for="tournament-chat-channel">
           <span>Kick channel for chat joins</span>
-          <input id="tournament-chat-channel" type="text" placeholder="Your channel name" autocomplete="off" />
+          <div class="gw-input-row">
+            <span class="gw-input-prefix">kick.com/</span>
+            <input id="tournament-chat-channel" type="text" placeholder="channelname" autocomplete="off" />
+          </div>
         </label>
       </div>
-      <div class="tournament-primary-wrap">
-        <label class="tournament-pick-count" id="tournament-pick-count-wrap" hidden>
-          <span>Pick</span>
-          <input id="tournament-pick-count" type="number" min="1" value="1" inputmode="numeric" />
-        </label>
-        <button class="btn btn--accent" id="tournament-primary" type="button">Set up a tournament</button>
-        <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
-        <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>Start new tournament</button>
-      </div>
-    </div>
+    </section>
 
-    <div id="tournament-empty" hidden></div>
-    <h2 class="tournament-title-display" id="tournament-title-display" hidden></h2>
-    <p class="tournament-game-display" id="tournament-game-display" hidden></p>
     <section class="tournament-list-card" id="tournament-list-card" aria-labelledby="tournament-list-heading">
       <div class="tournament-list-head">
         <div>

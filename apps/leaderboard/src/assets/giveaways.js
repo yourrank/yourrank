@@ -261,7 +261,7 @@ if (!window.__yrSpaShell) {
       const summary = $("gw-shield-summary");
       if (badge) {
         badge.textContent = e.target.checked ? "Active" : "Disabled";
-        badge.className = e.target.checked ? "pill pill--good" : "pill pill--mute";
+        badge.className = e.target.checked ? "gw-event-badge gw-event-badge--live" : "gw-event-badge";
       }
       if (summary) summary.textContent = e.target.checked ? "Fair play active" : "Fair play off";
     });
@@ -394,7 +394,7 @@ if (!window.__yrSpaShell) {
 
     messagesCount++;
     const feedCounter = $("gw-feed-counter");
-    if (feedCounter) feedCounter.textContent = `${messagesCount.toLocaleString()} msgs`;
+    if (feedCounter) feedCounter.textContent = `${messagesCount.toLocaleString()} messages`;
 
     const sender = chatData.sender;
     const username = sender.username || sender.slug || "Anonymous";
@@ -1193,29 +1193,32 @@ if (!window.__yrSpaShell) {
         ${inlineStateHtml({ kind: "empty", title: "No active raffles", body: "Create a raffle to let viewers buy tickets with Credits." })}`;
     } else {
       activeList.innerHTML = active.map((r) => `
-        <div class="gw-raffle-card" data-raffle-id="${esc(r.id)}">
-          <div class="gw-raffle-header">
-            <div>
-              <span class="pill pill--good">Active Raffle</span>
-              <h3 class="gw-raffle-title">${esc(r.title)}</h3>
-              ${r.description ? `<p class="gw-raffle-desc">${esc(r.description)}</p>` : ""}
+        <article class="gw-event-card" data-raffle-id="${esc(r.id)}">
+          <div class="gw-event-card-head">
+            <div class="gw-event-card-ident">
+              <span class="gw-event-badge gw-event-badge--live">Selling tickets</span>
+              <h3 class="gw-event-title">${esc(r.title)}</h3>
+              ${r.description ? `<p class="gw-event-sub">${esc(r.description)}</p>` : ""}
             </div>
-            <div class="gw-raffle-badge">
-              <strong>${r.ticket_cost === 0 ? "FREE" : `${r.ticket_cost} Credits`}</strong>
-              <small>per ticket</small>
+            <p class="gw-event-figure">
+              <strong>${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</strong>
+              <span>per ticket</span>
+            </p>
+          </div>
+          <div class="gw-event-stats">
+            <div class="gw-event-stat"><strong>${r.total_tickets || 0}</strong><span>Tickets sold</span></div>
+            <div class="gw-event-stat"><strong>${r.participant_count || 0}</strong><span>Viewers in</span></div>
+            <div class="gw-event-stat"><strong>${r.max_tickets_per_viewer || 10}</strong><span>Max per viewer</span></div>
+          </div>
+          <div class="gw-event-card-foot">
+            <p class="gw-event-foot-note">${(r.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for the first ticket"}</p>
+            <div class="gw-event-foot-actions">
+              <button class="btn btn--sm btn--accent btn--draw-raffle" data-id="${esc(r.id)}" type="button">
+                Draw winner
+              </button>
             </div>
           </div>
-          <div class="gw-raffle-stats-row">
-            <div><strong>${r.total_tickets || 0}</strong><span>Tickets Sold</span></div>
-            <div><strong>${r.participant_count || 0}</strong><span>Participants</span></div>
-            <div><strong>${r.max_tickets_per_viewer || 10}</strong><span>Max / Viewer</span></div>
-          </div>
-          <div class="gw-raffle-footer">
-            <button class="btn btn--accent btn--draw-raffle" data-id="${esc(r.id)}" type="button">
-              Draw Random Winner
-            </button>
-          </div>
-        </div>
+        </article>
       `).join("");
 
       activeList.querySelectorAll(".btn--draw-raffle").forEach((btn) => {
@@ -1231,8 +1234,8 @@ if (!window.__yrSpaShell) {
           <td><strong>${esc(r.title)}</strong></td>
           <td>${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</td>
           <td>${r.total_tickets || 0} tickets</td>
-          <td>
-            ${r.winner_name ? `<strong>${esc(r.winner_name)}</strong> <small>(Ticket #${r.winner_ticket_number})</small>` : "<em>No winner</em>"}
+          <td class="gw-history-winner">
+            ${r.winner_name ? `<strong>${esc(r.winner_name)}</strong><span>Ticket #${r.winner_ticket_number}</span>` : "<span>No winner drawn</span>"}
           </td>
           <td>${r.drawn_at ? new Date(r.drawn_at).toLocaleString() : "—"}</td>
         </tr>
@@ -1347,26 +1350,37 @@ if (!window.__yrSpaShell) {
     } else {
       activeList.innerHTML = active.map((d) => {
         const pct = Math.min(100, Math.round(((d.claimed_count || 0) / (d.max_claims || 1)) * 100));
+        const remaining = Math.max(0, (d.max_claims || 0) - (d.claimed_count || 0));
         return `
-          <div class="gw-drop-card">
-            <div class="gw-drop-header">
-              <div class="d-flex items-center gap-8">
-                <code class="gw-drop-code-badge">${esc(d.code)}</code>
-                <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy</button>
+          <article class="gw-event-card">
+            <div class="gw-event-card-head">
+              <div class="gw-event-card-ident">
+                <span class="gw-event-badge gw-event-badge--live">Claimable now</span>
+                <div class="gw-event-code-row">
+                  <code class="gw-event-code">${esc(d.code)}</code>
+                  <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy</button>
+                </div>
+                <p class="gw-event-sub">Viewers type this code in chat to claim.</p>
               </div>
-              <span class="pill pill--good">+${d.points_reward} Credits</span>
+              <p class="gw-event-figure">
+                <strong>+${d.points_reward} Credits</strong>
+                <span>per claim</span>
+              </p>
             </div>
-            <div class="gw-drop-progress-box">
-              <div class="d-flex justify-between font-12 mb-4">
-                <span>Claims Progress</span>
-                <strong>${d.claimed_count || 0} / ${d.max_claims} claimed (${pct}%)</strong>
+            <div class="gw-event-body">
+              <div>
+                <div class="gw-event-meter-head">
+                  <span>Claims</span>
+                  <strong>${d.claimed_count || 0} of ${d.max_claims} · ${pct}%</strong>
+                </div>
+                <div class="gw-event-meter"><div class="gw-event-meter-fill" style="width: ${pct}%;"></div></div>
               </div>
-              <div class="gw-drop-bar-bg"><div class="gw-drop-bar-fill" style="width: ${pct}%;"></div></div>
             </div>
-            <div class="font-12 font-muted mt-8">
-              ${d.expires_at ? `Expires: ${new Date(d.expires_at).toLocaleTimeString()}` : "No time limit"}
+            <div class="gw-event-stats">
+              <div class="gw-event-stat"><strong>${remaining}</strong><span>Claims left</span></div>
+              <div class="gw-event-stat"><strong>${d.expires_at ? new Date(d.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "None"}</strong><span>${d.expires_at ? "Expires at" : "Time limit"}</span></div>
             </div>
-          </div>
+          </article>
         `;
       }).join("");
 
@@ -1383,10 +1397,10 @@ if (!window.__yrSpaShell) {
     } else {
       pastList.innerHTML = past.map((d) => `
         <tr>
-          <td><code>${esc(d.code)}</code></td>
+          <td><code class="gw-event-code">${esc(d.code)}</code></td>
           <td>+${d.points_reward} Credits</td>
           <td>${d.claimed_count || 0} / ${d.max_claims}</td>
-          <td><span class="pill pill--mute">${esc(d.status)}</span></td>
+          <td><span class="gw-event-badge">${esc(d.status)}</span></td>
           <td>${new Date(d.created_at).toLocaleString()}</td>
         </tr>
       `).join("");
@@ -1475,59 +1489,63 @@ if (!window.__yrSpaShell) {
         const rawOpts = typeof p.options === "string" ? JSON.parse(p.options) : (p.options || []);
         const totalPool = p.total_pool || 0;
         return `
-          <div class="gw-pred-card" data-pred-id="${esc(p.id)}">
-            <div class="gw-pred-header">
-              <div>
-                <span class="pill ${p.status === "open" ? "pill--good" : "pill--info"}">
-                  ${p.status === "open" ? "Betting Open" : "Betting Locked"}
+          <article class="gw-event-card" data-pred-id="${esc(p.id)}">
+            <div class="gw-event-card-head">
+              <div class="gw-event-card-ident">
+                <span class="gw-event-badge ${p.status === "open" ? "gw-event-badge--live" : "gw-event-badge--locked"}">
+                  ${p.status === "open" ? "Betting open" : "Betting locked"}
                 </span>
-                <h3 class="gw-pred-title">${esc(p.title)}</h3>
+                <h3 class="gw-event-title">${esc(p.title)}</h3>
               </div>
-              <div class="gw-pred-pool-badge">
-              <strong>${totalPool} Credits</strong>
-                <small>Total Pool</small>
+              <p class="gw-event-figure">
+                <strong>${totalPool} Credits</strong>
+                <span>in the pool</span>
+              </p>
+            </div>
+
+            <div class="gw-event-body">
+              <div class="gw-event-options">
+                ${rawOpts.map((opt) => {
+                  const optPts = opt.total_points || 0;
+                  const pct = totalPool > 0 ? Math.round((optPts / totalPool) * 100) : 0;
+                  const leading = totalPool > 0 && optPts === Math.max(...rawOpts.map((o) => o.total_points || 0));
+                  return `
+                    <div class="gw-event-option${leading ? " is-leading" : ""}">
+                      <div class="gw-event-option-head">
+                        <span class="gw-event-option-label">${esc(opt.label)}</span>
+                        <span class="gw-event-option-value"><b>${pct}%</b> · ${optPts} Credits</span>
+                      </div>
+                      <div class="gw-event-meter">
+                        <div class="gw-event-meter-fill" style="width: ${pct}%;"></div>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
               </div>
             </div>
 
-            <!-- Options & Odds Bar -->
-            <div class="gw-pred-options-grid">
-              ${rawOpts.map((opt) => {
-                const optPts = opt.total_points || 0;
-                const pct = totalPool > 0 ? Math.round((optPts / totalPool) * 100) : 50;
-                return `
-                  <div class="gw-pred-opt-box">
-                    <div class="d-flex justify-between font-13 font-bold mb-4">
-                      <span>${esc(opt.label)}</span>
-                      <span>${optPts} Credits (${pct}%)</span>
-                    </div>
-                    <div class="gw-drop-bar-bg">
-                      <div class="gw-drop-bar-fill" style="width: ${pct}%;"></div>
-                    </div>
-                  </div>
-                `;
-              }).join("")}
+            <div class="gw-event-stats">
+              <div class="gw-event-stat"><strong>${p.participant_count || 0}</strong><span>Bettors</span></div>
+              <div class="gw-event-stat"><strong>${p.min_bet}–${p.max_bet}</strong><span>Bet limits</span></div>
+              <div class="gw-event-stat"><strong>${p.lock_at ? new Date(p.lock_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Manual"}</strong><span>Locks at</span></div>
             </div>
 
-            <div class="gw-pred-stats-row">
-              <div><strong>${p.participant_count || 0}</strong><span>Bettors</span></div>
-              <div><strong>${p.min_bet} - ${p.max_bet}</strong><span>Bet Limits</span></div>
-              <div><strong>${p.lock_at ? new Date(p.lock_at).toLocaleTimeString() : "Manual"}</strong><span>Lock Time</span></div>
-            </div>
-
-            <div class="gw-pred-footer">
-              ${p.status === "open" ? `
-                <button class="btn btn--sm btn--ghost btn--lock-pred" data-id="${esc(p.id)}" type="button">
-                  Lock Betting
+            <div class="gw-event-card-foot">
+              <button class="btn btn--sm btn--ghost font-danger btn--cancel-pred" data-id="${esc(p.id)}" type="button">
+                Cancel &amp; refund
+              </button>
+              <div class="gw-event-foot-actions">
+                ${p.status === "open" ? `
+                  <button class="btn btn--sm btn--ghost btn--lock-pred" data-id="${esc(p.id)}" type="button">
+                    Lock betting
+                  </button>
+                ` : ""}
+                <button class="btn btn--sm btn--accent btn--open-settle" data-id="${esc(p.id)}" type="button">
+                  Settle &amp; pay out
                 </button>
-              ` : ""}
-              <button class="btn btn--sm btn--accent btn--open-settle" data-id="${esc(p.id)}" type="button">
-                Settle Outcome &amp; Payout
-              </button>
-              <button class="btn btn--sm btn--danger btn--cancel-pred" data-id="${esc(p.id)}" type="button">
-                Cancel &amp; refund all bets
-              </button>
+              </div>
             </div>
-          </div>
+          </article>
         `;
       }).join("");
 
@@ -1557,9 +1575,9 @@ if (!window.__yrSpaShell) {
             <td><strong>${p.total_pool || 0} Credits</strong></td>
             <td>${p.participant_count || 0} bettors</td>
             <td>
-              ${p.winning_option_id ? `<span class="pill pill--good">${esc(p.winning_option_id.toUpperCase())}</span>` : "—"}
+              ${p.winning_option_id ? `<span class="gw-event-badge gw-event-badge--live">${esc(p.winning_option_id)}</span>` : "—"}
             </td>
-            <td><span class="pill pill--mute">${esc(p.status)}</span></td>
+            <td><span class="gw-event-badge">${esc(p.status)}</span></td>
             <td>${new Date(p.created_at).toLocaleString()}</td>
           </tr>
         `;
