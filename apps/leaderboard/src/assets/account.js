@@ -11,6 +11,7 @@ import { getMe, handleAuthError } from "./dashboard/session.js";
 
 const statusEl = () => $("status");
 let _accountPopstate = null;
+let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
   if (!el) return;
@@ -340,6 +341,8 @@ function renderTeam(data) {
   const invitesEl = $("teamInvitesList");
   if (!membersEl || !invitesEl) return;
 
+  if (data?.siteId) teamSiteId = data.siteId;
+
   if (!data || !data.ok) {
     membersEl.innerHTML = `<p class="hint">${esc(data?.error || "Could not load team members.")}</p>`;
     invitesEl.innerHTML = `<p class="hint">Unavailable</p>`;
@@ -450,7 +453,7 @@ function renderTeam(data) {
       sel.addEventListener("change", async () => {
         const targetUserId = sel.getAttribute("data-user-id");
         const newRole = sel.value;
-        const res = await jsonReq("POST", "/api/site/team/role", { targetUserId, role: newRole });
+        const res = await jsonReq("POST", "/api/site/team/role", { targetUserId, role: newRole, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Role updated successfully");
           loadTeam();
@@ -465,7 +468,7 @@ function renderTeam(data) {
       btn.addEventListener("click", async () => {
         if (!confirm("Are you sure you want to remove this member?")) return;
         const targetUserId = btn.getAttribute("data-user-id");
-        const res = await jsonReq("POST", "/api/site/team/remove", { targetUserId });
+        const res = await jsonReq("POST", "/api/site/team/remove", { targetUserId, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Member removed");
           loadTeam();
@@ -478,7 +481,7 @@ function renderTeam(data) {
     document.querySelectorAll(".team-revoke-invite-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const inviteId = btn.getAttribute("data-invite-id");
-        const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId });
+        const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Invitation revoked");
           loadTeam();
@@ -501,7 +504,14 @@ function renderTeam(data) {
 }
 
 async function loadTeam() {
-  const r = await jsonReq("GET", "/api/site/team");
+  const selectedSiteId = state.ACTIVE_SITE_ID
+    || new URLSearchParams(location.search).get("siteId")
+    || teamSiteId
+    || "";
+  const teamUrl = selectedSiteId
+    ? `/api/site/team?siteId=${encodeURIComponent(selectedSiteId)}`
+    : "/api/site/team";
+  const r = await jsonReq("GET", teamUrl);
   renderTeam(r.ok ? r.data : { ok: false, error: r.data?.error || "Failed to load team" });
 }
 
@@ -543,7 +553,7 @@ function wireTeam() {
     sendBtn.disabled = true;
     sendBtn.textContent = "Creating...";
 
-    const res = await jsonReq("POST", "/api/site/team/invite", { email, role });
+    const res = await jsonReq("POST", "/api/site/team/invite", { email, role, siteId: teamSiteId });
     sendBtn.disabled = false;
     sendBtn.textContent = "Create Invitation";
 

@@ -272,30 +272,33 @@ export async function handleArchive(request, env, {
   return r.error ? bad(r.error, 400) : json({ ok: true, label: r.label });
 }
 
-// POST /api/site/archive/delete — { id }
+// POST /api/site/archive/delete — { id, siteId? }
 export async function handleArchiveDelete(request, env, {
   requireUserImpl = requireUser,
   getByUserImpl = getByUser,
+  getBoardByIdImpl = getBoardById,
+  requireSiteCapabilityImpl = requireSiteCapability,
   deleteArchiveImpl = deleteArchive,
 } = {}) {
   const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
   const body = (await readJson(request)) || {};
   if (!body.id) return bad("id required");
-  const site = await getByUserImpl(env, user.id);
-  if (site) {
-    const authorization = await requireSiteCapability(user, site, "canRoleManageBilling");
-    if (authorization.res) return authorization.res;
-  }
-  const r = await deleteArchiveImpl(env, user.id, body.id);
+  const site = body.siteId
+    ? await getBoardByIdImpl(env, user.id, String(body.siteId))
+    : await getByUserImpl(env, user.id);
+  if (!site) return bad("Site not found", 404);
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBilling");
+  if (authorization.res) return authorization.res;
+  const r = await deleteArchiveImpl(env, user.id, body.id, site.id);
   if (!r.error) {
     await logAudit({
       actorId: user.id,
       action: "archive_delete",
       entityType: "site",
-      entityId: site?.id || body.id,
+      entityId: site.id,
       request,
-      details: { board_id: site?.id || null, board_slug: site?.slug || null, archive_id: body.id },
+      details: { board_id: site.id, board_slug: site.slug, archive_id: body.id },
     });
   }
   return r.error ? bad(r.error, 400) : json({ ok: true });
@@ -451,8 +454,18 @@ export async function handleDuplicateBoard(request, env, {
 }
 
 // POST /api/site/notify/test — send a test Discord or Telegram notification.
-export async function handleNotifyTest(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleNotifyTest(request, env, {
+  requireUserImpl = requireUser,
+  getBoardByIdImpl = getBoardById,
+  getByUserImpl = getByUser,
+  requireSiteCapabilityImpl = requireSiteCapability,
+  oneImpl = one,
+  decryptCredentialImpl = decryptCredential,
+  decryptTokenImpl = decryptToken,
+  sendDiscordWebhookImpl = sendDiscordWebhook,
+  sendTelegramMessageImpl = sendTelegramMessage,
+} = {}) {
+  const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
   if (user.status === "suspended") return bad("This account is suspended.", 403);
   if (effectivePlan(user) === "free") return bad("Notifications are a Pro feature. Upgrade to unlock.", 403);
@@ -461,15 +474,17 @@ export async function handleNotifyTest(request, env) {
   if (!body) return bad("Invalid request");
   const channel = String(body.channel || "").trim(); // "discord" or "telegram"
 
-  const site = await getByUser(env, user.id);
+  const site = body.siteId
+    ? await getBoardByIdImpl(env, user.id, String(body.siteId))
+    : await getByUserImpl(env, user.id);
   if (!site) return bad("No site found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBot");
   if (authorization.res) return authorization.res;
 
   if (channel === "discord") {
     let webhookUrl = body.webhook_url ? String(body.webhook_url).trim() : null;
     if (!webhookUrl) {
-      try { webhookUrl = await decryptCredential(site.discord_webhook_url_enc); } catch { webhookUrl = null; }
+      try { webhookUrl = await decryptCredentialImpl(site.discord_webhook_url_enc); } catch { webhookUrl = null; }
     }
     if (!webhookUrl) return bad("No Discord link saved yet.");
     if (!/^https:\/\/discord\.com\/api\/webhooks\/\d+\/.+/.test(webhookUrl) &&
@@ -480,7 +495,7 @@ export async function handleNotifyTest(request, env) {
     embed.title = "🧪 Test Notification";
     embed.description = "Discord notifications are set up correctly!";
     embed.fields.push({ name: "Status", value: "✅ Notifications are working.", inline: false });
-    const result = await sendDiscordWebhook(webhookUrl, embed);
+    const result = await sendDiscordWebhookImpl(webhookUrl, embed);
     return result.ok ? json({ ok: true, message: "Test message sent to Discord!" }) : bad(result.error || "Failed to send.", 502);
   }
 
@@ -488,11 +503,11 @@ export async function handleNotifyTest(request, env) {
     const chatId = String(body.chat_id || site.telegram_chat_id || "").trim();
     if (!chatId) return bad("No Telegram chat ID configured.");
     // Find bot token — BUG-DB-008: bot_token doesn't exist on users. Tokens live in bots table (encrypted).
-    const bot = await one("SELECT token_encrypted FROM bots WHERE owner_id=$1 AND status='active' ORDER BY created_at DESC LIMIT 1", [user.id]);
+    const bot = await oneImpl("SELECT token_encrypted FROM bots WHERE owner_id=$1 AND status='active' ORDER BY created_at DESC LIMIT 1", [user.id]);
     if (!bot?.token_encrypted) return bad("No Telegram bot connected. Set up your bot first.");
-    const botToken = await decryptToken(Buffer.from(bot.token_encrypted));
+    const botToken = await decryptTokenImpl(Buffer.from(bot.token_encrypted));
     const text = `🧪 *Test Notification*\n\nYour Telegram notifications for *${site.name || "Your Site"}* are working!`;
-    const result = await sendTelegramMessage(botToken, chatId, text);
+    const result = await sendTelegramMessageImpl(botToken, chatId, text);
     return result.ok ? json({ ok: true, message: "Test message sent to Telegram!" }) : bad(result.error || "Failed to send.", 502);
   }
 

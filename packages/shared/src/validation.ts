@@ -307,6 +307,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
       channel: z.enum(["discord", "telegram"]),
       webhook_url: optionalString(500),
       chat_id: optionalString(100),
+      siteId: optionalUuid(),
     })
     .strict(),
 

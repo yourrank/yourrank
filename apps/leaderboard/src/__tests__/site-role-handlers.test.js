@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import {
   handleArchive,
+  handleArchiveDelete,
   handleDeleteSite,
   handleExportStats,
   handleHeatmap,
+  handleNotifyTest,
   handleStats,
 } from "../handlers/sites.js";
 
@@ -30,6 +32,115 @@ function deps(role, extra = {}) {
     ...extra,
   };
 }
+
+describe("archive and notification scope", () => {
+  it("deletes an archive for the selected site", async () => {
+    const calls = [];
+    const selectedSite = { id: "site-2", user_id: "owner-1", slug: "other" };
+    const response = await handleArchiveDelete(
+      request("/api/site/archive/delete", { id: "arch-1", siteId: "site-2" }),
+      env,
+      {
+        ...deps("owner"),
+        getBoardByIdImpl: async (_env, _uid, siteId) => {
+          calls.push({ type: "getBoardById", siteId });
+          return selectedSite;
+        },
+        deleteArchiveImpl: async (_env, _uid, id, siteId) => {
+          calls.push({ type: "deleteArchive", id, siteId });
+          return { ok: true };
+        },
+      }
+    );
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      { type: "getBoardById", siteId: "site-2" },
+      { type: "deleteArchive", id: "arch-1", siteId: "site-2" },
+    ]);
+  });
+
+  it("falls back to the active site when deleting an archive without siteId", async () => {
+    const calls = [];
+    const response = await handleArchiveDelete(
+      request("/api/site/archive/delete", { id: "arch-2" }),
+      env,
+      {
+        ...deps("owner"),
+        deleteArchiveImpl: async (_env, _uid, id, siteId) => {
+          calls.push({ type: "deleteArchive", id, siteId });
+          return { ok: true };
+        },
+      }
+    );
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([{ type: "deleteArchive", id: "arch-2", siteId: site.id }]);
+  });
+
+  it("sends a Discord test notification for the selected site", async () => {
+    const calls = [];
+    const proUser = { id: "owner-1", status: "active", plan: "pro", plan_expires_at: Date.now() + 86400000 };
+    const selectedSite = { id: "site-2", user_id: "owner-1", slug: "other", name: "Other Board" };
+    const response = await handleNotifyTest(
+      request("/api/site/notify/test", { channel: "discord", webhook_url: "https://discord.com/api/webhooks/123/token", siteId: "site-2" }),
+      env,
+      {
+        requireUserImpl: async () => ({ user: proUser, res: null }),
+        getBoardByIdImpl: async (_env, _uid, siteId) => {
+          calls.push({ type: "getBoardById", siteId });
+          return selectedSite;
+        },
+        getByUserImpl: async () => { throw new Error("should not fall back to getByUser"); },
+        requireSiteCapabilityImpl: async (_user, s, capability) => {
+          calls.push({ type: "capability", siteId: s.id, capability });
+          return { role: "owner", res: null };
+        },
+        sendDiscordWebhookImpl: async (url, _embed) => {
+          calls.push({ type: "sendDiscord", url });
+          return { ok: true };
+        },
+      }
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.ok).toBe(true);
+    expect(calls).toEqual([
+      { type: "getBoardById", siteId: "site-2" },
+      { type: "capability", siteId: "site-2", capability: "canRoleManageBot" },
+      { type: "sendDiscord", url: "https://discord.com/api/webhooks/123/token" },
+    ]);
+  });
+
+  it("falls back to the active site when sending a test notification without siteId", async () => {
+    const calls = [];
+    const proUser = { id: "owner-1", status: "active", plan: "pro", plan_expires_at: Date.now() + 86400000 };
+    const response = await handleNotifyTest(
+      request("/api/site/notify/test", { channel: "discord", webhook_url: "https://discord.com/api/webhooks/123/token" }),
+      env,
+      {
+        requireUserImpl: async () => ({ user: proUser, res: null }),
+        getByUserImpl: async () => {
+          calls.push({ type: "getByUser" });
+          return site;
+        },
+        getBoardByIdImpl: async () => { throw new Error("should not call getBoardById"); },
+        requireSiteCapabilityImpl: async (_user, s, capability) => {
+          calls.push({ type: "capability", siteId: s.id, capability });
+          return { role: "owner", res: null };
+        },
+        sendDiscordWebhookImpl: async (url) => {
+          calls.push({ type: "sendDiscord", url });
+          return { ok: true };
+        },
+      }
+    );
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      { type: "getByUser" },
+      { type: "capability", siteId: site.id, capability: "canRoleManageBot" },
+      { type: "sendDiscord", url: "https://discord.com/api/webhooks/123/token" },
+    ]);
+  });
+});
 
 describe("site role handler authorization", () => {
   for (const role of ["manager", "moderator"]) {

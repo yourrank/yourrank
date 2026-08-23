@@ -864,8 +864,10 @@ export async function createArchive(env, uid, { label, clear, siteId } = {}, req
   return { ok: true, label: lab };
 }
 
-export async function deleteArchive(env, uid, id) {
-  const site = await getByUser(env, uid);
+export async function deleteArchive(env, uid, id, siteId = null) {
+  const site = siteId
+    ? await getBoardById(env, uid, String(siteId))
+    : await getByUser(env, uid);
   if (!site) return { error: "no site" };
   await exec("DELETE FROM archives WHERE id=$1 AND site_id=$2", [String(id || ""), site.id]);
   return { ok: true };
