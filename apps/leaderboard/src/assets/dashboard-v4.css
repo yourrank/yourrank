@@ -5267,18 +5267,21 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-header {
   align-items: center;
   margin-bottom: 20px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  row-gap: 10px;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-header-text {
   min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-header h2,
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-header h3 {
   margin: 0;
-  color: var(--v3-ink);
+  color: var(--v4-ink);
   font-size: var(--v4-type-card-size);
   line-height: var(--v4-type-card-leading);
 }
@@ -5329,8 +5332,11 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   border-radius: var(--v3-radius-sm);
   background: var(--v3-chrome-card);
   color: var(--v3-ink);
-  font: 500 11px var(--v3-mono);
-  letter-spacing: .06em;
+  font: 600 11px var(--v3-sans);
+  letter-spacing: .04em;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-sync-strip span {
@@ -5348,8 +5354,10 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-sync-strip small {
   color: var(--v3-ink-mute);
-  font: 400 11px var(--v3-mono);
+  font: 400 11px var(--v3-sans);
   letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-frame {
@@ -5720,7 +5728,22 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .cr-confirm-popover button.btn--accent { border-color: var(--v3-accent); background: var(--v3-accent); color: var(--v3-accent-ink);
 }
 
-.v3-dash[data-auth-workspace] .cr-drawer-head { margin-bottom: 24px;
+.v3-dash[data-auth-workspace] .cr-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px;
+}
+
+.v3-dash[data-auth-workspace] #cr-tip-drawer {
+  position: fixed;
+  top: var(--v3-topbar-h, 64px);
+  right: 0;
+  bottom: 0;
+  width: min(440px, 100vw);
+  z-index: 130;
+  overflow-y: auto;
+  border-radius: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  box-shadow: var(--v4-shadow-overlay, 0 16px 48px rgba(18, 17, 17, 0.14));
 }
 
 .v3-dash[data-auth-workspace] .cr-drawer-head h2 { margin: 0; font-size: var(--v4-type-section-size); line-height: var(--v4-type-section-leading);
