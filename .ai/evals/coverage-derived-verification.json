@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "skill": "coverage-derived-verification",
+  "cases": [
+    {
+      "id": "coverage-derived-verification-positive-1",
+      "task": "Verify navigation consistency across the whole app. The router has many routes including dynamic feature routes.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "derive route-pattern inventory from the router or canonical route manifest",
+        "use representative fixtures for dynamic patterns",
+        "report verified and excluded route-pattern counts"
+      ],
+      "forbidden_outcomes": [
+        "use a hand-picked route list as complete coverage"
+      ]
+    },
+    {
+      "id": "coverage-derived-verification-negative-1",
+      "task": "Correct one spelling typo in a README sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized verification workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger coverage-derived-verification without a relevant class-wide verification need"
+      ]
+    }
+  ]
+}

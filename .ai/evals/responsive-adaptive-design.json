@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "responsive-adaptive-design",
+  "cases": [
+    {
+      "id": "responsive-adaptive-design-positive-1",
+      "task": "Make a dense dashboard with sidebar, filters and tables work well on phones.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "adapt navigation, priorities and table/filter interactions rather than only shrinking widths",
+        "preserve critical functionality and reading order"
+      ],
+      "forbidden_outcomes": [
+        "hide primary actions just to make mobile look cleaner"
+      ]
+    },
+    {
+      "id": "responsive-adaptive-design-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger responsive-adaptive-design without a UI/UX reason"
+      ]
+    }
+  ]
+}

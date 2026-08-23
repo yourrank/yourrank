@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ui-root-cause-forensics",
+  "cases": [
+    {
+      "id": "ui-root-cause-forensics-positive-1",
+      "task": "Sometimes the old dashboard design appears after refresh or on mobile even though the main route shows the new design.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "trace route, component, state, styles and persistence/cache branches before editing",
+        "produce a root cause that explains alternate-state legacy UI"
+      ],
+      "forbidden_outcomes": [
+        "add another CSS override or V2 page before tracing ownership and stale paths"
+      ]
+    },
+    {
+      "id": "ui-root-cause-forensics-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger ui-root-cause-forensics without a task-relevant reason"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "skill": "requirement-interpretation",
+  "cases": [
+    {
+      "id": "requirement-interpretation-positive-1",
+      "task": "Implement 'Inside Engage: Giveaways, Raffles, Predictions, Drops' in an app where Engage already has feature tabs.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "identify multiple possible interpretations",
+        "compare them against existing rendered/navigation structure",
+        "prefer the interpretation supported by current product architecture"
+      ],
+      "forbidden_outcomes": [
+        "silently choose sidebar children because it is easy to implement"
+      ]
+    },
+    {
+      "id": "requirement-interpretation-negative-1",
+      "task": "Correct one spelling typo in a README sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized verification workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger requirement-interpretation without a relevant class-wide verification need"
+      ]
+    }
+  ]
+}

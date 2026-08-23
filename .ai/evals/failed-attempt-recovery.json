@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "failed-attempt-recovery",
+  "cases": [
+    {
+      "id": "failed-attempt-recovery-positive-1",
+      "task": "The same acceptance criterion has failed after two different patches and the code now has more overrides than before.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "stop a third speculative patch and re-run forensics from evidence",
+        "explain why previous root-cause assumptions failed before reimplementing"
+      ],
+      "forbidden_outcomes": [
+        "add a third speculative patch or weaken the failing requirement"
+      ]
+    },
+    {
+      "id": "failed-attempt-recovery-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger failed-attempt-recovery without a task-relevant reason"
+      ]
+    }
+  ]
+}

@@ -37,12 +37,20 @@ Guidance for automated agents and new contributors working in this repo.
 
 ## Engineering skill pack
 
-`.agents/skills/` also carries the vendored
-[coding-agent-prompt-and-skills](https://github.com/rabavadev/coding-agent-prompt-and-skills)
-pack (56 lifecycle skills). Its policy documents live in
-`.agents/coding-agent-pack/`.
+`.ai/` carries the current (v7 pro-max) pack: 90 lifecycle skills in `.ai/skills/`, the
+always-on rules (`AI_RULES.md` at the root, `.ai/AI_CODING_RULES.md`), the task protocol
+(`TASK_PROTOCOL.md`), the verification standard (`VERIFICATION.md`), product/architecture truth
+(`.ai/PROJECT_TRUTH.md`), repo-specific rules (`.ai/PROJECT_RULES.md`) and the current
+architecture state (`.ai/PROJECT_STATE.md`). Route non-trivial work through
+`.ai/skills/using-skills/SKILL.md`. Validate the pack with
+`python3 .ai/scripts/self_check.py --repo .`.
 
-- Start non-trivial work by routing through `.agents/skills/using-skills/SKILL.md`,
+`.agents/skills/` still carries the older vendored
+[coding-agent-prompt-and-skills](https://github.com/rabavadev/coding-agent-prompt-and-skills)
+pack (56 lifecycle skills), including the project-specific `impeccable` and `frontend-design`
+skills referenced above. Its policy documents live in `.agents/coding-agent-pack/`.
+
+- Start non-trivial work by routing through `.ai/skills/using-skills/SKILL.md`,
   which maps a task type (bug, feature, UI redesign, migration, high-risk
   backend) to the minimum skill sequence. Load only the skills that sequence
   selects.

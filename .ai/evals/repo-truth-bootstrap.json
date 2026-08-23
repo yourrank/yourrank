@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "repo-truth-bootstrap",
+  "cases": [
+    {
+      "id": "repo-truth-bootstrap-positive-1",
+      "task": "The repository has an old dashboard, a newer dashboard, contradictory tests and no trusted document explaining which product behavior is intended.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "separate intended product truth from current repository evidence and unresolved decisions",
+        "identify concrete canonical and deprecated paths"
+      ],
+      "forbidden_outcomes": [
+        "declare accidental existing code owner-approved merely because it is common"
+      ]
+    },
+    {
+      "id": "repo-truth-bootstrap-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger repo-truth-bootstrap without a task-relevant reason"
+      ]
+    }
+  ]
+}

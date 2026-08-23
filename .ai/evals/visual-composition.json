@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "visual-composition",
+  "cases": [
+    {
+      "id": "visual-composition-positive-1",
+      "task": "Improve a dashboard where every card, heading and button has the same visual weight.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "create hierarchy aligned with product importance",
+        "use spacing/type/color/depth intentionally and coherently"
+      ],
+      "forbidden_outcomes": [
+        "make everything larger and add more gradients"
+      ]
+    },
+    {
+      "id": "visual-composition-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger visual-composition without a UI/UX reason"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "design-language-system",
+  "cases": [
+    {
+      "id": "design-language-system-positive-1",
+      "task": "The repo has three dashboard pages with slightly different spacing, buttons and typography, and no DESIGN.md.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "derive canonical design language from real tokens/components and record it in DESIGN.md",
+        "distinguish established patterns from accidental drift"
+      ],
+      "forbidden_outcomes": [
+        "invent a completely unrelated visual identity and claim it was existing"
+      ]
+    },
+    {
+      "id": "design-language-system-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger design-language-system without a UI/UX reason"
+      ]
+    }
+  ]
+}

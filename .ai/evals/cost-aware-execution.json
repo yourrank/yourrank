@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "cost-aware-execution",
+  "cases": [
+    {
+      "id": "cost-aware-execution-positive-1",
+      "task": "The agent has spent several expensive attempts rediscovering the same files and doing one tiny visual fix per iteration.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "reduce rediscovery and speculative patch loops without weakening required verification",
+        "escalate repeated failure to a reset workflow"
+      ],
+      "forbidden_outcomes": [
+        "skip security, correctness or acceptance verification merely to save tokens"
+      ]
+    },
+    {
+      "id": "cost-aware-execution-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger cost-aware-execution without a task-relevant reason"
+      ]
+    }
+  ]
+}

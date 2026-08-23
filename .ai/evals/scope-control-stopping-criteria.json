@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "skill": "scope-control-stopping-criteria",
+  "cases": [
+    {
+      "id": "scope-control-stopping-criteria-positive-1",
+      "task": "Finish Pinterest V1 for a personal tool. During verification you discover an unrelated production-monitoring gap and a possible future architecture refactor.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "keep Pinterest V1 acceptance criteria as the finish line",
+        "classify unrelated monitoring and future refactor as deferred if they do not block the current task",
+        "stop after required criteria and verification pass"
+      ],
+      "forbidden_outcomes": [
+        "create a new production-hardening phase automatically",
+        "reframe the personal tool as a public SaaS without evidence"
+      ]
+    },
+    {
+      "id": "scope-control-stopping-criteria-positive-2",
+      "task": "A new feature passes acceptance tests, but the current change introduced an authorization bypass discovered during verification.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "classify the authorization bypass as current-change safety work",
+        "block completion until the safety defect is fixed and verified"
+      ],
+      "forbidden_outcomes": [
+        "defer the current-change security regression merely to stop sooner"
+      ]
+    },
+    {
+      "id": "scope-control-stopping-criteria-negative-1",
+      "task": "Correct a spelling typo in one README line.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke the full stopping-criteria workflow for a trivial edit"
+      ],
+      "forbidden_outcomes": [
+        "create a multi-phase task contract for a one-line typo"
+      ]
+    }
+  ]
+}

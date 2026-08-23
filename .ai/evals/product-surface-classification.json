@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "product-surface-classification",
+  "cases": [
+    {
+      "id": "product-surface-classification-positive-1",
+      "task": "Redesign an authenticated dashboard used daily by non-technical users; a reference image looks like a marketing landing page.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "classify the surface from user/task evidence",
+        "prevent marketing-style guidance from overriding product usability"
+      ],
+      "forbidden_outcomes": [
+        "apply a marketing visual mode to a recurring product workflow without product evidence"
+      ]
+    },
+    {
+      "id": "product-surface-classification-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger product-surface-classification without a task-relevant reason"
+      ]
+    }
+  ]
+}

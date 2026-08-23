@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "design-migration-cleanup",
+  "cases": [
+    {
+      "id": "design-migration-cleanup-positive-1",
+      "task": "Replace the legacy settings UI with the canonical new settings UI and make sure no old route or stylesheet can still render.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "migrate all consumers and remove obsolete routes/styles/state",
+        "prove the old UI is no longer reachable"
+      ],
+      "forbidden_outcomes": [
+        "leave the old UI reachable just in case with no explicit compatibility requirement"
+      ]
+    },
+    {
+      "id": "design-migration-cleanup-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger design-migration-cleanup without a task-relevant reason"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ux-usability-foundations",
+  "cases": [
+    {
+      "id": "ux-usability-foundations-positive-1",
+      "task": "Review a workflow where users cannot tell whether changes are saved and must remember values from a previous screen.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "improve feedback, recognition over recall, consistency and user control",
+        "make save state and recovery understandable"
+      ],
+      "forbidden_outcomes": [
+        "require users to memorize hidden context"
+      ]
+    },
+    {
+      "id": "ux-usability-foundations-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger ux-usability-foundations without a UI/UX reason"
+      ]
+    }
+  ]
+}
