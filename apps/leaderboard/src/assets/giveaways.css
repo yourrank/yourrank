@@ -405,9 +405,15 @@
 
 .gw-metrics-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .gw-metrics-row {
+    flex-wrap: wrap;
+  }
 }
 
 .gw-stat-pill {
@@ -477,14 +483,16 @@
 }
 
 .gw-roller-track {
-  font-family: var(--v4-font-mono, ui-monospace, monospace);
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--v4-cobalt);
+  letter-spacing: 0.01em;
+  color: var(--v4-ink);
 }
 
 .gw-roller-track--spinning {
+  font-family: var(--v4-font-mono, ui-monospace, monospace);
+  letter-spacing: 0.02em;
+  color: var(--v4-cobalt);
   animation: gw-roll-blur 0.1s infinite;
 }
 
