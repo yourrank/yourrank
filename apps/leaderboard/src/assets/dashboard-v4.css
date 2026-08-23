@@ -1627,7 +1627,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 .v3-dash[data-auth-workspace] .ov-summary h2,
 .v3-dash[data-auth-workspace] .ov-summary h3 { margin: 10px 0 5px; font-size: var(--v4-type-card-size); line-height: var(--v4-type-card-leading); letter-spacing: -0.025em; font-weight: 700; }
 .v3-dash[data-auth-workspace] .ov-summary-copy p { max-width: 54ch; margin: 0; color: var(--v4-ink-soft); font-size: 13px; line-height: 1.55; }
-.v3-dash[data-auth-workspace] .ov-summary-actions { display: grid; justify-items: end; gap: 9px; }
+.v3-dash[data-auth-workspace] .ov-summary-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; margin-top: 10px; }
 .v3-dash[data-auth-workspace] .ov-summary-links { display: flex; gap: 14px; flex: 0 0 auto; }
 .v3-dash[data-auth-workspace] .ov-summary-links a { color: var(--v4-ink-soft); font-size: 12px; font-weight: 650; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: 40px; padding: 8px 12px; border-radius: var(--v3-radius-sm); }
 .v3-dash[data-auth-workspace] .ov-summary-links a:hover { color: var(--v4-cobalt); text-decoration-color: currentColor; }
@@ -2806,6 +2806,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 }
 .v3-dash[data-auth-workspace] .v3-alert b { color: var(--v4-warning); }
 .v3-dash[data-auth-workspace] .v3-alert .btn { flex: 0 0 auto; }
+/* Narrow containers (e.g. Top players rail) stack the alert instead of squeezing it. */
+.v3-dash[data-auth-workspace] .ov-sample-players { flex-direction: column; align-items: flex-start; gap: 6px; }
+.v3-dash[data-auth-workspace] .ov-sample-players > span { display: block; }
 .v3-dash[data-auth-workspace] .v3-note { border: 1px solid var(--v4-line); background: var(--v4-surface-soft); color: var(--v4-ink-soft); }
 .v3-dash[data-auth-workspace] .v3-setting-row,
 .v3-dash[data-auth-workspace] .v3-game-row,
@@ -3800,7 +3803,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .ov-live-card { padding: 20px; }
   .v3-dash[data-auth-workspace] .ov-head { align-items: stretch; }
   .v3-dash[data-auth-workspace] .ov-summary { display: grid; padding: 18px; }
-  .v3-dash[data-auth-workspace] .ov-summary-actions { justify-items: stretch; }
+  .v3-dash[data-auth-workspace] .ov-summary-actions { flex-direction: column; align-items: stretch; }
   .v3-dash[data-auth-workspace] .ov-summary-links { justify-content: flex-start; }
   .v3-dash[data-auth-workspace] .ov-setup-head { flex-direction: column; }
   .v3-dash[data-auth-workspace] .ov-setup-row { grid-template-columns: auto minmax(0, 1fr); padding-inline: 18px; }
