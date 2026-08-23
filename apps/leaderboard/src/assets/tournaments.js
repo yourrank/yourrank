@@ -168,6 +168,7 @@ function renderTournament() {
     $("tournament-step-label").textContent = tournament.status === "completed"
       ? `Champion: ${tournament.winner_name || "—"}`
       : "Tournament cancelled";
+    $("tournament-count").textContent = "";
     primary.hidden = true;
     pickWrap.hidden = true;
     $("tournament-reopen").hidden = true;

@@ -19,6 +19,8 @@ async function api(method, path, body) {
 }
 
 let state = {};
+let redeemingItemId = null;
+const redeemKeys = {};
 
 function setStatus(id, msg, err) {
   const el = $(id);
@@ -156,7 +158,8 @@ function renderSite() {
   const items = data.shopItems || [];
   $("vd-shop-empty").hidden = items.length > 0;
   $("vd-shop-list").innerHTML = items.map((i) => {
-    const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0);
+    const isRedeeming = redeemingItemId === i.id;
+  const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0) && !isRedeeming;
     return `
       <div class="vd-card-row">
         <div class="vd-card-main">
@@ -239,15 +242,20 @@ async function redeem(shopItemId, btn) {
   if (!await showConfirmModal("Confirm order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
   if (btn) setLoading(btn, true, "Placing order…");
 
-  let idempotencyKey = btn?.dataset.redeemKey;
+  // Tie the idempotency key to the item, not just the DOM node, so rapid clicks
+  // before re-render still resolve to the same order.
+  let idempotencyKey = redeemKeys[shopItemId] || btn?.dataset.redeemKey;
   if (!idempotencyKey) {
     idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    if (btn) btn.dataset.redeemKey = idempotencyKey;
+    redeemKeys[shopItemId] = idempotencyKey;
   }
+  if (btn) btn.dataset.redeemKey = idempotencyKey;
+
+  redeemingItemId = shopItemId;
+  renderSite();
 
   try {
     const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId, idempotencyKey });
-    if (btn) delete btn.dataset.redeemKey;
     state.current.viewer.balance = data.balance;
     state.current.redemptions = state.current.redemptions || [];
     state.current.redemptions.unshift({
@@ -257,11 +265,15 @@ async function redeem(shopItemId, btn) {
       status: "pending",
       createdAt: new Date().toISOString(),
     });
+    delete redeemKeys[shopItemId];
     renderSite();
     // Refresh sites list to update balances.
     load().catch(() => {});
   } catch (err) { setStatus("vd-login-status", err.message, true); }
-  finally { if (btn) setLoading(btn, false); }
+  finally {
+    redeemingItemId = null;
+    if (btn) setLoading(btn, false);
+  }
 }
 
 $("vd-logout")?.addEventListener("click", async () => {
