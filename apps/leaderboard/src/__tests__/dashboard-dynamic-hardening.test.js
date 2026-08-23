@@ -222,3 +222,14 @@ describe("direct load / fragment parity", () => {
     }
   });
 });
+
+describe("account team scope", () => {
+  it("derives the managed site from the team list and includes it in every team mutation", () => {
+    expect(accountJs).toContain('let teamSiteId = state.ACTIVE_SITE_ID || "";');
+    expect(accountJs).toContain('if (data?.siteId) teamSiteId = data.siteId;');
+    expect(accountJs).toContain('"/api/site/team/role", { targetUserId, role: newRole, siteId: teamSiteId }');
+    expect(accountJs).toContain('"/api/site/team/remove", { targetUserId, siteId: teamSiteId }');
+    expect(accountJs).toContain('"/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId }');
+    expect(accountJs).toContain('"/api/site/team/invite", { email, role, siteId: teamSiteId }');
+  });
+});
