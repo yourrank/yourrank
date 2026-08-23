@@ -914,6 +914,18 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
   z-index: 20;
   background: var(--v4-canvas);
 }
+/* Engage page head reads as one row: title/lede left, primary action right. */
+.v3-dash[data-auth-workspace] #gw-app > .v3-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.v3-dash[data-auth-workspace] #gw-app > .v3-head .v3-head-col {
+  min-width: 0;
+  flex: 1 1 360px;
+}
 .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head + .v3-tabs,
 .v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-tabs,
 .v3-dash[data-auth-workspace] #acc-app > .account-settings-tabs,
@@ -924,6 +936,8 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
   top: calc(var(--v3-topbar-h) + var(--v3-sticky-head-offset, 0px));
   z-index: 19;
   background: var(--v4-canvas);
+  display: flex;
+  width: 100%;
 }
 /* Rewards renders its subnav before the page head, so the tabs stick directly
    under the topbar and the head scrolls normally. */
@@ -2811,8 +2825,28 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 .v3-dash[data-auth-workspace] .ov-sample-players > span { display: block; }
 .v3-dash[data-auth-workspace] .v3-note { border: 1px solid var(--v4-line); background: var(--v4-surface-soft); color: var(--v4-ink-soft); }
 .v3-dash[data-auth-workspace] .v3-setting-row,
-.v3-dash[data-auth-workspace] .v3-game-row,
 .v3-dash[data-auth-workspace] .v3-settings-row { border-color: var(--v4-line); display: flex; align-items: center; gap: 18px; padding: 18px 0; }
+/* Game rows stack the label/toggle line above the per-game controls. */
+.v3-dash[data-auth-workspace] .v3-game-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--v4-line);
+}
+.v3-dash[data-auth-workspace] .v3-game-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+.v3-dash[data-auth-workspace] .v3-game-main > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.v3-dash[data-auth-workspace] .v3-game-main > div > span {
+  color: var(--v4-ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
 .v3-dash[data-auth-workspace] .v3-block-grid {
   display: grid;
   gap: 0;
@@ -4535,7 +4569,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] .v3-card-head h2,
-.v3-dash[data-auth-workspace] .v3-card-head h3 {margin:0;font-size:var(--v4-type-card-size);line-height:var(--v4-type-card-leading);text-transform:uppercase;letter-spacing:.08em;margin:0;
+.v3-dash[data-auth-workspace] .v3-card-head h3 {margin:0;font-size:var(--v4-type-card-size);line-height:var(--v4-type-card-leading);font-weight:700;letter-spacing:-0.01em;
 }
 
 .v3-dash[data-auth-workspace] .v3-chip--always {font:11px var(--v3-mono);white-space:nowrap;
