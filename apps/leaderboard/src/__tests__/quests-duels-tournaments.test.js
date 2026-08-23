@@ -62,6 +62,31 @@ describe("Quests, Duels & Tournaments Suite", () => {
     };
   });
 
+  // Records which statements would be committed by a transaction wrapper. Used
+  // to verify that a thrown conflict does not commit partial state.
+  function recordingTransaction() {
+    const committed = [];
+    const tx = async (fn) => {
+      const pending = [];
+      const txProxy = {
+        one: async (...args) => {
+          const res = await mockOne(...args);
+          pending.push({ sql: args[0], params: args[1], res });
+          return res;
+        },
+        unsafe: async (...args) => {
+          const res = await mockExec(...args);
+          pending.push({ sql: args[0], params: args[1], res });
+          return res;
+        },
+      };
+      const result = await fn(txProxy);
+      committed.push(...pending);
+      return result;
+    };
+    return { tx, committed };
+  }
+
   // --- DAILY QUESTS & STREAKS ---
   describe("Daily Quests & Streaks", () => {
     it("returns daily quests and calculates streak multiplier for viewer", async () => {
@@ -381,6 +406,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
         site_id: "site-456",
         site_user_id: "owner-1",
       }); // find match
+      mockOne.mockResolvedValueOnce({ player1_name: "TBD", status: "pending" }); // downstream slot
 
       const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
         method: "POST",
@@ -417,6 +443,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
         site_id: "site-456",
         site_user_id: "owner-1",
       });
+      mockOne.mockResolvedValueOnce({ player1_name: "TBD", status: "pending" }); // downstream slot
 
       const res = await handleUpdateMatchScore(
         new Request("http://localhost/api/tournaments/tourn-1/score", {
@@ -482,6 +509,131 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(res.status).toBe(404);
       expect(await res.text()).toContain("Match not found or unauthorized.");
       expect(deps.requireSiteCapabilityImpl).not.toHaveBeenCalled();
+    });
+
+    it("crowns the champion after a final match score update", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "match-final",
+        tournament_id: "tourn-1",
+        round_number: 3,
+        match_index: 0,
+        player1_name: "Alice",
+        player2_name: "Bob",
+        bracket_size: 8,
+        site_id: "site-456",
+        site_user_id: "owner-1",
+      }); // find final match
+
+      const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-final", player1Score: 2, player2Score: 1 }),
+      });
+
+      const res = await handleUpdateMatchScore(req, mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(body.isFinals).toBe(true);
+      expect(body.winnerName).toBe("Alice");
+      expect(mockExec).toHaveBeenCalled();
+      const tournUpdate = mockExec.mock.calls.find((call) => call[0].includes("UPDATE tournaments"));
+      expect(tournUpdate).toBeTruthy();
+      expect(tournUpdate[1]).toEqual(["Alice", "tourn-1"]);
+    });
+
+    it("returns 409 and does not update the current match when the downstream slot is already filled", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "match-1",
+        tournament_id: "tourn-1",
+        round_number: 1,
+        match_index: 0,
+        player1_name: "Alice",
+        player2_name: "Bob",
+        bracket_size: 8,
+        site_id: "site-456",
+        site_user_id: "owner-1",
+      }); // find match
+      mockOne.mockResolvedValueOnce({ player1_name: "Charlie", status: "pending" }); // downstream already filled
+
+      const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-1", player1Score: 3, player2Score: 1 }),
+      });
+
+      const res = await handleUpdateMatchScore(req, mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("Downstream match has already progressed.");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it("rolls back the current match update when the final champion update conflicts", async () => {
+      const { tx, committed } = recordingTransaction();
+      deps.withTransaction = tx;
+      mockExec.mockReset();
+      mockExec.mockResolvedValueOnce([{}]); // matchUpdate succeeds
+      mockExec.mockResolvedValueOnce([]); // tournUpdate conflict
+
+      mockOne.mockResolvedValueOnce({
+        id: "match-final",
+        tournament_id: "tourn-1",
+        round_number: 3,
+        match_index: 0,
+        player1_name: "Alice",
+        player2_name: "Bob",
+        bracket_size: 8,
+        site_id: "site-456",
+        site_user_id: "owner-1",
+      });
+
+      const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-final", player1Score: 2, player2Score: 1 }),
+      });
+
+      const res = await handleUpdateMatchScore(req, mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("Tournament already has a champion.");
+      const matchUpdates = committed.filter((stmt) =>
+        stmt.sql.includes("UPDATE tournament_matches") && stmt.sql.includes("player1_score")
+      );
+      expect(matchUpdates.length).toBe(0);
+    });
+
+    it("rolls back the current match update when downstream advancement conflicts after the pre-check", async () => {
+      const { tx, committed } = recordingTransaction();
+      deps.withTransaction = tx;
+      mockExec.mockReset();
+      mockExec.mockResolvedValueOnce([{}]); // matchUpdate succeeds
+      mockExec.mockResolvedValueOnce([]); // nextUpdate conflict
+
+      mockOne.mockResolvedValueOnce({
+        id: "match-1",
+        tournament_id: "tourn-1",
+        round_number: 1,
+        match_index: 0,
+        player1_name: "Alice",
+        player2_name: "Bob",
+        bracket_size: 8,
+        site_id: "site-456",
+        site_user_id: "owner-1",
+      }); // find match
+      mockOne.mockResolvedValueOnce({ player1_name: "TBD", status: "pending" }); // downstream pre-check passes
+
+      const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-1", player1Score: 3, player2Score: 1 }),
+      });
+
+      const res = await handleUpdateMatchScore(req, mockEnv(), deps);
+      expect(res.status).toBe(409);
+      const matchUpdates = committed.filter((stmt) =>
+        stmt.sql.includes("UPDATE tournament_matches") && stmt.sql.includes("player1_score")
+      );
+      expect(matchUpdates.length).toBe(0);
     });
 
     it("returns bracket tree for spectator viewing", async () => {

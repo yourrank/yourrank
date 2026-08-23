@@ -464,6 +464,31 @@ describe("handleViewerRedeem double-spend protection", () => {
     expect(ledgerInserts.length).toBe(1);
     expect(ledgerInserts[0].sql).toMatch(/'spend'/);
   });
+
+  it("retry with the same idempotency key returns the original order without mutating balance or stock", async () => {
+    // Simulates the client retrying after a lost/network-failed response: the
+    // server already accepted the first request, so the retry must resolve to
+    // the same redemption and must not deduct balance or stock again.
+    db.oneResponses.push({
+      id: "red-1",
+      shop_item_id: "item-1",
+      cost: 50,
+      status: "pending",
+      balance: 450,
+      blocked: false,
+      item_name: "Sticker",
+    });
+    db.unsafeResponses.push([{ id: "site-1" }]);
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.redemptionId).toBe("red-1");
+    expect(body.balance).toBe(450);
+    expect(db.calls.some((c) => /INSERT INTO redemptions/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /INSERT INTO credit_ledger/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE shop_items/.test(c.sql))).toBe(false);
+  });
 });
 
 // --- Cancel restores both balance and inventory ------------------------------

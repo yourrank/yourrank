@@ -242,8 +242,8 @@ async function redeem(shopItemId, btn) {
   if (!await showConfirmModal("Confirm order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
   if (btn) setLoading(btn, true, "Placing order…");
 
-  // Tie the idempotency key to the item, not just the DOM node, so rapid clicks
-  // before re-render still resolve to the same order.
+  // Tie the idempotency key to the item, not just the DOM node, so retries and
+  // rapid clicks resolve to the same order. The key is only cleared on success.
   let idempotencyKey = redeemKeys[shopItemId] || btn?.dataset.redeemKey;
   if (!idempotencyKey) {
     idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -266,13 +266,15 @@ async function redeem(shopItemId, btn) {
       createdAt: new Date().toISOString(),
     });
     delete redeemKeys[shopItemId];
-    renderSite();
-    // Refresh sites list to update balances.
+    // Refresh sites list to update balances; site view will re-render below.
     load().catch(() => {});
   } catch (err) { setStatus("vd-login-status", err.message, true); }
   finally {
     redeemingItemId = null;
     if (btn) setLoading(btn, false);
+    // Re-render so the visible Order button is re-enabled after a failure and
+    // reflects the latest balance/order state after success.
+    if (state.current) renderSite();
   }
 }
 

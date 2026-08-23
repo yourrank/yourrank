@@ -20,6 +20,14 @@ const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
 const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
 
+class TournamentConflictError extends Error {
+  constructor(message, status = 409) {
+    super(message);
+    this.name = "TournamentConflictError";
+    this.status = status;
+  }
+}
+
 function isSupportedBracketSize(n) {
   return Number.isInteger(n) && SUPPORTED_BRACKET_SIZES.includes(n);
 }
@@ -707,85 +715,119 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
   const tournamentId = tournamentIdFromRequest(request);
   if (!tournamentId) return bad("tournamentId is required.");
 
-  const result = await withTransaction(async (tx) => {
-    const match = await tx.one(
-      `SELECT tm.id, tm.round_number, tm.match_index, tm.player1_name, tm.player2_name, tm.status,
-              t.id AS tournament_id, t.status AS tournament_status, t.bracket_size, t.site_id, s.user_id AS site_user_id
-         FROM tournament_matches tm
-         JOIN tournaments t ON t.id = tm.tournament_id
-         JOIN sites s ON s.id = t.site_id
-        WHERE tm.tournament_id=$1 AND tm.id=$2
-        FOR UPDATE OF tm, t`,
-      [tournamentId, matchId]
-    );
-    if (!match) return { error: "Match not found or unauthorized.", status: 404 };
-
-    const authorization = await requireSiteCapabilityImpl(
-      user,
-      { id: match.site_id, user_id: match.site_user_id },
-      "canRoleManageBoard"
-    );
-    if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
-
-    if (match.tournament_status === "completed" || match.tournament_status === "cancelled") {
-      return { error: "Tournament is already finished.", status: 409 };
-    }
-    if (match.status === "completed") {
-      return { error: "Match has already been scored.", status: 409 };
-    }
-    if (!match.player1_name || !match.player2_name || match.player1_name === "TBD" || match.player2_name === "TBD") {
-      return { error: "Match is not ready to score.", status: 400 };
-    }
-
-    const totalRounds = Math.log2(match.bracket_size || 0);
-    if (!Number.isFinite(totalRounds) || totalRounds < 1) {
-      return { error: "Invalid bracket size.", status: 400 };
-    }
-    const isFinals = match.round_number === totalRounds;
-    const winnerName = rawP1 > rawP2 ? match.player1_name : match.player2_name;
-
-    const matchUpdate = await tx.unsafe(
-      `UPDATE tournament_matches
-          SET player1_score=$1, player2_score=$2, winner_name=$3, status='completed'
-        WHERE id=$4 AND status != 'completed'
-        RETURNING id`,
-      [rawP1, rawP2, winnerName, match.id]
-    );
-    if (!matchUpdate || matchUpdate.length === 0) {
-      return { error: "Match could not be scored. It may have already been completed.", status: 409 };
-    }
-
-    if (isFinals) {
-      const tournUpdate = await tx.unsafe(
-        `UPDATE tournaments
-            SET winner_name=$1, status='completed', updated_at=now()
-          WHERE id=$2 AND status NOT IN ('completed', 'cancelled')
-          RETURNING id`,
-        [winnerName, match.tournament_id]
+  let result;
+  try {
+    result = await withTransaction(async (tx) => {
+      const match = await tx.one(
+        `SELECT tm.id, tm.round_number, tm.match_index, tm.player1_name, tm.player2_name, tm.status,
+                t.id AS tournament_id, t.status AS tournament_status, t.bracket_size, t.site_id, s.user_id AS site_user_id
+           FROM tournament_matches tm
+           JOIN tournaments t ON t.id = tm.tournament_id
+           JOIN sites s ON s.id = t.site_id
+          WHERE tm.tournament_id=$1 AND tm.id=$2
+          FOR UPDATE OF tm, t`,
+        [tournamentId, matchId]
       );
-      if (!tournUpdate || tournUpdate.length === 0) {
-        return { error: "Tournament already has a champion.", status: 409 };
-      }
-    } else {
-      const nextRound = match.round_number + 1;
-      const nextMatchIndex = Math.floor(match.match_index / 2);
-      const isPlayer1Slot = match.match_index % 2 === 0;
-      const slotColumn = isPlayer1Slot ? "player1_name" : "player2_name";
-      const nextUpdate = await tx.unsafe(
-        `UPDATE tournament_matches
-            SET ${slotColumn}=$1
-          WHERE tournament_id=$2 AND round_number=$3 AND match_index=$4
-            AND (${slotColumn} IS NULL OR ${slotColumn} = '' OR ${slotColumn} = 'TBD')
-          RETURNING ${slotColumn}`,
-        [winnerName, match.tournament_id, nextRound, nextMatchIndex]
-      );
-      if (!nextUpdate || nextUpdate.length === 0) {
-        return { error: "Downstream match has already progressed or is conflicting.", status: 409 };
-      }
-    }
+      if (!match) return { error: "Match not found or unauthorized.", status: 404 };
 
-    return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number };
-  });
+      const authorization = await requireSiteCapabilityImpl(
+        user,
+        { id: match.site_id, user_id: match.site_user_id },
+        "canRoleManageBoard"
+      );
+      if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
+
+      if (match.tournament_status === "completed" || match.tournament_status === "cancelled") {
+        return { error: "Tournament is already finished.", status: 409 };
+      }
+      if (match.status === "completed") {
+        return { error: "Match has already been scored.", status: 409 };
+      }
+      if (!match.player1_name || !match.player2_name || match.player1_name === "TBD" || match.player2_name === "TBD") {
+        return { error: "Match is not ready to score.", status: 400 };
+      }
+
+      const totalRounds = Math.log2(match.bracket_size || 0);
+      if (!Number.isFinite(totalRounds) || totalRounds < 1) {
+        return { error: "Invalid bracket size.", status: 400 };
+      }
+      const isFinals = match.round_number === totalRounds;
+      const winnerName = rawP1 > rawP2 ? match.player1_name : match.player2_name;
+
+      // Lock and validate downstream state before mutating the current match.
+      if (!isFinals) {
+        const nextRound = match.round_number + 1;
+        const nextMatchIndex = Math.floor(match.match_index / 2);
+        const isPlayer1Slot = match.match_index % 2 === 0;
+        const slotColumn = isPlayer1Slot ? "player1_name" : "player2_name";
+
+        const nextMatch = await tx.one(
+          `SELECT ${slotColumn}, status FROM tournament_matches
+            WHERE tournament_id=$1 AND round_number=$2 AND match_index=$3
+            FOR UPDATE`,
+          [match.tournament_id, nextRound, nextMatchIndex]
+        );
+        if (!nextMatch) return { error: "Downstream match not found.", status: 400 };
+        if (nextMatch.status === "completed") {
+          return { error: "Downstream match has already progressed.", status: 409 };
+        }
+        const slotValue = nextMatch[slotColumn];
+        if (slotValue && slotValue !== "" && slotValue !== "TBD") {
+          return { error: "Downstream match has already progressed.", status: 409 };
+        }
+
+        const matchUpdate = await tx.unsafe(
+          `UPDATE tournament_matches
+              SET player1_score=$1, player2_score=$2, winner_name=$3, status='completed'
+            WHERE id=$4 AND status != 'completed'
+            RETURNING id`,
+          [rawP1, rawP2, winnerName, match.id]
+        );
+        if (!matchUpdate || matchUpdate.length === 0) {
+          return { error: "Match could not be scored. It may have already been completed.", status: 409 };
+        }
+
+        const nextUpdate = await tx.unsafe(
+          `UPDATE tournament_matches
+              SET ${slotColumn}=$1
+            WHERE tournament_id=$2 AND round_number=$3 AND match_index=$4
+              AND (${slotColumn} IS NULL OR ${slotColumn} = '' OR ${slotColumn} = 'TBD')
+            RETURNING ${slotColumn}`,
+          [winnerName, match.tournament_id, nextRound, nextMatchIndex]
+        );
+        if (!nextUpdate || nextUpdate.length === 0) {
+          throw new TournamentConflictError("Downstream match has already progressed or is conflicting.", 409);
+        }
+      } else {
+        const matchUpdate = await tx.unsafe(
+          `UPDATE tournament_matches
+              SET player1_score=$1, player2_score=$2, winner_name=$3, status='completed'
+            WHERE id=$4 AND status != 'completed'
+            RETURNING id`,
+          [rawP1, rawP2, winnerName, match.id]
+        );
+        if (!matchUpdate || matchUpdate.length === 0) {
+          return { error: "Match could not be scored. It may have already been completed.", status: 409 };
+        }
+
+        const tournUpdate = await tx.unsafe(
+          `UPDATE tournaments
+              SET winner_name=$1, status='completed', updated_at=now()
+            WHERE id=$2 AND status NOT IN ('completed', 'cancelled')
+            RETURNING id`,
+          [winnerName, match.tournament_id]
+        );
+        if (!tournUpdate || tournUpdate.length === 0) {
+          throw new TournamentConflictError("Tournament already has a champion.", 409);
+        }
+      }
+
+      return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number };
+    });
+  } catch (err) {
+    if (err instanceof TournamentConflictError) return bad(err.message, err.status);
+    throw err;
+  }
   if (result.error) return bad(result.error, result.status);
 
   await logAudit({
