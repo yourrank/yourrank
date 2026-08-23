@@ -223,12 +223,13 @@ function renderViewerRow(v) {
   const joined = fmtDate(v.created_at);
   const earned = v.last_earned_at ? fmtDate(v.last_earned_at) : "Not yet";
   const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet";
-  const history = v.kick_username
-    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(v.kick_username)}">History</a> `
+  const identity = viewerIdentity(v);
+  const history = identity !== "Member"
+    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}">History</a> `
     : "";
   return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
 }
-function renderRedemptionRow(r) { return `<td><b>${esc(r.kick_username || r.kick_user_id)}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
+function renderRedemptionRow(r) { return `<td><b>${esc(viewerIdentity(r))}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
   const root = $("cr-shop-list"); if (!root) return;
   ensureShopControls(items.length > 0);
@@ -250,8 +251,7 @@ function renderShopCards(items) {
     $("crShopEmptyCreate")?.addEventListener("click", () => openShop(), { once: true });
   }
   root.innerHTML = pageItems.map((i) => {
-    const imgHtml = (i.image_url || i.image || i.imageUrl) ? `<div class="cr-shop-card-thumb"><img src="${esc(i.image_url || i.image || i.imageUrl)}" alt="${esc(i.name)}" /></div>` : "";
-    return `<article class="cr-shop-card${i.active ? "" : " is-inactive"}">${imgHtml}<div class="cr-shop-card-head"><button class="cr-shop-card-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button><div class="cr-shop-card-controls"><button class="cr-shop-delete" type="button" data-del-shop="${esc(i.id)}" aria-label="Disable ${esc(i.name)}" title="Disable ${esc(i.name)}">×</button><input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Toggle ${esc(i.name)}" /></div></div><p>${esc(i.description || "")}</p><hr /><div class="cr-shop-card-foot"><b>${i.cost} <small>cr</small></b><span>Stock: ${i.stock === null ? "∞" : `${i.stock} left`}</span></div></article>`;
+    return `<article class="cr-shop-card${i.active ? "" : " is-inactive"}"><div class="cr-shop-card-head"><button class="cr-shop-card-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button><div class="cr-shop-card-controls"><button class="cr-shop-delete" type="button" data-del-shop="${esc(i.id)}" aria-label="Disable ${esc(i.name)}" title="Disable ${esc(i.name)}">×</button><input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Toggle ${esc(i.name)}" /></div></div><p>${esc(i.description || "")}</p><hr /><div class="cr-shop-card-foot"><b>${i.cost} <small>cr</small></b><span>Stock: ${i.stock === null ? "∞" : `${i.stock} left`}</span></div></article>`;
   }).join("");
   const controls = $("cr-shop-controls"); if (controls) { controls.querySelector("[data-shop-page]").textContent = filtered.length ? `Page ${shopPage} of ${pages} (${filtered.length})` : ""; controls.querySelector("[data-shop-prev]").disabled = shopPage <= 1; controls.querySelector("[data-shop-next]").disabled = shopPage >= pages; }
   wireDynamicActions();
@@ -282,7 +282,7 @@ function render() {
     renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt: state.channel?.linkedAt });
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending orders"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "orders / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
-    $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; $("cr-viewer-auth-public").checked = auth.public !== false;
+    $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; const publicToggle = $("cr-viewer-auth-public"); if (publicToggle) publicToggle.checked = auth.public !== false;
   }
   if (current === "rules") {
     for (const id of ["cr-reward-submit", "cr-reward-create-submit"]) { const el = $(id); if (el) { el.disabled = rewardAtLimit; el.title = rewardAtLimit ? "Upgrade your plan to add more ways to earn" : ""; } }
@@ -494,26 +494,6 @@ function openShop(item, trigger) {
   drawerTrigger = trigger || $("cr-shop-new");
   $("cr-shop")?.classList.add("has-drawer");
   $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-active").checked = item?.active !== false; 
-  const imgData = item?.image_url || item?.image || item?.imageUrl || "";
-  const imgInput = $("cr-shop-image-data");
-  if (imgInput) imgInput.value = imgData;
-  const dropContent = $("cr-shop-drop-content");
-  const previewWrap = $("cr-shop-preview-wrap");
-  const previewImg = $("cr-shop-preview-img");
-  const progbar = $("cr-shop-progbar");
-  const nameEl = $("cr-shop-filename");
-  const sizeEl = $("cr-shop-filesize");
-  if (imgData && previewImg && previewWrap && dropContent) {
-    previewImg.src = imgData;
-    if (nameEl) nameEl.textContent = item?.name || "Uploaded image";
-    if (sizeEl) sizeEl.textContent = "Saved";
-    if (progbar) progbar.hidden = true;
-    dropContent.hidden = true;
-    previewWrap.hidden = false;
-  } else if (previewWrap && dropContent) {
-    previewWrap.hidden = true;
-    dropContent.hidden = false;
-  }
   $("cr-shop-name").focus(); 
 }
 function closeShop() { $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
@@ -642,80 +622,9 @@ function wireActions() {
   });
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
 
-  // Shop Item Image Uploader
-  const uploadZone = $("cr-shop-upload-zone");
-  const fileInput = $("cr-shop-file-input");
-  const browseBtn = $("cr-shop-browse-btn");
-  const removeImgBtn = $("cr-shop-remove-img");
-  const dropContent = $("cr-shop-drop-content");
-  const previewWrap = $("cr-shop-preview-wrap");
-  const previewImg = $("cr-shop-preview-img");
-  const nameEl = $("cr-shop-filename");
-  const sizeEl = $("cr-shop-filesize");
-  const progbar = $("cr-shop-progbar");
-  const progfill = $("cr-shop-progfill");
-
-  const handleFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) {
-      setStatus("cr-shop-status", "Please select a valid image file (PNG, JPG, WebP, GIF).", true);
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setStatus("cr-shop-status", "Image file must be 5 MB or smaller.", true);
-      return;
-    }
-    const reader = new FileReader();
-    if (progbar) progbar.hidden = false;
-    if (progfill) progfill.style.transform = "scaleX(0)";
-
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      const imgDataInput = $("cr-shop-image-data");
-      if (imgDataInput) imgDataInput.value = dataUrl;
-      if (previewImg) previewImg.src = dataUrl;
-      if (nameEl) nameEl.textContent = file.name;
-      const sizeStr = file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
-      if (sizeEl) sizeEl.textContent = sizeStr;
-      if (dropContent) dropContent.hidden = true;
-      if (previewWrap) previewWrap.hidden = false;
-
-      if (progfill) {
-        progfill.style.transform = "scaleX(1)";
-        setTimeout(() => { if (progbar) progbar.hidden = true; }, 400);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  uploadZone?.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.classList.add("is-dragover"); });
-  uploadZone?.addEventListener("dragleave", () => uploadZone.classList.remove("is-dragover"));
-  uploadZone?.addEventListener("drop", (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove("is-dragover");
-    const dropped = e.dataTransfer?.files?.[0];
-    if (dropped) handleFile(dropped);
-  });
-  uploadZone?.addEventListener("click", (e) => {
-    if (e.target !== removeImgBtn && !removeImgBtn?.contains(e.target)) {
-      fileInput?.click();
-    }
-  });
-  browseBtn?.addEventListener("click", (e) => { e.stopPropagation(); fileInput?.click(); });
-  fileInput?.addEventListener("change", (e) => {
-    const f = e.target.files?.[0];
-    if (f) handleFile(f);
-  });
-  removeImgBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const imgDataInput = $("cr-shop-image-data");
-    if (imgDataInput) imgDataInput.value = "";
-    if (fileInput) fileInput.value = "";
-    if (previewWrap) previewWrap.hidden = true;
-    if (dropContent) dropContent.hidden = false;
-  });
   $("cr-shop-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), imageUrl: $("cr-shop-image-data")?.value || undefined, cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
+    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
     catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-tip-open-btn")?.addEventListener("click", () => openTip("", ""));
@@ -845,7 +754,8 @@ function renderActivity() {
     list.innerHTML = activityEvents.map((event) => {
       const debit = event.direction === "debit";
       const amount = `${debit ? "−" : "+"}${event.amount}`;
-      return `<tr><td title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td>${esc(event.kickUsername || event.kickUserId || "Unknown member")}</td><td>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td>${esc(event.description || "—")}</td></tr>`;
+      const memberName = event.kickUsername || event.discordUsername || event.kickUserId || event.discordUserId || "Unknown member";
+      return `<tr><td title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td>${esc(memberName)}</td><td>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td>${esc(event.description || "—")}</td></tr>`;
     }).join("");
   }
   if (more) more.hidden = !activityCursor;

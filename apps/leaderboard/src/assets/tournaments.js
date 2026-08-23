@@ -1,5 +1,6 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
 import { renderEmpty } from "./dashboard/states.js";
+import { showConfirmModal } from "./dashboard/utils.js";
 import { computeTrustScore, connectKickChat } from "./chat-entry.js";
 
 const $ = (id) => document.getElementById(id);
@@ -118,6 +119,21 @@ function renderEntries() {
   }).join("");
 }
 
+function renderTitle() {
+  const titleEl = $("tournament-title-display");
+  const gameEl = $("tournament-game-display");
+  if (!titleEl || !gameEl) return;
+  if (!tournament) {
+    titleEl.hidden = true;
+    gameEl.hidden = true;
+    return;
+  }
+  titleEl.hidden = false;
+  gameEl.hidden = false;
+  titleEl.textContent = tournament.title || "Community tournament";
+  gameEl.textContent = tournament.game_name || "Game";
+}
+
 function renderTournament() {
   const empty = $("tournament-empty");
   const listCard = $("tournament-list-card");
@@ -125,12 +141,14 @@ function renderTournament() {
   const primary = $("tournament-primary");
   const pickWrap = $("tournament-pick-count-wrap");
   const channelField = $("tournament-chat-channel")?.closest(".tournament-channel-field");
+  const bracketCard = $("tournament-bracket-card");
   if (!tournament) {
     listCard.hidden = true;
     settings.hidden = true;
     primary.hidden = true;
     $("tournament-new").hidden = true;
     if (channelField) channelField.hidden = true;
+    if (bracketCard) bracketCard.hidden = true;
     renderEmpty(empty, {
       compactHeading: true,
       title: "Start a tournament",
@@ -138,35 +156,50 @@ function renderTournament() {
       actions: [{ id: "tournament-create-empty", label: "Create tournament", accent: true }],
     });
     empty.hidden = false;
+    renderTitle();
     return;
   }
+  const isFinished = tournament.status === "completed" || tournament.status === "cancelled";
   empty.hidden = true;
-  listCard.hidden = false;
-  settings.hidden = false;
-  if (channelField) channelField.hidden = false;
-  const activeCount = entries.filter((entry) => ["pending", "confirmed", "selected"].includes(entry.status)).length;
-  const eligibleCount = entries.filter((entry) => ["pending", "confirmed"].includes(entry.status)).length;
-  $("tournament-count").textContent = `${activeCount}${tournament.entry_cap ? ` of ${tournament.entry_cap}` : ""} entries`;
-  $("tournament-step-label").textContent = tournament.signup_state === "open"
-    ? `Viewers can join with ${tournament.entry_keyword || "!join"}`
-    : tournament.signup_state === "locked" ? "Signups are locked" : "Signups are closed";
-  const picking = tournament.signup_state === "locked" || eligibleCount > 0 && tournament.signup_state !== "open";
-  primary.hidden = false;
-  pickWrap.hidden = !picking;
-  primary.textContent = tournament.signup_state === "open" ? "Lock signups" : eligibleCount ? "Pick participants" : "Open signups";
-  if (tournament.signup_state === "open") primary.dataset.action = "lock";
-  else if (eligibleCount) primary.dataset.action = "pick";
-  else primary.dataset.action = "open";
-  primary.hidden = primary.dataset.action === "open" && entries.length === 0;
-  $("tournament-reopen").hidden = tournament.signup_state === "open" || eligibleCount === 0;
-  $("tournament-new").hidden = entries.length === 0 && tournament.signup_state !== "locked";
+  listCard.hidden = isFinished;
+  settings.hidden = isFinished;
+  if (channelField) channelField.hidden = isFinished;
+  if (isFinished) {
+    $("tournament-step-label").textContent = tournament.status === "completed"
+      ? `Champion: ${tournament.winner_name || "—"}`
+      : "Tournament cancelled";
+    $("tournament-count").textContent = "";
+    primary.hidden = true;
+    pickWrap.hidden = true;
+    $("tournament-reopen").hidden = true;
+    $("tournament-new").hidden = false;
+  } else {
+    const activeCount = entries.filter((entry) => ["pending", "confirmed", "selected"].includes(entry.status)).length;
+    const eligibleCount = entries.filter((entry) => ["pending", "confirmed"].includes(entry.status)).length;
+    $("tournament-count").textContent = `${activeCount}${tournament.entry_cap ? ` of ${tournament.entry_cap}` : ""} entries`;
+    $("tournament-step-label").textContent = tournament.signup_state === "open"
+      ? `Viewers can join with ${tournament.entry_keyword || "!join"}`
+      : tournament.signup_state === "locked" ? "Signups are locked" : "Signups are closed";
+    const picking = tournament.signup_state === "locked" || eligibleCount > 0 && tournament.signup_state !== "open";
+    pickWrap.hidden = !picking;
+    primary.textContent = tournament.signup_state === "open" ? "Lock signups" : eligibleCount ? "Pick participants" : "Open signups";
+    if (tournament.signup_state === "open") primary.dataset.action = "lock";
+    else if (eligibleCount) primary.dataset.action = "pick";
+    else primary.dataset.action = "open";
+    primary.hidden = primary.dataset.action === "open" && entries.length === 0;
+    $("tournament-reopen").hidden = tournament.signup_state === "open" || eligibleCount === 0;
+    $("tournament-new").hidden = entries.length === 0 && tournament.signup_state !== "locked";
 
-  $("tournament-format").value = tournament.format || "bracket";
-  $("tournament-entry-cap").value = tournament.entry_cap || "";
-  $("tournament-keyword").value = tournament.entry_keyword || "!join";
-  $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-  $("tournament-chat-channel").value = board.kickChannelName || "";
+    $("tournament-title").value = tournament.title || "";
+    $("tournament-game").value = tournament.game_name || "";
+    $("tournament-format").value = tournament.format || "bracket";
+    $("tournament-entry-cap").value = tournament.entry_cap || "";
+    $("tournament-keyword").value = tournament.entry_keyword || "!join";
+    $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
+    $("tournament-chat-channel").value = board.kickChannelName || "";
+  }
   renderEntries();
+  loadBracket();
 }
 
 async function loadEntries() {
@@ -179,7 +212,10 @@ async function loadEntries() {
 async function loadTournament() {
   const data = await api("/api/tournaments");
   const tournaments = data.tournaments || [];
-  tournament = tournaments.find((item) => !["completed", "cancelled"].includes(item.status)) || null;
+  // Prefer an active tournament, but keep a completed/cancelled one visible
+  // so the bracket and champion survive reload/back navigation.
+  const active = tournaments.find((item) => !["completed", "cancelled"].includes(item.status));
+  tournament = active || tournaments[0] || null;
   entries = [];
   if (tournament) await loadEntries();
   else renderTournament();
@@ -303,11 +339,14 @@ async function handlePrimary() {
   }
   if (action === "pick") {
     const count = Math.max(1, parseInt($("tournament-pick-count").value, 10) || 1);
+    if (!await showConfirmModal("Pick participants", `Randomly pick ${count} entries and seed the bracket? This cannot be undone.`, "Pick and seed", true)) return;
     await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/random-pick`, {
       method: "POST",
       body: JSON.stringify({ count }),
     });
-    return loadEntries();
+    await loadEntries();
+    await loadBracket();
+    return;
   }
 }
 
@@ -338,9 +377,103 @@ async function handleEntryAction(button) {
   setMessage("");
 }
 
+function groupBy(array, key) {
+  return array.reduce((acc, item) => {
+    const group = item[key] ?? "";
+    (acc[group] = acc[group] || []).push(item);
+    return acc;
+  }, {});
+}
+
+async function loadBracket() {
+  if (!tournament) return;
+  const bracketCard = $("tournament-bracket-card");
+  if (!bracketCard) return;
+  try {
+    const data = await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/bracket`);
+    renderBracket(data);
+  } catch (error) {
+    bracketCard.hidden = true;
+  }
+}
+
+function renderBracket(data) {
+  const bracketCard = $("tournament-bracket-card");
+  const bracket = $("tournament-bracket");
+  const champion = $("tournament-champion");
+  if (!bracketCard || !bracket || !champion) return;
+  const matches = data.matches || [];
+  const tourn = data.tournament || tournament || {};
+  if (!matches.length && !tourn.winner_name) {
+    bracketCard.hidden = true;
+    return;
+  }
+  bracketCard.hidden = false;
+  if (tourn.winner_name) {
+    champion.hidden = false;
+    champion.textContent = `Champion: ${esc(tourn.winner_name)}`;
+  } else {
+    champion.hidden = true;
+  }
+  const byRound = groupBy(matches, "round_number");
+  const rounds = Object.keys(byRound).sort((a, b) => Number(a) - Number(b));
+  bracket.innerHTML = rounds.map((round) => {
+    const roundMatches = byRound[round].sort((a, b) => a.match_index - b.match_index);
+    return `<div class="tournament-round"><h3>Round ${esc(round)}</h3>${roundMatches.map((match) => renderMatch(match)).join("")}</div>`;
+  }).join("");
+}
+
+function renderMatch(match) {
+  const p1 = match.player1_name || "TBD";
+  const p2 = match.player2_name || "TBD";
+  const isComplete = match.status === "completed";
+  const p1Winner = isComplete && match.winner_name === p1;
+  const p2Winner = isComplete && match.winner_name === p2;
+  const canScore = !isComplete && p1 !== "TBD" && p2 !== "TBD";
+  const scores = isComplete
+    ? `<span class="tournament-match-score">${match.player1_score ?? 0} - ${match.player2_score ?? 0}</span>`
+    : canScore
+      ? `<input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
+         <span class="tournament-match-divider">–</span>
+         <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
+         <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>`
+      : `<span class="tournament-match-tbd">Waiting for both players</span>`;
+  return `
+    <div class="tournament-match" data-match-id="${esc(match.id)}">
+      <div class="tournament-match-players">
+        <span class="tournament-match-player${p1Winner ? " winner" : ""}">${esc(p1)}${p1Winner ? " 👑" : ""}</span>
+      </div>
+      <div class="tournament-match-players">
+        <span class="tournament-match-player${p2Winner ? " winner" : ""}">${esc(p2)}${p2Winner ? " 👑" : ""}</span>
+      </div>
+      <div class="tournament-match-actions">${scores}</div>
+    </div>
+  `;
+}
+
+async function submitScore(matchId, target) {
+  const matchEl = target.closest('.tournament-match');
+  if (!matchEl) return;
+  const p1Input = matchEl.querySelector('[data-score-player="1"]');
+  const p2Input = matchEl.querySelector('[data-score-player="2"]');
+  const player1Score = parseInt(p1Input?.value, 10) || 0;
+  const player2Score = parseInt(p2Input?.value, 10) || 0;
+  if (player1Score === player2Score) {
+    setMessage("A match cannot end in a tie. Enter different scores.", true);
+    return;
+  }
+  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, {
+    method: "POST",
+    body: JSON.stringify({ matchId, player1Score, player2Score }),
+  });
+  await loadBracket();
+}
+
 async function saveSettings(event) {
   event.preventDefault();
   const body = {
+    title: $("tournament-title").value.trim(),
+    gameName: $("tournament-game").value.trim(),
     format: $("tournament-format").value,
     entryCap: $("tournament-entry-cap").value,
     entryKeyword: $("tournament-keyword").value.trim() || "!join",
@@ -381,12 +514,13 @@ async function init() {
 }
 
 document.addEventListener("click", async (event) => {
-  const target = event.target.closest?.("#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create-empty, #tournament-empty-action, #tournament-retry, [data-entry-action]");
+  const target = event.target.closest?.("#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create-empty, #tournament-empty-action, #tournament-retry, [data-entry-action], [data-score-match]");
   if (!target || !$("tournament-app")) return;
   event.preventDefault();
   try {
     if (target.id === "tournament-retry") return init();
     if (target.matches("[data-entry-action]")) return await handleEntryAction(target);
+    if (target.matches("[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
     if (target.id === "tournament-reopen") return await reopenSignups();
     if (target.id === "tournament-create-empty") return await createTournament();
     if (target.id === "tournament-new") return await createTournament();

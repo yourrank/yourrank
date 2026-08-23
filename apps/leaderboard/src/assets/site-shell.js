@@ -263,15 +263,23 @@
       btn.disabled = true;
       btn.textContent = "Placing order…";
       setRedeemStatus("Ordering “" + name + "”…");
+      var idempotencyKey = btn.dataset.redeemKey;
+      if (!idempotencyKey) {
+        idempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : Date.now() + "-" + Math.random().toString(36).slice(2);
+        btn.dataset.redeemKey = idempotencyKey;
+      }
       fetch("/api/viewer/redeem", {
         method: "POST",
         credentials: "same-origin",
         headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
-        body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem }),
+        body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem, idempotencyKey: idempotencyKey }),
       })
         .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
         .then(function (r) {
           if (r.ok && r.data.ok) {
+            delete btn.dataset.redeemKey;
             btn.textContent = "Requested";
             btn.classList.add("is-success");
             setRedeemStatus("Order placed: “" + name + "”. " + cost + " credits deducted.");

@@ -450,6 +450,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     .object({
       slug: z.string().trim().min(1).max(80),
       shopItemId: z.string().trim().min(1).max(64),
+      idempotencyKey: z.string().trim().min(1).max(100).optional().or(z.literal("").optional()),
     })
     .strict(),
 

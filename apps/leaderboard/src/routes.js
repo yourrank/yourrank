@@ -73,7 +73,6 @@ import {
   handleLockPrediction,
   handleSettlePrediction,
   handleCancelPrediction,
-  handlePlaceBet,
 } from "./handlers/predictions.js";
 import {
   handleGetWheelConfig,
@@ -286,7 +285,6 @@ export const ROUTES = [
   { path: "/api/predictions/:id/lock", method: "POST", handler: withHandler(handleLockPrediction) },
   { path: "/api/predictions/:id/settle", method: "POST", handler: withHandler(handleSettlePrediction) },
   { path: "/api/predictions/:id/cancel", method: "POST", handler: withHandler(handleCancelPrediction) },
-  { path: "/api/predictions/bet", method: "POST", handler: withHandler(handlePlaceBet) },
 
   // Lucky Wheel Game
   { path: "/api/games/wheel/config", method: "GET", handler: withHandler(handleGetWheelConfig) },

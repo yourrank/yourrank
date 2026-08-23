@@ -739,6 +739,8 @@ ${tabs}
     </div>
 
     <div id="tournament-empty" hidden></div>
+    <h2 class="tournament-title-display" id="tournament-title-display" hidden></h2>
+    <p class="tournament-game-display" id="tournament-game-display" hidden></p>
     <section class="tournament-list-card" id="tournament-list-card" aria-labelledby="tournament-list-heading">
       <div class="tournament-list-head">
         <div>
@@ -756,6 +758,14 @@ ${tabs}
     <details class="tournament-settings" id="tournament-settings">
       <summary>Settings <span>Format, cap, anti-alt and chat command</span></summary>
       <form id="tournament-settings-form" class="tournament-settings-grid">
+        <div class="field">
+          <label for="tournament-title">Tournament title</label>
+          <input id="tournament-title" name="title" type="text" placeholder="Community tournament" maxlength="120" />
+        </div>
+        <div class="field">
+          <label for="tournament-game">Game</label>
+          <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" />
+        </div>
         <div class="field">
           <label for="tournament-format">Format</label>
           <select id="tournament-format" name="format" class="v3-select">
@@ -783,6 +793,17 @@ ${tabs}
         </div>
       </form>
     </details>
+
+    <section class="tournament-list-card" id="tournament-bracket-card" aria-labelledby="tournament-bracket-heading" hidden>
+      <div class="tournament-list-head">
+        <div>
+          <h2 id="tournament-bracket-heading">Bracket</h2>
+          <p class="tournament-muted">Enter scores for each match to advance the winner.</p>
+        </div>
+      </div>
+      <div id="tournament-bracket" class="tournament-bracket"></div>
+      <p class="tournament-champion" id="tournament-champion" hidden></p>
+    </section>
   </div>
 </div>
 

@@ -13,6 +13,10 @@ import {
   effectivePlan,
 } from "@yourrank/shared/plans";
 
+function isUniqueViolation(error) {
+  return error?.code === "23505" || /unique constraint|unique violation|duplicate key/i.test(error?.message || "");
+}
+
 export async function handleViewerMe(request, env) {
   const { viewer, res } = await requireViewer(request, env);
   if (res) return res;
@@ -142,6 +146,11 @@ export async function handleViewerSite(request, env) {
       )
     : [];
 
+  const activeDropCount = await one(
+    "SELECT count(*)::int AS count FROM code_drops WHERE site_id=$1 AND status='active'",
+    [site.id]
+  );
+
   return ok({
     site: {
       id: site.id,
@@ -172,116 +181,165 @@ export async function handleViewerSite(request, env) {
       updatedAt: r.updated_at,
       itemName: r.item_name,
     })),
+    activeDropCount: activeDropCount?.count || 0,
   });
 }
 
-export async function handleViewerRedeem(request, env) {
-  const { viewer, res } = await requireViewer(request, env);
+export async function handleViewerRedeem(request, env, deps = {}) {
+  const requireViewerFn = deps.requireViewer || requireViewer;
+  const { viewer, res } = await requireViewerFn(request, env);
   if (res) return res;
 
-  const body = await (async () => {
+  const body = request.validatedBody || await (async () => {
     try { return await request.json(); } catch { return null; }
   })();
   const slug = String(body?.slug || "").trim().toLowerCase();
   const shopItemId = String(body?.shopItemId || "").trim();
-
+  const idempotencyKey = String(body?.idempotencyKey || "").trim();
   if (!slug || !shopItemId) return bad("slug and shopItemId required");
+  if (!idempotencyKey) return bad("idempotency key required");
+  const clientToken = idempotencyKey;
 
   const r = await getPublicSite(env, slug, request);
   if (r && r.requiresPassword) return bad("Password required.", 401);
   if (!r || r.suspended) return bad("site not found", 404);
 
-  const plan = r.plan;
-
   const rl = await rateLimit(env, `viewer-redeem:${r.id}:${viewer.id}`, 10, 60);
   if (!rl.ok) return bad("rate limited", 429);
 
-  const txResult = await withTransaction(async (tx) => {
-    await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [r.id]);
+  let txResult;
+  try {
+    txResult = await withTransaction(async (tx) => {
+      await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [r.id]);
 
-    const [pendingRow, fulfilled30dRow] = await Promise.all([
-      tx.one(
-        `SELECT count(*)::int AS count FROM redemptions red
-           JOIN site_viewers sv ON sv.id = red.site_viewer_id
-          WHERE sv.site_id=$1 AND red.status='pending'`,
-        [r.id]
-      ),
-      tx.one(
-        `SELECT count(*)::int AS count FROM redemptions red
-           JOIN site_viewers sv ON sv.id = red.site_viewer_id
-          WHERE sv.site_id=$1 AND red.status='fulfilled' AND red.created_at > now() - interval '30 days'`,
-        [r.id]
-      ),
-    ]);
-    if ((pendingRow?.count || 0) >= CREDITS_PENDING_REDEMPTIONS_LIMITS[plan]) {
-      return { error: "This streamer's shop is at capacity. Ask them to upgrade.", status: 403 };
-    }
-    if ((fulfilled30dRow?.count || 0) >= CREDITS_REDEMPTIONS_PER_30D_LIMITS[plan]) {
-      return { error: "This streamer's monthly redemption limit is reached. Ask them to upgrade.", status: 403 };
-    }
-
-    const viewerRow = await tx.one(
-      `SELECT sv.id, sv.balance, sv.blocked
-         FROM site_viewers sv
-        WHERE sv.site_id=$1 AND sv.viewer_id=$2
-        FOR UPDATE`,
-      [r.id, viewer.id]
-    );
-    if (!viewerRow) return { error: "No credits found on this site. Earn some first.", status: 400 };
-    if (viewerRow.blocked) return { error: "viewer blocked", status: 400 };
-
-    const item = await tx.one(
-      "SELECT id, name, cost, stock FROM shop_items WHERE id=$1 AND site_id=$2 AND active=true FOR UPDATE",
-      [shopItemId, r.id]
-    );
-    if (!item) return { error: "item not found", status: 400 };
-    if (item.stock !== null && item.stock <= 0) return { error: "out of stock", status: 400 };
-
-    // Atomic conditional update: the WHERE clauses make concurrent redemptions
-    // race-safe and ensure balance can never go negative or stock below zero.
-    const updatedViewer = await tx.one(
-      `UPDATE site_viewers
-        SET balance = balance - $1,
-            total_spent = total_spent + $1,
-            last_redeemed_at = now(),
-            updated_at = now()
-      WHERE id=$2 AND balance >= $1
-      RETURNING id, balance`,
-      [item.cost, viewerRow.id]
-    );
-    if (!updatedViewer) return { error: "insufficient balance", status: 400 };
-
-    if (item.stock !== null) {
-      const updatedItem = await tx.one(
-        `UPDATE shop_items
-            SET stock = stock - 1, updated_at = now()
-          WHERE id=$1 AND stock >= 1
-         RETURNING id`,
-        [item.id]
+      // Idempotency lookup is performed before any mutable business checks
+      // (plan capacity, stock, balance) so retries always return the original
+      // order and cancellation cannot make a token reusable.
+      const existing = await tx.one(
+        `SELECT r.id, r.shop_item_id, r.cost, r.status, sv.balance, sv.blocked, i.name AS item_name
+           FROM redemptions r
+           JOIN site_viewers sv ON sv.id = r.site_viewer_id
+           LEFT JOIN shop_items i ON i.id = r.shop_item_id
+          WHERE sv.site_id = $1
+            AND sv.viewer_id = $2
+            AND r.client_token = $3`,
+        [r.id, viewer.id, clientToken]
       );
-      if (!updatedItem) return { error: "out of stock", status: 400 };
+      if (existing) {
+        if (existing.shop_item_id !== shopItemId) {
+          return { error: "idempotency key already used for a different item", status: 409 };
+        }
+        return { redemptionId: existing.id, balance: Number(existing.balance), itemName: existing.item_name || shopItemId, itemCost: existing.cost, status: existing.status };
+      }
+
+      const plan = r.plan;
+      const [pendingRow, fulfilled30dRow] = await Promise.all([
+        tx.one(
+          `SELECT count(*)::int AS count FROM redemptions red
+             JOIN site_viewers sv ON sv.id = red.site_viewer_id
+            WHERE sv.site_id=$1 AND red.status='pending'`,
+          [r.id]
+        ),
+        tx.one(
+          `SELECT count(*)::int AS count FROM redemptions red
+             JOIN site_viewers sv ON sv.id = red.site_viewer_id
+            WHERE sv.site_id=$1 AND red.status='fulfilled' AND red.created_at > now() - interval '30 days'`,
+          [r.id]
+        ),
+      ]);
+      if ((pendingRow?.count || 0) >= CREDITS_PENDING_REDEMPTIONS_LIMITS[plan]) {
+        return { error: "This streamer's shop is at capacity. Ask them to upgrade.", status: 403 };
+      }
+      if ((fulfilled30dRow?.count || 0) >= CREDITS_REDEMPTIONS_PER_30D_LIMITS[plan]) {
+        return { error: "This streamer's monthly redemption limit is reached. Ask them to upgrade.", status: 403 };
+      }
+
+      const viewerRow = await tx.one(
+        `SELECT sv.id, sv.balance, sv.blocked
+           FROM site_viewers sv
+          WHERE sv.site_id=$1 AND sv.viewer_id=$2
+          FOR UPDATE`,
+        [r.id, viewer.id]
+      );
+      if (!viewerRow) return { error: "No credits found on this site. Earn some first.", status: 400 };
+      if (viewerRow.blocked) return { error: "viewer blocked", status: 400 };
+
+      const item = await tx.one(
+        "SELECT id, name, cost, stock FROM shop_items WHERE id=$1 AND site_id=$2 AND active=true FOR UPDATE",
+        [shopItemId, r.id]
+      );
+      if (!item) return { error: "item not found", status: 400 };
+      if (item.stock !== null && item.stock <= 0) return { error: "out of stock", status: 400 };
+
+      // Atomic conditional update: the WHERE clauses make concurrent redemptions
+      // race-safe and ensure balance can never go negative or stock below zero.
+      const updatedViewer = await tx.one(
+        `UPDATE site_viewers
+          SET balance = balance - $1,
+              total_spent = total_spent + $1,
+              last_redeemed_at = now(),
+              updated_at = now()
+        WHERE id=$2 AND balance >= $1
+        RETURNING id, balance`,
+        [item.cost, viewerRow.id]
+      );
+      if (!updatedViewer) return { error: "insufficient balance", status: 400 };
+
+      if (item.stock !== null) {
+        const updatedItem = await tx.one(
+          `UPDATE shop_items
+              SET stock = stock - 1, updated_at = now()
+            WHERE id=$1 AND stock >= 1
+           RETURNING id`,
+          [item.id]
+        );
+        if (!updatedItem) return { error: "out of stock", status: 400 };
+      }
+
+      const redemptionRows = await tx.unsafe(
+        `INSERT INTO redemptions (site_viewer_id, shop_item_id, cost, status, client_token)
+         VALUES ($1, $2, $3, 'pending', $4)
+         RETURNING id`,
+        [viewerRow.id, item.id, item.cost, clientToken]
+      );
+
+      await tx.unsafe(
+        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
+         VALUES ($1, 'spend', $2, $3, $4)`,
+        [
+          viewerRow.id,
+          item.cost,
+          `Ordered: ${item.name || item.id}`,
+          JSON.stringify({ shop_item_id: item.id, redemption_id: redemptionRows[0].id, item_name: item.name || "" }),
+        ]
+      );
+
+      return { redemptionId: redemptionRows[0].id, balance: updatedViewer.balance, itemName: item.name, itemCost: item.cost };
+    });
+  } catch (e) {
+    // If two retries race on the same idempotency key, the durable unique index
+    // raises a conflict. Return the existing order (or a misuse conflict) so the
+    // member is never charged twice.
+    if (isUniqueViolation(e)) {
+      const existing = await one(
+        `SELECT r.id, r.shop_item_id, r.cost, r.status, sv.balance, i.name AS item_name
+           FROM redemptions r
+           JOIN site_viewers sv ON sv.id = r.site_viewer_id
+           LEFT JOIN shop_items i ON i.id = r.shop_item_id
+          WHERE sv.site_id = $1
+            AND sv.viewer_id = $2
+            AND r.client_token = $3`,
+        [r.id, viewer.id, clientToken]
+      );
+      if (existing) {
+        if (existing.shop_item_id !== shopItemId) {
+          return bad("idempotency key already used for a different item", 409);
+        }
+        return ok({ redemptionId: existing.id, balance: Number(existing.balance), itemName: existing.item_name || shopItemId });
+      }
     }
-
-    const redemptionRows = await tx.unsafe(
-      `INSERT INTO redemptions (site_viewer_id, shop_item_id, cost, status)
-       VALUES ($1, $2, $3, 'pending')
-       RETURNING id`,
-      [viewerRow.id, item.id, item.cost]
-    );
-
-    await tx.unsafe(
-      `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
-       VALUES ($1, 'spend', $2, $3, $4)`,
-      [
-        viewerRow.id,
-        item.cost,
-        `Ordered: ${item.name || item.id}`,
-        JSON.stringify({ shop_item_id: item.id, redemption_id: redemptionRows[0].id, item_name: item.name || "" }),
-      ]
-    );
-
-    return { redemptionId: redemptionRows[0].id, balance: updatedViewer.balance, itemName: item.name, itemCost: item.cost };
-  });
+    throw e;
+  }
 
   if (txResult.error) return bad(txResult.error, txResult.status);
 

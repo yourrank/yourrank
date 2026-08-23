@@ -258,6 +258,7 @@ describe("handleCreditsSaveShopItem", () => {
 describe("handleViewerRedeem balance edge cases", () => {
   it("redeems with exactly enough credits and lands on a zero balance", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 }, // pending
       { count: 0 }, // fulfilled30d
       { id: "sv-1", balance: 50, blocked: false }, // viewer
@@ -271,7 +272,7 @@ describe("handleViewerRedeem balance edge cases", () => {
       [{ id: "red-1" }], // redemption insert
       [] // ledger insert
     );
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.balance).toBe(0);
@@ -283,6 +284,7 @@ describe("handleViewerRedeem balance edge cases", () => {
 
   it("refuses to redeem with 0 credits", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 0, blocked: false },
@@ -290,7 +292,7 @@ describe("handleViewerRedeem balance edge cases", () => {
       null // conditional update finds no row: balance 0 < cost 50
     );
     db.unsafeResponses.push([{ id: "site-1" }]);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("insufficient balance");
@@ -301,12 +303,13 @@ describe("handleViewerRedeem balance edge cases", () => {
 
   it("refuses to redeem when the viewer has never earned on this board", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       null // no site_viewers row at all
     );
     db.unsafeResponses.push([{ id: "site-1" }]);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/Earn some first/);
@@ -318,6 +321,7 @@ describe("handleViewerRedeem balance edge cases", () => {
 describe("handleViewerRedeem inventory edge cases", () => {
   it("redeems the single unit of a quantity-1 item and decrements stock", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 100, blocked: false },
@@ -326,7 +330,7 @@ describe("handleViewerRedeem inventory edge cases", () => {
       { id: "item-1" } // stock 1 -> 0 succeeds
     );
     db.unsafeResponses.push([{ id: "site-1" }], [{ id: "red-1" }], []);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(200);
     const stockUpdate = db.calls.find((c) => c.method === "one" && /UPDATE shop_items/.test(c.sql));
     expect(stockUpdate.sql).toMatch(/AND stock >= 1/);
@@ -334,6 +338,7 @@ describe("handleViewerRedeem inventory edge cases", () => {
 
   it("does not touch stock for an unlimited-quantity item", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 100, blocked: false },
@@ -342,20 +347,21 @@ describe("handleViewerRedeem inventory edge cases", () => {
       // no stock update expected for stock === null
     );
     db.unsafeResponses.push([{ id: "site-1" }], [{ id: "red-1" }], []);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(200);
     expect(db.calls.some((c) => /UPDATE shop_items/.test(c.sql))).toBe(false);
   });
 
   it("refuses items listed as out of stock before spending", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 100, blocked: false },
       { id: "item-1", name: "Gone", cost: 50, stock: 0 }
     );
     db.unsafeResponses.push([{ id: "site-1" }]);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("out of stock");
@@ -365,13 +371,14 @@ describe("handleViewerRedeem inventory edge cases", () => {
 
   it("rejects redeeming an inactive or deleted item", async () => {
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 100, blocked: false },
       null // item lookup with active=true finds nothing
     );
     db.unsafeResponses.push([{ id: "site-1" }]);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("item not found");
@@ -385,6 +392,7 @@ describe("handleViewerRedeem double-spend protection", () => {
     // Tab A wins the conditional balance update; tab B's update matches no row.
     const first = (() => {
       db.oneResponses.push(
+        null, // no existing redemption for token
         { count: 0 },
         { count: 0 },
         { id: "sv-1", balance: 50, blocked: false },
@@ -392,13 +400,14 @@ describe("handleViewerRedeem double-spend protection", () => {
         { id: "sv-1", balance: 0 }
       );
       db.unsafeResponses.push([{ id: "site-1" }], [{ id: "red-1" }], []);
-      return handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+      return handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     })();
     const resA = await first;
     expect(resA.status).toBe(200);
 
     resetDb();
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 50, blocked: false }, // stale read before tab A commits
@@ -406,7 +415,7 @@ describe("handleViewerRedeem double-spend protection", () => {
       null // tab A already spent it: balance >= 50 matches nothing
     );
     db.unsafeResponses.push([{ id: "site-1" }]);
-    const resB = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const resB = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(resB.status).toBe(400);
     const bodyB = await resB.json();
     expect(bodyB.error).toBe("insufficient balance");
@@ -418,6 +427,7 @@ describe("handleViewerRedeem double-spend protection", () => {
     // The handler must surface an error rather than report success, so the
     // DB rolls everything back atomically.
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 100, blocked: false },
@@ -430,13 +440,14 @@ describe("handleViewerRedeem double-spend protection", () => {
       new Error("connection reset")
     );
     await expect(
-      handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv())
+      handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv())
     ).rejects.toThrow("connection reset");
   });
 
   it("issues exactly one redemption row and one spend ledger entry per successful redeem", async () => {
     // Guard against regression where a retry handler could double-insert.
     db.oneResponses.push(
+      null, // no existing redemption for token
       { count: 0 },
       { count: 0 },
       { id: "sv-1", balance: 500, blocked: false },
@@ -445,13 +456,38 @@ describe("handleViewerRedeem double-spend protection", () => {
       { id: "item-1" }
     );
     db.unsafeResponses.push([{ id: "site-1" }], [{ id: "red-1" }], []);
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
     expect(res.status).toBe(200);
     const redemptionInserts = db.calls.filter((c) => /INSERT INTO redemptions/.test(c.sql));
     const ledgerInserts = db.calls.filter((c) => /INSERT INTO credit_ledger/.test(c.sql));
     expect(redemptionInserts.length).toBe(1);
     expect(ledgerInserts.length).toBe(1);
     expect(ledgerInserts[0].sql).toMatch(/'spend'/);
+  });
+
+  it("retry with the same idempotency key returns the original order without mutating balance or stock", async () => {
+    // Simulates the client retrying after a lost/network-failed response: the
+    // server already accepted the first request, so the retry must resolve to
+    // the same redemption and must not deduct balance or stock again.
+    db.oneResponses.push({
+      id: "red-1",
+      shop_item_id: "item-1",
+      cost: 50,
+      status: "pending",
+      balance: 450,
+      blocked: false,
+      item_name: "Sticker",
+    });
+    db.unsafeResponses.push([{ id: "site-1" }]);
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "test-key" }), makeEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.redemptionId).toBe("red-1");
+    expect(body.balance).toBe(450);
+    expect(db.calls.some((c) => /INSERT INTO redemptions/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /INSERT INTO credit_ledger/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE shop_items/.test(c.sql))).toBe(false);
   });
 });
 

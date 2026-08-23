@@ -1,5 +1,6 @@
 // Community Events Handlers: Raffles (Ticket Draws) & Flash Code Drops.
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import {
@@ -10,8 +11,6 @@ import {
 } from "@yourrank/shared/db";
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
-import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
-
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -336,13 +335,15 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     return bad("All claims for this drop have been taken!", 400);
   }
 
-  // Resolve viewer
+  // Resolve viewer. Create a site membership row on first interaction
+  // so a viewer can claim a drop without having earned credits first.
   const siteViewer = await one(
-    "SELECT id, balance FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+     VALUES ($1, $2, 0, 0, 0)
+     ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at=now()
+     RETURNING id, balance`,
     [site.id, viewerId]
   );
-
-  if (!siteViewer) return bad("Viewer not found on this site.", 404);
 
   // Check if viewer already claimed
   const alreadyClaimed = await one(
@@ -388,7 +389,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
 
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'reward', $2, $3)`,
+       VALUES ($1, 'earn', $2, $3)`,
       [siteViewer.id, drop.points_reward, `Flash Code Drop: ${drop.code}`]
     );
 

@@ -9,9 +9,6 @@ import {
   withTransaction as defaultWithTransaction,
 } from "@yourrank/shared/db";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
-import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
-import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
-
 /**
  * GET /api/predictions — List predictions for the site
  */
@@ -35,8 +32,7 @@ export async function handleGetPredictions(request, env, deps = {}) {
   if (authorization.res) return authorization.res;
 
   // Lazily close predictions whose betting window has elapsed so the dashboard
-  // never shows them as "Betting Open" forever. Bet placement is independently
-  // guarded by lock_at in handlePlaceBet.
+  // never shows them as "Betting Open" forever.
   await exec(
     "UPDATE predictions SET status='locked', updated_at=now() WHERE site_id=$1 AND status='open' AND lock_at IS NOT NULL AND lock_at <= now()",
     [site.id]
@@ -379,126 +375,4 @@ export async function handleCancelPrediction(request, env, deps = {}) {
   return ok({ predictionId, status: "cancelled", message: `Prediction cancelled and ${bets.length} bets refunded.` });
 }
 
-/**
- * POST /api/predictions/bet — Viewer places a wager on an option
- */
-export async function handlePlaceBet(request, env, deps = {}) {
-  const {
-    one = defaultOne,
-    withTransaction = defaultWithTransaction,
-    requireViewer = defaultRequireViewer,
-    rateLimit = defaultRateLimit,
-  } = deps;
 
-  const { viewer, res } = await requireViewer(request, env);
-  if (res) return res;
-
-  const body = await readJson(request);
-  const predictionId = String(body?.predictionId || "").trim();
-  const optionId = String(body?.optionId || "").trim().toLowerCase();
-  const amount = parseInt(body?.amount, 10) || 0;
-  const viewerId = viewer.id;
-
-  if (!predictionId || !optionId || amount <= 0) {
-    return bad("Prediction, option, and positive amount are required.");
-  }
-
-  const rl = await rateLimit(env, `prediction:bet:${viewerId}`, 30, 60);
-  if (!rl.ok) return bad("Too many attempts. Please wait a minute.", 429);
-
-  const pred = await one(
-    "SELECT id, site_id, title, options, status, min_bet, max_bet, lock_at FROM predictions WHERE id=$1",
-    [predictionId]
-  );
-
-  if (!pred) return bad("Prediction not found.", 404);
-  if (pred.status !== "open") return bad("Betting on this prediction is closed.", 400);
-
-  if (pred.lock_at && new Date(pred.lock_at).getTime() < Date.now()) {
-    return bad("Prediction betting time has ended.", 400);
-  }
-
-  if (amount < pred.min_bet || amount > pred.max_bet) {
-    return bad(`Bet amount must be between ${pred.min_bet} and ${pred.max_bet} points.`);
-  }
-
-  const siteViewer = await one(
-    "SELECT id, balance FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
-    [pred.site_id, viewerId]
-  );
-
-  if (!siteViewer) return bad("Viewer not found on this site.", 404);
-  if ((siteViewer.balance || 0) < amount) {
-    return bad(`Insufficient credits. You have ${siteViewer.balance || 0} pts.`);
-  }
-
-  const outcome = await withTransaction(async (tx) => {
-    // Re-verify under a row lock so a bet can never land while the prediction
-    // is being locked or settled concurrently.
-    const fresh = await tx.one(
-      "SELECT status, lock_at FROM predictions WHERE id=$1 FOR UPDATE",
-      [pred.id]
-    );
-    if (!fresh || fresh.status !== "open") {
-      return { error: "Betting on this prediction is closed.", status: 400 };
-    }
-    if (fresh.lock_at && new Date(fresh.lock_at).getTime() < Date.now()) {
-      return { error: "Prediction betting time has ended.", status: 400 };
-    }
-
-    // Deduct viewer balance
-    const updatedViewer = await tx.one(
-      "UPDATE site_viewers SET balance = balance - $1, updated_at=now() WHERE id=$2 AND balance >= $1 RETURNING id, balance",
-      [amount, siteViewer.id]
-    );
-    if (!updatedViewer) return { error: `Insufficient credits. You have ${siteViewer.balance || 0} pts.`, status: 400 };
-
-    // Insert bet
-    const bet = await tx.one(
-      `INSERT INTO prediction_bets (prediction_id, site_viewer_id, viewer_id, option_id, amount)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, amount, option_id, created_at`,
-      [pred.id, siteViewer.id, viewerId, optionId, amount]
-    );
-
-    // Update prediction pool & option stats
-    const rawOpts = typeof pred.options === "string" ? JSON.parse(pred.options) : (pred.options || []);
-    const updatedOpts = rawOpts.map((opt) => {
-      if (opt.id === optionId) {
-        return {
-          ...opt,
-          total_points: (opt.total_points || 0) + amount,
-          total_bets: (opt.total_bets || 0) + 1,
-        };
-      }
-      return opt;
-    });
-
-    await tx.unsafe(
-      "UPDATE predictions SET total_pool = total_pool + $1, options = $2, updated_at=now() WHERE id=$3",
-      [amount, JSON.stringify(updatedOpts), pred.id]
-    );
-
-    await tx.unsafe(
-      `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'bet', $2, $3)`,
-      [siteViewer.id, -amount, `Prediction Bet (${optionId.toUpperCase()}): ${pred.title}`]
-    );
-
-    return {
-      betId: bet.id,
-      amount,
-      newBalance: updatedViewer.balance,
-      options: updatedOpts,
-    };
-  });
-  if (outcome.error) return bad(outcome.error, outcome.status);
-
-  return ok({
-    betId: outcome.betId,
-    amount: outcome.amount,
-    newBalance: outcome.newBalance,
-    options: outcome.options,
-    message: `Bet placed: ${amount} points on ${optionId.toUpperCase()}! 🔮`,
-  });
-}

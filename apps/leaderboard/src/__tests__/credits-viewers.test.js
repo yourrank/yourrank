@@ -12,9 +12,11 @@ describe("viewer membership display", () => {
     expect(creditsJs).toContain('const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet"');
     expect(creditsJs).toContain("v.discord_username");
     expect(creditsJs).toContain("v.avatar_url");
-    expect(creditsJs).toContain("const history = v.kick_username");
+    expect(creditsJs).toContain("function viewerIdentity(");
+    expect(creditsJs).toContain('v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member"');
     expect(creditsJs).not.toContain("v.viewer_id ||");
-    expect(creditsJs).toContain("/dashboard/rewards/activity?viewer=${encodeURIComponent(v.kick_username)}");
+    expect(creditsJs).toContain('const history = identity !== "Member"');
+    expect(creditsJs).toContain('/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}');
     expect(creditsJs).toContain('new URLSearchParams(location.search).get("viewer")');
     expect(creditsJs).toContain("has signed in but has not earned or spent credits yet");
     expect(creditsJs).toContain("Members who sign in will appear here");

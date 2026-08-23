@@ -19,6 +19,8 @@ async function api(method, path, body) {
 }
 
 let state = {};
+let redeemingItemId = null;
+const redeemKeys = {};
 
 function setStatus(id, msg, err) {
   const el = $(id);
@@ -143,8 +145,8 @@ function renderSite() {
     ? `Kick channel: @${channel}`
     : "Streamer site";
 
-  const v = data.viewer;
-  $("vd-site-balance").textContent = v ? v.balance : 0;
+  const v = data.viewer || { balance: 0, blocked: false };
+  $("vd-site-balance").textContent = v.balance;
 
   const earnHint = $("vd-earn-hint");
   if (earnHint) {
@@ -156,7 +158,8 @@ function renderSite() {
   const items = data.shopItems || [];
   $("vd-shop-empty").hidden = items.length > 0;
   $("vd-shop-list").innerHTML = items.map((i) => {
-    const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0);
+    const isRedeeming = redeemingItemId === i.id;
+  const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0) && !isRedeeming;
     return `
       <div class="vd-card-row">
         <div class="vd-card-main">
@@ -191,6 +194,44 @@ function renderSite() {
       </div>
     </div>
   `}).join("");
+
+  renderEvents();
+}
+
+function renderEvents() {
+  const data = state.current;
+  if (!data) return;
+
+  const dropClaim = $("vd-drop-claim");
+  const eventsEmpty = $("vd-events-empty");
+
+  dropClaim.hidden = !(data.activeDropCount > 0);
+  eventsEmpty.hidden = data.activeDropCount > 0;
+}
+
+$("vd-drop-claim-btn")?.addEventListener("click", claimDrop);
+
+async function claimDrop() {
+  const input = $("vd-drop-code");
+  const code = String(input.value).trim().toUpperCase();
+  if (!code) {
+    setStatus("vd-drop-status", "Enter a code.", true);
+    return;
+  }
+  const btn = $("vd-drop-claim-btn");
+  setLoading(btn, true, "Claiming…");
+  try {
+    const data = await api("POST", "/api/events/drops/claim", { site: state.current.site.slug, code });
+    setStatus("vd-drop-status", `+${data.pointsAwarded} credits claimed.`, false);
+    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
+    state.current.viewer.balance = data.newBalance;
+    $("vd-drop-code").value = "";
+    renderSite();
+  } catch (err) {
+    setStatus("vd-drop-status", err.message, true);
+  } finally {
+    setLoading(btn, false);
+  }
 }
 
 async function redeem(shopItemId, btn) {
@@ -201,8 +242,20 @@ async function redeem(shopItemId, btn) {
   if (!await showConfirmModal("Confirm order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
   if (btn) setLoading(btn, true, "Placing order…");
 
+  // Tie the idempotency key to the item, not just the DOM node, so retries and
+  // rapid clicks resolve to the same order. The key is only cleared on success.
+  let idempotencyKey = redeemKeys[shopItemId] || btn?.dataset.redeemKey;
+  if (!idempotencyKey) {
+    idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    redeemKeys[shopItemId] = idempotencyKey;
+  }
+  if (btn) btn.dataset.redeemKey = idempotencyKey;
+
+  redeemingItemId = shopItemId;
+  renderSite();
+
   try {
-    const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId });
+    const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId, idempotencyKey });
     state.current.viewer.balance = data.balance;
     state.current.redemptions = state.current.redemptions || [];
     state.current.redemptions.unshift({
@@ -212,11 +265,17 @@ async function redeem(shopItemId, btn) {
       status: "pending",
       createdAt: new Date().toISOString(),
     });
-    renderSite();
-    // Refresh sites list to update balances.
+    delete redeemKeys[shopItemId];
+    // Refresh sites list to update balances; site view will re-render below.
     load().catch(() => {});
   } catch (err) { setStatus("vd-login-status", err.message, true); }
-  finally { if (btn) setLoading(btn, false); }
+  finally {
+    redeemingItemId = null;
+    if (btn) setLoading(btn, false);
+    // Re-render so the visible Order button is re-enabled after a failure and
+    // reflects the latest balance/order state after success.
+    if (state.current) renderSite();
+  }
 }
 
 $("vd-logout")?.addEventListener("click", async () => {
