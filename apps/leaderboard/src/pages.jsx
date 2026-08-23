@@ -14,7 +14,6 @@ import { responsiblePage } from "./pages/responsible.js";
 import { refundPage } from "./pages/refund.js";
 import { cookiesPage } from "./pages/cookies.js";
 import { helpHubPage, helpSupportPage, helpFeedbackPage } from "./pages/help.js";
-import { docsPage } from "./pages/docs.js";
 import {
   rewardsChannelPage,
   rewardsOverviewPage,
@@ -25,13 +24,11 @@ import {
 } from "./pages/rewards.jsx";
 import { audienceMembersPage } from "./pages/audience.jsx";
 import { settingsUnifiedPage } from "./pages/account.jsx";
-import { faqPage } from "./pages/faq.js";
 import { reviewsPage } from "./pages/reviews.js";
 import { invitePage } from "./pages/invite.jsx";
 import { giveawaysPage } from "./pages/giveaways.jsx";
 
 export const PAGES = {
-  docs: docsPage,
   login: loginPage,
   forgot: forgotPage,
   reset: resetPage,
@@ -58,7 +55,6 @@ export const PAGES = {
   rewardsRedemptions: rewardsRedemptionsPage,
   rewardsHistory: rewardsHistoryPage,
   settingsUnified: settingsUnifiedPage,
-  faq: faqPage,
   reviews: reviewsPage,
   invite: invitePage,
 };
