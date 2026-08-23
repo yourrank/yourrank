@@ -121,11 +121,11 @@ function renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt }) 
   }
   const token = $("cr-channel-token");
   if (token) {
-    token.textContent = expiryDate
-      ? (expiryDate > new Date()
-        ? `Kick connected · renews in ${Math.max(1, Math.ceil((expiryDate - Date.now()) / 86400000))} days`
-        : "Kick connection expired · reconnect")
-      : (connected ? "Kick not connected · reconnect Kick" : "Not connected yet");
+    token.textContent = tokenExpired
+      ? "Needs attention · reconnect"
+      : connected
+        ? "Renews automatically"
+        : "Not connected yet";
     token.classList.toggle("cr-attention", Boolean(connected && tokenExpired));
   }
   const linked = $("cr-channel-linked");
