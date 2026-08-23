@@ -251,8 +251,7 @@ function renderShopCards(items) {
     $("crShopEmptyCreate")?.addEventListener("click", () => openShop(), { once: true });
   }
   root.innerHTML = pageItems.map((i) => {
-    const imgHtml = (i.image_url || i.image || i.imageUrl) ? `<div class="cr-shop-card-thumb"><img src="${esc(i.image_url || i.image || i.imageUrl)}" alt="${esc(i.name)}" /></div>` : "";
-    return `<article class="cr-shop-card${i.active ? "" : " is-inactive"}">${imgHtml}<div class="cr-shop-card-head"><button class="cr-shop-card-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button><div class="cr-shop-card-controls"><button class="cr-shop-delete" type="button" data-del-shop="${esc(i.id)}" aria-label="Disable ${esc(i.name)}" title="Disable ${esc(i.name)}">×</button><input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Toggle ${esc(i.name)}" /></div></div><p>${esc(i.description || "")}</p><hr /><div class="cr-shop-card-foot"><b>${i.cost} <small>cr</small></b><span>Stock: ${i.stock === null ? "∞" : `${i.stock} left`}</span></div></article>`;
+    return `<article class="cr-shop-card${i.active ? "" : " is-inactive"}"><div class="cr-shop-card-head"><button class="cr-shop-card-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button><div class="cr-shop-card-controls"><button class="cr-shop-delete" type="button" data-del-shop="${esc(i.id)}" aria-label="Disable ${esc(i.name)}" title="Disable ${esc(i.name)}">×</button><input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Toggle ${esc(i.name)}" /></div></div><p>${esc(i.description || "")}</p><hr /><div class="cr-shop-card-foot"><b>${i.cost} <small>cr</small></b><span>Stock: ${i.stock === null ? "∞" : `${i.stock} left`}</span></div></article>`;
   }).join("");
   const controls = $("cr-shop-controls"); if (controls) { controls.querySelector("[data-shop-page]").textContent = filtered.length ? `Page ${shopPage} of ${pages} (${filtered.length})` : ""; controls.querySelector("[data-shop-prev]").disabled = shopPage <= 1; controls.querySelector("[data-shop-next]").disabled = shopPage >= pages; }
   wireDynamicActions();
@@ -495,26 +494,6 @@ function openShop(item, trigger) {
   drawerTrigger = trigger || $("cr-shop-new");
   $("cr-shop")?.classList.add("has-drawer");
   $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-active").checked = item?.active !== false; 
-  const imgData = item?.image_url || item?.image || item?.imageUrl || "";
-  const imgInput = $("cr-shop-image-data");
-  if (imgInput) imgInput.value = imgData;
-  const dropContent = $("cr-shop-drop-content");
-  const previewWrap = $("cr-shop-preview-wrap");
-  const previewImg = $("cr-shop-preview-img");
-  const progbar = $("cr-shop-progbar");
-  const nameEl = $("cr-shop-filename");
-  const sizeEl = $("cr-shop-filesize");
-  if (imgData && previewImg && previewWrap && dropContent) {
-    previewImg.src = imgData;
-    if (nameEl) nameEl.textContent = item?.name || "Uploaded image";
-    if (sizeEl) sizeEl.textContent = "Saved";
-    if (progbar) progbar.hidden = true;
-    dropContent.hidden = true;
-    previewWrap.hidden = false;
-  } else if (previewWrap && dropContent) {
-    previewWrap.hidden = true;
-    dropContent.hidden = false;
-  }
   $("cr-shop-name").focus(); 
 }
 function closeShop() { $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
@@ -643,80 +622,9 @@ function wireActions() {
   });
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
 
-  // Shop Item Image Uploader
-  const uploadZone = $("cr-shop-upload-zone");
-  const fileInput = $("cr-shop-file-input");
-  const browseBtn = $("cr-shop-browse-btn");
-  const removeImgBtn = $("cr-shop-remove-img");
-  const dropContent = $("cr-shop-drop-content");
-  const previewWrap = $("cr-shop-preview-wrap");
-  const previewImg = $("cr-shop-preview-img");
-  const nameEl = $("cr-shop-filename");
-  const sizeEl = $("cr-shop-filesize");
-  const progbar = $("cr-shop-progbar");
-  const progfill = $("cr-shop-progfill");
-
-  const handleFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) {
-      setStatus("cr-shop-status", "Please select a valid image file (PNG, JPG, WebP, GIF).", true);
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setStatus("cr-shop-status", "Image file must be 5 MB or smaller.", true);
-      return;
-    }
-    const reader = new FileReader();
-    if (progbar) progbar.hidden = false;
-    if (progfill) progfill.style.transform = "scaleX(0)";
-
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      const imgDataInput = $("cr-shop-image-data");
-      if (imgDataInput) imgDataInput.value = dataUrl;
-      if (previewImg) previewImg.src = dataUrl;
-      if (nameEl) nameEl.textContent = file.name;
-      const sizeStr = file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
-      if (sizeEl) sizeEl.textContent = sizeStr;
-      if (dropContent) dropContent.hidden = true;
-      if (previewWrap) previewWrap.hidden = false;
-
-      if (progfill) {
-        progfill.style.transform = "scaleX(1)";
-        setTimeout(() => { if (progbar) progbar.hidden = true; }, 400);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  uploadZone?.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.classList.add("is-dragover"); });
-  uploadZone?.addEventListener("dragleave", () => uploadZone.classList.remove("is-dragover"));
-  uploadZone?.addEventListener("drop", (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove("is-dragover");
-    const dropped = e.dataTransfer?.files?.[0];
-    if (dropped) handleFile(dropped);
-  });
-  uploadZone?.addEventListener("click", (e) => {
-    if (e.target !== removeImgBtn && !removeImgBtn?.contains(e.target)) {
-      fileInput?.click();
-    }
-  });
-  browseBtn?.addEventListener("click", (e) => { e.stopPropagation(); fileInput?.click(); });
-  fileInput?.addEventListener("change", (e) => {
-    const f = e.target.files?.[0];
-    if (f) handleFile(f);
-  });
-  removeImgBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const imgDataInput = $("cr-shop-image-data");
-    if (imgDataInput) imgDataInput.value = "";
-    if (fileInput) fileInput.value = "";
-    if (previewWrap) previewWrap.hidden = true;
-    if (dropContent) dropContent.hidden = false;
-  });
   $("cr-shop-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), imageUrl: $("cr-shop-image-data")?.value || undefined, cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
+    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
     catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-tip-open-btn")?.addEventListener("click", () => openTip("", ""));

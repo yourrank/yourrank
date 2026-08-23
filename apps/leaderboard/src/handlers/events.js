@@ -1,5 +1,6 @@
 // Community Events Handlers: Raffles (Ticket Draws) & Flash Code Drops.
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import {
@@ -10,8 +11,6 @@ import {
 } from "@yourrank/shared/db";
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
-import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
-
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -193,145 +192,6 @@ export async function handleDrawRaffle(request, env, deps = {}) {
 }
 
 /**
- * POST /api/events/raffles/tickets — Viewer buys raffle ticket(s)
- */
-export async function handleBuyRaffleTicket(request, env, deps = {}) {
-  const {
-    one = defaultOne,
-    withTransaction = defaultWithTransaction,
-    requireViewer = defaultRequireViewer,
-    rateLimit = defaultRateLimit,
-    logAudit = defaultLogAudit,
-  } = deps;
-
-  const { viewer, res } = await requireViewer(request, env);
-  if (res) return res;
-
-  const body = await readJson(request);
-  const raffleId = String(body?.raffleId || "").trim();
-  const requestedCount = Math.max(1, Math.min(100, parseInt(body?.count, 10) || 1));
-
-  if (!raffleId) return bad("Raffle ID is required.");
-
-  const rl = await rateLimit(env, `raffle:ticket:${viewer.id}`, 30, 60);
-  if (!rl.ok) return bad("Too many attempts. Please wait a minute.", 429);
-
-  const raffle = await one(
-    `SELECT id, site_id, title, ticket_cost, max_tickets_per_viewer, status, total_tickets, ends_at
-       FROM raffles
-      WHERE id=$1 AND status='active'`,
-    [raffleId]
-  );
-
-  if (!raffle) return bad("Raffle not found or no longer active.", 404);
-  if (raffle.ends_at && new Date(raffle.ends_at).getTime() < Date.now()) {
-    return bad("This raffle has ended.", 400);
-  }
-
-  const siteViewer = await one(
-    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
-     VALUES ($1, $2, 0, 0, 0)
-     ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at=now()
-     RETURNING id, balance`,
-    [raffle.site_id, viewer.id]
-  );
-
-  const existing = await one(
-    `SELECT count(*)::int AS count FROM raffle_tickets WHERE raffle_id=$1 AND viewer_id=$2`,
-    [raffle.id, viewer.id]
-  );
-
-  const count = Math.min(requestedCount, raffle.max_tickets_per_viewer - (existing?.count || 0));
-  if (count <= 0) {
-    return bad(`You already have the maximum ${raffle.max_tickets_per_viewer} ticket(s) for this raffle.`, 400);
-  }
-
-  const totalCost = (raffle.ticket_cost || 0) * count;
-  if ((siteViewer.balance || 0) < totalCost) {
-    return bad(`Insufficient credits. ${count} ticket(s) cost ${totalCost} credits.`, 400);
-  }
-
-  const outcome = await withTransaction(async (tx) => {
-    const locked = await tx.one(
-      `SELECT site_id, ticket_cost, max_tickets_per_viewer, status, total_tickets, ends_at
-         FROM raffles WHERE id=$1 FOR UPDATE`,
-      [raffle.id]
-    );
-    if (!locked || locked.status !== "active") {
-      return { error: "Raffle is no longer active.", status: 400 };
-    }
-    if (locked.ends_at && new Date(locked.ends_at).getTime() < Date.now()) {
-      return { error: "This raffle has ended.", status: 400 };
-    }
-
-    const lockedViewer = await tx.one(
-      "SELECT id, balance FROM site_viewers WHERE id=$1 FOR UPDATE",
-      [siteViewer.id]
-    );
-    if (!lockedViewer || lockedViewer.balance < (locked.ticket_cost || 0) * count) {
-      return { error: "Insufficient credits.", status: 400 };
-    }
-
-    const lockedExisting = await tx.one(
-      `SELECT count(*)::int AS count FROM raffle_tickets WHERE raffle_id=$1 AND viewer_id=$2`,
-      [raffle.id, viewer.id]
-    );
-    if ((lockedExisting?.count || 0) + count > locked.max_tickets_per_viewer) {
-      return { error: `Maximum ${locked.max_tickets_per_viewer} tickets per viewer.`, status: 400 };
-    }
-
-    for (let i = 0; i < count; i++) {
-      const ticketNumber = locked.total_tickets + i + 1;
-      await tx.unsafe(
-        `INSERT INTO raffle_tickets (raffle_id, site_viewer_id, viewer_id, ticket_number, viewer_name)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [raffle.id, siteViewer.id, viewer.id, ticketNumber, viewer.kick_username || viewer.discord_username || "Viewer"]
-      );
-    }
-
-    const updatedViewer = await tx.one(
-      "UPDATE site_viewers SET balance = balance - $1, total_spent = total_spent + $1, updated_at=now() WHERE id=$2 RETURNING id, balance",
-      [totalCost, siteViewer.id]
-    );
-
-    const updatedRaffle = await tx.one(
-      "UPDATE raffles SET total_tickets = total_tickets + $1, updated_at=now() WHERE id=$2 RETURNING total_tickets",
-      [count, raffle.id]
-    );
-
-    await tx.unsafe(
-      `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'spend', $2, $3)`,
-      [siteViewer.id, -totalCost, `Raffle tickets: ${raffle.title}`]
-    );
-
-    return {
-      newBalance: updatedViewer.balance,
-      totalTickets: updatedRaffle.total_tickets,
-    };
-  });
-
-  if (outcome.error) return bad(outcome.error, outcome.status);
-
-  await logAudit({
-    actorId: viewer.id,
-    action: "raffle_buy_ticket",
-    entityType: "raffle",
-    entityId: raffle.id,
-    request,
-    details: { ticketsBought: count, totalCost, newBalance: outcome.newBalance },
-  });
-
-  return ok({
-    ok: true,
-    ticketsBought: count,
-    newBalance: outcome.newBalance,
-    totalTickets: outcome.totalTickets,
-    cost: totalCost,
-  });
-}
-
-/**
  * GET /api/events/drops — List flash code drops
  */
 export async function handleGetCodeDrops(request, env, deps = {}) {
@@ -476,8 +336,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   }
 
   // Resolve viewer. Create a site membership row on first interaction
-  // so a viewer can claim a drop, place a bet, or buy a raffle ticket
-  // without having earned credits first.
+  // so a viewer can claim a drop without having earned credits first.
   const siteViewer = await one(
     `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
      VALUES ($1, $2, 0, 0, 0)

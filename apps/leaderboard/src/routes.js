@@ -63,7 +63,6 @@ import {
   handleGetRaffles,
   handleCreateRaffle,
   handleDrawRaffle,
-  handleBuyRaffleTicket,
   handleGetCodeDrops,
   handleCreateCodeDrop,
   handleClaimCodeDrop,
@@ -74,7 +73,6 @@ import {
   handleLockPrediction,
   handleSettlePrediction,
   handleCancelPrediction,
-  handlePlaceBet,
 } from "./handlers/predictions.js";
 import {
   handleGetWheelConfig,
@@ -277,7 +275,6 @@ export const ROUTES = [
   { path: "/api/events/raffles", method: "GET", handler: withHandler(handleGetRaffles) },
   { path: "/api/events/raffles", method: "POST", handler: withHandler(handleCreateRaffle) },
   { path: "/api/events/raffles/draw", method: "POST", handler: withHandler(handleDrawRaffle) },
-  { path: "/api/events/raffles/tickets", method: "POST", handler: withHandler(handleBuyRaffleTicket) },
   { path: "/api/events/drops", method: "GET", handler: withHandler(handleGetCodeDrops) },
   { path: "/api/events/drops", method: "POST", handler: withHandler(handleCreateCodeDrop) },
   { path: "/api/events/drops/claim", method: "POST", handler: withHandler(handleClaimCodeDrop) },
@@ -288,7 +285,6 @@ export const ROUTES = [
   { path: "/api/predictions/:id/lock", method: "POST", handler: withHandler(handleLockPrediction) },
   { path: "/api/predictions/:id/settle", method: "POST", handler: withHandler(handleSettlePrediction) },
   { path: "/api/predictions/:id/cancel", method: "POST", handler: withHandler(handleCancelPrediction) },
-  { path: "/api/predictions/bet", method: "POST", handler: withHandler(handlePlaceBet) },
 
   // Lucky Wheel Game
   { path: "/api/games/wheel/config", method: "GET", handler: withHandler(handleGetWheelConfig) },

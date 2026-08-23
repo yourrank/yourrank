@@ -18,6 +18,36 @@ import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
+const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
+
+function isSupportedBracketSize(n) {
+  return Number.isInteger(n) && SUPPORTED_BRACKET_SIZES.includes(n);
+}
+
+async function seedTournamentMatches(tx, tournamentId, participants, bracketSize) {
+  const totalRounds = Math.log2(bracketSize);
+
+  const round1MatchCount = bracketSize / 2;
+  for (let m = 0; m < round1MatchCount; m++) {
+    await tx.unsafe(
+      `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
+       VALUES ($1, 1, $2, $3, $4, 'pending')`,
+      [tournamentId, m, participants[m * 2], participants[m * 2 + 1]]
+    );
+  }
+
+  let currentMatchCount = round1MatchCount / 2;
+  for (let r = 2; r <= totalRounds; r++) {
+    for (let m = 0; m < currentMatchCount; m++) {
+      await tx.unsafe(
+        `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
+         VALUES ($1, $2, $3, 'TBD', 'TBD', 'pending')`,
+        [tournamentId, r, m]
+      );
+    }
+    currentMatchCount = currentMatchCount / 2;
+  }
+}
 
 function tournamentIdFromRequest(request) {
   return new URL(request.url).pathname.split("/")[3] || "";
@@ -108,7 +138,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const body = await readJson(request);
   const title = String(body?.title || "").trim() || "Community Tournament";
   const gameName = String(body?.gameName || "Game").trim();
-  const bracketSize = [4, 8, 16, 32].includes(parseInt(body?.bracketSize, 10)) ? parseInt(body?.bracketSize, 10) : 8;
+  const requestedBracketSize = [4, 8, 16, 32].includes(parseInt(body?.bracketSize, 10)) ? parseInt(body?.bracketSize, 10) : 8;
   const tournamentFormat = ["bracket", "1v1", "2v2"].includes(body?.format) ? body.format : "bracket";
   const entryCap = body?.entryCap === "" || body?.entryCap === null || body?.entryCap === undefined
     ? null
@@ -120,11 +150,16 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const entryKeyword = String(body?.entryKeyword || "!join").trim().slice(0, 40) || "!join";
 
   const rawParticipants = Array.isArray(body?.participants) ? body.participants : [];
-  const participants = rawParticipants.length
-    ? rawParticipants.slice(0, bracketSize).map((p, i) => String(p || `Player ${i + 1}`).trim())
+  const providedParticipantCount = rawParticipants.length;
+  if (providedParticipantCount > 0 && !isSupportedBracketSize(providedParticipantCount)) {
+    return bad("Participant count must be a supported bracket size (4, 8, 16, or 32).");
+  }
+  const bracketSize = providedParticipantCount || requestedBracketSize;
+  const participants = providedParticipantCount
+    ? rawParticipants.map((p) => String(p || "").trim()).filter(Boolean)
     : [];
-  while (participants.length > 0 && participants.length < bracketSize) {
-    participants.push(`Player ${participants.length + 1}`);
+  if (providedParticipantCount && participants.length !== providedParticipantCount) {
+    return bad("Every participant must have a non-empty name.");
   }
 
   const url = new URL(request.url);
@@ -133,8 +168,6 @@ export async function handleCreateTournament(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
-
-  const totalRounds = Math.log2(bracketSize);
 
   const result = await withTransaction(async (tx) => {
     const tourn = await tx.one(
@@ -161,28 +194,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
     );
 
     if (participants.length > 0) {
-      // Generate matches for Round 1
-      const round1MatchCount = bracketSize / 2;
-      for (let m = 0; m < round1MatchCount; m++) {
-        await tx.unsafe(
-          `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
-           VALUES ($1, 1, $2, $3, $4, 'pending')`,
-          [tourn.id, m, participants[m * 2], participants[m * 2 + 1]]
-        );
-      }
-
-      // Generate empty matches for subsequent rounds
-      let currentMatchCount = round1MatchCount / 2;
-      for (let r = 2; r <= totalRounds; r++) {
-        for (let m = 0; m < currentMatchCount; m++) {
-          await tx.unsafe(
-            `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
-             VALUES ($1, $2, $3, 'TBD', 'TBD', 'pending')`,
-            [tourn.id, r, m]
-          );
-        }
-        currentMatchCount = currentMatchCount / 2;
-      }
+      await seedTournamentMatches(tx, tourn.id, participants, bracketSize);
     }
 
     return tourn;
@@ -601,9 +613,18 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
 
   const result = await withTransaction(async (tx) => {
     const tournament = await tx.one(
-      "SELECT id, bracket_size, format FROM tournaments WHERE id=$1 FOR UPDATE",
+      "SELECT id, bracket_size, format, status FROM tournaments WHERE id=$1 FOR UPDATE",
       [access.tournament.id]
     );
+    if (tournament.status === "completed" || tournament.status === "cancelled") {
+      return { error: "Tournament is already finished.", status: 409 };
+    }
+    if (!isSupportedBracketSize(count)) {
+      return { error: "Pick count must be a supported bracket size (4, 8, 16, or 32).", status: 400 };
+    }
+    if (count > tournament.bracket_size) {
+      return { error: `Pick count cannot exceed the bracket size of ${tournament.bracket_size}.`, status: 400 };
+    }
     const available = await tx.one(
       `SELECT count(*)::integer AS count FROM tournament_entries
         WHERE tournament_id=$1 AND status IN ('pending', 'confirmed')`,
@@ -632,35 +653,17 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
       [ids]
     );
 
-    // Seed the bracket from the selected entries so the streamer can run it.
-    const bracketSize = tournament.bracket_size || Math.max(2, 2 ** Math.ceil(Math.log2(Math.max(1, selected.length))));
-    const seeded = selected.map((entry) => entry.display_name).slice(0, bracketSize);
-    while (seeded.length < bracketSize) seeded.push(`Player ${seeded.length + 1}`);
+    const selectedNames = (selected || []).map((entry) => entry.display_name);
+    if (selectedNames.length !== count) {
+      return { error: "Could not select the requested number of entries.", status: 400 };
+    }
+    const bracketSize = count;
     await tx.unsafe(
-      "UPDATE tournaments SET participants_json=$1::jsonb, updated_at=now() WHERE id=$2",
-      [JSON.stringify(seeded), tournament.id]
+      "UPDATE tournaments SET participants_json=$1, bracket_size=$2, updated_at=now() WHERE id=$3",
+      [JSON.stringify(selectedNames), bracketSize, tournament.id]
     );
     await tx.unsafe("DELETE FROM tournament_matches WHERE tournament_id=$1", [tournament.id]);
-    const round1MatchCount = bracketSize / 2;
-    for (let m = 0; m < round1MatchCount; m++) {
-      await tx.unsafe(
-        `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
-         VALUES ($1, 1, $2, $3, $4, 'pending')`,
-        [tournament.id, m, seeded[m * 2], seeded[m * 2 + 1]]
-      );
-    }
-    let currentMatchCount = round1MatchCount / 2;
-    const totalRounds = Math.log2(bracketSize);
-    for (let r = 2; r <= totalRounds; r++) {
-      for (let m = 0; m < currentMatchCount; m++) {
-        await tx.unsafe(
-          `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
-           VALUES ($1, $2, $3, 'TBD', 'TBD', 'pending')`,
-          [tournament.id, r, m]
-        );
-      }
-      currentMatchCount = currentMatchCount / 2;
-    }
+    await seedTournamentMatches(tx, tournament.id, selectedNames, bracketSize);
 
     return { entries: selected || [] };
   });
@@ -682,7 +685,6 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
 export async function handleUpdateMatchScore(request, env, deps = {}) {
   const {
     requireUser = defaultRequireUser,
-    one = defaultOne,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteCapability,
@@ -691,88 +693,117 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
 
-  const body = await readJson(request);
+  const body = await readJson(request) || {};
   const matchId = String(body?.matchId || "").trim();
-  const p1Score = parseInt(body?.player1Score, 10) || 0;
-  const p2Score = parseInt(body?.player2Score, 10) || 0;
-
   if (!matchId) return bad("matchId is required.");
 
-  const match = await one(
-    `SELECT tm.id, tm.tournament_id, tm.round_number, tm.match_index, tm.player1_name, tm.player2_name,
-            t.site_id, t.bracket_size, s.user_id AS site_user_id
-      FROM tournament_matches tm
-      JOIN tournaments t ON t.id = tm.tournament_id
-      JOIN sites s ON s.id = t.site_id
-      WHERE tm.id=$1`,
-    [matchId]
-  );
+  const rawP1 = Number(body?.player1Score);
+  const rawP2 = Number(body?.player2Score);
+  if (!Number.isInteger(rawP1) || !Number.isInteger(rawP2) || rawP1 < 0 || rawP2 < 0) {
+    return bad("Scores must be non-negative integers.");
+  }
+  if (rawP1 === rawP2) return bad("Scores cannot be tied. A winner must be decided.");
 
-  if (!match) return bad("Match not found or unauthorized.", 404);
-  const authorization = await requireSiteCapabilityImpl(
-    user,
-    { id: match.site_id, user_id: match.site_user_id },
-    "canRoleManageBoard"
-  );
-  if (authorization.res) return authorization.res;
-  if (p1Score === p2Score) return bad("Scores cannot be tied. A winner must be decided.", 400);
+  const tournamentId = tournamentIdFromRequest(request);
+  if (!tournamentId) return bad("tournamentId is required.");
 
-  const winnerName = p1Score > p2Score ? match.player1_name : match.player2_name;
-  const totalRounds = Math.log2(match.bracket_size);
-  const isFinals = match.round_number === totalRounds;
+  const result = await withTransaction(async (tx) => {
+    const match = await tx.one(
+      `SELECT tm.id, tm.round_number, tm.match_index, tm.player1_name, tm.player2_name, tm.status,
+              t.id AS tournament_id, t.status AS tournament_status, t.bracket_size, t.site_id, s.user_id AS site_user_id
+         FROM tournament_matches tm
+         JOIN tournaments t ON t.id = tm.tournament_id
+         JOIN sites s ON s.id = t.site_id
+        WHERE tm.tournament_id=$1 AND tm.id=$2
+        FOR UPDATE OF tm, t`,
+      [tournamentId, matchId]
+    );
+    if (!match) return { error: "Match not found or unauthorized.", status: 404 };
 
-  await withTransaction(async (tx) => {
-    // 1. Update this match
-    await tx.unsafe(
+    const authorization = await requireSiteCapabilityImpl(
+      user,
+      { id: match.site_id, user_id: match.site_user_id },
+      "canRoleManageBoard"
+    );
+    if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
+
+    if (match.tournament_status === "completed" || match.tournament_status === "cancelled") {
+      return { error: "Tournament is already finished.", status: 409 };
+    }
+    if (match.status === "completed") {
+      return { error: "Match has already been scored.", status: 409 };
+    }
+    if (!match.player1_name || !match.player2_name || match.player1_name === "TBD" || match.player2_name === "TBD") {
+      return { error: "Match is not ready to score.", status: 400 };
+    }
+
+    const totalRounds = Math.log2(match.bracket_size || 0);
+    if (!Number.isFinite(totalRounds) || totalRounds < 1) {
+      return { error: "Invalid bracket size.", status: 400 };
+    }
+    const isFinals = match.round_number === totalRounds;
+    const winnerName = rawP1 > rawP2 ? match.player1_name : match.player2_name;
+
+    const matchUpdate = await tx.unsafe(
       `UPDATE tournament_matches
           SET player1_score=$1, player2_score=$2, winner_name=$3, status='completed'
-        WHERE id=$4`,
-      [p1Score, p2Score, winnerName, match.id]
+        WHERE id=$4 AND status != 'completed'
+        RETURNING id`,
+      [rawP1, rawP2, winnerName, match.id]
     );
+    if (!matchUpdate || matchUpdate.length === 0) {
+      return { error: "Match could not be scored. It may have already been completed.", status: 409 };
+    }
 
-    // 2. Advance winner to next round or declare champion
     if (isFinals) {
-      await tx.unsafe(
-        "UPDATE tournaments SET winner_name=$1, status='completed', updated_at=now() WHERE id=$2",
+      const tournUpdate = await tx.unsafe(
+        `UPDATE tournaments
+            SET winner_name=$1, status='completed', updated_at=now()
+          WHERE id=$2 AND status NOT IN ('completed', 'cancelled')
+          RETURNING id`,
         [winnerName, match.tournament_id]
       );
+      if (!tournUpdate || tournUpdate.length === 0) {
+        return { error: "Tournament already has a champion.", status: 409 };
+      }
     } else {
       const nextRound = match.round_number + 1;
       const nextMatchIndex = Math.floor(match.match_index / 2);
       const isPlayer1Slot = match.match_index % 2 === 0;
-
-      if (isPlayer1Slot) {
-        await tx.unsafe(
-          `UPDATE tournament_matches
-              SET player1_name=$1
-            WHERE tournament_id=$2 AND round_number=$3 AND match_index=$4`,
-          [winnerName, match.tournament_id, nextRound, nextMatchIndex]
-        );
-      } else {
-        await tx.unsafe(
-          `UPDATE tournament_matches
-              SET player2_name=$1
-            WHERE tournament_id=$2 AND round_number=$3 AND match_index=$4`,
-          [winnerName, match.tournament_id, nextRound, nextMatchIndex]
-        );
+      const slotColumn = isPlayer1Slot ? "player1_name" : "player2_name";
+      const nextUpdate = await tx.unsafe(
+        `UPDATE tournament_matches
+            SET ${slotColumn}=$1
+          WHERE tournament_id=$2 AND round_number=$3 AND match_index=$4
+            AND (${slotColumn} IS NULL OR ${slotColumn} = '' OR ${slotColumn} = 'TBD')
+          RETURNING ${slotColumn}`,
+        [winnerName, match.tournament_id, nextRound, nextMatchIndex]
+      );
+      if (!nextUpdate || nextUpdate.length === 0) {
+        return { error: "Downstream match has already progressed or is conflicting.", status: 409 };
       }
     }
+
+    return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number };
   });
+  if (result.error) return bad(result.error, result.status);
 
   await logAudit({
     actorId: user.id,
     action: "tournament_match_score",
     entityType: "tournament_match",
-    entityId: match.id,
+    entityId: result.matchId,
     request,
-    details: { winnerName, p1Score, p2Score, isFinals },
+    details: { winnerName: result.winnerName, p1Score: rawP1, p2Score: rawP2, isFinals: result.isFinals },
   });
 
   return ok({
-    matchId: match.id,
-    winnerName,
-    isFinals,
-    message: isFinals ? `👑 Champion crowned: ${winnerName}!` : `🏆 ${winnerName} advanced to Round ${match.round_number + 1}!`,
+    matchId: result.matchId,
+    winnerName: result.winnerName,
+    isFinals: result.isFinals,
+    message: result.isFinals
+      ? `👑 Champion crowned: ${result.winnerName}!`
+      : `🏆 ${result.winnerName} advanced to Round ${result.roundNumber + 1}!`,
   });
 }
 

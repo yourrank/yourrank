@@ -1,6 +1,6 @@
 // Dashboard API for the Kick credits / shop system.
 import { requireUser, bad, ok, json, readJson } from "../auth.js";
-import { getByUser, getBoardById, getPublicSite, validateLogoData } from "../site.js";
+import { getByUser, getBoardById, getPublicSite } from "../site.js";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
@@ -142,7 +142,7 @@ export async function handleCreditsStatus(request, env) {
     ),
     query(
       // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
-      `SELECT id, name, description, cost, stock, active, image_url
+      `SELECT id, name, description, cost, stock, active
          FROM shop_items
         WHERE site_id=$1 ORDER BY created_at DESC LIMIT 1024`,
       [site.id]
@@ -495,14 +495,6 @@ export async function handleCreditsSaveShopItem(request, env) {
   const cost = Number(body?.cost || 0);
   const stock = body?.stock === null || body?.stock === undefined ? null : Number(body.stock);
   const active = body?.active !== false;
-  const rawImageUrl = body?.imageUrl;
-
-  let imageUrl = null;
-  if (typeof rawImageUrl === "string" && rawImageUrl.trim() !== "") {
-    const validated = validateLogoData(rawImageUrl.trim());
-    if (validated.error) return bad(validated.error);
-    imageUrl = validated.dataUri;
-  }
 
   if (!name) return bad("Item name is required");
   if (!Number.isFinite(cost) || cost <= 0) return bad("Cost must be a positive number");
@@ -524,28 +516,22 @@ export async function handleCreditsSaveShopItem(request, env) {
     }
 
     if (id) {
-      const hasImage = typeof rawImageUrl === "string";
       const rows = await tx.unsafe(
-        hasImage
-          ? `UPDATE shop_items
-                SET name=$1, description=$2, cost=$3, stock=$4, active=$5, image_url=$6, updated_at=now()
-              WHERE id=$7 AND site_id=$8
-              RETURNING id`
-          : `UPDATE shop_items
-                SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now()
-              WHERE id=$6 AND site_id=$7
-              RETURNING id`,
-        hasImage ? [name, description, cost, stock, active, imageUrl, id, site.id] : [name, description, cost, stock, active, id, site.id]
+        `UPDATE shop_items
+            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now()
+          WHERE id=$6 AND site_id=$7
+          RETURNING id`,
+        [name, description, cost, stock, active, id, site.id]
       );
       if (!rows || rows.length === 0) return { error: "shop item not found", status: 404 };
       return { id: rows[0].id };
     }
 
     const rows = await tx.unsafe(
-      `INSERT INTO shop_items (site_id, name, description, cost, stock, active, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO shop_items (site_id, name, description, cost, stock, active)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [site.id, name, description, cost, stock, active, imageUrl]
+      [site.id, name, description, cost, stock, active]
     );
     return { id: rows[0].id };
   });
@@ -812,7 +798,7 @@ export async function handlePublicCredits(request, env) {
 
   const shopItems = await query(
     // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
-    `SELECT id, name, description, cost, stock, active, image_url
+    `SELECT id, name, description, cost, stock, active
        FROM shop_items
       WHERE site_id=$1 AND active=true
       ORDER BY cost ASC

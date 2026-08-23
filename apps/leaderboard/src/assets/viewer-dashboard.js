@@ -200,77 +200,13 @@ function renderEvents() {
   if (!data) return;
 
   const dropClaim = $("vd-drop-claim");
-  const rafflesEl = $("vd-raffles");
-  const predictionsEl = $("vd-predictions");
   const eventsEmpty = $("vd-events-empty");
 
   dropClaim.hidden = !(data.activeDropCount > 0);
-  rafflesEl.innerHTML = "";
-  predictionsEl.innerHTML = "";
-
-  const raffles = data.activeRaffles || [];
-  const predictions = data.openPredictions || [];
-  const anyEvents = data.activeDropCount > 0 || raffles.length > 0 || predictions.length > 0;
-  eventsEmpty.hidden = anyEvents;
-
-  const v = data.viewer || { balance: 0, blocked: false };
-
-  rafflesEl.innerHTML = raffles.map((r) => {
-    const cost = r.ticket_cost || 0;
-    const max = r.max_tickets_per_viewer || 1;
-    const owned = r.viewer_ticket_count || 0;
-    const remaining = Math.max(0, max - owned);
-    const canBuy = !v.blocked && v.balance >= cost && remaining > 0;
-    return `
-      <div class="vd-card-row">
-        <div class="vd-card-main">
-          <div class="vd-card-title">${esc(r.title)}</div>
-          <div class="hint">${esc(r.description || "Raffle")} · ${cost === 0 ? "Free" : `${cost} credits/ticket`} · ${owned}/${max} tickets</div>
-        </div>
-        <div class="vd-card-side">
-          <div class="vd-card-cost">${r.total_tickets || 0}</div>
-          <div class="hint">entries</div>
-          <button class="btn btn--sm" data-buy-raffle="${esc(r.id)}" ${canBuy ? "" : "disabled"}>Buy ticket</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  predictionsEl.innerHTML = predictions.map((p) => {
-    const opts = typeof p.options === "string" ? JSON.parse(p.options) : (p.options || []);
-    const now = Date.now();
-    const locked = p.lock_at && new Date(p.lock_at).getTime() < now;
-    const betCount = p.viewer_bet_count || 0;
-    const canBet = !v.blocked && !locked && v.balance >= (p.min_bet || 1) && betCount === 0;
-    const optionsHtml = opts.map((o) => `<option value="${esc(o.id)}">${esc(o.label || o.id)}</option>`).join("");
-    const min = p.min_bet || 1;
-    const maxAttr = p.max_bet ? `max="${p.max_bet}"` : "";
-    return `
-      <div class="vd-card-row vd-prediction-row">
-        <div class="vd-card-main">
-          <div class="vd-card-title">${esc(p.title)}</div>
-          <div class="hint">Pool: ${p.total_pool || 0} credits · Min ${min} · Max ${p.max_bet || "—"}${locked ? " · Locked" : ""}</div>
-        </div>
-        <div class="vd-card-side">
-          <select class="vd-select" data-pred-option="${esc(p.id)}" ${canBet ? "" : "disabled"}>
-            <option value="">Pick an option</option>
-            ${optionsHtml}
-          </select>
-          <input type="number" class="vd-input" data-pred-amount="${esc(p.id)}" min="${min}" ${maxAttr} placeholder="Amount" ${canBet ? "" : "disabled"} />
-          <button class="btn btn--sm" data-place-bet="${esc(p.id)}" ${canBet ? "" : "disabled"}>Place bet</button>
-        </div>
-      </div>
-      <p class="status" id="vd-pred-status-${esc(p.id)}" role="status" aria-live="polite"></p>
-    `;
-  }).join("");
-
-  document.querySelectorAll("[data-buy-raffle]").forEach((b) => {
-    b.addEventListener("click", () => buyTicket(b.dataset.buyRaffle, b));
-  });
-  document.querySelectorAll("[data-place-bet]").forEach((b) => {
-    b.addEventListener("click", () => placeBet(b.dataset.placeBet, b));
-  });
+  eventsEmpty.hidden = data.activeDropCount > 0;
 }
+
+$("vd-drop-claim-btn")?.addEventListener("click", claimDrop);
 
 async function claimDrop() {
   const input = $("vd-drop-code");
@@ -290,62 +226,6 @@ async function claimDrop() {
     renderSite();
   } catch (err) {
     setStatus("vd-drop-status", err.message, true);
-  } finally {
-    setLoading(btn, false);
-  }
-}
-
-async function buyTicket(raffleId, btn) {
-  const raffle = (state.current.activeRaffles || []).find((r) => r.id === raffleId);
-  if (!raffle) return;
-  const cost = raffle.ticket_cost || 0;
-  const label = cost === 0 ? "Get a free ticket" : `Spend ${cost} credits for a ticket`;
-  if (!await showConfirmModal("Buy raffle ticket", label, "Buy ticket", false)) return;
-  setLoading(btn, true, "Buying…");
-  try {
-    const data = await api("POST", "/api/events/raffles/tickets", { raffleId, count: 1 });
-    setStatus("vd-events-status", `Bought ${data.ticketsBought} ticket(s).`, false);
-    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
-    state.current.viewer.balance = data.newBalance;
-    renderSite();
-  } catch (err) {
-    setStatus("vd-events-status", err.message, true);
-  } finally {
-    setLoading(btn, false);
-  }
-}
-
-async function placeBet(predictionId, btn) {
-  const pred = (state.current.openPredictions || []).find((p) => p.id === predictionId);
-  if (!pred) return;
-  const optionSelect = $(`[data-pred-option="${predictionId}"]`);
-  const amountInput = $(`[data-pred-amount="${predictionId}"]`);
-  const optionId = optionSelect?.value?.trim();
-  const amount = parseInt(amountInput?.value, 10) || 0;
-  const statusId = `vd-pred-status-${predictionId}`;
-  if (!optionId) {
-    setStatus(statusId, "Pick an option.", true);
-    return;
-  }
-  if (amount < (pred.min_bet || 1) || (pred.max_bet && amount > pred.max_bet)) {
-    setStatus(statusId, `Bet must be between ${pred.min_bet || 1} and ${pred.max_bet || "—"}.`, true);
-    return;
-  }
-  const v = state.current.viewer || { balance: 0, blocked: false };
-  if (amount > v.balance) {
-    setStatus(statusId, "Insufficient credits.", true);
-    return;
-  }
-  if (!await showConfirmModal("Place prediction bet", `Bet ${amount} credits on ${optionId}?`, "Place bet", false)) return;
-  setLoading(btn, true, "Placing…");
-  try {
-    const data = await api("POST", "/api/predictions/bet", { predictionId, optionId, amount });
-    setStatus(statusId, `Bet placed. New balance: ${data.newBalance}.`, false);
-    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
-    state.current.viewer.balance = data.newBalance;
-    renderSite();
-  } catch (err) {
-    setStatus(statusId, err.message, true);
   } finally {
     setLoading(btn, false);
   }
@@ -406,8 +286,6 @@ $("vd-switch")?.addEventListener("click", async () => {
   await api("POST", "/api/viewer/logout").catch(() => {});
   location.href = "/me";
 });
-
-$("vd-drop-claim-btn")?.addEventListener("click", claimDrop);
 
 const LOGIN_ERROR_MESSAGES = Object.freeze({
   rate_limited: "Too many login attempts. Try again shortly.",
