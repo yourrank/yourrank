@@ -58,15 +58,15 @@ body:has(.v3-dash[data-auth-workspace]) > main > .yr-workspace-loader.is-error .
 
 body:has(.v3-dash[data-auth-workspace]),
 .v3-dash[data-auth-workspace] {
-  --v4-canvas: #ffffff;
-  --v4-surface: #fcfcfc;
-  --v4-surface-soft: #fcfcfc;
-  --v4-surface-strong: #efefef;
-  --v4-ink: #191919;
-  --v4-ink-soft: #5c5c5c;
-  --v4-ink-mute: #6b6b6b;
-  --v4-line: rgba(0, 0, 0, 0.08);
-  --v4-line-strong: rgba(0, 0, 0, 0.12);
+  --v4-canvas: #f3f3ef;
+  --v4-surface: #ffffff;
+  --v4-surface-soft: #f7f7f3;
+  --v4-surface-strong: #ebebe5;
+  --v4-ink: #141414;
+  --v4-ink-soft: #55554f;
+  --v4-ink-mute: #6b6b64;
+  --v4-line: rgba(20, 20, 12, 0.1);
+  --v4-line-strong: rgba(20, 20, 12, 0.16);
   --v4-navy: #121111;
   --v4-navy-raised: #232323;
   --v4-navy-line: rgba(255, 255, 255, 0.12);
@@ -87,10 +87,10 @@ body:has(.v3-dash[data-auth-workspace]),
   --v4-danger-line: rgb(180 35 24 / 0.28);
   --v4-danger-soft: #fff0ee;
   --v4-font-mono: var(--v3-mono);
-  --v4-radius: 16px;
-  --v4-radius-sm: 6px;
-  --v4-radius-control: 2px;
-  --v4-shadow: none;
+  --v4-radius: 14px;
+  --v4-radius-sm: 8px;
+  --v4-radius-control: 8px;
+  --v4-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
   --v4-shadow-overlay: 0 16px 48px rgba(18, 17, 17, 0.14);
   --yr-space-sm: 18px;
   --yr-space-md: 20px;
@@ -533,11 +533,11 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 }
 .v3-dash[data-auth-workspace] .lb-nav.is-on,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"] {
-  border-color: rgb(var(--v4-cobalt-rgb) / 0.2);
-  background: rgb(var(--v4-cobalt-rgb) / 0.12);
+  border-color: var(--v4-cobalt);
+  background: var(--v4-cobalt);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: none;
+  box-shadow: 0 6px 18px -8px rgb(var(--v4-cobalt-rgb) / 0.7);
 }
 .v3-dash[data-auth-workspace] .lb-nav.is-on::before,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"]::before {
@@ -545,7 +545,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 }
 .v3-dash[data-auth-workspace] .lb-nav.is-on .lb-nav-ic,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"] .lb-nav-ic {
-  color: #38bdf8;
+  color: #ffffff;
 }
 .v3-dash[data-auth-workspace] .lb-nav-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 0; background: transparent; color: currentColor; }
 .v3-dash[data-auth-workspace] .lb-nav-ic svg { width: 17px; height: 17px; }
@@ -1497,7 +1497,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 .v3-dash[data-auth-workspace] .v3-set-btn:hover { transform: translateY(-1px); }
 .v3-dash[data-auth-workspace] .btn--accent,
 .v3-dash[data-auth-workspace] .v3-btn--accent,
-.v3-dash[data-auth-workspace] .v3-set-btn--dark { border-color: var(--v4-cobalt); background: var(--v4-cobalt); color: var(--v4-cobalt-ink); }
+.v3-dash[data-auth-workspace] .v3-set-btn--dark { border-color: var(--v4-cobalt); background: var(--v4-cobalt); color: var(--v4-cobalt-ink); box-shadow: 0 1px 2px rgb(var(--v4-cobalt-rgb) / 0.3), 0 8px 20px -10px rgb(var(--v4-cobalt-rgb) / 0.55); }
 .v3-dash[data-auth-workspace] .btn--accent:hover,
 .v3-dash[data-auth-workspace] .v3-btn--accent:hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--dark:hover { border-color: var(--v4-cobalt-hover); background: var(--v4-cobalt-hover); color: #ffffff; }
@@ -2198,7 +2198,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 .v3-dash[data-auth-workspace] .board-table { width: 100%; border-collapse: collapse; color: var(--v4-ink); font-size: 13px; }
 .v3-dash[data-auth-workspace] .v3-table th,
 .v3-dash[data-auth-workspace] .admin-table th,
-.v3-dash[data-auth-workspace] .board-table th { padding: 11px 14px; border-bottom: 1px solid var(--v4-line-strong); background: var(--v4-surface-soft); color: var(--v4-ink-soft); font: 650 11px var(--v3-sans); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+.v3-dash[data-auth-workspace] .board-table th { padding: 12px 14px; border-bottom: 1px solid var(--v4-line-strong); background: var(--v4-surface-strong); color: var(--v4-ink-soft); font: 700 10.5px var(--v3-sans); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
   text-align: left; }
 .v3-dash[data-auth-workspace] .v3-table td,
 .v3-dash[data-auth-workspace] .admin-table td,
@@ -4991,7 +4991,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] .ov-setup-row:has(.is-done) {
-  background: var(--yr-color-surface-sunken-2); background: color-mix(in srgb, var(--v3-green) 3%, var(--v3-main-panel));
+  background: color-mix(in srgb, var(--v3-green) 3%, var(--v3-main-panel));
 }
 
 .v3-dash[data-auth-workspace] .ov-setup-foot {
@@ -5044,7 +5044,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-tab.is-on[data-accent] { border-bottom-color: var(--v3-accent);
 }
 
-.v3-dash[data-auth-workspace] .v3-table tbody tr:hover td { background: var(--yr-color-bg);
+.v3-dash[data-auth-workspace] .v3-table tbody tr:hover td { background: var(--v4-cobalt-soft);
 }
 
 .v3-dash[data-auth-workspace] .v3-table tbody tr.is-sel td { background: var(--v3-accent-soft);
@@ -5062,7 +5062,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   height: 22px;
   border-radius: 999px;
   position: relative;
-  background: var(--yr-color-text-secondary-2);
+  background: #c9c9c1;
   cursor: pointer;
   transition: background .15s;
   flex: 0 0 auto;
@@ -5076,7 +5076,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--yr-color-surface);
+  background: #ffffff;
   transition: transform .15s, background .15s;
 }
 
@@ -5150,7 +5150,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-meter {
   height: 6px;
   border-radius: 999px;
-  background: var(--yr-color-border-3);
+  background: var(--v4-line-strong);
   overflow: hidden;
 }
 
@@ -5702,19 +5702,19 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .cr-usage-upgrade { display: block; color: var(--v3-accent-ink); font-size: 11px; margin-top: 8px;
 }
 
-.v3-dash[data-auth-workspace] .cr-confirm-popover { position: fixed; z-index: 200; width: 260px; padding: 14px; border-radius: var(--v3-radius-sm); background: var(--v3-chrome); color: var(--yr-color-text-inverse); box-shadow: var(--v3-shadow-lg);
+.v3-dash[data-auth-workspace] .cr-confirm-popover { position: fixed; z-index: 200; width: 260px; padding: 14px; border-radius: var(--v3-radius-sm); border: 1px solid var(--v4-line-strong); background: #ffffff; color: var(--v4-ink); box-shadow: var(--v4-shadow-overlay);
 }
 
 .v3-dash[data-auth-workspace] .cr-confirm-popover strong { display: block; font-size: 14px; font-weight: 700;
 }
 
-.v3-dash[data-auth-workspace] .cr-confirm-popover p { color: var(--yr-color-chrome-ink-5); font-size: 13px; line-height: 1.4; margin: 8px 0 14px;
+.v3-dash[data-auth-workspace] .cr-confirm-popover p { color: var(--v4-ink-soft); font-size: 13px; line-height: 1.4; margin: 8px 0 14px;
 }
 
 .v3-dash[data-auth-workspace] .cr-confirm-popover div { display: flex; justify-content: flex-end; gap: 8px;
 }
 
-.v3-dash[data-auth-workspace] .cr-confirm-popover button { border: 1px solid var(--yr-color-chrome-line-5); border-radius: var(--v3-radius-sm); background: transparent; color: var(--yr-color-text-inverse); padding: 7px 11px; cursor: pointer;
+.v3-dash[data-auth-workspace] .cr-confirm-popover button { border: 1px solid var(--v4-line-strong); border-radius: var(--v3-radius-sm); background: #ffffff; color: var(--v4-ink); padding: 7px 11px; cursor: pointer;
 }
 
 .v3-dash[data-auth-workspace] .cr-confirm-popover button.btn--accent { border-color: var(--v3-accent); background: var(--v3-accent); color: var(--v3-accent-ink);

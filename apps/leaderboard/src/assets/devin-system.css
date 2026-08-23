@@ -22,14 +22,14 @@
   --devin-ink: #191919;
   --devin-muted: #5c5c5c;
   --devin-faint: #6b6b6b;
-  --devin-bg: #ffffff;
-  --devin-surface: #fcfcfc;
-  --devin-surface-2: #efefef;
-  --devin-line: rgba(0, 0, 0, 0.12);
-  --devin-line-soft: rgba(0, 0, 0, 0.08);
-  --devin-radius-card: 16px;
-  --devin-radius-control: 2px;
-  --devin-radius-small: 6px;
+  --devin-bg: #f3f3ef;
+  --devin-surface: #ffffff;
+  --devin-surface-2: #ebebe5;
+  --devin-line: rgba(20, 20, 12, 0.16);
+  --devin-line-soft: rgba(20, 20, 12, 0.1);
+  --devin-radius-card: 14px;
+  --devin-radius-control: 8px;
+  --devin-radius-small: 8px;
   --devin-radius-pill: 200px;
   --devin-font: "Inter", "Fira Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --devin-mono: "Geist Mono", "Fira Code", "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
@@ -406,7 +406,7 @@ body.yr-ui {
 .v3-dash[data-auth-workspace] {
   --v4-canvas: var(--devin-bg);
   --v4-surface: var(--devin-surface);
-  --v4-surface-soft: var(--devin-surface-2);
+  --v4-surface-soft: #f7f7f3;
   --v4-surface-strong: var(--devin-surface-2);
   --v4-ink: var(--devin-ink);
   --v4-ink-soft: var(--devin-muted);
@@ -424,7 +424,7 @@ body.yr-ui {
   --v4-radius: var(--devin-radius-card);
   --v4-radius-sm: var(--devin-radius-small);
   --v4-radius-control: var(--devin-radius-control);
-  --v4-shadow: none;
+  --v4-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
   --v4-shadow-overlay: 0 16px 48px rgba(18, 17, 17, 0.14);
 }
 
@@ -441,10 +441,11 @@ body:has(.v3-dash[data-auth-workspace]),
   border-color: var(--devin-line-soft);
   border-radius: var(--devin-radius-card);
   background: var(--devin-surface);
-  box-shadow: none;
+  box-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
 }
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"],
-.v3-dash[data-auth-workspace] .lb-nav.is-active { background: #232323; box-shadow: inset 2px 0 0 var(--devin-primary); }
+.v3-dash[data-auth-workspace] .lb-nav.is-active,
+.v3-dash[data-auth-workspace] .lb-nav.is-on { background: var(--devin-primary); box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--devin-primary) 70%, transparent); color: #ffffff; }
 .v3-dash[data-auth-workspace] .lb-side-brandmark,
 .gm-brand-mark,
 .gm-who-avatar { border-radius: var(--devin-radius-small); background: var(--devin-primary); }
