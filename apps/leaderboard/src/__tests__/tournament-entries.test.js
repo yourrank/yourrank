@@ -176,7 +176,7 @@ describe("tournament entry lifecycle", () => {
     ];
     const d = deps({
       oneValues: [TOURNAMENT],
-      txOneValues: [{ count: 3 }],
+      txOneValues: [{ ...TOURNAMENT, bracket_size: 4 }, { count: 3 }],
       txQueryValues: [picked, picked.map((entry) => ({ ...entry, status: "selected" }))],
     });
     const response = await handleRandomPickTournamentEntries(
@@ -309,5 +309,37 @@ describe("tournament entry lifecycle", () => {
     );
     expect(response.status).toBe(200);
     expect(txUnsafe).toHaveBeenCalledTimes(3);
+  });
+
+  it("seeds the bracket when entries are randomly picked", async () => {
+    const picked = [
+      { id: "entry-1", display_name: "Alice" },
+      { id: "entry-2", display_name: "Bob" },
+    ];
+    const selected = picked.map((entry) => ({ ...entry, status: "selected" }));
+    const txUnsafe = mock(async () => []);
+    let oneCall = 0;
+    let queryCall = 0;
+    const d = {
+      requireUser: mock(async () => ({ user: USER, res: null })),
+      one: mock(async () => TOURNAMENT),
+      withTransaction: mock(async (fn) => fn({
+        one: mock(async () => (++oneCall === 1 ? { ...TOURNAMENT, bracket_size: 4 } : { count: 2 })),
+        query: mock(async () => (++queryCall === 1 ? picked : selected)),
+        unsafe: txUnsafe,
+      })),
+      logAudit: mock(async () => {}),
+      requireSiteCapabilityImpl: mock(async () => ({ res: null })),
+    };
+    const response = await handleRandomPickTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/random-pick", { count: 2 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const unsafeSQL = txUnsafe.mock.calls.map((call) => call[0]).join(" ");
+    expect(unsafeSQL).toContain("UPDATE tournaments SET participants_json");
+    expect(unsafeSQL).toContain("DELETE FROM tournament_matches");
+    expect(unsafeSQL).toContain("INSERT INTO tournament_matches");
   });
 });

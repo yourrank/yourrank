@@ -1,7 +1,7 @@
 import { loadBoardShell, sitePath } from "./dashboard/board-shell.js";
 import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js";
 import { clearSession } from "./dashboard/session.js";
-import { inlineStateHtml } from "./dashboard/states.js";
+import { inlineStateHtml, renderInlineState } from "./dashboard/states.js";
 import { showConfirmModal } from "./dashboard/utils.js";
 import { computeTrustScore, connectKickChat } from "./chat-entry.js";
 
@@ -45,15 +45,28 @@ if (!window.__yrSpaShell) {
   let claimTimerInterval = null;
   let claimSecondsRemaining = 60;
   let winnerClaimed = false;
+  let siteId = "";
 
   // Anti-Alt & Sybil Tracking
   const chatHistory = new Map(); // username -> message count
   const recentEntryTimestamps = []; // timestamps of recent entrants for burst detection
   let pastWinners = new Set();
-  try {
-    const savedWinners = JSON.parse(localStorage.getItem("yr_past_winners") || "[]");
-    pastWinners = new Set(savedWinners.map((w) => String(w).toLowerCase()));
-  } catch {}
+
+  function pastWinnersKey() {
+    return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
+  }
+
+  function channelKey() {
+    return `yr_gw_channel:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
+  }
+
+  function loadPastWinners() {
+    try {
+      const savedWinners = JSON.parse(localStorage.getItem(pastWinnersKey()) || "[]");
+      pastWinners = new Set(savedWinners.map((w) => String(w).toLowerCase()));
+    } catch {}
+  }
+  loadPastWinners();
 
   // DOM Elements
   const $ = (id) => document.getElementById(id);
@@ -62,9 +75,20 @@ if (!window.__yrSpaShell) {
     // Wire the giveaway UI first so a failing shell request can never leave the
     // page unresponsive.
     wireEvents();
-    autoFillChannel();
-    loadBoardShell().then(() => window.__yrBoot?.signal()).catch((error) => {
+    loadBoardShell().then((shell) => {
+      siteId = shell.activeSiteId || "";
+      autoFillChannel();
+      window.__yrBoot?.signal();
+    }).catch((error) => {
       window.__yrBoot?.fail(error?.message || "The dashboard shell could not be loaded.");
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (isListening || entrants.length > 0 || currentWinner) {
+        const message = "A giveaway is in progress. Refreshing will clear all entrants and the current winner.";
+        event.preventDefault();
+        event.returnValue = message;
+        return message;
+      }
     });
   }
 
@@ -197,7 +221,7 @@ if (!window.__yrSpaShell) {
 
   async function autoFillChannel() {
     // Check if channel is saved in localStorage or from site API
-    const saved = localStorage.getItem("yr_gw_channel");
+    const saved = localStorage.getItem(channelKey());
     if (saved) {
       $("gw-channel-input").value = saved;
     } else {
@@ -285,7 +309,7 @@ if (!window.__yrSpaShell) {
 
     targetKeyword = keyword;
     channelName = inputChan.toLowerCase().replace(/^@/, "");
-    localStorage.setItem("yr_gw_channel", channelName);
+    localStorage.setItem(channelKey(), channelName);
 
     $("gw-status-text").textContent = "Resolving Kick chatroom…";
     setStatus("connecting", "Connecting…");
@@ -731,6 +755,7 @@ if (!window.__yrSpaShell) {
     let pool = entrants;
 
     // Filter out previous winners if enabled
+    loadPastWinners();
     if (optExcludePrev) {
       const filtered = pool.filter((e) => !pastWinners.has(e.username.toLowerCase()));
       if (filtered.length > 0) pool = filtered;
@@ -822,7 +847,7 @@ if (!window.__yrSpaShell) {
       // Save winner to past winners registry
       pastWinners.add(winner.username.toLowerCase());
       try {
-        localStorage.setItem("yr_past_winners", JSON.stringify(Array.from(pastWinners)));
+        localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
       } catch {}
 
       displayWinner(winner);
@@ -1136,12 +1161,23 @@ if (!window.__yrSpaShell) {
   }
 
   async function loadRaffles() {
+    const activeList = $("rf-active-list");
     try {
       const res = await dashboardFetch("/api/events/raffles");
-      if (!res.ok) return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (activeList) {
+          renderInlineState(activeList, { kind: "error", title: "Couldn't load raffles", body: data.error || "Something went wrong. Try again.", actions: [{ label: "Retry", onClick: loadRaffles }] });
+        }
+        return;
+      }
       const data = await res.json();
       renderRaffles(data.raffles || []);
-    } catch {}
+    } catch (err) {
+      if (activeList) {
+        renderInlineState(activeList, { kind: "error", title: "Couldn't load raffles", body: "Network error. Check your connection and try again.", actions: [{ label: "Retry", onClick: loadRaffles }] });
+      }
+    }
   }
 
   function renderRaffles(raffles) {
@@ -1278,12 +1314,23 @@ if (!window.__yrSpaShell) {
   }
 
   async function loadCodeDrops() {
+    const activeList = $("cd-active-list");
     try {
       const res = await dashboardFetch("/api/events/drops");
-      if (!res.ok) return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (activeList) {
+          renderInlineState(activeList, { kind: "error", title: "Couldn't load drops", body: data.error || "Something went wrong. Try again.", actions: [{ label: "Retry", onClick: loadCodeDrops }] });
+        }
+        return;
+      }
       const data = await res.json();
       renderCodeDrops(data.drops || []);
-    } catch {}
+    } catch (err) {
+      if (activeList) {
+        renderInlineState(activeList, { kind: "error", title: "Couldn't load drops", body: "Network error. Check your connection and try again.", actions: [{ label: "Retry", onClick: loadCodeDrops }] });
+      }
+    }
   }
 
   function renderCodeDrops(drops) {
@@ -1305,7 +1352,7 @@ if (!window.__yrSpaShell) {
             <div class="gw-drop-header">
               <div class="d-flex items-center gap-8">
                 <code class="gw-drop-code-badge">${esc(d.code)}</code>
-                <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button">Copy</button>
+                <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy</button>
               </div>
               <span class="pill pill--good">+${d.points_reward} Credits</span>
             </div>
@@ -1392,13 +1439,24 @@ if (!window.__yrSpaShell) {
   let activePredictionsList = [];
 
   async function loadPredictions() {
+    const activeList = $("pred-active-list");
     try {
       const res = await dashboardFetch("/api/predictions");
-      if (!res.ok) return;
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (activeList) {
+          renderInlineState(activeList, { kind: "error", title: "Couldn't load predictions", body: data.error || "Something went wrong. Try again.", actions: [{ label: "Retry", onClick: loadPredictions }] });
+        }
+        return;
+      }
       const data = await res.json();
       activePredictionsList = data.predictions || [];
       renderPredictions(activePredictionsList);
-    } catch {}
+    } catch (err) {
+      if (activeList) {
+        renderInlineState(activeList, { kind: "error", title: "Couldn't load predictions", body: "Network error. Check your connection and try again.", actions: [{ label: "Retry", onClick: loadPredictions }] });
+      }
+    }
   }
 
   function renderPredictions(predictions) {
@@ -1465,6 +1523,9 @@ if (!window.__yrSpaShell) {
               <button class="btn btn--sm btn--accent btn--open-settle" data-id="${esc(p.id)}" type="button">
                 Settle Outcome &amp; Payout
               </button>
+              <button class="btn btn--sm btn--danger btn--cancel-pred" data-id="${esc(p.id)}" type="button">
+                Cancel &amp; refund all bets
+              </button>
             </div>
           </div>
         `;
@@ -1479,6 +1540,10 @@ if (!window.__yrSpaShell) {
           const pred = activePredictionsList.find((p) => p.id === btn.dataset.id);
           if (pred) openSettleDrawer(pred, btn);
         });
+      });
+
+      activeList.querySelectorAll(".btn--cancel-pred").forEach((btn) => {
+        btn.addEventListener("click", () => cancelPredictionById(btn.dataset.id, btn));
       });
     }
 
@@ -1625,34 +1690,36 @@ if (!window.__yrSpaShell) {
     }
   }
 
-  async function cancelPrediction() {
-    const predId = $("settle-pred-id")?.value;
-    if (!predId) return;
-
+  async function cancelPredictionById(predictionId, trigger) {
+    if (!predictionId) return;
     if (!await showConfirmModal("Cancel prediction", "Cancel this prediction? All bets will be fully refunded to viewers.", "Cancel prediction", true)) return;
 
-    const submit = $("settle-btn-cancel-pred");
-    const original = submit?.innerHTML;
-    if (submit) { submit.disabled = true; submit.textContent = "Cancelling…"; }
-    setInlineStatus("settle-status", "");
+    const original = trigger?.innerHTML;
+    if (trigger) { trigger.disabled = true; trigger.textContent = "Cancelling…"; }
     try {
-      const res = await dashboardFetch(`/api/predictions/${predId}/cancel`, {
+      const res = await dashboardFetch(`/api/predictions/${predictionId}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ predictionId: predId }),
+        body: JSON.stringify({ predictionId }),
       });
       const data = await responseData(res);
       if (!res.ok) {
-        setInlineStatus("settle-status", data.error || "Failed to cancel prediction", true);
+        showEngageError(data.error || "Failed to cancel prediction");
         return;
       }
       closeEventDrawer("settle-drawer");
       loadPredictions();
     } catch {
-      setInlineStatus("settle-status", "Network error cancelling prediction.", true);
+      showEngageError("Network error cancelling prediction.");
     } finally {
-      if (submit) { submit.disabled = false; submit.innerHTML = original; }
+      if (trigger) { trigger.disabled = false; trigger.innerHTML = original; }
     }
+  }
+
+  async function cancelPrediction() {
+    const predId = $("settle-pred-id")?.value;
+    if (!predId) return;
+    await cancelPredictionById(predId, $("settle-btn-cancel-pred"));
   }
 
   function esc(str) {

@@ -30,6 +30,7 @@ export function nextStepAction({
   creditsStatus = "loading",
   creditsConnected = false,
   rewardMappings = null,
+  shopItems = null,
   giveawayStatus = "loading",
   activeGiveaways = null,
   hasActivity = false,
@@ -97,9 +98,18 @@ export function nextStepAction({
   if (creditsEnabled && creditsStatus === "ready" && creditsConnected && rewardMappings === 0) {
     return {
       key: "addReward",
-      title: "Add your first reward",
-      body: "Create the shop item members can order with the credits they earn.",
-      label: "Add reward",
+      title: "Create your first way to earn",
+      body: "Create a Kick reward so members can earn credits before they can order shop items.",
+      label: "Create way to earn",
+      href: "/dashboard/rewards/rules#cr-reward-create-form",
+    };
+  }
+  if (creditsEnabled && creditsStatus === "ready" && creditsConnected && rewardMappings > 0 && shopItems === 0) {
+    return {
+      key: "addShopItem",
+      title: "Add your first shop item",
+      body: "Create the item members can order with the credits they earn.",
+      label: "Create shop item",
       href: "/dashboard/rewards/shop",
     };
   }

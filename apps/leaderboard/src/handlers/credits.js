@@ -1,6 +1,6 @@
 // Dashboard API for the Kick credits / shop system.
 import { requireUser, bad, ok, json, readJson } from "../auth.js";
-import { getByUser, getBoardById, getPublicSite } from "../site.js";
+import { getByUser, getBoardById, getPublicSite, validateLogoData } from "../site.js";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
@@ -142,7 +142,7 @@ export async function handleCreditsStatus(request, env) {
     ),
     query(
       // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
-      `SELECT id, name, description, cost, stock, active
+      `SELECT id, name, description, cost, stock, active, image_url
          FROM shop_items
         WHERE site_id=$1 ORDER BY created_at DESC LIMIT 1024`,
       [site.id]
@@ -160,7 +160,8 @@ export async function handleCreditsStatus(request, env) {
     ),
     query(
       `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at,
-              v.kick_user_id, v.kick_username, i.name AS item_name
+              v.kick_user_id, v.kick_username,
+              v.discord_user_id, v.discord_username, i.name AS item_name
          FROM redemptions r
          JOIN site_viewers sv ON sv.id = r.site_viewer_id
          JOIN viewers v ON v.id = sv.viewer_id
@@ -494,6 +495,14 @@ export async function handleCreditsSaveShopItem(request, env) {
   const cost = Number(body?.cost || 0);
   const stock = body?.stock === null || body?.stock === undefined ? null : Number(body.stock);
   const active = body?.active !== false;
+  const rawImageUrl = body?.imageUrl;
+
+  let imageUrl = null;
+  if (typeof rawImageUrl === "string" && rawImageUrl.trim() !== "") {
+    const validated = validateLogoData(rawImageUrl.trim());
+    if (validated.error) return bad(validated.error);
+    imageUrl = validated.dataUri;
+  }
 
   if (!name) return bad("Item name is required");
   if (!Number.isFinite(cost) || cost <= 0) return bad("Cost must be a positive number");
@@ -515,22 +524,28 @@ export async function handleCreditsSaveShopItem(request, env) {
     }
 
     if (id) {
+      const hasImage = typeof rawImageUrl === "string";
       const rows = await tx.unsafe(
-        `UPDATE shop_items
-            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now()
-          WHERE id=$6 AND site_id=$7
-          RETURNING id`,
-        [name, description, cost, stock, active, id, site.id]
+        hasImage
+          ? `UPDATE shop_items
+                SET name=$1, description=$2, cost=$3, stock=$4, active=$5, image_url=$6, updated_at=now()
+              WHERE id=$7 AND site_id=$8
+              RETURNING id`
+          : `UPDATE shop_items
+                SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now()
+              WHERE id=$6 AND site_id=$7
+              RETURNING id`,
+        hasImage ? [name, description, cost, stock, active, imageUrl, id, site.id] : [name, description, cost, stock, active, id, site.id]
       );
       if (!rows || rows.length === 0) return { error: "shop item not found", status: 404 };
       return { id: rows[0].id };
     }
 
     const rows = await tx.unsafe(
-      `INSERT INTO shop_items (site_id, name, description, cost, stock, active)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO shop_items (site_id, name, description, cost, stock, active, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [site.id, name, description, cost, stock, active]
+      [site.id, name, description, cost, stock, active, imageUrl]
     );
     return { id: rows[0].id };
   });
@@ -647,6 +662,8 @@ export async function handleCreditsViewerHistory(request, env) {
        sv.created_at,
        v.kick_user_id,
        v.kick_username,
+       v.discord_user_id,
+       v.discord_username,
        COUNT(r.id) FILTER (WHERE r.status != 'cancelled')::int AS redemptions_total,
        COUNT(r.id) FILTER (WHERE r.status = 'pending')::int AS redemptions_pending
      FROM sites s
@@ -654,9 +671,9 @@ export async function handleCreditsViewerHistory(request, env) {
      JOIN viewers v ON v.id = sv.viewer_id
      LEFT JOIN redemptions r ON r.site_viewer_id = sv.id
      WHERE s.user_id = $1
-       AND ($2 = '' OR lower(v.kick_username) = lower($2))
-       AND ($3 = '' OR v.kick_user_id = $3)
-     GROUP BY s.id, s.slug, s.name, sv.id, v.kick_user_id, v.kick_username
+       AND ($2 = '' OR lower(v.kick_username) = lower($2) OR lower(v.discord_username) = lower($2))
+       AND ($3 = '' OR v.kick_user_id = $3 OR v.discord_user_id = $3)
+     GROUP BY s.id, s.slug, s.name, sv.id, v.kick_user_id, v.kick_username, v.discord_user_id, v.discord_username
      ORDER BY sv.total_earned DESC, s.name ASC
      LIMIT 50`,
     [user.id, kickUsername, kickUserId]
@@ -675,6 +692,8 @@ export async function handleCreditsViewerHistory(request, env) {
     createdAt: r.created_at,
     kickUserId: r.kick_user_id,
     kickUsername: r.kick_username,
+    discordUserId: r.discord_user_id,
+    discordUsername: r.discord_username,
     redemptionsTotal: r.redemptions_total,
     redemptionsPending: r.redemptions_pending,
   }));
@@ -713,7 +732,7 @@ export async function handleCreditsActivity(request, env) {
   const params = [siteId, kickUsername, type, user.id];
   const conditions = [
     "sv.site_id = $1",
-    "($2 = '' OR lower(v.kick_username) = lower($2))",
+    "($2 = '' OR lower(v.kick_username) = lower($2) OR lower(v.discord_username) = lower($2))",
     "($3 = '' OR cl.type = $3)",
     "s.user_id = $4",
   ];
@@ -725,7 +744,9 @@ export async function handleCreditsActivity(request, env) {
 
   const rows = await query(
     `SELECT cl.id, cl.created_at, cl.type, cl.amount, cl.description,
-            v.kick_username, v.kick_user_id, s.id AS site_id, s.name AS site_name
+            v.kick_username, v.kick_user_id,
+            v.discord_username, v.discord_user_id,
+            s.id AS site_id, s.name AS site_name
        FROM credit_ledger cl
        JOIN site_viewers sv ON sv.id = cl.site_viewer_id
        JOIN sites s ON s.id = sv.site_id
@@ -747,6 +768,8 @@ export async function handleCreditsActivity(request, env) {
     description: row.description,
     kickUsername: row.kick_username,
     kickUserId: row.kick_user_id,
+    discordUsername: row.discord_username,
+    discordUserId: row.discord_user_id,
     siteId: row.site_id,
     siteName: row.site_name,
   }));
@@ -789,7 +812,7 @@ export async function handlePublicCredits(request, env) {
 
   const shopItems = await query(
     // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
-    `SELECT id, name, description, cost, stock, active
+    `SELECT id, name, description, cost, stock, active, image_url
        FROM shop_items
       WHERE site_id=$1 AND active=true
       ORDER BY cost ASC
@@ -831,7 +854,11 @@ export async function handleCreditsViewerAuth(request, env) {
   const body = await readJson(request);
   const kick = body?.kick === true || body?.kick === "true";
   const discord = body?.discord === true || body?.discord === "true";
-  const publicRedeem = body?.public === true || body?.public === "true";
+  // The public-redeem flow is not built yet, so preserve the existing flag
+  // when the dashboard no longer sends the hidden checkbox.
+  const publicRedeem = body && ("public" in body)
+    ? body.public === true || body.public === "true"
+    : !!site.viewer_public_redeem_enabled;
 
   await exec(
     `UPDATE sites
@@ -932,12 +959,12 @@ export async function handleCreditsAnalytics(request, env) {
       `SELECT i.id, i.name, COUNT(r.id) FILTER (WHERE r.status != 'cancelled')::int AS redemptions,
               COALESCE(SUM(r.cost) FILTER (WHERE r.status != 'cancelled'), 0)::int AS credits_spent
          FROM shop_items i
-         LEFT JOIN redemptions r ON r.shop_item_id = i.id
+         LEFT JOIN redemptions r ON r.shop_item_id = i.id AND r.created_at > $2::timestamptz
         WHERE i.site_id = $1
         GROUP BY i.id, i.name
         ORDER BY redemptions DESC, i.name ASC
         LIMIT 10`,
-      [site.id]
+      [site.id, startDate]
     ),
     query(
       `SELECT totals.status, totals.count::int

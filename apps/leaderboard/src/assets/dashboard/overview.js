@@ -282,6 +282,7 @@ export function renderOverviewSummary() {
         creditsStatus: state.CREDITS_STATUS,
         creditsConnected: Boolean(state.CREDITS?.channel?.externalId),
         rewardMappings: state.CREDITS?.usage?.rewardMappings ?? null,
+        shopItems: state.CREDITS?.usage?.shopItems ?? null,
         giveawayStatus: state.GIVEAWAYS_STATUS,
         activeGiveaways: activeGiveawayCount,
         hasActivity: activity.length > 0,

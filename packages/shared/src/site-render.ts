@@ -872,14 +872,6 @@ function meMain(ctx) {
       <span class="yr-gamer-ava">${avatarHtml(viewer)}</span>
       <div>
         <h2 class="yr-gamer-name">${esc(viewerName(viewer))}</h2>
-        <span class="yr-gamer-badge">🎖️ VIP Community Member</span>
-      </div>
-    </div>
-    <div class="yr-gamer-streak">
-      <span class="yr-streak-flame">🔥</span>
-      <div>
-        <strong>Active Streak</strong>
-        <span>Daily rewards active</span>
       </div>
     </div>
   </div>
@@ -893,12 +885,12 @@ function meMain(ctx) {
       <strong class="yr-gstat-val">${formatNumber(viewerOnSite?.total_earned || 0)} CR</strong>
     </div>
     <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Orders</span>
-      <strong class="yr-gstat-val">${formatNumber(redemptions.length)} orders</strong>
+      <span class="yr-gstat-lbl">Lifetime Spent</span>
+      <strong class="yr-gstat-val">${formatNumber(viewerOnSite?.total_spent || 0)} CR</strong>
     </div>
     <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Events &amp; Duels</span>
-      <strong class="yr-gstat-val">Active</strong>
+      <span class="yr-gstat-lbl">Orders</span>
+      <strong class="yr-gstat-val">${formatNumber(redemptions.length)} orders</strong>
     </div>
   </div>
 </div>`;

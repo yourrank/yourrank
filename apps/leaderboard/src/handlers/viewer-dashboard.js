@@ -13,6 +13,10 @@ import {
   effectivePlan,
 } from "@yourrank/shared/plans";
 
+function isUniqueViolation(error) {
+  return error?.code === "23505" || /unique constraint|unique violation|duplicate key/i.test(error?.message || "");
+}
+
 export async function handleViewerMe(request, env) {
   const { viewer, res } = await requireViewer(request, env);
   if (res) return res;
@@ -122,7 +126,7 @@ export async function handleViewerSite(request, env) {
 
   const shopItems = await query(
     // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
-    `SELECT id, name, description, cost, stock, active
+    `SELECT id, name, description, cost, stock, active, image_url
        FROM shop_items
       WHERE site_id=$1 AND active=true
       ORDER BY cost ASC
@@ -141,6 +145,31 @@ export async function handleViewerSite(request, env) {
         [viewerRow.id]
       )
     : [];
+
+  const activeRaffles = await query(
+    `SELECT r.id, r.title, r.description, r.ticket_cost, r.max_tickets_per_viewer, r.total_tickets, r.ends_at,
+            (SELECT count(*)::int FROM raffle_tickets WHERE raffle_id=r.id AND viewer_id=$2) AS viewer_ticket_count
+       FROM raffles r
+      WHERE r.site_id=$1 AND r.status='active'
+      ORDER BY r.ends_at ASC NULLS LAST, r.created_at DESC
+      LIMIT 20`,
+    [site.id, viewer.id]
+  );
+
+  const openPredictions = await query(
+    `SELECT p.id, p.title, p.options, p.status, p.min_bet, p.max_bet, p.lock_at, p.total_pool,
+            (SELECT count(*)::int FROM prediction_bets WHERE prediction_id=p.id AND viewer_id=$2) AS viewer_bet_count
+       FROM predictions p
+      WHERE p.site_id=$1 AND p.status='open'
+      ORDER BY p.lock_at ASC NULLS LAST, p.created_at DESC
+      LIMIT 20`,
+    [site.id, viewer.id]
+  );
+
+  const activeDropCount = await one(
+    "SELECT count(*)::int AS count FROM code_drops WHERE site_id=$1 AND status='active'",
+    [site.id]
+  );
 
   return ok({
     site: {
@@ -172,6 +201,9 @@ export async function handleViewerSite(request, env) {
       updatedAt: r.updated_at,
       itemName: r.item_name,
     })),
+    activeRaffles: activeRaffles || [],
+    openPredictions: openPredictions || [],
+    activeDropCount: activeDropCount?.count || 0,
   });
 }
 
@@ -184,6 +216,8 @@ export async function handleViewerRedeem(request, env) {
   })();
   const slug = String(body?.slug || "").trim().toLowerCase();
   const shopItemId = String(body?.shopItemId || "").trim();
+  const idempotencyKey = String(body?.idempotencyKey || "").trim();
+  const clientToken = idempotencyKey || null;
 
   if (!slug || !shopItemId) return bad("slug and shopItemId required");
 
@@ -196,7 +230,9 @@ export async function handleViewerRedeem(request, env) {
   const rl = await rateLimit(env, `viewer-redeem:${r.id}:${viewer.id}`, 10, 60);
   if (!rl.ok) return bad("rate limited", 429);
 
-  const txResult = await withTransaction(async (tx) => {
+  let txResult;
+  try {
+    txResult = await withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [r.id]);
 
     const [pendingRow, fulfilled30dRow] = await Promise.all([
@@ -237,6 +273,22 @@ export async function handleViewerRedeem(request, env) {
     if (!item) return { error: "item not found", status: 400 };
     if (item.stock !== null && item.stock <= 0) return { error: "out of stock", status: 400 };
 
+    // If the member retries with the same idempotency key, return the original
+    // order without deducting credits twice.
+    if (clientToken) {
+      const existing = await tx.one(
+        `SELECT id, cost
+           FROM redemptions
+          WHERE site_viewer_id = $1
+            AND client_token = $2
+            AND status IN ('pending', 'fulfilled')`,
+        [viewerRow.id, clientToken]
+      );
+      if (existing) {
+        return { redemptionId: existing.id, balance: viewerRow.balance, itemName: item.name, itemCost: existing.cost };
+      }
+    }
+
     // Atomic conditional update: the WHERE clauses make concurrent redemptions
     // race-safe and ensure balance can never go negative or stock below zero.
     const updatedViewer = await tx.one(
@@ -263,10 +315,10 @@ export async function handleViewerRedeem(request, env) {
     }
 
     const redemptionRows = await tx.unsafe(
-      `INSERT INTO redemptions (site_viewer_id, shop_item_id, cost, status)
-       VALUES ($1, $2, $3, 'pending')
+      `INSERT INTO redemptions (site_viewer_id, shop_item_id, cost, status, client_token)
+       VALUES ($1, $2, $3, 'pending', $4)
        RETURNING id`,
-      [viewerRow.id, item.id, item.cost]
+      [viewerRow.id, item.id, item.cost, clientToken]
     );
 
     await tx.unsafe(
@@ -281,7 +333,29 @@ export async function handleViewerRedeem(request, env) {
     );
 
     return { redemptionId: redemptionRows[0].id, balance: updatedViewer.balance, itemName: item.name, itemCost: item.cost };
-  });
+    });
+  } catch (e) {
+    // If two retries race on the same idempotency key, the unique index raises
+    // a conflict. Return the existing order instead of a 500 error so the
+    // member is never charged twice.
+    if (clientToken && isUniqueViolation(e)) {
+      const existing = await one(
+        `SELECT r.id, r.cost, sv.balance
+           FROM redemptions r
+           JOIN site_viewers sv ON sv.id = r.site_viewer_id
+          WHERE sv.site_id = $1
+            AND sv.viewer_id = $2
+            AND r.shop_item_id = $3
+            AND r.client_token = $4
+            AND r.status IN ('pending', 'fulfilled')`,
+        [r.id, viewer.id, shopItemId, clientToken]
+      );
+      if (existing) {
+        return ok({ redemptionId: existing.id, balance: Number(existing.balance) });
+      }
+    }
+    throw e;
+  }
 
   if (txResult.error) return bad(txResult.error, txResult.status);
 

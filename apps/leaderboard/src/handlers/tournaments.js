@@ -265,6 +265,12 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     updates.push(`${column}=$${values.length + 1}`);
     values.push(value);
   };
+  if (Object.prototype.hasOwnProperty.call(body, "title")) {
+    addUpdate("title", String(body.title || "").trim() || access.tournament.title || "Tournament");
+  }
+  if (Object.prototype.hasOwnProperty.call(body, "gameName")) {
+    addUpdate("game_name", String(body.gameName || "").trim() || access.tournament.game_name || "Game");
+  }
   if (Object.prototype.hasOwnProperty.call(body, "format")) {
     addUpdate("format", ["bracket", "1v1", "2v2"].includes(body.format) ? body.format : "bracket");
   }
@@ -594,6 +600,10 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
   if (access.error) return access.error;
 
   const result = await withTransaction(async (tx) => {
+    const tournament = await tx.one(
+      "SELECT id, bracket_size, format FROM tournaments WHERE id=$1 FOR UPDATE",
+      [access.tournament.id]
+    );
     const available = await tx.one(
       `SELECT count(*)::integer AS count FROM tournament_entries
         WHERE tournament_id=$1 AND status IN ('pending', 'confirmed')`,
@@ -621,6 +631,37 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
                   team_no, created_at, updated_at`,
       [ids]
     );
+
+    // Seed the bracket from the selected entries so the streamer can run it.
+    const bracketSize = tournament.bracket_size || Math.max(2, 2 ** Math.ceil(Math.log2(Math.max(1, selected.length))));
+    const seeded = selected.map((entry) => entry.display_name).slice(0, bracketSize);
+    while (seeded.length < bracketSize) seeded.push(`Player ${seeded.length + 1}`);
+    await tx.unsafe(
+      "UPDATE tournaments SET participants_json=$1::jsonb, updated_at=now() WHERE id=$2",
+      [JSON.stringify(seeded), tournament.id]
+    );
+    await tx.unsafe("DELETE FROM tournament_matches WHERE tournament_id=$1", [tournament.id]);
+    const round1MatchCount = bracketSize / 2;
+    for (let m = 0; m < round1MatchCount; m++) {
+      await tx.unsafe(
+        `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
+         VALUES ($1, 1, $2, $3, $4, 'pending')`,
+        [tournament.id, m, seeded[m * 2], seeded[m * 2 + 1]]
+      );
+    }
+    let currentMatchCount = round1MatchCount / 2;
+    const totalRounds = Math.log2(bracketSize);
+    for (let r = 2; r <= totalRounds; r++) {
+      for (let m = 0; m < currentMatchCount; m++) {
+        await tx.unsafe(
+          `INSERT INTO tournament_matches (tournament_id, round_number, match_index, player1_name, player2_name, status)
+           VALUES ($1, $2, $3, 'TBD', 'TBD', 'pending')`,
+          [tournament.id, r, m]
+        );
+      }
+      currentMatchCount = currentMatchCount / 2;
+    }
+
     return { entries: selected || [] };
   });
   if (result.error) return bad(result.error, result.status);

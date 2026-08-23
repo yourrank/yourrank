@@ -153,7 +153,58 @@ describe("handleCreditsSaveShopItem", () => {
     expect(body.id).toBe("item-1");
     const insert = db.calls.find((c) => c.method === "unsafe" && /INSERT INTO shop_items/.test(c.sql));
     expect(insert).toBeDefined();
-    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true]);
+    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true, null]);
+  });
+
+  it("persists a validated item image on create", async () => {
+    const validPng = "data:image/png;base64,iVBORw0KGgo=";
+    db.unsafeResponses.push([{ id: "site-1" }], [{ id: "item-1" }]);
+    db.oneResponses.push({ count: 0 });
+    const res = await handleCreditsSaveShopItem(
+      req("https://test.com/api/credits/shop", "POST", { name: "Art", description: "", cost: 50, stock: 1, imageUrl: validPng }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const insert = db.calls.find((c) => c.method === "unsafe" && /INSERT INTO shop_items/.test(c.sql));
+    expect(insert.params[6]).toBe(validPng);
+  });
+
+  it("rejects a malformed item image", async () => {
+    const res = await handleCreditsSaveShopItem(
+      req("https://test.com/api/credits/shop", "POST", { name: "Bad art", cost: 10, stock: 1, imageUrl: "data:image/png;base64,notpng" }),
+      makeEnv()
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/file type|base64|data URI/i);
+  });
+
+  it("preserves existing image when update omits imageUrl", async () => {
+    db.unsafeResponses.push([{ id: "site-1" }], [{ id: "item-1" }]);
+    db.oneResponses.push({ count: 1 });
+    const res = await handleCreditsSaveShopItem(
+      req("https://test.com/api/credits/shop", "POST", { id: "item-1", name: "Sticker v2", cost: 250, stock: 9 }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const update = db.calls.find((c) => c.method === "unsafe" && /UPDATE shop_items/.test(c.sql));
+    expect(update.sql).not.toMatch(/image_url/);
+    expect(update.params[6]).toBe("site-1");
+  });
+
+  it("updates image_url on explicit edit", async () => {
+    const validPng = "data:image/png;base64,iVBORw0KGgo=";
+    db.unsafeResponses.push([{ id: "site-1" }], [{ id: "item-1" }]);
+    db.oneResponses.push({ count: 1 });
+    const res = await handleCreditsSaveShopItem(
+      req("https://test.com/api/credits/shop", "POST", { id: "item-1", name: "Sticker v2", cost: 250, stock: 9, imageUrl: validPng }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const update = db.calls.find((c) => c.method === "unsafe" && /UPDATE shop_items/.test(c.sql));
+    expect(update.sql).toMatch(/image_url/);
+    expect(update.params[5]).toBe(validPng);
+    expect(update.params[7]).toBe("site-1");
   });
 
   it("rejects a price of 0", async () => {

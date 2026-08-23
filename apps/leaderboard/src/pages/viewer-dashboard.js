@@ -73,6 +73,23 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <div id="vd-redemptions-list"></div>
     <p class="empty" id="vd-redemptions-empty" hidden>No orders yet. Place an order from Rewards to see it here.</p>
     <p class="hint"><b>Pending</b> = waiting for the streamer; <b>Fulfilled</b> = approved; <b>Cancelled</b> = refunded.</p>
+
+    <h3 class="mt-24">Live events</h3>
+    <p class="status" id="vd-events-status" role="status" aria-live="polite"></p>
+    <div id="vd-drop-claim" class="vd-card-row" hidden>
+      <div class="vd-card-main">
+        <div class="vd-card-title">Claim a drop code</div>
+        <div class="hint">Enter a code from the streamer to earn credits.</div>
+        <p class="status" id="vd-drop-status" role="status" aria-live="polite"></p>
+      </div>
+      <div class="vd-card-side">
+        <input type="text" id="vd-drop-code" placeholder="CODE" style="width:120px;text-transform:uppercase" aria-label="Drop code" />
+        <button class="btn btn--sm" id="vd-drop-claim-btn" type="button">Claim</button>
+      </div>
+    </div>
+    <div id="vd-raffles"></div>
+    <div id="vd-predictions"></div>
+    <p class="empty" id="vd-events-empty" hidden>No live events right now.</p>
   </section>
 </main>
 `,

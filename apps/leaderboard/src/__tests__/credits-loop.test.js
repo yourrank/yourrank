@@ -27,6 +27,9 @@ const siteFixture = {
   viewerKickAuthEnabled: true,
   viewerDiscordAuthEnabled: false,
   viewerPublicRedeemEnabled: true,
+  viewer_kick_auth_enabled: true,
+  viewer_discord_auth_enabled: false,
+  viewer_public_redeem_enabled: true,
 };
 let boardResult = siteFixture;
 
@@ -116,6 +119,9 @@ import {
   handleCreditsAdjustBalance,
   handleCreditsReconcile,
   handleCreditsActivity,
+  handleCreditsAnalytics,
+  handleCreditsViewerAuth,
+  handleCreditsViewerHistory,
 } from "../handlers/credits.js";
 import { processKickRewardRedemption } from "@yourrank/shared/kick-credits";
 
@@ -230,6 +236,27 @@ describe("handleViewerRedeem", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("out of stock");
+  });
+
+  it("returns the existing order when retried with the same idempotency key", async () => {
+    db.oneResponses.push(
+      { count: 0 },
+      { count: 0 },
+      { id: "sv-1", balance: 100, blocked: false },
+      { id: "item-1", name: "Sticker", cost: 50, stock: 3 },
+      { id: "red-1", cost: 50 }, // existing redemption for this key
+    );
+    db.unsafeResponses.push([{ id: "site-1" }]);
+    const res = await handleViewerRedeem(
+      req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "retry-key" }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.redemptionId).toBe("red-1");
+    expect(body.balance).toBe(100);
+    const insertCalls = db.calls.filter((c) => c.method === "unsafe" && /INSERT INTO redemptions/.test(c.sql));
+    expect(insertCalls.length).toBe(0);
   });
 });
 
@@ -398,9 +425,121 @@ describe("handleCreditsActivity", () => {
     const res = await handleCreditsActivity(req("https://test.com/api/credits/activity?siteId=site-1&kickUsername=Alice&type=refund"), makeEnv());
     expect(res.status).toBe(200);
     expect(db.calls[0].sql).toContain("lower(v.kick_username) = lower($2)");
+    expect(db.calls[0].sql).toContain("lower(v.discord_username) = lower($2)");
     expect(db.calls[0].sql).toContain("cl.type = $3");
     expect(db.calls[0].sql).toContain("s.user_id = $4");
     expect(db.calls[0].params.slice(0, 4)).toEqual(["site-1", "Alice", "refund", "user-1"]);
+  });
+
+  it("returns Discord identity in activity rows and finds members by Discord username", async () => {
+    const createdAt = "2026-08-20T12:00:00.000Z";
+    db.queryResponses.push([
+      {
+        id: "ev-1",
+        created_at: createdAt,
+        type: "earn",
+        amount: 15,
+        description: "Discord welcome",
+        kick_username: null,
+        kick_user_id: null,
+        discord_username: "disc_user",
+        discord_user_id: "d1",
+        site_id: "site-1",
+        site_name: "Test",
+      },
+    ]);
+    const res = await handleCreditsActivity(req("https://test.com/api/credits/activity?siteId=site-1&kickUsername=disc_user"), makeEnv());
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.events[0].discordUsername).toBe("disc_user");
+    const activityQuery = db.calls.find((c) => c.method === "query" && /credit_ledger/.test(c.sql));
+    expect(activityQuery.params.slice(0, 4)).toEqual(["site-1", "disc_user", "", userFixture.id]);
+  });
+});
+
+describe("handleCreditsAnalytics", () => {
+  it("filters top items by the selected date range", async () => {
+    db.oneResponses.push(
+      { total: 1000 }, // allTimeEarned
+      { total: 100 }, // periodEarned
+      { total: 500 }, // allTimeSpent
+      { total: 50 }, // periodSpent
+      { total: 10, fulfilled: 5, pending: 3, cancelled: 2, credits_spent: 500 }, // redemptionSummary
+      { total: 200 } // viewerBalance
+    );
+    db.queryResponses.push(
+      [], // topEarners
+      [{ id: "i1", name: "Sticker", redemptions: 5, credits_spent: 250 }], // topItems
+      [], // redemptionsByStatus
+      [] // creditsByDay
+    );
+    const res = await handleCreditsAnalytics(req("https://test.com/api/credits/analytics?days=7"), makeEnv());
+    expect(res.status).toBe(200);
+    const topItem = db.calls.find((c) => c.method === "query" && /FROM shop_items i/.test(c.sql));
+    expect(topItem).toBeDefined();
+    expect(topItem.params.length).toBe(2);
+    expect(topItem.sql).toMatch(/r\.created_at > \$2::timestamptz/);
+    expect(topItem.params[0]).toBe("site-1");
+    const start = Date.parse(topItem.params[1]);
+    expect(Number.isFinite(start)).toBe(true);
+    expect(Math.abs(Date.now() - 7 * 86400000 - start)).toBeLessThan(1000);
+    const body = await res.json();
+    expect(body.topItems).toEqual([{ id: "i1", name: "Sticker", redemptions: 5, credits_spent: 250 }]);
+  });
+});
+
+describe("handleCreditsViewerAuth", () => {
+  it("preserves the existing public-redeem setting when the dashboard omits the field", async () => {
+    siteFixture.viewer_public_redeem_enabled = false;
+    const res = await handleCreditsViewerAuth(
+      req("https://test.com/api/credits/viewer-auth", "POST", { kick: true, discord: true }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const call = db.calls.find((c) => c.method === "exec" && /UPDATE sites/.test(c.sql));
+    expect(call.params.slice(0, 3)).toEqual([true, true, false]);
+    siteFixture.viewer_public_redeem_enabled = true;
+  });
+
+  it("updates the public-redeem setting when the dashboard explicitly sends it", async () => {
+    const res = await handleCreditsViewerAuth(
+      req("https://test.com/api/credits/viewer-auth", "POST", { kick: true, discord: true, public: true }),
+      makeEnv()
+    );
+    expect(res.status).toBe(200);
+    const call = db.calls.find((c) => c.method === "exec" && /UPDATE sites/.test(c.sql));
+    expect(call.params.slice(0, 3)).toEqual([true, true, true]);
+  });
+});
+
+describe("handleCreditsViewerHistory", () => {
+  it("finds a member by Discord username and returns their Discord identity", async () => {
+    db.queryResponses.push([
+      {
+        site_id: "site-1",
+        slug: "test",
+        name: "Test Casino",
+        site_viewer_id: "sv-1",
+        balance: 30,
+        total_earned: 50,
+        total_spent: 20,
+        blocked: false,
+        fraud_score: 0,
+        created_at: "2026-08-01T00:00:00.000Z",
+        kick_user_id: null,
+        kick_username: null,
+        discord_user_id: "d1",
+        discord_username: "disc_user",
+        redemptions_total: 2,
+        redemptions_pending: 0,
+      },
+    ]);
+    const res = await handleCreditsViewerHistory(req("https://test.com/api/credits/viewer/history?kickUsername=disc_user"), makeEnv());
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.boards[0].discordUsername).toBe("disc_user");
+    const historyQuery = db.calls.find((c) => c.method === "query" && /FROM sites s/.test(c.sql));
+    expect(historyQuery.sql).toMatch(/lower\(v\.discord_username\) = lower\(\$2\)/i);
   });
 });
 

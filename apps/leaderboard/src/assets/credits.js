@@ -223,12 +223,13 @@ function renderViewerRow(v) {
   const joined = fmtDate(v.created_at);
   const earned = v.last_earned_at ? fmtDate(v.last_earned_at) : "Not yet";
   const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet";
-  const history = v.kick_username
-    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(v.kick_username)}">History</a> `
+  const identity = viewerIdentity(v);
+  const history = identity !== "Member"
+    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}">History</a> `
     : "";
   return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
 }
-function renderRedemptionRow(r) { return `<td><b>${esc(r.kick_username || r.kick_user_id)}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
+function renderRedemptionRow(r) { return `<td><b>${esc(viewerIdentity(r))}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
   const root = $("cr-shop-list"); if (!root) return;
   ensureShopControls(items.length > 0);
@@ -282,7 +283,7 @@ function render() {
     renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt: state.channel?.linkedAt });
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending orders"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "orders / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
-    $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; $("cr-viewer-auth-public").checked = auth.public !== false;
+    $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; const publicToggle = $("cr-viewer-auth-public"); if (publicToggle) publicToggle.checked = auth.public !== false;
   }
   if (current === "rules") {
     for (const id of ["cr-reward-submit", "cr-reward-create-submit"]) { const el = $(id); if (el) { el.disabled = rewardAtLimit; el.title = rewardAtLimit ? "Upgrade your plan to add more ways to earn" : ""; } }
@@ -845,7 +846,8 @@ function renderActivity() {
     list.innerHTML = activityEvents.map((event) => {
       const debit = event.direction === "debit";
       const amount = `${debit ? "−" : "+"}${event.amount}`;
-      return `<tr><td title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td>${esc(event.kickUsername || event.kickUserId || "Unknown member")}</td><td>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td>${esc(event.description || "—")}</td></tr>`;
+      const memberName = event.kickUsername || event.discordUsername || event.kickUserId || event.discordUserId || "Unknown member";
+      return `<tr><td title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td>${esc(memberName)}</td><td>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td>${esc(event.description || "—")}</td></tr>`;
     }).join("");
   }
   if (more) more.hidden = !activityCursor;

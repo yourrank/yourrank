@@ -79,7 +79,12 @@ describe("dashboard overview quick actions", () => {
     // These have no other owner on Home, so the card speaks for them.
     const live = { status: { published: true, emailVerified: true }, steps: setupComplete };
     expect(nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: false }).key).toBe("connectKick");
-    expect(nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: true, rewardMappings: 0 }).key).toBe("addReward");
+    const addReward = nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: true, rewardMappings: 0 });
+    expect(addReward.key).toBe("addReward");
+    expect(addReward.href).toBe("/dashboard/rewards/rules#cr-reward-create-form");
+    const addShop = nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: true, rewardMappings: 1, shopItems: 0 });
+    expect(addShop.key).toBe("addShopItem");
+    expect(addShop.href).toBe("/dashboard/rewards/shop");
     expect(nextStepAction({ ...live, hasActivity: false, visits: 0 }).key).toBe("shareSite");
     expect(nextStepAction({ ...live, hasActivity: false, visits: 4, giveawayStatus: "ready", activeGiveaways: 0 }).key).toBe("createGiveaway");
 

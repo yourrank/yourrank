@@ -3,6 +3,7 @@ import {
   handleGetRaffles,
   handleCreateRaffle,
   handleDrawRaffle,
+  handleBuyRaffleTicket,
   handleGetCodeDrops,
   handleCreateCodeDrop,
   handleClaimCodeDrop,
@@ -272,5 +273,99 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.ok).toBe(true);
     expect(body.pointsAwarded).toBe(30);
     expect(body.newBalance).toBe(130);
+  });
+
+  it("handleClaimCodeDrop creates a site_viewer row on first claim", async () => {
+    mockOne.mockResolvedValueOnce(SITE); // find site
+    mockOne.mockResolvedValueOnce({
+      id: "drop-1",
+      code: "KICK30",
+      points_reward: 30,
+      max_claims: 20,
+      claimed_count: 5,
+      status: "active",
+    }); // find drop
+    mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 0 }); // upsert site_viewer
+    mockOne.mockResolvedValueOnce(null); // not yet claimed
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ id: "claim-2" }); // atomic claim insert
+    mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 30 }); // credit update
+
+    const req = new Request("http://localhost/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "streamer", code: "KICK30" }),
+    });
+
+    const res = await handleClaimCodeDrop(req, mockEnv(), deps);
+    expect(res.status).toBe(200);
+    expect((await res.json()).newBalance).toBe(30);
+    const siteViewerSql = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO site_viewers"));
+    expect(siteViewerSql).toBeTruthy();
+  });
+
+  it("handleBuyRaffleTicket buys a ticket and deducts credits", async () => {
+    mockOne.mockResolvedValueOnce({
+      id: "raffle-1",
+      site_id: "site-456",
+      title: "VIP Role",
+      ticket_cost: 50,
+      max_tickets_per_viewer: 5,
+      status: "active",
+      total_tickets: 10,
+      ends_at: null,
+    }); // find raffle
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 200 }); // upsert site_viewer
+    mockOne.mockResolvedValueOnce({ count: 1 }); // existing tickets
+
+    const txOne = mock();
+    txOne.mockResolvedValueOnce({ site_id: "site-456", ticket_cost: 50, max_tickets_per_viewer: 5, status: "active", total_tickets: 10, ends_at: null });
+    txOne.mockResolvedValueOnce({ id: "sv-1", balance: 200 });
+    txOne.mockResolvedValueOnce({ count: 1 });
+    txOne.mockResolvedValueOnce({ id: "sv-1", balance: 150 });
+    txOne.mockResolvedValueOnce({ total_tickets: 11 });
+
+    mockWithTransaction.mockImplementationOnce((fn) => fn({
+      one: txOne,
+      unsafe: mock().mockResolvedValue(),
+    }));
+
+    const req = new Request("http://localhost/api/events/raffles/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raffleId: "raffle-1", count: 1 }),
+    });
+
+    const res = await handleBuyRaffleTicket(req, mockEnv(), deps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ticketsBought).toBe(1);
+    expect(body.newBalance).toBe(150);
+    expect(body.cost).toBe(50);
+  });
+
+  it("handleBuyRaffleTicket rejects insufficient credits", async () => {
+    mockOne.mockResolvedValueOnce({
+      id: "raffle-1",
+      site_id: "site-456",
+      title: "VIP Role",
+      ticket_cost: 50,
+      max_tickets_per_viewer: 5,
+      status: "active",
+      total_tickets: 10,
+      ends_at: null,
+    });
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 20 });
+    mockOne.mockResolvedValueOnce({ count: 0 });
+
+    const req = new Request("http://localhost/api/events/raffles/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raffleId: "raffle-1", count: 1 }),
+    });
+
+    const res = await handleBuyRaffleTicket(req, mockEnv(), deps);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("Insufficient credits");
   });
 });

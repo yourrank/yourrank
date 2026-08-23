@@ -422,12 +422,16 @@ export async function handlePlaceBet(request, env, deps = {}) {
     return bad(`Bet amount must be between ${pred.min_bet} and ${pred.max_bet} points.`);
   }
 
+  // Resolve viewer. Create a site membership row on first interaction
+  // so a viewer can place a bet without having earned credits first.
   const siteViewer = await one(
-    "SELECT id, balance FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+     VALUES ($1, $2, 0, 0, 0)
+     ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at=now()
+     RETURNING id, balance`,
     [pred.site_id, viewerId]
   );
 
-  if (!siteViewer) return bad("Viewer not found on this site.", 404);
   if ((siteViewer.balance || 0) < amount) {
     return bad(`Insufficient credits. You have ${siteViewer.balance || 0} pts.`);
   }
