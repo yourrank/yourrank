@@ -328,11 +328,26 @@
   width: 100%;
 }
 
-/* Chat Feed */
+/* Card heads inside Engage cards already sit in the card's padding box, and any
+   trailing status chip stays on the right edge when the row wraps. */
+.v3-dash[data-auth-workspace] .gw-workspace-content .gw-card:not(.gw-card--table) > .v3-section-head {
+  padding: 0;
+  margin-bottom: 18px;
+}
+
+.gw-workspace-content .gw-card > .v3-section-head > :last-child:not(:only-child) {
+  margin-left: auto;
+}
+
+/* Chat Feed — bleeds to the card edges so the log reads as its own surface. */
+#gw-feed-card .gw-feed-container {
+  margin: 18px -24px -24px;
+}
+
 .gw-feed-container {
-  height: 280px;
+  height: 220px;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 14px 24px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -351,8 +366,12 @@
   align-items: center;
   justify-content: center;
   height: 100%;
+  padding: 0 24px;
   color: var(--v4-ink-mute);
-  font-size: 12px;
+  font-family: var(--v3-sans);
+  font-size: 13px;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .gw-chat-msg {
@@ -437,10 +456,9 @@
 
 .gw-stat-lbl {
   color: var(--v4-ink-mute);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .gw-stage-body {
@@ -483,10 +501,16 @@
 }
 
 .gw-roller-track {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
   color: var(--v4-ink);
+}
+
+.gw-roller > p {
+  max-width: 34rem;
+  margin: 8px auto 18px;
+  font-size: 13px;
 }
 
 .gw-roller-track--spinning {
@@ -1099,15 +1123,15 @@
 .gw-tab-pane { display: none; }
 .gw-tab-pane.is-active { display: block; }
 
-/* Tournament entry list: one quiet surface, with the next action kept obvious. */
+/* Tournaments: the same card language as the other Engage tabs — a status card
+   that always states the next action, then the entry list, then settings. */
 .tournament-app {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  max-width: 980px;
+  gap: 18px;
+  margin-top: 18px;
 }
 
-.tournament-toolbar,
 .tournament-list-head,
 .tournament-settings-actions {
   display: flex;
@@ -1116,9 +1140,40 @@
   gap: 16px;
 }
 
-.tournament-toolbar {
-  max-width: 760px;
-  padding: 4px 0 8px;
+.tournament-status-card {
+  padding: 20px;
+  border: 1px solid var(--v4-line, #e5e7eb);
+  border-radius: var(--v4-radius, 12px);
+  background: var(--v4-surface, #fff);
+  box-shadow: var(--v4-shadow);
+}
+
+.tournament-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.tournament-status-ident {
+  min-width: 0;
+}
+
+.tournament-status-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v4-line, #e5e7eb);
+}
+
+.tournament-status-card #tournament-empty:not([hidden]) {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v4-line, #e5e7eb);
 }
 
 .tournament-step-label,
@@ -1129,14 +1184,29 @@
   font-size: 13px;
 }
 
+.tournament-status-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
 .tournament-step-label {
-  color: var(--v4-ink, var(--v4-ink));
+  padding: 4px 10px;
+  border: 1px solid var(--v4-line);
+  border-radius: 999px;
+  background: var(--v4-surface-soft);
+  color: var(--v4-ink);
+  font-size: 12.5px;
   font-weight: 650;
 }
 
 .tournament-count {
-  margin-top: 3px;
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.tournament-count:empty {
+  display: none;
 }
 
 .tournament-message {
@@ -1330,9 +1400,11 @@
 }
 
 .tournament-settings {
-  max-width: 760px;
-  border-top: 1px solid var(--v4-line, #e5e7eb);
-  padding-top: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--v4-line, #e5e7eb);
+  border-radius: var(--v4-radius, 12px);
+  background: var(--v4-surface, #fff);
+  box-shadow: var(--v4-shadow);
 }
 
 .tournament-settings summary {
@@ -1377,18 +1449,23 @@
   display: flex;
   align-items: flex-start;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 12px;
-  color: var(--v4-ink-mute, #6b7280);
-  font-size: 12px;
+  gap: 6px;
+  color: var(--v4-ink, #111827);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tournament-channel-field .gw-input-row {
+  width: min(300px, 100%);
 }
 
 .tournament-channel-field input {
-  width: min(260px, 100%);
+  width: 100%;
+  font-weight: 400;
 }
 
 @media (max-width: 640px) {
-  .tournament-toolbar,
+  .tournament-status-foot,
   .tournament-list-head,
   .tournament-settings-actions {
     align-items: flex-start;
@@ -1449,114 +1526,337 @@
   gap: 24px;
 }
 
-/* Raffles Cards & Grid */
-.gw-raffles-container, .gw-drops-container {
+/* ==========================================================================
+   Engage event cards — one card anatomy shared by raffles, drops and
+   predictions: identity row, emphasised figure, hairline stat band, action
+   footer. Values stay ink; cobalt is reserved for the primary action and the
+   meters so a card only ever has one accent.
+   ========================================================================== */
+.gw-raffles-container,
+.gw-drops-container {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.gw-raffle-card, .gw-drop-card {
-  padding: 18px 20px;
-  border: 1px solid var(--v4-line, var(--v4-line));
-  border-radius: var(--v4-radius-sm);
-  background: #ffffff;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
   gap: 14px;
+  margin-top: 18px;
 }
 
-.gw-raffle-header, .gw-drop-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.gw-raffle-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--v4-ink, var(--v4-ink));
-  margin: 6px 0 2px;
-}
-
-.gw-raffle-desc {
-  font-size: 12.5px;
-  color: var(--v4-ink-soft, var(--v4-ink-mute));
-  margin: 0;
-}
-
-.gw-raffle-badge {
-  text-align: right;
-  flex-shrink: 0;
-}
-.gw-raffle-badge strong {
-  display: block;
-  font-size: 16px;
-  color: var(--v4-cobalt, var(--v4-cobalt));
-  font-weight: 800;
-}
-.gw-raffle-badge small {
-  font-size: 11px;
-  color: var(--v4-ink-soft, var(--v4-ink-mute));
-}
-
-.gw-raffle-stats-row {
+.gw-preds-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--v4-surface-soft, var(--v4-surface-soft));
-  border-radius: var(--v4-radius-sm);
-  text-align: center;
-}
-.gw-raffle-stats-row strong {
-  display: block;
-  font-size: 14px;
-  color: var(--v4-ink, var(--v4-ink));
-}
-.gw-raffle-stats-row span {
-  font-size: 10.5px;
-  color: var(--v4-ink-soft, var(--v4-ink-mute));
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
 }
 
-.gw-raffle-footer {
-  margin-top: auto;
-  padding-top: 4px;
-}
-
-/* Flash Code Drops */
-.gw-drop-code-badge {
-  font-family: var(--v3-mono, monospace);
-  font-size: 14px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: var(--v4-radius-sm);
-  background: var(--v4-surface-strong);
-  color: var(--v4-ink);
-  border: 1px dashed var(--v4-line-strong);
-}
-
-.gw-drop-progress-box {
+.gw-event-card {
   display: flex;
+  min-width: 0;
   flex-direction: column;
-}
-.gw-drop-bar-bg {
-  width: 100%;
-  height: 8px;
-  background: var(--v4-surface-strong);
+  border: 1px solid var(--v4-line);
   border-radius: var(--v4-radius);
+  background: var(--v4-surface, #fff);
   overflow: hidden;
 }
-.gw-drop-bar-fill {
+
+.gw-event-card-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 16px;
+  padding: 16px 18px 14px;
+}
+
+.gw-event-card-ident {
+  min-width: 0;
+}
+
+.gw-event-title {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--v4-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.gw-event-sub {
+  margin: 4px 0 0;
+  color: var(--v4-ink-soft, var(--v4-ink-mute));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Status: a dot plus a plain-language label, never a mono code token. */
+.gw-event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--v4-ink-soft, var(--v4-ink-mute));
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.gw-event-badge::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.gw-event-badge--live {
+  color: #15803d;
+}
+
+.gw-event-badge--locked {
+  color: #b45309;
+}
+
+.gw-event-figure {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.gw-event-figure strong {
+  display: block;
+  color: var(--v4-ink);
+  font-size: 17px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.gw-event-figure span {
+  display: block;
+  margin-top: 2px;
+  color: var(--v4-ink-mute);
+  font-size: 12px;
+}
+
+.gw-event-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 18px 14px;
+}
+
+/* Stat band: hairlines instead of a grey tray, so the numbers read first. */
+.gw-event-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  margin-top: auto;
+  border-top: 1px solid var(--v4-line);
+  background: var(--v4-surface-soft);
+}
+
+.gw-event-stat {
+  min-width: 0;
+  padding: 11px 14px;
+  border-left: 1px solid var(--v4-line);
+}
+
+.gw-event-stat:first-child {
+  border-left: 0;
+}
+
+.gw-event-stat strong {
+  display: block;
+  color: var(--v4-ink);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.gw-event-stat span {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--v4-ink-mute);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gw-event-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--v4-line);
+}
+
+.gw-event-card-foot .gw-event-foot-note {
+  margin: 0;
+  color: var(--v4-ink-mute);
+  font-size: 12px;
+}
+
+.gw-event-card-foot .gw-event-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Meter shared by drop claims and prediction odds. */
+.gw-event-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--v4-surface-strong);
+}
+
+.gw-event-meter-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--v4-cobalt) 0%, var(--v4-cobalt) 100%);
-  border-radius: var(--v4-radius);
+  border-radius: 999px;
+  background: var(--v4-cobalt);
   transition: width 300ms ease;
+}
+
+.gw-event-meter-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.gw-event-meter-head span {
+  color: var(--v4-ink-soft, var(--v4-ink-mute));
+}
+
+.gw-event-meter-head strong {
+  color: var(--v4-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+/* Prediction odds rows. The leading side gets the tint; nothing else does. */
+.gw-event-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gw-event-option {
+  padding: 10px 12px;
+  border: 1px solid var(--v4-line);
+  border-radius: var(--v4-radius-sm);
+  background: var(--v4-surface);
+}
+
+.gw-event-option.is-leading {
+  border-color: rgb(var(--v4-cobalt-rgb) / 0.35);
+  background: rgb(var(--v4-cobalt-rgb) / 0.05);
+}
+
+.gw-event-option-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.gw-event-option-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--v4-ink);
+  font-size: 13.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gw-event-option-value {
+  flex-shrink: 0;
+  color: var(--v4-ink-soft, var(--v4-ink-mute));
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gw-event-option-value b {
+  color: var(--v4-ink);
+  font-weight: 700;
+}
+
+/* Drop code: mono is earned here — viewers type this string verbatim. */
+.gw-event-code {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid var(--v4-line-strong);
+  border-radius: var(--v4-radius-sm);
+  background: var(--v4-surface-soft);
+  color: var(--v4-ink);
+  font-family: var(--v4-font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.gw-event-code-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gw-event-card-ident .gw-event-code-row {
+  margin-top: 8px;
+}
+
+/* Table rows in the history cards */
+.gw-history-winner strong {
+  color: var(--v4-ink);
+}
+
+.gw-history-winner span {
+  display: block;
+  margin-top: 2px;
+  color: var(--v4-ink-mute);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .gw-event-card-head {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .gw-event-figure {
+    text-align: left;
+  }
+
+  .gw-event-stats {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+
+  .gw-event-stat {
+    border-top: 1px solid var(--v4-line);
+    border-left: 0;
+  }
+
+  .gw-event-stat:first-child {
+    border-top: 0;
+  }
+
+  .gw-event-card-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gw-event-card-foot .gw-event-foot-actions {
+    margin-left: 0;
+  }
 }
 
 /* Preset Chips (Custom-First UX) */
@@ -1665,97 +1965,6 @@
   }
 }
 
-/* Predictions Styling */
-.gw-preds-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.gw-pred-card {
-  border: 1px solid var(--v4-line, var(--v4-line));
-  border-radius: var(--v4-radius);
-  padding: 20px;
-  background: var(--v4-surface, #ffffff);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.gw-pred-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.gw-pred-title {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--v4-ink, var(--v4-ink));
-  margin: 6px 0 0;
-}
-
-.gw-pred-pool-badge {
-  text-align: right;
-  background: rgb(var(--v4-cobalt-rgb) / 0.08);
-  padding: 6px 12px;
-  border-radius: var(--v4-radius-sm);
-}
-
-.gw-pred-pool-badge strong {
-  display: block;
-  font-size: 16px;
-  color: var(--brand-accent, var(--v4-cobalt));
-}
-
-.gw-pred-pool-badge small {
-  font-size: 11px;
-  color: var(--v4-ink-mute);
-  text-transform: uppercase;
-}
-
-.gw-pred-options-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.gw-pred-opt-box {
-  background: var(--v4-canvas, var(--v4-surface-soft));
-  padding: 12px;
-  border-radius: var(--v4-radius-sm);
-  border: 1px solid var(--v4-line, var(--v4-line));
-}
-
-.gw-pred-stats-row {
-  display: flex;
-  gap: 20px;
-  padding-top: 12px;
-  border-top: 1px solid var(--v4-line, var(--v4-line));
-  font-size: 13px;
-}
-
-.gw-pred-stats-row > div {
-  display: flex;
-  flex-direction: column;
-}
-
-.gw-pred-stats-row strong {
-  color: var(--v4-ink, var(--v4-ink));
-}
-
-.gw-pred-stats-row span {
-  font-size: 11px;
-  color: var(--v4-ink-mute);
-}
-
-.gw-pred-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .gw-settle-opt-label {
   display: flex;
   align-items: center;
@@ -1774,13 +1983,14 @@
 }
 
 .tournament-title-display {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 20px;
   font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .tournament-game-display {
-  margin: 0 0 16px;
+  margin: 3px 0 10px;
   color: var(--v4-ink-mute, #6b7280);
   font-size: 13px;
 }

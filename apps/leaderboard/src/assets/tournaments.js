@@ -198,6 +198,7 @@ function renderTournament() {
     $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
     $("tournament-chat-channel").value = board.kickChannelName || "";
   }
+  renderTitle();
   renderEntries();
   loadBracket();
 }
