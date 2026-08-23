@@ -936,6 +936,8 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
   top: calc(var(--v3-topbar-h) + var(--v3-sticky-head-offset, 0px));
   z-index: 19;
   background: var(--v4-canvas);
+  display: flex;
+  width: 100%;
 }
 /* Rewards renders its subnav before the page head, so the tabs stick directly
    under the topbar and the head scrolls normally. */
