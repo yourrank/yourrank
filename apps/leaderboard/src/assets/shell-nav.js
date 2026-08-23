@@ -48,7 +48,6 @@
       [".lb-page.is-on > .v3-head + .v3-tabs", ".lb-page.is-on > .v3-head"],
       [".lb-page.is-on > .design-grid > .design-controls > .v3-tabs", ".lb-page.is-on > .design-grid > .design-controls > .v3-section-title"],
       [".v3-analytics-page > .v3-tabs", ".v3-analytics-page > .v3-head"],
-      [".cr-workspace-content > .v3-tabs", "#cr-app > .v3-head"],
       ["#acc-app > .account-settings-tabs", "#acc-app > .account-settings-head"],
       ["#gw-app > .gw-nav-tabs", "#gw-app > .v3-head"],
     ];

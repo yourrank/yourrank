@@ -53,7 +53,7 @@ async function loadSessions() {
     let html =
       '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Device / Started</th><th>Expires</th><th class="ta-r">Status</th></tr></thead><tbody>';
     for (const s of data.sessions) {
-      const label = s.current ? '<span class="pill pill--good">● Current device (Active)</span>' : '<span class="pill pill--muted">Other browser</span>';
+      const label = s.current ? '<span class="pill pill--good">● Current device</span>' : '<span class="pill pill--muted">Other browser</span>';
       const created = s.createdAt ? new Date(s.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
       const expires = s.expiresAt ? new Date(s.expiresAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
       html += `<tr><td><div class="session-device-cell"><strong>💻 Web Session</strong><span class="hint">${created}</span></div></td><td><span class="hint">${expires}</span></td><td class="ta-r">${label}</td></tr>`;
