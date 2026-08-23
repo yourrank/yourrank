@@ -389,7 +389,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
 
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'reward', $2, $3)`,
+       VALUES ($1, 'earn', $2, $3)`,
       [siteViewer.id, drop.points_reward, `Flash Code Drop: ${drop.code}`]
     );
 

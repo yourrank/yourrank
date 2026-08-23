@@ -1379,7 +1379,7 @@ if (!window.__yrSpaShell) {
     }
 
     if (past.length === 0) {
-      pastList.innerHTML = `<tr><td colspan="5">${inlineStateHtml({ kind: "empty", title: "No drops created yet", body: "Create a drop to reward active viewers with a limited-claim code." })}</td></tr>`;
+      pastList.innerHTML = `<tr><td colspan="5">${inlineStateHtml({ kind: "empty", title: active.length === 0 ? "No drops created yet" : "No past drops yet", body: active.length === 0 ? "Create a drop to reward active viewers with a limited-claim code." : "Active drops are shown above. Past exhausted/expired drops will appear here." })}</td></tr>`;
     } else {
       pastList.innerHTML = past.map((d) => `
         <tr>

@@ -159,35 +159,44 @@ function renderTournament() {
     renderTitle();
     return;
   }
+  const isFinished = tournament.status === "completed" || tournament.status === "cancelled";
   empty.hidden = true;
-  listCard.hidden = false;
-  settings.hidden = false;
-  if (channelField) channelField.hidden = false;
-  const activeCount = entries.filter((entry) => ["pending", "confirmed", "selected"].includes(entry.status)).length;
-  const eligibleCount = entries.filter((entry) => ["pending", "confirmed"].includes(entry.status)).length;
-  $("tournament-count").textContent = `${activeCount}${tournament.entry_cap ? ` of ${tournament.entry_cap}` : ""} entries`;
-  $("tournament-step-label").textContent = tournament.signup_state === "open"
-    ? `Viewers can join with ${tournament.entry_keyword || "!join"}`
-    : tournament.signup_state === "locked" ? "Signups are locked" : "Signups are closed";
-  const picking = tournament.signup_state === "locked" || eligibleCount > 0 && tournament.signup_state !== "open";
-  primary.hidden = false;
-  pickWrap.hidden = !picking;
-  primary.textContent = tournament.signup_state === "open" ? "Lock signups" : eligibleCount ? "Pick participants" : "Open signups";
-  if (tournament.signup_state === "open") primary.dataset.action = "lock";
-  else if (eligibleCount) primary.dataset.action = "pick";
-  else primary.dataset.action = "open";
-  primary.hidden = primary.dataset.action === "open" && entries.length === 0;
-  $("tournament-reopen").hidden = tournament.signup_state === "open" || eligibleCount === 0;
-  $("tournament-new").hidden = entries.length === 0 && tournament.signup_state !== "locked";
+  listCard.hidden = isFinished;
+  settings.hidden = isFinished;
+  if (channelField) channelField.hidden = isFinished;
+  if (isFinished) {
+    $("tournament-step-label").textContent = tournament.status === "completed"
+      ? `Champion: ${tournament.winner_name || "—"}`
+      : "Tournament cancelled";
+    primary.hidden = true;
+    pickWrap.hidden = true;
+    $("tournament-reopen").hidden = true;
+    $("tournament-new").hidden = false;
+  } else {
+    const activeCount = entries.filter((entry) => ["pending", "confirmed", "selected"].includes(entry.status)).length;
+    const eligibleCount = entries.filter((entry) => ["pending", "confirmed"].includes(entry.status)).length;
+    $("tournament-count").textContent = `${activeCount}${tournament.entry_cap ? ` of ${tournament.entry_cap}` : ""} entries`;
+    $("tournament-step-label").textContent = tournament.signup_state === "open"
+      ? `Viewers can join with ${tournament.entry_keyword || "!join"}`
+      : tournament.signup_state === "locked" ? "Signups are locked" : "Signups are closed";
+    const picking = tournament.signup_state === "locked" || eligibleCount > 0 && tournament.signup_state !== "open";
+    pickWrap.hidden = !picking;
+    primary.textContent = tournament.signup_state === "open" ? "Lock signups" : eligibleCount ? "Pick participants" : "Open signups";
+    if (tournament.signup_state === "open") primary.dataset.action = "lock";
+    else if (eligibleCount) primary.dataset.action = "pick";
+    else primary.dataset.action = "open";
+    primary.hidden = primary.dataset.action === "open" && entries.length === 0;
+    $("tournament-reopen").hidden = tournament.signup_state === "open" || eligibleCount === 0;
+    $("tournament-new").hidden = entries.length === 0 && tournament.signup_state !== "locked";
 
-  $("tournament-title").value = tournament.title || "";
-  $("tournament-game").value = tournament.game_name || "";
-  $("tournament-format").value = tournament.format || "bracket";
-  $("tournament-entry-cap").value = tournament.entry_cap || "";
-  $("tournament-keyword").value = tournament.entry_keyword || "!join";
-  $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-  $("tournament-chat-channel").value = board.kickChannelName || "";
-  renderTitle();
+    $("tournament-title").value = tournament.title || "";
+    $("tournament-game").value = tournament.game_name || "";
+    $("tournament-format").value = tournament.format || "bracket";
+    $("tournament-entry-cap").value = tournament.entry_cap || "";
+    $("tournament-keyword").value = tournament.entry_keyword || "!join";
+    $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
+    $("tournament-chat-channel").value = board.kickChannelName || "";
+  }
   renderEntries();
   loadBracket();
 }
@@ -202,7 +211,10 @@ async function loadEntries() {
 async function loadTournament() {
   const data = await api("/api/tournaments");
   const tournaments = data.tournaments || [];
-  tournament = tournaments.find((item) => !["completed", "cancelled"].includes(item.status)) || null;
+  // Prefer an active tournament, but keep a completed/cancelled one visible
+  // so the bracket and champion survive reload/back navigation.
+  const active = tournaments.find((item) => !["completed", "cancelled"].includes(item.status));
+  tournament = active || tournaments[0] || null;
   entries = [];
   if (tournament) await loadEntries();
   else renderTournament();

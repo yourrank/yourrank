@@ -190,7 +190,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
   const { viewer, res } = await requireViewerFn(request, env);
   if (res) return res;
 
-  const body = await (async () => {
+  const body = request.validatedBody || await (async () => {
     try { return await request.json(); } catch { return null; }
   })();
   const slug = String(body?.slug || "").trim().toLowerCase();
