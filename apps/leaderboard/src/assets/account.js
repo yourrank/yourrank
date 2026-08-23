@@ -11,7 +11,7 @@ import { getMe, handleAuthError } from "./dashboard/session.js";
 
 const statusEl = () => $("status");
 let _accountPopstate = null;
-let teamSiteId = state.ACTIVE_SITE_ID || "";
+let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
   if (!el) return;
@@ -504,7 +504,14 @@ function renderTeam(data) {
 }
 
 async function loadTeam() {
-  const r = await jsonReq("GET", "/api/site/team");
+  const selectedSiteId = state.ACTIVE_SITE_ID
+    || new URLSearchParams(location.search).get("siteId")
+    || teamSiteId
+    || "";
+  const teamUrl = selectedSiteId
+    ? `/api/site/team?siteId=${encodeURIComponent(selectedSiteId)}`
+    : "/api/site/team";
+  const r = await jsonReq("GET", teamUrl);
   renderTeam(r.ok ? r.data : { ok: false, error: r.data?.error || "Failed to load team" });
 }
 
