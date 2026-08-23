@@ -25,7 +25,7 @@ describe("Telegram overview states", () => {
 
     expect(html).toContain("@creator_bot");
     expect(html).toContain("Send a broadcast");
-    expect(html).toContain("Edit replies");
+    expect(html).toContain("Edit commands");
     expect(html).toContain('id="deepLinkExample"');
     expect(html).toContain('id="totClicks"');
     expect(html).toContain('id="chart"');

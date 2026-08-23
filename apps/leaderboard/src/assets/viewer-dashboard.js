@@ -82,7 +82,7 @@ function render() {
   $("vd-boards-card").hidden = false;
   $("vd-site-card").hidden = true;
 
-  const name = v.discordUsername || v.kickUsername || "Viewer";
+  const name = v.discordUsername || v.kickUsername || "Member";
   $("vd-username").textContent = name;
   if (v.avatarUrl) {
     $("vd-avatar").src = v.avatarUrl;
@@ -140,8 +140,8 @@ function renderSite() {
   $("vd-site-name").textContent = data.site.name || data.site.slug;
   const channel = data.site.kickChannelName;
   $("vd-site-streamer").textContent = channel
-    ? `Kick channel: @${channel}${data.site.kickChannelExternalId ? " · " + data.site.kickChannelExternalId : ""}`
-    : "Streamer board";
+    ? `Kick channel: @${channel}`
+    : "Streamer site";
 
   const v = data.viewer;
   $("vd-site-balance").textContent = v ? v.balance : 0;
@@ -149,8 +149,8 @@ function renderSite() {
   const earnHint = $("vd-earn-hint");
   if (earnHint) {
     earnHint.textContent = channel
-      ? `Earn credits by redeeming @${channel}'s mapped Kick channel rewards during a live stream.`
-      : "Earn credits by redeeming the streamer's mapped Kick channel rewards during a live stream.";
+      ? `Earn credits by using @${channel}'s linked Kick rewards during a live stream.`
+      : "Earn credits by using the streamer's linked Kick rewards during a live stream.";
   }
 
   const items = data.shopItems || [];
@@ -166,7 +166,7 @@ function renderSite() {
         <div class="vd-card-side">
           <div class="vd-card-cost">${i.cost} credits</div>
           ${i.stock !== null ? `<div class="hint">Stock: ${i.stock}</div>` : ""}
-          <button class="btn btn--sm" data-redeem="${esc(i.id)}" ${canBuy ? "" : "disabled"}>Redeem</button>
+          <button class="btn btn--sm" data-redeem="${esc(i.id)}" ${canBuy ? "" : "disabled"}>Order</button>
         </div>
       </div>
     `;
@@ -198,8 +198,8 @@ async function redeem(shopItemId, btn) {
   if (!slug) return;
   const item = (state.current.shopItems || []).find((i) => i.id === shopItemId);
   if (!item) return;
-  if (!await showConfirmModal("Confirm prize order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
-  if (btn) setLoading(btn, true, "Redeeming…");
+  if (!await showConfirmModal("Confirm order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
+  if (btn) setLoading(btn, true, "Placing order…");
 
   try {
     const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId });
@@ -213,7 +213,7 @@ async function redeem(shopItemId, btn) {
       createdAt: new Date().toISOString(),
     });
     renderSite();
-    // Refresh boards list to update balances.
+    // Refresh sites list to update balances.
     load().catch(() => {});
   } catch (err) { setStatus("vd-login-status", err.message, true); }
   finally { if (btn) setLoading(btn, false); }

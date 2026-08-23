@@ -227,7 +227,7 @@ export async function handleViewerRedeem(request, env) {
         FOR UPDATE`,
       [r.id, viewer.id]
     );
-    if (!viewerRow) return { error: "No credits found on this board. Earn some first.", status: 400 };
+    if (!viewerRow) return { error: "No credits found on this site. Earn some first.", status: 400 };
     if (viewerRow.blocked) return { error: "viewer blocked", status: 400 };
 
     const item = await tx.one(
@@ -275,7 +275,7 @@ export async function handleViewerRedeem(request, env) {
       [
         viewerRow.id,
         item.cost,
-        `Redeemed: ${item.name || item.id}`,
+        `Ordered: ${item.name || item.id}`,
         JSON.stringify({ shop_item_id: item.id, redemption_id: redemptionRows[0].id, item_name: item.name || "" }),
       ]
     );

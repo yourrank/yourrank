@@ -258,11 +258,11 @@
       var label = btn.textContent;
       var name = btn.dataset.rewardName || "this reward";
       var cost = btn.dataset.rewardCost || "0";
-      if (!window.confirm("Redeem “" + name + "” for " + cost + " credits?")) return;
+      if (!window.confirm("Order “" + name + "” for " + cost + " credits?")) return;
       var focusTarget = btn;
       btn.disabled = true;
-      btn.textContent = "Redeeming…";
-      setRedeemStatus("Redeeming “" + name + "”…");
+      btn.textContent = "Placing order…";
+      setRedeemStatus("Ordering “" + name + "”…");
       fetch("/api/viewer/redeem", {
         method: "POST",
         credentials: "same-origin",
@@ -274,12 +274,12 @@
           if (r.ok && r.data.ok) {
             btn.textContent = "Requested";
             btn.classList.add("is-success");
-            setRedeemStatus("Reward requested: “" + name + "”. " + cost + " credits deducted.");
+            setRedeemStatus("Order placed: “" + name + "”. " + cost + " credits deducted.");
             focusTarget.focus();
           } else {
             btn.textContent = label;
             btn.disabled = false;
-            setRedeemStatus(r.data.error || "Couldn’t redeem that reward. Please try again.", true);
+            setRedeemStatus(r.data.error || "Couldn’t place that order. Please try again.", true);
             focusTarget.focus();
           }
         })

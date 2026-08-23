@@ -10,16 +10,16 @@ export const viewerDashboardPage = leaderboardPageHtml({
   content: `
 <header class="gm-shell-nav"><div class="gm-shell-inner">
   <a class="gm-brand" href="/"><span class="gm-brand-mark">${brandMarkSvg()}</span><span class="gm-brand-word">YourRank</span></a>
-  <nav id="vd-nav" aria-label="Viewer"></nav>
+  <nav id="vd-nav" aria-label="Account"></nav>
 </div></header>
 
 <main class="wrap cr-wrap" id="main-content">
   <div id="vd-loading" class="ui-loading" hidden><div class="ui-loading__spinner"></div></div>
   <div class="an-head">
     <div>
-      <div class="an-eyebrow">Viewer dashboard</div>
+      <div class="an-eyebrow">Your account</div>
       <h1 class="an-title" id="vd-title">My credits</h1>
-      <p class="an-sub">See your credits across all streamer boards and redeem items.</p>
+      <p class="an-sub">See your credits across all streamer sites and order items.</p>
     </div>
   </div>
 
@@ -37,7 +37,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <div class="vd-profile-head">
       <img id="vd-avatar" class="vd-avatar" src="" alt="" hidden />
       <div>
-        <h2 id="vd-username">Viewer</h2>
+        <h2 id="vd-username">Member</h2>
         <p class="card-sub" id="vd-identity">Loading identity…</p>
       </div>
       <div class="vd-profile-actions">
@@ -48,30 +48,30 @@ export const viewerDashboardPage = leaderboardPageHtml({
   </section>
 
   <section class="card" id="vd-boards-card" hidden>
-    <h2>Your boards</h2>
-    <p class="card-sub">Each card shows your credits for a streamer's board. Select one to view rewards and your prize orders.</p>
+    <h2>Your sites</h2>
+    <p class="card-sub">Each card shows your credits for a streamer's site. Select one to view rewards and your orders.</p>
     <div id="vd-boards"></div>
-    <p class="empty" id="vd-boards-empty" hidden>You don't have credits on any board yet. Redeem a Kick channel reward covered by a credit rule to earn some.</p>
+    <p class="empty" id="vd-boards-empty" hidden>You don't have credits on any site yet. Use one of the streamer's linked Kick rewards to earn credits.</p>
   </section>
 
   <section class="card" id="vd-site-card" hidden>
     <div class="vd-site-head">
       <div>
-        <h2 id="vd-site-name">Board</h2>
-        <p class="card-sub" id="vd-site-streamer">Streamer board</p>
+        <h2 id="vd-site-name">Site</h2>
+        <p class="card-sub" id="vd-site-streamer">Streamer site</p>
       </div>
-      <button class="btn btn--sm" id="vd-back" type="button">Back to boards</button>
+      <button class="btn btn--sm" id="vd-back" type="button">Back to sites</button>
     </div>
     <p class="card-sub">Balance: <b id="vd-site-balance">0</b> credits</p>
-    <p class="hint" id="vd-earn-hint">Earn credits by redeeming the streamer's Kick channel rewards covered by credit rules during a live stream.</p>
+    <p class="hint" id="vd-earn-hint">Earn credits by using the streamer's linked Kick rewards during a live stream.</p>
 
     <h3>Rewards</h3>
     <div id="vd-shop-list"></div>
     <p class="empty" id="vd-shop-empty" hidden>No items available.</p>
 
-    <h3 class="mt-24">Your prize orders</h3>
+    <h3 class="mt-24">Your orders</h3>
     <div id="vd-redemptions-list"></div>
-    <p class="empty" id="vd-redemptions-empty" hidden>No prize orders yet. Place an order from Rewards to see it here.</p>
+    <p class="empty" id="vd-redemptions-empty" hidden>No orders yet. Place an order from Rewards to see it here.</p>
     <p class="hint"><b>Pending</b> = waiting for the streamer; <b>Fulfilled</b> = approved; <b>Cancelled</b> = refunded.</p>
   </section>
 </main>

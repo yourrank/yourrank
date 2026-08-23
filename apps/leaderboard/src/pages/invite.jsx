@@ -12,7 +12,7 @@ export function InvitePage({ invite, token, user } = {}) {
   const roleLabel = invite?.role === "manager" ? "Manager" : "Moderator";
   const roleDesc = invite?.role === "manager"
     ? "Full operational access to manage leaderboards, viewer rewards & shop fulfillment, casino offers, and bot commands."
-    : "Access to update live leaderboard scores and review and fulfil viewer prize orders.";
+    : "Access to update live leaderboard scores and review and fulfil viewer orders.";
 
   return (
     <html lang="en">

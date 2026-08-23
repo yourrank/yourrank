@@ -6,7 +6,7 @@ import { activityEmptyAction, giveawayAction, nextStepAction, visitsMetricState 
 
 // Home already owns some state in dedicated surfaces: the setup checklist
 // renders brand/players/publish/verification, and the pending-orders banner
-// renders reward requests. Repeating those as a "Next step" card would show
+// renders orders. Repeating those as a "Next step" card would show
 // the same instruction three times, so the card only speaks for the steps no
 // other surface on the page claims.
 const NEXT_STEP_OWNED_ELSEWHERE = new Set(["verifyEmail", "brand", "players", "publish", "pendingOrders"]);
@@ -218,7 +218,7 @@ export function renderOverviewSummary() {
     const pendingAlertCount = $("ovPendingOrdersAlertCount");
     if (pendingAlertCount) pendingAlertCount.textContent = number(pendingOrders);
     const pendingAlertLabel = $("ovPendingOrdersAlertLabel");
-    if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending credit order needs review." : "pending credit orders need review.";
+    if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending order needs review." : "pending orders need review.";
     const kpiRow = $("ovKpiRow");
     if (creditsCard) creditsCard.hidden = !creditsEnabled;
     if (pendingOrdersCard) pendingOrdersCard.hidden = pendingOrders <= 0;
@@ -244,14 +244,14 @@ export function renderOverviewSummary() {
       return minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.floor(minutes / 60)}h ago` : `${Math.floor(minutes / 1440)}d ago`;
     };
     const activity = [
-      ...(state.CREDITS?.redemptions || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Viewer", sub: `${item.item_name || "Shop item"} ordered` })),
-      ...(state.CREDITS?.viewers || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Viewer", sub: "Joined via Kick sign-in" })),
+      ...(state.CREDITS?.redemptions || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Member", sub: `${item.item_name || "Shop item"} ordered` })),
+      ...(state.CREDITS?.viewers || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Member", sub: "Joined via Kick sign-in" })),
       ...(state.PUBLISHED_AT ? [{ at: state.PUBLISHED_AT, title: "YourRank", sub: "Site published" }] : []),
       ...(state.SITE_UPDATED_AT ? [{ at: state.SITE_UPDATED_AT, title: "YourRank", sub: "Site updated" }] : []),
     ].filter((item) => item.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 5);
     $("ovActivityList").innerHTML = activity.map((item) => `<div class="ov-activity-row"><span class="ov-activity-icon">${ACTIVITY_ICON}</span><span class="ov-activity-copy"><b>${esc(item.title)}</b><span>${esc(item.sub)}</span></span><time>${relative(item.at)}</time></div>`).join("");
     if (activity.length) $("ovActivityEmpty").hidden = true;
-    else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and reward requests will appear here.", compactHeading: true, actions: [activityEmptyAction(status.published)] });
+    else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and orders will appear here.", compactHeading: true, actions: [activityEmptyAction(status.published)] });
     const sampleNotice = state.SAMPLE_PLAYERS
       ? `<div class="v3-alert v3-alert--warning ov-sample-players" role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/players">Manage players</a></div>`
       : "";

@@ -10,7 +10,7 @@ import { DEFAULT_SECTIONS, isPro } from "./site.js";
 
 const SECTION_ROWS = [
   ["shop", "Shop", "Let members browse and redeem your shop items.", "Turning off removes Shop from navigation and disables the /shop URL."],
-  ["credits", "Rewards", "Let members see their balance and prize order history.", "Turning off removes Rewards from navigation and disables the /credits URL."],
+  ["credits", "Rewards", "Let members see their balance and order history.", "Turning off removes Rewards from navigation and disables the /credits URL."],
   ["games", "Games", "Let members play credit-based games on your site.", "Turning off removes Games from navigation and disables the /games URL."],
 ];
 

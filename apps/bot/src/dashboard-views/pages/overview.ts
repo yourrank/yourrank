@@ -7,7 +7,7 @@ export function overviewPanel({ hasBot = true }: { hasBot?: boolean } = {}): str
       <div class="v3-empty">
         <div class="v3-empty-ic" aria-hidden="true">◎</div>
         <h2 id="telegramSetupTitle">Connect your Telegram bot</h2>
-        <p>Connect one bot first. After that you can set replies, send broadcasts, and share offers from this workspace.</p>
+        <p>Connect one bot first. After that you can edit commands, send broadcasts, and share offers from this workspace.</p>
         <div class="v3-empty-actions">
           <a class="btn btn--accent" href="/dashboard/telegram/bots">Connect bot</a>
         </div>
@@ -20,10 +20,10 @@ export function overviewPanel({ hasBot = true }: { hasBot?: boolean } = {}): str
   <div class="lb-bento" data-page="overview">
     <div class="lb-widget lb-widget--full" aria-label="Quick actions">
       <div class="d-flex flex-wrap gap-12">
-        <a href="/dashboard/telegram/broadcasts" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Send a broadcast</span><span class="muted text-xs">Message your subscribers</span></a>
-        <a href="/dashboard/telegram/commands" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Edit replies</span><span class="muted text-xs">Change what your bot says</span></a>
+        <a href="/dashboard/telegram/broadcasts" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Send a broadcast</span><span class="muted text-xs">Send broadcasts to your subscribers</span></a>
+        <a href="/dashboard/telegram/commands" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Edit commands</span><span class="muted text-xs">Change what your bot says</span></a>
         <a href="/dashboard/telegram/offers" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Create an offer</span><span class="muted text-xs">Make a tracked link to share</span></a>
-        <a href="/dashboard/telegram/bots" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Manage bot</span><span class="muted text-xs">Check the Telegram connection</span></a>
+        <a href="/dashboard/telegram/bots" class="btn btn--ghost d-flex flex-col items-start gap-4 bot-quick-action"><span class="font-600 text-sm">Manage bots</span><span class="muted text-xs">Check Telegram connections</span></a>
       </div>
     </div>
 
