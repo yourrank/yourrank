@@ -520,6 +520,7 @@
 
 @media (min-width: 1024px) {
   .yr-g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .yr-g3--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yr-g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .yr-g12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .yr-c8 { grid-column: span 8 / span 8; }

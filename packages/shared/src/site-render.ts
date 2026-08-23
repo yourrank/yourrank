@@ -620,17 +620,19 @@ function homeMain(ctx) {
     right: heroRight,
   });
 
-  const kpis = viewer
+  const kpiItems = viewer
     ? [
         kpi("Credits / 7d", "chart", `+${formatNumber(dailyEarned(ledger).reduce((a, d) => a + d.value, 0))}`, `${ledger.length} recent entries`, { accent: true }),
         kpi("Earned all time", "trophy", formatNumber(viewerOnSite?.total_earned || 0), `${formatNumber(viewerOnSite?.total_spent || 0)} spent so far`),
         kpi("Pending orders", "hourglass", formatNumber(pending), pending ? `${esc(b.name || slug)} fulfils by hand` : "Nothing waiting"),
-      ].join("")
+      ]
     : [
         pool ? null : kpi("Leaderboard", "trophy", period, `${period} leaderboard`),
         kpi("Players", "chart", formatNumber(players.length), "On the current leaderboard"),
         kpi(data.ended ? "Round" : data.scheduled ? "Starts in" : "Ends in", "hourglass", data.ended ? "Ended" : (cd ? cd.text : "—"), data.ended ? "Final standings" : data.scheduled ? "Until score updates open" : (cd ? "Until final standings" : "No end date set")),
-      ].filter(Boolean).join("");
+      ].filter(Boolean);
+  const kpis = kpiItems.join("");
+  const kpiGridClass = kpiItems.length === 2 ? "yr-g3 yr-g3--pair" : "yr-g3";
 
   const series = dailyEarned(ledger);
   const chartOrHow = viewer
@@ -678,7 +680,7 @@ ${creditsChart(series)}
   }
 
 return `${heroHtml}
-${kpis ? `<div class="yr-g3">${kpis}</div>` : ""}
+${kpis ? `<div class="${kpiGridClass}">${kpis}</div>` : ""}
 <div class="yr-g12">${chartOrHow}${rightCol}</div>
 ${demoGiveaway ? `<div class="yr-g12">${demoGiveawayCard(demoGiveaway)}</div>` : ""}
 ${featured}`;
