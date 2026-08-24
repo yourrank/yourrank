@@ -75,7 +75,7 @@ export function DashboardShell({ activeNav = "home", boardContext = "full", foot
     topbarHtml: `${workspaceSearchHtml()}${workspaceAvailabilityHtml(boardContext)}`,
     crumbs: crumbs || [],
     embeddedInMain: true,
-    directContent: true,
+    stack: false,
     contentId,
     overlaysHtml: overlays || "",
     content,

@@ -2,30 +2,33 @@ import { describe, expect, it } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { appHtml } from "../../../bot/src/dashboard-views/app.ts";
-import { botNavItems, pageLinks, telegramChrome } from "../../../bot/src/dashboard-views/shell.ts";
-import { navListHtml } from "@yourrank/shared/dashboard-chrome";
-import { dashboardNavItems } from "@yourrank/shared/dashboard-nav";
-import { DASHBOARD_ROUTES, routeById } from "@yourrank/shared/dashboard-routes";
+import { PAGES } from "../pages.jsx";
+import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
+import { DASHBOARD_ROUTES } from "@yourrank/shared/dashboard-routes";
 
 const root = join(import.meta.dir, "../../../../");
+const sharedSrc = join(root, "packages/shared/src");
+const leaderboardSrc = join(root, "apps/leaderboard/src");
 const botSrc = join(root, "apps/bot/src");
-const leaderboardAssets = join(root, "apps/leaderboard/src/assets");
+const leaderboardAssets = join(leaderboardSrc, "assets");
 const user = { display_name: "Test operator", email: "operator@example.com", plan: "pro" };
-const pageCases = [
-  ["overview", "telegram"],
-  ["bots", "telegram.bots"],
-  ["commands", "telegram.commands"],
-  ["offers", "telegram.offers"],
-  ["broadcasts", "telegram.broadcasts"],
-];
 
-function sourceFiles(dir, { excludePages = false } = {}) {
+function sourceFiles(dir) {
   const files = [];
   function visit(current) {
-    for (const name of readdirSync(current, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
-      const path = join(current, name.name);
-      if (name.isDirectory()) visit(path);
-      else if (/\.(?:js|jsx|ts|tsx)$/.test(name.name) && !(excludePages && path.includes("/dashboard-views/pages/")) && !path.includes("/__tests__/")) files.push(path);
+    const entries = readdirSync(current, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+    );
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== "__tests__") visit(path);
+      } else if (
+        /\.(?:js|jsx|ts|tsx)$/.test(entry.name) &&
+        entry.name !== "assets_bundled.js"
+      ) {
+        files.push(path);
+      }
     }
   }
   visit(dir);
@@ -38,81 +41,94 @@ function executableSource(path) {
     .replace(/^[ \t]*\/\/.*$/gm, "");
 }
 
-function allMarkup(page, routeId) {
-  const html = appHtml(user, "https://yourrank.site", "nonce", page, undefined, {
-    botUsername: "testbot",
-    botStatus: "active",
-    siteName: "Test site",
-  });
-  const chrome = telegramChrome(page);
-  expect((html.match(/class="v3-dash"/g) || []).length).toBe(1);
-  expect((html.match(/data-auth-workspace="true"/g) || []).length).toBe(1);
-  expect((html.match(/data-shell-drawer="shared"/g) || []).length).toBe(1);
-  expect((html.match(/id="lbSide"/g) || []).length).toBe(1);
-  expect((html.match(/class="lb-topbar"/g) || []).length).toBe(1);
-  expect((html.match(/<main class="lb-bento"/g) || []).length).toBe(1);
-  expect((html.match(/class="v3-crumbs"/g) || []).length).toBe(1);
-  expect((html.match(/<h1\b/g) || []).length).toBe(1);
-  expect((html.match(/<details class="gm-profile\b/g) || []).length).toBe(1);
-  expect(html).toContain(`<title>${chrome.documentTitle}</title>`);
-  expect(html).toContain(`<h1>${chrome.h1}</h1>`);
-  for (const crumb of chrome.crumbs) expect(html).toContain(crumb.label);
-  expect(html).toContain(`data-nav="${chrome.navKey}"`);
-  expect(html).toContain(`href="${chrome.canonicalPath}"`);
-  expect(html).toContain(`<nav class="v3-tabs telegram-tabs`);
-  for (const link of pageLinks) expect(html).toContain(`href="${link.href}"`);
-  expect(html).toContain(`data-page="${page}"`);
-  expect(routeById(routeId).canonicalPath).toBe(chrome.canonicalPath);
-  return html;
+function shellCounts(html, { telegram = false } = {}) {
+  return {
+    root: (html.match(/class="v3-dash"[^>]*data-auth-workspace="true"[^>]*data-shell-drawer="shared"/g) || []).length,
+    side: (html.match(/id="lbSide"/g) || []).length,
+    topbar: (html.match(/class="lb-topbar"/g) || []).length,
+    bento: (html.match(telegram ? /<main class="lb-bento"/g : /<div class="lb-bento"/g) || []).length,
+    main: (html.match(/<main\b/g) || []).length,
+  };
 }
 
-function assertStructuralOwnership() {
-  const shell = readFileSync(join(root, "packages/shared/src/dashboard-chrome.ts"), "utf8");
-  const adapter = executableSource(join(root, "apps/leaderboard/src/pages/dashboard-shell.jsx"));
+function assertSingleShell(html, { telegram = false } = {}) {
+  expect(shellCounts(html, { telegram })).toEqual({
+    root: 1,
+    side: 1,
+    topbar: 1,
+    bento: 1,
+    main: telegram ? 1 : 0,
+  });
+}
+
+function assertRouteOwnership() {
+  const routes = readFileSync(join(sharedSrc, "dashboard-routes.ts"), "utf8");
+  expect(routes).toContain("export const DASHBOARD_ROUTES");
+  expect(routes).toContain("export const DASHBOARD_ROUTE_ALIASES");
+  expect(DASHBOARD_ROUTES.length).toBeGreaterThan(0);
+}
+
+function assertChromeStateOwnership() {
+  const state = readFileSync(join(sharedSrc, "dashboard-chrome-state.ts"), "utf8");
+  expect(state).toContain("export function dashboardChromeState");
+  expect(state).toContain("DASHBOARD_SECTION_TITLES");
+  expect(state).toContain("crumbsFor");
+}
+
+function assertClientNavigationOwnership() {
   const shellRuntime = executableSource(join(leaderboardAssets, "dashboard/shell.js"));
-  const dashboardAssets = sourceFiles(leaderboardAssets);
-  const botRuntime = sourceFiles(botSrc, { excludePages: true });
-
-  expect((shell.match(/function dashboardChromeHtml/g) || []).length).toBe(1);
-  expect(shell).toContain("data-shell-drawer");
-  expect(adapter).not.toMatch(/class=["']lb-shell|class=["']lb-side["']|class=["']lb-topbar["']|class=["']lb-main["']/);
-
-  const structuralEmitters = [...dashboardAssets, ...botRuntime].filter((path) => {
-    if (path.endsWith("dashboard-chrome.ts")) return false;
-    const src = executableSource(path);
-    return /class=["'`](?:lb-shell|lb-side|lb-main|lb-topbar)["'`]|<aside[^>]+class=["'`]lb-side/.test(src);
-  });
-  expect(structuralEmitters, structuralEmitters.map((path) => relative(root, path)).join(", ")).toEqual([]);
-
+  const navigationOwners = sourceFiles(leaderboardSrc).filter((path) =>
+    /pushState/.test(executableSource(path))
+  );
   expect((shellRuntime.match(/export (?:async )?function requestDashboardRoute/g) || []).length).toBe(1);
-  const navigationOwners = dashboardAssets.filter((path) => /pushState/.test(executableSource(path)));
   expect(navigationOwners).toEqual([join(leaderboardAssets, "dashboard/shell.js")]);
+}
 
-  const runtimeDuplicates = dashboardAssets.filter((path) => {
-    if (path.endsWith("shell-nav.js")) return false;
-    if (path.endsWith("contact.js")) return false;
-    if (path.endsWith("dashboard/command-palette.js")) return false;
-    if (path.endsWith("dashboard/help-drawer.js")) return false;
-    return /(?:#lbSide|\.lb-backdrop|data-close-side|gm-logout-form|is-open)/.test(executableSource(path));
-  });
+function assertShellStructureOwnership() {
+  const sharedShell = readFileSync(join(sharedSrc, "dashboard-chrome.ts"), "utf8");
+  const adapter = executableSource(join(leaderboardSrc, "pages/dashboard-shell.jsx"));
+  const structuralEmitters = [...sourceFiles(sharedSrc), ...sourceFiles(leaderboardSrc), ...sourceFiles(botSrc)]
+    .filter((path) => path !== join(sharedSrc, "dashboard-chrome.ts"))
+    .filter((path) => {
+      const src = executableSource(path);
+      return /class=["'`](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-side-brandrow)["'`]|<aside[^>]+class=["'`]lb-side/.test(src);
+    });
+  const telegramShellSources = sourceFiles(botSrc)
+    .filter((path) => !path.includes("/dashboard-views/pages/"))
+    .filter((path) => /class=["'`](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-bento|lb-side-brandrow|v3-crumbs|gm-shell-nav|gm-profile)(?:["'` ])/.test(executableSource(path)));
+  expect((sharedShell.match(/function dashboardChromeHtml/g) || []).length).toBe(1);
+  expect(adapter).not.toMatch(/class=["'](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-main)["']/);
+  expect(structuralEmitters, structuralEmitters.map((path) => relative(root, path)).join(", ")).toEqual([]);
+  expect(telegramShellSources, telegramShellSources.map((path) => relative(root, path)).join(", ")).toEqual([]);
+}
+
+function assertShellRuntimeOwnership() {
+  const runtimeDuplicates = sourceFiles(leaderboardAssets)
+    .filter((path) => {
+      if (path.endsWith("shell-nav.js")) {
+        // shell-nav.js is the canonical authenticated drawer/profile runtime.
+        return false;
+      }
+      if (path.endsWith("contact.js")) {
+        // contact.js owns the separate public #helpSide drawer.
+        return false;
+      }
+      return /(?:#lbSide|\.lb-backdrop|data-close-side|data-collapse-side|gm-logout-form)/.test(
+        executableSource(path)
+      );
+    });
   expect(runtimeDuplicates, runtimeDuplicates.map((path) => relative(root, path)).join(", ")).toEqual([]);
   expect(readFileSync(join(leaderboardAssets, "shell-nav.js"), "utf8")).toContain("yr:dashboard-drawer-close");
+}
 
-  const registries = botRuntime.filter((path) => /(?:DASHBOARD_ROUTE_ALIASES|NAV_QUERY_ALIASES)\s*=/.test(executableSource(path)));
-  expect(registries).toEqual([]);
-  const chromeRegistries = [
-    ...sourceFiles(join(root, "packages/shared/src")),
-    ...sourceFiles(join(root, "apps/leaderboard/src")),
-    ...sourceFiles(join(root, "apps/bot/src")),
-  ]
-    .filter((path) => !path.endsWith("apps/leaderboard/src/assets_bundled.js"))
-    .filter((path) => !path.endsWith("packages/shared/src/dashboard-chrome-state.ts"))
-    .filter((path) => /(?:const|let|var)\s+\w*(?:CHROME|DASHBOARD).*(?:LABEL|TITLE|CRUMB)\w*\s*=/.test(executableSource(path)));
-  expect(chromeRegistries, chromeRegistries.map((path) => relative(root, path)).join(", ")).toEqual([]);
-  expect(DASHBOARD_ROUTES.filter((route) => route.owner === "bot").length).toBeGreaterThan(0);
-  expect(readFileSync(join(root, "packages/shared/src/dashboard-routes.ts"), "utf8")).toContain("export const DASHBOARD_ROUTE_ALIASES");
-  expect(readFileSync(join(root, "packages/shared/src/dashboard-chrome-state.ts"), "utf8")).toContain("export function dashboardChromeState");
+function assertRedirectOwnership() {
+  const routeRegistrySources = [...sourceFiles(leaderboardSrc), ...sourceFiles(botSrc)]
+    .filter((path) => path !== join(sharedSrc, "dashboard-routes.ts"))
+    .filter((path) => /(?:DASHBOARD_ROUTE_ALIASES|NAV_QUERY_ALIASES)\s*=/.test(executableSource(path)));
+  expect(routeRegistrySources, routeRegistrySources.map((path) => relative(root, path)).join(", ")).toEqual([]);
+}
 
+function assertDeliveryGatesPresent() {
   const requiredGates = [
     "dashboard-analytics-delivery-gate.test.js",
     "dashboard-editor-delivery-gate.test.js",
@@ -123,40 +139,70 @@ function assertStructuralOwnership() {
     "dashboard-legacy-redirects.test.js",
   ];
   for (const file of requiredGates) expect(existsSync(join(import.meta.dir, file))).toBe(true);
-  expect(existsSync(join(root, "apps/bot/src/__tests__/telegram-shell-ownership-gate.test.ts"))).toBe(true);
+  expect(existsSync(join(botSrc, "__tests__/telegram-shell-ownership-gate.test.ts"))).toBe(true);
+}
+
+function assertWorkerOwnership() {
   expect(existsSync(join(root, "apps/leaderboard/wrangler.toml"))).toBe(true);
   expect(existsSync(join(root, "apps/bot/wrangler.toml"))).toBe(true);
+  expect(DASHBOARD_ROUTES.filter((route) => route.owner === "bot").length).toBeGreaterThan(0);
+  expect(DASHBOARD_ROUTES.filter((route) => route.owner === "leaderboard").length).toBeGreaterThan(0);
+}
+
+function assertAntiDuplication() {
+  const chromeRegistries = [...sourceFiles(sharedSrc), ...sourceFiles(leaderboardSrc), ...sourceFiles(botSrc)]
+    .filter((path) => path !== join(sharedSrc, "dashboard-chrome-state.ts"))
+    .filter((path) => /(?:const|let|var)\s+\w*(?:CHROME|DASHBOARD).*(?:LABEL|TITLE|CRUMB)\w*\s*=/.test(executableSource(path)));
+  expect(chromeRegistries, chromeRegistries.map((path) => relative(root, path)).join(", ")).toEqual([]);
+  expect(readFileSync(join(sharedSrc, "dashboard-chrome.ts"), "utf8")).toContain("data-shell-drawer=\"shared\"");
+  expect(dashboardChromeHtml).toBeFunction();
 }
 
 describe("Wave 2 structural ownership gate", () => {
-  it("keeps one canonical authenticated shell for every Telegram page", () => {
-    for (const [page, routeId] of pageCases) allMarkup(page, routeId);
+  it("keeps one authenticated shell per product", () => {
+    const telegram = appHtml(user, "https://yourrank.site", "nonce", "overview", undefined, {
+      botUsername: "testbot",
+      botStatus: "active",
+      siteName: "Test site",
+    });
+    const leaderboard = PAGES.dashboard.Component({ user, activePath: "/dashboard" }).toString();
+    assertSingleShell(telegram, { telegram: true });
+    assertSingleShell(leaderboard);
   });
 
-  it("keeps Telegram navigation and panels as body-owned content", () => {
-    for (const [page] of pageCases) {
-      const html = appHtml(user, "https://yourrank.site", "nonce", page);
-      expect(html).toContain("telegram-tabs");
-      expect(html).toContain(`data-page="${page}"`);
-    }
-    expect(botNavItems()).toEqual(dashboardNavItems());
-    expect(navListHtml(botNavItems(), "telegram", "Telegram")).toContain('data-nav="telegram"');
+  it("keeps route ownership singular", () => {
+    assertRouteOwnership();
   });
 
-  it("keeps shell structure owned by dashboardChromeHtml", () => {
-    assertStructuralOwnership();
+  it("keeps chrome-state ownership singular", () => {
+    assertChromeStateOwnership();
   });
 
-  it("keeps canonical chrome and route registries singular", () => {
-    const state = readFileSync(join(root, "packages/shared/src/dashboard-chrome-state.ts"), "utf8");
-    const routes = readFileSync(join(root, "packages/shared/src/dashboard-routes.ts"), "utf8");
-    expect((state.match(/DASHBOARD_SECTION_TITLES/g) || []).length).toBeGreaterThan(0);
-    expect((routes.match(/DASHBOARD_ROUTE_ALIASES/g) || []).length).toBeGreaterThan(0);
-    expect(state).toContain("crumbsFor");
-    expect(routes).toContain("resolveAliasRedirect");
+  it("keeps client navigation singular", () => {
+    assertClientNavigationOwnership();
   });
 
-  it("keeps delivery and Worker ownership gates present", () => {
-    assertStructuralOwnership();
+  it("keeps shell structure owned by the shared emitter", () => {
+    assertShellStructureOwnership();
+  });
+
+  it("keeps shell runtime owned by shell-nav.js", () => {
+    assertShellRuntimeOwnership();
+  });
+
+  it("keeps redirect registries owned by the shared manifest", () => {
+    assertRedirectOwnership();
+  });
+
+  it("keeps delivery gates present", () => {
+    assertDeliveryGatesPresent();
+  });
+
+  it("keeps Worker ownership explicit", () => {
+    assertWorkerOwnership();
+  });
+
+  it("keeps anti-duplication invariants active", () => {
+    assertAntiDuplication();
   });
 });

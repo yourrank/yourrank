@@ -139,7 +139,7 @@ export interface ChromeOpts {
   /** The surrounding document already provides the main landmark. */
   embeddedInMain?: boolean;
   /** Render crumbs and content directly inside the bento without a stack. */
-  directContent?: boolean;
+  stack?: boolean;
   contentId?: string;
   overlaysHtml?: string;
   /** Add profile-name hooks used by the browser shell's identity updater. */
@@ -179,26 +179,11 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
     ? `<div class="lb-bento" id="${esc(contentId)}">`
     : `<main class="lb-bento" id="${esc(contentId)}">`;
   const contentClose = opts.embeddedInMain ? "</div>" : "</main>";
-  const shellNewline = opts.directContent ? "" : "\n";
-  const collapseIcon = opts.directContent
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>'
-    : COLLAPSE_ICON;
-  const closeIcon = opts.directContent
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>'
-    : CLOSE_ICON;
-  const menuIcon = opts.directContent
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>'
-    : MENU_ICON;
-  const collapseAttribute = opts.directContent ? "data-collapse-side=\"true\"" : "data-collapse-side";
-  const contentBody = opts.directContent
+  const contentBody = opts.stack === false
     ? `${crumbs}${opts.content}`
     : `<div class="v3-stack">\n${title}\n${opts.content}\n</div>`;
-  const topbarContext = opts.topbarContextHtml
-    ? `${opts.directContent ? "" : "\n"}${opts.topbarContextHtml}`
-    : "";
-  const overlaysHtml = opts.overlaysHtml
-    ? `${opts.directContent ? "" : "\n"}${opts.overlaysHtml}`
-    : "";
+  const topbarContext = opts.topbarContextHtml ? `${opts.topbarContextHtml}\n` : "";
+  const overlays = opts.overlaysHtml ? `${opts.overlaysHtml}\n` : "";
   const rootId = opts.rootId || "dash";
   const rootIdentity = opts.identity ? ` data-identity="${esc(opts.identity)}"` : "";
   const rootHidden = opts.rootHidden ? ' hidden=""' : "";
@@ -207,7 +192,33 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
   // the rail, topbar and bento is scoped to `.v3-dash[data-auth-workspace]`, so
   // rendering it without the attribute produces unstyled workspace markup.
   const collapse = opts.collapsible
-    ? `<button class="lb-side-collapse" type="button" aria-label="Collapse navigation" aria-pressed="false" aria-controls="lbSide" ${collapseAttribute}>${collapseIcon}</button>`
+    ? `<button class="lb-side-collapse" type="button" aria-label="Collapse navigation" aria-pressed="false" aria-controls="lbSide" data-collapse-side>${COLLAPSE_ICON}</button>`
     : "";
-  return `<div class="v3-dash" id="${esc(rootId)}" data-auth-workspace="true"${rootIdentity} data-shell-drawer="shared"${rootHidden}>${shellNewline}${DESIGN_CONTRACT}${shellNewline}<div class="toast" id="status" role="status" aria-live="polite"></div>${shellNewline}<div class="lb-shell">${shellNewline}<aside class="lb-side" id="lbSide" aria-label="${esc(sideLabel)}">${shellNewline}<div class="lb-side-brandrow">${shellNewline}<a class="lb-side-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-side-brandcopy"><b>YourRank</b><small>Creator workspace</small></span></a>${shellNewline}${collapse}${shellNewline}<button class="lb-side-close" type="button" aria-label="Close navigation" data-close-side="true">${closeIcon}</button>${shellNewline}</div>${shellNewline}${head}${shellNewline}${navListHtml(opts.nav, opts.active, opts.navLabel || "Dashboard")}${shellNewline}${opts.footHtml ? `<div class="lb-side-foot">${opts.footHtml}</div>` : ""}${shellNewline}${sideProfile}${shellNewline}</aside>${shellNewline}<div class="lb-main">${shellNewline}<header class="lb-topbar" id="lbTopbar">${shellNewline}<button class="lb-menu lb-topbar-menu" id="lbMenu" type="button" aria-label="Show sections" aria-expanded="false" aria-controls="lbSide">${menuIcon}</button>${shellNewline}${opts.railProfile ? "" : `<a class="lb-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-brand-txt">YourRank</span></a>`}${topbarContext}${shellNewline}<div class="lb-topbar-actions">${opts.topbarHtml || topProfile}</div>${shellNewline}</header>${shellNewline}${contentOpen}${shellNewline}${contentBody}${shellNewline}${contentClose}${overlaysHtml}${shellNewline}</div>${shellNewline}</div>${shellNewline}</div>`;
+  return `<div class="v3-dash" id="${esc(rootId)}" data-auth-workspace="true"${rootIdentity} data-shell-drawer="shared"${rootHidden}>
+${DESIGN_CONTRACT}
+<div class="toast" id="status" role="status" aria-live="polite"></div>
+<div class="lb-shell">
+<aside class="lb-side" id="lbSide" aria-label="${esc(sideLabel)}">
+<div class="lb-side-brandrow">
+<a class="lb-side-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-side-brandcopy"><b>YourRank</b><small>Creator workspace</small></span></a>
+${collapse}
+<button class="lb-side-close" type="button" aria-label="Close navigation" data-close-side="true">${CLOSE_ICON}</button>
+</div>
+${head}
+${navListHtml(opts.nav, opts.active, opts.navLabel || "Dashboard")}
+${opts.footHtml ? `<div class="lb-side-foot">${opts.footHtml}</div>` : ""}
+${sideProfile}
+</aside>
+<div class="lb-main">
+<header class="lb-topbar" id="lbTopbar">
+<button class="lb-menu lb-topbar-menu" id="lbMenu" type="button" aria-label="Show sections" aria-expanded="false" aria-controls="lbSide">${MENU_ICON}</button>
+${opts.railProfile ? "" : `<a class="lb-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-brand-txt">YourRank</span></a>`}
+${topbarContext}<div class="lb-topbar-actions">${opts.topbarHtml || topProfile}</div>
+</header>
+${contentOpen}
+${contentBody}
+${contentClose}
+${overlays}</div>
+</div>
+</div>`;
 }
