@@ -56,6 +56,7 @@ export function DashboardShell({ activeNav = "home", boardContext = "full", foot
       })
       : "";
   const contentId = boardContext === "selector" ? "cr-main" : "workspace-content";
+  const content = Array.isArray(children) ? children.flat(Infinity).join("") : String(children ?? "");
 
   return raw(dashboardChromeHtml({
     nav: dashboardNavItems(),
@@ -77,6 +78,6 @@ export function DashboardShell({ activeNav = "home", boardContext = "full", foot
     directContent: true,
     contentId,
     overlaysHtml: overlays || "",
-    content: String(children ?? ""),
+    content,
   }));
 }
