@@ -49,8 +49,17 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
   return out;
 }
 
+/**
+ * Source paths relative to src, sorted by code point so assertions never
+ * depend on the filesystem's readdir order (which differs between machines).
+ */
 function relativeFiles(files) {
-  return files.map((file) => path.relative(SRC_ROOT, file));
+  return files.map((file) => path.relative(SRC_ROOT, file)).sort();
+}
+
+/** [file, count] tuples sorted by code point, for the same reason. */
+function sortByFile(entries) {
+  return [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 describe("manifest: Sites-list delivery identity", () => {
@@ -196,7 +205,7 @@ describe("boot/render/data: one Sites-list path", () => {
         - (source.match(/export function renderBoardsPage\(/g) || []).length;
       if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
     }
-    expect(callers).toEqual([
+    expect(sortByFile(callers)).toEqual([
       ["assets/dashboard.js", 1],
       ["assets/dashboard/boards.js", 1],
       ["assets/dashboard/site.js", 3],
@@ -210,7 +219,7 @@ describe("boot/render/data: one Sites-list path", () => {
       const count = (source.match(/\bstate\.BOARDS\s*=/g) || []).length;
       if (count > 0) assignments.push([path.relative(SRC_ROOT, file), count]);
     }
-    expect(assignments).toEqual([["assets/dashboard.js", 1]]);
+    expect(sortByFile(assignments)).toEqual([["assets/dashboard.js", 1]]);
   });
 
   it("keeps the Sites-list DOM ids owned by boards.js", () => {
