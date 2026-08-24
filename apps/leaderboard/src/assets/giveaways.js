@@ -1511,7 +1511,7 @@ if (!window.__yrSpaShell) {
         ${inlineStateHtml({ kind: "empty", title: "No active predictions", body: "Launch a live prediction to let viewers wager their Credits on your stream match outcomes." })}`;
     } else {
       activeList.innerHTML = active.map((p) => {
-        const rawOpts = typeof p.options === "string" ? JSON.parse(p.options) : (p.options || []);
+        const rawOpts = p.options || [];
         const totalPool = p.total_pool || 0;
         return `
           <article class="gw-event-card" data-pred-id="${esc(p.id)}">
@@ -1686,7 +1686,7 @@ if (!window.__yrSpaShell) {
     $("settle-pred-id").value = pred.id;
     $("settle-pred-title").textContent = `Question: "${pred.title}" — Total Pool: ${pred.total_pool || 0} Credits`;
 
-    const rawOpts = typeof pred.options === "string" ? JSON.parse(pred.options) : (pred.options || []);
+    const rawOpts = pred.options || [];
     const container = $("settle-options-container");
     if (container) {
       container.innerHTML = rawOpts.map((opt, i) => `

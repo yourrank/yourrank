@@ -1,9 +1,10 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
 import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
-import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite, fromJsonb } from "../site.js";
+import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { bumpStat, getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
 import { one, exec, query } from "@yourrank/shared/db";
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { logAudit } from "@yourrank/shared/audit";
 import { buildTop3Embed, sendDiscordWebhook, sendTelegramMessage } from "@yourrank/shared/notifications";
 import { decryptToken, decryptCredential } from "@yourrank/shared/crypto";

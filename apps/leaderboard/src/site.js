@@ -295,8 +295,6 @@ async function getPlayerCount(siteId, search = "") {
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
-export { fromJsonb };
-
 // C-06: Added proper CSS generic fallback stacks so browsers FOUT to a sane
 // generic font rather than the arbitrary system default when the webfont fails.
 export const FONT_FAMILIES = {
