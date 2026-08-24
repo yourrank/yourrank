@@ -14,14 +14,26 @@ const hashed = Array.from(new Uint8Array(digest))
   .join("");
 
 const kickId = `e2e-kick-${Date.now()}`;
+const username = `e2eviewer${Date.now()}`;
 const [viewer] = await sql`
   insert into viewers (kick_user_id, kick_username, avatar_url)
-  values (${kickId}, ${`e2eviewer${Date.now()}`}, null)
+  values (${kickId}, ${username}, null)
   returning id`;
 
 await sql`
   insert into viewer_sessions (token, viewer_id, expires_at)
   values (${hashed}, ${viewer.id}, now() + interval '2 hours')`;
 
-console.log(JSON.stringify({ rawToken: raw, viewerId: viewer.id }));
+console.log(JSON.stringify({ rawToken: raw, viewerId: viewer.id, username }));
+
+// Point MINT_VIEWER_ENV_FILE at $GITHUB_ENV (or any env file) to have the three
+// variables the gate reads appended, instead of parsing the JSON in shell.
+const envFile = process.env.MINT_VIEWER_ENV_FILE;
+if (envFile) {
+  await Bun.write(
+    envFile,
+    (await Bun.file(envFile).exists() ? await Bun.file(envFile).text() : "") +
+      `E2E_VIEWER_SESSION=${raw}\nE2E_VIEWER_ID=${viewer.id}\nE2E_VIEWER_USERNAME=${username}\n`
+  );
+}
 await sql.end();
