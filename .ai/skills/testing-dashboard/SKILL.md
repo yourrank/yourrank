@@ -129,3 +129,106 @@ marketing proxy, browser history on the dashboard SPA, public board pages under
 `wrangler dev`, collapsed sidebar rail, topbar/nav handles, known route/state defects,
 auth/authorization regression testing, console/Worker error collection, and telling
 legitimate empty states apart from defects.
+
+## Running the `e2e/` suite and the release gate against local wrangler dev
+
+The `e2e/` suite talks HTTP to a running Worker; the `bun run gate` wrapper in
+`e2e/package.json` additionally prints a per-scenario PASSED / FAILED / SKIPPED /
+NOT VERIFIABLE matrix and fails when zero tests executed.
+
+```bash
+export PATH="$HOME/.nvm/versions/node/v22.12.0/bin:$PATH"          # wrangler needs Node >= 22
+export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://postgres:postgres@127.0.0.1:5432/yourrank"
+export DATABASE_URL="$CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"
+npx wrangler dev -c apps/leaderboard/wrangler.toml --port 8787 --local-protocol https \
+  >/tmp/wrangler-leaderboard.log 2>&1 &
+cd e2e && NODE_TLS_REJECT_UNAUTHORIZED=0 \
+  E2E_BASE_URL=https://localhost:8787 E2E_ALLOW_MUTATIONS=1 \
+  E2E_DB_URL="$DATABASE_URL" bun run gate
+```
+
+Points that cost time and are likely to recur:
+
+- `.dev.vars` alone does not satisfy the Hyperdrive local binding; without the
+  `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` export wrangler exits
+  with "you should use a local Postgres connection string to emulate Hyperdrive".
+- Start the Worker with `setsid`/`nohup` or a persistent shell; a plain
+  backgrounded process dies with the one-shot shell.
+- Use `--local-protocol https` (plus `NODE_TLS_REJECT_UNAUTHORIZED=0` for shell
+  clients and `--ignore-certificate-errors` for Chrome). Over plain HTTP,
+  `upgrade-insecure-requests` breaks the shared logout fetch.
+- A board is only publicly reachable once the owner's email is verified, and the
+  raw token is email-only. Point `E2E_DB_URL` at the same database so the suite
+  can satisfy that precondition directly; otherwise public-access scenarios must
+  report SKIPPED, not PASSED.
+- Repeated runs trip the login rate limit (`429 Too many attempts`), which lives in
+  a Durable Object. Reset it by stopping wrangler/`workerd`, deleting
+  `apps/leaderboard/.wrangler/state`, and restarting.
+- Viewer wagering (bet/mines/round readback) needs a `yr_viewer` session. It can be
+  minted locally: insert `viewers`, `site_viewers`, and `viewer_sessions` with
+  `token = sha256hex(<random 64-hex raw token>)` per
+  `packages/shared/src/viewer-session.ts`, then pass the raw token as
+  `E2E_VIEWER_SESSION` (plus `E2E_VIEWER_USERNAME`). Fund the viewer through the
+  owner-facing credit API rather than a direct DB write.
+- `e2e/scripts/gate.mjs` streams Bun's output (it used to buffer it with `spawnSync`
+  and die on the full suite with `spawnSync bun ENOBUFS` before printing a matrix).
+  If a future change reintroduces buffering, scope the run (e.g.
+  `bun run gate src/journeys.test.ts`) and report the full-suite run separately.
+- The gate's `tests executed: N` counter parses `(pass|fail)` lines from Bun's output.
+  Bun prints each failing test name twice (inline and again in the end-of-run recap),
+  so on any run with failures the counter is inflated (e.g. `tests executed: 109`
+  while the same line reports `21 pass, 44 fail`). Trust Bun's own summary, and treat
+  the executed count as reliable only when there are no failures.
+- Rebuild the leaderboard assets (`node build.js` in `apps/leaderboard`) before every
+  browser check: `src/assets_bundled.js` is generated, so dashboard JS/CSS changes are
+  invisible until it is regenerated. `wrangler dev` then hot-reloads on its own; verify
+  with `curl -sk https://localhost:8787/assets/<file>.js | grep <new symbol>`.
+- `e2e/src/smoke.test.ts` expectations are stale relative to the current dashboard
+  shell (grouped navigation hrefs) and it primes CSRF from `/`, which is proxied to
+  the absent `MARKETING` binding locally (503). Use `/login` to seed `__csrf`.
+
+## Verifying that an API refusal is actually visible to the user
+
+Reading the JSON error or the Worker log is not enough: several dashboard pages
+share error helpers whose fallback target element only exists on one tab. Confirm
+the message is really painted by checking the element's geometry, not its text:
+
+```js
+const e = document.getElementById('gw-status-text');
+e.getBoundingClientRect();   // 0x0 at 0,0 means it is not visible
+e.offsetParent;              // null means an ancestor is display:none
+```
+
+`showEngageError()` in `apps/leaderboard/src/assets/giveaways.js` used to default to
+`#gw-status-text`, which lives inside the chat tab pane (`#pane-chat`); on the
+Raffles / Drops / Predictions tabs that pane is hidden, so refusals such as the
+zero-ticket raffle draw looked like a silent no-op. It now writes into the
+page-level `#gw-page-alert` region rendered above the panes. Expect this class of
+bug on any page using a shared `fallbackId`.
+
+Geometry is necessary but not sufficient — also check that the element's classes
+resolve to real CSS on that page, otherwise an "error" paints as ordinary body text:
+
+```js
+const e = document.getElementById('gw-page-alert');
+getComputedStyle(e).color;            // near-black means no error styling applied
+[...document.styleSheets].flatMap(s => { try { return [...s.cssRules] } catch { return [] } })
+  .filter(r => r.selectorText?.includes('status--error'));
+```
+
+The Engage stylesheet (`/assets/giveaways.css`) defines `.gw-status--error`, not
+`.status--error`, so a `class="status status--error"` alert renders unstyled there.
+
+### Proving a JSONB normalisation at runtime
+
+A jsonb column can be put into the legacy double-encoded shape in place and
+restored afterwards, which exercises the reader without running a migration:
+
+```sql
+UPDATE predictions SET options = to_jsonb(options::text) WHERE id = '<id>';  -- jsonb_typeof -> string
+UPDATE predictions SET options = (options #>> '{}')::jsonb  WHERE id = '<id>';  -- restore
+```
+
+If the view still renders after the first statement, the unwrap really is on the
+server side of the response boundary; if it renders only because the browser
+re-parsed the string, that is the defect to remove.
