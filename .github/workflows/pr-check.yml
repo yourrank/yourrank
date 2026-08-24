@@ -290,7 +290,7 @@ jobs:
           E2E_ALLOW_MUTATIONS: ${{ secrets.E2E_ALLOW_MUTATIONS }}
         run: |
           if [ -z "$E2E_BASE_URL" ] || [ "$E2E_ALLOW_MUTATIONS" != "1" ]; then
-            echo "::error::E2E gate not configured: set the E2E_BASE_URL and E2E_ALLOW_MUTATIONS repository secrets to an isolated non-production environment. A skipped E2E run is not a passing E2E run."
+            echo "::error::E2E gate not configured: set the E2E_BASE_URL and E2E_ALLOW_MUTATIONS repository secrets to an isolated non-production environment. A skipped E2E run is not a passing E2E run. Scenarios needing a public board also require E2E_DB_URL (owner email verification is only completable by email); viewer wagering scenarios need E2E_VIEWER_SESSION and E2E_VIEWER_USERNAME."
             exit 1
           fi
 
@@ -312,4 +312,6 @@ jobs:
           E2E_ALLOW_MUTATIONS: ${{ secrets.E2E_ALLOW_MUTATIONS }}
           E2E_TELEGRAM_BOT_TOKEN: ${{ secrets.E2E_TELEGRAM_BOT_TOKEN }}
           E2E_VIEWER_SESSION: ${{ secrets.E2E_VIEWER_SESSION }}
+          E2E_VIEWER_USERNAME: ${{ secrets.E2E_VIEWER_USERNAME }}
+          E2E_DB_URL: ${{ secrets.E2E_DB_URL }}
         run: bun run gate

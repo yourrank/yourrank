@@ -12,21 +12,38 @@
  * scenario. A skipped run can therefore never be reported as a passing gate.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { SCENARIOS, SCENARIO_KEYS, scenarioReady } from "../src/scenarios.ts";
 
 const VERDICT = { PASSED: "PASSED", FAILED: "FAILED", SKIPPED: "SKIPPED", NV: "NOT VERIFIABLE" };
 
 const args = process.argv.slice(2);
-const run = spawnSync("bun", ["test", "--timeout", "30000", ...(args.length ? args : ["src/"])], {
-  cwd: new URL("..", import.meta.url).pathname,
-  encoding: "utf8",
-  env: process.env,
-  stdio: ["inherit", "pipe", "pipe"],
+
+/**
+ * Streamed rather than buffered: `spawnSync` caps captured output at its default
+ * `maxBuffer` and the full suite exceeds it, killing the run with ENOBUFS before
+ * any verdict is computed — a gate that cannot report is a gate that cannot fail
+ * honestly. Chunks are echoed as they arrive and accumulated for parsing.
+ */
+const run = await new Promise((resolve) => {
+  const child = spawn("bun", ["test", "--timeout", "30000", ...(args.length ? args : ["src/"])], {
+    cwd: new URL("..", import.meta.url).pathname,
+    env: process.env,
+    stdio: ["inherit", "pipe", "pipe"],
+  });
+  let captured = "";
+  for (const stream of [child.stdout, child.stderr]) {
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk) => {
+      captured += chunk;
+      process.stdout.write(chunk);
+    });
+  }
+  child.on("error", (error) => resolve({ output: captured, status: null, error }));
+  child.on("close", (status) => resolve({ output: captured, status, error: null }));
 });
 
-const output = `${run.stdout || ""}\n${run.stderr || ""}`;
-process.stdout.write(output);
+const output = run.output;
 
 if (run.error) {
   console.error(`::error::E2E gate could not start bun test: ${run.error.message}`);

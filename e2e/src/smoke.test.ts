@@ -21,7 +21,8 @@ const TELEGRAM_BOT_TOKEN = process.env.E2E_TELEGRAM_BOT_TOKEN || "";
 
 const id = randomId();
 const email = `e2e-${id}@yourrank.test`;
-const password = "TestPass1234";
+// The server password policy requires a symbol (apps/leaderboard/src/password-rules.js).
+const password = "TestPass1234!";
 const name = "E2E Test";
 const slug = `e2e-${id}`;
 
@@ -84,8 +85,10 @@ describe("YourRank E2E smoke", () => {
   beforeAll(async () => {
     client = new Client(BASE_URL);
 
-    // Prime the CSRF cookie before the first mutating request.
-    await client.get("/");
+    // Prime the CSRF cookie before the first mutating request. "/" is proxied to
+    // the MARKETING worker binding, absent in local dev (503), so use a
+    // first-party page that sets __csrf.
+    await client.get("/login");
     const signup = await client.post("/api/auth/signup", { email, password, name, slug });
     if (!signup.json?.ok) {
       throw new Error(`signup failed: ${signup.status} ${signup.body}`);

@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { SQL } from "bun";
 import { Client, randomId } from "./client.js";
 import { tag } from "./scenarios.js";
 
@@ -29,10 +30,24 @@ if (process.env.E2E_ALLOW_MUTATIONS !== "1") {
 const BASE_URL = parsedBaseUrl.origin;
 const VIEWER_SESSION = process.env.E2E_VIEWER_SESSION?.trim() || "";
 
+/**
+ * A board only becomes publicly reachable once the OWNER'S EMAIL IS VERIFIED:
+ * `getPublicSite` hides boards whose owner is unverified, and the public slug
+ * serves `pendingVerificationPage` (403 "This leaderboard isn't live yet").
+ * The raw verification token is only ever delivered by email, so an HTTP-only
+ * suite cannot complete it. When E2E_DB_URL points at the target environment's
+ * database we satisfy that precondition directly — the same state change the
+ * emailed link performs. Without it, the scenarios that require public access
+ * report SKIPPED rather than failing or pretending to pass.
+ */
+const DB_URL = process.env.E2E_DB_URL?.trim() || "";
+const PUBLIC_ACCESS_AVAILABLE = Boolean(DB_URL);
+
 const id = randomId();
 const email = `e2e-journeys-${id}@yourrank.test`;
-const password = "TestPass1234";
-const rotatedPassword = "TestPass5678";
+// The server password policy requires a symbol (apps/leaderboard/src/password-rules.js).
+const password = "TestPass1234!";
+const rotatedPassword = "TestPass5678!";
 const slug = `e2e-j-${id}`;
 
 let client: Client;
@@ -47,11 +62,22 @@ async function login(pw: string) {
 describe("release-gate journeys", () => {
   beforeAll(async () => {
     client = new Client(BASE_URL);
-    await client.get("/");
+    // Seeds the __csrf cookie. "/" is proxied to the MARKETING worker binding,
+    // which is absent in local dev (503), so use a first-party page instead.
+    await client.get("/login");
 
     const signup = await client.post("/api/auth/signup", { email, password, name: "E2E Journeys", slug });
     if (!signup.json?.ok) throw new Error(`signup failed: ${signup.status} ${signup.body}`);
     accountCreated = true;
+
+    if (PUBLIC_ACCESS_AVAILABLE) {
+      const sql = new SQL(DB_URL);
+      try {
+        await sql`update users set email_verified = true where email = ${email}`;
+      } finally {
+        await sql.end();
+      }
+    }
 
     const first = await login(password);
     if (!first.json?.ok) throw new Error(`login failed: ${first.status} ${first.body}`);
@@ -107,7 +133,7 @@ describe("release-gate journeys", () => {
     expect(bogus.json?.ok).not.toBe(true);
 
     const wrongCurrent = await client.post("/api/auth/change-password", {
-      currentPassword: "WrongPass1234",
+      currentPassword: "WrongPass1234!",
       password: rotatedPassword,
     });
     expect(wrongCurrent.status).toBe(401);
@@ -127,7 +153,7 @@ describe("release-gate journeys", () => {
     expect(fresh.json?.ok).toBe(true);
   });
 
-  it(`${tag("player-validation")} the server refuses invalid and duplicate players instead of storing them`, async () => {
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("player-validation")} the server refuses invalid and duplicate players instead of storing them`, async () => {
     const before = await client.get(`/api/public/${slug}/players`);
     const beforeCount = Array.isArray(before.json?.players) ? before.json.players.length : 0;
 
@@ -135,27 +161,32 @@ describe("release-gate journeys", () => {
       siteId,
       players: [{ name: "Valid Player", wagered: -5 }],
     });
+    // PUT /api/site validates the payload through its schema layer, which answers
+    // with a field-scoped message (`players.<i>.<field>: ...`) and no `code`.
     expect(negative.status).toBe(400);
     expect(negative.json?.ok).toBe(false);
-    expect(negative.json?.code).toBe("invalid_player_number");
+    expect(negative.json?.error).toContain("players.0.wagered");
 
     const notFinite = await client.put("/api/site", {
       siteId,
       players: [{ name: "Valid Player", wagered: "not-a-number" }],
     });
     expect(notFinite.status).toBe(400);
-    expect(notFinite.json?.code).toBe("invalid_player_number");
+    expect(notFinite.json?.ok).toBe(false);
+    expect(notFinite.json?.error).toContain("players.0.wagered");
 
     const duplicate = await client.put("/api/site", {
       siteId,
       players: [{ name: "Same Name", wagered: 10 }, { name: "same name", wagered: 20 }],
     });
     expect(duplicate.status).toBe(400);
-    expect(duplicate.json?.code).toBe("duplicate_player");
+    expect(duplicate.json?.ok).toBe(false);
+    expect(duplicate.json?.error).toContain("Duplicate player name");
 
     const nameless = await client.put("/api/site", { siteId, players: [{ name: "   ", wagered: 10 }] });
     expect(nameless.status).toBe(400);
-    expect(nameless.json?.code).toBe("invalid_player_name");
+    expect(nameless.json?.ok).toBe(false);
+    expect(nameless.json?.error).toContain("players.0.name");
 
     // None of the refusals may have persisted anything.
     const unchanged = await client.get(`/api/public/${slug}/players`);
@@ -176,7 +207,7 @@ describe("release-gate journeys", () => {
     expect(names).toContain("Gate Player Two");
   });
 
-  it(`${tag("games-config")} the public games config serves exactly what the owner saved`, async () => {
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("games-config")} the public games config serves exactly what the owner saved`, async () => {
     const enable = await client.post("/api/site/sections", { siteId, siteSections: { games: true } });
     expect(enable.status).toBe(200);
     expect(enable.json?.ok).toBe(true);
@@ -322,13 +353,17 @@ describe("release-gate journeys", () => {
     expect(missing.json?.ok).not.toBe(true);
   });
 
-  it(`${tag("publish-draft-navigation")} returning a board to draft removes public access and republishing restores it`, async () => {
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("publish-draft-navigation")} returning a board to draft removes public access and republishing restores it`, async () => {
     const published = await client.get(`/${slug}`);
     expect(published.status).toBe(200);
 
+    // GET /api/public/:slug returns the raw public board shape (site.js publicShape),
+    // not an { ok: true } envelope, so assert on the real payload instead.
     const publicApi = await client.get(`/api/public/${slug}`);
     expect(publicApi.status).toBe(200);
-    expect(publicApi.json?.ok).toBe(true);
+    expect(typeof publicApi.json?.brand?.name).toBe("string");
+    expect(String(publicApi.json?.brand?.name).length).toBeGreaterThan(0);
+    expect(Array.isArray(publicApi.json?.players)).toBe(true);
 
     const draft = await client.put("/api/site", { siteId, published: false, isDraft: true });
     expect(draft.status).toBe(200);
@@ -356,17 +391,90 @@ describe("release-gate journeys", () => {
  * `E2E_VIEWER_SESSION` carries a captured `yr_viewer` token these run for real;
  * otherwise they are reported SKIPPED, never PASSED.
  */
-const describeViewer = VIEWER_SESSION ? describe : describe.skip;
+/**
+ * A minted viewer session alone is not enough to wager: the viewer also needs a
+ * funded membership on the board under test. In production that balance comes
+ * from Kick channel-point claims (OAuth + webhooks, not runnable headless), so
+ * the gate grants it through the owner-facing credit-adjust API instead — a real
+ * product path, not a database write. E2E_VIEWER_USERNAME is the minted viewer's
+ * Kick username, which that API resolves.
+ */
+const VIEWER_USERNAME = process.env.E2E_VIEWER_USERNAME?.trim() || "";
+const describeViewer = VIEWER_SESSION && VIEWER_USERNAME ? describe : describe.skip;
 
 describeViewer("viewer wagering journeys", () => {
   let viewer: Client;
   let roundId = "";
   let openMinesRound: any = null;
 
+  // This suite owns its own board. The creator suite above deletes its account in
+  // afterAll, so reusing that owner/site here 401s. viewer_sessions is keyed only
+  // by viewer_id (no site column), so the minted token is valid on any board.
+  // `slug` deliberately shadows the creator suite's slug for the tests below.
+  const vId = randomId();
+  const vEmail = `e2e-viewer-owner-${vId}@yourrank.test`;
+  const slug = `e2e-v-${vId}`;
+  let ownerClient: Client;
+  let vSiteId = "";
+  let vAccountCreated = false;
+
   beforeAll(async () => {
+    ownerClient = new Client(BASE_URL);
+    await ownerClient.get("/login");
+
+    const signup = await ownerClient.post("/api/auth/signup", { email: vEmail, password, name: "E2E Viewer Owner", slug });
+    if (!signup.json?.ok) throw new Error(`viewer-owner signup failed: ${signup.status} ${signup.body}`);
+    vAccountCreated = true;
+
+    const sql = new SQL(DB_URL);
+    try {
+      await sql`update users set email_verified = true where email = ${vEmail}`;
+    } finally {
+      await sql.end();
+    }
+
+    const loginRes = await ownerClient.post("/api/auth/login", { email: vEmail, password });
+    if (!loginRes.json?.ok) throw new Error(`viewer-owner login failed: ${loginRes.status} ${loginRes.body}`);
+
+    const trial = await ownerClient.post("/api/billing/trial", {});
+    if (!trial.json?.ok) throw new Error(`viewer-owner trial failed: ${trial.status} ${trial.body}`);
+
+    const site = await ownerClient.get("/api/site");
+    if (!site.json?.siteId) throw new Error(`viewer-owner site lookup failed: ${site.status} ${site.body}`);
+    vSiteId = site.json.siteId;
+
+    const publish = await ownerClient.post("/api/site/finish", { siteId: vSiteId });
+    if (!publish.json?.ok) throw new Error(`viewer-owner publish failed: ${publish.status} ${publish.body}`);
+
+    const sections = await ownerClient.post("/api/site/sections", { siteId: vSiteId, siteSections: { games: true } });
+    if (!sections.json?.ok) throw new Error(`games section enable failed: ${sections.status} ${sections.body}`);
+
+    for (const game of ["dice", "mines"]) {
+      const saved = await ownerClient.post("/api/site/games/settings", {
+        siteId: vSiteId, game, enabled: true, minBet: 1, maxBet: 500, houseEdgeBps: 250, dailyLossCap: 100000,
+      });
+      if (!saved.json?.ok) throw new Error(`${game} settings failed: ${saved.status} ${saved.body}`);
+    }
+
+    // Owner funds the viewer on this board through the dashboard's own API.
+    const grant = await ownerClient.post("/api/credits/tip", {
+      siteId: vSiteId,
+      username: VIEWER_USERNAME,
+      delta: 5000,
+      reason: "release gate funding",
+    });
+    if (!grant.json?.ok) throw new Error(`viewer funding failed: ${grant.status} ${grant.body}`);
+
     viewer = new Client(BASE_URL);
     await viewer.get(`/${slug}`);
     viewer.setViewerSession(VIEWER_SESSION);
+  });
+
+  afterAll(async () => {
+    if (!vAccountCreated) return;
+    const relogin = await ownerClient.post("/api/auth/login", { email: vEmail, password });
+    if (!relogin.json?.ok) return;
+    await ownerClient.post("/api/account/delete", { password });
   });
 
   it(`${tag("games-bet-placement")} a dice bet debits the balance and returns a settled round`, async () => {

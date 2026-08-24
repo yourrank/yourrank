@@ -124,12 +124,21 @@ if (!window.__yrSpaShell) {
     status.setAttribute("role", isError ? "alert" : "status");
   }
 
-  function showEngageError(message, fallbackId = "gw-status-text") {
-    const fallback = $(fallbackId);
-    if (fallback) {
-      fallback.textContent = message;
-      fallback.closest("[aria-live]")?.setAttribute("role", "alert");
-    }
+  // Engage refusals are reported in the page-level alert region, which sits above
+  // the tab panes so the message is visible whichever tab the action came from.
+  function showEngageError(message) {
+    const alert = $("gw-page-alert");
+    if (!alert) return;
+    alert.textContent = message;
+    alert.hidden = false;
+    alert.scrollIntoView({ block: "nearest" });
+  }
+
+  function clearEngageError() {
+    const alert = $("gw-page-alert");
+    if (!alert) return;
+    alert.textContent = "";
+    alert.hidden = true;
   }
 
   const draftSiteKey = () => {
@@ -805,6 +814,7 @@ if (!window.__yrSpaShell) {
   }
 
   function rollWinner() {
+    clearEngageError();
     const pool = getEligibleEntrantsPool();
     if (pool.length === 0) {
       if (entrants.length === 0) return;
@@ -1292,6 +1302,7 @@ if (!window.__yrSpaShell) {
   }
 
   async function drawRaffle(raffleId, trigger) {
+    clearEngageError();
     if (!await showConfirmModal("Draw raffle winner", "Are you ready to draw the random winning ticket on stream?", "Draw winner", true)) return;
 
     const original = trigger?.innerHTML;
@@ -1650,6 +1661,7 @@ if (!window.__yrSpaShell) {
   }
 
   async function lockPrediction(predictionId) {
+    clearEngageError();
     try {
       const res = await dashboardFetch(`/api/predictions/${predictionId}/lock`, {
         method: "POST",
@@ -1723,6 +1735,7 @@ if (!window.__yrSpaShell) {
   }
 
   async function cancelPredictionById(predictionId, trigger) {
+    clearEngageError();
     if (!predictionId) return;
     if (!await showConfirmModal("Cancel prediction", "Cancel this prediction? All bets will be fully refunded to viewers.", "Cancel prediction", true)) return;
 

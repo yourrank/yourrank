@@ -263,6 +263,12 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
 ${tabs}
 </div>
 
+<!-- The one place an Engage action reports a refusal. It lives outside the tab
+     panes so a refusal on any tab is actually painted: the previous target was
+     the Kick connection badge inside the hidden chat pane, which made server
+     refusals (e.g. drawing a raffle with zero tickets) look like a no-op. -->
+<p class="status status--error" id="gw-page-alert" role="alert" aria-live="assertive" hidden></p>
+
 <!-- =========================================================================
      TAB 1: LIVE CHAT GIVEAWAYS
      ========================================================================= -->
