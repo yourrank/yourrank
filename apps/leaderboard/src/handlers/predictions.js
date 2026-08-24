@@ -50,7 +50,11 @@ export async function handleGetPredictions(request, env, deps = {}) {
     [site.id]
   );
 
-  return ok({ predictions: predictions || [] });
+  // Unwrap jsonb at this boundary so the client always receives options as an
+  // array; the browser must not carry a second decoder.
+  return ok({
+    predictions: (predictions || []).map((p) => ({ ...p, options: fromJsonb(p.options) || [] })),
+  });
 }
 
 /**
