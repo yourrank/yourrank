@@ -33,6 +33,17 @@ psql "$READONLY_DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f supabase/repair/preflight_20260903000000.sql
 ```
 
+No local database access is needed to do this: the `JSONB repair preflight (read-only)`
+workflow (`.github/workflows/jsonb-preflight.yml`) runs exactly this script against
+production from CI using the existing `SUPABASE_ACCESS_TOKEN` / `SUPABASE_DB_PASSWORD`
+secrets. It deploys nothing and applies no migration, forces
+`default_transaction_read_only=on` on the session, proves a write is rejected, and **fails**
+if any allowlisted column was not inspected, if the report is incomplete, if production
+cannot be reached, or if the candidate total differs from the classified baseline
+(`expected_total`, default 26). The report is attached to the run as an artifact and
+summarised on the run page. Run it from the Actions tab, or let it run on a pull request
+that touches the repair.
+
 It is read-only by construction: the script runs inside `SET TRANSACTION READ
 ONLY` and ends in `ROLLBACK`, creates nothing (the guarded parse the migration
 gets from `jsonb_repair_parse()` is done here by a plpgsql `EXCEPTION` block),
