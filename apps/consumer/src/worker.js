@@ -63,7 +63,7 @@ export async function handleDlq(batch, env, ctx, { execImpl = exec, alertImpl = 
         `INSERT INTO queue_dlq_events (message_id, queue_name, event_type, body)
          VALUES ($1, $2, $3, $4::jsonb)
          ON CONFLICT (message_id) DO NOTHING`,
-        [msg.id, batch.queue, msg.body?.type ?? "unknown", JSON.stringify(msg.body)]
+        [msg.id, batch.queue, msg.body?.type ?? "unknown", msg.body ?? null]
       );
       msg.ack();
     } catch (err) {
@@ -122,7 +122,7 @@ export async function handleEvent(input, tokenCache, env, { bumpStatImpl = bumpS
       break;
     }
     default: {
-      throw new Error(`unsupported queue event: ${body.type}`);
+      throw new Error(`unsupported queue event: ${/** @type {{ type?: string }} */ (body).type}`);
     }
   }
 }

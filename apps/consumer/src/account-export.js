@@ -282,6 +282,7 @@ export async function processAccountExport(event, env, {
     actualCounts.players = await emitPages(writer, "players", "SELECT id, site_id, name, normalized_name, wagered, prize, sort, updated_at, version, score, hands, net_profit, win_rate, change FROM players WHERE " + siteFilter, [siteIds], "id", read);
     actualCounts.archives = await emitPages(writer, "archives", "SELECT id, site_id, label, snapshot_json, top3_json, winner_name, created_at FROM archives WHERE " + siteFilter, [siteIds], "id", read);
 
+    /** @type {Array<[string, string, string, ((row: any) => any)?]>} */
     const accountSpecs = [
       ["subscriptions", "SELECT id, plan, status, provider, current_period_end, created_at FROM subscriptions WHERE user_id=$1", "id"],
       ["payments", "SELECT id, subscription_id, provider, invoice_id, amount, currency, tx_ref, status, created_at, updated_at, plan_tier FROM payments WHERE user_id=$1", "id"],

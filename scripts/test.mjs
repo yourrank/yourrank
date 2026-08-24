@@ -21,8 +21,9 @@ runCmd("node", ["build.js"], "apps/leaderboard");
 // 1. Run shared tests
 runCmd("bun", ["test", "src/__tests__/"], "packages/shared");
 
-// 2. Run queue consumer tests
-runCmd("bun", ["test", "src/worker.test.js"], "apps/consumer");
+// 2. Run queue consumer tests. Every file under src/ — naming a single file here
+// meant src/viewer-export.test.js never ran in CI.
+runCmd("bun", ["test", "src/"], "apps/consumer");
 
 // 3. Run bot tests
 runCmd("bun", ["test", "src/__tests__/"], "apps/bot");

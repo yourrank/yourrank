@@ -44,6 +44,9 @@ jobs:
         working-directory: apps/web
         run: bun run lint
 
+      - name: Lint consumer
+        run: bun run lint:consumer
+
       - name: Reject undocumented global test mocks
         run: bun run check:test-mocks
 
@@ -79,6 +82,9 @@ jobs:
       - name: Typecheck web
         working-directory: apps/web
         run: bun run typecheck
+
+      - name: Typecheck consumer
+        run: bunx tsc -p apps/consumer/tsconfig.json
 
   test:
     name: Test
@@ -240,6 +246,11 @@ jobs:
         env:
           SESSION_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test packages/shared/src/__tests__/session-team-postgres.test.ts
+
+      - name: Consumer jsonb writer tests (against migrated schema)
+        env:
+          JSONB_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: bun test apps/consumer/src/jsonb-database.test.js
 
       - name: Verify schema consistency
         env:

@@ -17,20 +17,31 @@ import { join } from "node:path";
 
 const REPO = join(import.meta.dir, "..", "..", "..", "..");
 const MIGRATIONS = join(REPO, "supabase", "migrations");
+// Every workspace that can reach the database. `apps/consumer` was missing here
+// while it still bound a pre-serialised `queue_dlq_events.body`, so the gate has
+// to enumerate the workspaces rather than the ones that happened to be fixed.
 const ROOTS = [
   join(REPO, "packages", "shared", "src"),
   join(REPO, "apps", "leaderboard", "src"),
   join(REPO, "apps", "bot", "src"),
   join(REPO, "apps", "monitor", "src"),
+  join(REPO, "apps", "consumer", "src"),
+  join(REPO, "apps", "web", "src"),
 ];
 
 const SOURCE = /\.(ts|tsx|js|jsx)$/;
 const WRITES = /\b(insert\s+into|update|set_|place_bet|settle_round)\b/i;
 
+// Browser-side code cannot reach Postgres, and `assets_bundled.js` is generated
+// from it, so neither can hold a jsonb writer — but both are full of quoted SQL
+// lookalikes ("update", "params", …) next to legitimate JSON.stringify calls.
+const NOT_A_DB_CALLER = /(^|[\\/])(assets|assets_bundled\.js)$/;
+
 function filesIn(dir: string, match: RegExp): string[] {
   let out: string[] = [];
   for (const entry of readdirSync(dir)) {
     if (entry === "node_modules" || entry === "__snapshots__") continue;
+    if (NOT_A_DB_CALLER.test(entry)) continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) out = out.concat(filesIn(full, match));
     else if (match.test(entry)) out.push(full);
@@ -52,22 +63,40 @@ function jsonbColumns(): Set<string> {
   return columns;
 }
 
+/** End index (inclusive) of the string literal opened at `start`. */
+function literalEnd(src: string, start: number): number {
+  const quote = src[start];
+  let i = start + 1;
+  while (i < src.length && src[i] !== quote) {
+    if (src[i] === "\\") i++;
+    i++;
+  }
+  return i;
+}
+
 /**
- * The argument list of every query call whose SQL template writes a jsonb
- * column: the text between the end of the template literal and the closing
- * paren of the enclosing call.
+ * The argument list of every query call whose SQL writes a jsonb column: the
+ * text between the end of the SQL string and the closing paren of the enclosing
+ * call. Template literals, quoted strings, and `"…" + "…"` concatenations all
+ * count — restricting the scan to backticks let a `'INSERT …'` writer through.
  */
 function jsonbWriteArguments(src: string, columns: Set<string>): string[] {
   const regions: string[] = [];
 
   for (let i = 0; i < src.length; i++) {
-    if (src[i] !== "`") continue;
-    let end = i + 1;
-    while (end < src.length && src[end] !== "`") {
-      if (src[end] === "\\") end++;
-      end++;
+    if (src[i] !== "`" && src[i] !== '"' && src[i] !== "'") continue;
+    let end = literalEnd(src, i);
+    let sql = src.slice(i + 1, end);
+    // Fold `"…" + "…"` / adjacent-literal concatenation into one SQL string.
+    for (;;) {
+      const rest = src.slice(end + 1);
+      const join = /^\s*\+\s*(?=[`"'])/.exec(rest);
+      if (!join) break;
+      const next = end + 1 + join[0].length;
+      const nextEnd = literalEnd(src, next);
+      sql += src.slice(next + 1, nextEnd);
+      end = nextEnd;
     }
-    const sql = src.slice(i + 1, end);
     i = end;
 
     const lower = sql.toLowerCase();
@@ -102,6 +131,20 @@ describe("jsonb parameter binding", () => {
     expect(columns.size).toBeGreaterThan(10);
     expect(columns.has("params")).toBe(true);
     expect(columns.has("metadata")).toBe(true);
+  });
+
+  it("sees writers whose SQL is not a template literal", () => {
+    // The scan used to look at backticked SQL only, so a quoted or concatenated
+    // statement was invisible to it. Each fixture must be reported.
+    const fixtures = [
+      `await exec('INSERT INTO game_rounds (params) VALUES ($1::jsonb)', [JSON.stringify(params)]);`,
+      `await exec("UPDATE predictions SET options=$1" + " WHERE id=$2", [JSON.stringify(options), id]);`,
+      "await exec(`UPDATE seasons SET tiers_json=$1`, [JSON.stringify(tiers)]);",
+    ];
+    for (const fixture of fixtures) {
+      const args = jsonbWriteArguments(fixture, columns);
+      expect(args.some((region) => region.includes("JSON.stringify"))).toBe(true);
+    }
   });
 
   it("never binds a pre-serialised value to a jsonb column", () => {
