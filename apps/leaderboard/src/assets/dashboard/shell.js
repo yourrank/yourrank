@@ -417,8 +417,8 @@ export function setupEditorTabs() {
       if (next) { e.preventDefault(); next.click(); next.focus(); }
     });
     tabs._show = show;
-    const initialGroup = currentRoute().tab || location.hash.replace("#", "") || "setup";
-    show(buttons.find((b) => b.dataset.egroup === initialGroup)?.dataset.egroup || "setup");
+    const initialGroup = currentRoute().tab || location.hash.replace("#", "") || defaultTab("board");
+    show(buttons.find((b) => b.dataset.egroup === initialGroup)?.dataset.egroup || defaultTab("board"));
   }
 
 export function setupShell() {
