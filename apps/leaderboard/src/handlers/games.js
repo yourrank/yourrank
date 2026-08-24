@@ -15,6 +15,7 @@
 //   * the active server seed is never returned, only its hash.
 // ============================================================================
 
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { bad, ok, readJson } from "../auth.js";
 import { getPublicSite } from "../site.js";
 import { requireViewer } from "./viewer-auth.js";
@@ -115,9 +116,9 @@ function publicRound(round, { includeOutcome }) {
     state: round.state,
     payout: Number(round.payout),
     multiplier: Number(round.multiplier),
-    params: round.params,
+    params: fromJsonb(round.params) || {},
     revealed: round.revealed || [],
-    outcome: includeOutcome && round.state === "settled" ? round.outcome : null,
+    outcome: includeOutcome && round.state === "settled" ? fromJsonb(round.outcome) : null,
     serverSeedHash: round.server_seed_hash,
     clientSeed: round.client_seed,
     nonce: Number(round.nonce),
@@ -292,11 +293,12 @@ export async function handleGamesMinesReveal(request, env, deps = defaultDepende
   const round = await deps.getOwnedRound(roundId, player.id);
   if (!round || round.game !== "mines") return bad("round not found", 404);
   if (round.state !== "open") return bad("round already settled", 409);
-  if (!round.outcome) return bad("round not ready", 409);
+  const roundOutcome = fromJsonb(round.outcome);
+  if (!roundOutcome) return bad("round not ready", 409);
 
-  const minePositions = round.outcome.minePositions || [];
-  const gridSize = round.outcome.gridSize || MINES_GRID_SIZE;
-  const mines = round.outcome.mines || minePositions.length;
+  const minePositions = roundOutcome.minePositions || [];
+  const gridSize = roundOutcome.gridSize || MINES_GRID_SIZE;
+  const mines = roundOutcome.mines || minePositions.length;
 
   const already = (round.revealed || []).includes(tile);
   // Re-revealing the same tile is a no-op, which makes a client retry safe.
@@ -358,7 +360,8 @@ export async function handleGamesMinesCashout(request, env, deps = defaultDepend
 
   const round = await deps.getOwnedRound(roundId, player.id);
   if (!round || round.game !== "mines") return bad("round not found", 404);
-  if (!round.outcome) return bad("round not ready", 409);
+  const roundOutcome = fromJsonb(round.outcome);
+  if (!roundOutcome) return bad("round not ready", 409);
 
   // Settled rounds return their stored result: cashing out twice pays once.
   if (round.state === "settled") {
@@ -370,15 +373,15 @@ export async function handleGamesMinesCashout(request, env, deps = defaultDepend
       replayed: true,
       multiplier: Number(round.multiplier),
       payout: Number(round.payout),
-      minePositions: round.outcome.minePositions || [],
+      minePositions: roundOutcome.minePositions || [],
       balance: Number(player.balance),
     });
   }
   if (round.state !== "open") return bad("round is not open", 409);
 
-  const minePositions = round.outcome.minePositions || [];
-  const gridSize = round.outcome.gridSize || MINES_GRID_SIZE;
-  const mines = round.outcome.mines || minePositions.length;
+  const minePositions = roundOutcome.minePositions || [];
+  const gridSize = roundOutcome.gridSize || MINES_GRID_SIZE;
+  const mines = roundOutcome.mines || minePositions.length;
   const safeRevealed = (round.revealed || []).filter((t) => !minePositions.includes(t)).length;
   if (safeRevealed <= 0) return bad("reveal at least one tile before cashing out");
 

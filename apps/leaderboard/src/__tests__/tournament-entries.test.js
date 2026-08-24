@@ -310,7 +310,8 @@ describe("tournament entry lifecycle", () => {
       d
     );
     expect(response.status).toBe(200);
-    expect(txOne.mock.calls[0][1][4]).toBe("[]");
+    // participants_json is jsonb: the array is bound natively, never pre-serialised.
+    expect(txOne.mock.calls[0][1][4]).toEqual([]);
     expect(txUnsafe).not.toHaveBeenCalled();
   });
 

@@ -199,7 +199,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
         title,
         gameName,
         bracketSize,
-        JSON.stringify(participants),
+        participants,
         entryCap,
         tournamentFormat,
         antiAltEnabled,
@@ -686,7 +686,7 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
     const bracketSize = count;
     await tx.unsafe(
       "UPDATE tournaments SET participants_json=$1, bracket_size=$2, updated_at=now() WHERE id=$3",
-      [JSON.stringify(selectedNames), bracketSize, tournament.id]
+      [selectedNames, bracketSize, tournament.id]
     );
     await tx.unsafe("DELETE FROM tournament_matches WHERE tournament_id=$1", [tournament.id]);
     await seedTournamentMatches(tx, tournament.id, selectedNames, bracketSize);

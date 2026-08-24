@@ -611,7 +611,7 @@ export async function handleCreditsUpdateRedemption(request, env) {
       await tx.unsafe(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
          VALUES ($1, 'revoke', $2, 'Cancelled redemption refund', $3)`,
-        [redemption.site_viewer_id, redemption.cost, JSON.stringify({ redemption_id: redemption.id })]
+        [redemption.site_viewer_id, redemption.cost, { redemption_id: redemption.id }]
       );
     }
 
@@ -1079,7 +1079,7 @@ export async function handleCreditsAdjustBalance(request, env) {
       await tx.unsafe(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
          VALUES ($1, 'earn', $2, $3, $4)`,
-        [siteViewer.id, delta, `Manual credit: ${reason}`, JSON.stringify({ reason, adjusted_by: user.id, manual: true })]
+        [siteViewer.id, delta, `Manual credit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
       );
       return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
     }
@@ -1099,7 +1099,7 @@ export async function handleCreditsAdjustBalance(request, env) {
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
        VALUES ($1, 'refund', $2, $3, $4)`,
-      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, JSON.stringify({ reason, adjusted_by: user.id, manual: true })]
+      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
     );
     return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
   });

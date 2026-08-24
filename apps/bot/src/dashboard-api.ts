@@ -791,7 +791,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       `INSERT INTO broadcasts (bot_id, body, media_url, status, scheduled_at, segment, audience_filter_snapshot)
        VALUES ($1, $2, $3, 'scheduled', $4, $5, $6::jsonb)
        RETURNING id, status`,
-      [bot_id, body.trim(), media_url ?? null, scheduled_at ?? null, segmentValue, segment ? JSON.stringify(segment) : JSON.stringify({})]
+      [bot_id, body.trim(), media_url ?? null, scheduled_at ?? null, segmentValue, segment ?? {}]
     );
     const row = rows[0];
     return c.json({ ...row, segment: parseSegment(segmentValue) });

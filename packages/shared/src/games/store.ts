@@ -312,7 +312,7 @@ export async function placeBet(input: {
     input.siteViewerId,
     input.game,
     input.bet,
-    JSON.stringify(input.params ?? {}),
+    input.params ?? {},
     input.idempotencyKey,
   ]);
   const result = (row?.[0]?.result ?? {}) as Record<string, unknown>;
@@ -340,7 +340,7 @@ export async function placeBet(input: {
 }
 
 export async function setRoundOutcome(roundId: string, outcome: unknown): Promise<void> {
-  await exec(`SELECT set_round_outcome($1, $2::jsonb) AS result`, [roundId, JSON.stringify(outcome)]);
+  await exec(`SELECT set_round_outcome($1, $2::jsonb) AS result`, [roundId, outcome ?? {}]);
 }
 
 export async function settleRound(
@@ -353,7 +353,7 @@ export async function settleRound(
     roundId,
     multiplier,
     payout,
-    outcome === undefined ? null : JSON.stringify(outcome),
+    outcome === undefined ? null : outcome,
   ]);
   const result = (row?.[0]?.result ?? {}) as Record<string, unknown>;
   if (!result.ok) return { ok: false, error: String(result.error || "settle failed") };

@@ -221,7 +221,7 @@ export async function handleAcceptDuel(request, env, deps = {}) {
       `UPDATE viewer_duels
           SET status='completed', winner_viewer_id=$1, roll_details=$2
         WHERE id=$3`,
-      [winnerViewerId, JSON.stringify(rollDetails), duel.id]
+      [winnerViewerId, rollDetails, duel.id]
     );
     return { balance: updatedTarget.balance };
   });

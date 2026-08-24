@@ -1,4 +1,5 @@
 // Seasonal Battle Pass & Viewer Progression Handlers.
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
@@ -66,11 +67,11 @@ export async function handleGetSeason(request, env, deps = {}) {
       `INSERT INTO seasons (site_id, season_number, title, tiers_json)
        VALUES ($1, 1, 'Season 1: Grand Launch', $2)
        RETURNING id, season_number, title, status, tiers_json, starts_at, ends_at`,
-      [site.id, JSON.stringify(defaultTiers)]
+      [site.id, defaultTiers]
     );
   }
 
-  const tiers = typeof season.tiers_json === "string" ? JSON.parse(season.tiers_json) : (season.tiers_json || []);
+  const tiers = fromJsonb(season.tiers_json) || [];
 
   let progress = {
     currentLevel: 1,
@@ -86,7 +87,7 @@ export async function handleGetSeason(request, env, deps = {}) {
     );
 
     if (prog) {
-      const claimed = typeof prog.claimed_tiers === "string" ? JSON.parse(prog.claimed_tiers) : (prog.claimed_tiers || []);
+      const claimed = fromJsonb(prog.claimed_tiers) || [];
       const nextTier = tiers.find((t) => t.level === (prog.current_level + 1));
       progress = {
         currentLevel: prog.current_level,
@@ -148,7 +149,7 @@ export async function handleCreateSeason(request, env, deps = {}) {
     `INSERT INTO seasons (site_id, season_number, title, tiers_json)
      VALUES ($1, $2, $3, $4)
      RETURNING id, season_number, title, status, tiers_json, starts_at`,
-    [site.id, newSeasonNumber, title, JSON.stringify(tiers)]
+    [site.id, newSeasonNumber, title, tiers]
   );
 
   await logAudit({
@@ -191,7 +192,7 @@ export async function handleClaimTierReward(request, env, deps = {}) {
   const season = await one("SELECT id, site_id, title, tiers_json FROM seasons WHERE id=$1 AND status='active'", [seasonId]);
   if (!season) return bad("Active season not found.", 404);
 
-  const tiers = typeof season.tiers_json === "string" ? JSON.parse(season.tiers_json) : (season.tiers_json || []);
+  const tiers = fromJsonb(season.tiers_json) || [];
   const tier = tiers.find((t) => t.level === tierLevel);
   if (!tier || !tier.reward) return bad("Milestone reward not found for this tier.", 404);
 
@@ -207,7 +208,7 @@ export async function handleClaimTierReward(request, env, deps = {}) {
     return bad(`You need to reach Level ${tierLevel} to claim this reward (current Level: ${prog?.current_level || 1}).`, 400);
   }
 
-  const claimed = typeof prog.claimed_tiers === "string" ? JSON.parse(prog.claimed_tiers) : (prog.claimed_tiers || []);
+  const claimed = fromJsonb(prog.claimed_tiers) || [];
   if (claimed.includes(tierLevel)) {
     return bad("You have already claimed this milestone reward!", 400);
   }
@@ -222,7 +223,7 @@ export async function handleClaimTierReward(request, env, deps = {}) {
         WHERE id = $2
           AND NOT (claimed_tiers @> $3::jsonb)
        RETURNING id`,
-      [JSON.stringify([tierLevel]), prog.id, JSON.stringify([tierLevel])]
+      [[tierLevel], prog.id, [tierLevel]]
     );
     if (!claimedRow) return { error: "You have already claimed this milestone reward!", status: 400 };
 
@@ -287,7 +288,7 @@ export async function handleAwardXp(request, env, deps = {}) {
   const siteViewer = await one("SELECT id FROM site_viewers WHERE site_id=$1 AND viewer_id=$2", [siteId, viewerId]);
   if (!siteViewer) return bad("Viewer not found on site.", 404);
 
-  const tiers = typeof season.tiers_json === "string" ? JSON.parse(season.tiers_json) : (season.tiers_json || []);
+  const tiers = fromJsonb(season.tiers_json) || [];
 
   const outcome = await withTransaction(async (tx) => {
     let prog = await tx.one(

@@ -18,7 +18,7 @@ export async function claimTelegramUpdate(
      VALUES ($1, $2, $3::jsonb)
      ON CONFLICT (bot_id, update_id) DO NOTHING
      RETURNING bot_id`,
-    [botId, updateId, JSON.stringify(update)]
+    [botId, updateId, update]
   );
   return rows.length > 0;
 }
