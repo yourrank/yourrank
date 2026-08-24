@@ -1,28 +1,37 @@
 /** @jsxImportSource preact */
 import { useMemo, useState } from "preact/hooks";
+import {
+  DICE_MAX_TARGET,
+  DICE_MIN_TARGET,
+  diceMultiplier,
+  diceWinChance,
+} from "@yourrank/shared/games/dice";
+import type { DiceDirection, DiceOutcome } from "@yourrank/shared/games/dice";
 import type { GameProps } from "../../registry.js";
 import { BetPanel } from "../../ui/BetPanel.js";
 import { sound } from "../../sound.js";
 import { haptic } from "../../haptics.js";
 
+/**
+ * The pre-bet multiplier and win chance come from the same shared functions the
+ * server settles with, priced at the site's configured edge — the browser never
+ * has its own dice maths, so a quoted 1.98× is the multiplier that gets paid.
+ */
 export default function DiceBoard({ store, config }: GameProps) {
-  const [target, setTarget] = useState<number>(50.0);
-  const [isOver, setIsOver] = useState<boolean>(true);
+  const [target, setTarget] = useState<number>(50);
+  const [direction, setDirection] = useState<DiceDirection>("over");
   const [betAmount, setBetAmount] = useState<number>(10);
   const [rolledNumber, setRolledNumber] = useState<number | null>(null);
   const [lastWon, setLastWon] = useState<boolean | null>(null);
   const [inFlight, setInFlight] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Win Chance & Multiplier calculation (with standard 1% edge)
-  const winChance = useMemo(() => {
-    return isOver ? 100 - target : target;
-  }, [target, isOver]);
-
-  const multiplier = useMemo(() => {
-    const chance = Math.max(0.01, Math.min(98, winChance));
-    return Math.round((99 / chance) * 100) / 100;
-  }, [winChance]);
+  const isOver = direction === "over";
+  const winChance = useMemo(() => diceWinChance(target, direction) * 100, [target, direction]);
+  const multiplier = useMemo(
+    () => diceMultiplier(target, direction, config.houseEdgeBps),
+    [target, direction, config.houseEdgeBps]
+  );
 
   const handleRoll = async (amount: number) => {
     if (inFlight) return;
@@ -32,13 +41,15 @@ export default function DiceBoard({ store, config }: GameProps) {
     try {
       const res = await store.api.placeBet({
         game: "dice",
-        amount,
+        bet: amount,
+        params: { target, direction },
       });
 
-      const rollVal = (res.outcome as any)?.roll ?? Math.round(Math.random() * 10000) / 100;
-      setRolledNumber(rollVal);
-
-      const won = isOver ? rollVal > target : rollVal < target;
+      // The roll and the win/lose verdict are the server's, not a local
+      // comparison against the slider.
+      const outcome = res.outcome as Partial<DiceOutcome>;
+      setRolledNumber(typeof outcome.rollDisplay === "number" ? outcome.rollDisplay : null);
+      const won = res.payout > 0;
       setLastWon(won);
 
       if (won) {
@@ -134,12 +145,12 @@ export default function DiceBoard({ store, config }: GameProps) {
           {/* Range Input Slider */}
           <input
             type="range"
-            min="2"
-            max="98"
+            min={DICE_MIN_TARGET}
+            max={DICE_MAX_TARGET}
             step="1"
             value={target}
             disabled={inFlight}
-            onInput={(e) => setTarget(Number((e.target as HTMLInputElement).value))}
+            onInput={(e) => setTarget(Math.round(Number((e.target as HTMLInputElement).value)))}
             style={{ width: "100%", accentColor: "#38bdf8", cursor: "pointer" }}
           />
 
@@ -173,7 +184,7 @@ export default function DiceBoard({ store, config }: GameProps) {
           </div>
           <div>
             <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#94a3b8", letterSpacing: "0.1em", fontWeight: "600" }}>Roll {isOver ? "Over" : "Under"}</div>
-            <div style={{ fontFamily: "monospace", fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>{target.toFixed(2)}</div>
+            <div style={{ fontFamily: "monospace", fontSize: "16px", fontWeight: "700", color: "#f8fafc" }}>{target}</div>
           </div>
           <div>
             <div style={{ fontSize: "10px", textTransform: "uppercase", color: "#94a3b8", letterSpacing: "0.1em", fontWeight: "600" }}>Win Chance</div>
@@ -199,7 +210,7 @@ export default function DiceBoard({ store, config }: GameProps) {
             <button
               type="button"
               disabled={inFlight}
-              onClick={() => setIsOver(true)}
+              onClick={() => setDirection("over")}
               style={{
                 padding: "8px 12px",
                 borderRadius: "8px",
@@ -217,7 +228,7 @@ export default function DiceBoard({ store, config }: GameProps) {
             <button
               type="button"
               disabled={inFlight}
-              onClick={() => setIsOver(false)}
+              onClick={() => setDirection("under")}
               style={{
                 padding: "8px 12px",
                 borderRadius: "8px",

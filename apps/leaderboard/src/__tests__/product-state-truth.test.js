@@ -61,4 +61,19 @@ describe("removed non-functional controls", () => {
     expect(shellNavAsset).not.toContain("Couldn't sign out");
     expect(shellNavAsset).toContain("form.submit()");
   });
+
+  it("offers no demo credits, because no demo balance exists anywhere in the product", () => {
+    const gamesAsset = read("dashboard/games.js");
+    const palette = read("dashboard/command-palette.js");
+    const dashboardPage = fs.readFileSync(path.resolve(import.meta.dir, "../pages/dashboard.jsx"), "utf8");
+    // The games preview frame is the real viewer island against the real API,
+    // so nothing may promise a sandbox balance or claim to refill one.
+    for (const src of [gamesAsset, palette, dashboardPage]) {
+      expect(src).not.toContain("demo=1");
+      expect(src).not.toContain("Demo balance");
+      expect(src).not.toContain("demo points");
+      expect(src).not.toContain("Reset Demo Credits");
+    }
+    expect(gamesAsset).toContain("Preview reloaded");
+  });
 });

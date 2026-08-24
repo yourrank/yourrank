@@ -34,6 +34,25 @@ function makeApi(fetchImpl, overrides = {}) {
   });
 }
 
+/** Exactly what POST /api/games/bet sends for a settled dice round. */
+const WIRE_BET = {
+  round: {
+    id: "r1",
+    game: "dice",
+    bet: 10,
+    state: "settled",
+    params: { target: 50, direction: "over", houseEdgeBps: 100 },
+    outcome: { roll: 4242, rollDisplay: 42.42, win: true, target: 50, direction: "over" },
+    multiplier: 2,
+    payout: 20,
+    serverSeedHash: "hash",
+    clientSeed: "seed",
+    nonce: 3,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  },
+  balance: 510,
+};
+
 const BET_RESULT = {
   roundId: "r1",
   game: "dice",
@@ -42,23 +61,48 @@ const BET_RESULT = {
   multiplier: 2,
   payout: 20,
   balance: 510,
-  outcome: { roll: 42 },
+  outcome: WIRE_BET.round.outcome,
+  params: WIRE_BET.round.params,
+  revealed: [],
+  fairness: { serverSeedHash: "hash", clientSeed: "seed", nonce: 3 },
   createdAt: "2026-01-01T00:00:00.000Z",
 };
 
 describe("requests", () => {
-  test("getConfig sends the slug and returns the server payload verbatim", async () => {
-    const cfg = { enabled: true, currency: "credits", games: [], limits: { maxBet: 100 } };
-    const f = fetchStub([jsonResponse(cfg)]);
-    expect(await makeApi(f).getConfig()).toEqual(cfg);
+  test("getConfig maps the server's config shape into the UI contract", async () => {
+    const f = fetchStub([
+      jsonResponse({
+        slug: "acme",
+        gamesEnabled: true,
+        games: [{ game: "dice", minBet: 1, maxBet: 100, houseEdgeBps: 100, dailyLossCap: null }],
+        supported: ["mines", "plinko", "dice", "limbo"],
+      }),
+    ]);
+    // `limbo` is server-supported but has no board, so it never reaches the UI.
+    expect(await makeApi(f).getConfig()).toEqual({
+      enabled: true,
+      currency: "credits",
+      games: [
+        {
+          id: "dice",
+          enabled: true,
+          name: "Dice",
+          minBet: 1,
+          maxBet: 100,
+          houseEdgeBps: 100,
+          dailyLossCap: null,
+        },
+      ],
+      limits: { maxBet: 100, dailyWagerLimit: null, cooldownMs: 0 },
+    });
     expect(f.calls[0].path).toBe("/api/games/config?slug=acme");
     expect(f.calls[0].init.method).toBe("GET");
     expect(f.calls[0].init.headers["idempotency-key"]).toBeUndefined();
   });
 
   test("placeBet posts json with csrf + idempotency headers and same-origin credentials", async () => {
-    const f = fetchStub([jsonResponse(BET_RESULT)]);
-    const result = await makeApi(f).placeBet({ game: "dice", amount: 10 });
+    const f = fetchStub([jsonResponse(WIRE_BET)]);
+    const result = await makeApi(f).placeBet({ game: "dice", bet: 10, params: { target: 50, direction: "over" } });
     expect(result).toEqual(BET_RESULT);
     const { init } = f.calls[0];
     expect(init.method).toBe("POST");
@@ -66,11 +110,19 @@ describe("requests", () => {
     expect(init.headers["content-type"]).toBe("application/json");
     expect(init.headers["idempotency-key"]).toBe("key-1");
     expect(init.headers["x-csrf-token"]).toBeDefined();
-    expect(JSON.parse(init.body)).toEqual({ slug: "acme", game: "dice", amount: 10 });
+    // The server requires `bet`, `params` and the key in the body — it reads the
+    // header only for logging.
+    expect(JSON.parse(init.body)).toEqual({
+      slug: "acme",
+      game: "dice",
+      bet: 10,
+      params: { target: 50, direction: "over" },
+      idempotencyKey: "key-1",
+    });
   });
 
   test("history query params are passed through", async () => {
-    const f = fetchStub([jsonResponse({ entries: [] })]);
+    const f = fetchStub([jsonResponse({ rounds: [] })]);
     await makeApi(f).getHistory({ game: "mines", limit: 5, cursor: "c1" });
     expect(f.calls[0].path).toContain("game=mines");
     expect(f.calls[0].path).toContain("limit=5");
@@ -82,7 +134,7 @@ describe("failures", () => {
   test("a 4xx is not retried and carries a typed code", async () => {
     const f = fetchStub([jsonResponse({ error: "Not enough credits." }, 402)]);
     const err = await makeApi(f)
-      .placeBet({ game: "dice", amount: 10 })
+      .placeBet({ game: "dice", bet: 10, params: { target: 50, direction: "over" } })
       .catch((e) => e);
     expect(err).toBeInstanceOf(GamesApiError);
     expect(err.retryable).toBe(false);
@@ -101,8 +153,8 @@ describe("failures", () => {
   });
 
   test("a retried POST reuses one idempotency key so it stays one bet", async () => {
-    const f = fetchStub([jsonResponse({}, 503), jsonResponse(BET_RESULT)]);
-    const result = await makeApi(f).placeBet({ game: "dice", amount: 10 });
+    const f = fetchStub([jsonResponse({}, 503), jsonResponse(WIRE_BET)]);
+    const result = await makeApi(f).placeBet({ game: "dice", bet: 10, params: { target: 50, direction: "over" } });
     expect(result).toEqual(BET_RESULT);
     expect(f.calls.length).toBe(2);
     expect(f.calls.map((c) => c.init.headers["idempotency-key"])).toEqual(["key-1", "key-1"]);
@@ -113,9 +165,11 @@ describe("failures", () => {
       () => {
         throw new Error("boom");
       },
-      jsonResponse(BET_RESULT),
+      jsonResponse(WIRE_BET),
     ]);
-    expect(await makeApi(f).placeBet({ game: "dice", amount: 10 })).toEqual(BET_RESULT);
+    expect(
+      await makeApi(f).placeBet({ game: "dice", bet: 10, params: { target: 50, direction: "over" } })
+    ).toEqual(BET_RESULT);
     expect(f.calls.length).toBe(2);
   });
 

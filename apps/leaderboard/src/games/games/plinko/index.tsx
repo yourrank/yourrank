@@ -1,32 +1,57 @@
 /** @jsxImportSource preact */
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { GameProps } from "../../registry.js";
+import type { PlinkoRisk } from "../../types.js";
 import { BetPanel } from "../../ui/BetPanel.js";
 import { sound } from "../../sound.js";
 import { haptic } from "../../haptics.js";
 
+/**
+ * Plinko replays a decision the server already made.
+ *
+ * The backend returns the ball's path (one 0/1 per row) and the bucket it landed
+ * in, and the site's payout table arrives with the config. Nothing here rolls a
+ * die, picks a direction or prices a bucket — the animation is a rendering of
+ * `outcome.path`, so what the viewer watches is what was settled.
+ */
+
 interface Ball {
   id: number;
-  x: number; // pixel offset from center
-  y: number; // pixel offset from top
-  step: number;
-  col: number;
-  path: Array<{ x: number; y: number }>;
+  /** Server path: 0 = left, 1 = right, one entry per row. */
+  path: number[];
   bucket: number;
+  /** Rows already animated. */
+  step: number;
 }
 
-const BUCKET_MULTIPLIERS: Record<string, number[]> = {
-  low: [5.6, 2.1, 1.1, 1.0, 0.5, 1.0, 1.1, 2.1, 5.6],
-  medium: [13.0, 3.0, 1.3, 0.7, 0.4, 0.7, 1.3, 3.0, 13.0],
-  high: [29.0, 4.0, 1.5, 0.3, 0.2, 0.3, 1.5, 4.0, 29.0],
-};
+const RISKS: readonly PlinkoRisk[] = ["low", "medium", "high"];
+const STEP_MS = 70;
+const BUCKET_FLASH_MS = 600;
 
-const ROWS = 8;
-const PEG_SPACING = 36;
-const ROW_HEIGHT = 30;
+/** Fallback board only — the real row count and tables come from the server. */
+const FALLBACK_ROWS = 16;
+
+interface PlinkoOutcome {
+  path?: unknown;
+  bucket?: unknown;
+  rows?: unknown;
+}
+
+function readPath(outcome: Record<string, unknown>, rows: number): { path: number[]; bucket: number } | null {
+  const raw = outcome as PlinkoOutcome;
+  if (!Array.isArray(raw.path) || typeof raw.bucket !== "number") return null;
+  const path = raw.path.map((step) => (Number(step) === 1 ? 1 : 0));
+  if (path.length !== rows) return null;
+  return { path, bucket: raw.bucket };
+}
+
+/** Horizontal centre of the ball after `step` rows, as a fraction of the board. */
+function xFraction(step: number, column: number, rows: number): number {
+  return (column + (rows - step) / 2 + 0.5) / (rows + 1);
+}
 
 export default function PlinkoBoard({ store, config }: GameProps) {
-  const [risk, setRisk] = useState<"low" | "medium" | "high">("medium");
+  const [risk, setRisk] = useState<PlinkoRisk>("medium");
   const [betAmount, setBetAmount] = useState<number>(10);
   const [activeBucket, setActiveBucket] = useState<number | null>(null);
   const [balls, setBalls] = useState<Ball[]>([]);
@@ -34,50 +59,41 @@ export default function PlinkoBoard({ store, config }: GameProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const nextBallId = useRef(1);
 
-  const multipliers = BUCKET_MULTIPLIERS[risk] || BUCKET_MULTIPLIERS.medium;
+  const rows = config.rows ?? FALLBACK_ROWS;
+  const multipliers = useMemo(() => {
+    const table = config.payoutTables?.[risk];
+    return table && table.length === rows + 1 ? table : null;
+  }, [config.payoutTables, risk, rows]);
 
-  // Animate balls smoothly down the peg pyramid
+  // One tick per row, following the server's path.
   useEffect(() => {
     if (balls.length === 0) return;
-
     const timer = setInterval(() => {
       setBalls((prev) => {
-        const nextList: Ball[] = [];
-
+        const next: Ball[] = [];
         for (const ball of prev) {
-          if (ball.step < ball.path.length - 1) {
-            const nextStep = ball.step + 1;
-            const nextPos = ball.path[nextStep];
-            nextList.push({
-              ...ball,
-              step: nextStep,
-              x: nextPos.x,
-              y: nextPos.y,
-            });
-            if (nextStep <= ROWS) {
-              sound.play("click");
-            }
+          if (ball.step < ball.path.length) {
+            next.push({ ...ball, step: ball.step + 1 });
+            sound.play("click");
+            continue;
+          }
+          setActiveBucket(ball.bucket);
+          setTimeout(() => setActiveBucket(null), BUCKET_FLASH_MS);
+          const mult = multipliers?.[ball.bucket] ?? 1;
+          if (mult >= 1.5) {
+            sound.play("win");
+            haptic("win");
+          } else if (mult >= 1) {
+            sound.play("click");
+            haptic("tap");
           } else {
-            // Reached bucket
-            setActiveBucket(ball.bucket);
-            setTimeout(() => setActiveBucket(null), 600);
-            const mult = multipliers[ball.bucket] ?? 1;
-            if (mult >= 1.5) {
-              sound.play("win");
-              haptic("win");
-            } else if (mult >= 1.0) {
-              sound.play("click");
-              haptic("tap");
-            } else {
-              sound.play("lose");
-              haptic("error");
-            }
+            sound.play("lose");
+            haptic("error");
           }
         }
-        return nextList;
+        return next;
       });
-    }, 70);
-
+    }, STEP_MS);
     return () => clearInterval(timer);
   }, [balls.length, multipliers]);
 
@@ -89,39 +105,16 @@ export default function PlinkoBoard({ store, config }: GameProps) {
     try {
       const res = await store.api.placeBet({
         game: "plinko",
-        amount,
+        bet: amount,
+        params: { rows, risk },
       });
 
-      // True physical Galton board simulation: at each row, 50% chance left or right
-      let col = 0;
-      const path: Array<{ x: number; y: number }> = [{ x: 0, y: 8 }]; // start above top pin
-
-      for (let r = 1; r <= ROWS; r++) {
-        const goRight = Math.random() < 0.5;
-        if (goRight) col += 1;
-        const xPos = (col - r / 2) * PEG_SPACING;
-        const yPos = r * ROW_HEIGHT + 10;
-        path.push({ x: xPos, y: yPos });
+      const drop = readPath(res.outcome, rows);
+      if (drop) {
+        setBalls((prev) => [...prev, { id: nextBallId.current++, path: drop.path, bucket: drop.bucket, step: 0 }]);
+        sound.play("bet");
+        haptic("impact");
       }
-
-      // Final landing in bottom bucket (col is 0 to ROWS)
-      const finalBucket = Math.min(multipliers.length - 1, Math.max(0, col));
-      const finalX = (finalBucket - (multipliers.length - 1) / 2) * PEG_SPACING;
-      path.push({ x: finalX, y: (ROWS + 1) * ROW_HEIGHT + 14 });
-
-      const newBall: Ball = {
-        id: nextBallId.current++,
-        x: path[0].x,
-        y: path[0].y,
-        step: 0,
-        col,
-        path,
-        bucket: finalBucket,
-      };
-
-      setBalls((prev) => [...prev, newBall]);
-      sound.play("bet");
-      haptic("impact");
       store.applyResult(res);
     } catch (err: any) {
       setLocalError(err?.message || "Failed to drop ball");
@@ -131,9 +124,10 @@ export default function PlinkoBoard({ store, config }: GameProps) {
     }
   };
 
+  const pegRows = Array.from({ length: rows }, (_, i) => i + 1);
+
   return (
     <div class="gx-game gx-plinko" style={{ display: "grid", gap: "16px", padding: "16px", width: "100%", maxWidth: "800px", margin: "0 auto" }}>
-      {/* Plinko Pyramid Stage */}
       <div
         class="gx-plinko__stage"
         style={{
@@ -143,113 +137,99 @@ export default function PlinkoBoard({ store, config }: GameProps) {
           padding: "24px 16px 20px",
           display: "grid",
           gap: "12px",
-          placeItems: "center",
           position: "relative",
           overflow: "hidden",
         }}
       >
-        {/* Pegs Grid */}
-        <div style={{ position: "relative", width: `${(ROWS + 2) * PEG_SPACING}px`, height: `${(ROWS + 1) * ROW_HEIGHT + 20}px` }}>
-          {Array.from({ length: ROWS }, (_, rowIdx) => {
-            const count = rowIdx + 3;
-            const y = (rowIdx + 1) * ROW_HEIGHT + 10;
-            return (
-              <div key={rowIdx}>
-                {Array.from({ length: count }, (_, colIdx) => {
-                  const x = (colIdx - (count - 1) / 2) * PEG_SPACING;
-                  return (
-                    <div
-                      key={colIdx}
-                      style={{
-                        position: "absolute",
-                        left: `calc(50% + ${x}px)`,
-                        top: `${y}px`,
-                        width: "6px",
-                        height: "6px",
-                        borderRadius: "50%",
-                        background: "#94a3b8",
-                        boxShadow: "0 0 6px rgba(148, 163, 184, 0.8)",
-                        transform: "translate(-50%, -50%)",
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })}
-
-          {/* Animated Balls */}
-          {balls.map((b) => (
-            <div
-              key={b.id}
-              style={{
-                position: "absolute",
-                top: `${b.y}px`,
-                left: `calc(50% + ${b.x}px)`,
-                width: "14px",
-                height: "14px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #f59e0b, #ef4444)",
-                boxShadow: "0 0 12px #f59e0b, inset 0 2px 4px rgba(255,255,255,0.4)",
-                transform: "translate(-50%, -50%)",
-                transition: "all 0.06s cubic-bezier(0.2, 0.8, 0.4, 1)",
-                zIndex: 10,
-              }}
-            />
+        {/* Pegs and balls are positioned in percentages so the board fits any
+            width — a 17-bucket board cannot rely on fixed pixel spacing. */}
+        <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3", minHeight: "220px" }}>
+          {pegRows.map((row) => (
+            <div key={row}>
+              {Array.from({ length: row + 1 }, (_, col) => (
+                <div
+                  key={col}
+                  style={{
+                    position: "absolute",
+                    left: `${xFraction(row, col, rows) * 100}%`,
+                    top: `${(row / (rows + 1)) * 100}%`,
+                    width: "5px",
+                    height: "5px",
+                    borderRadius: "50%",
+                    background: "#94a3b8",
+                    boxShadow: "0 0 6px rgba(148, 163, 184, 0.8)",
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
+              ))}
+            </div>
           ))}
-        </div>
 
-        {/* Bottom Buckets */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${multipliers.length}, 1fr)`,
-            gap: "4px",
-            width: `${multipliers.length * PEG_SPACING}px`,
-            maxWidth: "100%",
-            marginTop: "6px",
-          }}
-        >
-          {multipliers.map((m, idx) => {
-            const isHit = activeBucket === idx;
-            const isHigh = m >= 10;
-            const isMid = m >= 1.5;
-
+          {balls.map((ball) => {
+            const column = ball.path.slice(0, ball.step).reduce((sum, s) => sum + s, 0);
             return (
               <div
-                key={idx}
+                key={ball.id}
                 style={{
-                  padding: "8px 2px",
-                  borderRadius: "6px",
-                  background: isHit
-                    ? "#ffffff"
-                    : isHigh
-                    ? "linear-gradient(135deg, #e11d48, #be123c)"
-                    : isMid
-                    ? "linear-gradient(135deg, #f59e0b, #d97706)"
-                    : "#1e293b",
-                  color: isHit ? "#000000" : "#ffffff",
-                  fontSize: "11px",
-                  fontFamily: "monospace",
-                  fontWeight: "800",
-                  textAlign: "center",
-                  boxShadow: isHit
-                    ? "0 0 16px #ffffff"
-                    : isHigh
-                    ? "0 0 10px rgba(225, 29, 72, 0.4)"
-                    : "none",
-                  transform: isHit ? "scale(1.18) translateY(-4px)" : "none",
-                  transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                  position: "absolute",
+                  left: `${xFraction(ball.step, column, rows) * 100}%`,
+                  top: `${(ball.step / (rows + 1)) * 100}%`,
+                  width: "12px",
+                  height: "12px",
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #f59e0b, #ef4444)",
+                  boxShadow: "0 0 12px #f59e0b, inset 0 2px 4px rgba(255,255,255,0.4)",
+                  transform: "translate(-50%, -50%)",
+                  transition: `left ${STEP_MS}ms linear, top ${STEP_MS}ms cubic-bezier(0.4, 0, 1, 1)`,
+                  zIndex: 10,
                 }}
-              >
-                {m}×
-              </div>
+              />
             );
           })}
         </div>
+
+        {/* Buckets are the server's payout table for this risk level. */}
+        {multipliers ? (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${multipliers.length}, 1fr)`, gap: "2px", width: "100%" }}>
+            {multipliers.map((m, idx) => {
+              const isHit = activeBucket === idx;
+              const isHigh = m >= 10;
+              const isMid = m >= 1.5;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    padding: "6px 1px",
+                    borderRadius: "5px",
+                    background: isHit
+                      ? "#ffffff"
+                      : isHigh
+                      ? "linear-gradient(135deg, #e11d48, #be123c)"
+                      : isMid
+                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                      : "#1e293b",
+                    color: isHit ? "#000000" : "#ffffff",
+                    fontSize: "9px",
+                    fontFamily: "monospace",
+                    fontWeight: "800",
+                    textAlign: "center",
+                    boxShadow: isHit ? "0 0 16px #ffffff" : "none",
+                    transform: isHit ? "scale(1.18) translateY(-4px)" : "none",
+                    transition: "all 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }}
+                >
+                  {m}×
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ margin: 0, textAlign: "center", color: "#94a3b8", fontSize: "12px" }}>
+            Payouts unavailable — reload to fetch this board's table.
+          </p>
+        )}
       </div>
 
-      {/* Controls */}
       <div style={{ width: "100%", maxWidth: "420px", margin: "0 auto" }}>
         <BetPanel
           bounds={{ min: config.minBet, max: config.maxBet, balance: store.balance.value }}
@@ -259,18 +239,19 @@ export default function PlinkoBoard({ store, config }: GameProps) {
           currency={store.currency.value}
           actionLabel="Drop Ball"
           loading={inFlight}
+          disabled={!multipliers}
           error={localError}
         >
-          {/* Risk Selector */}
           <div style={{ display: "grid", gap: "6px", marginBottom: "12px" }}>
             <label style={{ fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", color: "#94a3b8", fontWeight: "600" }}>
               Risk Level
             </label>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-              {(["low", "medium", "high"] as const).map((r) => (
+              {RISKS.map((r) => (
                 <button
                   key={r}
                   type="button"
+                  disabled={inFlight}
                   onClick={() => setRisk(r)}
                   style={{
                     padding: "8px",

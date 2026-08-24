@@ -40,9 +40,9 @@ describe("gamesIslandMount", () => {
     expect(gamesIslandMount(base)).toContain('<script type="module" src="/assets/games/games.js" nonce="n0nce"></script>');
   });
 
-  test("demo mode is opt-in and off by default", () => {
-    expect(gamesIslandMount(base)).toContain('data-gx-demo-allowed="false"');
-    expect(gamesIslandMount({ ...base, demoAllowed: true })).toContain('data-gx-demo-allowed="true"');
+  test("carries no demo affordance: the island has one API, the real one", () => {
+    const html = gamesIslandMount({ ...base, demoAllowed: true });
+    expect(html).not.toContain("demo");
   });
 
   test("renders a stable skeleton and a no-JS fallback", () => {

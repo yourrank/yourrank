@@ -26,6 +26,7 @@ import {
   minesMultiplierTable,
   payoutForBet,
   plinkoPayoutTable,
+  PLINKO_MAX_ROWS,
   resolveRound,
   validateParams,
   isMultiStep,
@@ -48,6 +49,9 @@ import {
 } from "@yourrank/shared/games/store";
 
 const MAX_IDEMPOTENCY_KEY = 100;
+
+/** Round timestamps are the server's clock, never the browser's. */
+const nowIso = () => new Date().toISOString();
 
 const defaultDependencies = {
   getPublicSite,
@@ -143,13 +147,16 @@ export async function handleGamesConfig(request, env, deps = defaultDependencies
       houseEdgeBps: g.houseEdgeBps,
       dailyLossCap: g.dailyLossCap,
       // Payout tables are public information — they are pure functions of the
-      // configured edge, and the UI needs them to draw the board.
+      // configured edge, and the UI needs them to draw the board. `rows` says
+      // which board those tables price, so the client cannot render a board the
+      // server would settle differently.
+      rows: g.game === "plinko" ? PLINKO_MAX_ROWS : undefined,
       tables:
         g.game === "plinko"
           ? {
-              low: plinkoPayoutTable(16, "low", g.houseEdgeBps),
-              medium: plinkoPayoutTable(16, "medium", g.houseEdgeBps),
-              high: plinkoPayoutTable(16, "high", g.houseEdgeBps),
+              low: plinkoPayoutTable(PLINKO_MAX_ROWS, "low", g.houseEdgeBps),
+              medium: plinkoPayoutTable(PLINKO_MAX_ROWS, "medium", g.houseEdgeBps),
+              high: plinkoPayoutTable(PLINKO_MAX_ROWS, "high", g.houseEdgeBps),
             }
           : undefined,
     }));
@@ -231,6 +238,7 @@ export async function handleGamesBet(request, env, deps = defaultDependencies) {
         serverSeedHash: result.serverSeedHash,
         clientSeed: result.clientSeed,
         nonce: result.nonce,
+        createdAt: nowIso(),
       },
       multiplierTable: minesMultiplierTable(
         validated.params.gridSize || MINES_GRID_SIZE,
@@ -258,6 +266,7 @@ export async function handleGamesBet(request, env, deps = defaultDependencies) {
       serverSeedHash: result.serverSeedHash,
       clientSeed: result.clientSeed,
       nonce: result.nonce,
+      createdAt: nowIso(),
     },
     balance: settled.balance,
   });
@@ -299,6 +308,8 @@ export async function handleGamesMinesReveal(request, env, deps = defaultDepende
     const settled = await deps.settleRound(roundId, 0, 0);
     return ok({
       roundId,
+      game: "mines",
+      bet: Number(round.bet),
       tile,
       hitMine: true,
       state: "settled",
@@ -315,6 +326,8 @@ export async function handleGamesMinesReveal(request, env, deps = defaultDepende
   const next = cashoutMultiplier(gridSize, mines, safeRevealed + 1, round.house_edge_bps);
   return ok({
     roundId,
+    game: "mines",
+    bet: Number(round.bet),
     tile,
     hitMine: false,
     state: "open",
@@ -322,6 +335,9 @@ export async function handleGamesMinesReveal(request, env, deps = defaultDepende
     multiplier: current,
     nextMultiplier: next,
     cashoutValue: payoutForBet(Number(round.bet), current),
+    // Unchanged by an open reveal, but reported so the client never has to
+    // guess or keep its own copy of the balance.
+    balance: Number(player.balance),
   });
 }
 
@@ -348,11 +364,14 @@ export async function handleGamesMinesCashout(request, env, deps = defaultDepend
   if (round.state === "settled") {
     return ok({
       roundId,
+      game: "mines",
+      bet: Number(round.bet),
       state: "settled",
       replayed: true,
       multiplier: Number(round.multiplier),
       payout: Number(round.payout),
       minePositions: round.outcome.minePositions || [],
+      balance: Number(player.balance),
     });
   }
   if (round.state !== "open") return bad("round is not open", 409);
@@ -370,6 +389,8 @@ export async function handleGamesMinesCashout(request, env, deps = defaultDepend
 
   return ok({
     roundId,
+    game: "mines",
+    bet: Number(round.bet),
     state: "settled",
     replayed: !!settled.replayed,
     multiplier: settled.multiplier,

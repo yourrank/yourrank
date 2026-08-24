@@ -8,6 +8,11 @@
 //  The client CONSUMES these shapes — it never invents an outcome, a payout or
 //  a random value. Anything a viewer sees on screen came out of a server
 //  response that arrived in one of the types below.
+//
+//  These are the UI's view of a response, not the wire format. The wire format
+//  is declared once, next to the single place that reads it (api/wire.ts), and
+//  mapped into the types below by the API client. There is no second reader:
+//  no component ever touches a raw response.
 // ============================================================================
 
 export type GameId = "mines" | "plinko" | "dice";
@@ -31,9 +36,21 @@ export interface GameConfig {
   maxBet: number;
   /** Largest multiplier the game can pay, used for the "max win" hint. */
   maxMultiplier?: number;
-  /** Per-game knobs (mines: grid size / mine counts, plinko: rows, ...). */
-  options?: Record<string, unknown>;
+  /** House edge the server priced this game with, basis points. */
+  houseEdgeBps: number;
+  /** Streamer's rolling loss cap for this game, `null` = none. */
+  dailyLossCap: number | null;
+  /**
+   * Plinko: the server's payout table per risk level. Sent by the backend
+   * because the browser must not price a bet the server settles.
+   */
+  payoutTables?: PlinkoPayoutTables;
+  /** Plinko: the row count those payout tables price. */
+  rows?: number;
 }
+
+export type PlinkoRisk = "low" | "medium" | "high";
+export type PlinkoPayoutTables = Record<PlinkoRisk, number[]>;
 
 export interface GlobalLimits {
   /** Hard cap on a single bet across every game. */
@@ -52,14 +69,21 @@ export interface ViewerState {
   balance: number;
 }
 
-/** POST /api/games/bet */
+/**
+ * POST /api/games/bet. Field names are the server's: `bet` is the wager and
+ * `params` is what the backend validates per game, so a request cannot drift
+ * from what `handleGamesBet` accepts.
+ */
 export interface BetRequest {
   slug: string;
   game: GameId;
-  amount: number;
-  /** Per-game payload (mines: `{ mines: 3 }`, dice: `{ target: 50, over: true }`). */
-  options?: Record<string, unknown>;
+  bet: number;
+  /** Per-game payload (mines: `{ mines: 3 }`, dice: `{ target: 50, direction: "over" }`). */
+  params: GameParams;
 }
+
+/** Flat by contract — the backend rejects nested params. */
+export type GameParams = Record<string, string | number | boolean>;
 
 export type RoundStatus = "open" | "won" | "lost" | "cashed_out" | "void";
 
@@ -81,6 +105,37 @@ export interface BetResult {
   outcome: Record<string, unknown>;
   fairness?: RoundFairness;
   createdAt: string;
+  /** Params the server validated for this round. */
+  params: GameParams;
+  /** Tiles already revealed — Mines only, empty everywhere else. */
+  revealed: number[];
+  /**
+   * Mines: the server's cashout multiplier for 1..n safe tiles, returned when
+   * the round opens. The board reads its "next multiplier" from here instead of
+   * recomputing the house edge in the browser.
+   */
+  minesMultiplierTable?: number[];
+}
+
+/**
+ * POST /api/games/mines/reveal — a step inside an open round. A superset of
+ * `BetResult` so the store can apply it unchanged when the step ends the round.
+ */
+export interface MinesRevealResult extends BetResult {
+  tile: number;
+  hitMine: boolean;
+  /** Server multiplier if the viewer cashed out now. */
+  cashoutValue: number;
+  /** Server multiplier after one more safe tile. */
+  nextMultiplier: number;
+  /** Public only once the round is over. */
+  minePositions: number[];
+}
+
+/** POST /api/games/mines/cashout */
+export interface MinesCashoutResult extends BetResult {
+  minePositions: number[];
+  replayed: boolean;
 }
 
 export interface RoundFairness {

@@ -120,7 +120,7 @@ function renderGames(settings) {
       ? `<span class="v3-game-coming">Coming soon</span>`
       : `<div class="v3-game-controls" ${row.enabled ? "" : "hidden"}>
           <span class="v3-game-max"><label for="gameMax-${game.key}">Max Bet</label><input id="gameMax-${game.key}" class="v3-number-input" type="number" min="1" step="1" inputmode="numeric" placeholder="100" value="${row.maxBet || ""}" data-game-max="${game.key}" /><span>cr</span></span>
-          <button type="button" class="btn btn--xs btn--ghost v3-game-test-btn" data-test-game="${game.key}">Test in Simulator 🎮</button>
+          <button type="button" class="btn btn--xs btn--ghost v3-game-test-btn" data-test-game="${game.key}">Test in preview 🎮</button>
         </div>`;
     return `<div class="v3-game-row ${game.disabled ? "is-disabled" : ""}" data-game="${game.key}">
       <div class="v3-game-main"><div><strong>${game.label}</strong><span>${game.description}</span><small class="v3-inline-save" data-game-status="${game.key}" role="status" aria-live="polite"></small></div><input class="v3-toggle" type="checkbox" data-game-toggle="${game.key}" ${row.enabled ? "checked" : ""} ${disabled} aria-label="Enable ${game.label}"></div>
@@ -206,8 +206,8 @@ function setSimulatorGame(gameId) {
   const previewBtn = $("gamesPreviewBtn");
 
   const embedUrl = siteId
-    ? `/dashboard/preview?board=${encodeURIComponent(siteId)}&section=games&demo=1&embed=1&game=${encodeURIComponent(activeSimulatorGame)}`
-    : (slug ? `/${encodeURIComponent(slug)}/games?demo=1&embed=1&game=${encodeURIComponent(activeSimulatorGame)}` : "");
+    ? `/dashboard/preview?board=${encodeURIComponent(siteId)}&section=games&embed=1&game=${encodeURIComponent(activeSimulatorGame)}`
+    : (slug ? `/${encodeURIComponent(slug)}/games?embed=1&game=${encodeURIComponent(activeSimulatorGame)}` : "");
   const liveUrl = slug ? `/${encodeURIComponent(slug)}/games` : "#";
 
   if (iframe && embedUrl) {
@@ -246,12 +246,12 @@ function setupSimulator() {
     });
   });
 
-  const resetBtn = $("gamesResetDemo");
-  resetBtn?.addEventListener("click", () => {
+  const reloadBtn = $("gamesReloadPreview");
+  reloadBtn?.addEventListener("click", () => {
     const iframe = $("gamesSimulatorIframe");
     if (iframe && iframe.dataset.currentSrc) {
       loadSimulatorFrame(iframe, iframe.dataset.currentSrc + "&_t=" + Date.now());
-      showToast("Demo balance reset to 2,500 credits", "success");
+      showToast("Preview reloaded", "success");
     }
   });
 

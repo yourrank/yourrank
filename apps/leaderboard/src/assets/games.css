@@ -622,21 +622,6 @@
   border-color: transparent;
 }
 
-/* ------------------------------------------------------------------- demo */
-.gx-demo-banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--gx-space-2);
-  padding: 6px var(--gx-space-4);
-  background: color-mix(in srgb, var(--gx-warn) 16%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--gx-warn) 35%, transparent);
-  color: var(--gx-warn);
-  font-size: .78rem;
-  font-weight: 650;
-  letter-spacing: .04em;
-}
-
 /* --------------------------------------------------------------- noscript */
 .gx-noscript {
   margin: var(--gx-space-6) auto;

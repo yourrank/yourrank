@@ -19,7 +19,6 @@ import { setHapticsEnabled } from "../haptics.js";
 import { sound } from "../sound.js";
 import { safeImageUrl, safePath } from "../url.js";
 import { BalanceDisplay } from "./BalanceDisplay.js";
-import { DefaultBetPanel } from "./DefaultBetPanel.js";
 import { GameFrame } from "./GameFrame.js";
 import type { GameFrameState } from "./GameFrame.js";
 import { HistoryStrip } from "./HistoryStrip.js";
@@ -67,17 +66,13 @@ export function GamesShell({ store, branding, showHeader = true }: GamesShellPro
   }, [activeId]);
 
   const Board = gameModule?.default ?? null;
-  const Panel = gameModule?.Panel ?? DefaultBetPanel;
+  // A board owns its own controls (mine count, risk, dice target), so the panel
+  // slot renders only when a game ships a separate one.
+  const Panel = gameModule?.Panel ?? null;
 
   return (
     <GamesStoreContext.Provider value={store}>
       <div class="gx-app">
-        {store.demo ? (
-          <div class="gx-demo-banner" role="status">
-            Demo mode — mock data, nothing is wagered
-          </div>
-        ) : null}
-
         <header class={showHeader ? "gx-header" : "gx-header gx-header--compact"}>
           {showHeader ? (
             <a class="gx-header__brand" href={safePath(branding.homeUrl, "/")}>
@@ -131,7 +126,7 @@ export function GamesShell({ store, branding, showHeader = true }: GamesShellPro
             </GameFrame>
           </div>
 
-          <div class="gx-panel-slot">{playable && active ? <Panel store={store} config={active} /> : null}</div>
+          <div class="gx-panel-slot">{Panel && playable && active ? <Panel store={store} config={active} /> : null}</div>
 
           <div class="gx-history-slot gx-surface">
             <HistoryStrip entries={store.history.value} loading={store.loading.value} />

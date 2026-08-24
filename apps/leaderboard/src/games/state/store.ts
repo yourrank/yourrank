@@ -19,7 +19,6 @@ import type { BetResult, GameConfig, GameId, GamesConfig, HistoryEntry, ViewerSt
 export interface GamesStore {
   api: GamesApi;
   slug: string;
-  demo: boolean;
   signInHref: string;
   earnHref: string;
 
@@ -52,7 +51,6 @@ export interface CreateStoreOptions {
   api: GamesApi;
   slug: string;
   viewer: ViewerState;
-  demo?: boolean;
   signInHref?: string;
   earnHref?: string;
   initialGame?: GameId | null;
@@ -77,7 +75,6 @@ export function createGamesStore(opts: CreateStoreOptions): GamesStore {
   const store: GamesStore = {
     api: opts.api,
     slug: opts.slug,
-    demo: Boolean(opts.demo),
     signInHref: opts.signInHref ?? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(`/${opts.slug}/games`)}`,
     earnHref: opts.earnHref ?? `/${opts.slug}/credits`,
     config,

@@ -53,9 +53,8 @@ const COMMANDS = [
   { id: "act-public", title: "Open live public site", group: "Actions", icon: PALETTE_ICONS.external, action: () => {
     window.open("/" + (state.SLUG || ""), "_blank");
   }},
-  { id: "act-reset-demo", title: "Reset mini-games demo credits (2,500 cr)", group: "Actions", icon: PALETTE_ICONS.refresh, action: () => {
-    $("gamesResetDemo")?.click();
-    showToast("Demo balance refilled to 2,500 credits", "success");
+  { id: "act-reload-games-preview", title: "Reload mini-games preview", group: "Actions", icon: PALETTE_ICONS.refresh, action: () => {
+    $("gamesReloadPreview")?.click();
   }},
   { id: "nav-home", title: "Home", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "overview run-sheet", action: () => requestDashboardRoute("home") },
   { id: "nav-board", title: "Leaderboard", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings", action: () => requestDashboardRoute("board", "players") },
