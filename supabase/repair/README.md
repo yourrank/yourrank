@@ -52,11 +52,34 @@ length, or array length and element types). Key names are printed; values are
 not. It also reports totals, counts per table/column, columns with zero
 candidates, and any column it could not inspect.
 
+## Production preflight result
+
+Run read-only against the production database (PostgreSQL 17.6) as an RLS-exempt
+role, `PREFLIGHT COMPLETE: all 20 allowlisted columns inspected.`, 0 columns
+uninspectable, **26 candidate rows** in 5 columns:
+
+| Column | Candidates | Parsed shape | Classification |
+| --- | --- | --- | --- |
+| `conversions.raw` | 7 | object `amount, click_ref, currency, event` | confirmed legacy double-encoded |
+| `credit_ledger.metadata` | 2 | object `adjusted_by, manual, reason` | confirmed legacy double-encoded |
+| `predictions.options` | 5 | array(2) of object `id, label, total_bets, total_points` | confirmed legacy double-encoded |
+| `queue_dlq_events.body` | 11 | object `changes, kind, siteId, siteName, type` | confirmed legacy double-encoded |
+| `tournaments.participants_json` | 1 | array(0) | confirmed legacy double-encoded |
+| other 15 allowlisted columns | 0 | — | nothing to repair |
+
+Each shape is exactly what the pre-#620 writer for that column serialised, every
+candidate row predates the #620 deployment, and the seven non-allowlisted jsonb
+columns hold no double-encoded value either, so the allowlist is neither too
+narrow nor too broad for this database. Re-run the preflight immediately before
+the migration: the count is a point-in-time observation, not a constant.
+
 ## Guarantees, and how they were rehearsed
 
 Rehearsal seeds nine legacy shapes into all 27 jsonb columns of the migrated
 schema, including FK-valid `game_rounds`/`credit_ledger` parents (176 rows), then
-runs the preflight, the repair twice and the rollback.
+runs the preflight, the repair twice and the rollback. It is run on both
+Postgres 16 and Postgres 17, the production major version, with identical
+results.
 
 | Row shape | Behaviour | Rehearsal |
 | --- | --- | --- |
