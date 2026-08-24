@@ -9,11 +9,23 @@
 -- fixes are live everywhere. See supabase/repair/README.md for the procedure,
 -- the expected counts and the rollback.
 --
--- Scope is an explicit allowlist, not the schema: only columns that some commit
--- actually wrote from a pre-serialised binding are touched, so a column that
--- legitimately stores a JSON string can never be rewritten by this migration.
--- Every cast is guarded by a real parse, so malformed legacy strings, scalar
--- strings, NULLs and already-correct objects/arrays are all left untouched.
+-- Scope is an explicit allowlist, not the schema: only the 20 columns that some
+-- commit actually wrote from a pre-serialised binding are considered, and every
+-- other jsonb column in the schema is never touched, even when it holds a
+-- double-encoded value.
+--
+-- Within an allowlisted column, every cast is guarded by a real parse:
+--   * malformed strings, scalar JSON strings, JSON null and SQL NULL are all
+--     preserved, as are values already stored as an object or an array;
+--   * a JSON *string* whose text parses to an object or an array is a repair
+--     CANDIDATE and will be rewritten.
+-- That last predicate is semantically ambiguous on its own: a row that
+-- deliberately stored the text of a JSON object is indistinguishable from a
+-- legacy double-encoded row. The allowlist narrows the ambiguity to columns with
+-- a provably pre-serialising writer, and supabase/repair/preflight_20260903000000.sql
+-- enumerates the real candidates read-only so they are inspected against the
+-- column's application contract BEFORE this migration runs. Pre-images make any
+-- misjudgement reversible.
 BEGIN;
 
 -- Pre-image of every row this migration rewrites, keyed by primary key, so the
@@ -98,8 +110,9 @@ BEGIN
       RAISE EXCEPTION 'table public.% has no primary key, so the repair could not be reversed', target.table_name;
     END IF;
 
-    -- A row is double-encoded only if the column holds a JSON string whose text
-    -- re-parses as an object or an array. Everything else is legitimate data.
+    -- Candidate predicate, identical to the preflight script's: the column holds
+    -- a JSON string whose text re-parses as an object or an array. Every other
+    -- shape is left alone.
     predicate := format(
       'jsonb_typeof(t.%1$I) = ''string''
          AND jsonb_typeof(public.jsonb_repair_parse(t.%1$I #>> ''{}'')) IN (''object'', ''array'')',
