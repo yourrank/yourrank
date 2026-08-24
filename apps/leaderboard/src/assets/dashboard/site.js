@@ -9,6 +9,7 @@ import { renderPerformance, renderPerformanceLoading } from "./performance.js";
 import { clearPlayersDraft, collectPlayers, commitDraftMutation, renderPlayers, renumber, toggleEmpty } from "./players.js";
 import { requestPublicationChange } from "./publication.js";
 import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from "./request.js";
+import { currentRoute, requestDashboardRoute } from "./shell.js";
 
 export const DEFAULT_SECTIONS = {
   hero: true,
@@ -53,9 +54,12 @@ async function wireObsTools() {
       if (!siteSelect._wired) {
         siteSelect._wired = true;
         siteSelect.addEventListener("change", () => {
+          // Switching the overlay's site reloads the current route with the
+          // new siteId; the entry point owns the destination and the reload.
           const next = new URL(location.href);
           next.searchParams.set("siteId", siteSelect.value);
-          location.assign(next.pathname + next.search);
+          const route = currentRoute();
+          requestDashboardRoute(route.page, route.tab, { query: next.search, reload: true });
         });
       }
     }

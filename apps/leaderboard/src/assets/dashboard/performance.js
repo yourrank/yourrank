@@ -2,12 +2,16 @@ import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricValue, setRowsLoading } from "./states.js";
 import { chromeStateFor } from "./routes.js";
+import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function initPerformance() {
   if (initPerformance._done) return;
   initPerformance._done = true;
+  // The shell's navigation entry point owns the URL and history for tab
+  // switches; this section only repaints its panels for the routed tab.
+  registerRouteRenderer("performance", ({ tab }) => showTab(tab));
   wireRangeFilter();
   wireTabs();
   renderEmpty($("eventsEmpty"), {
@@ -38,21 +42,9 @@ function wireTabs() {
   page._tabsWired = true;
   page.querySelectorAll("[data-perf-tab]").forEach((tab) => tab.addEventListener("click", (event) => {
     event.preventDefault();
-    const target = tab.dataset.perfTab;
-    const nextPath = `/dashboard/analytics/${target}${location.search}`;
-    if (nextPath !== location.pathname + location.search) history.pushState({}, "", nextPath);
-    window.dispatchEvent(new CustomEvent("yr-nav", { detail: { page: "performance", hash: target } }));
-    showTab(target);
+    requestDashboardRoute("performance", tab.dataset.perfTab);
   }));
   showTab((location.pathname.match(/\/analytics\/([^/]+)/) || [])[1] || "activity");
-  if (!page._routeTabsWired) {
-    page._routeTabsWired = true;
-    window.addEventListener("popstate", () => {
-      if (location.pathname.startsWith("/dashboard/analytics")) {
-        showTab((location.pathname.match(/\/analytics\/([^/]+)/) || [])[1] || "activity");
-      }
-    });
-  }
 }
 
 function showTab(tab) {

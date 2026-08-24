@@ -182,24 +182,22 @@ describe("dynamic section shell integration", () => {
     expect(dynamicJs).not.toContain("wireDynamicSubTabs");
   });
 
-  it("keeps the command palette inside the shell except for cross-worker Telegram", () => {
-    // Every Navigation entry either routes via requestDashboardRoute or is
-    // the deliberate Telegram document load.
+  it("routes every command palette destination through the navigation entry point", () => {
+    // Cross-worker Telegram included: the entry point decides that it needs
+    // a full document navigation, the palette never navigates directly.
     const entries = [...paletteJs.matchAll(/\{ id: "(nav-[^"]+)".*?action: \(\) => (.*?) \},/g)];
     expect(entries.length).toBeGreaterThan(10);
     for (const [, id, action] of entries) {
-      if (id === "nav-telegram") {
-        expect(action).toContain("location.href");
-      } else {
-        expect(action, `${id} must route through the shell`).toContain("requestDashboardRoute");
-        expect(action, `${id} must not trigger a document reload`).not.toContain("location.href");
-      }
+      expect(action, `${id} must route through the shell`).toContain("requestDashboardRoute");
+      expect(action, `${id} must not navigate directly`).not.toContain("location.href");
     }
   });
 
-  it("re-routes the reward edit flow in-shell with force, keeping document mode intact", () => {
+  it("re-routes the reward edit flow through the entry point with force", () => {
+    // One call for both modes: the entry point re-routes in place inside the
+    // shell and falls back to a document load on standalone pages.
     const creditsJs = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-    expect(creditsJs).toMatch(/__yrSpaShell[\s\S]*?force: true/);
-    expect(creditsJs).toMatch(/location\.href = `\/dashboard\/rewards\/rules\$\{query\}`/);
+    expect(creditsJs).toMatch(/requestDashboardRoute\("rewards", "rules", \{ query: .*force: true \}\)/);
+    expect(creditsJs).not.toContain("yr-nav");
   });
 });

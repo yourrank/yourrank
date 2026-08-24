@@ -4,13 +4,15 @@ import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmMod
 import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
-import { openDrawer, closeDrawer } from "./dashboard/shell.js";
+import { openDrawer, closeDrawer, registerRouteRenderer, requestDashboardRoute } from "./dashboard/shell.js";
 import { renderReferrals } from "./dashboard/referrals.js";
 import { checkout, renderPlan, loadHistory, loadPlanUsage, wireCancelSubscription } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
+import { parseDynamicPath } from "./dashboard/routes.js";
 
 const statusEl = () => $("status");
 let _accountPopstate = null;
+let _unregisterRenderer = null;
 let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
@@ -221,7 +223,7 @@ function wireUnifiedSettingsTabs() {
   if (!root || currentTab() !== "settings") return;
   const tabs = [...root.querySelectorAll("[data-settings-tab]")];
   const panels = [...root.querySelectorAll("[data-settings-panel]")];
-  const select = (key, push = false) => {
+  const select = (key) => {
     const active = tabs.some((tab) => tab.dataset.settingsTab === key) ? key : "account";
     tabs.forEach((tab) => {
       const on = tab.dataset.settingsTab === active;
@@ -229,21 +231,24 @@ function wireUnifiedSettingsTabs() {
       tab.setAttribute("aria-selected", String(on));
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== active; });
-    if (push) {
-      const url = new URL(location.href);
-      url.pathname = `/dashboard/settings/${active}`;
-      history.pushState({ settingsTab: active }, "", url);
-    }
   };
+  // Tab clicks request the destination through the shell's navigation entry
+  // point, which owns the URL, history and title; this section repaints its
+  // panels through the registered renderer.
+  _unregisterRenderer?.();
+  _unregisterRenderer = registerRouteRenderer("settings", ({ tab }) => select(tab));
   tabs.forEach((tab) => tab.addEventListener("click", (event) => {
     event.preventDefault();
-    select(tab.dataset.settingsTab, true);
+    requestDashboardRoute("settings", tab.dataset.settingsTab);
   }));
-  _accountPopstate = () => {
-    const key = location.pathname.split("/").pop();
-    select(key);
-  };
-  addEventListener("popstate", _accountPopstate);
+  if (!window.__yrSpaShell) {
+    // Standalone document: the persistent shell's popstate handling is not
+    // installed, so Back/Forward is repainted here.
+    _accountPopstate = () => {
+      select(parseDynamicPath(location.pathname)?.tab || "account");
+    };
+    addEventListener("popstate", _accountPopstate);
+  }
   select(settingsTab());
 }
 
@@ -624,4 +629,8 @@ export function leave() {
     removeEventListener("popstate", _accountPopstate);
     _accountPopstate = null;
   }
+  // Release the route renderer so the shell fetches the fragment fresh on the
+  // next entry instead of painting into a torn-down DOM.
+  _unregisterRenderer?.();
+  _unregisterRenderer = null;
 }
