@@ -181,19 +181,6 @@ async function api(path, opts) {
   try { return await r.json(); }
   catch { return { error: 'Server error (' + r.status + ') — try again or contact support' }; }
 }
-async function logout(btn) {
-  if (btn) { btn.disabled = true; if (btn.textContent) btn.textContent = 'Logging out…'; }
-  try {
-    const r = await fetch('/bot/auth/logout',{method:'POST',headers:{'Accept':'application/json'}});
-    if (!r.ok) throw new Error('logout failed');
-    // AUDIT-B4: notify other open dashboard tabs that this creator session ended.
-    try { localStorage.setItem('yr:logout', String(Date.now())); } catch (e) {}
-    location.reload();
-  } catch (e) {
-    if (btn) { btn.disabled = false; if (btn.textContent) btn.textContent = 'Sign out failed'; }
-  }
-}
-
 let submitting = false;
 const page = document.body.dataset.page || 'overview';
 let __lastBots = [];
@@ -1355,8 +1342,7 @@ async function handleAction(e) {
     || action === 'wizardNext' || action === 'wizardPrev';
   if (!NO_LOADING) setLoading(target);
   try {
-    if (action === 'logout') { e.preventDefault(); await logout(target); }
-    else if (action === 'connectBot') { e.preventDefault(); await connectBot(target); }
+    if (action === 'connectBot') { e.preventDefault(); await connectBot(target); }
     else if (action === 'checkHealth') { e.preventDefault(); await checkHealth(target); }
     else if (action === 'syncCommands') { e.preventDefault(); await syncCommands(target); }
     else if (action === 'disconnectBot') { e.preventDefault(); await disconnectBot(target); }
@@ -1401,30 +1387,6 @@ async function handleAction(e) {
 }
 
 document.addEventListener('click', handleAction);
-// Mobile sidebar drawer: toggle with the hamburger, close when tapping outside, trap focus.
-const menuBtn = $('lbMenu');
-const side = $('lbSide');
-if (menuBtn && side) {
-  menuBtn.setAttribute('aria-expanded', String(side.classList.contains('is-open')));
-  menuBtn.addEventListener('click', (e) => { e.stopPropagation(); side.classList.toggle('is-open'); menuBtn.setAttribute('aria-expanded', String(side.classList.contains('is-open'))); });
-  document.addEventListener('click', (e) => {
-    if (side.classList.contains('is-open') && !side.contains(e.target) && e.target !== menuBtn) { side.classList.remove('is-open'); menuBtn.setAttribute('aria-expanded','false'); }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (!side.classList.contains('is-open')) return;
-    if (e.key === 'Escape') { side.classList.remove('is-open'); menuBtn.setAttribute('aria-expanded','false'); menuBtn.focus(); return; }
-    if (e.key !== 'Tab') return;
-    const focusable = Array.from(side.querySelectorAll('a, button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(el => !el.disabled && el.offsetParent !== null);
-    if (focusable.length === 0) return;
-    const first = focusable[0], last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
-}
-const logoutForm = document.querySelector('.gm-logout-form');
-if (logoutForm) {
-  logoutForm.addEventListener('submit', (e) => { e.preventDefault(); logout(e.submitter); });
-}
 const botSelect = $('botSelect');
 if (botSelect) botSelect.addEventListener('change', (e) => { selectBotById(e.target.value); });
 const bcBotSelect = $('bcBotSelect');
