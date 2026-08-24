@@ -182,7 +182,7 @@ jobs:
             echo '```'
             echo '### Structural evidence'
             echo '```'
-            grep -E 'current=string parsed=' preflight-clean.txt | head -60
+            grep -E 'current=string parsed=' preflight-clean.txt | head -60 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$TOTAL" != "$EXPECTED" ]; then
