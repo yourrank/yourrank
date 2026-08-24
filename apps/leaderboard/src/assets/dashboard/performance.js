@@ -1,7 +1,7 @@
 import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricValue, setRowsLoading } from "./states.js";
-import { chromeStateFor } from "./routes.js";
+import { chromeStateFor, defaultTab, parseDashboardPath, SECTIONS } from "./routes.js";
 import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -44,11 +44,12 @@ function wireTabs() {
     event.preventDefault();
     requestDashboardRoute("performance", tab.dataset.perfTab);
   }));
-  showTab((location.pathname.match(/\/analytics\/([^/]+)/) || [])[1] || "activity");
+  const route = parseDashboardPath(location.pathname);
+  showTab(route?.page === "performance" ? route.tab || defaultTab("performance") : defaultTab("performance"));
 }
 
 function showTab(tab) {
-  const active = ["activity", "referrals", "events"].includes(tab) ? tab : "activity";
+  const active = SECTIONS.performance.tabs.includes(tab) ? tab : defaultTab("performance");
   document.querySelectorAll("[data-perf-tab]").forEach((node) => {
     const selected = node.dataset.perfTab === active;
     node.classList.toggle("is-on", selected);
