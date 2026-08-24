@@ -485,6 +485,22 @@ export function parseDashboardRouteId(value: string): DashboardRouteId | undefin
   return ROUTES_BY_ID.has(value as DashboardRouteId) ? (value as DashboardRouteId) : undefined;
 }
 
+/**
+ * A registered legacy alias spelling of a route, validated against the
+ * manifest: throws at module load if `path` is not an alias of `routeId`.
+ * Lets presentation code (dashboard-nav.ts) address an alias spelling (the
+ * /dashboard/settings root document, the /dashboard/giveaways section entry)
+ * without minting a new hard-coded route table — if the alias leaves the
+ * manifest, every reference fails loudly instead of drifting.
+ */
+export function dashboardAliasPath(path: string, routeId: DashboardRouteId): string {
+  const alias = ALIASES_BY_PATH.get(path);
+  if (!alias || alias.routeId !== routeId) {
+    throw new Error(`${path} is not a registered alias of ${String(routeId)}`);
+  }
+  return path;
+}
+
 /** Resolution of a pathname against the manifest. */
 export interface ResolvedDashboardPath {
   readonly route: DashboardRouteDef;
