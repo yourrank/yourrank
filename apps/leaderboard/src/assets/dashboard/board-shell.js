@@ -1,5 +1,6 @@
 import { updateProfileMenu } from "./profile-menu.js";
 import { getMe, getSites, handleAuthError } from "./session.js";
+import { currentRoute, requestDashboardRoute } from "./shell.js";
 import { renderSiteSelector } from "./site-selector.js";
 import { state } from "./state.js";
 
@@ -72,7 +73,10 @@ export async function loadBoardShell() {
     sites: list,
     activeId: activeSiteId,
     onSelect: (id) => {
-      location.href = `${location.pathname}?siteId=${encodeURIComponent(id)}`;
+      // Switching sites reloads the current section's document with the new
+      // site context; the entry point owns the destination and the reload.
+      const route = currentRoute();
+      requestDashboardRoute(route.page, route.tab, { query: `?siteId=${encodeURIComponent(id)}`, reload: true });
     },
   });
   const board = list.find((b) => String(b.id || b.siteId) === String(current)) || list[0] || {};

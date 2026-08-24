@@ -1,5 +1,5 @@
 import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
-import { openDrawer, closeDrawer } from "./dashboard/shell.js";
+import { openDrawer, closeDrawer, requestDashboardRoute } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
 import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricEmpty, setMetricLoading, setRowsLoading } from "./dashboard/states.js";
@@ -428,14 +428,10 @@ function prefillEditFromQuery() {
 }
 function editReward(id) {
   const q = new URLSearchParams(); q.set("edit", id); if (siteQuery()) q.set("siteId", siteQuery());
-  const query = `?${q.toString()}`;
-  if (window.__yrSpaShell) {
-    // Inside the persistent shell: re-route in place. `force` re-runs the
-    // section even when only the query changed (same path, different ?edit=).
-    window.dispatchEvent(new CustomEvent("yr-nav", { detail: { page: "rewards", hash: "rules", query, force: true } }));
-  } else {
-    location.href = `/dashboard/rewards/rules${query}`;
-  }
+  // The entry point re-routes in place inside the persistent shell (`force`
+  // re-runs the section even when only the query changed — same path,
+  // different ?edit=) and falls back to a document load on standalone pages.
+  requestDashboardRoute("rewards", "rules", { query: `?${q.toString()}`, force: true });
 }
 async function delReward(id, trigger) {
   const confirmed = await confirmPopover(trigger, "Disable way to earn", "This disables the way to earn; credit activity is retained.");

@@ -1,10 +1,15 @@
-// Dashboard shell: sidebar navigation and mobile drawer.
+// Dashboard shell: sidebar navigation, mobile drawer, and the one canonical
+// client navigation entry point (requestDashboardRoute). Every dashboard
+// module requests a destination through it; this module alone decides
+// between in-place tab rendering, SPA section switches, dynamic fragment
+// loads and full document (cross-worker) navigation, and it alone mutates
+// history for dashboard routes.
 import { $ } from "./utils.js";
 import { clearDirty, state, subscribe } from "./state.js";
 import { renderOverviewSummary } from "./overview.js";
 import { fitDesignPreview, loadStats, refreshDesignPreview } from "./site.js";
-import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath } from "./routes.js";
-import { DYNAMIC_SECTIONS, dynamicPath, isDynamicSection, parseDynamicPath } from "./routes.js";
+import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
+import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
 
 // Sections are all in one document now, so nothing below reinitializes the
@@ -15,6 +20,15 @@ export function registerSectionMounter(fn) { sectionMounter = fn; }
 
 let navigationPending = false;
 let lastRouteUrl = location.pathname + location.search;
+
+// Sections that render their own tab switches in place (analytics panels,
+// settings panels) register a renderer here. The entry point still owns the
+// URL, history behavior and chrome state; the renderer only paints content.
+const routeRenderers = {};
+export function registerRouteRenderer(page, render) {
+  routeRenderers[page] = render;
+  return () => { if (routeRenderers[page] === render) delete routeRenderers[page]; };
+}
 
 function ensureDialog() {
   if (window.YRDialog) return Promise.resolve(window.YRDialog);
@@ -99,8 +113,22 @@ function hasDynamicRegion() {
 
 function routeDestination(page, tab = "", query = location.search) {
   const suffix = query ? (String(query).startsWith("?") ? String(query) : `?${query}`) : "";
-  const base = isDynamicSection(page) ? dynamicPath(page, tab) : dashboardPath(page, tab || defaultHash(page));
+  let base;
+  if (isDynamicSection(page)) base = dynamicPath(page, tab);
+  else if (resolveSection(page)) base = dashboardPath(page, tab || defaultHash(page));
+  // Cross-worker destinations (Telegram) are manifest routes outside this
+  // document's section vocabulary; they resolve through the canonical chrome
+  // state and end in a full document navigation below.
+  else base = chromeStateFor(page, tab)?.canonicalPath || dashboardPath(page, tab || defaultHash(page));
   return base + suffix;
+}
+
+function routeTitle(page, tab) {
+  return isDynamicSection(page) ? dynamicTitle(page, tab) : dashboardTitle({ page, tab: tab || defaultHash(page) });
+}
+
+function routeCrumbs(page, tab) {
+  renderCrumbs(page, tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page)));
 }
 
 export async function requestDashboardRoute(page, tab = "", { replace = false, query = location.search, reload = false, force = false } = {}) {
@@ -114,6 +142,22 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
   try {
     if (!await allowNavigation()) return false;
 
+    // In-place tab switch: the destination section is already rendered and
+    // owns a registered renderer (analytics tabs, settings panels). The
+    // entry point updates history, rail, crumbs and title; the renderer
+    // repaints the section's panels without a fetch or reload.
+    const renderer = routeRenderers[page];
+    if (!reload && renderer && currentRoute().page === page) {
+      if (sameUrl || replace) history.replaceState(history.state || {}, "", destination);
+      else history.pushState({}, "", destination);
+      lastRouteUrl = destination;
+      setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
+      routeCrumbs(page, tab);
+      document.title = routeTitle(page, tab);
+      renderer({ page, tab, query });
+      return true;
+    }
+
     // Dynamic sections (Rewards, Engagement, Audience, Account) load as
     // content fragments inside the persistent shell — no document reload.
     // Only when this document IS the shell: the command palette and other
@@ -124,6 +168,7 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
       else history.pushState({}, "", destination);
       lastRouteUrl = destination;
       setActiveSideNav(DYNAMIC_SECTIONS[page].navKey);
+      routeCrumbs(page, tab);
       await loadDynamicSection(page, tab || DYNAMIC_SECTIONS[page].tabs[0], { query });
       return true;
     }
@@ -210,6 +255,7 @@ export function navTo(page, hash = "") {
   }
 
   sectionMounter?.(page);
+  routeRenderers[page]?.({ page, tab: scrollHash, query: location.search });
   setActiveSideNav(page, navHash);
   document.querySelectorAll(".lb-page").forEach((p) => p.classList.toggle("is-on", p.dataset.page === page));
   closeDrawer();
@@ -447,9 +493,18 @@ export function setupShell() {
     }
     lastRouteUrl = destination;
     if (isDynamicSection(route.page)) {
+      setActiveSideNav(DYNAMIC_SECTIONS[route.page].navKey);
+      // The section is still mounted and renders its own tabs in place: no
+      // refetch, just repaint the panels for the restored URL.
+      routeCrumbs(route.page, route.tab);
+      const renderer = routeRenderers[route.page];
+      if (renderer) {
+        document.title = routeTitle(route.page, route.tab);
+        renderer({ page: route.page, tab: route.tab, query: location.search });
+        return;
+      }
       // Back/forward into a dynamic section: load it as a fragment, preserving
       // the query string (?edit=, ?siteId=) so deep-linked state survives.
-      setActiveSideNav(DYNAMIC_SECTIONS[route.page].navKey);
       await loadDynamicSection(route.page, route.tab, { query: location.search });
     } else {
       // Back/forward into a core SPA section: tear down any dynamic
@@ -457,14 +512,6 @@ export function setupShell() {
       leaveDynamicSection();
       navTo(route.page, route.tab);
     }
-  });
-
-  // Allow nested dashboard modules to request navigation without a circular import.
-  window.addEventListener("yr-nav", (e) => {
-    const { page, hash, query, force } = e.detail || {};
-    if (!page) return;
-    e.preventDefault();
-    requestDashboardRoute(page, hash || defaultHash(page), { query: query ?? location.search, force: Boolean(force) });
   });
 
   // Catch-all for internal dashboard links rendered or re-rendered after
