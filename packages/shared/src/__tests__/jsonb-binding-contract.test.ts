@@ -3,9 +3,8 @@
 // holding a JSON *string* instead of an object/array: `jsonb_typeof()` says
 // `string`, `params->>'mines'` reads nothing, and readers get a string back.
 // That is how game_rounds.params/outcome, tournaments.participants_json,
-// predictions.options, credit_ledger.metadata and friends were written before
-// 20260902000000_jsonb_unwrap_double_encoded.sql. The contract is: bind the
-// value, never a pre-serialised copy of it.
+// predictions.options, credit_ledger.metadata and friends were once written.
+// The contract is: bind the value, never a pre-serialised copy of it.
 //
 // The scan is column-driven rather than text-driven: the jsonb column names come
 // from the migrations, and only the argument list of a query whose SQL writes one
@@ -75,13 +74,52 @@ function literalEnd(src: string, start: number): number {
 }
 
 /**
+ * Blanks out comments, keeping every other byte in place. Without this a lone
+ * apostrophe in prose ("broadcasts can't be cancelled") reads as the start of a
+ * string literal, so the scan pairs it with the next apostrophe further down the
+ * file and skips whatever lies between — which is how the double-encoded
+ * `broadcasts.audience_filter_snapshot` writer sat under a passing gate.
+ */
+function blankComments(src: string): string {
+  const out = src.split("");
+  const blank = (from: number, to: number) => {
+    for (let i = from; i < to && i < out.length; i++) if (out[i] !== "\n") out[i] = " ";
+  };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      i = literalEnd(src, i);
+      continue;
+    }
+    if (ch === "/" && src[i + 1] === "/") {
+      const end = src.indexOf("\n", i);
+      blank(i, end === -1 ? src.length : end);
+      i = end === -1 ? src.length : end;
+      continue;
+    }
+    if (ch === "/" && src[i + 1] === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      blank(i, stop);
+      i = stop - 1;
+    }
+  }
+  return out.join("");
+}
+
+/**
  * The argument list of every query call whose SQL writes a jsonb column: the
  * text between the end of the SQL string and the closing paren of the enclosing
  * call. Template literals, quoted strings, and `"…" + "…"` concatenations all
  * count — restricting the scan to backticks let a `'INSERT …'` writer through.
  */
-function jsonbWriteArguments(src: string, columns: Set<string>): string[] {
+function jsonbWriteArguments(source: string, columns: Set<string>): string[] {
   const regions: string[] = [];
+  const src = blankComments(source);
 
   for (let i = 0; i < src.length; i++) {
     if (src[i] !== "`" && src[i] !== '"' && src[i] !== "'") continue;
@@ -147,12 +185,28 @@ describe("jsonb parameter binding", () => {
     }
   });
 
+  it("sees writers that follow an apostrophe in a comment", () => {
+    // A lone apostrophe in prose used to swallow the rest of the file: the
+    // broadcasts writer below was invisible to the scan for exactly this reason.
+    const fixture = [
+      "// Already sent broadcasts can't be cancelled.",
+      "const rows = await exec(",
+      "  `INSERT INTO broadcasts (bot_id, audience_filter_snapshot) VALUES ($1, $2::jsonb)`,",
+      "  [botId, JSON.stringify(segment)]",
+      ");",
+    ].join("\n");
+    const args = jsonbWriteArguments(fixture, columns);
+    expect(args.some((region) => region.includes("JSON.stringify"))).toBe(true);
+  });
+
   it("never binds a pre-serialised value to a jsonb column", () => {
     const offenders: string[] = [];
 
     for (const root of ROOTS) {
       for (const file of filesIn(root, SOURCE)) {
-        if (file.includes(`${join("src", "__tests__")}`)) continue;
+        // Tests are not writers, and some deliberately bind a pre-serialised
+        // value to reproduce the defect (apps/consumer/src/jsonb-database.test.js).
+        if (file.includes(`${join("src", "__tests__")}`) || /\.(test|spec)\.[jt]sx?$/.test(file)) continue;
         const src = readFileSync(file, "utf8");
         if (!src.includes("JSON.stringify")) continue;
         for (const args of jsonbWriteArguments(src, columns)) {

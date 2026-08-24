@@ -3,9 +3,10 @@
 // postgres.js returns a jsonb column already parsed, so a correctly written row
 // arrives as an object/array. Rows written by an earlier build that bound
 // `JSON.stringify(value)` instead of the value itself are JSON-encoded twice and
-// arrive as a string (see 20260902000000_jsonb_unwrap_double_encoded.sql, which
-// normalises the stored rows). This is the one place that tolerates those rows,
-// so readers never grow their own `typeof x === "string" ? JSON.parse(x)` shim.
+// arrive as a string. Repairing those rows is a separate data deployment
+// (supabase/repair/); until it has run everywhere this is the one place that
+// tolerates them, so readers never grow their own
+// `typeof x === "string" ? JSON.parse(x)` shim.
 
 /**
  * Normalise a value read from a json/jsonb column.
