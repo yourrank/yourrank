@@ -9,6 +9,7 @@ import { updateUserPassword } from "../data/auth.js";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import { logAudit } from "@yourrank/shared/audit";
 import { validatePassword } from "../password-rules.js";
+import { routeContext } from "../middleware/handler.js";
 
 async function currentSessionHash(req) {
   // If the current request just rotated the session, the new token is in
@@ -346,14 +347,14 @@ export async function handleCreateExportJob(request, env, {
   }
 }
 
-export async function handleExportJobStatus(request, env, ctx, {
+export async function handleExportJobStatus(request, env, {
   currentUserImpl = currentUser,
   oneImpl = one,
 } = {}) {
   try {
     const user = await currentUserImpl(request, env);
     if (!user) return bad("unauthorized", 401);
-    const id = ctx?.slug || new URL(request.url).searchParams.get("id");
+    const id = routeContext(request).slug || new URL(request.url).searchParams.get("id");
     const job = await oneImpl(
       `SELECT id, status, error, manifest, created_at, started_at, completed_at, expires_at
          FROM account_export_jobs WHERE id=$1 AND user_id=$2`,
@@ -368,14 +369,14 @@ export async function handleExportJobStatus(request, env, ctx, {
   }
 }
 
-export async function handleExportJobDownload(request, env, ctx, {
+export async function handleExportJobDownload(request, env, {
   currentUserImpl = currentUser,
   oneImpl = one,
 } = {}) {
   try {
     const user = await currentUserImpl(request, env);
     if (!user) return bad("unauthorized", 401);
-    const id = ctx?.slug || new URL(request.url).searchParams.get("id");
+    const id = routeContext(request).slug || new URL(request.url).searchParams.get("id");
     const job = await oneImpl(
       `SELECT id, status, artifact_key, expires_at FROM account_export_jobs WHERE id=$1 AND user_id=$2`,
       [id, user.id]

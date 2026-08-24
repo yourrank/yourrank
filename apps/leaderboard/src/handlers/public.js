@@ -3,6 +3,7 @@ import { getPublicSite as defaultGetPublicSite, getPublicStreamVersion as defaul
 import { getStats as defaultGetStats, isStatementTimeout as defaultIsStatementTimeout } from "../stats.js";
 import { rateLimit as defaultRateLimit, rateLimitHeaders, clientIp as defaultClientIp, json, bad } from "../auth.js";
 import { one as defaultOne } from "@yourrank/shared/db";
+import { routeContext } from "../middleware/handler.js";
 import { demoLeaderboardData } from "../demo-data.js";
 import {
   connectLiveBoard,
@@ -18,10 +19,10 @@ import {
  * Handle GET /api/public/:slug/standings
  * Returns full standings JSON for embedding / Telegram bot queries
  */
-export async function handlePublicStandings(request, env, ctx, deps = {}) {
+export async function handlePublicStandings(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, rateLimit = defaultRateLimit, clientIp = defaultClientIp } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const rl = await rateLimit(env, `pub-standings:${clientIp(request)}`, 100, 60);
     if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429, rateLimitHeaders(rl));
 
@@ -78,10 +79,10 @@ export async function handlePublicStandings(request, env, ctx, deps = {}) {
  * Handle GET /api/public/:slug/players
  * Returns lightweight players-only endpoint for live polling
  */
-export async function handlePublicPlayers(request, env, ctx, deps = {}) {
+export async function handlePublicPlayers(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, rateLimit = defaultRateLimit, clientIp = defaultClientIp, one = defaultOne } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const ip = clientIp(request);
     const url = new URL(request.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 100));
@@ -150,10 +151,10 @@ export async function handlePublicPlayers(request, env, ctx, deps = {}) {
  * Handle GET /api/public/:slug/stream
  * Server-Sent Events for live leaderboard updates (replaces 30s polling).
  */
-export async function handlePublicStream(request, env, ctx, deps = {}) {
+export async function handlePublicStream(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, getPublicStreamVersion = defaultGetPublicStreamVersion, rateLimit = defaultRateLimit, clientIp = defaultClientIp } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const rl = await rateLimit(env, `pub-stream:${clientIp(request)}`, 60, 60);
     if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429, rateLimitHeaders(rl));
     if (liveBoardStreamDisabled(env)) {
@@ -230,10 +231,10 @@ function getPublicStreamInterval(env) {
  * Handle GET /api/public/:slug/rank?user=X
  * Returns plain-text rank lookup for Nightbot / Streamlabs custom commands
  */
-export async function handlePublicRank(request, env, ctx, deps = {}) {
+export async function handlePublicRank(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, rateLimit = defaultRateLimit, clientIp = defaultClientIp } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const userParam = new URL(request.url).searchParams.get("user") || "";
     const rl = await rateLimit(env, `pub-rank:${clientIp(request)}`, 60, 60);
     const rankHeaders = { "content-type": "text/plain; charset=utf-8", ...rateLimitHeaders(rl) };
@@ -330,10 +331,10 @@ export async function handlePublicRank(request, env, ctx, deps = {}) {
  * Handle GET /api/public/:slug (generic endpoint)
  * Returns the full leaderboard data as JSON
  */
-export async function handlePublicData(request, env, ctx, deps = {}) {
+export async function handlePublicData(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, rateLimit = defaultRateLimit, clientIp = defaultClientIp } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const rl = await rateLimit(env, `pub-data:${clientIp(request)}`, 120, 60);
     if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429, rateLimitHeaders(rl));
 
@@ -356,10 +357,10 @@ export async function handlePublicData(request, env, ctx, deps = {}) {
  * Public stats page for publishers/streamers to share.
  * Returns summary counts and a 14-day views series.
  */
-export async function handlePublicStats(request, env, ctx, deps = {}) {
+export async function handlePublicStats(request, env, deps = {}) {
   const { getPublicSite = defaultGetPublicSite, getStats = defaultGetStats, isStatementTimeout = defaultIsStatementTimeout, rateLimit = defaultRateLimit, clientIp = defaultClientIp } = deps;
   try {
-    const slug = ctx.slug;
+    const { slug } = routeContext(request);
     const rl = await rateLimit(env, `pub-stats:${clientIp(request)}`, 60, 60);
     if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429, rateLimitHeaders(rl));
 

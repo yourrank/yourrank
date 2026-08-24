@@ -3,13 +3,14 @@ import { requireUser, bad, ok, readJson } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { exec } from "@yourrank/shared/db";
 import { requireSiteCapability } from "../site-authorization.js";
+import { routeContext } from "../middleware/handler.js";
 
 function getSite(env, user, url) {
   const siteId = url.searchParams.get("siteId");
   return siteId ? getBoardById(env, user.id, siteId) : getByUser(env, user.id);
 }
 
-export async function handleCreditsBlockViewer(request, env, ctx) {
+export async function handleCreditsBlockViewer(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
@@ -18,7 +19,7 @@ export async function handleCreditsBlockViewer(request, env, ctx) {
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
 
-  const id = ctx?.slug || url.pathname.split("/").pop();
+  const id = routeContext(request).slug || url.pathname.split("/").pop();
   const body = await readJson(request);
   const blocked = body?.blocked === true;
   const reason = String(body?.reason || "").trim();

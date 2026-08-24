@@ -11,6 +11,7 @@ import { PLATFORM_HOST } from "../constants.js";
 import { invalidateCustomDomain } from "../middleware/custom-domain.js";
 import { notifyLiveBoard } from "../live-board-config.js";
 import { requireSiteCapability } from "../site-authorization.js";
+import { routeContext } from "../middleware/handler.js";
 
 function csvCell(value) {
   const text = String(value ?? "");
@@ -160,7 +161,7 @@ export async function handleHeatmap(request, env, {
   }
 }
 
-export async function handleTrackCopy(request, env, ctx) {
+export async function handleTrackCopy(request, env) {
   const ip = clientIp(request);
   if (!(await rateLimit(env, `copy:${ip}`, 60, 60)).ok) return json({ ok: false, error: "Too many requests." }, 429);
   const body = await readJson(request);
@@ -178,8 +179,8 @@ export async function handleTrackCopy(request, env, ctx) {
       }
     );
     const p = producer.send({ type: "bump", siteId: site.id, field: "copies", referer: null, timestamp: Date.now() });
-    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(p);
-    else p.catch((err) => { console.error("[trackCopy] copy enqueue failed:", err); });
+    routeContext(request).waitUntil(p);
+    p.catch((err) => { console.error("[trackCopy] copy enqueue failed:", err); });
   }
   return json({ ok: true });
 }

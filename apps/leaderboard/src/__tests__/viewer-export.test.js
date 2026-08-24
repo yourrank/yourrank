@@ -4,6 +4,7 @@ import {
   handleViewerExportStatus,
   handleViewerExportDownload,
 } from "../handlers/viewer-export.js";
+import { attachRouteContext } from "../middleware/handler.js";
 
 const VIEWER = { id: "viewer-1" };
 const env = { ACCOUNT_EXPORTS: { get: async () => ({ body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode("artifact")); c.close(); } }) }) } };
@@ -43,8 +44,8 @@ describe("viewer export ownership and lifecycle", () => {
 
   it("makes foreign and nonexistent status jobs indistinguishable", async () => {
     const d = deps({ oneImpl: async () => null });
-    const foreign = await handleViewerExportStatus(request(), env, { slug: "foreign" }, d);
-    const missing = await handleViewerExportStatus(request(), env, { slug: "missing" }, d);
+    const foreign = await handleViewerExportStatus(attachRouteContext(request(), { slug: "foreign" }), env, d);
+    const missing = await handleViewerExportStatus(attachRouteContext(request(), { slug: "missing" }), env, d);
     expect(foreign.status).toBe(404);
     expect(missing.status).toBe(404);
     expect(await foreign.text()).toBe(await missing.text());
@@ -52,8 +53,8 @@ describe("viewer export ownership and lifecycle", () => {
 
   it("makes foreign and nonexistent download jobs indistinguishable", async () => {
     const d = deps({ oneImpl: async () => null });
-    const foreign = await handleViewerExportDownload(request(), env, { slug: "foreign" }, d);
-    const missing = await handleViewerExportDownload(request(), env, { slug: "missing" }, d);
+    const foreign = await handleViewerExportDownload(attachRouteContext(request(), { slug: "foreign" }), env, d);
+    const missing = await handleViewerExportDownload(attachRouteContext(request(), { slug: "missing" }), env, d);
     expect(foreign.status).toBe(404);
     expect(missing.status).toBe(404);
     expect(await foreign.text()).toBe(await missing.text());

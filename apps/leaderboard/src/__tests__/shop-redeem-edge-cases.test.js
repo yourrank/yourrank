@@ -1,4 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { attachRouteContext } from "../middleware/handler.js";
 
 // Edge-case coverage for the rewards / shop loop, complementing
 // credits-loop.test.js:
@@ -500,9 +501,8 @@ describe("handleCreditsUpdateRedemption inventory restore", () => {
     );
     db.unsafeResponses.push([], [], []); // balance refund, stock restore, ledger
     const res = await handleCreditsUpdateRedemption(
-      req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }),
-      makeEnv(),
-      { slug: "red-1" }
+      attachRouteContext(req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }), { slug: "red-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     const stockRestore = db.calls.find((c) => c.method === "unsafe" && /UPDATE shop_items[\s\S]*stock = stock \+ 1/s.test(c.sql));
@@ -517,9 +517,8 @@ describe("handleCreditsUpdateRedemption inventory restore", () => {
       { id: "red-1", site_viewer_id: "sv-1", shop_item_id: "item-1", cost: 50 }
     );
     const res = await handleCreditsUpdateRedemption(
-      req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "fulfilled" }),
-      makeEnv(),
-      { slug: "red-1" }
+      attachRouteContext(req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "fulfilled" }), { slug: "red-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     expect(db.calls.some((c) => /UPDATE shop_items/.test(c.sql))).toBe(false);
@@ -529,9 +528,8 @@ describe("handleCreditsUpdateRedemption inventory restore", () => {
 
   it("rejects an invalid status transition", async () => {
     const res = await handleCreditsUpdateRedemption(
-      req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "pending" }),
-      makeEnv(),
-      { slug: "red-1" }
+      attachRouteContext(req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "pending" }), { slug: "red-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(400);
   });

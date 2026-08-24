@@ -2,6 +2,7 @@ import { withTransaction as defaultWithTransaction, one as defaultOne, exec as d
 // Authentication handlers for signup, login, logout, password reset
 import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, RESERVED, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, generateUniqueReferralCode } from "../auth.js";
 import { hashToken } from "@yourrank/shared/crypto";
+import { routeContext } from "../middleware/handler.js";
 import { trackActivation } from "@yourrank/shared/activation-funnel";
 import { createBoard, getUserBoardsList } from "../site.js";
 import { sendEmail, resetEmail, sendOnboardingEmail, sendVerificationEmail } from "../email.js";
@@ -69,7 +70,7 @@ async function applyReferralReward(referrerId, referredId) {
   });
 }
 
-export async function handleSignup(request, env, ctx) {
+export async function handleSignup(request, env) {
   try {
     if (!(await rateLimit(env, `signup:${clientIp(request)}`, 10, 3600)).ok) return bad("Too many attempts. Try again later.", 429);
     const body = await readJson(request);
@@ -144,15 +145,14 @@ export async function handleSignup(request, env, ctx) {
 
     if (referrerId) {
       const rewardPromise = applyReferralReward(referrerId, userId).catch((err) => console.error("[signup] referral reward failed:", err));
-      if (ctx?.waitUntil) ctx.waitUntil(rewardPromise);
-      else rewardPromise.catch(() => {});
+      routeContext(request).waitUntil(rewardPromise);
     }
 
     const token = await createSession(env, userId);
     const origin = new URL(request.url).origin;
-    await issueVerificationEmail(env, userId, email, origin, ctx?.waitUntil);
+    await issueVerificationEmail(env, userId, email, origin, routeContext(request).waitUntil);
     const onboardingPromise = sendOnboardingEmail(env, 0, { id: userId, email, display_name: displayName, slug: finalSlug, origin });
-    if (ctx?.waitUntil) ctx.waitUntil(onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
+    routeContext(request).waitUntil(onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
     trackActivation("leaderboard", userId, "signup", { email, referred: !!referrerId });
     return json({ ok: true, user: { id: userId, email, slug: finalSlug, emailVerified: false }, needsVerification: true }, 200, { "set-cookie": cookieSet(token, env) });
   } catch (e) {
@@ -161,7 +161,7 @@ export async function handleSignup(request, env, ctx) {
   }
 }
 
-export async function handleLogin(request, env, ctx) {
+export async function handleLogin(request, env) {
   try {
     // SEC-110: IP-based rate limit
     if (!(await rateLimit(env, `login:${clientIp(request)}`, 20, 600)).ok) return bad("Too many attempts. Try again in a few minutes.", 429);
@@ -208,7 +208,7 @@ export async function handleLogin(request, env, ctx) {
     ]);
     const origin = new URL(request.url).origin;
     if (!user.email_verified) {
-      await issueVerificationEmail(env, user.id, user.email, origin, ctx?.waitUntil);
+      await issueVerificationEmail(env, user.id, user.email, origin, routeContext(request).waitUntil);
       return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: false }, needsVerification: true }, 200, { "set-cookie": cookieSet(token, env) });
     }
     return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: true } }, 200, { "set-cookie": cookieSet(token, env) });
@@ -412,7 +412,7 @@ export async function handleVerifyEmail(request, _env) {
 
 // POST /api/auth/resend-verification — { email }
 // Does not reveal whether the email exists.
-export async function handleResendVerification(request, env, ctx) {
+export async function handleResendVerification(request, env) {
   try {
     const body = await readJson(request);
     const email = String(body?.email || "").trim().toLowerCase();
@@ -423,7 +423,7 @@ export async function handleResendVerification(request, env, ctx) {
     const user = await one("SELECT id, email_verified FROM users WHERE email=$1", [email]);
     if (user && !user.email_verified) {
       const origin = new URL(request.url).origin;
-      await issueVerificationEmail(env, user.id, email, origin, ctx?.waitUntil);
+      await issueVerificationEmail(env, user.id, email, origin, routeContext(request).waitUntil);
     }
     return ok({ sent: true });
   } catch (e) {

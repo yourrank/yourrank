@@ -5,6 +5,7 @@
 // Run: bun test src/__tests__/sites-handlers.test.js
 
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { attachRouteContext } from "../middleware/handler.js";
 
 // ── Mock shared modules ────────────────────────────────────────────────
 const dbUrl    = import.meta.resolve("@yourrank/shared/db");
@@ -296,7 +297,7 @@ describe("handleTrackCopy", () => {
   it("returns ok even with null body", async () => {
     const env = mockEnv();
     // GET request with no body → readJson returns null
-    const res = await handleTrackCopy(req("https://test.com/api/track-copy", "GET"), env, { waitUntil: () => {} });
+    const res = await handleTrackCopy(attachRouteContext(req("https://test.com/api/track-copy", "GET"), { waitUntil: () => {} }), env);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("ok", true);
@@ -306,7 +307,7 @@ describe("handleTrackCopy", () => {
     mockOne.mockResolvedValueOnce({ id: "site-1" }); // site lookup
     const env = mockEnv();
     const ctx = { waitUntil: (p) => p };
-    const res = await handleTrackCopy(req("https://test.com/api/track-copy", "POST", { slug: "testboard" }), env, ctx);
+    const res = await handleTrackCopy(attachRouteContext(req("https://test.com/api/track-copy", "POST", { slug: "testboard" }), ctx), env);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("ok", true);
