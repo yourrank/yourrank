@@ -5,7 +5,7 @@ import { raw } from "hono/html";
 import { DashboardShell } from "./dashboard-shell.jsx";
 
 import { brandLoaderLogoSvg } from "@yourrank/shared/brand-assets";
-import { chromeStateFor, dashboardTitleForPath, defaultTab, parseDashboardPath } from "../assets/dashboard/routes.js";
+import { chromeStateFor, dashboardPath, dashboardTitleForPath, defaultTab, parseDashboardPath, SECTIONS as DASHBOARD_SECTIONS } from "../assets/dashboard/routes.js";
 import { DEFAULT_DASHBOARD_TITLE } from "@yourrank/shared/dashboard-chrome-state";
 
 const OBS_TOOLS = `<div class="lb-widget lb-widget--full ov-obs-suite-card"><div class="v3-section-head"><div><h2>OBS Live Stream Overlays</h2><p class="v3-head-sub">Paste transparent browser sources directly into OBS Studio or Streamlabs.</p></div><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/design">Appearance →</a></div><div class="v3-settings-row"><div><b>Site for these overlay links</b><p class="card-sub" id="obsSiteHint">Loading your sites…</p></div><select id="obsSiteSelect" class="v3-select" aria-label="Site for OBS links"><option>Loading sites…</option></select></div><div class="ov-obs-grid"><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">PREDICTIONS HUD</span><strong>Live Betting Overlay</strong><p>Live Yes/No odds bar &amp; countdown timer on stream.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-pred-hud" type="button">Copy OBS Link</button></div><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">SOUND ALERTS</span><strong>Stream Alerts &amp; Chimes</strong><p>Audio chimes &amp; popup cards for orders &amp; winners.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-alerts" type="button">Copy OBS Link</button></div><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">PODIUM TICKER</span><strong>Leaderboard Bar</strong><p>Horizontal scrolling ticker of top players &amp; points.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-ticker" type="button">Copy OBS Link</button></div></div></div>`;
@@ -25,15 +25,12 @@ export const dashboardConfig = {
   }),
 };
 
-export const EDITOR_TABS = ["setup", "players", "design", "share", "history"];
 export const ANALYTICS_TABS = ["activity", "referrals", "events"];
-export const BOARD_TABS = [
-  ["setup", "Setup", "/dashboard/leaderboard/setup"],
-  ["players", "Players", "/dashboard/leaderboard/players"],
-  ["design", "Appearance", "/dashboard/leaderboard/design"],
-  ["share", "Share", "/dashboard/leaderboard/share"],
-  ["history", "History", "/dashboard/leaderboard/history"],
-];
+export const BOARD_TABS = DASHBOARD_SECTIONS.board.tabs.map((tab) => [
+  tab,
+  chromeStateFor("board", tab, { exact: true }).tabLabel,
+  dashboardPath("board", tab),
+]);
 
 function LeaderboardTabs({ active }) {
   return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="Leaderboard pages">
@@ -126,7 +123,7 @@ function OverviewSection({ active } = {}) {
   );
 }
 
-function EditorSection({ active, activeHash = "setup", showTabs = active } = {}) {
+function EditorSection({ active, activeHash = defaultTab("board"), showTabs = active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="board">
 
