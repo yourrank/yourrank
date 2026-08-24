@@ -3,6 +3,7 @@
 
 import { membersPage } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
+import { chromeStateFor } from "../assets/dashboard/routes.js";
 
 // Audience is the people area. Members (who earn and spend credits) are managed
 // here; site visitors (anonymous traffic) already have their canonical view
@@ -16,8 +17,9 @@ export function AudienceMembersPage({ activePath, user, fragment } = {}) {
     <div id="cr-app" data-cr-tab="viewers" hidden dangerouslySetInnerHTML={{ __html: membersPage + VISITOR_ANALYTICS_CARD }}></div>
     <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading your members…</p></div>
   </div>;
+  const chrome = chromeStateFor("audience", "viewers");
   if (fragment) return content;
-  return <DashboardShell activeNav="members" activePath={activePath || "/dashboard/audience/members"} boardContext="selector" crumbs={[{ label: "Audience", href: "/dashboard/audience/members" }, { label: "Members" }]} footer="rewards" rootId="cr-dash" user={user}>
+  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
     {content}
   </DashboardShell>;
 }
@@ -25,6 +27,6 @@ export function AudienceMembersPage({ activePath, user, fragment } = {}) {
 const audienceConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"], scripts: ['<script src="/assets/credits.js?v=4" type="module"></script>', '<script src="/assets/shell-nav.js?v=2" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
 
 export const audienceMembersPage = {
-  config: { ...audienceConfigBase, title: "Members · Audience · YourRank", canonical: "https://yourrank.site/dashboard/audience/members" },
+  config: { ...audienceConfigBase, title: chromeStateFor("audience", "viewers").documentTitle, canonical: "https://yourrank.site/dashboard/audience/members" },
   Component: AudienceMembersPage,
 };

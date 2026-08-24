@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dashboardNavItems } from "@yourrank/shared/dashboard-nav";
+import { routeById } from "@yourrank/shared/dashboard-routes";
 import { PAGES } from "../pages.jsx";
 import { mapActiveNav } from "../pages/dashboard-shell.jsx";
 import { NAV_OWNER_MAP, navOwner, parseDashboardPath } from "../assets/dashboard/routes.js";
@@ -158,7 +159,7 @@ describe("dashboard navigation ownership", () => {
         (path === "/dashboard/giveaways" && worker.includes('path === "/dashboard/giveaways"')) ||
         (path === "/dashboard/rewards" && worker.includes('path === "/dashboard/rewards"')) ||
         (path === "/dashboard/audience/members" && worker.includes('path === "/dashboard/audience/members"')) ||
-        (path === "/dashboard/telegram" && readFileSync(new URL("../../../bot/src/dashboard-views/app.ts", import.meta.url), "utf8").includes('canonicalPath = "/dashboard/telegram"')) ||
+        (path === "/dashboard/telegram" && routeById("telegram").canonicalPath === path && readFileSync(new URL("../../../bot/src/dashboard-views/shell.ts", import.meta.url), "utf8").includes('overview: "telegram"')) ||
         (path.startsWith("/dashboard/giveaways/") && worker.includes('path.startsWith("/dashboard/giveaways/")')) ||
         (path.startsWith("/dashboard/rewards/") && worker.includes('path.startsWith("/dashboard/rewards/")'));
       expect(routeHandled).toBeTruthy();

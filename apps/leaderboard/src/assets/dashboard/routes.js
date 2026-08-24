@@ -3,7 +3,9 @@
 // semantics of its own: every path, tab list, alias spelling and prefix is
 // read from the manifest, and a regression gate rejects any hard-coded
 // /dashboard route literal outside dashboardAliasPath(...) lookups.
-// Presentation stays local: titles, tab labels, boot modules, topbar context.
+// Chrome state (crumbs, tab labels, document titles, rail owner) comes from
+// the canonical chrome-state owner (@yourrank/shared/dashboard-chrome-state);
+// only delivery/boot metadata stays local (boot modules, topbar context).
 //
 // No browser globals at module scope: the Worker imports this too.
 
@@ -19,6 +21,11 @@ import {
   routeById,
   trimTrailingSlashes,
 } from "@yourrank/shared/dashboard-routes";
+import {
+  DASHBOARD_SECTION_TITLES,
+  DEFAULT_DASHBOARD_TITLE,
+  dashboardChromeState,
+} from "@yourrank/shared/dashboard-chrome-state";
 
 export { trimTrailingSlashes };
 
@@ -38,23 +45,37 @@ const sectionTabPaths = (section) =>
   );
 
 export const SECTIONS = {
-  home: { path: HOME_PATH, title: "Home" },
-  board: { path: routeById("board").canonicalPath, title: "Leaderboard", tabs: sectionTabs("board") },
-  boards: { path: routeById("boards").canonicalPath, title: "Sites" },
-  games: { path: routeById("games").canonicalPath, title: "Games" },
-  performance: { path: routeById("performance").canonicalPath, title: "Analytics", tabs: sectionTabs("performance") },
+  home: { path: HOME_PATH, title: DASHBOARD_SECTION_TITLES.home },
+  board: { path: routeById("board").canonicalPath, title: DASHBOARD_SECTION_TITLES.board, tabs: sectionTabs("board") },
+  boards: { path: routeById("boards").canonicalPath, title: DASHBOARD_SECTION_TITLES.boards },
+  games: { path: routeById("games").canonicalPath, title: DASHBOARD_SECTION_TITLES.games },
+  performance: { path: routeById("performance").canonicalPath, title: DASHBOARD_SECTION_TITLES.performance, tabs: sectionTabs("performance") },
   // Account settings (`/dashboard/settings` and its tabs) are their own
   // documents, served by the Worker. This section is the selected site's
   // settings, which is all this document knows to render.
-  site: { path: routeById("site").canonicalPath, title: "Site settings" },
-};
-
-export const TAB_TITLES = {
-  board: { setup: "Setup", players: "Players", design: "Appearance", share: "Share", history: "History" },
-  performance: { activity: "Site visitors", referrals: "Referrals", events: "Events" },
+  site: { path: routeById("site").canonicalPath, title: DASHBOARD_SECTION_TITLES.site },
 };
 
 export const MANAGE_SITES_VALUE = "__manage_sites__";
+
+/**
+ * Manifest route id for a section/tab pair in this file's page vocabulary.
+ * With `exact`, an unknown tab resolves to "" instead of the section root.
+ */
+export function routeIdFor(page, tab = "", { exact = false } = {}) {
+  const wanted = String(tab || "");
+  const match = DASHBOARD_ROUTES.find((r) => r.section === page && (r.tab || "") === wanted);
+  if (match) return match.id;
+  if (exact) return "";
+  const root = DASHBOARD_ROUTES.find((r) => r.section === page);
+  return root ? root.id : "";
+}
+
+/** Canonical chrome state (rail owner, crumbs, labels, document title). */
+export function chromeStateFor(page, tab = "", { exact = false } = {}) {
+  const id = routeIdFor(page, tab, { exact });
+  return id ? dashboardChromeState(id) : null;
+}
 
 // ---- Dynamic sections ----
 //
@@ -157,18 +178,8 @@ export function dynamicPath(page, tab = "") {
 /** Human-readable title for a dynamic section route. */
 export function dynamicTitle(page, tab = "") {
   const section = DYNAMIC_SECTIONS[page];
-  if (!section) return "Dashboard · YourRank";
-  const labels = {
-    rewards: { overview: "Overview", shop: "Shop", rules: "Ways to earn", redemptions: "Orders", history: "Activity" },
-    giveaways: { chat: "Giveaways", raffles: "Raffles", drops: "Drops", preds: "Predictions", tournaments: "Tournaments" },
-    audience: { viewers: "Members" },
-    settings: { account: "Account", team: "Team", plan: "Billing", connections: "Connections", data: "Data" },
-    siteConnections: { channel: "Kick connection" },
-  };
-  const sectionLabels = labels[page] || {};
-  const tabLabel = sectionLabels[tab || section.tabs[0]] || "";
-  const sectionLabel = page === "rewards" ? "Rewards" : page === "giveaways" ? "Engagement" : page === "audience" ? "Audience" : page === "settings" ? "Account" : page === "siteConnections" ? "Site settings" : page;
-  return `${tabLabel ? `${tabLabel} · ` : ""}${sectionLabel} · YourRank`;
+  if (!section) return DEFAULT_DASHBOARD_TITLE;
+  return chromeStateFor(page, tab || section.tabs[0]).documentTitle;
 }
 
 export { ACCOUNT_SECTION_PATHS, LEGACY_ACCOUNT_PATHS, NAV_OWNER_MAP, navOwner };
@@ -257,10 +268,8 @@ export function parseDashboardPath(pathname) {
 }
 
 export function dashboardTitle(route) {
-  const section = SECTIONS[route?.page];
-  if (!section) return "Dashboard · YourRank";
-  const tabTitle = TAB_TITLES[route.page]?.[route.tab];
-  return `${tabTitle ? `${tabTitle} · ` : ""}${section.title} · YourRank`;
+  if (!route || !SECTIONS[route.page]) return DEFAULT_DASHBOARD_TITLE;
+  return chromeStateFor(route.page, route.tab).documentTitle;
 }
 
 export function dashboardTitleForPath(pathname) {

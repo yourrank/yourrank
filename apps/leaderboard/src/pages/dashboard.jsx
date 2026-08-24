@@ -5,12 +5,13 @@ import { raw } from "hono/html";
 import { DashboardShell } from "./dashboard-shell.jsx";
 
 import { brandLoaderLogoSvg } from "@yourrank/shared/brand-assets";
-import { dashboardTitleForPath, parseDashboardPath } from "../assets/dashboard/routes.js";
+import { chromeStateFor, dashboardTitleForPath, defaultTab, parseDashboardPath } from "../assets/dashboard/routes.js";
+import { DEFAULT_DASHBOARD_TITLE } from "@yourrank/shared/dashboard-chrome-state";
 
 const OBS_TOOLS = `<div class="lb-widget lb-widget--full ov-obs-suite-card"><div class="v3-section-head"><div><h2>OBS Live Stream Overlays</h2><p class="v3-head-sub">Paste transparent browser sources directly into OBS Studio or Streamlabs.</p></div><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/design">Appearance →</a></div><div class="v3-settings-row"><div><b>Site for these overlay links</b><p class="card-sub" id="obsSiteHint">Loading your sites…</p></div><select id="obsSiteSelect" class="v3-select" aria-label="Site for OBS links"><option>Loading sites…</option></select></div><div class="ov-obs-grid"><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">PREDICTIONS HUD</span><strong>Live Betting Overlay</strong><p>Live Yes/No odds bar &amp; countdown timer on stream.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-pred-hud" type="button">Copy OBS Link</button></div><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">SOUND ALERTS</span><strong>Stream Alerts &amp; Chimes</strong><p>Audio chimes &amp; popup cards for orders &amp; winners.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-alerts" type="button">Copy OBS Link</button></div><div class="ov-obs-item"><div class="ov-obs-info"><span class="ov-obs-tag">PODIUM TICKER</span><strong>Leaderboard Bar</strong><p>Horizontal scrolling ticker of top players &amp; points.</p></div><button class="btn btn--sm btn--accent" id="ov-btn-copy-ticker" type="button">Copy OBS Link</button></div></div></div>`;
 
 export const dashboardConfig = {
-  title: "Dashboard · YourRank",
+  title: DEFAULT_DASHBOARD_TITLE,
   canonical: "https://yourrank.site/dashboard",
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
   scripts: ['<script src="/assets/dashboard.js?v=15" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=2" defer></script>'],
@@ -33,19 +34,6 @@ export const BOARD_TABS = [
   ["share", "Share", "/dashboard/leaderboard/share"],
   ["history", "History", "/dashboard/leaderboard/history"],
 ];
-// Each route serves one section, so the trail is derived from the route rather
-// than hand-written per screen — every page below Home says where it is.
-const SECTION_CRUMBS = {
-  board: { label: "Leaderboard", href: "/dashboard/leaderboard" },
-  games: { label: "Games", href: "/dashboard/games" },
-  performance: { label: "Analytics", href: "/dashboard/analytics" },
-  site: { label: "Site settings", href: "/dashboard/site" },
-  boards: { label: "Sites", href: "/dashboard/leaderboards" },
-};
-const TAB_LABELS = {
-  setup: "Setup", players: "Players", design: "Appearance", share: "Share", history: "History",
-  activity: "Site visitors", referrals: "Sources", events: "Events",
-};
 
 function LeaderboardTabs({ active }) {
   return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="Leaderboard pages">
@@ -55,34 +43,14 @@ function LeaderboardTabs({ active }) {
   </nav>;
 }
 
-function dashboardCrumbs(activeNav, activeHash) {
-  const section = SECTION_CRUMBS[activeNav];
-  if (!section) return null;
-  // The rail and suite top-nav already establish context; the trail starts at
-  // the section so it stays short and each leaf names only its own path.
-  const trail = [];
-  const tab = TAB_LABELS[activeHash];
-  trail.push(tab ? section : { label: section.label });
-  if (tab) trail.push({ label: tab });
-  return trail;
-}
-
+// Which SPA section/tab this document opens on. Route → section/tab comes
+// from the canonical resolver; the section-root default tab comes from the
+// manifest tab order.
 function dashboardShellRoute(activePath = "") {
-  const pathname = String(activePath || "").split("?")[0].replace(/\/+$/, "") || "/dashboard";
+  const pathname = String(activePath || "").split("?")[0];
   const route = parseDashboardPath(pathname);
-  if (!route) {
-    if (pathname.startsWith("/dashboard/settings/")) {
-      return { activeNav: "account", activeHash: pathname.split("/")[3] || "account" };
-    }
-    return { activeNav: "home", activeHash: "" };
-  }
-  if (route.page === "home") return { activeNav: "home", activeHash: "" };
-  if (route.page === "board") return { activeNav: "board", activeHash: route.tab || "setup" };
-  if (route.page === "games") return { activeNav: "games", activeHash: "games" };
-  if (route.page === "performance") return { activeNav: "performance", activeHash: route.tab || "activity" };
-  if (route.page === "site") return { activeNav: "site", activeHash: "board" };
-  if (route.page === "boards") return { activeNav: "boards", activeHash: "" };
-  return { activeNav: "home", activeHash: "" };
+  if (!route) return { activeNav: "home", activeHash: "" };
+  return { activeNav: route.page, activeHash: route.tab || defaultTab(route.page) };
 }
 
 
@@ -385,7 +353,10 @@ function AnalyticsSection({ active, activeHash = "activity" } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="performance">
 <div class="v3-analytics-page">
-  <header class="v3-head"><h1>{TAB_LABELS[activeHash] || "Site visitors"}</h1><p class="v3-head-sub">See how people find and interact with your site.</p></header>
+  {/* The document's activeHash names the h1 even when it belongs to another
+      section (a board tab on a leaderboard URL): the SSR'd heading has always
+      reflected the address the document was opened on. */}
+  <header class="v3-head"><h1>{chromeStateFor("performance", activeHash, { exact: true })?.tabLabel || chromeStateFor("board", activeHash, { exact: true })?.tabLabel || chromeStateFor("performance", "activity").tabLabel}</h1><p class="v3-head-sub">See how people find and interact with your site.</p></header>
   <div class="v3-analytics-scope"><span id="perfScope"><span id="perfBoardName">Active site</span> · Last <span id="perfRangeLabel">14</span> days</span><div id="perfRangeFilter" class="v3-range-filter" role="group" aria-label="Date range"><button class="v3-range-btn" type="button" data-range="7">7d</button><button class="v3-range-btn is-active" type="button" data-range="14">14d</button><button class="v3-range-btn" type="button" data-range="30">30d</button></div></div>
   <nav class="v3-tabs" aria-label="Analytics pages">
     <a class={"v3-tab" + (activeHash === "activity" ? " is-on" : "")} href="/dashboard/analytics/activity" data-perf-tab="activity" aria-current={activeHash === "activity" ? "page" : undefined}>Site visitors</a>
@@ -546,7 +517,7 @@ export function DashboardContent({ user, activePath } = {}) {
 <small>Creator workspace</small>
 </div>
 </div>
-<DashboardShell activeNav={activeNav} activePath={activePath} boardContext="full" crumbs={dashboardCrumbs(activeNav, activeHash)} footer="dashboard" initiallyHidden user={user}>
+<DashboardShell activeNav={activeNav} activePath={activePath} boardContext="full" crumbs={chromeStateFor(activeNav, activeHash, { exact: true })?.crumbs || null} footer="dashboard" initiallyHidden user={user}>
 <div class="lb-notice lb-notice--verification" id="verifyBanner" hidden role="status" aria-live="polite"><span class="lb-notice-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg></span><div class="lb-notice-copy"><strong>Public leaderboard offline until you verify</strong><span id="verifyBannerText">Visitors cannot open your published leaderboard until you verify <b id="verifyBannerEmail"></b>.</span><span id="verifyBannerStatus"></span></div><button class="btn btn--sm btn--ghost" id="verifyResend" type="button">Resend verification</button><button class="btn btn--sm btn--ghost" id="verifyDismiss" type="button" aria-label="Dismiss email verification notice">Dismiss</button></div>
   {sections.map((key) => {
     const Section = SECTIONS[key];

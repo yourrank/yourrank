@@ -5,7 +5,7 @@ const user = { display_name: "Creator", email: "creator@example.com", plan: "fre
 
 describe("Telegram overview states", () => {
   it("shows one focused setup action before a bot is connected", () => {
-    const html = appHtml(user, "https://yourrank.site", "nonce", "overview", undefined, "/dashboard/telegram", {
+    const html = appHtml(user, "https://yourrank.site", "nonce", "overview", undefined, {
       botUsername: null,
       siteName: "Main site",
     });
@@ -17,7 +17,7 @@ describe("Telegram overview states", () => {
   });
 
   it("shows activity and creator actions after a bot is connected", () => {
-    const html = appHtml(user, "https://yourrank.site", "nonce", "overview", undefined, "/dashboard/telegram", {
+    const html = appHtml(user, "https://yourrank.site", "nonce", "overview", undefined, {
       botUsername: "creator_bot",
       botStatus: "active",
       siteName: "Main site",
