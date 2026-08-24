@@ -41,7 +41,7 @@ export const giveawaysConfig = {
   scripts: [
     '<script src="/assets/giveaways.js?v=1" type="module"></script>',
     '<script src="/assets/tournaments.js?v=1" type="module"></script>',
-    '<script src="/assets/shell-nav.js?v=2" defer></script>',
+    '<script src="/assets/shell-nav.js?v=3" defer></script>',
   ],
   nav: false,
   footer: false,

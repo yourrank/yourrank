@@ -370,10 +370,6 @@ async function init() {
       const saveBtn = document.getElementById("save");
       if (saveBtn && !saveBtn.disabled && !saveBtn.hidden) saveBtn.click();
     }
-    // Escape: Close drawer
-    if (e.key === "Escape") {
-      import("./dashboard/shell.js").then(m => m.closeDrawer(false));
-    }
   });
 
   if (urlParams.get("upgraded")) {

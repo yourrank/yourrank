@@ -142,6 +142,13 @@
       if (returnFocus !== false && menuButtons[0]) menuButtons[0].focus();
     }
 
+    // Dashboard navigation requests this event when an in-document route
+    // changes. shell-nav.js remains the sole owner of drawer state while
+    // callers can close the drawer without importing its implementation.
+    document.addEventListener("yr:dashboard-drawer-close", function (event) {
+      closeDrawer(event.detail && event.detail.returnFocus);
+    });
+
     function openDrawer() {
       if (!side) return;
       side.classList.add("is-open");

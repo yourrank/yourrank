@@ -258,7 +258,9 @@ export function navTo(page, hash = "") {
   routeRenderers[page]?.({ page, tab: scrollHash, query: location.search });
   setActiveSideNav(page, navHash);
   document.querySelectorAll(".lb-page").forEach((p) => p.classList.toggle("is-on", p.dataset.page === page));
-  closeDrawer();
+  // shell-nav.js owns drawer state. This request lets navigation close it
+  // without duplicating drawer behavior in the SPA runtime.
+  document.dispatchEvent(new CustomEvent("yr:dashboard-drawer-close", { detail: { returnFocus: false } }));
   renderCrumbs(page, scrollHash);
   if (page === "home") renderOverviewSummary();
   if (page === "home" || page === "performance") loadStats();
@@ -295,79 +297,6 @@ export function scrollToHash(hash) {
     target.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     target.classList.add("is-highlighted");
     setTimeout(() => target.classList.remove("is-highlighted"), 1200);
-  }
-}
-
-export function openDrawer() {
-  const side = $("lbSide");
-  const inertSiblings = (container) => {
-    for (const child of container.children) {
-      if (child === side) continue;
-      if (child.contains(side)) inertSiblings(child);
-      else child.inert = true;
-    }
-  };
-  if (side) {
-    side.classList.add("is-open");
-    // The sidebar is a permanent navigation landmark on desktop and only becomes
-    // a dialog while it is open as a drawer, so the role goes on here and comes
-    // off on close — a static `role="dialog"` hides the nav from assistive tech.
-    side.setAttribute("role", "dialog");
-    side.setAttribute("aria-modal", "true");
-  }
-  document.querySelector(".lb-backdrop")?.classList.add("is-open");
-  document.querySelectorAll(".lb-menu").forEach((b) => b.setAttribute("aria-expanded", "true"));
-  // Inert the background so Tab can't reach content behind the drawer.
-  document.querySelectorAll("main:not(.lb-side), header, footer").forEach((el) => {
-    if (el === side) return;
-    if (!el.contains(side)) {
-      el.inert = true;
-      return;
-    }
-    // Some shells wrap both the drawer and page content in the same main.
-    // Inert only that wrapper's non-drawer children so the drawer remains
-    // interactive while the content behind it is unavailable to AT and input.
-    inertSiblings(el);
-  });
-  const firstNav = side?.querySelector(".lb-nav");
-  if (firstNav) setTimeout(() => firstNav.focus(), 0);
-  // Focus trap: cycle Tab within the drawer.
-  document.addEventListener("keydown", _drawerFocusTrap);
-}
-
-export function closeDrawer(focusMenu = true) {
-  const side = $("lbSide");
-  if (side) {
-    side.classList.remove("is-open");
-    side.removeAttribute("role");
-    side.removeAttribute("aria-modal");
-  }
-  document.querySelector(".lb-backdrop")?.classList.remove("is-open");
-  document.querySelectorAll(".lb-menu").forEach((b) => b.setAttribute("aria-expanded", "false"));
-  // Remove inert from background.
-  document.querySelectorAll("[inert]").forEach((el) => { el.inert = false; });
-  document.removeEventListener("keydown", _drawerFocusTrap);
-  if (focusMenu) {
-    const menu = document.querySelector(".lb-page.is-on .lb-menu") || document.querySelector(".lb-menu");
-    if (menu) setTimeout(() => menu.focus(), 0);
-  }
-}
-
-// Focus trap handler — keeps Tab within the drawer while it's open.
-function _drawerFocusTrap(e) {
-  if (e.key !== "Tab") return;
-  const side = $("lbSide");
-  if (!side || !side.classList.contains("is-open")) return;
-  const focusable = side.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
-  if (!focusable.length) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (e.shiftKey && document.activeElement === first) {
-    e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && document.activeElement === last) {
-    e.preventDefault();
-    first.focus();
   }
 }
 
@@ -425,13 +354,6 @@ export function setupShell() {
   if (setupShell._done) return;
   setupShell._done = true;
   setupEditorTabs();
-  let backdrop = document.querySelector(".lb-backdrop");
-  if (!backdrop) {
-    backdrop = document.createElement("div");
-    backdrop.className = "lb-backdrop";
-    document.body.appendChild(backdrop);
-  }
-  backdrop.addEventListener("click", () => closeDrawer());
 
   // Sidebar links are plain links to other documents; they only need
   // interception when they move within this one (and to guard unsaved work).
@@ -462,10 +384,6 @@ export function setupShell() {
     e.preventDefault();
     requestDashboardRoute(el.dataset.jump, defaultHash(el.dataset.jump));
   }));
-  document.querySelectorAll(".lb-menu").forEach((btn) => btn.addEventListener("click", (e) => { e.stopPropagation(); openDrawer(); }));
-  document.querySelectorAll("[data-close-side]").forEach((btn) => btn.addEventListener("click", () => closeDrawer()));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("lbSide")?.classList.contains("is-open")) { e.preventDefault(); closeDrawer(); } });
-
   // The signed-in dashboard renders no second product navigation: the rail is
   // canonical, and dashboard documents are built with `nav: false`, so the old
   // `.gm-tab` top switcher never appears here. (The public Help header still

@@ -60,7 +60,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
 
 const settingsConfigBase = {
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=2" defer></script>'],
+  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
   nav: false,
   footer: false,
   wide: true,
