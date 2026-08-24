@@ -148,9 +148,11 @@ export interface ChromeOpts {
 }
 
 /**
- * The whole signed-in shell as a string, for Workers that render HTML without
- * JSX (the bot). The leaderboard's `DashboardShell` renders the same rail and
- * topbar from `navListHtml` / `profileMenuHtml`.
+ * The one source of authenticated dashboard shell structure. Every signed-in
+ * surface renders through here: the bot Worker's Telegram documents, the
+ * leaderboard's `DashboardShell` adapter, and signed-in Help. Products supply
+ * their own body, rail head, topbar context and overlays as slots; the tree,
+ * its ids and its `data-shell-*` markers belong to this function.
  */
 export function dashboardChromeHtml(opts: ChromeOpts): string {
   const profile = profileMenuHtml({
