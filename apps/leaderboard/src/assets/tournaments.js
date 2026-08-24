@@ -196,7 +196,7 @@ function renderTournament() {
     $("tournament-entry-cap").value = tournament.entry_cap || "";
     $("tournament-keyword").value = tournament.entry_keyword || "!join";
     $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-    $("tournament-chat-channel").value = board.kickChannelName || "";
+    $("tournament-chat-channel").value = tournament.chat_channel || board.kickChannelName || "";
   }
   renderTitle();
   renderEntries();
@@ -324,11 +324,7 @@ async function handlePrimary() {
   if (!tournament) return createTournament();
   const action = $("tournament-primary").dataset.action;
   if (action === "open") {
-    if (!$("tournament-chat-channel")?.value.trim()) {
-      setMessage("Add your Kick channel before opening signups.", true);
-      $("tournament-chat-channel")?.focus();
-      return;
-    }
+    if (!await persistChatChannel()) return;
     await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/open`, { method: "POST", body: "{}" });
     await loadTournament();
     return startChat();
@@ -351,13 +347,27 @@ async function handlePrimary() {
   }
 }
 
-async function reopenSignups() {
-  if (!tournament) return;
-  if (!$("tournament-chat-channel")?.value.trim()) {
+// The server refuses to open signups without a stored channel, so persist what
+// the streamer typed before asking it to open them.
+async function persistChatChannel() {
+  const channel = $("tournament-chat-channel")?.value.trim() || "";
+  if (!channel) {
     setMessage("Add your Kick channel before opening signups.", true);
     $("tournament-chat-channel")?.focus();
-    return;
+    return false;
   }
+  if (channel === (tournament.chat_channel || "")) return true;
+  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
+    method: "POST",
+    body: JSON.stringify({ chatChannel: channel }),
+  });
+  tournament.chat_channel = channel;
+  return true;
+}
+
+async function reopenSignups() {
+  if (!tournament) return;
+  if (!await persistChatChannel()) return;
   await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/open`, {
     method: "POST",
     body: "{}",
@@ -479,6 +489,7 @@ async function saveSettings(event) {
     entryCap: $("tournament-entry-cap").value,
     entryKeyword: $("tournament-keyword").value.trim() || "!join",
     antiAltEnabled: $("tournament-anti-alt").checked,
+    chatChannel: $("tournament-chat-channel").value.trim(),
   };
   await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
     method: "POST",

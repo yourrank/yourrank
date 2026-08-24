@@ -67,7 +67,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).not.toContain("tr.innerHTML");
     expect(source).toContain("message.textContent = entrant.message");
     expect(source).toContain("userLink.textContent = entrant.username");
-    expect(source).toContain("safeAvatarUrl(entrant.avatar, defaultAvatar)");
+    expect(source).toContain("safeAvatarUrl(entrant.avatar, DEFAULT_AVATAR)");
   });
 
   it("loads the server-rendered giveaway tab on initialization", () => {

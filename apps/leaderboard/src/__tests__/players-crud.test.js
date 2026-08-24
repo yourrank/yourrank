@@ -215,6 +215,18 @@ describe("Players CRUD validation", () => {
     expect(players.loadPlayersDraft()).toBeNull();
   });
 
+  // A staged draft identical to the saved rows used to be restored and marked
+  // dirty on the next render, so "Draft changes" reappeared with no user edit.
+  it("only treats a staged draft as changes when it differs from the saved rows", () => {
+    const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
+    const identical = { players: [{ name: "Alice", wagered: "1,000", prize: "0" }], quickAdd: { name: "", wagered: "", prize: "" } };
+    expect(players.draftHasChanges(identical, saved)).toBe(false);
+    expect(players.draftHasChanges({ ...identical, quickAdd: { name: "Zoe" } }, saved)).toBe(true);
+    expect(players.draftHasChanges({ players: [{ name: "Alice", wagered: "2000" }] }, saved)).toBe(true);
+    expect(players.draftHasChanges({ players: [] }, saved)).toBe(true);
+    expect(players.draftHasChanges(null, saved)).toBe(false);
+  });
+
   it("discard restores the saved snapshot and clears dirty state", () => {
     dashboardState.SAVED_PLAYERS = [{ name: "Saved", wagered: 1, prize: 0 }];
     dashboardState._dirty = true;

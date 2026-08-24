@@ -8,6 +8,8 @@ import { computeTrustScore, connectKickChat } from "./chat-entry.js";
 // Client-side script for Live Chat Keyword Listener & Giveaways
 // Connects to Kick's Pusher WebSocket network in real-time
 
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+
 // Lifecycle bridge: the IIFE below assigns its enter/leave functions here so
 // the module can export them for the persistent-shell dynamic-section loader.
 let _giveawaysEnter = null;
@@ -590,8 +592,6 @@ if (!window.__yrSpaShell) {
     tr.id = `entrant-${entrant.id}`;
     tr.dataset.username = entrant.username.toLowerCase();
 
-    const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
-
     const numberCell = document.createElement("td");
     numberCell.className = "ta-c gw-number-cell";
     numberCell.textContent = String(index);
@@ -601,10 +601,10 @@ if (!window.__yrSpaShell) {
     userWrap.className = "gw-entrant-user";
     const avatar = document.createElement("img");
     avatar.className = "gw-entrant-avatar";
-    avatar.src = safeAvatarUrl(entrant.avatar, defaultAvatar);
+    avatar.src = safeAvatarUrl(entrant.avatar, DEFAULT_AVATAR);
     avatar.alt = "";
     avatar.addEventListener("error", () => {
-      avatar.src = defaultAvatar;
+      avatar.src = DEFAULT_AVATAR;
     }, { once: true });
     const userLink = document.createElement("a");
     userLink.className = "gw-entrant-name";
@@ -862,6 +862,13 @@ if (!window.__yrSpaShell) {
     }, 2200);
   }
 
+  // The modal's chat-claim countdown only makes sense for the chat giveaway;
+  // a raffle ticket draw has nothing to claim in chat.
+  function setModalClaimVisible(visible) {
+    const box = $("gw-modal-claim-box");
+    if (box) box.hidden = !visible;
+  }
+
   function startClaimTimer(winner) {
     const totalSecs = parseInt($("gw-opt-claim-duration")?.value || "60", 10);
     winnerClaimed = false;
@@ -939,7 +946,6 @@ if (!window.__yrSpaShell) {
   function displayWinner(winner) {
     const showcase = $("gw-winner-stage");
     const modal = $("gw-winner-modal");
-    const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
 
     const customRule = $("gw-custom-rule-text")?.value?.trim();
     const msgText = customRule ? `"${winner.message}" — Requirement: ${customRule}` : `"${winner.message}"`;
@@ -947,12 +953,14 @@ if (!window.__yrSpaShell) {
     // Populate inline showcase
     $("gw-winner-name").textContent = winner.username;
     $("gw-winner-message").textContent = msgText;
-    $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar, defaultAvatar);
+    $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar, DEFAULT_AVATAR);
 
     // Populate Celebration Modal
     $("gw-modal-name").textContent = winner.username;
     $("gw-modal-msg").textContent = msgText;
-    $("gw-modal-avatar").src = safeAvatarUrl(winner.avatar, defaultAvatar);
+    $("gw-modal-avatar").src = safeAvatarUrl(winner.avatar, DEFAULT_AVATAR);
+    setModalClaimVisible(true);
+    if ($("gw-modal-trust-badge")) $("gw-modal-trust-badge").hidden = false;
 
     const score = winner.trustScore || 75;
     let badgeClass = "gw-trust-badge gw-trust-badge--high";
@@ -1300,11 +1308,17 @@ if (!window.__yrSpaShell) {
         return;
       }
 
-      // Show winner celebration modal
+      // Celebrate only a real winner; the modal's badges and claim countdown
+      // are meaningless without one.
       const modal = $("gw-winner-modal");
-      if (modal) {
-        $("gw-modal-name").textContent = data.winnerName || "No winner";
-        $("gw-modal-msg").textContent = data.winnerTicketNumber ? `Winning Ticket #${data.winnerTicketNumber} (out of ${data.totalTickets} tickets)` : "No tickets were sold.";
+      if (!data.winnerName) {
+        showEngageError("No winner was drawn — no tickets were sold.");
+      } else if (modal) {
+        $("gw-modal-name").textContent = data.winnerName;
+        $("gw-modal-msg").textContent = `Winning Ticket #${data.winnerTicketNumber} (out of ${data.totalTickets} tickets)`;
+        $("gw-modal-avatar").src = DEFAULT_AVATAR;
+        if ($("gw-modal-trust-badge")) $("gw-modal-trust-badge").hidden = true;
+        setModalClaimVisible(false);
         modal.hidden = false;
         playWinnerSound();
       }

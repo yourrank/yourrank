@@ -280,6 +280,8 @@ export async function handleExportData(request, env, {
 }
 
 const EXPORT_TTL_SECONDS = 7 * 24 * 60 * 60;
+const EXPORT_NOT_CONFIGURED_MESSAGE =
+  "Data export is not configured on this deployment, so it cannot run. Contact support to request your data.";
 
 export async function handleCreateExportJob(request, env, {
   currentUserImpl = currentUser,
@@ -294,7 +296,10 @@ export async function handleCreateExportJob(request, env, {
     if (!user) return bad("unauthorized", 401);
     if (!env.ACCOUNT_EXPORTS) {
       console.error("account export unavailable: ACCOUNT_EXPORTS R2 binding is not configured");
-      return bad("Data export is temporarily unavailable. Please try again later.", 503);
+      return json(
+        { ok: false, code: "export_not_configured", error: EXPORT_NOT_CONFIGURED_MESSAGE },
+        503,
+      );
     }
     const rl = await rateLimitImpl(env, `account-export:${user.id}`, 2, 3600);
     if (!rl.ok) return bad("Too many exports. Try again later.", 429, rateLimitHeaders(rl));
@@ -384,7 +389,10 @@ export async function handleExportJobDownload(request, env, {
     if (!job || job.status !== "completed" || !job.artifact_key || new Date(job.expires_at).getTime() <= Date.now()) return bad("Export is not available.", 404);
     if (!env.ACCOUNT_EXPORTS) {
       console.error("account export download unavailable: ACCOUNT_EXPORTS R2 binding is not configured");
-      return bad("Data export is temporarily unavailable.", 503);
+      return json(
+        { ok: false, code: "export_not_configured", error: EXPORT_NOT_CONFIGURED_MESSAGE },
+        503,
+      );
     }
     const object = await env.ACCOUNT_EXPORTS.get(job.artifact_key);
     if (!object) return bad("Export artifact is no longer available.", 404);

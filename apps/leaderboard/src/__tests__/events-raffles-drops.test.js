@@ -146,6 +146,33 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(ticketSql).not.toContain("v.display_name");
   });
 
+  it("handleDrawRaffle refuses to draw when no tickets were sold", async () => {
+    mockOne.mockResolvedValueOnce({
+      id: "raffle-1",
+      site_id: "site-456",
+      title: "VIP Role",
+      status: "active",
+      total_tickets: 0,
+    });
+    mockQuery.mockResolvedValueOnce([]); // no tickets
+
+    const req = new Request("http://localhost/api/events/raffles/draw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raffleId: "raffle-1" }),
+    });
+
+    const res = await handleDrawRaffle(req, mockEnv(), deps);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain("nothing to draw");
+    // The raffle must stay active: no state transition, no fabricated winner.
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(body.status).toBeUndefined();
+    expect(body.winnerName).toBeUndefined();
+  });
+
   it("handleCreateCodeDrop creates a drop code with custom reward and claims limit", async () => {
     mockOne.mockResolvedValueOnce({
       id: "drop-1",

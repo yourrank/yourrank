@@ -89,6 +89,15 @@ async function getTournamentForMutation(request, user, one, requireSiteCapabilit
   return { tournament };
 }
 
+// Kick channel slugs are lowercase letters, digits, underscores and hyphens.
+function normalizeChatChannel(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?kick\.com\//i, "")
+    .replace(/[^A-Za-z0-9_-]/g, "")
+    .slice(0, 40);
+}
+
 function entryStateFor(tournament, eligibleCount) {
   if (tournament.entry_cap && eligibleCount >= tournament.entry_cap) return "waitlist";
   return "pending";
@@ -117,7 +126,7 @@ export async function handleGetTournaments(request, env, deps = {}) {
   const tournaments = await query(
     `SELECT id, title, game_name, bracket_size, status, winner_name, created_at,
             signup_state, entry_cap, format, anti_alt_enabled, require_login,
-            min_credits, entry_fee, entry_keyword
+            min_credits, entry_fee, entry_keyword, chat_channel
        FROM tournaments
       WHERE site_id=$1
       ORDER BY created_at DESC LIMIT 20`,
@@ -237,11 +246,16 @@ async function updateSignupState(request, env, state, deps = {}) {
 
   const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
   if (access.error) return access.error;
+  // Signups are collected from Kick chat, so the server refuses to open them
+  // until the channel to listen to is actually stored.
+  if (state === "open" && !normalizeChatChannel(access.tournament.chat_channel)) {
+    return bad("Add your Kick channel before opening signups.", 400);
+  }
   const result = await one(
     `UPDATE tournaments
         SET signup_state=$1, updated_at=now()
       WHERE id=$2
-      RETURNING id, signup_state, entry_cap, entry_keyword`,
+      RETURNING id, signup_state, entry_cap, entry_keyword, chat_channel`,
     [state, access.tournament.id]
   );
   await logAudit({
@@ -317,6 +331,9 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   if (Object.prototype.hasOwnProperty.call(body, "entryKeyword")) {
     addUpdate("entry_keyword", String(body.entryKeyword || "!join").trim().slice(0, 40) || "!join");
   }
+  if (Object.prototype.hasOwnProperty.call(body, "chatChannel")) {
+    addUpdate("chat_channel", normalizeChatChannel(body.chatChannel) || null);
+  }
 
   let tournament = access.tournament;
   if (updates.length) {
@@ -326,7 +343,8 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
           SET ${updates.join(", ")}, updated_at=now()
         WHERE id=$${values.length}
         RETURNING id, title, game_name, signup_state, entry_cap, format,
-                  anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword`,
+                  anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
+                  chat_channel`,
       values
     );
     await logAudit({

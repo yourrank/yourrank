@@ -1,6 +1,6 @@
 import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
-import { renderEmpty, renderError, setMetricLoading, setMetricUnknown, setMetricValue, setRowsLoading } from "./states.js";
+import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricValue, setRowsLoading } from "./states.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const TAB_LABELS = {
@@ -94,7 +94,10 @@ export function renderPerformance(stats) {
     const priorCtr = previousTotals.views ? previousTotals.clicks / previousTotals.views * 100 : 0;
     setKpi("perfKpiCtr", `${ctr.toFixed(1)}%`, previousTotals.views ? `${(ctr - priorCtr).toFixed(1)} pp` : "");
   } else {
-    ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfKpiCtr", "perfTotalViews"].forEach((id) => setMetricUnknown($(id)));
+    // The stats request succeeded and the period genuinely has no traffic:
+    // show the real zeros instead of an "unavailable" placeholder.
+    ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfTotalViews"].forEach((id) => setMetricEmpty($(id)));
+    setMetricEmpty($("perfKpiCtr"), { value: "0.0%" });
     ["perfKpiViewsDelta", "perfKpiClicksDelta", "perfKpiCopiesDelta", "perfKpiCtrDelta"].forEach((id) => { const el = $(id); if (el) el.textContent = ""; });
   }
   const rangeLabel = $("perfRangeLabel");

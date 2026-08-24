@@ -18,6 +18,7 @@ const TOURNAMENT = {
   site_user_id: "owner-1",
   signup_state: "open",
   entry_cap: null,
+  chat_channel: "streamerchannel",
 };
 
 function request(path, body) {
@@ -57,6 +58,33 @@ describe("tournament entry lifecycle", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).tournament.signup_state).toBe("open");
     expect(d.requireSiteCapabilityImpl).toHaveBeenCalled();
+  });
+
+  it("refuses to open signups until a chat channel is stored", async () => {
+    const d = deps({ oneValues: [{ ...TOURNAMENT, chat_channel: null }] });
+    const response = await handleOpenTournamentSignups(request("/api/tournaments/tournament-1/signups/open"), {}, d);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("Kick channel");
+    // No state transition may happen: only the access lookup ran.
+    expect(d._mocks.one).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists the chat channel through settings", async () => {
+    const d = deps({
+      oneValues: [
+        { ...TOURNAMENT, chat_channel: null },
+        { id: TOURNAMENT.id, chat_channel: "streamerchannel" },
+      ],
+    });
+    const response = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { chatChannel: "https://kick.com/StreamerChannel" }),
+      {},
+      d,
+    );
+    expect(response.status).toBe(200);
+    const update = d._mocks.one.mock.calls[1];
+    expect(update[0]).toContain("chat_channel=$1");
+    expect(update[1][0]).toBe("StreamerChannel");
   });
 
   it("puts entries on the waitlist and locks at the cap", async () => {

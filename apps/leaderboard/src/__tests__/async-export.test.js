@@ -35,13 +35,31 @@ describe("async account export", () => {
     expect(d.state.execs).toHaveLength(1);
   });
 
-  it("fails immediately when the R2 binding is unavailable without creating a job", async () => {
+  // "Temporarily unavailable, try again later" was a lie: without the R2
+  // binding no retry can ever succeed, so the state is reported as a
+  // configuration fact the UI can render without a retry affordance.
+  it("reports an unconfigured export backend as such without creating a job", async () => {
     const d = deps();
     const res = await handleCreateExportJob(request(), {}, d);
     expect(res.status).toBe(503);
-    expect(await res.text()).toContain("temporarily unavailable");
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.code).toBe("export_not_configured");
+    expect(body.error).toContain("not configured");
+    expect(body.error).not.toContain("try again");
     expect(d.state.execs).toHaveLength(0);
     expect(d.state.sent).toHaveLength(0);
+  });
+
+  it("reports the same configuration fact on download instead of a retryable failure", async () => {
+    const d = deps({ oneImpl: async () => ({ id: "job-1", status: "completed", artifact_key: "key", expires_at: new Date(Date.now() + 10000).toISOString() }) });
+    const res = await handleExportJobDownload(
+      attachRouteContext(new Request("https://yourrank.site/api/account/export/job-1/download", { method: "GET" }), { slug: "job-1" }),
+      {},
+      d,
+    );
+    expect(res.status).toBe(503);
+    expect((await res.json()).code).toBe("export_not_configured");
   });
 
   it("reuses an existing pending request", async () => {

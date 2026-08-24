@@ -184,10 +184,13 @@ describe("signed-in shell navigation", () => {
     expect(html).not.toContain('id="wsMenu"');
     expect(html).not.toContain('id="manageBoardsBtn"');
     expect(html).toContain('id="sidebarBoardSelect"');
-    expect((html.match(/class="gm-profile-link"/g) || []).length).toBe(2);
+    expect((html.match(/class="gm-profile-link"/g) || []).length).toBe(1);
     expect((html.match(/class="gm-logout"/g) || []).length).toBe(1);
     expect(html).not.toContain("Account settings");
-    expect(html).toContain("Appearance");
+    // The workspace skin has no dark token set, so no Appearance control may
+    // advertise a theme the product cannot render.
+    expect(html).not.toContain("Appearance");
+    expect(html).not.toContain("yrThemeToggle");
     expect(html).toContain("Help &amp; feedback");
     expect(html).toContain("Sign out");
     expect((html.match(/<svg\b/g) || []).length).toBeGreaterThanOrEqual(4);
