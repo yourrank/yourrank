@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "impeccable",
+  "cases": [
+    {
+      "id": "impeccable-positive-1",
+      "task": "Redesign the YourRank dashboard overview so it stops reading as a templated admin panel.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "shape the product journey and hierarchy before styling",
+        "apply a clear point of view with production-grade craft"
+      ],
+      "forbidden_outcomes": [
+        "ship a templated dashboard aesthetic without a design rationale"
+      ]
+    },
+    {
+      "id": "impeccable-negative-1",
+      "task": "Rename a database column in a migration with no UI surface.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger impeccable without a task-relevant reason"
+      ]
+    }
+  ]
+}

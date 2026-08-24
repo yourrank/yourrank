@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ui-ux-pro-max",
+  "cases": [
+    {
+      "id": "ui-ux-pro-max-positive-1",
+      "task": "Pick a color palette, font pairing and chart type for the streamer analytics page.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "select palette, typography and chart type from the local design database",
+        "respect stack-specific guidance"
+      ],
+      "forbidden_outcomes": [
+        "invent design tokens with no stated source"
+      ]
+    },
+    {
+      "id": "ui-ux-pro-max-negative-1",
+      "task": "Update a SQL index definition.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger ui-ux-pro-max without a task-relevant reason"
+      ]
+    }
+  ]
+}

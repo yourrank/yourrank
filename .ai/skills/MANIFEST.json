@@ -275,6 +275,13 @@
       "has_scripts": false
     },
     {
+      "name": "frontend-design",
+      "path": "skills/frontend-design/SKILL.md",
+      "sha256": "1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
       "name": "frontend-ui-ux",
       "path": "skills/frontend-ui-ux/SKILL.md",
       "sha256": "ad4601c501ad2d4b0ce08fa9fccc349814c66c92307397bb8f4f9bf71569a35e",
@@ -308,6 +315,13 @@
       "sha256": "db044047783d4fd5966a697aea655a3ab3086ee0628173d8ccec3027ff98fc32",
       "has_references": false,
       "has_scripts": false
+    },
+    {
+      "name": "impeccable",
+      "path": "skills/impeccable/SKILL.md",
+      "sha256": "0af3e24c8e59ca19da4f7f1023a186447ace502045fa71fd0037395a69a1e418",
+      "has_references": false,
+      "has_scripts": true
     },
     {
       "name": "impeccable-bridge",
@@ -562,6 +576,20 @@
       "has_scripts": false
     },
     {
+      "name": "testing-dashboard",
+      "path": "skills/testing-dashboard/SKILL.md",
+      "sha256": "b8810b8fa38aefadd09b2e5ab656931a3c8643fc40893fc092e3bcf87e721217",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "testing-rewards-engagement",
+      "path": "skills/testing-rewards-engagement/SKILL.md",
+      "sha256": "4a2834c0f3e27714539da95df6d9993615a983bde837182fbe8cea38731b7109",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
       "name": "typescript-best-practices",
       "path": "skills/typescript-best-practices/SKILL.md",
       "sha256": "bcb7029ab8e3ef81f7ca101e11e961f7165a6307b8c700c9800da91c86332460",
@@ -581,6 +609,13 @@
       "sha256": "0c37883a75af2f92f92d50e2fb392e3f4459d55e838b08bbfde6a6ec94fdb84e",
       "has_references": true,
       "has_scripts": false
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "path": "skills/ui-ux-pro-max/SKILL.md",
+      "sha256": "f581ba5ceef388ce5d1925ac300d450db07146e41812f98e19bf627ab2f9d09b",
+      "has_references": true,
+      "has_scripts": true
     },
     {
       "name": "using-skills",
