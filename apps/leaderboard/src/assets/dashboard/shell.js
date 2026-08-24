@@ -127,6 +127,10 @@ function routeTitle(page, tab) {
   return isDynamicSection(page) ? dynamicTitle(page, tab) : dashboardTitle({ page, tab: tab || defaultHash(page) });
 }
 
+function routeCrumbs(page, tab) {
+  renderCrumbs(page, tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page)));
+}
+
 export async function requestDashboardRoute(page, tab = "", { replace = false, query = location.search, reload = false, force = false } = {}) {
   if (navigationPending) return false;
   const destination = routeDestination(page, tab, query);
@@ -148,7 +152,7 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
       else history.pushState({}, "", destination);
       lastRouteUrl = destination;
       setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
-      if (!isDynamicSection(page)) renderCrumbs(page, tab || defaultHash(page));
+      routeCrumbs(page, tab);
       document.title = routeTitle(page, tab);
       renderer({ page, tab, query });
       return true;
@@ -164,6 +168,7 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
       else history.pushState({}, "", destination);
       lastRouteUrl = destination;
       setActiveSideNav(DYNAMIC_SECTIONS[page].navKey);
+      routeCrumbs(page, tab);
       await loadDynamicSection(page, tab || DYNAMIC_SECTIONS[page].tabs[0], { query });
       return true;
     }
@@ -491,6 +496,7 @@ export function setupShell() {
       setActiveSideNav(DYNAMIC_SECTIONS[route.page].navKey);
       // The section is still mounted and renders its own tabs in place: no
       // refetch, just repaint the panels for the restored URL.
+      routeCrumbs(route.page, route.tab);
       const renderer = routeRenderers[route.page];
       if (renderer) {
         document.title = routeTitle(route.page, route.tab);
