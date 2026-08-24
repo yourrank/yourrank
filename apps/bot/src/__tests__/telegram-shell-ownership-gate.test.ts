@@ -35,6 +35,11 @@ const SHELL_MARKERS = [
   /class="gm-profile\b/,
 ];
 
+// Panels are page bodies mounted inside the shared shell's content region, so
+// they legitimately carry the bento class; every other shell marker is still
+// forbidden to them.
+const PANEL_ALLOWED_MARKER = /class="lb-bento\b/;
+
 function sourceFiles(dir = SRC_ROOT, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
@@ -142,12 +147,13 @@ describe("Telegram body ownership and navigation", () => {
 
 describe("Telegram source ownership", () => {
   it("keeps shell structural markup out of bot-owned sources", () => {
-    const emitters = sourceFiles()
-      .filter((file) => !path.relative(SRC_ROOT, file).startsWith("dashboard-views/pages/"))
-      .filter((file) => {
-        const source = stripComments(readFileSync(file, "utf8"));
-        return SHELL_MARKERS.some((marker) => marker.test(source));
-      });
+    const emitters = sourceFiles().filter((file) => {
+      const isPanel = path.relative(SRC_ROOT, file).startsWith("dashboard-views/pages/");
+      const source = stripComments(readFileSync(file, "utf8"));
+      return SHELL_MARKERS.some((marker) =>
+        (!isPanel || marker.source !== PANEL_ALLOWED_MARKER.source) && marker.test(source),
+      );
+    });
     expect(relativeFiles(emitters)).toEqual([]);
   });
 
