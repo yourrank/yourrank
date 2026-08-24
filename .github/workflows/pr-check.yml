@@ -275,39 +275,41 @@ jobs:
           echo "OK: Schema consistency checks passed"
 
   e2e:
-    name: E2E smoke
+    name: E2E
     runs-on: ubuntu-latest
     needs: build
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Check E2E environment
-        id: e2e-env
+      # An unconfigured environment is a broken release gate, not a pass: this
+      # job used to report success having run zero tests. Configure the secrets
+      # or accept a red check.
+      - name: Require an E2E environment
         env:
           E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
           E2E_ALLOW_MUTATIONS: ${{ secrets.E2E_ALLOW_MUTATIONS }}
         run: |
           if [ -z "$E2E_BASE_URL" ] || [ "$E2E_ALLOW_MUTATIONS" != "1" ]; then
-            echo "E2E not configured; skipping smoke tests."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "::error::E2E gate not configured: set the E2E_BASE_URL and E2E_ALLOW_MUTATIONS repository secrets to an isolated non-production environment. A skipped E2E run is not a passing E2E run."
+            exit 1
           fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        if: steps.e2e-env.outputs.skip != 'true'
         with:
           bun-version: '1.3.0'
 
       - name: Install dependencies
-        if: steps.e2e-env.outputs.skip != 'true'
         run: bun install --frozen-lockfile
 
-      - name: Run E2E smoke tests
-        if: steps.e2e-env.outputs.skip != 'true'
+      # bun test exits 0 when every test is filtered out or skipped, so the suite
+      # runs through the gate: it prints a per-scenario PASSED / FAILED / SKIPPED /
+      # NOT VERIFIABLE matrix and fails unless every required scenario executed
+      # and passed.
+      - name: Run E2E release gate
         working-directory: e2e
         env:
           E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
           E2E_ALLOW_MUTATIONS: ${{ secrets.E2E_ALLOW_MUTATIONS }}
           E2E_TELEGRAM_BOT_TOKEN: ${{ secrets.E2E_TELEGRAM_BOT_TOKEN }}
-        run: bun run test
+          E2E_VIEWER_SESSION: ${{ secrets.E2E_VIEWER_SESSION }}
+        run: bun run gate

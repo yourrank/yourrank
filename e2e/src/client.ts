@@ -41,7 +41,13 @@ export class Client {
     const parts: string[] = [];
     if (this.cookies["yr_session"]) parts.push(`yr_session=${encodeURIComponent(this.cookies["yr_session"])}`);
     if (this.cookies["__csrf"]) parts.push(`__csrf=${this.cookies["__csrf"]}`);
+    if (this.cookies["yr_viewer"]) parts.push(`yr_viewer=${encodeURIComponent(this.cookies["yr_viewer"])}`);
     return parts.join("; ");
+  }
+
+  /** Adopts a viewer session captured out-of-band (Kick/Telegram OAuth cannot run headless). */
+  setViewerSession(token: string) {
+    this.cookies["yr_viewer"] = token;
   }
 
   async req(
@@ -97,6 +103,10 @@ export class Client {
 
   post(path: string, body?: any, opts?: { headers?: Record<string, string>; skipCsrf?: boolean }) {
     return this.req("POST", path, { ...opts, body });
+  }
+
+  put(path: string, body?: any, opts?: { headers?: Record<string, string> }) {
+    return this.req("PUT", path, { ...opts, body });
   }
 
   patch(path: string, body?: any, opts?: { headers?: Record<string, string> }) {
