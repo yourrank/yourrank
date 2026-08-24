@@ -71,7 +71,8 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          # Belt and braces: the server refuses every write in this session, whatever the script does.
+          # Requested for defence in depth, but NOT relied on: Supabase's connection pooler
+          # silently drops startup options, so read-only is enforced per transaction instead.
           PGOPTIONS: -c default_transaction_read_only=on
         run: |
           set -uo pipefail
@@ -101,20 +102,46 @@ jobs:
             echo "::error::production access could not be established on any endpoint"
             exit 1
           fi
-          psql "$CONNECTED" -Atc \
-            "select 'role='||current_user||' read_only='||current_setting('transaction_read_only')||' bypassrls='||(select rolbypassrls from pg_roles where rolname=current_user)||' version='||current_setting('server_version')" \
-            | tee role.txt
-          # A write must be rejected by the same session the preflight uses.
-          psql "$CONNECTED" -v ON_ERROR_STOP=1 \
-            -c 'create table zz_preflight_probe(i int)' >probe.txt 2>&1 && {
-              echo "::error::the session is NOT read-only — a DDL statement succeeded"; exit 1; }
-          grep -qi 'read-only transaction' probe.txt || {
-            echo "::error::DDL was rejected for an unexpected reason:"; cat probe.txt; exit 1; }
-          echo "write probe rejected: $(tr -d '\n' < probe.txt | sed 's/.*ERROR/ERROR/' | cut -c1-120)"
+          psql "$CONNECTED" -Atq -v ON_ERROR_STOP=1 -f - <<'SQL' | tee role.txt
+          BEGIN;
+          SET TRANSACTION READ ONLY;
+          SELECT 'role=' || current_user
+              || ' bypassrls=' || (select rolbypassrls from pg_roles where rolname = current_user)
+              || ' version=' || current_setting('server_version')
+              || ' transaction_read_only=' || current_setting('transaction_read_only');
+          ROLLBACK;
+          SQL
+          grep -q 'transaction_read_only=on' role.txt || {
+            echo "::error::SET TRANSACTION READ ONLY did not take effect on this endpoint"; exit 1; }
+          grep -q 'bypassrls=t' role.txt || {
+            echo "::error::the connecting role is not RLS-exempt, so the report could under-report rows"; exit 1; }
+          # Prove a write is refused the way the preflight protects itself: inside an explicit
+          # read-only transaction. The statement is a no-op (WHERE false) and the transaction
+          # ends in ROLLBACK, so it cannot change anything even if the guard were absent.
+          psql "$CONNECTED" -v ON_ERROR_STOP=1 -f - >probe.txt 2>&1 <<'SQL' && {
+          BEGIN;
+          SET TRANSACTION READ ONLY;
+          UPDATE public.sites SET id = id WHERE false;
+          ROLLBACK;
+          SQL
+              echo "::error::the transaction is NOT read-only — a write statement was accepted (nothing was committed; the transaction was rolled back)"
+              cat probe.txt; exit 1; }
+          grep -qi 'cannot execute UPDATE in a read-only transaction' probe.txt || {
+            echo "::error::the write was rejected for an unexpected reason:"; cat probe.txt; exit 1; }
+          echo "write probe rejected inside a read-only transaction: $(grep -io 'ERROR:.*' probe.txt | head -1)"
           psql "$CONNECTED" -v ON_ERROR_STOP=1 -f "$SCRIPT" >preflight.txt 2>&1
           STATUS=$?
           sed -e 's/^psql:[^ ]*: NOTICE:  //' -e 's/^NOTICE:  //' preflight.txt > preflight-clean.txt
           cat preflight-clean.txt
+          # Nothing may be left behind: no object the preflight or the probe could have created.
+          RESIDUE=$(psql "$CONNECTED" -Atc \
+            "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'public' and (c.relname like 'zz\\_%' or c.relname = 'jsonb_repair_preimage')")
+          if [ "$RESIDUE" != "0" ]; then
+            echo "::error::the run left $RESIDUE unexpected object(s) in the production schema"
+            exit 1
+          fi
+          echo "residue check: 0 objects created"
           exit $STATUS
 
       - name: Gate the result
