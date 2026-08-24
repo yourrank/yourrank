@@ -106,7 +106,10 @@ describe("Giveaway Chatroom Handler", () => {
     // Ahead of every pane, so a refusal on any tab is visible rather than being
     // written into a hidden pane.
     expect(alertIndex).toBeLessThan(html.indexOf('class="gw-tab-pane'));
-    expect(html).toContain('<p class="status status--error" id="gw-page-alert" role="alert"');
+    expect(html).toContain('<p class="gw-page-alert" id="gw-page-alert" role="alert"');
+    // Styled as an error by the stylesheet the page actually loads, so the
+    // refusal does not render as ordinary body copy.
+    expect(giveawaysCssSource).toContain(".gw-page-alert {");
 
     expect(giveawaysSource).toContain('function showEngageError(message)');
     expect(giveawaysSource).toContain('const alert = $("gw-page-alert")');

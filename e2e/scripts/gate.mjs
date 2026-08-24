@@ -53,13 +53,11 @@ if (run.error) {
 /** bun prints one line per test: `(pass|fail|skip|todo) suite > name [1.00ms]`. */
 const results = new Map(); // scenario key -> Set of outcomes
 const unknownTags = new Set();
-let executed = 0;
 
 for (const line of output.split("\n")) {
   const m = /^\s*\((pass|fail|skip|todo)\)\s(.*)$/.exec(line);
   if (!m) continue;
   const [, outcome, name] = m;
-  if (outcome === "pass" || outcome === "fail") executed++;
   const tags = [...name.matchAll(/\[scenario:([a-z0-9-]+)\]/g)].map((t) => t[1]);
   for (const key of tags) {
     if (!SCENARIO_KEYS.has(key)) {
@@ -71,9 +69,17 @@ for (const line of output.split("\n")) {
   }
 }
 
-const summary = /(\d+) pass[\s\S]*?(\d+) fail/.exec(output);
-const reportedPass = summary ? Number(summary[1]) : 0;
-const reportedFail = summary ? Number(summary[2]) : 0;
+// The executed count comes from bun's own summary, never from counting result
+// lines: bun repeats every failing test in its end-of-run recap, so tallying
+// lines double-counts failures and would overstate how much actually ran.
+const summary = /^\s*(\d+) pass\b[\s\S]*?^\s*(\d+) fail\b/m.exec(output);
+if (!summary) {
+  console.error("::error::E2E gate could not read bun's pass/fail summary; refusing to report a test count");
+  process.exit(1);
+}
+const reportedPass = Number(summary[1]);
+const reportedFail = Number(summary[2]);
+const executed = reportedPass + reportedFail;
 
 function verdictFor(scenario) {
   const outcomes = results.get(scenario.key);
