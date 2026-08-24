@@ -143,10 +143,12 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardJs).toContain('target.searchParams.set("board", state.ACTIVE_SITE_ID)');
     expect(dashboardJs).toContain('target.pathname.startsWith("/dashboard/leaderboard/")');
     expect(dashboardJs).toContain('target.pathname.startsWith("/dashboard/analytics/")');
-    expect(boardShellJs).toContain('`/dashboard/leaderboards?board=${encodeURIComponent(siteId)}`');
+    expect(boardShellJs).toContain('"/dashboard/leaderboards"');
     expect(boardShellJs).toContain('target.pathname.startsWith("/dashboard/leaderboard/")');
     expect(boardShellJs).toContain('target.searchParams.set("board", siteId)');
     expect(boardShellJs).toContain('target.searchParams.set("siteId", siteId)');
+    expect(boardShellJs).not.toContain("dataset.productLink");
+    expect(dashboardJs).not.toContain("dataset.productLink");
   });
 
   it("reports public site availability truthfully from Credits", () => {

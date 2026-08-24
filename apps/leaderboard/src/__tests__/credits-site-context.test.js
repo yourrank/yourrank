@@ -1,4 +1,8 @@
 import { describe, it, expect } from "bun:test";
+import { readFileSync } from "node:fs";
+
+const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
+const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 
 function makeEl(id, tag = "div") {
   return {
@@ -24,12 +28,17 @@ function makeEl(id, tag = "div") {
 
 function installBrowserGlobals() {
   const elements = new Map();
+  const links = [];
   const document = {
     readyState: "complete",
     cookie: "",
-    querySelector: (sel) => (sel === 'meta[name="request-id"]' ? null : null),
+    querySelector: (sel) => {
+      if (sel === 'meta[name="request-id"]') return null;
+      const product = sel.match(/^\[data-product-link="([^"]+)"\]$/)?.[1];
+      return product ? links.find((link) => link.dataset.productLink === product) || null : null;
+    },
     getElementById: (id) => elements.get(id) || null,
-    querySelectorAll: () => [],
+    querySelectorAll: (sel) => sel === "a[href]" ? links : [],
     addEventListener: () => {},
     createElement: () => makeEl(""),
     body: { appendChild: () => {} },
@@ -54,6 +63,14 @@ function installBrowserGlobals() {
   globalThis.fetch = () => Promise.resolve(new Response("{}", { status: 200 }));
   return {
     addElement(id, el) { elements.set(id, el); return el; },
+    addLink(href, productLink) {
+      const link = makeEl("", "a");
+      link.attributes.href = href;
+      link.href = href;
+      link.dataset.productLink = productLink;
+      links.push(link);
+      return link;
+    },
   };
 }
 
@@ -66,5 +83,25 @@ describe("credits applyOAuthContext site fallback", () => {
     const link = addElement("cr-channel-connect", makeEl("cr-channel-connect", "a"));
     applyOAuthContext();
     expect(link.href).toContain("siteId=site-from-dashboard");
+  });
+
+  it("stamps Home and Sites independently even when both share the sites product marker", async () => {
+    const { addLink } = installBrowserGlobals();
+    const { preserveSiteContextLinks } = await import("../assets/dashboard/board-shell.js");
+    const home = addLink("/dashboard", "sites");
+    const sites = addLink("/dashboard/leaderboards", "sites");
+
+    preserveSiteContextLinks("site-42");
+
+    expect(home.href).toBe("/dashboard?board=site-42");
+    expect(sites.href).toBe("/dashboard/leaderboards?board=site-42");
+    expect(home.dataset.productLink).toBe("sites");
+    expect(sites.dataset.productLink).toBe("sites");
+  });
+
+  it("stamps destinations from pathname rather than the product marker", () => {
+    expect(boardShellJs).not.toContain('data-product-link="sites"');
+    expect(boardShellJs).not.toContain("dataset.productLink");
+    expect(dashboardJs).not.toContain("dataset.productLink");
   });
 });

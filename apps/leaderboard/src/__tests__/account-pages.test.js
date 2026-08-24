@@ -166,7 +166,7 @@ describe("settings panels", () => {
         tab: key,
         user: { email: "a@b.c" },
       }).toString();
-      expect(html).toContain(`<h1>${label}</h1>`);
+      expect(html).toContain(`<h1 data-chrome-h1="true">${label}</h1>`);
       expect(html).toContain(`Account</a>`);
       expect(html).toContain(`>${label}</span>`);
       expect(html).not.toContain('class="lb-board-select-lbl">Account settings');

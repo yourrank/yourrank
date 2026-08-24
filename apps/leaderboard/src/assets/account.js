@@ -4,7 +4,7 @@ import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmMod
 import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
-import { registerRouteRenderer, requestDashboardRoute } from "./dashboard/shell.js";
+import { registerRouteRenderer, requestDashboardRoute, syncRouteChrome } from "./dashboard/shell.js";
 import { renderReferrals } from "./dashboard/referrals.js";
 import { checkout, renderPlan, loadHistory, loadPlanUsage, wireCancelSubscription } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
@@ -245,7 +245,9 @@ function wireUnifiedSettingsTabs() {
     // Standalone document: the persistent shell's popstate handling is not
     // installed, so Back/Forward is repainted here.
     _accountPopstate = () => {
-      select(parseDynamicPath(location.pathname)?.tab || "account");
+      const tab = parseDynamicPath(location.pathname)?.tab || "account";
+      select(tab);
+      syncRouteChrome("settings", tab);
     };
     addEventListener("popstate", _accountPopstate);
   }

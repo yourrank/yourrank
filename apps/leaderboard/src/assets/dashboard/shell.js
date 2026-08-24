@@ -131,6 +131,16 @@ function routeCrumbs(page, tab) {
   renderCrumbs(page, tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page)));
 }
 
+export function syncRouteChrome(page, tab = "") {
+  const resolvedTab = tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page));
+  const chrome = chromeStateFor(page, resolvedTab, { exact: true });
+  setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
+  routeCrumbs(page, resolvedTab);
+  const heading = document.querySelector("[data-chrome-h1]");
+  if (heading && chrome?.tabLabel) heading.textContent = chrome.tabLabel;
+  document.title = routeTitle(page, resolvedTab);
+}
+
 export async function requestDashboardRoute(page, tab = "", { replace = false, query = location.search, reload = false, force = false } = {}) {
   if (navigationPending) return false;
   const destination = routeDestination(page, tab, query);
@@ -151,9 +161,7 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
       if (sameUrl || replace) history.replaceState(history.state || {}, "", destination);
       else history.pushState({}, "", destination);
       lastRouteUrl = destination;
-      setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
-      routeCrumbs(page, tab);
-      document.title = routeTitle(page, tab);
+      syncRouteChrome(page, tab);
       renderer({ page, tab, query });
       return true;
     }
@@ -411,13 +419,11 @@ export function setupShell() {
     }
     lastRouteUrl = destination;
     if (isDynamicSection(route.page)) {
-      setActiveSideNav(DYNAMIC_SECTIONS[route.page].navKey);
       // The section is still mounted and renders its own tabs in place: no
       // refetch, just repaint the panels for the restored URL.
-      routeCrumbs(route.page, route.tab);
       const renderer = routeRenderers[route.page];
       if (renderer) {
-        document.title = routeTitle(route.page, route.tab);
+        syncRouteChrome(route.page, route.tab);
         renderer({ page: route.page, tab: route.tab, query: location.search });
         return;
       }
