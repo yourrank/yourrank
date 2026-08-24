@@ -9,9 +9,12 @@ import {
   DASHBOARD_ROUTES,
   DASHBOARD_ROUTE_ALIASES,
   NAV_QUERY_ALIASES,
+  NAV_QUERY_REDIRECT_POLICY,
   QUERY_PARAM_AUDIT,
   SETTINGS_ROOT_TAB_PARAMS,
+  applyAliasSearch,
   buildDashboardPath,
+  resolveNavRedirect,
   canonicalDashboardPath,
   parseDashboardRouteId,
   resolveDashboardLocation,
@@ -131,14 +134,20 @@ describe("dashboard route manifest invariants", () => {
     expect(() => buildDashboardPath("not.a.route" as DashboardRouteId)).toThrow();
   });
 
-  it("records exact redirect semantics on every redirect alias", () => {
+  it("records exact, executable redirect semantics on every redirect alias", () => {
+    const probe = new URLSearchParams("keep=1&other=two");
     for (const a of DASHBOARD_ROUTE_ALIASES) {
       if (a.kind !== "redirect") continue;
       expect([301, 302], a.path).toContain(a.status);
-      expect(["preserve", "drop", "transform"], a.path).toContain(a.search);
-      // A "transform" behavior must document the exact transformation.
-      if (a.search === "transform") expect(a.searchTransform, a.path).toBeTruthy();
-      else expect(a.searchTransform, a.path).toBeUndefined();
+      // Search behavior is executable data, never prose: every behavior can
+      // be applied deterministically to real parameters.
+      if (typeof a.search === "string") {
+        expect(["preserve", "drop"], a.path).toContain(a.search);
+      } else {
+        expect(typeof a.search.preserveExisting, a.path).toBe("boolean");
+      }
+      const applied = applyAliasSearch(a.search, probe);
+      expect(applied, a.path).toBeInstanceOf(URLSearchParams);
       // redirectTo is only for Locations that are NOT the canonical path.
       if (a.redirectTo) {
         expect(a.redirectTo, a.path).not.toBe(routeById(a.routeId).canonicalPath);
@@ -146,6 +155,42 @@ describe("dashboard route manifest invariants", () => {
         expect(resolveDashboardPath(a.redirectTo)?.route.id, a.path).toBe(a.routeId);
       }
     }
+    // applyAliasSearch executes each behavior exactly.
+    expect(applyAliasSearch("preserve", probe).toString()).toBe("keep=1&other=two");
+    expect(applyAliasSearch("drop", probe).toString()).toBe("");
+    expect(applyAliasSearch({ preserveExisting: true, set: { from: "bot" } }, probe).toString())
+      .toBe("keep=1&other=two&from=bot");
+    expect(applyAliasSearch({ preserveExisting: true, delete: ["keep"] }, probe).toString())
+      .toBe("other=two");
+    expect(applyAliasSearch({ preserveExisting: false, set: { a: "1" } }, probe).toString())
+      .toBe("a=1");
+    // The input is never mutated.
+    expect(probe.toString()).toBe("keep=1&other=two");
+  });
+
+  it("encodes the legacy ?nav= redirect policy as executable manifest data", () => {
+    // One uniform policy for every nav alias: 302, strip nav, preserve rest.
+    expect(NAV_QUERY_REDIRECT_POLICY.status).toBe(302);
+    expect(applyAliasSearch(NAV_QUERY_REDIRECT_POLICY.search, new URLSearchParams("nav=games&from=test&keep=2")).toString())
+      .toBe("from=test&keep=2");
+    for (const [nav, routeId] of Object.entries(NAV_QUERY_ALIASES)) {
+      const redirect = resolveNavRedirect(nav, `nav=${nav}&from=test&keep=2`);
+      expect(redirect, nav).toBeDefined();
+      expect(redirect!.routeId, nav).toBe(routeId);
+      expect(redirect!.status, nav).toBe(302);
+      // The Location always resolves back to the declared route identity —
+      // targets go through the canonical route model.
+      expect(resolveDashboardPath(redirect!.pathname)?.route.id, nav).toBe(routeId);
+      expect(redirect!.search.toString(), nav).toBe("from=test&keep=2");
+    }
+    // The two legacy-spelling Locations (LEGACY_ACCOUNT_PATHS in the Worker).
+    expect(resolveNavRedirect("settings")!.pathname).toBe("/dashboard/settings");
+    expect(resolveNavRedirect("manage")!.pathname).toBe("/dashboard/settings");
+    // Everything else lands on the target route's canonical path.
+    expect(resolveNavRedirect("games")!.pathname).toBe("/dashboard/games");
+    expect(resolveNavRedirect("kickrewards")!.pathname).toBe("/dashboard/site/connections");
+    // Unknown nav values are not redirects.
+    expect(resolveNavRedirect("nope")).toBeUndefined();
   });
 
   it("canonicalizes deterministically and idempotently", () => {

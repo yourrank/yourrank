@@ -10,7 +10,9 @@ import {
   DASHBOARD_ROUTE_ALIASES,
   NAV_QUERY_ALIASES,
   QUERY_PARAM_AUDIT,
+  applyAliasSearch,
   buildDashboardPath,
+  resolveNavRedirect,
   canonicalDashboardPath,
   resolveDashboardLocation,
   resolveDashboardPath,
@@ -22,7 +24,6 @@ import {
   DYNAMIC_SECTIONS,
   SECTION_ALIASES,
   ACCOUNT_SECTION_PATHS,
-  dashboardPath,
   parseDashboardPath,
   parseDynamicPath,
   legacyDashboardPath,
@@ -154,14 +155,10 @@ describe("manifest parity: legacy aliases", () => {
       // Worker lands on a legacy spelling, canonical path otherwise).
       const expectedPath = alias.redirectTo || routeById(alias.routeId).canonicalPath;
       expect(location.pathname, alias.path).toBe(expectedPath);
-      // Exact search behavior.
-      if (alias.search === "preserve") {
-        expect(location.search, alias.path).toBe("?keep=1&other=two");
-      } else if (alias.search === "drop") {
-        expect(location.search, alias.path).toBe("");
-      } else {
-        expect(alias.searchTransform, alias.path).toBeTruthy();
-      }
+      // Exact search behavior, EXECUTED from the alias's structured data —
+      // the manifest, not this test, defines the transformation.
+      const expectedSearch = applyAliasSearch(alias.search, new URLSearchParams("keep=1&other=two")).toString();
+      expect(location.searchParams.toString(), alias.path).toBe(expectedSearch);
     }
   });
 
@@ -222,25 +219,22 @@ describe("manifest parity: legacy aliases", () => {
 
   it("canonicalizes every legacy ?nav= value exactly like the Worker", async () => {
     for (const [nav, routeId] of Object.entries(NAV_QUERY_ALIASES)) {
-      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?nav=${nav}&from=test&keep=2`), {}, {});
-      // Exact status: legacy ?nav= is always a 302.
-      expect(response.status, nav).toBe(302);
+      const requestSearch = `nav=${nav}&from=test&keep=2`;
+      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?${requestSearch}`), {}, {});
+      // Expected behavior is DERIVED from the encoded manifest policy
+      // (NAV_QUERY_REDIRECT_POLICY + NAV_QUERY_ALIASES via resolveNavRedirect),
+      // then compared against the Worker's real response — the test does not
+      // restate the 302/strip-nav/preserve rule.
+      const expected = resolveNavRedirect(nav, requestSearch);
+      expect(expected, nav).toBeDefined();
+      expect(expected.routeId, nav).toBe(routeId);
+      expect(response.status, nav).toBe(expected.status);
       const location = new URL(response.headers.get("location"), "https://yourrank.test");
-      // Exact resulting pathname, computed from the same runtime tables the
-      // Worker uses (kickrewards special case, LEGACY_ACCOUNT_PATHS, then
-      // dashboardPath), and manifest agreement on the identity.
-      const expectedPath = nav === "kickrewards"
-        ? "/dashboard/site/connections"
-        : LEGACY_ACCOUNT_PATHS[nav] || dashboardPath(resolveSection(nav));
-      expect(location.pathname, `?nav=${nav}`).toBe(expectedPath);
+      expect(location.pathname, `?nav=${nav}`).toBe(expected.pathname);
+      expect(location.searchParams.toString(), nav).toBe(expected.search.toString());
+      // The Location lands on the manifest identity the alias declares.
       const resolved = resolveDashboardPath(location.pathname);
       expect(resolved?.route.id, `?nav=${nav} → ${location.pathname}`).toBe(routeId);
-      // Exact transformation: only `nav` is stripped; every unrelated
-      // parameter survives canonicalization.
-      expect(location.searchParams.get("from"), nav).toBe("test");
-      expect(location.searchParams.get("keep"), nav).toBe("2");
-      expect([...location.searchParams].length, nav).toBe(2);
-      expect(location.searchParams.has("nav"), nav).toBe(false);
       // The location resolver reaches the same identity without a network hop.
       expect(resolveDashboardLocation("/dashboard", `nav=${nav}`)?.routeId, nav).toBe(routeId);
     }

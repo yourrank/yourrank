@@ -76,13 +76,39 @@ export interface DashboardRouteDef {
 }
 
 /**
+ * A structured, executable query-string transformation: enough data to
+ * PERFORM the redirect's search rewriting, not just describe it.
+ * Applied by applyAliasSearch(): start from the incoming parameters when
+ * `preserveExisting`, then `delete` names, then `set` fixed values.
+ */
+export interface SearchTransform {
+  readonly preserveExisting: boolean;
+  readonly delete?: readonly string[];
+  readonly set?: Readonly<Record<string, string>>;
+}
+
+/**
  * How a legacy redirect treats the request's query string today
  * (parity-tested against the serving Worker):
  * - "preserve": the full search string is carried to the target.
  * - "drop": the redirect discards the search string.
- * - "transform": documented per-alias in `searchTransform`.
+ * - a SearchTransform: a structured rewrite (e.g. /bot/settings keeps every
+ *   parameter and sets from=bot).
  */
-export type AliasSearchBehavior = "preserve" | "drop" | "transform";
+export type AliasSearchBehavior = "preserve" | "drop" | SearchTransform;
+
+/** Execute an AliasSearchBehavior over a request's query parameters. */
+export function applyAliasSearch(
+  behavior: AliasSearchBehavior,
+  search: URLSearchParams,
+): URLSearchParams {
+  if (behavior === "drop") return new URLSearchParams();
+  if (behavior === "preserve") return new URLSearchParams(search);
+  const out = behavior.preserveExisting ? new URLSearchParams(search) : new URLSearchParams();
+  for (const name of behavior.delete ?? []) out.delete(name);
+  for (const [name, value] of Object.entries(behavior.set ?? {})) out.set(name, value);
+  return out;
+}
 
 /**
  * A legacy address for a route.
@@ -108,10 +134,8 @@ export type DashboardRouteAlias =
       readonly kind: "redirect";
       /** Exact redirect status the Worker sends today. */
       readonly status: 301 | 302;
-      /** Exact query/search behavior of the redirect today. */
+      /** Exact, executable query/search behavior of the redirect today. */
       readonly search: AliasSearchBehavior;
-      /** Required documentation of a "transform" search behavior. */
-      readonly searchTransform?: string;
       /**
        * Exact Location pathname the Worker sends today, when it is NOT the
        * target route's canonical path (e.g. /dashboard/manage →
@@ -257,7 +281,7 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   { path: "/bot/broadcasts", routeId: "telegram.broadcasts", kind: "redirect", status: 301, search: "drop" },
   // /bot/settings hands off to the leaderboard settings document, tagging
   // the origin so the settings page can render a back-link.
-  { path: "/bot/settings", routeId: "settings.account", kind: "redirect", status: 302, search: "transform", searchTransform: "preserve all parameters, then set from=bot", redirectTo: "/dashboard/settings", servedBy: "bot" },
+  { path: "/bot/settings", routeId: "settings.account", kind: "redirect", status: 302, search: { preserveExisting: true, set: { from: "bot" } }, redirectTo: "/dashboard/settings", servedBy: "bot" },
   // Served by the leaderboard Worker: /dashboard/bot/* does not match the bot
   // Worker's yourrank.site/dashboard/telegram* pattern.
   { path: "/dashboard/bot/setup", routeId: "telegram", kind: "redirect", status: 301, search: "preserve", servedBy: "leaderboard" },
@@ -290,6 +314,56 @@ export const NAV_QUERY_ALIASES: Readonly<Record<string, DashboardRouteId>> = {
   connections: "settings.connections",
   integrations: "settings.connections",
 };
+
+/**
+ * The single redirect policy the Worker applies to every legacy `?nav=`
+ * address today: 302, strip `nav`, preserve every unrelated query parameter,
+ * and send the target through the canonical route model (parity-tested).
+ * Uniform across all NAV_QUERY_ALIASES — encoded once, not per alias.
+ */
+export const NAV_QUERY_REDIRECT_POLICY = {
+  status: 302,
+  search: { preserveExisting: true, delete: ["nav"] },
+} as const satisfies { readonly status: 301 | 302; readonly search: SearchTransform };
+
+// Exact Location pathnames for the two nav values whose redirect lands on a
+// legacy spelling instead of the target route's canonical path
+// (LEGACY_ACCOUNT_PATHS in the Worker: the /dashboard/settings root document,
+// itself a rewrite alias of settings.account).
+const NAV_REDIRECT_LOCATIONS: Readonly<Partial<Record<string, string>>> = {
+  settings: "/dashboard/settings",
+  manage: "/dashboard/settings",
+};
+
+/** The fully-resolved redirect for one legacy `?nav=` request. */
+export interface NavRedirect {
+  readonly routeId: DashboardRouteId;
+  readonly status: 301 | 302;
+  /** Exact Location pathname the Worker sends today. */
+  readonly pathname: string;
+  /** Exact Location search parameters the Worker sends today. */
+  readonly search: URLSearchParams;
+}
+
+/**
+ * Derive the exact `?nav=` canonicalization redirect from the manifest:
+ * NAV_QUERY_ALIASES target + NAV_QUERY_REDIRECT_POLICY, executed over the
+ * request's query parameters.
+ */
+export function resolveNavRedirect(
+  nav: string,
+  search: string | URLSearchParams = "",
+): NavRedirect | undefined {
+  const routeId = NAV_QUERY_ALIASES[nav];
+  if (!routeId) return undefined;
+  const params = search instanceof URLSearchParams ? search : new URLSearchParams(search);
+  return {
+    routeId,
+    status: NAV_QUERY_REDIRECT_POLICY.status,
+    pathname: NAV_REDIRECT_LOCATIONS[nav] ?? routeById(routeId).canonicalPath,
+    search: applyAliasSearch(NAV_QUERY_REDIRECT_POLICY.search, params),
+  };
+}
 
 // Legacy tab-selection query parameters on the /dashboard/settings root
 // document: `?tab=<tab>` picks the settings tab, and a bare `?plan` selects
