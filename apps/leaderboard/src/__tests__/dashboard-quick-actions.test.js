@@ -3,12 +3,12 @@ import { readFileSync } from "node:fs";
 import { PAGES } from "../pages.jsx";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { activityEmptyAction, giveawayAction, nextStepAction } from "../assets/dashboard/overview-state.js";
+import { SECTIONS } from "../assets/dashboard/routes.js";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const utilsJs = readFileSync(new URL("../assets/dashboard/utils.js", import.meta.url), "utf8");
 const overviewJs = readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8");
 const gamesJs = readFileSync(new URL("../assets/dashboard/games.js", import.meta.url), "utf8");
-const routesJs = readFileSync(new URL("../assets/dashboard/routes.js", import.meta.url), "utf8");
 const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 const performanceJs = readFileSync(new URL("../assets/dashboard/performance.js", import.meta.url), "utf8");
@@ -210,7 +210,7 @@ describe("dashboard overview quick actions", () => {
   });
 
   it("keeps Games terminology and status copy singular", () => {
-    expect(routesJs).toContain('games: { path: "/dashboard/games", title: "Games" }');
+    expect(SECTIONS.games).toEqual({ path: "/dashboard/games", title: "Games" });
     expect(gamesJs).toContain('{ key: "limbo", label: "Limbo", description: "", disabled: true }');
     expect(gamesJs).toContain('<span class="v3-game-coming">Coming soon</span>');
   });
