@@ -12,6 +12,7 @@ import {
   QUERY_PARAM_AUDIT,
   buildDashboardPath,
   canonicalDashboardPath,
+  resolveDashboardLocation,
   resolveDashboardPath,
   routeById,
 } from "@yourrank/shared/dashboard-routes";
@@ -139,19 +140,28 @@ describe("manifest parity: legacy aliases", () => {
     }
   });
 
-  it("redirects every leaderboard-served redirect alias to its manifest target", async () => {
+  it("redirects every leaderboard-served redirect alias with the exact recorded semantics", async () => {
     for (const alias of DASHBOARD_ROUTE_ALIASES) {
       if (alias.kind !== "redirect") continue;
       const servedBy = alias.servedBy || routeById(alias.routeId).owner;
       if (servedBy !== "leaderboard") continue;
-      const response = await worker.fetch(new Request(`https://yourrank.test${alias.path}`), {}, {});
-      expect([301, 302].includes(response.status), `${alias.path} → ${response.status}`).toBe(true);
+      // Two unrelated parameters prove exact search behavior, not resemblance.
+      const response = await worker.fetch(new Request(`https://yourrank.test${alias.path}?keep=1&other=two`), {}, {});
+      // Exact status — never "either 301 or 302".
+      expect(response.status, `${alias.path} → ${response.status}`).toBe(alias.status);
       const location = new URL(response.headers.get("location"), "https://yourrank.test");
-      // The redirect may land on the canonical path or on another legacy
-      // spelling of the same destination (e.g. /account → /dashboard/settings);
-      // either way it must resolve to the same manifest route.
-      const resolved = resolveDashboardPath(location.pathname);
-      expect(resolved?.route.id, `${alias.path} → ${location.pathname}`).toBe(alias.routeId);
+      // Exact resulting pathname: the recorded Location (redirectTo when the
+      // Worker lands on a legacy spelling, canonical path otherwise).
+      const expectedPath = alias.redirectTo || routeById(alias.routeId).canonicalPath;
+      expect(location.pathname, alias.path).toBe(expectedPath);
+      // Exact search behavior.
+      if (alias.search === "preserve") {
+        expect(location.search, alias.path).toBe("?keep=1&other=two");
+      } else if (alias.search === "drop") {
+        expect(location.search, alias.path).toBe("");
+      } else {
+        expect(alias.searchTransform, alias.path).toBeTruthy();
+      }
     }
   });
 
@@ -169,6 +179,11 @@ describe("manifest parity: legacy aliases", () => {
       expect(canonicalDashboardPath(legacy), legacy).toBe(canonical);
     }
     for (const [legacy, canonical] of Object.entries(LEGACY_TELEGRAM_REDIRECTS)) {
+      // Documented discrepancy: the bot Worker owns yourrank.site/dashboard/
+      // telegram* and has no /overview route (it 404s), so this defensive
+      // leaderboard entry is unreachable in production and stays out of the
+      // manifest (see the bot-side parity test).
+      if (legacy === "/dashboard/telegram/overview") continue;
       const resolved = resolveDashboardPath(legacy);
       expect(resolved, legacy).toBeDefined();
       expect(resolved.canonical, legacy).toBe(false);
@@ -207,14 +222,27 @@ describe("manifest parity: legacy aliases", () => {
 
   it("canonicalizes every legacy ?nav= value exactly like the Worker", async () => {
     for (const [nav, routeId] of Object.entries(NAV_QUERY_ALIASES)) {
-      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?nav=${nav}&from=test`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?nav=${nav}&from=test&keep=2`), {}, {});
+      // Exact status: legacy ?nav= is always a 302.
       expect(response.status, nav).toBe(302);
       const location = new URL(response.headers.get("location"), "https://yourrank.test");
+      // Exact resulting pathname, computed from the same runtime tables the
+      // Worker uses (kickrewards special case, LEGACY_ACCOUNT_PATHS, then
+      // dashboardPath), and manifest agreement on the identity.
+      const expectedPath = nav === "kickrewards"
+        ? "/dashboard/site/connections"
+        : LEGACY_ACCOUNT_PATHS[nav] || dashboardPath(resolveSection(nav));
+      expect(location.pathname, `?nav=${nav}`).toBe(expectedPath);
       const resolved = resolveDashboardPath(location.pathname);
       expect(resolved?.route.id, `?nav=${nav} → ${location.pathname}`).toBe(routeId);
-      // Other query parameters survive canonicalization; ?nav= itself does not.
+      // Exact transformation: only `nav` is stripped; every unrelated
+      // parameter survives canonicalization.
       expect(location.searchParams.get("from"), nav).toBe("test");
+      expect(location.searchParams.get("keep"), nav).toBe("2");
+      expect([...location.searchParams].length, nav).toBe(2);
       expect(location.searchParams.has("nav"), nav).toBe(false);
+      // The location resolver reaches the same identity without a network hop.
+      expect(resolveDashboardLocation("/dashboard", `nav=${nav}`)?.routeId, nav).toBe(routeId);
     }
     // The manifest covers every nav value the runtime resolves: any name that
     // resolveSection accepts (plus the LEGACY_ACCOUNT_PATHS/kickrewards names)
@@ -274,9 +302,30 @@ describe("manifest parity: navigation-state query parameters", () => {
         expect(route.navParams.includes(p), `${route.id} must not declare ${p}`).toBe(false);
       }
     }
-    for (const [param, entry] of Object.entries(QUERY_PARAM_AUDIT)) {
-      expect(["navigation", "one-shot-action", "feature"].includes(entry.classification), param).toBe(true);
+    for (const [param, uses] of Object.entries(QUERY_PARAM_AUDIT)) {
+      expect(uses.length, param).toBeGreaterThan(0);
+      for (const use of uses) {
+        expect(["navigation", "one-shot-action", "feature"].includes(use.classification), param).toBe(true);
+      }
     }
+  });
+
+  it("resolves the settings root tab grammar exactly like the Worker source", () => {
+    // The tab grammar lives in index.js and is served behind auth, so pin
+    // the exact source the location resolver mirrors: tab= wins, a bare
+    // ?plan falls back to the plan tab, billing|plan collapse to plan.
+    const indexSrc = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+    expect(indexSrc).toContain('url.searchParams.get("tab") || (url.searchParams.has("plan") ? "plan" : null)');
+    expect(indexSrc).toContain('requestedTab === "billing" || requestedTab === "plan"');
+    expect(indexSrc).toContain('["account", "team", "connections", "data"].includes(requestedTab)');
+    // And the resolver reproduces it (review examples).
+    expect(resolveDashboardLocation("/dashboard/settings", "")?.routeId).toBe("settings.account");
+    expect(resolveDashboardLocation("/dashboard/settings", "tab=team")?.routeId).toBe("settings.team");
+    expect(resolveDashboardLocation("/dashboard/settings", "tab=connections")?.routeId).toBe("settings.connections");
+    expect(resolveDashboardLocation("/dashboard/settings", "tab=billing")?.routeId).toBe("settings.plan");
+    expect(resolveDashboardLocation("/dashboard/settings", "tab=plan")?.routeId).toBe("settings.plan");
+    expect(resolveDashboardLocation("/dashboard/settings", "plan")?.routeId).toBe("settings.plan");
+    expect(resolveDashboardLocation("/dashboard/settings", "tab=bogus")?.routeId).toBe("settings.account");
   });
 
   it("builds URLs the current runtime already accepts", async () => {
@@ -302,6 +351,9 @@ describe("manifest parity: complete route inventory", () => {
       ...Object.values(LEGACY_TELEGRAM_REDIRECTS),
     ]);
     for (const path of destinations) {
+      // Unreachable defensive entry (bot Worker owns the pattern and 404s);
+      // see the Telegram redirect-map test above and the bot-side parity test.
+      if (path === "/dashboard/telegram/overview") continue;
       expect(resolveDashboardPath(path), path).toBeDefined();
     }
   });
@@ -319,5 +371,82 @@ describe("manifest parity: complete route inventory", () => {
         expect(response.status, route.id).toBeLessThan(400);
       }
     }
+  });
+});
+
+describe("query-parameter audit enforcement (mechanical gate)", () => {
+  // Deterministic, focused scanner over the dashboard routing/navigation
+  // sources: every literal URLSearchParams read/write they perform must be
+  // classified in QUERY_PARAM_AUDIT (or sit in the documented exclusion list
+  // below). A new routing-affecting query parameter therefore fails CI until
+  // it is classified.
+  const SCANNED_SOURCES = [
+    "../index.js",
+    "../telegram-routes.js",
+    "../login-redirect.js",
+    "../assets/dashboard/routes.js",
+    "../assets/dashboard/board-shell.js",
+    "../assets/credits.js",
+    "../assets/dashboard/players.js",
+  ];
+
+  // Parameters a scanned source touches that are deliberately NOT dashboard
+  // query parameters. Every entry needs a tight justification; growing this
+  // list is a review event, not a default.
+  const EXCLUDED_PARAMS = new Map([
+    // (none currently — every discovered parameter is classified)
+  ]);
+
+  const scanParams = (src) => {
+    const params = new Set();
+    // Receivers that are URLSearchParams: `url.searchParams`-style access
+    // plus local `const x = new URLSearchParams(...)` bindings.
+    const receivers = new Set(["searchParams"]);
+    for (const m of src.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*new URLSearchParams/g)) {
+      receivers.add(m[1]);
+    }
+    const names = [...receivers].map((r) => r.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    const accessRe = new RegExp(`\\b(?:${names})\\.(?:get|getAll|has|set|delete|append)\\(\\s*["']([\\w-]+)["']`, "g");
+    const inlineRe = /new URLSearchParams\([^)]*\)\.(?:get|getAll|has|set|delete|append)\(\s*["']([\w-]+)["']/g;
+    for (const m of src.matchAll(accessRe)) params.add(m[1]);
+    for (const m of src.matchAll(inlineRe)) params.add(m[1]);
+    return params;
+  };
+
+  it("finds every literal query parameter of the routing sources in the audit", () => {
+    const discovered = new Map();
+    for (const file of SCANNED_SOURCES) {
+      const src = readFileSync(new URL(file, import.meta.url), "utf8");
+      for (const param of scanParams(src)) {
+        if (!discovered.has(param)) discovered.set(param, []);
+        discovered.get(param).push(file);
+      }
+    }
+    // The scanner has real coverage (guards against a silently broken regex).
+    for (const expected of ["nav", "tab", "plan", "board", "siteId", "edit", "viewer"]) {
+      expect(discovered.has(expected), `scanner lost ${expected}`).toBe(true);
+    }
+    for (const [param, files] of discovered) {
+      const classified = Object.prototype.hasOwnProperty.call(QUERY_PARAM_AUDIT, param);
+      const excluded = EXCLUDED_PARAMS.has(param);
+      expect(
+        classified || excluded,
+        `query parameter "${param}" (read/written in ${files.join(", ")}) is not classified in QUERY_PARAM_AUDIT — classify it (navigation / one-shot-action / feature) or add a documented exclusion`,
+      ).toBe(true);
+      expect(classified && excluded, `"${param}" cannot be both classified and excluded`).toBe(false);
+    }
+  });
+
+  it("keeps navigation classifications context-bound (no global `plan`)", () => {
+    // `plan` must be navigation ONLY on the settings root document and
+    // feature state elsewhere; the structure carries both uses explicitly.
+    const plan = QUERY_PARAM_AUDIT.plan;
+    expect(plan.map((u) => u.classification).sort()).toEqual(["feature", "navigation"]);
+    expect(plan.find((u) => u.classification === "navigation").context).toBe("/dashboard/settings root document");
+    // The resolver honors that context: ?plan is identity on the settings
+    // root and inert everywhere else.
+    expect(resolveDashboardLocation("/dashboard/settings", "plan")?.routeId).toBe("settings.plan");
+    expect(resolveDashboardLocation("/dashboard", "plan")?.routeId).toBe("home");
+    expect(resolveDashboardLocation("/dashboard/settings/team", "plan")?.routeId).toBe("settings.team");
   });
 });
