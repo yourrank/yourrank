@@ -38,7 +38,8 @@ import { applyLegalIdentity } from "./pages/legal-helper.js";
 import { hashToken, newClickRef } from "@yourrank/shared/crypto";
 import { handleDashboardPreview } from "./handlers/preview.js";
 import { demoLeaderboardData } from "./demo-data.js";
-import { legacyTelegramRedirect } from "./telegram-routes.js";
+import { resolveAliasRedirect, resolveNavRedirect } from "@yourrank/shared/dashboard-routes";
+import { logLegacyDashboardRedirect } from "@yourrank/shared/dashboard-legacy-telemetry";
 
 // Sections the virtual /demo board renders. `games` is off in the demo data,
 // so its shell never links there.
@@ -51,10 +52,9 @@ import {
   renderNewPlayerProfile,
   renderNewStreamerProfile,
 } from "./auxiliary-renderers.js";
-import { parseDashboardPath, dashboardPath, resolveSection, legacyDashboardPath, trimTrailingSlashes } from "./assets/dashboard/routes.js";
-import { LEGACY_ACCOUNT_PATHS } from "@yourrank/shared/dashboard-nav";
+import { parseDashboardPath, trimTrailingSlashes } from "./assets/dashboard/routes.js";
 import { deferClickWrite, trackedDestination } from "./tracked-redirect.js";
-import { setRequestMetrics } from "@yourrank/shared/request-id";
+import { getLogger, setRequestMetrics } from "@yourrank/shared/request-id";
 import { evaluateConsumerHealth } from "./consumer-health.js";
 import { readDlqHealth } from "./dlq-health.js";
 import { proxyMarketingHome } from "./marketing-proxy.js";
@@ -125,6 +125,19 @@ function redirectKeepingSearch(pathname, url, status = 302) {
   const target = new URL(pathname, url);
   target.search = url.search;
   return redirectResponse(target, status);
+}
+
+function redirectFromManifest(url, legacy, source) {
+  logLegacyDashboardRedirect({
+    alias: legacy.alias,
+    route_id: legacy.routeId,
+    status: legacy.status,
+    served_by: legacy.servedBy,
+    source,
+  }, getLogger());
+  const target = new URL(legacy.pathname, url);
+  target.search = legacy.search.toString();
+  return redirectResponse(target, legacy.status);
 }
 
 // Maps a dashboard sub-path to the page key + tab needed to render its content
@@ -751,16 +764,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           headers: { ...SECURE_HTML, ...csrfHeader, ...rateLimitHeaders(inviteRl) },
         });
       }
-      // Connect Kick lives under Site settings → Connections now; keep the old URLs working.
-      if (path === "/dashboard/settings/integrations") {
-        return redirectKeepingSearch("/dashboard/site/connections", url, 301);
-      }
-      if (path === "/dashboard/settings/board") {
-        return redirectKeepingSearch("/dashboard/site", url, 301);
-      }
-      if (path === "/dashboard/settings/plan") {
-        return redirectKeepingSearch("/dashboard/settings/billing", url, 301);
-      }
+      const manifestAlias = resolveAliasRedirect(path, url.search, "leaderboard");
+      if (manifestAlias) return redirectFromManifest(url, manifestAlias, "path_alias");
+
       if (path === "/dashboard/settings" || /^\/dashboard\/settings\/(account|team|billing|connections|data)$/.test(path)) {
         const pathTab = path.split("/").pop();
         const requestedTab = pathTab === "settings"
@@ -782,11 +788,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         }));
         return new Response(html, { headers: { ...SECURE_HTML, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
       }
-      if (path === "/dashboard/billing") return redirectKeepingSearch("/dashboard/settings/billing", url, 301);
-      if (path === "/dashboard/attribution") return redirectKeepingSearch("/dashboard/settings/connections", url);
-      if (path === "/dashboard/security") return redirectKeepingSearch("/dashboard/settings/account", url);
-      if (path === "/dashboard/integrations") return redirectKeepingSearch("/dashboard/settings/connections", url);
-      if (path === "/dashboard/manage") return redirectKeepingSearch("/dashboard/settings", url);
       // Fragment endpoint: returns the content HTML (without the shell) for
       // dynamic dashboard sections, so the persistent SPA shell can inject
       // them without a document reload. Reuses the same page components and
@@ -822,17 +823,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       if (path === "/dashboard/audience/members") {
         return renderDashboardPage("audienceMembers", "audience_render_failed");
       }
-      if (path === "/dashboard/audience" || path === "/dashboard/audience/viewers" || path === "/dashboard/audience/activity") {
-        const target = path.endsWith("/activity") ? "/dashboard/rewards/activity" : "/dashboard/audience/members";
-        return redirectKeepingSearch(target, url, 301);
-      }
-      if (path === "/dashboard/giveaways/preds") {
-        return redirectKeepingSearch("/dashboard/giveaways/predictions", url, 301);
-      }
-      const legacyDashboard = legacyDashboardPath(path);
-      if (legacyDashboard) {
-        return redirectResponse(new URL(legacyDashboard + url.search, url), 301);
-      }
       // Site settings → Connections: the Kick connection's canonical home.
       // Served as its own document (like the other fragment-booted sections)
       // because it runs the credits client, not the core SPA sections.
@@ -844,19 +834,19 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // they all serve the same document; the shell reads the path on boot.
       const dashboardRoute = parseDashboardPath(path);
       if (dashboardRoute) {
-        if (url.searchParams.get("nav") === "kickrewards") {
-          const target = new URL("/dashboard/site/connections", url);
-          for (const [k, v] of url.searchParams) if (k !== "nav") target.searchParams.set(k, v);
-          return redirectResponse(target, 302);
-        }
         // `?nav=` was the old address of a section. Send it to the real one so
         // the URL a user copies is the URL they can share.
         const legacyNav = url.searchParams.get("nav");
-        const legacy = resolveSection(legacyNav);
-        if (legacy) {
-          const target = new URL(LEGACY_ACCOUNT_PATHS[legacyNav] || dashboardPath(legacy), url);
-          for (const [k, v] of url.searchParams) if (k !== "nav") target.searchParams.set(k, v);
-          return redirectResponse(target, 302);
+        const navRedirect = legacyNav ? resolveNavRedirect(legacyNav, url.search) : undefined;
+        if (navRedirect) {
+          return redirectFromManifest(url, {
+            alias: `?nav=${legacyNav}`,
+            routeId: navRedirect.routeId,
+            status: navRedirect.status,
+            pathname: navRedirect.pathname,
+            search: navRedirect.search,
+            servedBy: "leaderboard",
+          }, "nav_query");
         }
         try {
           const user = await currentUser(request, env);
@@ -876,17 +866,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(error500Page(nonce), { status: 500, headers: HTML_N });
         }
       }
-      // `/account/*` was a second settings implementation; the canonical one is
-      // `/dashboard/settings/*`, so every old URL redirects into its tab.
-      if (path === "/account" || path === "/account.html") {
-        return redirectKeepingSearch("/dashboard/settings", url);
-      }
       if (path.startsWith("/account/")) {
-        const tab = path.slice("/account/".length).split("?")[0];
-        const map = { profile: "account", plan: "plan", postbacks: "connections", connected: "connections", data: "data" };
-        const target = map[tab];
-        if (!target) return redirectKeepingSearch("/dashboard/settings/account", url);
-        return redirectKeepingSearch(`/dashboard/settings/${target}`, url);
+        return redirectKeepingSearch("/dashboard/settings/account", url);
       }
       if (path === "/dashboard/preview" && (method === "GET" || method === "POST")) {
         try {
@@ -896,25 +877,11 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(error500Page(nonce), { status: 500, headers: HTML_N });
         }
       }
-      // Telegram now lives in the Bot Worker; preserve old leaderboard URLs.
-      const telegramTarget = legacyTelegramRedirect(path);
-      if (telegramTarget) {
-        return redirectResponse(new URL(telegramTarget + url.search, url), 301);
-      }
-      if (path === "/dashboard/setup") {
-        return redirectResponse(new URL("/dashboard", url), 302);
-      }
       if (path === "/dashboard/support") {
         const redirectUrl = new URL("/help/support", url);
         redirectUrl.searchParams.set("area", "dashboard");
         redirectUrl.searchParams.set("return", "/dashboard");
         return redirectResponse(redirectUrl, 302);
-      }
-      if (path === "/dashboard/credits") {
-        return redirectKeepingSearch("/dashboard/rewards", url, 301);
-      }
-      if (path === "/dashboard/giveaways") {
-        return redirectKeepingSearch("/dashboard/giveaways/chat", url);
       }
       if (path.startsWith("/dashboard/giveaways/")) {
         const tab = path.slice("/dashboard/giveaways/".length);
@@ -928,15 +895,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path.startsWith("/dashboard/rewards/")) {
         const tab = path.slice("/dashboard/rewards/".length).split("?")[0];
-        // The Kick connection moved to Site settings → Connections. Keep the
-        // old URL working as a permanent redirect that preserves site context.
-        if (tab === "channel") return redirectKeepingSearch("/dashboard/site/connections", url, 301);
-        if (tab === "overview") return redirectKeepingSearch("/dashboard/rewards", url, 301);
-        if (tab === "maps" || tab === "rewards") return redirectKeepingSearch("/dashboard/rewards/rules", url);
-        // Member management moved out of Rewards into Audience.
-        if (tab === "viewers") return redirectKeepingSearch("/dashboard/audience/members", url, 301);
         if (tab === "activity") return renderDashboardPage("rewardsHistory", "rewards_render_failed");
-        if (tab === "history") return redirectKeepingSearch("/dashboard/rewards/activity", url, 301);
         const map = { rules: "rewardsRules", shop: "rewardsShop", redemptions: "rewardsRedemptions" };
         const pageKey = map[tab];
         if (!pageKey) return redirectResponse(new URL("/dashboard/rewards", url), 302);
@@ -945,8 +904,13 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // An unknown tab under a real section (a typo, a renamed step) belongs on
       // that section rather than on a 404.
       if (path.startsWith("/dashboard/")) {
-        const section = resolveSection(path.slice("/dashboard/".length).split("/")[0]);
-        if (section) return redirectResponse(new URL(dashboardPath(section), url), 302);
+        const head = path.slice("/dashboard/".length).split("/")[0];
+        const section = resolveNavRedirect(head);
+        if (section) {
+          const target = new URL(section.pathname, url);
+          target.search = section.search.toString();
+          return redirectResponse(target, section.status);
+        }
       }
       if (path.startsWith("/dashboard/")) {
         const user = await currentUser(request, env);

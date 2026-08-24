@@ -25,6 +25,13 @@ import {
 } from "@yourrank/shared/postback";
 import { validatedBody, adminUserSchema, adminBotSchema, adminOfferSchema } from "./validation.js";
 import { errMessage } from "./errors.js";
+import {
+  DASHBOARD_ROUTE_ALIASES,
+  aliasWorker,
+  resolveAliasRedirect,
+} from "@yourrank/shared/dashboard-routes";
+import { logLegacyDashboardRedirect } from "@yourrank/shared/dashboard-legacy-telemetry";
+import { getLogger } from "@yourrank/shared/request-id";
 
 type Bindings = {
   PUBLIC_BASE_URL: string;
@@ -617,15 +624,32 @@ export function buildHonoApp({
   // (CF sends /bot/api/* to this worker, but Hono only matches /api/* by default)
   app.route("/bot/api", api);
 
+  for (const alias of DASHBOARD_ROUTE_ALIASES) {
+    if (alias.kind !== "redirect" || aliasWorker(alias) !== "bot") continue;
+    app.get(alias.path, (c) => {
+      const resolved = resolveAliasRedirect(alias.path, new URL(c.req.url).search, "bot");
+      if (!resolved) return c.notFound();
+      logLegacyDashboardRedirect({
+        alias: resolved.alias,
+        route_id: resolved.routeId,
+        status: resolved.status,
+        served_by: resolved.servedBy,
+        source: "path_alias",
+      }, getLogger());
+      const target = new URL(resolved.pathname, c.req.url);
+      target.search = resolved.search.toString();
+      return c.redirect(target.pathname + target.search, resolved.status);
+    });
+  }
+
   // =================================================================
   // 4) STREAMER DASHBOARD (Telegram Login + self-serve UI)
   //    Mounted under /bot so it never collides with the leaderboard
   //    Worker, which owns the root of yourrank.site. Cloudflare routes
   //    /bot/* to this Worker (see wrangler.toml).
   // =================================================================
-  app.route("/bot", buildDashboard({ legacyPages: true }));
+  app.route("/bot", buildDashboard());
   app.route("/dashboard/telegram", buildDashboard({ canonical: true }));
-  app.get("/bot", (c) => c.redirect("/dashboard/telegram", 301));
 
   return app;
 }

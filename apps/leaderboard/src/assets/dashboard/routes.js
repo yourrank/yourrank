@@ -207,12 +207,6 @@ export const SECTION_ALIASES = {
       return [name, route.section in SECTIONS ? route.section : route.tab];
     }),
   ),
-  // Documented divergence (PR-1 discrepancy list): the client resolves
-  // `manage`/`settings` to Site settings while the Worker redirects those
-  // paths to account settings. Preserved byte-for-byte until PR-12 settles
-  // the redirect surface.
-  manage: "site",
-  settings: "site",
 };
 
 export function legacyDashboardPath(pathname) {

@@ -366,7 +366,7 @@ describe("buildDashboard", () => {
     expect(html).toContain(`nonce="${m![1]}"`);
   });
 
-  it("serves canonical Telegram pages and permanently redirects legacy page routes", async () => {
+  it("serves canonical Telegram pages without legacy route redirects", async () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
       return Promise.resolve([]);
@@ -384,10 +384,6 @@ describe("buildDashboard", () => {
     }), testEnv);
     expect(canonicalDevLogin.status).toBe(404);
 
-    const legacy = buildDashboard({ legacyPages: true });
-    const redirect = await legacy.fetch(new Request("http://localhost:8788/dashboard"), testEnv);
-    expect(redirect.status).toBe(301);
-    expect(redirect.headers.get("location")).toBe("/dashboard/telegram");
   });
 
   it("POST /dash/api/bots connects a bot and returns its info", async () => {

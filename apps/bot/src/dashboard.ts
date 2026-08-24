@@ -60,7 +60,7 @@ type DashBindings = SessionEnv & {
 };
 type DashEnv = { Bindings: DashBindings; Variables: { cspNonce: string } };
 
-export function buildDashboard(opts: { canonical?: boolean; legacyPages?: boolean } = {}): Hono<DashEnv> {
+export function buildDashboard(opts: { canonical?: boolean } = {}): Hono<DashEnv> {
   const app = new Hono<DashEnv>();
   const canonical = opts.canonical === true;
 
@@ -210,9 +210,6 @@ export function buildDashboard(opts: { canonical?: boolean; legacyPages?: boolea
   };
 
   const pageRoute = (page: string) => {
-    if (opts.legacyPages) {
-      return (c: any) => c.redirect(`/dashboard/telegram${page === "overview" ? "" : `/${page}`}`, 301);
-    }
     return (c: any) => dashboardPage(c, page);
   };
   app.get(canonical ? "/" : "/dashboard", pageRoute("overview"));
@@ -220,14 +217,5 @@ export function buildDashboard(opts: { canonical?: boolean; legacyPages?: boolea
   app.get("/offers", pageRoute("offers"));
   app.get("/commands", pageRoute("commands"));
   app.get("/broadcasts", pageRoute("broadcasts"));
-  if (!canonical) {
-    app.get("/settings", (c) => {
-      const target = new URL("/dashboard/settings", c.req.url);
-      for (const [key, value] of new URL(c.req.url).searchParams) target.searchParams.set(key, value);
-      target.searchParams.set("from", "bot");
-      return c.redirect(target.pathname + target.search, 302);
-    });
-  }
-
   return app;
 }
