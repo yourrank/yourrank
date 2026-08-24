@@ -1,4 +1,17 @@
+// Presentation owner for the dashboard rail: labels, icons, grouping and
+// ordering live here. ROUTING semantics (paths, route ownership, legacy
+// spellings) are derived from the canonical manifest in dashboard-routes.ts
+// — this module holds no route table of its own (gated by
+// packages/shared/src/__tests__/dashboard-nav.test.ts).
 import type { NavItem } from "./dashboard-chrome.js";
+import {
+  dashboardAliasPath,
+  resolveNavRedirect,
+  routeById,
+  type DashboardRouteId,
+} from "./dashboard-routes.js";
+
+const href = (id: DashboardRouteId): string => routeById(id).canonicalPath;
 
 const NAV_ICONS = {
   players: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>',
@@ -32,76 +45,100 @@ const GEAR_ICON = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 
 //     definition, so they do not share a group.
 // Group labels are visual hierarchy only — they are not links and collapse
 // nothing.
+// Hrefs come from the manifest: canonical paths via routeById, plus the two
+// entries that deliberately address a registered alias spelling today — the
+// Engagement entry (the /dashboard/giveaways section entry, a 302 to the
+// chat tab) and Account (the /dashboard/settings root document).
 const DASHBOARD_NAV: NavItem[] = [
-  { key: "home", label: "Home", href: "/dashboard", icon: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>', productKey: "sites" },
-  { key: "sites", label: "Sites", href: "/dashboard/leaderboards", icon: NAV_ICONS.boards, productKey: "sites" },
+  { key: "home", label: "Home", href: href("home"), icon: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>', productKey: "sites" },
+  { key: "sites", label: "Sites", href: href("boards"), icon: NAV_ICONS.boards, productKey: "sites" },
   {
     key: "site-scope",
     label: "Current site",
     kind: "group",
     children: [
-      { key: "board", label: "Leaderboard", href: "/dashboard/leaderboard", icon: NAV_ICONS.players },
-      { key: "engage", label: "Engagement", href: "/dashboard/giveaways", icon: NAV_ICONS.giveaways },
-      { key: "games", label: "Games", href: "/dashboard/games", icon: NAV_ICONS.games },
-      { key: "redemptions", label: "Rewards", href: "/dashboard/rewards", icon: NAV_ICONS.shop, productKey: "credits" },
-      { key: "audience", label: "Audience", href: "/dashboard/audience/members", icon: NAV_ICONS.audience },
-      { key: "performance", label: "Analytics", href: "/dashboard/analytics", icon: NAV_ICONS.analytics },
-      { key: "site", label: "Site settings", href: "/dashboard/site", icon: NAV_ICONS.siteSettings },
+      { key: "board", label: "Leaderboard", href: href("board"), icon: NAV_ICONS.players },
+      { key: "engage", label: "Engagement", href: dashboardAliasPath("/dashboard/giveaways", "giveaways.chat"), icon: NAV_ICONS.giveaways },
+      { key: "games", label: "Games", href: href("games"), icon: NAV_ICONS.games },
+      { key: "redemptions", label: "Rewards", href: href("rewards.overview"), icon: NAV_ICONS.shop, productKey: "credits" },
+      { key: "audience", label: "Audience", href: href("audience.viewers"), icon: NAV_ICONS.audience },
+      { key: "performance", label: "Analytics", href: href("performance"), icon: NAV_ICONS.analytics },
+      { key: "site", label: "Site settings", href: href("site"), icon: NAV_ICONS.siteSettings },
     ],
   },
-  { key: "telegram", label: "Telegram", href: "/dashboard/telegram", icon: NAV_ICONS.share, productKey: "telegram" },
-  { key: "settings", label: "Account", href: "/dashboard/settings", icon: GEAR_ICON },
+  { key: "telegram", label: "Telegram", href: href("telegram"), icon: NAV_ICONS.share, productKey: "telegram" },
+  { key: "settings", label: "Account", href: dashboardAliasPath("/dashboard/settings", "settings.account"), icon: GEAR_ICON },
 ];
 
-export const NAV_OWNER_MAP = {
+// Rail ownership: each accepted spelling (section names, tab names, legacy
+// aliases) maps to the manifest ROUTE that owns it; the rendered rail key is
+// the route's navKey. The spellings are nav vocabulary; the OWNERSHIP is
+// manifest data — change a route's navKey and the rail follows.
+const NAV_OWNER_ROUTES = {
   board: "board",
   leaderboard: "board",
-  engage: "engage",
-  giveaways: "engage",
-  raffles: "engage",
-  predictions: "engage",
-  drops: "engage",
-  tournaments: "engage",
+  engage: "giveaways.chat",
+  giveaways: "giveaways.chat",
+  raffles: "giveaways.raffles",
+  predictions: "giveaways.preds",
+  drops: "giveaways.drops",
+  tournaments: "giveaways.tournaments",
   games: "games",
-  activity: "performance",
-  referrals: "performance",
+  activity: "performance.activity",
+  referrals: "performance.referrals",
   performance: "performance",
-  redemptions: "redemptions",
-  overview: "redemptions",
-  shop: "redemptions",
-  rules: "redemptions",
-  rewards: "redemptions",
-  history: "redemptions",
+  redemptions: "rewards.redemptions",
+  overview: "rewards.overview",
+  shop: "rewards.shop",
+  rules: "rewards.rules",
+  rewards: "rewards.overview",
+  history: "rewards.history",
   // The Kick connection belongs to the selected site: the channel link is
   // stored on the site row, so its rail owner is Site settings, not Rewards.
-  channel: "site",
-  siteConnections: "site",
-  members: "audience",
-  audience: "audience",
-  viewers: "audience",
-  boards: "sites",
+  channel: "siteConnections.channel",
+  siteConnections: "siteConnections.channel",
+  members: "audience.viewers",
+  audience: "audience.viewers",
+  viewers: "audience.viewers",
+  boards: "boards",
   site: "site",
-  settings: "settings",
-  account: "settings",
-  team: "settings",
-  plan: "settings",
-  connections: "settings",
-  data: "settings",
-  integrations: "settings",
-  billing: "settings",
-} as const;
+  settings: "settings.account",
+  account: "settings.account",
+  team: "settings.team",
+  plan: "settings.plan",
+  connections: "settings.connections",
+  data: "settings.data",
+  integrations: "settings.connections",
+  billing: "settings.plan",
+} as const satisfies Readonly<Record<string, DashboardRouteId>>;
 
-export const ACCOUNT_SECTION_PATHS = {
-  plan: "/dashboard/settings/billing",
-  connections: "/dashboard/settings/connections",
-} as const;
+export const NAV_OWNER_MAP: { readonly [K in keyof typeof NAV_OWNER_ROUTES]: string } =
+  Object.fromEntries(
+    Object.entries(NAV_OWNER_ROUTES).map(([key, id]) => [key, routeById(id).navKey]),
+  ) as { [K in keyof typeof NAV_OWNER_ROUTES]: string };
 
-export const LEGACY_ACCOUNT_PATHS = {
-  billing: "/dashboard/settings/billing",
-  integrations: "/dashboard/settings/connections",
-  manage: "/dashboard/settings",
-  settings: "/dashboard/settings",
-} as const;
+export const ACCOUNT_SECTION_PATHS: { readonly plan: string; readonly connections: string } = {
+  plan: href("settings.plan"),
+  connections: href("settings.connections"),
+};
+
+// The exact Locations of the legacy account ?nav= redirects, derived from
+// the manifest's encoded ?nav= policy (resolveNavRedirect).
+const legacyAccountPath = (nav: string): string => {
+  const redirect = resolveNavRedirect(nav);
+  /* istanbul ignore next -- these four nav values are manifest aliases */
+  if (!redirect) throw new Error(`no ?nav= redirect for ${nav}`);
+  return redirect.pathname;
+};
+
+export const LEGACY_ACCOUNT_PATHS: Readonly<
+  Record<"billing" | "integrations" | "manage" | "settings", string>
+> = {
+  billing: legacyAccountPath("billing"),
+  integrations: legacyAccountPath("integrations"),
+  manage: legacyAccountPath("manage"),
+  settings: legacyAccountPath("settings"),
+};
 
 export function navOwner(nav: string | null | undefined): string {
   return NAV_OWNER_MAP[nav as keyof typeof NAV_OWNER_MAP] || nav || "home";

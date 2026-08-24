@@ -144,12 +144,18 @@ export function hasBareImport(source) {
   return importSpecifiers(source).some(isBareSpecifier);
 }
 
+// Relative imports BETWEEN assets stay external (the browser loads each
+// asset as its own module), but relative imports INSIDE an inlined package
+// (e.g. shared dist modules importing their siblings) must be bundled — the
+// browser cannot resolve them against /assets/.
 const externalAssetModulesPlugin = {
   name: "external-asset-modules",
   setup(build) {
-    build.onResolve({ filter: /^(?:\.{1,2}\/|\/)/ }, ({ path: importPath, kind }) => (
-      kind === "entry-point" ? undefined : { path: importPath, external: true }
-    ));
+    build.onResolve({ filter: /^(?:\.{1,2}\/|\/)/ }, ({ path: importPath, kind, importer }) => {
+      if (kind === "entry-point") return undefined;
+      if (importer && !importer.startsWith(assetsDir + path.sep)) return undefined;
+      return { path: importPath, external: true };
+    });
   },
 };
 
