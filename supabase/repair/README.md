@@ -40,7 +40,8 @@ secrets. It deploys nothing and applies no migration, forces
 `default_transaction_read_only=on` on the session, proves a write is rejected, and **fails**
 if any allowlisted column was not inspected, if the report is incomplete, if production
 cannot be reached, or if the candidate total differs from the classified baseline
-(`expected_total`, default 26). The report is attached to the run as an artifact and
+(`expected_total`, default 0 now that the repair has run in production). The report
+is attached to the run as an artifact and
 summarised on the run page. Run it from the Actions tab, or let it run on a pull request
 that touches the repair.
 
@@ -83,6 +84,25 @@ candidate row predates the #620 deployment, and the seven non-allowlisted jsonb
 columns hold no double-encoded value either, so the allowlist is neither too
 narrow nor too broad for this database. Re-run the preflight immediately before
 the migration: the count is a point-in-time observation, not a constant.
+
+## Production repair result
+
+The migration ran in production on 2026-08-24 via the Deploy workflow
+([run 32700950596](https://github.com/yourrank/yourrank/actions/runs/32700950596),
+merge commit `c72c70ae`, #621) and repaired exactly the 26 preflighted rows:
+
+```
+repaired 7 double-encoded row(s) in conversions.raw (pre-images stored)
+repaired 2 double-encoded row(s) in credit_ledger.metadata (pre-images stored)
+repaired 5 double-encoded row(s) in predictions.options (pre-images stored)
+repaired 11 double-encoded row(s) in queue_dlq_events.body (pre-images stored)
+repaired 1 double-encoded row(s) in tournaments.participants_json (pre-images stored)
+jsonb repair complete: 26 row(s) across 20 allowlisted column(s)
+```
+
+The post-deploy smoke test passed and no rollback was triggered.
+`public.jsonb_repair_preimage` is retained until the repair is accepted.
+The classified baseline for the preflight is therefore **0** candidates.
 
 ## Guarantees, and how they were rehearsed
 
