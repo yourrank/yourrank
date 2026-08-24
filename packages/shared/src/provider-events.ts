@@ -39,7 +39,7 @@ export async function logProviderEvent(
       input.event_kind,
       input.status ?? null,
       input.tx_ref ?? null,
-      JSON.stringify(input.payload_json ?? {}),
+      input.payload_json ?? {},
     ]
   );
   return Array.isArray(rows) && rows.length > 0;

@@ -21,9 +21,9 @@ export interface GameModule {
   /** The board. Rendered inside <GameFrame>. */
   default: GameComponent;
   /**
-   * The game's bet controls. Optional: a game with no extra options gets the
-   * shared DefaultBetPanel. A game that needs its own (mine count, risk,
-   * target) exports one — usually <BetPanel> with children.
+   * Optional extra controls rendered below the board. Boards that already embed
+   * their own <BetPanel> leave this unset — two bet panels for one round is a
+   * bug, not a fallback.
    */
   Panel?: GameComponent;
 }

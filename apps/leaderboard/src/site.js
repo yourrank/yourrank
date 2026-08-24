@@ -1,5 +1,6 @@
 // Site + players data helpers for the Worker.
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { detectTop3Changes, dispatchNotifyEvent, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
 import { RESERVED, slugify, hashPassword } from "./auth.js";
@@ -293,19 +294,6 @@ async function getPlayerCount(siteId, search = "") {
 }
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
-
-// theme_json / extra_json / snapshot_json are JSONB. postgres.js returns them
-// already parsed (object/array). But a value that is pre-stringified with
-// JSON.stringify() and then bound to a `::jsonb` parameter gets JSON-encoded a
-// SECOND time by the driver, so it lands in the column as a JSON *string*
-// instead of an object. Legacy rows written that way come back as strings;
-// coerce them back so both new (object) and old (string) rows read correctly.
-export function fromJsonb(value) {
-  if (typeof value === "string") {
-    try { return JSON.parse(value); } catch { return null; }
-  }
-  return value;
-}
 
 // C-06: Added proper CSS generic fallback stacks so browsers FOUT to a sane
 // generic font rather than the arbitrary system default when the webfont fails.

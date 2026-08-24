@@ -10,7 +10,7 @@ src/games/
   types.ts          API contract (the only place a response shape is declared)
   api/client.ts     HttpGamesApi — CSRF, timeout, retry, idempotency
   api/errors.ts     GamesApiError + status/code mapping
-  api/mock.ts       demo-only fake API (loaded as its own chunk, ?demo=1)
+  api/wire.ts       server response shapes -> UI types (the one mapping boundary)
   state/store.ts    per-island signal store
   state/context.ts  store injection for game modules
   bet.ts            bet arithmetic + validation (pure)
@@ -23,7 +23,6 @@ src/games/
 entry.tsx           boots from data-gx-boot, mounts <GamesShell>
 ../games-embed.js   server-side mount helper for the host page
 ../../build-games.mjs  esbuild bundle -> src/assets/games/
-../../games-demo.mjs   local demo harness (dev only)
 ```
 
 ## Embedding it in a page
@@ -53,14 +52,13 @@ a compact bar (the live balance must stay visible mid-round) and drops the logo.
 
 ```bash
 cd apps/leaderboard
-node build-games.mjs && node games-demo.mjs   # http://localhost:5174/?demo=1
+node build-games.mjs        # bundle -> src/assets/games/
+bun run dev                 # play at http://localhost:8787/<slug>/games
 ```
 
-`?demo=1` swaps in `api/mock.ts`. Demo mode is opt-in twice over: the host page
-must pass `demoAllowed: true` (the demo harness does, production pages do not)
-*and* the URL must ask for it. The mock is a separate chunk that production
-never downloads, and it is never a fallback — a failed API call surfaces an
-error state, never a fake result.
+There is one API and it is the real one. The island has no mock, no demo mode
+and no offline fallback: a failed call surfaces an error state, never a
+fabricated round. Play locally against the Worker with a seeded viewer.
 
 ## Adding a game
 
@@ -96,7 +94,6 @@ strip and the result toast around your board.
 | `GamesShell` | Everything around a game: header, picker, board slot, panel slot, history, toast | `store`, `branding`, `showHeader` |
 | `GameFrame` | The five non-playing states, identical in every game | `state`, `gameName`, `errorMessage`, `onRetry`, `signInHref`, `earnHref` |
 | `BetPanel` | Amount field, `−/+`, `½ 2× max`, validation, primary action | `bounds`, `amount`, `onAmountChange`, `onSubmit`, `loading`, `disabled`, `error`, `children`, `secondary` |
-| `DefaultBetPanel` | `BetPanel` wired to `store.api.placeBet` — what a game with no options gets for free | `store`, `config` |
 | `BalanceDisplay` | Live balance with count-up and a `+N` flash | `balance`, `currency`, `lastDelta` |
 | `ResultToast` | Tiered win/loss celebration, auto-dismissing | `result`, `currency`, `onDismiss`, `autoDismissMs` |
 | `MultiplierDisplay` | Multiplier in win tiers | `value`, `size`, `tier`, `label` |
@@ -109,7 +106,7 @@ problems outrank the viewer's, so nobody is told to top up a game that is off.
 
 ## Store
 
-`createGamesStore({ api, slug, viewer, demo, initialGame })` returns signals
+`createGamesStore({ api, slug, viewer, initialGame })` returns signals
 (`config`, `viewer`, `balance`, `history`, `activeGame`, `pendingResult`,
 `loading`, `betting`, `error`, …) plus `load()`, `selectGame()`,
 `applyResult()`, `setError()`, `clearError()`, `dismissResult()`.

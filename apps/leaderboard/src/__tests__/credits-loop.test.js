@@ -1,4 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { attachRouteContext } from "../middleware/handler.js";
 
 // Resolve module URLs we need to mock before any handler imports.
 const dbUrl = import.meta.resolve("@yourrank/shared/db");
@@ -319,9 +320,8 @@ describe("handleCreditsUpdateRedemption", () => {
     );
     db.unsafeResponses.push([], [], []);
     const res = await handleCreditsUpdateRedemption(
-      req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }),
-      makeEnv(),
-      { slug: "red-1" }
+      attachRouteContext(req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }), { slug: "red-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     const updateCall = db.calls.find((c) => c.method === "one" && /UPDATE redemptions/.test(c.sql));
@@ -334,9 +334,8 @@ describe("handleCreditsUpdateRedemption", () => {
     // First cancellation succeeds; second returns 404 because the row is no longer pending.
     db.oneResponses.push(null);
     const res = await handleCreditsUpdateRedemption(
-      req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }),
-      makeEnv(),
-      { slug: "red-1" }
+      attachRouteContext(req("https://test.com/api/credits/redemptions/red-1", "POST", { status: "cancelled" }), { slug: "red-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(404);
     const body = await res.json();
@@ -352,9 +351,8 @@ describe("handleCreditsAdjustBalance", () => {
     );
     db.unsafeResponses.push([]);
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 20, reason: "Birthday bonus" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 20, reason: "Birthday bonus" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -370,9 +368,8 @@ describe("handleCreditsAdjustBalance", () => {
       null // conditional debit fails
     );
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: -20, reason: "Oops" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: -20, reason: "Oops" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(400);
     const body = await res.json();

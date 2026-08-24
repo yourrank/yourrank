@@ -8,6 +8,7 @@ import { logProviderEvent as defaultLogProviderEvent } from "@yourrank/shared/pr
 // Re-exported here for backward compatibility with any local imports.
 import { PLAN_LIMITS as _PL, BOARD_LIMITS as _BL, PLAN_PRICES as _PP, PLAN_META as _PM, computeProratedExpiry as _computeProratedExpiry, CREDITS_REWARD_LIMITS as _CRL, CREDITS_SHOP_LIMITS as _CSL, CREDITS_PENDING_REDEMPTIONS_LIMITS as _CPRL, CREDITS_REDEMPTIONS_PER_30D_LIMITS as _CR30L, CREDITS_VIEWERS_PER_30D_LIMITS as _CVL } from "@yourrank/shared/plans";
 import { sendReceiptEmail } from "./email.js";
+import { routeContext } from "./middleware/handler.js";
 const withTransaction = defaultWithTransaction;
 const one = defaultOne;
 const logAudit = defaultLogAudit;
@@ -335,7 +336,7 @@ async function hmacSha512Hex(secret, msg) {
 }
 
 // POST /api/billing/ipn — NOWPayments calls this on every payment status change.
-export async function handleIpn(request, env, ctx, {
+export async function handleIpn(request, env, {
   safeEqual = defaultSafeEqual,
   one = defaultOne,
   withTransaction = defaultWithTransaction,
@@ -503,8 +504,8 @@ export async function handleIpn(request, env, ctx, {
           expiresAt,
           origin,
         });
-        if (ctx?.waitUntil) ctx.waitUntil(receiptPromise.catch((err) => console.error("[ipn] receipt email failed:", err)));
-        else receiptPromise.catch((err) => console.error("[ipn] receipt email failed:", err));
+        routeContext(request).waitUntil(receiptPromise);
+        receiptPromise.catch((err) => console.error("[ipn] receipt email failed:", err));
       }
     } catch (receiptErr) {
       console.error("[ipn] receipt preparation failed:", receiptErr);

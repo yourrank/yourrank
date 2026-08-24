@@ -184,20 +184,6 @@
     });
   });
 
-  var themeToggle = document.getElementById("yrThemeToggle");
-  if (themeToggle) {
-    themeToggle.addEventListener("click", function () {
-      var doc = document.documentElement;
-      if (doc.getAttribute("data-theme") === "dark") {
-        doc.removeAttribute("data-theme");
-        try { localStorage.setItem("yr-theme", "light"); } catch (error) {}
-      } else {
-        doc.setAttribute("data-theme", "dark");
-        try { localStorage.setItem("yr-theme", "dark"); } catch (error) {}
-      }
-    });
-  }
-
   // AUDIT-B4: every page with the shared account menu (SPA shell, standalone
   // Rewards/Audience/Giveaways, and the Telegram bot dashboard) intercepts the
   // logout form so we can broadcast yr:logout only after the server confirms the
@@ -218,14 +204,15 @@
       .then(function (res) {
         if (!res.ok) throw new Error("logout failed: " + res.status);
         try { localStorage.setItem("yr:logout", String(Date.now())); } catch (error) {}
-        location.href = res.url || form.action;
+        location.href = res.url || "/login";
       })
-      .catch(function (err) {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = original || "Sign out";
-          btn.title = "Couldn't sign out. Check your connection and try again.";
-        }
+      .catch(function () {
+        // The fetch never proves the session survived, so guessing "sign out
+        // failed" would be a lie. Fall back to the native form POST: the server
+        // clears the cookie and redirects, and /login bounces back to the
+        // dashboard if the session is somehow still alive.
+        if (btn) btn.textContent = original || "Sign out";
+        form.submit();
       });
   }, true);
 })();

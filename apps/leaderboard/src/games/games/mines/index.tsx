@@ -1,13 +1,20 @@
 /** @jsxImportSource preact */
 import { useMemo, useState } from "preact/hooks";
+import { MINES_GRID_SIZE, minesMultiplierTable } from "@yourrank/shared/games/mines";
 import type { GameProps } from "../../registry.js";
 import { BetPanel } from "../../ui/BetPanel.js";
 import { sound } from "../../sound.js";
 import { haptic } from "../../haptics.js";
 import { formatCredits } from "../../bet.js";
 
-const GRID_SIZE = 25;
+const GRID_SIZE = MINES_GRID_SIZE;
 
+/**
+ * Every number on this board is the server's: the round's multiplier ladder
+ * arrives with the opening bet, each reveal returns the current and the next
+ * multiplier, and the mine layout stays hidden until the server publishes it.
+ * The board holds no notion of where a mine is.
+ */
 export default function MinesBoard({ store, config }: GameProps) {
   const [mineCount, setMineCount] = useState<number>(3);
   const [betAmount, setBetAmount] = useState<number>(10);
@@ -16,6 +23,8 @@ export default function MinesBoard({ store, config }: GameProps) {
   const [mines, setMines] = useState<Set<number>>(new Set());
   const [hitMine, setHitMine] = useState<number | null>(null);
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1);
+  const [serverNextMultiplier, setServerNextMultiplier] = useState<number | null>(null);
+  const [cashoutValue, setCashoutValue] = useState<number>(0);
   const [inFlight, setInFlight] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -23,18 +32,16 @@ export default function MinesBoard({ store, config }: GameProps) {
   const gemCount = GRID_SIZE - mineCount;
   const revealedCount = revealed.size;
 
-  // Calculate next potential multiplier
-  const nextMultiplier = useMemo(() => {
-    if (!isPlaying) {
-      return Math.round((0.99 * (GRID_SIZE / (GRID_SIZE - mineCount))) * 100) / 100;
-    }
-    const remainingGems = gemCount - revealedCount;
-    const remainingTiles = GRID_SIZE - revealedCount;
-    if (remainingGems <= 0) return currentMultiplier;
-    return Math.round(currentMultiplier * (remainingTiles / remainingGems) * 100) / 100;
-  }, [isPlaying, mineCount, revealedCount, currentMultiplier, gemCount]);
+  // Before a round exists there is nothing to ask the server about, so the
+  // preview uses the same shared ladder the backend settles with, priced at
+  // this site's edge. Inside a round the value is whatever the last reveal said.
+  const previewLadder = useMemo(
+    () => minesMultiplierTable(GRID_SIZE, mineCount, config.houseEdgeBps),
+    [mineCount, config.houseEdgeBps]
+  );
+  const nextMultiplier = isPlaying ? (serverNextMultiplier ?? currentMultiplier) : (previewLadder[0] ?? 1);
 
-  const currentPayout = isPlaying ? Math.floor(betAmount * currentMultiplier) : 0;
+  const currentPayout = cashoutValue;
 
   const handleStartGame = async (amount: number) => {
     if (isPlaying || inFlight) return;
@@ -44,14 +51,20 @@ export default function MinesBoard({ store, config }: GameProps) {
     setMines(new Set());
     setRevealed(new Set());
     setCurrentMultiplier(1);
+    setCashoutValue(0);
 
     try {
       const res = await store.api.placeBet({
         game: "mines",
-        amount,
+        bet: amount,
+        params: { mines: mineCount },
       });
       setRoundId(res.roundId);
-      setBetAmount(amount);
+      setRevealed(new Set(res.revealed));
+      setServerNextMultiplier(res.minesMultiplierTable?.[0] ?? null);
+      setBetAmount(res.amount);
+      // Opening a round already debited the wager: take the server's balance.
+      store.applyResult(res);
       sound.play("bet");
       haptic("impact");
     } catch (err: any) {
@@ -73,24 +86,25 @@ export default function MinesBoard({ store, config }: GameProps) {
         tile: index,
       });
 
-      if (res.status === "lost") {
-        setHitMine(index);
-        const allMines = new Set<number>((res.outcome as any)?.mines || [index]);
-        setMines(allMines);
+      setRevealed(new Set(res.revealed));
+
+      if (res.hitMine) {
+        setHitMine(res.tile);
+        setMines(new Set(res.minePositions));
         setRoundId(null);
+        setServerNextMultiplier(null);
+        setCashoutValue(0);
         sound.play("lose");
         haptic("error");
         store.applyResult(res);
-      } else {
-        setRevealed((prev) => new Set([...prev, index]));
-        setCurrentMultiplier(res.multiplier || 1.15);
-        sound.play("reveal");
-        haptic("tap");
-        if (res.status === "won" || res.status === "cashed_out") {
-          setRoundId(null);
-          store.applyResult(res);
-        }
+        return;
       }
+
+      setCurrentMultiplier(res.multiplier);
+      setServerNextMultiplier(res.nextMultiplier);
+      setCashoutValue(res.cashoutValue);
+      sound.play("reveal");
+      haptic("tap");
     } catch (err: any) {
       setLocalError(err?.message || "Failed to reveal tile");
     } finally {
@@ -106,6 +120,10 @@ export default function MinesBoard({ store, config }: GameProps) {
         roundId,
       });
       setRoundId(null);
+      setMines(new Set(res.minePositions));
+      setCurrentMultiplier(res.multiplier);
+      setServerNextMultiplier(null);
+      setCashoutValue(0);
       sound.play("cashout");
       haptic("win");
       store.applyResult(res);

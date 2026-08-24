@@ -1,9 +1,10 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
 import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
-import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite, fromJsonb } from "../site.js";
+import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { bumpStat, getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
 import { one, exec, query } from "@yourrank/shared/db";
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { logAudit } from "@yourrank/shared/audit";
 import { buildTop3Embed, sendDiscordWebhook, sendTelegramMessage } from "@yourrank/shared/notifications";
 import { decryptToken, decryptCredential } from "@yourrank/shared/crypto";
@@ -11,6 +12,7 @@ import { PLATFORM_HOST } from "../constants.js";
 import { invalidateCustomDomain } from "../middleware/custom-domain.js";
 import { notifyLiveBoard } from "../live-board-config.js";
 import { requireSiteCapability } from "../site-authorization.js";
+import { routeContext } from "../middleware/handler.js";
 
 function csvCell(value) {
   const text = String(value ?? "");
@@ -160,7 +162,7 @@ export async function handleHeatmap(request, env, {
   }
 }
 
-export async function handleTrackCopy(request, env, ctx) {
+export async function handleTrackCopy(request, env) {
   const ip = clientIp(request);
   if (!(await rateLimit(env, `copy:${ip}`, 60, 60)).ok) return json({ ok: false, error: "Too many requests." }, 429);
   const body = await readJson(request);
@@ -178,8 +180,8 @@ export async function handleTrackCopy(request, env, ctx) {
       }
     );
     const p = producer.send({ type: "bump", siteId: site.id, field: "copies", referer: null, timestamp: Date.now() });
-    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(p);
-    else p.catch((err) => { console.error("[trackCopy] copy enqueue failed:", err); });
+    routeContext(request).waitUntil(p);
+    p.catch((err) => { console.error("[trackCopy] copy enqueue failed:", err); });
   }
   return json({ ok: true });
 }

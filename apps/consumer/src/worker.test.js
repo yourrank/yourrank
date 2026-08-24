@@ -33,6 +33,9 @@ describe("dead-letter queue persistence", () => {
       alertImpl: async () => {},
     });
     expect(calls[0][0]).toContain("queue_dlq_events");
+    // The body must be bound as a value, not a pre-serialised copy: postgres.js
+    // encodes it for the jsonb column, so a string here lands as a JSON string.
+    expect(calls[0][1][3]).toEqual({ type: "bump", siteId: "site-1" });
     expect(msg.acked).toBe(1);
     expect(msg.retried).toBe(0);
   });

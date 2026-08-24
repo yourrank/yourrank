@@ -1708,7 +1708,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--v3
 .v3-dash[data-auth-workspace] .kpi-action:hover { text-decoration: underline; text-underline-offset: 3px; }
 /* Metric unavailable state */
 .v3-dash[data-auth-workspace] .metric-unavailable { color: var(--v4-ink-soft); font-size: 0.85em; cursor: help; }
-.v3-dash[data-auth-workspace] [data-metric-unavailable="true"] { opacity: 0.7; }
+.v3-dash[data-auth-workspace] [data-metric-unavailable] { opacity: 0.7; }
 /* Tier C: Activity + Players grid */
 .v3-dash[data-auth-workspace] .ov-live-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 4fr); gap: 16px; }
 .v3-dash[data-auth-workspace] .ov-live-card { min-width: 0; padding: 24px; }

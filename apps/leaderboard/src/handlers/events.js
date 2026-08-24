@@ -142,14 +142,10 @@ export async function handleDrawRaffle(request, env, deps = {}) {
     [raffleId]
   );
 
+  // A draw needs at least one entrant: the server owns this precondition so a
+  // raffle can never reach a "drawn" state without a real winning ticket.
   if (!tickets || tickets.length === 0) {
-    await exec("UPDATE raffles SET status='drawn', drawn_at=now(), updated_at=now() WHERE id=$1", [raffleId]);
-    return ok({
-      raffleId,
-      status: "drawn",
-      winnerName: null,
-      message: "Raffle closed with 0 tickets sold.",
-    });
+    return bad("No tickets were sold yet, so there is nothing to draw.", 400);
   }
 
   // Provably fair random draw

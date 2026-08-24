@@ -12,7 +12,6 @@
 // ============================================================================
 import { render } from "preact";
 import { createGamesApi } from "./api/client.js";
-import type { GamesApi } from "./api/client.js";
 import { isGameId } from "./registry.js";
 import { createGamesStore } from "./state/store.js";
 import { GamesShell } from "./ui/GamesShell.js";
@@ -74,34 +73,19 @@ function initialGame(): GameId | null {
   return isGameId(param) ? param : null;
 }
 
-/**
- * Demo mode is a separate chunk and is only reachable with ?demo=1 off the
- * production host. Production never loads it, and it is never a fallback for a
- * failing API call.
- */
-async function resolveApi(slug: string, demo: boolean): Promise<GamesApi> {
-  if (!demo) return createGamesApi({ slug });
-  const { createMockGamesApi } = await import("./api/mock.js");
-  return createMockGamesApi();
-}
-
 export async function mountGames(root: HTMLElement): Promise<void> {
   const boot = readBoot(root);
   if (!boot) return;
 
-  const params = new URLSearchParams(window.location.search);
-  const demo = params.get("demo") === "1" && root.getAttribute("data-gx-demo-allowed") === "true";
-
-  const [api, viewer] = await Promise.all([
-    resolveApi(boot.slug, demo),
-    demo ? Promise.resolve({ authenticated: true, displayName: "Demo viewer", avatarUrl: null, balance: 2500 }) : resolveViewer(boot.slug),
-  ]);
+  // There is one API: the real one. A failing request stays a failure rather
+  // than falling back to fabricated rounds.
+  const api = createGamesApi({ slug: boot.slug });
+  const viewer = await resolveViewer(boot.slug);
 
   const store = createGamesStore({
     api,
     slug: boot.slug,
     viewer,
-    demo,
     signInHref: safePath(boot.signInHref, `/${encodeURIComponent(boot.slug)}`),
     earnHref: safePath(boot.earnHref, `/${encodeURIComponent(boot.slug)}`),
     initialGame: initialGame(),

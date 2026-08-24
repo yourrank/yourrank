@@ -78,12 +78,35 @@ export function setMetricValue(el, text) {
   el.textContent = metricText("ready", text);
 }
 
-export function setMetricUnknown(el) {
+// A KPI has three distinct non-value states and they must never share copy:
+// the panel loaded and the number really is zero, the panel failed to load, or
+// the feature behind it is not connected. "—" is only honest for the last two.
+const METRIC_UNAVAILABLE_COPY = Object.freeze({
+  error: "Couldn't load this stat. Reload the page to try again.",
+  setup: "Not connected yet, so there is nothing to measure.",
+});
+
+/** The panel loaded and the real number is zero: show the zero, say why it is zero. */
+export function setMetricEmpty(el, { value = "0", note = "No activity in this period yet." } = {}) {
   if (!el) return;
   el.removeAttribute("aria-busy");
-  el.setAttribute("data-metric-unavailable", "true");
-  el.title = "Data unavailable — stats may still be loading or analytics isn't configured yet.";
-  el.innerHTML = `<span class="metric-unavailable" aria-label="Data unavailable">${UNKNOWN}</span>`;
+  el.removeAttribute("data-metric-unavailable");
+  el.setAttribute("data-metric-empty", "true");
+  el.title = note;
+  el.textContent = String(value);
+}
+
+/**
+ * The value is genuinely unknown. `reason` picks the copy: "error" (the request
+ * failed) or "setup" (the feature is not connected). Never used for real zeros.
+ */
+export function setMetricUnknown(el, reason = "error") {
+  if (!el) return;
+  el.removeAttribute("aria-busy");
+  el.removeAttribute("data-metric-empty");
+  el.setAttribute("data-metric-unavailable", reason);
+  el.title = METRIC_UNAVAILABLE_COPY[reason] || METRIC_UNAVAILABLE_COPY.error;
+  el.innerHTML = `<span class="metric-unavailable" aria-label="${reason === "setup" ? "Not connected" : "Couldn't load"}">${UNKNOWN}</span>`;
 }
 
 export function setRowsLoading(tbody, { cols = 1, rows = 3 } = {}) {

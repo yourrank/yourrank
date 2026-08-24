@@ -1,4 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import { attachRouteContext } from "../middleware/handler.js";
 
 // Credits lifecycle coverage, complementing credits-loop.test.js and
 // shop-redeem-edge-cases.test.js:
@@ -259,27 +260,24 @@ describe("processKickRewardRedemption reversal path (undo)", () => {
 describe("handleCreditsAdjustBalance validation", () => {
   it("rejects a delta of 0", async () => {
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 0, reason: "oops" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 0, reason: "oops" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(400);
   });
 
   it("rejects a non-numeric delta", async () => {
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: "lots", reason: "oops" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: "lots", reason: "oops" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(400);
   });
 
   it("requires a reason so history stays auditable", async () => {
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 10 }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 10 }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -293,9 +291,8 @@ describe("handleCreditsAdjustBalance validation", () => {
     );
     db.unsafeResponses.push([]); // ledger
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: -100, reason: "correction" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: -100, reason: "correction" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -312,9 +309,8 @@ describe("handleCreditsAdjustBalance validation", () => {
     );
     db.unsafeResponses.push([]);
     const res = await handleCreditsAdjustBalance(
-      req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 50, reason: "giveaway" }),
-      makeEnv(),
-      { slug: "sv-1" }
+      attachRouteContext(req("https://test.com/api/credits/viewers/sv-1/balance", "POST", { delta: 50, reason: "giveaway" }), { slug: "sv-1" }),
+      makeEnv()
     );
     expect(res.status).toBe(200);
     const ledger = db.calls.find((c) => /INSERT INTO credit_ledger/.test(c.sql));

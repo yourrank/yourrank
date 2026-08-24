@@ -1,4 +1,5 @@
 import { withTransaction as defaultWithTransaction, type Tx } from "./db.js";
+import { fromJsonb } from "./jsonb.js";
 
 export const OAUTH_STATE_TTL_SECONDS = 600;
 
@@ -59,7 +60,7 @@ export async function consumeOAuthState(
   const row = rows?.[0] as { payload?: unknown } | undefined;
   if (!row) return null;
   try {
-    const payload = typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload;
+    const payload = fromJsonb<Record<string, unknown>>(row.payload);
     return payload && typeof payload === "object" && !Array.isArray(payload)
       ? payload as Record<string, unknown>
       : null;

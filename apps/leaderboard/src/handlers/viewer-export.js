@@ -4,6 +4,7 @@ import { logAudit } from "@yourrank/shared/audit";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { bad, ok, rateLimitHeaders } from "../auth.js";
 import { requireViewer } from "./viewer-auth.js";
+import { routeContext } from "../middleware/handler.js";
 
 const EXPORT_TTL_SECONDS = 7 * 24 * 60 * 60;
 const CREATION_LIMIT = 2;
@@ -92,7 +93,7 @@ export async function handleCreateViewerExportJob(request, env, {
   }
 }
 
-export async function handleViewerExportStatus(request, env, ctx, {
+export async function handleViewerExportStatus(request, env, {
   requireViewerImpl = viewerJob,
   rateLimitImpl = rateLimit,
   oneImpl = one,
@@ -102,7 +103,7 @@ export async function handleViewerExportStatus(request, env, ctx, {
     if (res) return res;
     const rl = await rateLimitImpl(env, `viewer-export-status:${viewer.id}`, STATUS_LIMIT, 60);
     if (!rl.ok) return bad("Too many requests.", 429, rateLimitHeaders(rl));
-    const id = ctx?.slug || new URL(request.url).searchParams.get("id");
+    const id = routeContext(request).slug || new URL(request.url).searchParams.get("id");
     const job = await oneImpl(
       `SELECT id, status, error, manifest, created_at, started_at, completed_at, expires_at
          FROM viewer_export_jobs WHERE id=$1 AND viewer_id=$2`,
@@ -120,7 +121,7 @@ export async function handleViewerExportStatus(request, env, ctx, {
   }
 }
 
-export async function handleViewerExportDownload(request, env, ctx, {
+export async function handleViewerExportDownload(request, env, {
   requireViewerImpl = viewerJob,
   rateLimitImpl = rateLimit,
   oneImpl = one,
@@ -130,7 +131,7 @@ export async function handleViewerExportDownload(request, env, ctx, {
     if (res) return res;
     const rl = await rateLimitImpl(env, `viewer-export-download:${viewer.id}`, STATUS_LIMIT, 60);
     if (!rl.ok) return bad("Too many requests.", 429, rateLimitHeaders(rl));
-    const id = ctx?.slug || new URL(request.url).searchParams.get("id");
+    const id = routeContext(request).slug || new URL(request.url).searchParams.get("id");
     const job = await oneImpl(
       `SELECT id, status, artifact_key, expires_at
          FROM viewer_export_jobs WHERE id=$1 AND viewer_id=$2`,

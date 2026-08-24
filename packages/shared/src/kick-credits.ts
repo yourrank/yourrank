@@ -179,7 +179,7 @@ export async function processKickRewardRedemption(
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id`,
-      [messageId, event.eventType, rewardId, redeemerKickUserId, rewardCost, status, JSON.stringify(payload)]
+      [messageId, event.eventType, rewardId, redeemerKickUserId, rewardCost, status, payload]
     )) as { event_id: string }[];
     if (!eventRows || eventRows.length === 0) {
       return { duplicate: true };
@@ -328,14 +328,14 @@ export async function processKickRewardRedemption(
           siteViewer.id,
           refundAmount,
           `Reversed Kick reward: ${rewardTitle}`,
-          JSON.stringify({
+          {
             reward_id: rewardId,
             reward_title: rewardTitle,
             reward_cost: rewardCost,
             channel_id: channelExternalId,
             kick_redemption_id: kickRedemptionId,
             original_ledger_id: originalEarn.id,
-          }),
+          },
           messageId,
         ]
       );
@@ -506,13 +506,13 @@ export async function processKickRewardRedemption(
         siteViewerId,
         creditAmount,
         `Kick reward: ${rewardTitle}`,
-        JSON.stringify({
+        {
           reward_id: rewardId,
           reward_title: rewardTitle,
           reward_cost: rewardCost,
           channel_id: channelExternalId,
           kick_redemption_id: kickRedemptionId,
-        }),
+        },
         messageId,
       ]
     );

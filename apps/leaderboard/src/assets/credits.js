@@ -2,7 +2,7 @@ import { showConfirmModal, showPromptModal, ListController, logError, clearLoadE
 import { openDrawer, closeDrawer } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
-import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricLoading, setMetricUnknown, setRowsLoading } from "./dashboard/states.js";
+import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricEmpty, setMetricLoading, setRowsLoading } from "./dashboard/states.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
 import "./dashboard/help-drawer.js";
@@ -370,7 +370,9 @@ function renderAnalytics() {
     $("cr-stat-pending").textContent = s.redemptionsPending ?? 0;
     $("cr-stat-balance").textContent = s.viewerBalance ?? 0;
   } else {
-    ["cr-stat-earned", "cr-stat-spent", "cr-stat-redemptions", "cr-stat-pending", "cr-stat-balance"].forEach((id) => setMetricUnknown($(id)));
+    // Analytics loaded and every counter really is zero — show the zeros
+    // rather than the "data unavailable" placeholder.
+    ["cr-stat-earned", "cr-stat-spent", "cr-stat-redemptions", "cr-stat-pending", "cr-stat-balance"].forEach((id) => setMetricEmpty($(id)));
   }
   const label = $("cr-analytics-days-label"); if (label) label.textContent = String(Number($("cr-analytics-days")?.value) || 30);
   const items = a.topItems || [];

@@ -58,14 +58,14 @@ describe("serveStaticAsset caching", () => {
     expect(serveStaticAsset("/assets/nope.css", reqWith(), testAssets).status).toBe(404);
   });
 
-  it("serves the invite and theme scripts from the bundled asset map", () => {
+  it("serves page scripts from the bundled asset map", () => {
     const assets = {
       ...testAssets,
       "/assets/invite.js": ["document.body.dataset.invite = 'ready';", ".js"],
-      "/assets/theme.js": ["document.documentElement.dataset.theme = 'dark';", ".js"],
+      "/assets/dialog.js": ["window.yrDialog = {};", ".js"],
     };
     expect(serveStaticAsset("/assets/invite.js", new Request("https://test.com/assets/invite.js"), assets).status).toBe(200);
-    expect(serveStaticAsset("/assets/theme.js", new Request("https://test.com/assets/theme.js"), assets).status).toBe(200);
+    expect(serveStaticAsset("/assets/dialog.js", new Request("https://test.com/assets/dialog.js"), assets).status).toBe(200);
   });
 
   it("serves WebP media with binary content and revalidatable caching", async () => {

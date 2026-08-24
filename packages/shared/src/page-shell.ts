@@ -35,12 +35,9 @@ const GOOGLE_FONTS =
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
   '<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@500;700&display=swap" rel="stylesheet" />';
 
-const THEME_SCRIPT = (nonce = "") => `<script${nonce ? ` nonce="${esc(nonce)}"` : ""}>
-  try {
-    const t = localStorage.getItem('yr-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-  } catch(e) {}
-</script>`;
+// The operator console has no dark skin (the workspace stylesheets declare only
+// light values), so nothing here opts a document into `data-theme="dark"`. A
+// dark theme returns when the console stylesheets actually implement one.
 
 export interface LeaderboardPageOpts {
   title: string;
@@ -96,7 +93,6 @@ export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
 <title>${esc(opts.title)}</title>
 ${reqIdMeta}
 ${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${GOOGLE_FONTS}
-<script src="/assets/theme.js" defer></script>
 ${styles}
 ${opts.bootWatchdog ? DASHBOARD_BOOT_WATCHDOG : ""}
 </head><body${bodyAttr}>${DEVIN_DESIGN_CONTRACT}
@@ -222,7 +218,7 @@ export function botPageHtml(opts: BotPageOpts): string {
     : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Telegram · YourRank</title>${GOOGLE_FONTS}${THEME_SCRIPT(opts.nonce)}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${DEVIN_DESIGN_CONTRACT}
+<title>Telegram · YourRank</title>${GOOGLE_FONTS}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="skip-link">Skip to main content</a>
 ${nav}
 ${opts.content}

@@ -42,7 +42,6 @@ export function gamesIslandHead() {
  * @param {string} [o.signInUrl]     Where "sign in to play" points.
  * @param {boolean} [o.header]       Render the island's own header. Off when the
  *                                   host page already shows branding and balance.
- * @param {boolean} [o.demoAllowed]  Permit ?demo=1 (local development only).
  */
 export function gamesIslandMount({
   slug,
@@ -52,7 +51,6 @@ export function gamesIslandMount({
   creditsUrl = "",
   signInUrl = "",
   header = false,
-  demoAllowed = false,
 }) {
   const boot = {
     slug,
@@ -65,8 +63,7 @@ export function gamesIslandMount({
   };
 
   return `<div class="gx" id="gx-root"
-     data-gx-boot="${esc(JSON.stringify(boot))}"
-     data-gx-demo-allowed="${demoAllowed ? "true" : "false"}">
+     data-gx-boot="${esc(JSON.stringify(boot))}">
   <div class="gx-app">
     <main class="gx-main">
       <div class="gx-board-slot">

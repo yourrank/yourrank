@@ -839,7 +839,6 @@ function gamesMain(ctx) {
     creditsUrl: `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`,
     signInUrl: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`,
     header: false,
-    demoAllowed: true,
   });
 
   if (!viewer && !ctx.isDemo) {

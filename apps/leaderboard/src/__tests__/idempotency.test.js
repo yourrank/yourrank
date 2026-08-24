@@ -42,7 +42,7 @@ const billingDeps = {
   logAudit: async (input) => { auditCalls.push(input); },
 };
 const { handleIpn: handleIpnImpl } = await import("../billing.js");
-const handleIpn = (request, env, ctx) => handleIpnImpl(request, env, ctx, billingDeps);
+const handleIpn = (request, env) => handleIpnImpl(request, env, billingDeps);
 
 describe("IPN idempotency", () => {
   it("duplicate IPN with already-paid status does not double-activate", async () => {

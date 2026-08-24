@@ -149,6 +149,20 @@
   color: #b91c1c;
 }
 
+/* Page-level refusal banner for Engage actions. Sits above the tab panes so a
+   refusal is visible whichever tab raised it, and is styled as an error rather
+   than body copy. */
+.gw-page-alert {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--yr-color-danger-line-2);
+  border-radius: var(--radius-md);
+  background: var(--yr-color-danger-soft-2);
+  color: var(--yr-color-danger-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 @keyframes gw-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.85); }

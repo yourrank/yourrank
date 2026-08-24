@@ -20,6 +20,7 @@ import {
   CREDITS_VIEWERS_PER_30D_LIMITS,
 } from "@yourrank/shared/plans";
 import { requireSiteCapability } from "../site-authorization.js";
+import { routeContext } from "../middleware/handler.js";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
 const creditsCreateRewardDefaults = {
@@ -456,7 +457,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   });
 }
 
-export async function handleCreditsDeleteReward(request, env, ctx) {
+export async function handleCreditsDeleteReward(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
@@ -467,7 +468,7 @@ export async function handleCreditsDeleteReward(request, env, ctx) {
 
   if (!(await rateLimit(env, `credits:reward-del:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
 
-  const id = ctx?.slug || url.pathname.split("/").pop();
+  const id = routeContext(request).slug || url.pathname.split("/").pop();
   if (!id) return bad("missing reward id");
 
   const rows = await exec(
@@ -540,7 +541,7 @@ export async function handleCreditsSaveShopItem(request, env) {
   return ok({ id: txResult.id });
 }
 
-export async function handleCreditsDeleteShopItem(request, env, ctx) {
+export async function handleCreditsDeleteShopItem(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
@@ -550,7 +551,7 @@ export async function handleCreditsDeleteShopItem(request, env, ctx) {
   if (authorization.res) return authorization.res;
   if (!(await rateLimit(env, `credits:shop-del:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
 
-  const id = ctx?.slug || url.pathname.split("/").pop();
+  const id = routeContext(request).slug || url.pathname.split("/").pop();
   if (!id) return bad("missing item id");
 
   const rows = await exec(
@@ -564,7 +565,7 @@ export async function handleCreditsDeleteShopItem(request, env, ctx) {
   return ok({ id: rows[0].id });
 }
 
-export async function handleCreditsUpdateRedemption(request, env, ctx) {
+export async function handleCreditsUpdateRedemption(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
@@ -574,7 +575,7 @@ export async function handleCreditsUpdateRedemption(request, env, ctx) {
   if (authorization.res) return authorization.res;
   if (!(await rateLimit(env, `credits:redeem-update:${user.id}`, 30, 60)).ok) return bad("Too many requests.", 429);
 
-  const id = ctx?.slug || url.pathname.split("/").pop();
+  const id = routeContext(request).slug || url.pathname.split("/").pop();
   const body = await readJson(request);
   const status = String(body?.status || "").trim();
   if (!["fulfilled", "cancelled"].includes(status)) return bad("status must be fulfilled or cancelled");
@@ -610,7 +611,7 @@ export async function handleCreditsUpdateRedemption(request, env, ctx) {
       await tx.unsafe(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
          VALUES ($1, 'revoke', $2, 'Cancelled redemption refund', $3)`,
-        [redemption.site_viewer_id, redemption.cost, JSON.stringify({ redemption_id: redemption.id })]
+        [redemption.site_viewer_id, redemption.cost, { redemption_id: redemption.id }]
       );
     }
 
@@ -997,7 +998,7 @@ export async function handleCreditsAnalytics(request, env) {
 }
 
 // Streamer-only: add or remove credits from a site viewer with a ledger row.
-export async function handleCreditsAdjustBalance(request, env, ctx) {
+export async function handleCreditsAdjustBalance(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
@@ -1008,7 +1009,7 @@ export async function handleCreditsAdjustBalance(request, env, ctx) {
   if (!(await rateLimit(env, `credits:adjust:${user.id}`, 30, 60)).ok) return bad("Too many requests.", 429);
 
   const urlParts = url.pathname.split("/").filter(Boolean);
-  let siteViewerId = ctx?.slug;
+  let siteViewerId = routeContext(request).slug;
   if (!siteViewerId) {
     const vIdx = urlParts.indexOf("viewers");
     if (vIdx !== -1 && urlParts[vIdx + 1] && urlParts[vIdx + 1] !== "balance") {
@@ -1078,7 +1079,7 @@ export async function handleCreditsAdjustBalance(request, env, ctx) {
       await tx.unsafe(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
          VALUES ($1, 'earn', $2, $3, $4)`,
-        [siteViewer.id, delta, `Manual credit: ${reason}`, JSON.stringify({ reason, adjusted_by: user.id, manual: true })]
+        [siteViewer.id, delta, `Manual credit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
       );
       return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
     }
@@ -1098,7 +1099,7 @@ export async function handleCreditsAdjustBalance(request, env, ctx) {
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
        VALUES ($1, 'refund', $2, $3, $4)`,
-      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, JSON.stringify({ reason, adjusted_by: user.id, manual: true })]
+      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
     );
     return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
   });

@@ -182,6 +182,11 @@ function wireExport() {
     if (job.status === "completed") {
       status.innerHTML = `<a href="/api/account/export/${encodeURIComponent(job.exportId)}/download">Download your export</a>`;
       btn.disabled = false;
+    } else if (job.status === "unavailable") {
+      // Retrying cannot succeed while the export backend is unconfigured, so no
+      // "Try again" affordance is offered.
+      setStatus(status, job.message, true);
+      btn.disabled = true;
     } else if (job.status === "failed" || job.status === "expired") {
       const message = job.status === "failed" ? (job.message || "Export failed.") : "Export expired.";
       status.innerHTML = `${message} <button type="button" class="btn btn--sm btn--ghost" id="accExportRetry">Try again</button>`;
@@ -218,7 +223,11 @@ function wireExport() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        renderJob({ status: "failed", message: data?.message });
+        const message = data?.error || data?.message;
+        renderJob({
+          status: data?.code === "export_not_configured" ? "unavailable" : "failed",
+          message,
+        });
         return;
       }
       renderJob(data);

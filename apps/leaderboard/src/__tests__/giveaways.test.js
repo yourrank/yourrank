@@ -67,7 +67,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).not.toContain("tr.innerHTML");
     expect(source).toContain("message.textContent = entrant.message");
     expect(source).toContain("userLink.textContent = entrant.username");
-    expect(source).toContain("safeAvatarUrl(entrant.avatar, defaultAvatar)");
+    expect(source).toContain("safeAvatarUrl(entrant.avatar, DEFAULT_AVATAR)");
   });
 
   it("loads the server-rendered giveaway tab on initialization", () => {
@@ -97,6 +97,25 @@ describe("Giveaway Chatroom Handler", () => {
     expect(html).toContain('id="pane-raffles"');
     expect(html).toContain('class="gw-tab-pane is-active" id="pane-raffles"');
     expect(html).toContain('class="gw-tab-pane" id="pane-chat" hidden');
+  });
+
+  it("paints Engage refusals in a page-level alert outside the tab panes", () => {
+    const html = renderGiveawaysContentHtml("raffles");
+    const alertIndex = html.indexOf('id="gw-page-alert"');
+    expect(alertIndex).toBeGreaterThan(-1);
+    // Ahead of every pane, so a refusal on any tab is visible rather than being
+    // written into a hidden pane.
+    expect(alertIndex).toBeLessThan(html.indexOf('class="gw-tab-pane'));
+    expect(html).toContain('<p class="gw-page-alert" id="gw-page-alert" role="alert"');
+    // Styled as an error by the stylesheet the page actually loads, so the
+    // refusal does not render as ordinary body copy.
+    expect(giveawaysCssSource).toContain(".gw-page-alert {");
+
+    expect(giveawaysSource).toContain('function showEngageError(message)');
+    expect(giveawaysSource).toContain('const alert = $("gw-page-alert")');
+    // The Kick connection badge (gw-status-text, inside the chat pane) stays a
+    // connection indicator and is never used as the Engage error surface.
+    expect(giveawaysSource).not.toContain('fallbackId');
   });
 
   it("keeps OBS copy ownership in the sharing module", () => {

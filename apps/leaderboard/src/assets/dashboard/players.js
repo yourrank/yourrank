@@ -120,16 +120,16 @@ function showMoneyValue(input) {
   return true;
 }
 
-function showMoneyEditor(input) {
+function showMoneyEditor(input, rules = {}) {
   if (!input.value.trim()) return;
-  const parsed = parsePlayerNumber(input.value);
+  const parsed = parsePlayerNumber(input.value, rules);
   if (!parsed.ok) return;
   input.value = String(parsed.value);
   input.select();
 }
 
-function validatePlayerNumberInput(input, { money = false } = {}) {
-  const parsed = parsePlayerNumber(input?.value);
+function validatePlayerNumberInput(input, { money = false, ...rules } = {}) {
+  const parsed = parsePlayerNumber(input?.value, rules);
   if (!parsed.ok) {
     setPlayerFieldError(input, parsed.message);
     return false;
@@ -139,11 +139,13 @@ function validatePlayerNumberInput(input, { money = false } = {}) {
   return true;
 }
 
-function wireNumberInput(input, { money = false } = {}) {
+// `rules` carries the field's own signed/integer/max contract (see
+// PLAYER_NUMBER_FIELDS) so live validation matches what the server accepts.
+function wireNumberInput(input, { money = false, ...rules } = {}) {
   if (!input) return;
-  input.addEventListener("focus", () => showMoneyEditor(input));
-  input.addEventListener("blur", () => validatePlayerNumberInput(input, { money }));
-  validatePlayerNumberInput(input, { money });
+  input.addEventListener("focus", () => showMoneyEditor(input, rules));
+  input.addEventListener("blur", () => validatePlayerNumberInput(input, { money, ...rules }));
+  validatePlayerNumberInput(input, { money, ...rules });
 }
 
 function updateNameCounter(input) {
@@ -455,8 +457,40 @@ export function applyPlayerFieldVisibility(fields) {
   syncColumnDropdown(merged);
 }
 
+/**
+ * Stable comparison key for a set of player rows. Stored drafts hold raw input
+ * strings while the server holds numbers, so both sides are normalized before
+ * comparison.
+ */
+function playersFingerprint(rows) {
+  return JSON.stringify((Array.isArray(rows) ? rows : []).map((row) => [
+    String(row?.name ?? "").trim(),
+    ...PLAYER_NUMBER_FIELDS.map(({ key }) => {
+      const raw = row?.[key];
+      if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+      const number = Number(String(raw).replace(/,/g, ""));
+      return Number.isFinite(number) ? number : String(raw).trim();
+    }),
+  ]));
+}
+
+/**
+ * A stored draft only means "unpublished changes" when it differs from what the
+ * server holds. A draft that matches the saved rows (the state left behind by a
+ * save or a publish) must not resurrect the "Draft changes" state on the next
+ * render of this page.
+ */
+export function draftHasChanges(stored, saved) {
+  if (!stored) return false;
+  if (Object.values(stored.quickAdd || {}).some((value) => String(value ?? "").trim())) return true;
+  return playersFingerprint(stored.players) !== playersFingerprint(saved);
+}
+
 export function renderPlayers(list, { restoreDraft = false } = {}) {
-  const stored = restoreDraft ? readPlayersDraft() : null;
+  const persisted = restoreDraft ? readPlayersDraft() : null;
+  const stored = draftHasChanges(persisted, list) ? persisted : null;
+  // A stale draft identical to the saved rows is dropped rather than restored.
+  if (persisted && !stored) clearPlayersDraft();
   const source = stored ? stored.players : list;
   const b = $("rows");
   b.innerHTML = "";

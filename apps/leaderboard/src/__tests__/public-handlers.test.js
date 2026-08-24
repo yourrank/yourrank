@@ -27,6 +27,7 @@ import {
   handlePublicData as handlePublicDataImpl,
   handlePublicStream as handlePublicStreamImpl,
 } from "../handlers/public.js";
+import { attachRouteContext } from "../middleware/handler.js";
 
 // Helper: build a minimal Request
 function req(url, method = "GET") {
@@ -68,11 +69,11 @@ const siteDeps = {
   clientIp: () => "test-ip",
   one: dbOne,
 };
-const handlePublicStandings = (request, env, ctx) => handlePublicStandingsImpl(request, env, ctx, siteDeps);
-const handlePublicPlayers = (request, env, ctx) => handlePublicPlayersImpl(request, env, ctx, siteDeps);
-const handlePublicRank = (request, env, ctx) => handlePublicRankImpl(request, env, ctx, siteDeps);
-const handlePublicData = (request, env, ctx) => handlePublicDataImpl(request, env, ctx, siteDeps);
-const handlePublicStream = (request, env, ctx) => handlePublicStreamImpl(request, env, ctx, siteDeps);
+const handlePublicStandings = (request, env, ctx) => handlePublicStandingsImpl(attachRouteContext(request, ctx), env, siteDeps);
+const handlePublicPlayers = (request, env, ctx) => handlePublicPlayersImpl(attachRouteContext(request, ctx), env, siteDeps);
+const handlePublicRank = (request, env, ctx) => handlePublicRankImpl(attachRouteContext(request, ctx), env, siteDeps);
+const handlePublicData = (request, env, ctx) => handlePublicDataImpl(attachRouteContext(request, ctx), env, siteDeps);
+const handlePublicStream = (request, env, ctx) => handlePublicStreamImpl(attachRouteContext(request, ctx), env, siteDeps);
 
 // ── handlePublicStandings ──────────────────────────────────────────────
 describe("handlePublicStandings", () => {

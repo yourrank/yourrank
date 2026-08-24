@@ -102,6 +102,49 @@ curl -b /tmp/yr-cookies.txt -H "x-csrf-token: $CSRF" -X POST \
 
 Use CDP `Emulation.setDeviceMetricsOverride` with `width: 375, height: 812, deviceScaleFactor: 2, mobile: true` and capture screenshots; the public shop and `/me` render without horizontal overflow.
 
+## Hostile-QA checklist for engagement lifecycles
+
+Learned during the Phase 2 runtime audit. Always include these cases; they surface real bugs:
+
+- **Zero-participant lifecycles.** Draw a raffle with 0 tickets, settle a prediction with 0
+  bettors, open tournament signups with no entrants. A correct product blocks the action or
+  states "no eligible entrants"; a fabricated "WINNER DRAWN" state with a placeholder identity
+  ("Verified Viewer", broken avatar) is a bug.
+- **Persistence after hard refresh** for every created object *and* for every settings input
+  (e.g. the tournament Kick channel input may not persist, while its validation error stays on
+  screen and signups can still be opened).
+- **Client-vs-server validation mismatch.** Type a negative value into Players → Net profit; the
+  client shows "Enter a number from 0 to …" but the value may still be saved and re-rendered.
+- **Stale chrome after SPA/back navigation.** `/dashboard/_content` fragment navigation and
+  browser Back can leave a stale `<h1>` and breadcrumb from the previous section
+  (e.g. Team tab showing "Data"). Check breadcrumb + h1 + sidebar highlight on every nav.
+- **Sign out.** `POST /logout` may return 302 and truly destroy the session while the button
+  reverts to `title="Couldn't sign out…"` and never redirects. Always verify server state with a
+  hard refresh rather than trusting the UI message.
+- **Appearance/theme toggle.** It sets `documentElement[data-theme=dark]` + `localStorage
+  yr-theme`, but no dashboard stylesheet ships `data-theme` rules — verify with
+  `getComputedStyle` before calling dark mode working.
+
+## Multi-Worker surfaces and local gotchas
+
+- `/dashboard/telegram*` is owned by **apps/bot** (`wrangler dev` in `apps/bot`, port 8788);
+  the leaderboard Worker 404s it even though its sidebar links there. Run both Workers.
+- The bot Worker does not serve `/assets/*`: `app.css`, `shell-nav.css`, `ui.css`,
+  `dashboard-v4.css`, `devin-system.css`, `shell-nav.js`, `dialog.js` all 404 on 8788, so the
+  Telegram dashboard renders completely unstyled locally. Check `/tmp/wrangler-bot.log` before
+  reporting a "visual regression" — it may be a local asset-routing gap or a real production bug.
+- Marketing `/` needs `apps/web` built (`bun install` + repo-root
+  `node_modules/.bin/opennextjs-cloudflare build`, not `apps/web/node_modules/...`), otherwise
+  `/` returns 503 `marketing service unavailable`.
+- Wrangler 4.106 may ignore `apps/leaderboard/.dev.vars`; export
+  `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` in the shell.
+- Account data export needs the `ACCOUNT_EXPORTS` R2 binding; without it
+  `POST /api/account/export` returns 503 and the UI shows a bare "Export failed."
+- Signup accounts start `email_verified=false`. Publishing/public-board tests may require
+  flipping that column in Postgres — call that out as test-environment manipulation.
+- Window managers here may refuse widths below ~500 CSS px; use CDP
+  `Emulation.setDeviceMetricsOverride` for true 390px mobile checks instead of `wmctrl -e`.
+
 ## Forbidden flows
 
 Direct `/bet*`, `/wager*`, and paid-entry URLs should return the public 404 "No leaderboard here" page. The raffle tab is still reachable for streamers (admin UI) but do not exercise ticket-purchase flows.

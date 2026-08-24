@@ -357,8 +357,8 @@ function GamesSection({ active } = {}) {
         <div class="v3-card-head">
           <div>
             <h2>Live Game Preview</h2>
-            <p class="v3-head-sub">Play &amp; test interactive sandbox with 2,500 demo points</p>
-            <button class="btn btn--sm btn--ghost mt-8" id="gamesResetDemo" type="button">🔄 Reset Demo Credits</button>
+            <p class="v3-head-sub">Your live games page, exactly as a viewer sees it</p>
+            <button class="btn btn--sm btn--ghost mt-8" id="gamesReloadPreview" type="button">🔄 Reload preview</button>
           </div>
           <div class="v3-game-preview-tabs" role="tablist" aria-label="Preview game selection">
             <button class="v3-game-preview-tab is-active" data-preview-game="mines" type="button" role="tab" aria-selected="true">💣 Mines</button>
@@ -370,7 +370,7 @@ function GamesSection({ active } = {}) {
           <iframe id="gamesSimulatorIframe" src="" title="Live Games preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
         </div>
         <div class="v3-games-preview-foot">
-          <span class="v3-hint">⚡ Demo simulator active · Test bets, tile picks, and multipliers</span>
+          <span class="v3-hint">⚡ Live preview · bets here use real viewer credits</span>
           <a class="v3-game-popout-link" id="gamesPopoutLink" href="#" target="_blank" rel="noopener noreferrer">Pop out preview ↗</a>
         </div>
       </div>

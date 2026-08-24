@@ -2,6 +2,7 @@
 // Dashboard JS posts here so client errors are correlated with server logs,
 // Sentry, and the original request ID.
 import { json, bad, rateLimit, clientIp, readJsonLimited } from "../auth.js";
+import { requestMeta } from "../middleware/handler.js";
 
 const ALLOWED_LEVELS = new Set(["error", "warn", "info"]);
 const MAX_BODY_BYTES = 16 * 1024;
@@ -17,15 +18,13 @@ const LIMITS = {
 
 const truncate = (value, max) => typeof value === "string" ? value.slice(0, max) : undefined;
 
-export async function handleLog(request, env, ctx, meta) {
+export async function handleLog(request, env, deps = {}) {
+  const { log, sentry, reqId } = requestMeta(request);
   const {
-    log,
-    sentry,
-    reqId,
     rateLimit: rateLimitImpl = rateLimit,
     clientIp: clientIpImpl = clientIp,
     readJsonLimited: readJsonLimitedImpl = readJsonLimited,
-  } = meta || {};
+  } = deps;
   const ip = clientIpImpl(request);
   const limit = await rateLimitImpl(env, `clientlog:${ip}`, 30, 60);
   if (!limit.ok) return bad("Too many logs. Slow down.", 429);

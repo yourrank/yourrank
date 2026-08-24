@@ -158,12 +158,11 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
         creditsUrl: `/${slug}/credits`,
         signInUrl: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`,
         header: false,
-        demoAllowed: true,
       });
       const embedHtml = `<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mini-games Simulator</title>
+<title>Mini-games preview</title>
 ${gamesIslandHead()}
 <style nonce="${nonce}">
   html, body { margin: 0; padding: 0; background: #0c1017; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }

@@ -25,10 +25,12 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
     "@types/node": "^20.14.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "autoprefixer": "^10.5.4",
+    "eslint": "^8.57.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "toucan-js": "^4.1.1",
@@ -42,10 +44,11 @@
     "build": "cd apps/leaderboard && bun run build",
     "build:bot": "cd apps/bot && bun run build",
     "e2e": "cd e2e && bun run test",
-    "lint": "(cd apps/bot && bun run lint) && (cd apps/leaderboard && bun run lint)",
+    "lint": "(cd apps/bot && bun run lint) && (cd apps/leaderboard && bun run lint) && bun run lint:consumer",
+    "lint:consumer": "eslint apps/consumer/src --ext .js --no-eslintrc -c apps/leaderboard/.eslintrc.json",
     "build:brand-assets": "bun run --cwd packages/shared build && node scripts/build-brand-assets.mjs",
     "check:test-mocks": "node scripts/check-test-mocks.mjs",
-    "typecheck": "(cd packages/shared && bun run build) && (cd apps/bot && bun run typecheck) && (cd apps/leaderboard && bun run typecheck:games) && (cd apps/monitor && bun run typecheck) && (cd apps/web && bun run typecheck)",
+    "typecheck": "(cd packages/shared && bun run build) && (cd apps/bot && bun run typecheck) && (cd apps/leaderboard && bun run typecheck:games) && (cd apps/monitor && bun run typecheck) && (cd apps/web && bun run typecheck) && tsc -p apps/consumer/tsconfig.json",
     "test": "bun run scripts/test.mjs",
     "prepare": "git config core.hooksPath .githooks || true"
   },

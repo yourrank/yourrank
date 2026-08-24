@@ -81,7 +81,7 @@ export async function recordConversion(
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT DO NOTHING
        RETURNING id`,
-      [ownerId, offerId, clickRef, event, amount, currency, JSON.stringify(raw), playerName, playerNormalized, siteId ?? null]
+      [ownerId, offerId, clickRef, event, amount, currency, raw, playerName, playerNormalized, siteId ?? null]
     );
 
     if (inserted.length === 0) {

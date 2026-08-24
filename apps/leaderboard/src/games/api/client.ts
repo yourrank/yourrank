@@ -3,12 +3,14 @@
 //
 //  Contract: THE SERVER IS AUTHORITATIVE. This module is the only place the
 //  games UI talks to the network, and the only thing it does with a response is
-//  hand it back typed. It never derives an outcome, a payout, a balance or any
-//  randomness; if a call fails, it throws — it does not invent a result.
+//  map the wire shape (api/wire.ts) onto the UI types. It never derives an
+//  outcome, a payout, a balance or any randomness; if a call fails, it throws
+//  — it does not invent a result.
 //
-//  Every mutating call carries an `Idempotency-Key` so a retry after a dropped
-//  connection can never place a second bet: the backend returns the original
-//  round for a repeated key.
+//  Every mutating call carries an `Idempotency-Key`, and `POST /bet` also sends
+//  it in the body because that is what the backend keys a round on: a retry
+//  after a dropped connection returns the original round instead of wagering
+//  twice.
 // ============================================================================
 import type {
   BetRequest,
@@ -18,9 +20,28 @@ import type {
   GamesConfig,
   HistoryResponse,
   MinesCashoutRequest,
+  MinesCashoutResult,
   MinesRevealRequest,
+  MinesRevealResult,
 } from "../types.js";
 import { GamesApiError, errorMessageFrom, toErrorCode } from "./errors.js";
+import {
+  toBetResult,
+  toFairnessResponse,
+  toGamesConfig,
+  toHistoryResponse,
+  toMinesCashoutResult,
+  toMinesRevealResult,
+  toRotatedFairness,
+} from "./wire.js";
+import type {
+  WireBetResponse,
+  WireConfig,
+  WireFairness,
+  WireHistory,
+  WireMinesCashout,
+  WireMinesReveal,
+} from "./wire.js";
 
 export interface GamesApiOptions {
   slug: string;
@@ -42,8 +63,8 @@ export interface GamesApiOptions {
 export interface GamesApi {
   getConfig(signal?: AbortSignal): Promise<GamesConfig>;
   placeBet(req: Omit<BetRequest, "slug">, signal?: AbortSignal): Promise<BetResult>;
-  minesReveal(req: Omit<MinesRevealRequest, "slug">, signal?: AbortSignal): Promise<BetResult>;
-  minesCashout(req: Omit<MinesCashoutRequest, "slug">, signal?: AbortSignal): Promise<BetResult>;
+  minesReveal(req: Omit<MinesRevealRequest, "slug">, signal?: AbortSignal): Promise<MinesRevealResult>;
+  minesCashout(req: Omit<MinesCashoutRequest, "slug">, signal?: AbortSignal): Promise<MinesCashoutResult>;
   getHistory(params?: { game?: GameId; cursor?: string; limit?: number }, signal?: AbortSignal): Promise<HistoryResponse>;
   getFairness(signal?: AbortSignal): Promise<FairnessResponse>;
   rotateFairness(clientSeed?: string, signal?: AbortSignal): Promise<FairnessResponse>;
@@ -87,36 +108,65 @@ export class HttpGamesApi implements GamesApi {
     this.newKey = opts.idempotencyKey ?? randomKey;
   }
 
-  getConfig(signal?: AbortSignal): Promise<GamesConfig> {
-    return this.request<GamesConfig>("GET", `/api/games/config?slug=${encodeURIComponent(this.slug)}`, undefined, signal);
+  async getConfig(signal?: AbortSignal): Promise<GamesConfig> {
+    return toGamesConfig(
+      await this.request<WireConfig>("GET", `/api/games/config?slug=${encodeURIComponent(this.slug)}`, undefined, signal)
+    );
   }
 
-  placeBet(req: Omit<BetRequest, "slug">, signal?: AbortSignal): Promise<BetResult> {
-    return this.request<BetResult>("POST", "/api/games/bet", { slug: this.slug, ...req }, signal);
+  async placeBet(req: Omit<BetRequest, "slug">, signal?: AbortSignal): Promise<BetResult> {
+    return toBetResult(
+      await this.request<WireBetResponse>("POST", "/api/games/bet", { slug: this.slug, ...req }, signal, {
+        keyInBody: true,
+      })
+    );
   }
 
-  minesReveal(req: Omit<MinesRevealRequest, "slug">, signal?: AbortSignal): Promise<BetResult> {
-    return this.request<BetResult>("POST", "/api/games/mines/reveal", { slug: this.slug, ...req }, signal);
+  async minesReveal(req: Omit<MinesRevealRequest, "slug">, signal?: AbortSignal): Promise<MinesRevealResult> {
+    return toMinesRevealResult(
+      await this.request<WireMinesReveal>("POST", "/api/games/mines/reveal", { slug: this.slug, ...req }, signal)
+    );
   }
 
-  minesCashout(req: Omit<MinesCashoutRequest, "slug">, signal?: AbortSignal): Promise<BetResult> {
-    return this.request<BetResult>("POST", "/api/games/mines/cashout", { slug: this.slug, ...req }, signal);
+  async minesCashout(req: Omit<MinesCashoutRequest, "slug">, signal?: AbortSignal): Promise<MinesCashoutResult> {
+    return toMinesCashoutResult(
+      await this.request<WireMinesCashout>("POST", "/api/games/mines/cashout", { slug: this.slug, ...req }, signal)
+    );
   }
 
-  getHistory(params: { game?: GameId; cursor?: string; limit?: number } = {}, signal?: AbortSignal): Promise<HistoryResponse> {
+  async getHistory(
+    params: { game?: GameId; cursor?: string; limit?: number } = {},
+    signal?: AbortSignal
+  ): Promise<HistoryResponse> {
     const q = new URLSearchParams({ slug: this.slug });
     if (params.game) q.set("game", params.game);
     if (params.cursor) q.set("cursor", params.cursor);
     if (params.limit) q.set("limit", String(params.limit));
-    return this.request<HistoryResponse>("GET", `/api/games/history?${q.toString()}`, undefined, signal);
+    return toHistoryResponse(await this.request<WireHistory>("GET", `/api/games/history?${q.toString()}`, undefined, signal));
   }
 
-  getFairness(signal?: AbortSignal): Promise<FairnessResponse> {
-    return this.request<FairnessResponse>("GET", `/api/games/fairness?slug=${encodeURIComponent(this.slug)}`, undefined, signal);
+  async getFairness(signal?: AbortSignal): Promise<FairnessResponse> {
+    return toFairnessResponse(
+      await this.request<WireFairness>(
+        "GET",
+        `/api/games/fairness?slug=${encodeURIComponent(this.slug)}`,
+        undefined,
+        signal
+      )
+    );
   }
 
-  rotateFairness(clientSeed?: string, signal?: AbortSignal): Promise<FairnessResponse> {
-    return this.request<FairnessResponse>("POST", "/api/games/fairness/rotate", { slug: this.slug, clientSeed }, signal);
+  async rotateFairness(clientSeed?: string, signal?: AbortSignal): Promise<FairnessResponse> {
+    // `clientSeed` is omitted rather than sent as undefined: the endpoint
+    // rejects unknown/empty fields.
+    const body = clientSeed ? { slug: this.slug, clientSeed } : { slug: this.slug };
+    const wire = await this.request<{ current: WireFairness["current"]; revealed: NonNullable<WireFairness["revealed"]>[number] | null }>(
+      "POST",
+      "/api/games/fairness/rotate",
+      body,
+      signal
+    );
+    return toRotatedFairness(wire);
   }
 
   /**
@@ -124,14 +174,24 @@ export class HttpGamesApi implements GamesApi {
    * failures, always under the same idempotency key so a retried bet resolves
    * to the round the first attempt may already have created.
    */
-  private async request<T>(method: "GET" | "POST", path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  private async request<T>(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+    opts: { keyInBody?: boolean } = {}
+  ): Promise<T> {
     const idempotencyKey = method === "POST" ? this.newKey() : "";
+    // Only /bet accepts an idempotency key in its body; the other endpoints
+    // reject unknown fields, and they are idempotent by round state anyway.
+    const payload =
+      opts.keyInBody && body && typeof body === "object" ? { ...(body as object), idempotencyKey } : body;
     let lastError: GamesApiError = new GamesApiError("network");
 
     for (let attempt = 0; attempt <= this.retries; attempt++) {
       if (attempt > 0) await this.sleep(this.retryDelayMs * 2 ** (attempt - 1));
       try {
-        return await this.attempt<T>(method, path, body, idempotencyKey, signal);
+        return await this.attempt<T>(method, path, payload, idempotencyKey, signal);
       } catch (err) {
         const apiErr = err instanceof GamesApiError ? err : new GamesApiError("network");
         if (!apiErr.retryable) throw apiErr;

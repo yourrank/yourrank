@@ -1,4 +1,5 @@
 // Live Predictions & Voting Handlers.
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
@@ -49,7 +50,11 @@ export async function handleGetPredictions(request, env, deps = {}) {
     [site.id]
   );
 
-  return ok({ predictions: predictions || [] });
+  // Unwrap jsonb at this boundary so the client always receives options as an
+  // array; the browser must not carry a second decoder.
+  return ok({
+    predictions: (predictions || []).map((p) => ({ ...p, options: fromJsonb(p.options) || [] })),
+  });
 }
 
 /**
@@ -119,7 +124,7 @@ export async function handleCreatePrediction(request, env, deps = {}) {
     `INSERT INTO predictions (site_id, title, options, min_bet, max_bet, lock_at)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id, title, options, status, total_pool, min_bet, max_bet, lock_at, created_at`,
-    [site.id, title, JSON.stringify(options), minBet, maxBet, lockAt]
+    [site.id, title, options, minBet, maxBet, lockAt]
   );
 
   await logAudit({
@@ -212,7 +217,7 @@ export async function handleSettlePrediction(request, env, deps = {}) {
   }
 
   // Validate the winning option belongs to this prediction.
-  const predOptions = typeof pred.options === "string" ? JSON.parse(pred.options) : (pred.options || []);
+  const predOptions = fromJsonb(pred.options) || [];
   if (!predOptions.some((opt) => String(opt.id).toLowerCase() === winningOptionId)) {
     return bad("Winning option does not belong to this prediction.", 400);
   }

@@ -1,4 +1,5 @@
 // Lucky Wheel Interactive Game Handlers.
+import { fromJsonb } from "@yourrank/shared/jsonb";
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
@@ -60,7 +61,7 @@ export async function handleGetWheelConfig(request, env, deps = {}) {
   if (config) {
     spinCost = config.spin_cost;
     enabled = config.enabled;
-    const raw = typeof config.segments_json === "string" ? JSON.parse(config.segments_json) : config.segments_json;
+    const raw = fromJsonb(config.segments_json);
     if (Array.isArray(raw) && raw.length >= 2) segments = raw;
   }
 
@@ -109,7 +110,7 @@ export async function handleUpdateWheelConfig(request, env, deps = {}) {
      ON CONFLICT (site_id) DO UPDATE
         SET spin_cost=$2, enabled=$3, segments_json=$4, updated_at=now()
      RETURNING spin_cost, enabled, segments_json`,
-    [site.id, spinCost, enabled, JSON.stringify(segments)]
+    [site.id, spinCost, enabled, segments]
   );
 
   await logAudit({
@@ -162,7 +163,7 @@ export async function handleSpinWheel(request, env, deps = {}) {
 
   let segments = DEFAULT_SEGMENTS;
   if (config?.segments_json) {
-    const raw = typeof config.segments_json === "string" ? JSON.parse(config.segments_json) : config.segments_json;
+    const raw = fromJsonb(config.segments_json);
     if (Array.isArray(raw) && raw.length >= 1) segments = raw;
   }
 
