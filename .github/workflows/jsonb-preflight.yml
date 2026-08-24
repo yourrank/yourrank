@@ -1,0 +1,200 @@
+name: JSONB repair preflight (read-only)
+
+# Manual, read-only inspection of the production database for the rows that
+# supabase/migrations/20260903000000_repair_double_encoded_jsonb.sql would rewrite.
+#
+# This workflow NEVER deploys, NEVER runs migrations and NEVER writes to production:
+# the session is opened with default_transaction_read_only=on, the committed script
+# runs inside SET TRANSACTION READ ONLY and ends in ROLLBACK, and the script itself is
+# scanned for write statements before it is allowed to run.
+#
+# Required GitHub repo secrets (already used by Deploy):
+#   SUPABASE_ACCESS_TOKEN — Supabase personal access token
+#   SUPABASE_DB_PASSWORD  — database password for the `postgres` role
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_total:
+        description: 'Candidate total to compare against (job fails on a mismatch)'
+        required: false
+        default: '26'
+  # Also runs on a pull request that touches the repair itself, so the production
+  # candidate count is visible as a check before the migration is ever merged.
+  # Read-only: it cannot deploy or migrate.
+  pull_request:
+    paths:
+      - '.github/workflows/jsonb-preflight.yml'
+      - 'supabase/repair/**'
+      - 'supabase/migrations/20260903000000_repair_double_encoded_jsonb.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jsonb-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_REF: lygcqzjxlqbvymkfjvel
+      SCRIPT: supabase/repair/preflight_20260903000000.sql
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Prove the script contains no write statement
+        run: |
+          set -euo pipefail
+          # Strip comments, then refuse to run if any statement could modify the database.
+          BAD=$(sed -e 's/--.*$//' "$SCRIPT" \
+            | grep -Einw 'insert|update|delete|truncate|create|drop|alter|grant|revoke|commit|vacuum|copy' \
+            || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::preflight script contains write statements:"
+            printf '%s\n' "$BAD"
+            exit 1
+          fi
+          grep -q 'SET TRANSACTION READ ONLY' "$SCRIPT" || {
+            echo "::error::preflight script does not set a read-only transaction"; exit 1; }
+          grep -qi '^ROLLBACK;' "$SCRIPT" || {
+            echo "::error::preflight script does not end in ROLLBACK"; exit 1; }
+          echo "read-only proof: 0 write statements, transaction is READ ONLY, ends in ROLLBACK"
+
+      - name: Install psql
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Run the preflight against production (read-only)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # Requested for defence in depth, but NOT relied on: Supabase's connection pooler
+          # silently drops startup options, so read-only is enforced per transaction instead.
+          PGOPTIONS: -c default_transaction_read_only=on
+        run: |
+          set -uo pipefail
+          if [ -z "${PGPASSWORD:-}" ]; then
+            echo "::error::SUPABASE_DB_PASSWORD is not set — cannot establish production access"
+            exit 1
+          fi
+          # The `postgres` role owns these tables and is BYPASSRLS, so no row is hidden.
+          # Session-mode pooler first, then transaction mode, then the direct host.
+          POOLER_HOST=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/config/database/pooler" \
+            | grep -o '"db_host":"[^"]*"' | head -1 | cut -d'"' -f4)
+          POOLER_HOST=${POOLER_HOST:-aws-0-eu-west-1.pooler.supabase.com}
+          CONNECTED=
+          for TARGET in \
+            "host=$POOLER_HOST port=5432 user=postgres.$PROJECT_REF" \
+            "host=$POOLER_HOST port=6543 user=postgres.$PROJECT_REF" \
+            "host=db.$PROJECT_REF.supabase.co port=5432 user=postgres"; do
+            CONN="$TARGET dbname=postgres sslmode=require"
+            echo "--- trying ${TARGET%% user=*}"
+            if psql "$CONN" -Atc 'select 1' >/dev/null 2>&1; then
+              CONNECTED="$CONN"
+              break
+            fi
+          done
+          if [ -z "$CONNECTED" ]; then
+            echo "::error::production access could not be established on any endpoint"
+            exit 1
+          fi
+          psql "$CONNECTED" -Atq -v ON_ERROR_STOP=1 -f - <<'SQL' | tee role.txt
+          BEGIN;
+          SET TRANSACTION READ ONLY;
+          SELECT 'role=' || current_user
+              || ' bypassrls=' || (select rolbypassrls from pg_roles where rolname = current_user)
+              || ' version=' || current_setting('server_version')
+              || ' transaction_read_only=' || current_setting('transaction_read_only');
+          ROLLBACK;
+          SQL
+          grep -q 'transaction_read_only=on' role.txt || {
+            echo "::error::SET TRANSACTION READ ONLY did not take effect on this endpoint"; exit 1; }
+          grep -q 'bypassrls=t' role.txt || {
+            echo "::error::the connecting role is not RLS-exempt, so the report could under-report rows"; exit 1; }
+          # Prove a write is refused the way the preflight protects itself: inside an explicit
+          # read-only transaction. The statement is a no-op (WHERE false) and the transaction
+          # ends in ROLLBACK, so it cannot change anything even if the guard were absent.
+          psql "$CONNECTED" -v ON_ERROR_STOP=1 -f - >probe.txt 2>&1 <<'SQL' && {
+          BEGIN;
+          SET TRANSACTION READ ONLY;
+          UPDATE public.sites SET id = id WHERE false;
+          ROLLBACK;
+          SQL
+              echo "::error::the transaction is NOT read-only — a write statement was accepted (nothing was committed; the transaction was rolled back)"
+              cat probe.txt; exit 1; }
+          grep -qi 'cannot execute UPDATE in a read-only transaction' probe.txt || {
+            echo "::error::the write was rejected for an unexpected reason:"; cat probe.txt; exit 1; }
+          echo "write probe rejected inside a read-only transaction: $(grep -io 'ERROR:.*' probe.txt | head -1)"
+          psql "$CONNECTED" -v ON_ERROR_STOP=1 -f "$SCRIPT" >preflight.txt 2>&1
+          STATUS=$?
+          sed -e 's/^psql:[^ ]*: NOTICE:  //' -e 's/^NOTICE:  //' preflight.txt > preflight-clean.txt
+          cat preflight-clean.txt
+          # Nothing may be left behind: no object the preflight or the probe could have created.
+          RESIDUE=$(psql "$CONNECTED" -Atc \
+            "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'public' and (c.relname like 'zz\\_%' or c.relname = 'jsonb_repair_preimage')")
+          if [ "$RESIDUE" != "0" ]; then
+            echo "::error::the run left $RESIDUE unexpected object(s) in the production schema"
+            exit 1
+          fi
+          echo "residue check: 0 objects created"
+          exit $STATUS
+
+      - name: Gate the result
+        id: gate
+        env:
+          EXPECTED: ${{ inputs.expected_total || '26' }}
+        run: |
+          set -euo pipefail
+          if ! grep -q 'PREFLIGHT COMPLETE: all 20 allowlisted columns inspected\.' preflight-clean.txt; then
+            echo "::error::preflight did not complete — the report is not trustworthy"
+            exit 1
+          fi
+          NOT_INSPECTED=$(grep -oE 'could NOT be inspected: [0-9]+' preflight-clean.txt | tail -1 | grep -oE '[0-9]+')
+          if [ "${NOT_INSPECTED:-1}" != "0" ]; then
+            echo "::error::$NOT_INSPECTED allowlisted column(s) could not be inspected (row-level security or missing privileges)"
+            grep -A20 'could NOT be inspected' preflight-clean.txt || true
+            exit 1
+          fi
+          TOTAL=$(grep -oE 'TOTAL candidate rows the repair would rewrite: [0-9]+' preflight-clean.txt \
+            | grep -oE '[0-9]+$')
+          : "${TOTAL:?candidate total missing from the report}"
+          {
+            echo "## JSONB repair preflight (read-only, production)"
+            echo
+            echo "\`$(cat role.txt)\`"
+            echo
+            echo "| Metric | Value |"
+            echo "| --- | --- |"
+            echo "| candidate rows | $TOTAL |"
+            echo "| expected | $EXPECTED |"
+            echo "| columns not inspected | $NOT_INSPECTED |"
+            echo
+            echo '### Candidates by table.column'
+            echo '```'
+            grep -E '^ +[a-z_]+\.[a-z_]+: [0-9]+ candidate row\(s\)' preflight-clean.txt || true
+            echo '```'
+            echo '### Structural evidence'
+            echo '```'
+            grep -E 'current=string parsed=' preflight-clean.txt | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$TOTAL" != "$EXPECTED" ]; then
+            echo "::error::candidate total $TOTAL does not match the classified baseline $EXPECTED — every new candidate must be classified against its column's contract before the repair runs"
+            exit 1
+          fi
+          echo "candidate total $TOTAL matches the classified baseline; 0 columns uninspected"
+
+      - name: Upload the preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jsonb-preflight-report
+          path: |
+            preflight-clean.txt
+            role.txt
+          retention-days: 30
