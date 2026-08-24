@@ -18,7 +18,7 @@ on:
       expected_total:
         description: 'Candidate total to compare against (job fails on a mismatch)'
         required: false
-        default: '26'
+        default: '0'
   # Also runs on a pull request that touches the repair itself, so the production
   # candidate count is visible as a check before the migration is ever merged.
   # Read-only: it cannot deploy or migrate.
@@ -133,10 +133,12 @@ jobs:
           STATUS=$?
           sed -e 's/^psql:[^ ]*: NOTICE:  //' -e 's/^NOTICE:  //' preflight.txt > preflight-clean.txt
           cat preflight-clean.txt
-          # Nothing may be left behind: no object the preflight or the probe could have created.
+          # Nothing may be left behind: no object the preflight or the probe could have
+          # created. public.jsonb_repair_preimage is excluded: the repair migration creates
+          # and deliberately retains it until the repair is accepted (see supabase/repair/README.md).
           RESIDUE=$(psql "$CONNECTED" -Atc \
             "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
-              where n.nspname = 'public' and (c.relname like 'zz\\_%' or c.relname = 'jsonb_repair_preimage')")
+              where n.nspname = 'public' and c.relname like 'zz\\_%'")
           if [ "$RESIDUE" != "0" ]; then
             echo "::error::the run left $RESIDUE unexpected object(s) in the production schema"
             exit 1
@@ -147,7 +149,7 @@ jobs:
       - name: Gate the result
         id: gate
         env:
-          EXPECTED: ${{ inputs.expected_total || '26' }}
+          EXPECTED: ${{ inputs.expected_total || '0' }}
         run: |
           set -euo pipefail
           if ! grep -q 'PREFLIGHT COMPLETE: all 20 allowlisted columns inspected\.' preflight-clean.txt; then
@@ -180,7 +182,7 @@ jobs:
             echo '```'
             echo '### Structural evidence'
             echo '```'
-            grep -E 'current=string parsed=' preflight-clean.txt | head -60
+            grep -E 'current=string parsed=' preflight-clean.txt | head -60 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$TOTAL" != "$EXPECTED" ]; then
