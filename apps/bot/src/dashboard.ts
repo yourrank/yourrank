@@ -209,13 +209,15 @@ export function buildDashboard(opts: { canonical?: boolean } = {}): Hono<DashEnv
     ));
   };
 
-  const pageRoute = (page: string) => {
-    return (c: any) => dashboardPage(c, page);
-  };
-  app.get(canonical ? "/" : "/dashboard", pageRoute("overview"));
-  app.get("/bots", pageRoute("bots"));
-  app.get("/offers", pageRoute("offers"));
-  app.get("/commands", pageRoute("commands"));
-  app.get("/broadcasts", pageRoute("broadcasts"));
+  if (canonical) {
+    const pageRoute = (page: string) => {
+      return (c: any) => dashboardPage(c, page);
+    };
+    app.get("/", pageRoute("overview"));
+    app.get("/bots", pageRoute("bots"));
+    app.get("/offers", pageRoute("offers"));
+    app.get("/commands", pageRoute("commands"));
+    app.get("/broadcasts", pageRoute("broadcasts"));
+  }
   return app;
 }

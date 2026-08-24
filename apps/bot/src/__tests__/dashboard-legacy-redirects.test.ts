@@ -48,6 +48,36 @@ describe("manifest-owned bot redirects", () => {
     }
   });
 
+  it("keeps the legacy mount page-free while preserving its support surfaces", async () => {
+    for (const [path, target] of [
+      ["/bot/bots", "/dashboard/telegram/bots"],
+      ["/bot/dashboard", "/dashboard/telegram"],
+    ]) {
+      const response = await app.request(`https://yourrank.site${path}`, {}, testEnv);
+      expect(response.status, path).toBe(301);
+      expect(new URL(response.headers.get("location") ?? "", "https://yourrank.site").pathname, path)
+        .toBe(target);
+    }
+
+    const nonAliasPage = await app.request("https://yourrank.site/bot/overview", {}, testEnv);
+    expect(nonAliasPage.status).toBe(404);
+
+    const client = await app.request("https://yourrank.site/bot/dash/client.js", {}, testEnv);
+    expect(client.status).toBe(200);
+    expect(client.headers.get("content-type")).toContain("application/javascript");
+
+    const auth = await app.request("https://yourrank.site/bot/auth/logout", {
+      method: "POST",
+      headers: { accept: "application/json" },
+    }, testEnv);
+    expect(auth.status).toBe(200);
+
+    const api = await app.request("https://yourrank.site/bot/api/users", {
+      method: "POST",
+    }, testEnv);
+    expect(api.status).not.toBe(404);
+  });
+
   it("emits one bounded path event and ignores logger failures", async () => {
     const events: unknown[] = [];
     const response = await runWithLogger(logger(events), () =>

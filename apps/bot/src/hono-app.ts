@@ -28,6 +28,7 @@ import { errMessage } from "./errors.js";
 import {
   DASHBOARD_ROUTE_ALIASES,
   aliasWorker,
+  applyAliasSearch,
   resolveAliasRedirect,
 } from "@yourrank/shared/dashboard-routes";
 import { logLegacyDashboardRedirect } from "@yourrank/shared/dashboard-legacy-telemetry";
@@ -626,9 +627,11 @@ export function buildHonoApp({
 
   for (const alias of DASHBOARD_ROUTE_ALIASES) {
     if (alias.kind !== "redirect" || aliasWorker(alias) !== "bot") continue;
+    const resolved = resolveAliasRedirect(alias.path, "", "bot");
+    if (!resolved) continue;
     app.get(alias.path, (c) => {
-      const resolved = resolveAliasRedirect(alias.path, new URL(c.req.url).search, "bot");
-      if (!resolved) return c.notFound();
+      const requestUrl = new URL(c.req.url);
+      const search = applyAliasSearch(alias.search, requestUrl.searchParams).toString();
       logLegacyDashboardRedirect({
         alias: resolved.alias,
         route_id: resolved.routeId,
@@ -636,8 +639,8 @@ export function buildHonoApp({
         served_by: resolved.servedBy,
         source: "path_alias",
       }, getLogger());
-      const target = new URL(resolved.pathname, c.req.url);
-      target.search = resolved.search.toString();
+      const target = new URL(resolved.pathname, requestUrl);
+      target.search = search;
       return c.redirect(target.pathname + target.search, resolved.status);
     });
   }
