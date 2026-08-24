@@ -4,6 +4,7 @@
 import { raw } from "hono/html";
 import { settingsWidgets } from "./account-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
+import { chromeStateFor } from "../assets/dashboard/routes.js";
 
 export const SETTINGS_TABS = [
   ["account", "Account", '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
@@ -50,8 +51,9 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
         </aside>
       </div>
     </div>;
+  const chrome = chromeStateFor("settings", active);
   if (fragment) return content;
-  return <DashboardShell activeNav={active === "connections" ? "settings" : "account"} activePath={activePath || `/dashboard/settings/${active === "plan" ? "billing" : active}`} boardContext="none" crumbs={[{ label: "Account", href: "/dashboard/settings" }, { label: activeLabel }]} footer="account" topbarContext="Account" user={user}>
+  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="none" crumbs={chrome.crumbs} footer="account" topbarContext="Account" user={user}>
     {content}
   </DashboardShell>;
 }
@@ -67,7 +69,7 @@ const settingsConfigBase = {
 
 export const settingsConfig = {
   ...settingsConfigBase,
-  title: "Account · YourRank",
+  title: chromeStateFor("settings", "account").documentTitle,
   canonical: "https://yourrank.site/dashboard/settings",
 };
 

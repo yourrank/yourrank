@@ -1,13 +1,9 @@
 import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricValue, setRowsLoading } from "./states.js";
+import { chromeStateFor } from "./routes.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const TAB_LABELS = {
-  activity: "Site visitors",
-  referrals: "Sources",
-  events: "Events",
-};
 
 export function initPerformance() {
   if (initPerformance._done) return;
@@ -70,7 +66,7 @@ function showTab(tab) {
   const panels = { activity: ["perf-activity", "perf-heatmap"], referrals: ["perf-referrals", "perf-referrers"], events: ["perf-events"] };
   Object.entries(panels).forEach(([name, ids]) => ids.forEach((id) => { const node = $(id); if (node) node.hidden = name !== active; }));
   const crumb = document.querySelector('.v3-crumbs span[aria-current="page"]');
-  if (crumb) crumb.textContent = TAB_LABELS[active];
+  if (crumb) crumb.textContent = chromeStateFor("performance", active).tabLabel;
 }
 
 export function renderPerformance(stats) {

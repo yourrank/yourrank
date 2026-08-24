@@ -205,7 +205,6 @@ export function buildDashboard(opts: { canonical?: boolean; legacyPages?: boolea
       c.get("cspNonce"),
       page,
       undefined,
-      "/dashboard/telegram",
       { botUsername: user?.bot_username, botStatus: user?.bot_status, siteName: user?.site_name },
     ));
   };

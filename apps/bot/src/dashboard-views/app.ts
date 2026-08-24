@@ -1,6 +1,6 @@
 import { botPageHtml } from "@yourrank/shared/page-shell";
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
-import { botNavItems, pageLinks, pageMeta } from "./shell.js";
+import { botNavItems, pageLinks, pageMeta, telegramChrome } from "./shell.js";
 import { overviewPanel } from "./pages/overview.js";
 import { botsPanel } from "./pages/bots.js";
 import { commandsPanel } from "./pages/commands.js";
@@ -45,28 +45,24 @@ export function appHtml(
   nonce?: string,
   page = "overview",
   nav?: string,
-  canonicalPath = "/dashboard/telegram",
   context: DashboardContext = {},
 ): string {
   const meta = pageMeta(page);
-  const pagePath = page === "overview" ? canonicalPath : `${canonicalPath}/${page}`;
+  const chromeState = telegramChrome(page);
   // The Telegram pages render in the leaderboard dashboard's shell (same rail,
   // topbar and account menu) instead of a second, older-looking one.
   const chrome = dashboardChromeHtml({
     nav: botNavItems(),
-    active: "telegram",
+    active: chromeState.navKey,
     navLabel: "Telegram",
     railHeadHtml: `<div class="lb-ws-switcher"><a class="lb-ws-card" href="/dashboard/leaderboards"><div class="lb-ws-avatar">${esc((context.siteName || "S").slice(0, 1).toUpperCase())}</div><div class="lb-ws-meta"><span class="lb-ws-name">${esc(context.siteName || "No site connected")}</span><span class="lb-ws-plan">Active site</span></div></a></div>`,
-    title: meta.label,
+    title: chromeState.h1 ?? "",
     subtitle: meta.sub,
-    crumbs: [
-      { label: "Telegram", href: "/dashboard/telegram" },
-      { label: meta.label },
-    ],
+    crumbs: [...chromeState.crumbs],
     user,
     // This setup CTA is contextual bot state, not a second navigation tree.
     topbarHtml: `<div class="lb-topbar-hud"><div class="lb-account-hud"><span class="lb-hud-icon" aria-hidden="true">◎</span><div class="lb-hud-details"><span class="lb-board-select-lbl">CURRENT BOT</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="/dashboard/telegram/bots" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
-    activePath: pagePath,
+    activePath: chromeState.canonicalPath,
     railProfile: true,
     collapsible: true,
     logoutAction: "/bot/auth/logout",

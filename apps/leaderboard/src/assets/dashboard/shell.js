@@ -3,7 +3,7 @@ import { $ } from "./utils.js";
 import { clearDirty, state, subscribe } from "./state.js";
 import { renderOverviewSummary } from "./overview.js";
 import { fitDesignPreview, loadStats, refreshDesignPreview } from "./site.js";
-import { dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, SECTIONS, TAB_TITLES } from "./routes.js";
+import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath } from "./routes.js";
 import { DYNAMIC_SECTIONS, dynamicPath, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
 
@@ -183,17 +183,18 @@ function renderCrumbs(page, tab) {
   const bento = document.querySelector(".lb-bento");
   if (!bento) return;
   const existing = bento.querySelector(":scope > .v3-crumbs");
-  const section = SECTIONS[page];
-  const tabTitle = section?.tabs?.length ? (TAB_TITLES[page]?.[tab || defaultTab(page)] || "") : "";
+  const crumbs = chromeStateFor(page, tab || defaultTab(page), { exact: true })?.crumbs || [];
   // Top-level pages intentionally ship no breadcrumb trail.
-  if (!section || !tabTitle) {
+  if (crumbs.length < 2) {
     existing?.remove();
     return;
   }
+  const head = crumbs[0];
+  const leaf = crumbs[crumbs.length - 1];
   const nav = existing || document.createElement("nav");
   nav.className = "v3-crumbs";
   nav.setAttribute("aria-label", "Breadcrumb");
-  nav.innerHTML = `<a href="${section.path}">${section.title}</a><span class="v3-crumb-sep" aria-hidden="true">/</span><span aria-current="page">${tabTitle}</span>`;
+  nav.innerHTML = `<a href="${head.href}">${head.label}</a><span class="v3-crumb-sep" aria-hidden="true">/</span><span aria-current="page">${leaf.label}</span>`;
   if (!existing) bento.prepend(nav);
 }
 
@@ -347,17 +348,9 @@ export function setupEditorTabs() {
           el.hidden = el.dataset.egroup !== group;
         });
       }
-      const TAB_NAME_MAP = {
-        setup: "Setup",
-        players: "Players",
-        design: "Appearance",
-        share: "Share",
-        history: "History",
-        games: "Games",
-      };
       const crumbCurrent = document.querySelector(".v3-crumbs span[aria-current='page']");
       if (crumbCurrent) {
-        crumbCurrent.textContent = TAB_NAME_MAP[group] || buttons.find((b) => b.dataset.egroup === group)?.textContent.trim() || group;
+        crumbCurrent.textContent = chromeStateFor("board", group, { exact: true })?.tabLabel || buttons.find((b) => b.dataset.egroup === group)?.textContent.trim() || group;
       }
       // The preview measures off the visible column height; re-fit after toggling.
       setTimeout(fitDesignPreview, 0);

@@ -3,21 +3,21 @@
 
 import { raw } from "hono/html";
 import { DashboardShell } from "./dashboard-shell.jsx";
+import { chromeStateFor } from "../assets/dashboard/routes.js";
 import { renderGiveawayDrawersHtml, renderGiveawaysContentHtml } from "./giveaway-pages.js";
 
 export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {}) {
-  const labels = { chat: "Giveaways", raffles: "Raffles", drops: "Drops", preds: "Predictions", tournaments: "Tournaments" };
-  const crumbs = [{ label: "Engagement", href: "/dashboard/giveaways" }, { label: labels[tab] || labels.chat }];
+  const chrome = chromeStateFor("giveaways", tab, { exact: true }) || chromeStateFor("giveaways", "chat");
   const content = <div class="gw-workspace-content">
     <div id="gw-app" dangerouslySetInnerHTML={{ __html: renderGiveawaysContentHtml(tab) }}></div>
   </div>;
   if (fragment) return <>{content}{raw(renderGiveawayDrawersHtml(tab))}</>;
   return (
     <DashboardShell
-      activeNav={tab === "chat" || tab === "tournaments" ? "giveaways" : tab === "preds" ? "predictions" : tab}
-      activePath={activePath || `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`}
+      activeNav={chrome.navKey}
+      activePath={activePath || chrome.canonicalPath}
       boardContext="selector"
-      crumbs={crumbs}
+      crumbs={chrome.crumbs}
       footer="rewards"
       rootId="gw-dash"
       user={user}
@@ -29,7 +29,7 @@ export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {})
 }
 
 export const giveawaysConfig = {
-  title: "Engagement · YourRank",
+  title: chromeStateFor("giveaways", "chat").documentTitle,
   canonical: "https://yourrank.site/dashboard/giveaways",
   styles: [
     "/assets/app.css",
