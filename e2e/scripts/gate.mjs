@@ -79,6 +79,7 @@ if (!summary) {
 }
 const reportedPass = Number(summary[1]);
 const reportedFail = Number(summary[2]);
+const reportedSkip = Number(/^\s*(\d+) skip\b/m.exec(output)?.[1] ?? 0);
 const executed = reportedPass + reportedFail;
 
 function verdictFor(scenario) {
@@ -115,7 +116,16 @@ for (const { scenario, verdict, ready } of rows) {
   console.log(`${scenario.key.padEnd(width)}  ${verdict}${note}`);
 }
 console.log("-".repeat(width + 24));
-console.log(`tests executed: ${executed} (bun reported ${reportedPass} pass, ${reportedFail} fail)`);
+console.log(
+  `tests executed: ${executed} (bun reported ${reportedPass} pass, ${reportedFail} fail, ${reportedSkip} skip)`
+);
+if (reportedSkip > 0) {
+  // Skips are legitimate only for dependencies this suite cannot provision; they
+  // are surfaced, never folded into the pass count.
+  console.log(
+    `${reportedSkip} test(s) SKIPPED for missing environment dependencies (E2E_DB_URL, E2E_MARKETING_AVAILABLE, E2E_BOT_AVAILABLE, E2E_VIEWER_SESSION, E2E_TELEGRAM_BOT_TOKEN); a skipped test is not a passed test.`
+  );
+}
 
 const failures = [];
 if (executed === 0) failures.push("the suite executed zero tests; a skipped run is not a passing run");
@@ -131,4 +141,6 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("E2E gate passed: every required scenario executed and passed.");
+console.log(
+  `E2E gate passed: every required scenario executed and passed (${reportedSkip} test(s) skipped for missing environment dependencies).`
+);

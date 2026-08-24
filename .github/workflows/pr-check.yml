@@ -314,4 +314,10 @@ jobs:
           E2E_VIEWER_SESSION: ${{ secrets.E2E_VIEWER_SESSION }}
           E2E_VIEWER_USERNAME: ${{ secrets.E2E_VIEWER_USERNAME }}
           E2E_DB_URL: ${{ secrets.E2E_DB_URL }}
+          # Set to "1" only when the target environment actually serves the
+          # marketing pages ("/" and "/pricing", proxied to the MARKETING Worker)
+          # and the separate apps/bot Worker (/bot/*). Unset, those tests report
+          # SKIPPED instead of failing on a dependency the suite cannot deploy.
+          E2E_MARKETING_AVAILABLE: ${{ secrets.E2E_MARKETING_AVAILABLE }}
+          E2E_BOT_AVAILABLE: ${{ secrets.E2E_BOT_AVAILABLE }}
         run: bun run gate

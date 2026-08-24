@@ -1,6 +1,8 @@
 /// <reference types="bun-types" />
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { SQL } from "bun";
+import { dashboardNavItems } from "@yourrank/shared/dashboard-nav";
 import { Client, hmacSha256, randomId } from "./client.js";
 
 const rawBaseUrl = process.env.E2E_BASE_URL?.trim();
@@ -19,6 +21,20 @@ if (process.env.E2E_ALLOW_MUTATIONS !== "1") {
 const BASE_URL = parsedBaseUrl.origin;
 const TELEGRAM_BOT_TOKEN = process.env.E2E_TELEGRAM_BOT_TOKEN || "";
 
+// Dependencies this suite cannot create for itself. Each one gates the tests
+// that need it so they report SKIPPED instead of failing on a missing
+// environment — and never report PASSED without running.
+//
+// - E2E_DB_URL: a board is only publicly reachable once the owner's email is
+//   verified, and the raw token is only delivered by email (see journeys.test.ts).
+// - E2E_MARKETING_AVAILABLE: "/" and "/pricing" are proxied to the MARKETING
+//   Worker binding, which is absent in local dev (503).
+// - E2E_BOT_AVAILABLE: /bot/dash/* is served by the separate apps/bot Worker.
+const DB_URL = process.env.E2E_DB_URL?.trim() || "";
+const PUBLIC_ACCESS_AVAILABLE = Boolean(DB_URL);
+const MARKETING_AVAILABLE = process.env.E2E_MARKETING_AVAILABLE === "1";
+const BOT_AVAILABLE = process.env.E2E_BOT_AVAILABLE === "1";
+
 const id = randomId();
 const email = `e2e-${id}@yourrank.test`;
 // The server password policy requires a symbol (apps/leaderboard/src/password-rules.js).
@@ -26,27 +42,27 @@ const password = "TestPass1234!";
 const name = "E2E Test";
 const slug = `e2e-${id}`;
 
-const SIGNED_IN_DESTINATIONS = [
-  "/dashboard",
-  "/dashboard/leaderboard",
-  "/dashboard/leaderboard/setup",
-  "/dashboard/leaderboard/players",
-  "/dashboard/leaderboard/design",
-  "/dashboard/games",
-  "/dashboard/leaderboard/share",
-  "/dashboard/leaderboard/history",
-  "/dashboard/leaderboards",
-  "/dashboard/analytics/activity",
-  "/dashboard/rewards/viewers",
-  "/dashboard/rewards/redemptions",
-  "/dashboard/rewards/shop",
-  "/dashboard/rewards/rules",
-  "/dashboard/rewards/activity",
-  "/dashboard/rewards/channel",
-  "/dashboard/site",
-  "/dashboard/settings",
-  "/help",
-] as const;
+// The sidebar owns section roots and page subnavigation owns tabs (AGENTS.md),
+// so a leaf like /dashboard/rewards/viewers is reachable from the Rewards page's
+// own tabs, not from every other page's chrome. What every signed-in page must
+// therefore expose is the sidebar's section roots — taken from the same contract
+// the Worker renders from, so a section that disappears from the shell fails here
+// instead of being quietly accepted.
+// Matching the href alone would be vacuous for "/dashboard", which prefixes every
+// other dashboard link, so each section is identified by its nav key too — the
+// sidebar renders one `data-nav` per item.
+const SECTION_ROOTS: Array<{ key: string; href: string }> = (function collect(items): Array<{
+  key: string;
+  href: string;
+}> {
+  return items.flatMap((item) =>
+    item.kind === "group"
+      ? collect(item.children ?? [])
+      : item.href
+        ? [{ key: item.key, href: item.href }]
+        : []
+  );
+})(dashboardNavItems());
 
 const AUTHENTICATED_DASHBOARD_ROUTES = [
   ["/dashboard", "board"],
@@ -96,6 +112,15 @@ describe("YourRank E2E smoke", () => {
     accountCreated = true;
     primarySlug = signup.json.user.slug;
 
+    if (PUBLIC_ACCESS_AVAILABLE) {
+      const sql = new SQL(DB_URL);
+      try {
+        await sql`update users set email_verified = true where email = ${email}`;
+      } finally {
+        await sql.end();
+      }
+    }
+
     const login = await client.post("/api/auth/login", { email, password });
     if (!login.json?.ok) {
       throw new Error(`login failed: ${login.status} ${login.body}`);
@@ -130,7 +155,7 @@ describe("YourRank E2E smoke", () => {
   });
 
   describe("public site smoke", () => {
-    it("GET / returns the landing page", async () => {
+    it.skipIf(!MARKETING_AVAILABLE)("GET / returns the landing page", async () => {
       const res = await client.get("/");
       expect(res.status).toBe(200);
       expect(res.body).toContain("YourRank");
@@ -144,7 +169,7 @@ describe("YourRank E2E smoke", () => {
       expect(res.json?.db).toBe(true);
     });
 
-    it("GET /pricing returns the pricing page", async () => {
+    it.skipIf(!MARKETING_AVAILABLE)("GET /pricing returns the pricing page", async () => {
       const res = await client.get("/pricing");
       expect(res.status).toBe(200);
       expect(res.body).toContain("pricing");
@@ -182,34 +207,38 @@ describe("YourRank E2E smoke", () => {
       const res = await client.post("/api/site/finish", { siteId: primarySiteId });
       expect(res.status).toBe(200);
       expect(res.json?.ok).toBe(true);
-      expect(res.json?.published).toBe(true);
+      // The response reports the publication timestamp; `published` was never
+      // part of it. Assert the timestamp is a real date so a silent no-op
+      // publish still fails.
+      expect(typeof res.json?.publishedAt).toBe("string");
+      expect(Number.isFinite(Date.parse(res.json?.publishedAt))).toBe(true);
     });
 
-    it("GET /<slug> renders the public leaderboard page", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /<slug> renders the public leaderboard page", async () => {
       const res = await client.get(`/${primarySlug}`);
       expect(res.status).toBe(200);
       expect(res.body).toContain("leaderboard");
     });
 
-    it("GET /api/public/:slug/standings returns JSON", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug/standings returns JSON", async () => {
       const res = await client.get(`/api/public/${primarySlug}/standings`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.json?.players)).toBe(true);
     });
 
-    it("GET /api/public/:slug/players returns JSON", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug/players returns JSON", async () => {
       const res = await client.get(`/api/public/${primarySlug}/players`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.json?.players)).toBe(true);
     });
 
-    it("GET /api/public/:slug/rank returns a rank message", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug/rank returns a rank message", async () => {
       const res = await client.get(`/api/public/${primarySlug}/rank?user=TestPlayer`);
       expect(res.status).toBe(200);
       expect(res.body).toContain("leaderboard");
     });
 
-    it("GET /api/public/:slug returns full data JSON", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug returns full data JSON", async () => {
       const res = await client.get(`/api/public/${primarySlug}`);
       expect(res.status).toBe(200);
       expect(res.json?.players).toBeDefined();
@@ -246,15 +275,18 @@ describe("YourRank E2E smoke", () => {
     });
 
     for (const [path, siteParam] of AUTHENTICATED_DASHBOARD_ROUTES) {
-      it(`GET ${path} keeps every signed-in feature directly available`, async () => {
+      it(`GET ${path} renders the shell with every sidebar section root`, async () => {
         expect(primarySiteId).toBeDefined();
         const route = `${path}?${siteParam}=${encodeURIComponent(primarySiteId || "")}`;
         const res = await client.get(route);
         expect(res.status).toBe(200);
         expect(res.body).toContain('id="lbSide"');
         expect(res.body).toContain('data-close-side');
-        for (const destination of SIGNED_IN_DESTINATIONS) {
-          expect(res.body).toContain(`href="${destination}"`);
+        for (const { key, href } of SECTION_ROOTS) {
+          expect(res.body).toContain(`data-nav="${key}"`);
+          // The shell appends ?board=/?siteId= to site-scoped roots, so match the
+          // href prefix rather than the bare path.
+          expect(res.body).toContain(`href="${href}`);
         }
       });
     }
@@ -262,11 +294,15 @@ describe("YourRank E2E smoke", () => {
     it("GET /help keeps the full dashboard journey and local help actions", async () => {
       const res = await client.get("/help");
       expect(res.status).toBe(200);
-      expect(res.body).toContain('data-nav="help" aria-current="page"');
-      expect(res.body).toContain('data-nav="support"');
-      expect(res.body).toContain('data-nav="feedback"');
-      for (const destination of SIGNED_IN_DESTINATIONS) {
-        expect(res.body).toContain(`href="${destination}"`);
+      // Help is not a sidebar section, so it carries no `data-nav`: its own tab
+      // strip owns the active marker (page subnavigation owns tabs).
+      expect(res.body).toContain("help-workspace-subnav");
+      expect(res.body).toContain('href="/help" aria-current="page"');
+      expect(res.body).toContain('href="/help/support"');
+      expect(res.body).toContain('href="/help/feedback"');
+      for (const { key, href } of SECTION_ROOTS) {
+        expect(res.body).toContain(`data-nav="${key}"`);
+        expect(res.body).toContain(`href="${href}`);
       }
     });
   });
@@ -278,14 +314,16 @@ describe("YourRank E2E smoke", () => {
       expect(res.body).toContain("My credits");
     });
 
-    it("GET /<slug>/credits returns the public credits page", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /<slug>/credits redirects to the canonical shop page", async () => {
       const res = await client.get(`/${primarySlug}/credits`);
       expect(res.status).toBe(200);
-      expect(res.body).toContain("pc-wrap");
+      // The legacy credits URL is an alias: it 302s to /<slug>/shop, which the
+      // client follows, and the canonical site shell renders the shop section.
+      expect(res.body).toContain('data-section="shop"');
       expect(res.body).not.toMatch(/© 1970/);
     });
 
-    it("GET /<slug>/overlay returns the OBS overlay page", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /<slug>/overlay returns the OBS overlay page", async () => {
       const res = await client.get(`/${primarySlug}/overlay`);
       expect(res.status).toBe(200);
       expect(res.body).toContain("ov-wrap");
@@ -293,18 +331,25 @@ describe("YourRank E2E smoke", () => {
   });
 
   describe("postback and score postback", () => {
-    it("GET /api/attribution returns a postback URL for pro users", async () => {
+    it("GET /api/attribution returns signed postback credentials for pro users", async () => {
       const res = await client.get("/api/attribution");
       expect(res.status).toBe(200);
       expect(res.json?.ok).toBe(true);
-      expect(res.json?.postbackUrl).toContain("key=");
-      const url = new URL(res.json?.postbackUrl);
-      postbackKey = url.searchParams.get("key") || "";
+      // The response moved from a single query-string URL to explicit signed
+      // credentials plus a sunsetting legacy URL; assert both so the legacy
+      // field cannot be dropped silently before its sunset date.
+      expect(res.json?.postback?.signedEndpoint).toContain("/api/postback");
+      expect(res.json?.postback?.signature?.length).toBeGreaterThan(0);
+      expect(res.json?.postback?.legacyUrl).toContain("key=");
+      postbackKey = res.json?.postback?.key || "";
       expect(postbackKey.length).toBeGreaterThan(0);
     });
 
     it("POST /api/scores updates leaderboard with signed players payload", async () => {
+      // A postback key can cover several boards, so the server requires the
+      // target board in the signed body (or the X-Postback-Site header).
       const payload = JSON.stringify({
+        slug: primarySlug,
         players: [
           { name: "Alice", wagered: 12345, prize: 100 },
           { name: "Bob", wagered: 9000, prize: 50 },
@@ -323,14 +368,14 @@ describe("YourRank E2E smoke", () => {
       expect(res.json?.players).toBe(2);
     });
 
-    it("GET /api/public/:slug/standings reflects the new scores", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug/standings reflects the new scores", async () => {
       const res = await client.get(`/api/public/${primarySlug}/standings`);
       expect(res.status).toBe(200);
       expect(res.json?.players?.length).toBe(2);
       expect(res.json?.players[0].name).toBe("Alice");
     });
 
-    it("GET /api/public/:slug/rank returns Alices rank", async () => {
+    it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /api/public/:slug/rank returns Alices rank", async () => {
       const res = await client.get(`/api/public/${primarySlug}/rank?user=Alice`);
       expect(res.status).toBe(200);
       expect(res.body).toContain("#1");
@@ -356,7 +401,7 @@ describe("YourRank E2E smoke", () => {
     });
   });
 
-  describe("bot dashboard and tracked links", () => {
+  describe.skipIf(!BOT_AVAILABLE)("bot dashboard and tracked links", () => {
     it("GET /bot/health returns ok and db true", async () => {
       const res = await client.get("/bot/health");
       expect(res.status).toBe(200);
@@ -413,7 +458,7 @@ describe("YourRank E2E smoke", () => {
     });
   });
 
-  describe("Telegram bot connection (optional)", () => {
+  describe.skipIf(!BOT_AVAILABLE)("Telegram bot connection (optional)", () => {
     it("connects a real bot when E2E_TELEGRAM_BOT_TOKEN is set", async () => {
       if (!TELEGRAM_BOT_TOKEN) {
         expect(true).toBe(true); // skipped
