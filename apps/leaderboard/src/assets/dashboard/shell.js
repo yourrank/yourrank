@@ -175,8 +175,7 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
       if (sameUrl || replace) history.replaceState(history.state || {}, "", destination);
       else history.pushState({}, "", destination);
       lastRouteUrl = destination;
-      setActiveSideNav(DYNAMIC_SECTIONS[page].navKey);
-      routeCrumbs(page, tab);
+      syncRouteChrome(page, tab);
       await loadDynamicSection(page, tab || DYNAMIC_SECTIONS[page].tabs[0], { query });
       return true;
     }
@@ -419,11 +418,11 @@ export function setupShell() {
     }
     lastRouteUrl = destination;
     if (isDynamicSection(route.page)) {
+      syncRouteChrome(route.page, route.tab);
       // The section is still mounted and renders its own tabs in place: no
       // refetch, just repaint the panels for the restored URL.
       const renderer = routeRenderers[route.page];
       if (renderer) {
-        syncRouteChrome(route.page, route.tab);
         renderer({ page: route.page, tab: route.tab, query: location.search });
         return;
       }
