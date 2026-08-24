@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "instruction-conflict-resolution",
+  "cases": [
+    {
+      "id": "instruction-conflict-resolution-positive-1",
+      "task": "An imported design skill recommends a bold marketing style but PRODUCT.md requires a calm task-first operational workspace.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "resolve the conflict using explicit authority and specificity",
+        "keep owner/product requirements above imported generic guidance"
+      ],
+      "forbidden_outcomes": [
+        "silently follow the last-read third-party instruction over higher-authority project requirements"
+      ]
+    },
+    {
+      "id": "instruction-conflict-resolution-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger instruction-conflict-resolution without a task-relevant reason"
+      ]
+    }
+  ]
+}

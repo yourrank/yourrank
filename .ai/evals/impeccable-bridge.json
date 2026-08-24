@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "impeccable-bridge",
+  "cases": [
+    {
+      "id": "impeccable-bridge-positive-1",
+      "task": "Use the installed Impeccable design capability to critique and polish a product dashboard while preserving project design rules.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "treat Impeccable as optional on-demand guidance rather than repository truth",
+        "return to canonicalization, accessibility and verification gates after design work"
+      ],
+      "forbidden_outcomes": [
+        "copy or treat external aesthetic defaults as higher authority than PRODUCT.md or DESIGN.md"
+      ]
+    },
+    {
+      "id": "impeccable-bridge-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger impeccable-bridge without a task-relevant reason"
+      ]
+    }
+  ]
+}

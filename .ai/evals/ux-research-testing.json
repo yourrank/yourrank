@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ux-research-testing",
+  "cases": [
+    {
+      "id": "ux-research-testing-positive-1",
+      "task": "We are unsure whether streamers understand the difference between rewards, points and shop items. Plan how to validate the terminology.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "define learning goal, target participants, realistic tasks/questions and evidence",
+        "separate observation from inference"
+      ],
+      "forbidden_outcomes": [
+        "fabricate user findings without conducting research"
+      ]
+    },
+    {
+      "id": "ux-research-testing-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger ux-research-testing without a UI/UX reason"
+      ]
+    }
+  ]
+}

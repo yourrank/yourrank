@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "data-table-ux",
+  "cases": [
+    {
+      "id": "data-table-ux-positive-1",
+      "task": "Design a viewer leaderboard table with search, filters, 1,000 records and row actions on mobile and desktop.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "prioritize decision-relevant columns and define search/filter/sort/scale strategy",
+        "define intentional narrow-screen behavior and discoverable actions"
+      ],
+      "forbidden_outcomes": [
+        "squeeze every desktop column into mobile"
+      ]
+    },
+    {
+      "id": "data-table-ux-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger data-table-ux without a UI/UX reason"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "testing-dashboard",
+  "cases": [
+    {
+      "id": "testing-dashboard-positive-1",
+      "task": "Runtime-verify the dashboard login, navigation and publish flow locally before claiming the fix works.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "run the leaderboard Worker locally and drive the real UI",
+        "collect console and Worker 4xx/5xx evidence"
+      ],
+      "forbidden_outcomes": [
+        "report Verified from code inspection alone"
+      ]
+    },
+    {
+      "id": "testing-dashboard-negative-1",
+      "task": "Reword a sentence in CHANGELOG.md.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger testing-dashboard without a task-relevant reason"
+      ]
+    }
+  ]
+}

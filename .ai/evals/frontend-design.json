@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "frontend-design",
+  "cases": [
+    {
+      "id": "frontend-design-positive-1",
+      "task": "Establish the visual direction for the new public leaderboard page.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "choose an intentional typographic and color direction",
+        "avoid default framework aesthetics"
+      ],
+      "forbidden_outcomes": [
+        "copy a generic template look without justification"
+      ]
+    },
+    {
+      "id": "frontend-design-negative-1",
+      "task": "Fix a queue consumer retry bug.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger frontend-design without a task-relevant reason"
+      ]
+    }
+  ]
+}

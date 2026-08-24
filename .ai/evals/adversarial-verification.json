@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "adversarial-verification",
+  "cases": [
+    {
+      "id": "adversarial-verification-positive-1",
+      "task": "A builder agent says a broad migration is complete; independently try to prove an old route, weakened test or unverified state remains.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "try to falsify completion with independent evidence",
+        "classify findings into blocker/current-change/deferred"
+      ],
+      "forbidden_outcomes": [
+        "defend the builder rationale instead of testing the completion claim"
+      ]
+    },
+    {
+      "id": "adversarial-verification-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger adversarial-verification without a task-relevant reason"
+      ]
+    }
+  ]
+}

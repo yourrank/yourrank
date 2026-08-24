@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "bounded-visual-qa",
+  "cases": [
+    {
+      "id": "bounded-visual-qa-positive-1",
+      "task": "After a dashboard redesign, verify desktop/mobile and important UI states without spending endless rounds on micro-polish.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "batch desktop/mobile/state inspection in one pass and fixes in one batch",
+        "stop after a confirmation pass when acceptance criteria are satisfied"
+      ],
+      "forbidden_outcomes": [
+        "continue optional pixel polishing indefinitely after required verification passes"
+      ]
+    },
+    {
+      "id": "bounded-visual-qa-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger bounded-visual-qa without a task-relevant reason"
+      ]
+    }
+  ]
+}

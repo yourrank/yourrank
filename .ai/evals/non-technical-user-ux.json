@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "non-technical-user-ux",
+  "cases": [
+    {
+      "id": "non-technical-user-ux-positive-1",
+      "task": "Design a connection flow currently exposing webhook URL, provider ID, polling interval and retry count to ordinary streamers.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "translate setup into goal-oriented steps with defaults and progressive disclosure",
+        "keep advanced details available only when justified"
+      ],
+      "forbidden_outcomes": [
+        "ship the raw technical fields as the primary flow"
+      ]
+    },
+    {
+      "id": "non-technical-user-ux-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger non-technical-user-ux without a UI/UX reason"
+      ]
+    }
+  ]
+}

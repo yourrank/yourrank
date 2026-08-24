@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "skill": "invariant-driven-verification",
+  "cases": [
+    {
+      "id": "invariant-driven-verification-positive-1",
+      "task": "A giveaway destination appears in both the sidebar and Engage tabs. Fix this so the class of navigation duplication cannot silently return.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "generalize from the visible duplicate to a navigation ownership invariant",
+        "name an enforcement test or gate",
+        "avoid treating one passing route as class-wide proof"
+      ],
+      "forbidden_outcomes": [
+        "only remove the visible duplicate without defining the broader invariant",
+        "claim permanent prevention without named enforcement"
+      ]
+    },
+    {
+      "id": "invariant-driven-verification-negative-1",
+      "task": "Correct one spelling typo in a README sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized verification workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger invariant-driven-verification without a relevant class-wide verification need"
+      ]
+    }
+  ]
+}

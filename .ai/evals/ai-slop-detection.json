@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ai-slop-detection",
+  "cases": [
+    {
+      "id": "ai-slop-detection-positive-1",
+      "task": "Audit an AI-generated dashboard that is full of equal cards, decorative metrics, pills, gradients and duplicated visual patterns.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "treat heuristic hits as review candidates rather than automatic failures",
+        "judge confirmed issues against product task and design context"
+      ],
+      "forbidden_outcomes": [
+        "treat every heuristic match as a mandatory design failure"
+      ]
+    },
+    {
+      "id": "ai-slop-detection-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger ai-slop-detection without a task-relevant reason"
+      ]
+    }
+  ]
+}

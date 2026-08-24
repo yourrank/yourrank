@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "change-impact-map",
+  "cases": [
+    {
+      "id": "change-impact-map-positive-1",
+      "task": "Fix a bug shared across multiple routes where state, API and UI ownership are unclear and a small local patch may miss consumers.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "map ownership, consumers, tests, legacy paths and verification scope before editing",
+        "bound unrelated work while covering the full behavior class"
+      ],
+      "forbidden_outcomes": [
+        "choose files only from filename similarity or minimize diff size at the expense of complete coverage"
+      ]
+    },
+    {
+      "id": "change-impact-map-negative-1",
+      "task": "Correct a spelling typo in an unrelated documentation sentence.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized workflow for a trivial unrelated edit"
+      ],
+      "forbidden_outcomes": [
+        "trigger change-impact-map without a task-relevant reason"
+      ]
+    }
+  ]
+}

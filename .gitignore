@@ -50,3 +50,4 @@ tailwind.config.js
 .impeccable/critique/
 .impeccable/review/
 # impeccable-ignore-end
+__pycache__/

@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ux-writing-content-design",
+  "cases": [
+    {
+      "id": "ux-writing-content-design-positive-1",
+      "task": "Rewrite vague labels and error messages in an account connection flow.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "use specific action labels and recovery-oriented error text",
+        "translate system states into user meaning"
+      ],
+      "forbidden_outcomes": [
+        "leave generic Continue and Something went wrong everywhere"
+      ]
+    },
+    {
+      "id": "ux-writing-content-design-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger ux-writing-content-design without a UI/UX reason"
+      ]
+    }
+  ]
+}

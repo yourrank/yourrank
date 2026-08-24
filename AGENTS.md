@@ -24,8 +24,8 @@ Guidance for automated agents and new contributors working in this repo.
 
 - For UI/UX, frontend, redesign, navigation, layout, user-flow, or information-
   architecture work, load and actively apply both project skills:
-  `.agents/skills/impeccable/SKILL.md` and
-  `.agents/skills/frontend-design/SKILL.md`.
+  `.ai/skills/impeccable/SKILL.md` and
+  `.ai/skills/frontend-design/SKILL.md`.
 - Use Impeccable for product shaping, journey analysis, interaction quality,
   responsive behavior, accessibility, and implementation rigor. Use Frontend
   Design in the same task to establish a distinctive, subject-specific visual
@@ -37,19 +37,33 @@ Guidance for automated agents and new contributors working in this repo.
 
 ## Engineering skill pack
 
-`.agents/skills/` also carries the vendored
+This file is the canonical router. `.ai/` is the single instruction hierarchy below it —
+there is no second pack, and nothing that used to live under `.agents/` remains.
+`.ai/skills/` holds **95 skills**: the 90 lifecycle skills of the v7 pro-max
 [coding-agent-prompt-and-skills](https://github.com/rabavadev/coding-agent-prompt-and-skills)
-pack (56 lifecycle skills). Its policy documents live in
-`.agents/coding-agent-pack/`.
+pack plus the 5 project skills `impeccable`, `frontend-design`, `ui-ux-pro-max`,
+`testing-dashboard`, `testing-rewards-engagement`.
 
-- Start non-trivial work by routing through `.agents/skills/using-skills/SKILL.md`,
+Entry points: always-on rules `AI_RULES.md` (= `.ai/AI_CODING_RULES.md`), task protocol
+`TASK_PROTOCOL.md` (= `.ai/AI_WORKFLOW.md`), verification standard `VERIFICATION.md`
+(= `.ai/AI_VERIFICATION.md`), product/architecture truth `PROJECT_TRUTH.md`
+(= `.ai/PROJECT_TRUTH.md`), repo-specific rules `.ai/PROJECT_RULES.md`, current architecture
+state `.ai/PROJECT_STATE.md`, plus `.ai/AI_FORBIDDEN.md`, `.ai/INVARIANTS.md` and
+`.ai/STOPPING_CRITERIA.md`. Validate the graph and skill set with
+`python3 .ai/scripts/self_check.py --repo .` (expects 95 skills).
+
+- Start non-trivial work by routing through `.ai/skills/using-skills/SKILL.md`,
   which maps a task type (bug, feature, UI redesign, migration, high-risk
   backend) to the minimum skill sequence. Load only the skills that sequence
   selects.
-- `.agents/coding-agent-pack/CONTROLLER.md` holds the always-on policy: inspect
-  the repo before asking, one canonical implementation (no `*-v2`/`*-new`/
-  `*-final` files), root-cause over patch stacking, and runtime evidence before
-  claiming completion.
+- The always-on policy (`AI_RULES.md`, `.ai/AI_FORBIDDEN.md`): inspect the repo
+  before asking, one canonical implementation (no `*-v2`/`*-new`/`*-final` files,
+  no compatibility re-exports left behind), root-cause over patch stacking, and
+  runtime evidence before claiming completion.
+- Runtime verification of dashboard and rewards flows follows
+  `.ai/skills/testing-dashboard/SKILL.md` and
+  `.ai/skills/testing-rewards-engagement/SKILL.md`. A skipped check is never a
+  pass: report `PASSED` / `FAILED` / `SKIPPED` / `NOT RUN` / `NOT VERIFIABLE`.
 - UI/UX work keeps using `impeccable` and `frontend-design` (above) and adds the
   pack's `frontend-ui-ux`, `design-system`, `component-system`, `accessibility`,
   `browser-runtime-testing`, `behavior-validation`, and `final-review`.

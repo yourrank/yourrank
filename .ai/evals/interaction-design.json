@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "interaction-design",
+  "cases": [
+    {
+      "id": "interaction-design-positive-1",
+      "task": "Choose the right interaction for editing a complex integration configuration with six dependent fields.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "choose pattern based on complexity, context preservation, reversibility and mobile/focus needs",
+        "define trigger feedback completion and recovery"
+      ],
+      "forbidden_outcomes": [
+        "default to a nested modal wizard without reasoning"
+      ]
+    },
+    {
+      "id": "interaction-design-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger interaction-design without a UI/UX reason"
+      ]
+    }
+  ]
+}

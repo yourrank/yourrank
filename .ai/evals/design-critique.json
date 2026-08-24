@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "design-critique",
+  "cases": [
+    {
+      "id": "design-critique-positive-1",
+      "task": "Critique a polished dashboard that has huge empty areas, too many cards, buried actions and technical labels.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "prioritize task success, IA, interaction and hierarchy before polish",
+        "give evidence, user impact and recommended change"
+      ],
+      "forbidden_outcomes": [
+        "praise the design because it is visually clean"
+      ]
+    },
+    {
+      "id": "design-critique-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger design-critique without a UI/UX reason"
+      ]
+    }
+  ]
+}

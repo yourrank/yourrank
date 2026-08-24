@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "ux-audit",
+  "cases": [
+    {
+      "id": "ux-audit-positive-1",
+      "task": "Audit a streamer dashboard where settings are scattered, users hit dead ends, and key actions are hard to find.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "map end-to-end task flow and rank usability issues by severity",
+        "identify navigation, terminology, feedback and state problems"
+      ],
+      "forbidden_outcomes": [
+        "focus primarily on border radius and color polish"
+      ]
+    },
+    {
+      "id": "ux-audit-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger ux-audit without a UI/UX reason"
+      ]
+    }
+  ]
+}

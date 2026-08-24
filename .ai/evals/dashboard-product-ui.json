@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "dashboard-product-ui",
+  "cases": [
+    {
+      "id": "dashboard-product-ui-positive-1",
+      "task": "Redesign an operational streamer dashboard used daily to run giveaways, leaderboards and integrations.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "optimize scanability, actionability and returning-user speed",
+        "use cards only when grouping semantics justify them"
+      ],
+      "forbidden_outcomes": [
+        "add a giant marketing hero above the daily workspace by default"
+      ]
+    },
+    {
+      "id": "dashboard-product-ui-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger dashboard-product-ui without a UI/UX reason"
+      ]
+    }
+  ]
+}

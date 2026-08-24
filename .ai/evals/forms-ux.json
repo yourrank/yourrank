@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "forms-ux",
+  "cases": [
+    {
+      "id": "forms-ux-positive-1",
+      "task": "Improve a settings form that validates every keystroke, loses values after server errors, and has 20 ungrouped fields.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "group fields, improve validation timing, preserve values and provide actionable errors",
+        "define submission/progress/success behavior"
+      ],
+      "forbidden_outcomes": [
+        "keep first-keystroke error spam and flat field dump"
+      ]
+    },
+    {
+      "id": "forms-ux-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger forms-ux without a UI/UX reason"
+      ]
+    }
+  ]
+}

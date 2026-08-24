@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "skill": "information-architecture-navigation",
+  "cases": [
+    {
+      "id": "information-architecture-navigation-positive-1",
+      "task": "Reorganize a dashboard with separate Kick Settings, Reward Settings, Points Settings, Integration Settings and Advanced Settings.",
+      "should_trigger": true,
+      "required_outcomes": [
+        "group destinations by user goals and define a predictable hierarchy",
+        "remove duplicate/confusing destinations where appropriate"
+      ],
+      "forbidden_outcomes": [
+        "preserve every technical category simply because the backend has them"
+      ]
+    },
+    {
+      "id": "information-architecture-navigation-negative-1",
+      "task": "Fix a backend-only SQL query bug with no user-interface changes.",
+      "should_trigger": false,
+      "required_outcomes": [
+        "do not invoke this specialized UI/UX workflow"
+      ],
+      "forbidden_outcomes": [
+        "trigger information-architecture-navigation without a UI/UX reason"
+      ]
+    }
+  ]
+}

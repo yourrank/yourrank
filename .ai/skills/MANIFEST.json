@@ -1,0 +1,670 @@
+{
+  "version": "7.0.0-pro-max",
+  "skills": [
+    {
+      "name": "accessibility",
+      "path": "skills/accessibility/SKILL.md",
+      "sha256": "7750063adbdb706bb645ebcb95a03ffd5089a060f568b3a66cca8b2e20f35831",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "adversarial-verification",
+      "path": "skills/adversarial-verification/SKILL.md",
+      "sha256": "5e3d960363ec49860b3b417a4a4c4125dd0598e40429f559ab9f8c6a5d5e674b",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ai-slop-detection",
+      "path": "skills/ai-slop-detection/SKILL.md",
+      "sha256": "ba2734f4b2ccdfd6ae7a481ed5c245cdb31ba848e2e3fa5a0dd30a831f4f4134",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "api-integration",
+      "path": "skills/api-integration/SKILL.md",
+      "sha256": "c05ed4e09f91c2e4a34cd54fc518c8bfb3b9b3804d426c6796b4fd69fad274ce",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "api-interface-design",
+      "path": "skills/api-interface-design/SKILL.md",
+      "sha256": "60535cf2e7962bd0126d5e454fc4299f33fb675db090a58cb3553c6519726556",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "architecture-review",
+      "path": "skills/architecture-review/SKILL.md",
+      "sha256": "c2b3938885cdd1c680499a035ca13abce544a714dad286f8ed4c99f3afb985fa",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "backend",
+      "path": "skills/backend/SKILL.md",
+      "sha256": "d24f95521a8bf8d9a989ab2598b57d09a522e0ca216b3ef0dff05c71f002def8",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "behavior-validation",
+      "path": "skills/behavior-validation/SKILL.md",
+      "sha256": "b47e573aa6191238eaae7a037e798fe0148567c03bb478096597cb2a6256132a",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "bounded-visual-qa",
+      "path": "skills/bounded-visual-qa/SKILL.md",
+      "sha256": "87e27b2b74e2449b180e9593f4e8be1359404c90e66238e588c05654cad57c08",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "browser-runtime-testing",
+      "path": "skills/browser-runtime-testing/SKILL.md",
+      "sha256": "220b4ad1a09f0d466106fe66db51eb3fffa7adf3cf76b59ae5c92acbc3d494a0",
+      "has_references": false,
+      "has_scripts": true
+    },
+    {
+      "name": "canonical-implementation",
+      "path": "skills/canonical-implementation/SKILL.md",
+      "sha256": "ef583485a670e49a05e2a2ae219ab20c9975c061345df6f3b93ddf9e86c4a823",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "change-impact-map",
+      "path": "skills/change-impact-map/SKILL.md",
+      "sha256": "c8ca1ddbe67c42b3d5aa0e5e06939a30b2e2d9b59cbd91f0dc160916fd725aa4",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ci-cd",
+      "path": "skills/ci-cd/SKILL.md",
+      "sha256": "636579392f3a2a320a03a31ecc9041b1bff811faa7e4abc6ae4e0f10fce80341",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "code-review",
+      "path": "skills/code-review/SKILL.md",
+      "sha256": "28cad9949ead07ce03717a92b45d23a6838cf59804549ecb33d7ba7d689226bc",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "code-simplification",
+      "path": "skills/code-simplification/SKILL.md",
+      "sha256": "fc2e7f64286def0df0f153bc1b89ed42ca54352dc22720c1a4a2004f530a8a5a",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "codebase-exploration",
+      "path": "skills/codebase-exploration/SKILL.md",
+      "sha256": "52848bcb1a7a99e69424ba9bc0ed1604d0c5881c8d81a89205d2fe0721aa87f5",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "component-system",
+      "path": "skills/component-system/SKILL.md",
+      "sha256": "944946aa42236693c9b7f3b7668543d6019e6d3ccef3709ccc88b8a077312de7",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "context-management",
+      "path": "skills/context-management/SKILL.md",
+      "sha256": "754dcefa6b48671bd88748f79004157b06f9a09a09b9fc0159ef2988098eb06e",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "copywriting",
+      "path": "skills/copywriting/SKILL.md",
+      "sha256": "dc1d7d6264470efd8ba9805335192d4b834e0d5f980d95a6ccb66966455ac408",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "cost-aware-execution",
+      "path": "skills/cost-aware-execution/SKILL.md",
+      "sha256": "7df5fa87332f191593ee18e9b263bd7621603b972cdd26ea07f8cd0eedf1e615",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "coverage-derived-verification",
+      "path": "skills/coverage-derived-verification/SKILL.md",
+      "sha256": "f1a175950f0d5b3f62bda3679caf2f07769fe42a6127df4212877224db4a1468",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "dashboard-product-ui",
+      "path": "skills/dashboard-product-ui/SKILL.md",
+      "sha256": "b741323eee5ad2bb2cb1c54162f27712b4028eccba12bf4c08d8a20cc56ea617",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "data-table-ux",
+      "path": "skills/data-table-ux/SKILL.md",
+      "sha256": "b9a56b118732b1069484bd085b707f1e9cd60611de7c2ee58838a737808f7034",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "database",
+      "path": "skills/database/SKILL.md",
+      "sha256": "89621d945723e7d9d8f63524745316f2d3c3f3bbdb1e498897ea0ea55b6fd0a6",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "dead-code-cleanup",
+      "path": "skills/dead-code-cleanup/SKILL.md",
+      "sha256": "80c210fe30221a039c19423d6743fadf450bb96111a2de1d022ebe81b7c4fab0",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "debugging",
+      "path": "skills/debugging/SKILL.md",
+      "sha256": "3e69eccdcdca8e20b3679a257a623e2b1f295fce98c62517cebd0437cff216fc",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "dependency-management",
+      "path": "skills/dependency-management/SKILL.md",
+      "sha256": "e1c72fca092b9b7147c93e4bcb3753696ef8536deff8b3365ba071fd8c4db61d",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "deprecation-migration",
+      "path": "skills/deprecation-migration/SKILL.md",
+      "sha256": "2e280c722cbb123c943bf175a33bbf0f7aaf781ffd682928b2b6e95cdf5e4ae0",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "design-context-bootstrap",
+      "path": "skills/design-context-bootstrap/SKILL.md",
+      "sha256": "29a7ac44f2c763a50762a1fabd648e1179a0605de6a38527ee91d1a1a7d2012f",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "design-critique",
+      "path": "skills/design-critique/SKILL.md",
+      "sha256": "506c389d8a304f9cecddef1b1f0f5347ea5bb47447dc42b57c86bfbcbe219ae3",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "design-language-system",
+      "path": "skills/design-language-system/SKILL.md",
+      "sha256": "35225a3213014c4be45ae2c4c3890293858bea1cbd245ef4c63593c9e035299c",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "design-migration-cleanup",
+      "path": "skills/design-migration-cleanup/SKILL.md",
+      "sha256": "7830fd827593c3461043ae734ac6ad6f735dc60e3aabb824a1ee91c5c1964a68",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "design-system",
+      "path": "skills/design-system/SKILL.md",
+      "sha256": "a8abfad81d4dad39f88547023d862920ae17a965a1039e5a16f7a35beb37679d",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "documentation-adrs",
+      "path": "skills/documentation-adrs/SKILL.md",
+      "sha256": "de4e8c38d65311aa1726c9218143e6b5c3f4330536c4c6d3780f4d4785dad57d",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "environment-configuration",
+      "path": "skills/environment-configuration/SKILL.md",
+      "sha256": "2e2c139122f502b2e9c9228cb0260585f1c8a56e55ef77a6acfc4a6d4615af94",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "failed-attempt-recovery",
+      "path": "skills/failed-attempt-recovery/SKILL.md",
+      "sha256": "02253b875bf1633a88d613787c3364d0e0a4d4cfd9731247c85fea0e8f36f6e7",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "feature-flag-lifecycle",
+      "path": "skills/feature-flag-lifecycle/SKILL.md",
+      "sha256": "501714de5d87438b81cf77a7fa954fb87f5eba4bfc9472799b990e512bd310bf",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "final-review",
+      "path": "skills/final-review/SKILL.md",
+      "sha256": "f2a3ea5fad2e6d8dcd49508fd2779a28fca448880f313d3578238ebbe96f1abb",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "forms-ux",
+      "path": "skills/forms-ux/SKILL.md",
+      "sha256": "400d3b0a65f16b5450fffdadfb5b3d2789deb291016f5a92d4d24c05197689b8",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "frontend-design",
+      "path": "skills/frontend-design/SKILL.md",
+      "sha256": "1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "frontend-ui-ux",
+      "path": "skills/frontend-ui-ux/SKILL.md",
+      "sha256": "ad4601c501ad2d4b0ce08fa9fccc349814c66c92307397bb8f4f9bf71569a35e",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "game-development",
+      "path": "skills/game-development/SKILL.md",
+      "sha256": "37737b1eae3a2f891ab77fb35d063cf026676a1f63bc30cf836f8b75d72f9436",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "generated-file-safety",
+      "path": "skills/generated-file-safety/SKILL.md",
+      "sha256": "cffc65bf6f6814d6b870771073c982f20957f767acfbb462a835b81ae671d39c",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "git-workflow-versioning",
+      "path": "skills/git-workflow-versioning/SKILL.md",
+      "sha256": "d88d6357be997681dadf60b5f3a07f6a26c2eed7c9fdda8ec939a668c941aa4c",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "honest-completion-reporting",
+      "path": "skills/honest-completion-reporting/SKILL.md",
+      "sha256": "db044047783d4fd5966a697aea655a3ab3086ee0628173d8ccec3027ff98fc32",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "impeccable",
+      "path": "skills/impeccable/SKILL.md",
+      "sha256": "0af3e24c8e59ca19da4f7f1023a186447ace502045fa71fd0037395a69a1e418",
+      "has_references": false,
+      "has_scripts": true
+    },
+    {
+      "name": "impeccable-bridge",
+      "path": "skills/impeccable-bridge/SKILL.md",
+      "sha256": "66235d87a5828d5e18eac7560e3c999ac65ac998286c461cb6c57923e0c81b7f",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "incident-response",
+      "path": "skills/incident-response/SKILL.md",
+      "sha256": "f3d1f1bda5b84661b540feb997a288c1306ccfac2231c2f23088840b9b8a55d7",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "incremental-implementation",
+      "path": "skills/incremental-implementation/SKILL.md",
+      "sha256": "df6e77ff76124f8750d0e3b12876557f1ba6aed1a1423cb3233ab18601d58b26",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "information-architecture-navigation",
+      "path": "skills/information-architecture-navigation/SKILL.md",
+      "sha256": "5649fd8a4d5b829da112250854cd873b8c6c34eb492204b8d98e01eafd2be35d",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "instruction-conflict-resolution",
+      "path": "skills/instruction-conflict-resolution/SKILL.md",
+      "sha256": "f13a434601640d0116301e279944873045c3eb03170f86ab010d94ac0265862c",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "interaction-design",
+      "path": "skills/interaction-design/SKILL.md",
+      "sha256": "8abbfac2d4d93d84297cece1fdc5eb01edadc7f6160fea98544c3ce494f7790f",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "invariant-driven-verification",
+      "path": "skills/invariant-driven-verification/SKILL.md",
+      "sha256": "4cc7b589869179fb0f0e93b342037b577f886ecd12deedc35cb58069e51f38c0",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "monorepo-workspaces",
+      "path": "skills/monorepo-workspaces/SKILL.md",
+      "sha256": "cae2cbfdd8b7ae841879a98383cd9e8694dcc7731af1a0098e35ae4f9e50b548",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "motion-interaction-design",
+      "path": "skills/motion-interaction-design/SKILL.md",
+      "sha256": "d1dba1fd61030ff15f361f03d9b2885a245ed40dcab68a7df0544c06236e6ac1",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "nextjs-best-practices",
+      "path": "skills/nextjs-best-practices/SKILL.md",
+      "sha256": "0ad3d7c5fb956be9a41194fb44e35bddc602747a5a3aab6d49696b1dd72220c6",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "non-technical-user-ux",
+      "path": "skills/non-technical-user-ux/SKILL.md",
+      "sha256": "ea01ef1246a19b3ce3b446a3eb59b9f96828c32394c83e591e52279d9a7ab030",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "observability",
+      "path": "skills/observability/SKILL.md",
+      "sha256": "de92983f9ef6844978d09aeb9370264e8f2efa176f95778a3e48818fd1a85cbe",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "onboarding-first-run",
+      "path": "skills/onboarding-first-run/SKILL.md",
+      "sha256": "254cae8870677e6666e6a5adf18b24e09988a649b66d2d3a171f6f171341ee30",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "page-builder",
+      "path": "skills/page-builder/SKILL.md",
+      "sha256": "947382a668481b9f070ba13898c8ab571baaa3fc47966018ddab91467563b0c7",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "performance",
+      "path": "skills/performance/SKILL.md",
+      "sha256": "f41471e798e3a38c87bc0e7da999f9719004f8f1e280ec575925009eb6d22e52",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "planning-task-breakdown",
+      "path": "skills/planning-task-breakdown/SKILL.md",
+      "sha256": "a36d66462c4a5606dc95e3ef85fccfd4655bce0b0741de3aa227143959b6d9fe",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "playwright-e2e",
+      "path": "skills/playwright-e2e/SKILL.md",
+      "sha256": "e4efb1822091e368c2db6587c4cdf39a9533c26672044e8e8d7ce2f1b850a94b",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "privacy-data-governance",
+      "path": "skills/privacy-data-governance/SKILL.md",
+      "sha256": "f7f21e51cc745e47daafd6a423da97cb0a8e049554bfd4f8d52266eb3b5da9ba",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "product-surface-classification",
+      "path": "skills/product-surface-classification/SKILL.md",
+      "sha256": "867c712eb360a954c00199ddee5ee75011a87ce566a46a6d041029f50cd2608d",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "product-thinking",
+      "path": "skills/product-thinking/SKILL.md",
+      "sha256": "75b8ff85c6545be971158dc698a2e4e72e69de4982747127a52380ddcf73daac",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "react-best-practices",
+      "path": "skills/react-best-practices/SKILL.md",
+      "sha256": "d893024021e013321a34dd8c70cc2b9cbceba2a5e092c9109ea4a79fcef9d124",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "react-testing",
+      "path": "skills/react-testing/SKILL.md",
+      "sha256": "15a2cb93ede2cfbdee83df08403e2853a87108dcac086c7ee8ae181dfc0c251a",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "refactoring",
+      "path": "skills/refactoring/SKILL.md",
+      "sha256": "860b967f5d01552671a3d1e01163dccf20e03254eec646edab411611fb0516c3",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "reliability-resilience",
+      "path": "skills/reliability-resilience/SKILL.md",
+      "sha256": "e2987f2a6c3ea63820a8d2ba610b096f8b17bc18e5307693c7fd7f8e3960f075",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "repo-truth-bootstrap",
+      "path": "skills/repo-truth-bootstrap/SKILL.md",
+      "sha256": "1db0ac0c10de7cb492c4a8d2f4b0cffe245a3fc46025260f2c55b2049241f59e",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "requirement-interpretation",
+      "path": "skills/requirement-interpretation/SKILL.md",
+      "sha256": "87ad2793ebdde03201cbea56b6fbbcf2ce3713d55790b435a4b1567d7271a399",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "responsive-adaptive-design",
+      "path": "skills/responsive-adaptive-design/SKILL.md",
+      "sha256": "b32ac04940ff221cdeb7e28cfa32756e6f99a24efd8e3dee7e8700728c5eb6ee",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "scope-control-stopping-criteria",
+      "path": "skills/scope-control-stopping-criteria/SKILL.md",
+      "sha256": "5cc1ba4f2042557c9a3167c34b92338c638ae31f3ceee8c3cdada46bc19956cf",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "security",
+      "path": "skills/security/SKILL.md",
+      "sha256": "991fa1d88f28210c43bd48906ce3d28e0e295d8975ade0e6cd19b13bb957b977",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "shipping-rollback",
+      "path": "skills/shipping-rollback/SKILL.md",
+      "sha256": "6120f789ce3c8f70d16f08ae0b1abf0251a608f640cb85f5599fcb0afea1b5c9",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "site-architecture",
+      "path": "skills/site-architecture/SKILL.md",
+      "sha256": "462f204e304e22b3c00ded761e813bc8a172ca0f1629118706befc7b1d9b54fc",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "skill-security-review",
+      "path": "skills/skill-security-review/SKILL.md",
+      "sha256": "7d36e7c384c156548cbf217fade804f3230b1fba0561e6214ef1b490c12ca225",
+      "has_references": true,
+      "has_scripts": true
+    },
+    {
+      "name": "spec-driven-development",
+      "path": "skills/spec-driven-development/SKILL.md",
+      "sha256": "660560c49306e9612b9b529198a7db84175fe4e27dbce3d91998f04bc0601aaf",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "stack-freshness",
+      "path": "skills/stack-freshness/SKILL.md",
+      "sha256": "2f8184e21a2fd55d102311a352a38fab157f8de4e33ffabb950f67116713feb1",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "test-driven-development",
+      "path": "skills/test-driven-development/SKILL.md",
+      "sha256": "cc549903ea804149083b70cd62e9cd49d4cf6af87858a065490b5172a54ab779",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "testing",
+      "path": "skills/testing/SKILL.md",
+      "sha256": "6b9530b113ec3e3226e9d107b7a480402992833f5bb07aceaeb03c07d884ac47",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "testing-dashboard",
+      "path": "skills/testing-dashboard/SKILL.md",
+      "sha256": "b8810b8fa38aefadd09b2e5ab656931a3c8643fc40893fc092e3bcf87e721217",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "testing-rewards-engagement",
+      "path": "skills/testing-rewards-engagement/SKILL.md",
+      "sha256": "4a2834c0f3e27714539da95df6d9993615a983bde837182fbe8cea38731b7109",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "typescript-best-practices",
+      "path": "skills/typescript-best-practices/SKILL.md",
+      "sha256": "bcb7029ab8e3ef81f7ca101e11e961f7165a6307b8c700c9800da91c86332460",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ui-review",
+      "path": "skills/ui-review/SKILL.md",
+      "sha256": "419659a7368a221be6b04e8df6e90f0f05879abfbf90cc104ef77c0eaf7c8da3",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ui-root-cause-forensics",
+      "path": "skills/ui-root-cause-forensics/SKILL.md",
+      "sha256": "0c37883a75af2f92f92d50e2fb392e3f4459d55e838b08bbfde6a6ec94fdb84e",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "path": "skills/ui-ux-pro-max/SKILL.md",
+      "sha256": "f581ba5ceef388ce5d1925ac300d450db07146e41812f98e19bf627ab2f9d09b",
+      "has_references": true,
+      "has_scripts": true
+    },
+    {
+      "name": "using-skills",
+      "path": "skills/using-skills/SKILL.md",
+      "sha256": "5de93a98a7ccd1966f3a0796d23c7de414d46a324374a98395c23d9aa5f170f4",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ux-audit",
+      "path": "skills/ux-audit/SKILL.md",
+      "sha256": "8488ded6bfe4d69b3031f45c95855df79d2dd4e1c2db98ea618b723aca2a0a89",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "ux-research-testing",
+      "path": "skills/ux-research-testing/SKILL.md",
+      "sha256": "76e9b7bd42d708eeb99345786774910d555d1e1a21d6995f80259399aa4ab0ef",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ux-usability-foundations",
+      "path": "skills/ux-usability-foundations/SKILL.md",
+      "sha256": "c9d58e9617db1b356c7399974da7d1a98cff56406512984094f1a56e257d10e7",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "ux-writing-content-design",
+      "path": "skills/ux-writing-content-design/SKILL.md",
+      "sha256": "92fa71bcbf63729d1aeae863ab8aaef799fccadb8253d118d56c44f8d7ef88a1",
+      "has_references": false,
+      "has_scripts": false
+    },
+    {
+      "name": "visual-composition",
+      "path": "skills/visual-composition/SKILL.md",
+      "sha256": "1d9759b64ce8e900ee269c260fa51f02fad050031876708c2c5d7015017e3baa",
+      "has_references": true,
+      "has_scripts": false
+    },
+    {
+      "name": "visual-regression",
+      "path": "skills/visual-regression/SKILL.md",
+      "sha256": "9279f13cfa57d40d56273b06b1dbc07ebd953508c13e0a40c9e5788d304f6ccf",
+      "has_references": false,
+      "has_scripts": false
+    }
+  ]
+}
