@@ -1,5 +1,6 @@
 import { botPageHtml } from "@yourrank/shared/page-shell";
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
+import { dashboardChromeState } from "@yourrank/shared/dashboard-chrome-state";
 import { botNavItems, pageLinks, pageMeta, telegramChrome } from "./shell.js";
 import { overviewPanel } from "./pages/overview.js";
 import { botsPanel } from "./pages/bots.js";
@@ -55,13 +56,13 @@ export function appHtml(
     nav: botNavItems(),
     active: chromeState.navKey,
     navLabel: "Telegram",
-    railHeadHtml: `<div class="lb-ws-switcher"><a class="lb-ws-card" href="/dashboard/leaderboards"><div class="lb-ws-avatar">${esc((context.siteName || "S").slice(0, 1).toUpperCase())}</div><div class="lb-ws-meta"><span class="lb-ws-name">${esc(context.siteName || "No site connected")}</span><span class="lb-ws-plan">Active site</span></div></a></div>`,
+    railHeadHtml: `<div class="lb-ws-switcher"><a class="lb-ws-card" href="${dashboardChromeState("boards").canonicalPath}"><div class="lb-ws-avatar">${esc((context.siteName || "S").slice(0, 1).toUpperCase())}</div><div class="lb-ws-meta"><span class="lb-ws-name">${esc(context.siteName || "No site connected")}</span><span class="lb-ws-plan">Active site</span></div></a></div>`,
     title: chromeState.h1 ?? "",
     subtitle: meta.sub,
     crumbs: [...chromeState.crumbs],
     user,
     // This setup CTA is contextual bot state, not a second navigation tree.
-    topbarHtml: `<div class="lb-topbar-hud"><div class="lb-account-hud"><span class="lb-hud-icon" aria-hidden="true">◎</span><div class="lb-hud-details"><span class="lb-board-select-lbl">CURRENT BOT</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="/dashboard/telegram/bots" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
+    topbarHtml: `<div class="lb-topbar-hud"><div class="lb-account-hud"><span class="lb-hud-icon" aria-hidden="true">◎</span><div class="lb-hud-details"><span class="lb-board-select-lbl">CURRENT BOT</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="${telegramChrome("bots").canonicalPath}" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
     activePath: chromeState.canonicalPath,
     railProfile: true,
     collapsible: true,
@@ -77,6 +78,7 @@ export function appHtml(
     page,
     nonce,
     nav,
+    documentTitle: chromeState.documentTitle,
     dashboardChrome: true,
     content: `${chrome}
 ${dashClientScript()}`,

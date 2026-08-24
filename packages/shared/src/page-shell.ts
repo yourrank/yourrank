@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { brandMarkSvg } from "./brand-assets.js";
+import { DEFAULT_DASHBOARD_TITLE } from "./dashboard-chrome-state.js";
 import { type ShellUser } from "./shell-nav.js";
 
 export const DEVIN_DESIGN_CONTRACT = `<!--
@@ -202,6 +203,7 @@ export interface BotPageOpts {
   page: string;
   nonce?: string;
   nav?: string;
+  documentTitle?: string;
   /** Page renders the shared dashboard rail/topbar, so it needs its stylesheets. */
   dashboardChrome?: boolean;
   content: string;
@@ -218,7 +220,7 @@ export function botPageHtml(opts: BotPageOpts): string {
     : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Telegram · YourRank</title>${GOOGLE_FONTS}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${DEVIN_DESIGN_CONTRACT}
+<title>${esc(opts.documentTitle || DEFAULT_DASHBOARD_TITLE)}</title>${GOOGLE_FONTS}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="skip-link">Skip to main content</a>
 ${nav}
 ${opts.content}
