@@ -9,6 +9,7 @@ import {
   legacyDashboardPath,
   parseDashboardPath,
   parseDynamicPath,
+  resolveSection,
 } from "../assets/dashboard/routes.js";
 import {
   DASHBOARD_ROUTES,
@@ -89,7 +90,7 @@ describe("routes.js source gate", () => {
     expect(DYNAMIC_SECTIONS.siteConnections.tabPaths).toEqual({ channel: "/dashboard/site/connections" });
   });
 
-  it("pins SECTION_ALIASES to the previous hand-written vocabulary", () => {
+  it("pins SECTION_ALIASES to the manifest-backed vocabulary", () => {
     expect(SECTION_ALIASES).toEqual({
       overview: "home",
       editor: "board",
@@ -100,9 +101,7 @@ describe("routes.js source gate", () => {
       growth: "performance",
       referrals: "performance",
       integrations: "connections",
-      manage: "site",
       billing: "plan",
-      settings: "site",
     });
   });
 
@@ -119,8 +118,8 @@ describe("routes.js source gate", () => {
 
     expect(dashboardPath("board", "players")).toBe("/dashboard/leaderboard/players");
     expect(dashboardPath("billing")).toBe("/dashboard/settings/billing");
-    expect(dashboardPath("settings")).toBe("/dashboard/site");
-    expect(dashboardPath("manage")).toBe("/dashboard/site");
+    expect(resolveSection("settings")).toBe("");
+    expect(resolveSection("manage")).toBe("");
 
     expect(parseDynamicPath("/dashboard/rewards")).toEqual({ page: "rewards", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards/activity")).toEqual({ page: "rewards", tab: "history", dynamic: true });

@@ -315,29 +315,9 @@ describe("dashboard chrome ownership", () => {
 
     const checkedRoutes = new Set(routes.map(({ path }) => normalizedPath(path)));
     const allowlistedWorkerRoutes = new Map([
-      ["/dashboard/settings/integrations", "redirect-only legacy alias to Site settings → Connections"],
-      ["/dashboard/rewards/channel", "redirect-only legacy alias to Site settings → Connections"],
-      ["/dashboard/settings/board", "redirect-only legacy alias to Site settings"],
-      ["/dashboard/billing", "redirect-only legacy alias to account plan"],
-      ["/dashboard/attribution", "redirect-only legacy alias to account connections"],
-      ["/dashboard/security", "redirect-only legacy alias to account security tab"],
-      ["/dashboard/integrations", "redirect-only legacy alias to account connections"],
-      ["/dashboard/manage", "redirect-only legacy alias to account settings"],
       ["/dashboard/preview", "POST endpoint for template preview, not a dashboard chrome page"],
-      ["/dashboard/setup", "redirect-only legacy alias to dashboard overview"],
       ["/dashboard/support", "redirect-only redirect to help"],
-      ["/dashboard/credits", "redirect-only legacy alias to Rewards overview"],
       ["/dashboard/giveaways", "redirect-only section root to the default tab"],
-            ["/dashboard/rewards/maps", "redirect-only legacy alias to Rewards points"],
-      ["/dashboard/rewards/rewards", "redirect-only legacy alias to Rewards points"],
-      ["/dashboard/audience", "redirect-only section root to Audience members"],
-      ["/dashboard/audience/viewers", "redirect-only legacy alias to Audience members"],
-      ["/dashboard/rewards/viewers", "redirect-only legacy alias to Audience members"],
-      ["/dashboard/rewards/overview", "redirect-only alias to the Rewards root"],
-      ["/dashboard/audience/activity", "redirect-only legacy alias to Rewards activity"],
-      ["/dashboard/rewards/history", "redirect-only legacy alias to Audience activity"],
-      ["/dashboard/settings/plan", "redirect-only legacy alias to account billing"],
-      ["/dashboard/giveaways/preds", "redirect-only legacy alias to Engage predictions"],
       ["/dashboard/_content", "JSON fragment endpoint for persistent-shell navigation, not a chrome page"],
     ]);
     const workerRoutes = new Set(workerRouteLiterals(workerSource));
@@ -355,7 +335,7 @@ describe("dashboard chrome ownership", () => {
       "/dashboard/giveaways/chat",
       "/dashboard/giveaways/predictions",
       "/dashboard/site/connections",
-      "/dashboard/rewards/maps",
+      "/dashboard/rewards/rules",
       "/dashboard/settings/data",
     ]) {
       expect(workerRoutes).toContain(path);

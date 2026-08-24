@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dashboardNavItems } from "@yourrank/shared/dashboard-nav";
-import { routeById } from "@yourrank/shared/dashboard-routes";
+import { resolveAliasRedirect, routeById } from "@yourrank/shared/dashboard-routes";
 import { PAGES } from "../pages.jsx";
 import { mapActiveNav } from "../pages/dashboard-shell.jsx";
 import { NAV_OWNER_MAP, navOwner, parseDashboardPath } from "../assets/dashboard/routes.js";
@@ -154,7 +154,7 @@ describe("dashboard navigation ownership", () => {
     for (const { href } of flattenNav(dashboardNavItems())) {
       const path = new URL(href, "https://yourrank.test").pathname;
       const parsed = parseDashboardPath(path);
-      const routeHandled = parsed ||
+      const routeHandled = parsed || resolveAliasRedirect(path, "", "leaderboard") ||
         (path === "/dashboard/settings" && worker.includes('path === "/dashboard/settings"')) ||
         (path === "/dashboard/giveaways" && worker.includes('path === "/dashboard/giveaways"')) ||
         (path === "/dashboard/rewards" && worker.includes('path === "/dashboard/rewards"')) ||

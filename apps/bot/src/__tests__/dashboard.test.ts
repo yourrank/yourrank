@@ -288,6 +288,7 @@ describe("dashboard views", () => {
 // ── Dashboard route integration tests ─────────────────────────────────
 describe("buildDashboard", () => {
   const app = buildDashboard();
+  const canonicalApp = buildDashboard({ canonical: true });
 
   beforeEach(() => {
     resetMocks();
@@ -297,9 +298,9 @@ describe("buildDashboard", () => {
     process.env.PUBLIC_BASE_URL = "https://yourrank.site";
   });
 
-  it("GET /dashboard returns the login page when not authenticated", async () => {
-    const req = new Request("http://localhost:8787/dashboard");
-    const res = await app.fetch(req, testEnv);
+  it("GET / returns the canonical login page when not authenticated", async () => {
+    const req = new Request("http://localhost:8787/");
+    const res = await canonicalApp.fetch(req, testEnv);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('data-action="devLogin"');
@@ -343,15 +344,15 @@ describe("buildDashboard", () => {
     expect(res.headers.get("location")).toBe("/dashboard/telegram");
   });
 
-  it("GET /dashboard returns the app HTML when authenticated", async () => {
+  it("GET / returns the canonical app HTML when authenticated", async () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
       return Promise.resolve([]);
     });
-    const req = new Request("http://localhost:8787/dashboard", {
+    const req = new Request("http://localhost:8787/", {
       headers: { cookie: "yr_session=token123" },
     });
-    const res = await app.fetch(req, testEnv);
+    const res = await canonicalApp.fetch(req, testEnv);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<script src="/bot/dash/client.js"></script>');
@@ -366,7 +367,7 @@ describe("buildDashboard", () => {
     expect(html).toContain(`nonce="${m![1]}"`);
   });
 
-  it("serves canonical Telegram pages and permanently redirects legacy page routes", async () => {
+  it("serves canonical Telegram pages without legacy route redirects", async () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
       return Promise.resolve([]);
@@ -384,10 +385,6 @@ describe("buildDashboard", () => {
     }), testEnv);
     expect(canonicalDevLogin.status).toBe(404);
 
-    const legacy = buildDashboard({ legacyPages: true });
-    const redirect = await legacy.fetch(new Request("http://localhost:8788/dashboard"), testEnv);
-    expect(redirect.status).toBe(301);
-    expect(redirect.headers.get("location")).toBe("/dashboard/telegram");
   });
 
   it("POST /dash/api/bots connects a bot and returns its info", async () => {

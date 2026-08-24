@@ -7,12 +7,8 @@
 // dashboard-nav.ts; Wrangler route patterns stay deployment infrastructure in
 // each Worker's wrangler.toml (parity-tested, never generated from here).
 //
-// PR-1 is a pure addition: no runtime consumer imports this module yet. The
-// current runtime sources (apps/leaderboard/src/assets/dashboard/routes.js,
-// apps/leaderboard/src/index.js redirects, apps/leaderboard/src/
-// telegram-routes.js, apps/bot dashboard routes) remain authoritative until
-// later PRs derive them from this manifest. Parity tests pin this manifest to
-// the current behavior of those sources.
+// Workers and dashboard assets import this module directly. Parity tests pin
+// runtime consumers to the behavior declared here.
 //
 // Browser/server consumption decision (Correction 1): Option A — the built
 // shared package already exposes browser-safe ESM. This module compiles to
@@ -108,6 +104,15 @@ export function applyAliasSearch(
   for (const name of behavior.delete ?? []) out.delete(name);
   for (const [name, value] of Object.entries(behavior.set ?? {})) out.set(name, value);
   return out;
+}
+
+export interface AliasRedirect {
+  readonly alias: string;
+  readonly routeId: DashboardRouteId;
+  readonly status: 301 | 302;
+  readonly pathname: string;
+  readonly search: URLSearchParams;
+  readonly servedBy: DashboardWorker;
 }
 
 /**
@@ -211,7 +216,7 @@ export type DashboardRouteId = (typeof ROUTE_DEFS)[number]["id"];
 export const DASHBOARD_ROUTES: readonly DashboardRouteDef[] = ROUTE_DEFS;
 
 // Legacy path aliases. Each is pinned to current Worker behavior by parity
-// tests (kind "redirect" = index.js/telegram-routes.js/hono-app 3xx today,
+// tests (kind "redirect" = Worker 3xx today,
 // with the exact status and search behavior recorded; kind "rewrite" =
 // served in place via parseDashboardPath SECTION_ALIASES, the
 // /dashboard/settings root document or the /dashboard.html spelling).
@@ -271,8 +276,7 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   { path: "/account/connected", routeId: "settings.connections", kind: "redirect", status: 302, search: "preserve" },
   { path: "/account/data", routeId: "settings.data", kind: "redirect", status: 302, search: "preserve" },
   // telegram (bot Worker owns /bot* per wrangler.toml, and its Hono redirects
-  // drop the query string; the leaderboard Worker keeps a defensive copy of
-  // these redirects in telegram-routes.js that would preserve it)
+  // drop the query string)
   { path: "/bot", routeId: "telegram", kind: "redirect", status: 301, search: "drop" },
   { path: "/bot/dashboard", routeId: "telegram", kind: "redirect", status: 301, search: "drop" },
   { path: "/bot/bots", routeId: "telegram.bots", kind: "redirect", status: 301, search: "drop" },
@@ -462,6 +466,37 @@ export function trimTrailingSlashes(pathname: string): string {
   let end = s.length;
   while (end > 0 && s.charCodeAt(end - 1) === 47) end -= 1;
   return s.slice(0, end);
+}
+
+/** Return the Worker that serves a registered alias. */
+export function aliasWorker(alias: DashboardRouteAlias): DashboardWorker {
+  return alias.servedBy ?? routeById(alias.routeId).owner;
+}
+
+/**
+ * Resolve one manifest redirect alias, optionally scoped to its serving
+ * Worker. Rewrite aliases and canonical paths return undefined.
+ */
+export function resolveAliasRedirect(
+  pathname: string,
+  search: string | URLSearchParams = "",
+  worker?: DashboardWorker,
+): AliasRedirect | undefined {
+  const alias = ALIASES_BY_PATH.get(trimTrailingSlashes(pathname));
+  if (!alias || alias.kind !== "redirect") return undefined;
+  const servedBy = aliasWorker(alias);
+  if (worker && servedBy !== worker) return undefined;
+  return {
+    alias: alias.path,
+    routeId: alias.routeId,
+    status: alias.status,
+    pathname: alias.redirectTo ?? routeById(alias.routeId).canonicalPath,
+    search: applyAliasSearch(
+      alias.search,
+      search instanceof URLSearchParams ? search : new URLSearchParams(search),
+    ),
+    servedBy,
+  };
 }
 
 /**

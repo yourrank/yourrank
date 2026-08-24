@@ -12,8 +12,10 @@ import {
   NAV_QUERY_REDIRECT_POLICY,
   QUERY_PARAM_AUDIT,
   SETTINGS_ROOT_TAB_PARAMS,
+  aliasWorker,
   applyAliasSearch,
   buildDashboardPath,
+  resolveAliasRedirect,
   resolveNavRedirect,
   canonicalDashboardPath,
   parseDashboardRouteId,
@@ -166,6 +168,22 @@ describe("dashboard route manifest invariants", () => {
       .toBe("a=1");
     // The input is never mutated.
     expect(probe.toString()).toBe("keep=1&other=two");
+  });
+
+  it("resolves manifest aliases only for their serving Worker", () => {
+    const alias = DASHBOARD_ROUTE_ALIASES.find((a) => a.path === "/dashboard/settings/board");
+    expect(alias).toBeDefined();
+    expect(aliasWorker(alias!)).toBe("leaderboard");
+    expect(resolveAliasRedirect("/dashboard/settings/board", "?keep=1", "leaderboard")).toMatchObject({
+      alias: "/dashboard/settings/board",
+      routeId: "site",
+      status: 301,
+      pathname: "/dashboard/site",
+      servedBy: "leaderboard",
+    });
+    expect(resolveAliasRedirect("/dashboard/settings/board/", "?keep=1", "bot")).toBeUndefined();
+    expect(resolveAliasRedirect("/dashboard/sites", "?keep=1", "leaderboard")).toBeUndefined();
+    expect(resolveAliasRedirect("/dashboard/site", "?keep=1", "leaderboard")).toBeUndefined();
   });
 
   it("encodes the legacy ?nav= redirect policy as executable manifest data", () => {

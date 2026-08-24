@@ -1,6 +1,6 @@
 // Parity gate for the canonical dashboard route manifest (Wave 2 PR-1).
-// The manifest (@yourrank/shared/dashboard-routes) is a pure addition: the
-// runtime still routes through routes.js / index.js / telegram-routes.js.
+// The manifest (@yourrank/shared/dashboard-routes) is the executable route
+// model for both Workers.
 // These tests pin the manifest to the CURRENT behavior of those sources so
 // later PRs can derive consumers from it without behavior drift.
 import { describe, it, expect } from "bun:test";
@@ -9,10 +9,12 @@ import {
   DASHBOARD_ROUTES,
   DASHBOARD_ROUTE_ALIASES,
   NAV_QUERY_ALIASES,
+  aliasWorker,
   QUERY_PARAM_AUDIT,
   applyAliasSearch,
   buildDashboardPath,
   resolveNavRedirect,
+  resolveAliasRedirect,
   canonicalDashboardPath,
   resolveDashboardLocation,
   resolveDashboardPath,
@@ -29,7 +31,6 @@ import {
   legacyDashboardPath,
   resolveSection,
 } from "../assets/dashboard/routes.js";
-import { LEGACY_TELEGRAM_REDIRECTS } from "../telegram-routes.js";
 import worker from "../index.js";
 
 const routesById = new Map(DASHBOARD_ROUTES.map((r) => [r.id, r]));
@@ -162,7 +163,14 @@ describe("manifest parity: legacy aliases", () => {
     }
   });
 
-  it("covers legacyDashboardPath and the Telegram redirect map", () => {
+  it("leaves bot-owned aliases to the bot Worker", () => {
+    for (const alias of DASHBOARD_ROUTE_ALIASES) {
+      if (alias.kind !== "redirect" || aliasWorker(alias) !== "bot") continue;
+      expect(resolveAliasRedirect(alias.path, "?keep=1", "leaderboard"), alias.path).toBeUndefined();
+    }
+  });
+
+  it("covers legacyDashboardPath and canonical alias resolution", () => {
     for (const [legacy, canonical] of [
       ["/dashboard/editor", "/dashboard/leaderboard"],
       ["/dashboard/editor/setup", "/dashboard/leaderboard/setup"],
@@ -174,18 +182,6 @@ describe("manifest parity: legacy aliases", () => {
     ]) {
       expect(legacyDashboardPath(legacy), legacy).toBe(canonical);
       expect(canonicalDashboardPath(legacy), legacy).toBe(canonical);
-    }
-    for (const [legacy, canonical] of Object.entries(LEGACY_TELEGRAM_REDIRECTS)) {
-      // Documented discrepancy: the bot Worker owns yourrank.site/dashboard/
-      // telegram* and has no /overview route (it 404s), so this defensive
-      // leaderboard entry is unreachable in production and stays out of the
-      // manifest (see the bot-side parity test).
-      if (legacy === "/dashboard/telegram/overview") continue;
-      const resolved = resolveDashboardPath(legacy);
-      expect(resolved, legacy).toBeDefined();
-      expect(resolved.canonical, legacy).toBe(false);
-      expect(routeById(resolved.route.id).canonicalPath === canonical
-        || canonicalDashboardPath(canonical) === resolved.route.canonicalPath, legacy).toBe(true);
     }
   });
 
@@ -202,10 +198,6 @@ describe("manifest parity: legacy aliases", () => {
         // The Worker redirects this spelling before parseDashboardPath runs
         // (e.g. /dashboard/editor via legacyDashboardPath). The redirect must
         // land in the same section — except the one documented discrepancy:
-        // SECTION_ALIASES maps `manage` to the `site` section, but the Worker
-        // redirects /dashboard/manage to ACCOUNT settings. The manifest
-        // encodes the served (Worker) behavior; pin the divergence here.
-        if (aliasHead === "manage") continue;
         expect(resolved.route.section, aliasHead).toBe(parsed.page);
         continue;
       }
@@ -247,7 +239,9 @@ describe("manifest parity: legacy aliases", () => {
       ...Object.keys(ACCOUNT_SECTION_PATHS),
       ...Object.keys(LEGACY_ACCOUNT_PATHS),
       "kickrewards",
-    ].filter((name) => name === "kickrewards" || resolveSection(name)));
+      "manage",
+      "settings",
+    ].filter((name) => ["kickrewards", "manage", "settings"].includes(name) || resolveSection(name)));
     expect(Object.keys(NAV_QUERY_ALIASES).sort()).toEqual([...runtimeNavValues].sort());
   });
 });
@@ -341,13 +335,8 @@ describe("manifest parity: complete route inventory", () => {
       ...Object.values(DYNAMIC_SECTIONS).flatMap((s) => Object.values(s.tabPaths)),
       ...Object.values(LEGACY_ACCOUNT_PATHS),
       ...Object.values(ACCOUNT_SECTION_PATHS),
-      ...Object.keys(LEGACY_TELEGRAM_REDIRECTS),
-      ...Object.values(LEGACY_TELEGRAM_REDIRECTS),
     ]);
     for (const path of destinations) {
-      // Unreachable defensive entry (bot Worker owns the pattern and 404s);
-      // see the Telegram redirect-map test above and the bot-side parity test.
-      if (path === "/dashboard/telegram/overview") continue;
       expect(resolveDashboardPath(path), path).toBeDefined();
     }
   });
@@ -376,7 +365,6 @@ describe("query-parameter audit enforcement (mechanical gate)", () => {
   // it is classified.
   const SCANNED_SOURCES = [
     "../index.js",
-    "../telegram-routes.js",
     "../login-redirect.js",
     "../assets/dashboard/routes.js",
     "../assets/dashboard/board-shell.js",

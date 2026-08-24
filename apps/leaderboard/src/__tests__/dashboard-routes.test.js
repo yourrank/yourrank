@@ -4,7 +4,6 @@ import { describe, it, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { LEGACY_ACCOUNT_PATHS } from "@yourrank/shared/dashboard-nav";
 import { dashboardPath, parseDashboardPath, parseDynamicPath, resolveSection, defaultTab, legacyDashboardPath, dashboardTitleForPath } from "../assets/dashboard/routes.js";
-import { LEGACY_TELEGRAM_REDIRECTS, legacyTelegramRedirect } from "../telegram-routes.js";
 import worker from "../index.js";
 
 describe("dashboard routes", () => {
@@ -67,7 +66,7 @@ describe("dashboard routes", () => {
     expect(resolveSection("analytics")).toBe("performance");
     expect(resolveSection("billing")).toBe("plan");
     expect(resolveSection("integrations")).toBe("connections");
-    expect(resolveSection("settings")).toBe("site");
+    expect(resolveSection("settings")).toBe("");
     expect(dashboardPath("billing")).toBe("/dashboard/settings/billing");
     expect(dashboardPath("integrations")).toBe("/dashboard/settings/connections");
     expect(LEGACY_ACCOUNT_PATHS.billing).toBe(dashboardPath("billing"));
@@ -113,29 +112,6 @@ describe("dashboard routes", () => {
     expect(legacyDashboardPath("/dashboard/boards")).toBe("/dashboard/leaderboards");
     expect(parseDashboardPath("/account/profile")).toBeNull();
     expect(parseDashboardPath("/dashboard/")).toEqual({ page: "home", tab: "" });
-  });
-
-  it("maps legacy Telegram pages to the canonical Bot Worker", () => {
-    expect(LEGACY_TELEGRAM_REDIRECTS).toEqual({
-      "/bot": "/dashboard/telegram",
-      "/bot/dashboard": "/dashboard/telegram",
-      "/bot/bots": "/dashboard/telegram/bots",
-      "/bot/commands": "/dashboard/telegram/commands",
-      "/bot/offers": "/dashboard/telegram/offers",
-      "/bot/broadcasts": "/dashboard/telegram/broadcasts",
-      "/dashboard/telegram/overview": "/dashboard/telegram",
-      "/dashboard/bot/setup": "/dashboard/telegram",
-    });
-    for (const [legacy, canonical] of Object.entries(LEGACY_TELEGRAM_REDIRECTS)) {
-      expect(legacyTelegramRedirect(legacy)).toBe(canonical);
-    }
-    expect(legacyTelegramRedirect("/dashboard/telegram")).toBe("");
-    const worker = readFileSync(new URL("../index.js", import.meta.url), "utf8");
-    expect(worker).toContain('path === "/dashboard/integrations"');
-    expect(worker).toContain('redirectKeepingSearch("/dashboard/settings/connections", url)');
-    for (const alias of ["/bot", "/bot/dashboard", "/bot/bots", "/bot/commands", "/bot/offers", "/bot/broadcasts"]) {
-      expect(worker).not.toContain(`path === "${alias}"`);
-    }
   });
 
   it("defaults a section to its first tab", () => {
