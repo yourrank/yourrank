@@ -6553,6 +6553,179 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   gap: var(--ws-space-2);
 }
 
+.v3-dash[data-auth-workspace] .cr-member-history-backdrop {
+  position: fixed;
+  inset: var(--ws-topbar-h) 0 0;
+  z-index: 139;
+  background: rgba(18, 17, 17, .28);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-drawer {
+  position: fixed;
+  top: var(--ws-topbar-h);
+  right: 0;
+  bottom: 0;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100vw);
+  box-sizing: border-box;
+  overflow: hidden;
+  border-left: 1px solid var(--ws-line);
+  background: #ffffff;
+  box-shadow: -18px 0 48px rgba(18, 17, 17, .14);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ws-space-4);
+  padding: var(--ws-space-5) var(--ws-space-5) var(--ws-space-4);
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head h2,
+.v3-dash[data-auth-workspace] .cr-member-history-head p {
+  overflow-wrap: anywhere;
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head h2 {
+  margin: 0;
+  color: var(--ws-text);
+  font-size: var(--ws-type-section-size);
+  line-height: var(--ws-type-section-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head p {
+  margin: var(--ws-space-1) 0 0;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head .cr-drawer-close {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  border-radius: var(--ws-radius-sm);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-head .cr-drawer-close:hover {
+  background: var(--ws-surface-soft);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--ws-space-5);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0 0 var(--ws-space-6);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-facts > div {
+  min-width: 0;
+  padding: var(--ws-space-3) var(--ws-space-4);
+  border-right: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-facts > div:last-child {
+  border-right: 0;
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-facts dt {
+  color: var(--ws-text-mute);
+  font-size: var(--ws-type-label-size);
+  line-height: var(--ws-type-label-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-facts dd {
+  margin: var(--ws-space-1) 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ws-text);
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-4);
+  margin-bottom: var(--ws-space-3);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-section-head h3 {
+  margin: 0;
+  color: var(--ws-text);
+  font-size: var(--ws-type-card-size);
+  line-height: var(--ws-type-card-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--ws-space-4);
+  padding: var(--ws-space-4) 0;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list li:first-child {
+  border-top: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list li > div:first-child,
+.v3-dash[data-auth-workspace] .cr-member-history-event-meta {
+  display: grid;
+  min-width: 0;
+  gap: var(--ws-space-1);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list strong,
+.v3-dash[data-auth-workspace] .cr-member-history-event-meta b {
+  color: var(--ws-text);
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-list span,
+.v3-dash[data-auth-workspace] .cr-member-history-event-meta time {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-event-meta {
+  justify-items: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.v3-dash[data-auth-workspace] #cr-member-history-more {
+  width: 100%;
+  margin-top: var(--ws-space-4);
+}
+
 .v3-dash[data-auth-workspace] .cr-audience-note {
   display: flex;
   align-items: center;
@@ -6873,6 +7046,12 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     min-height: var(--ws-control-h-touch);
   }
 
+  .v3-dash[data-auth-workspace] .cr-member-history-head,
+  .v3-dash[data-auth-workspace] .cr-member-history-body {
+    padding-left: var(--ws-space-4);
+    padding-right: var(--ws-space-4);
+  }
+
   .v3-dash[data-auth-workspace] .cr-audience-note {
     align-items: flex-start;
     flex-direction: column;
@@ -6912,6 +7091,38 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 @media (max-width: 430px) {
+  .v3-dash[data-auth-workspace] .cr-member-history-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-facts > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--ws-line);
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-facts > div:last-child {
+    border-bottom: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-section-head .btn {
+    width: 100%;
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .cr-member-history-event-meta {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+    text-align: left;
+  }
+
   .v3-dash[data-auth-workspace] .v3-analytics-scope {
     padding: var(--ws-space-3);
   }

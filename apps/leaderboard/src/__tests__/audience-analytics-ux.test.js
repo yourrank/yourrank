@@ -27,6 +27,25 @@ describe("Audience members body", () => {
     expect(source).toContain('label: "Recently active"');
     expect(source).toContain('mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot"))');
   });
+
+  it("opens member history in an accessible drawer with a full-page fallback", () => {
+    const html = AudienceMembersPage({ fragment: true }).toString();
+    const source = readFileSync(path.join(SRC_ROOT, "assets/credits.js"), "utf8");
+    expect(html).toContain('id="cr-member-history-drawer"');
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-labelledby="cr-member-history-title"');
+    expect(html).toContain('aria-label="Close member history"');
+    expect(html).toContain('id="cr-member-history-full" href="/dashboard/rewards/activity"');
+    expect(source).toContain('data-member-history="${esc(v.id)}"');
+    expect(source).toContain('aria-controls="cr-member-history-drawer"');
+    expect(source).toContain('aria-expanded="false"');
+    expect(source).toContain('/api/credits/viewer/history?kickUsername=${encodeURIComponent(memberHistoryUsername)}');
+    expect(source).toContain('api("GET", `/api/credits/activity?${params}`)');
+    expect(source).toContain("dialog.trap(drawer, closeMemberHistory)");
+    expect(source).toContain("renderError(empty, {");
+    expect(source).toContain('title: "No credit activity yet"');
+  });
 });
 
 describe("Analytics bodies", () => {
