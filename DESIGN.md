@@ -318,8 +318,9 @@ whitespace first — reach for space before a border, and for a border before a 
 - `--ws-surface-soft` / `--ws-surface-strong` — inset and selected regions inside a surface.
 - `--ws-line` / `--ws-line-strong` — the hairline that does most grouping work; `-strong` only where a boundary
   must survive against a soft fill.
-- `--ws-chrome`, `--ws-chrome-raised`, `--ws-chrome-line`, `--ws-chrome-text`, `--ws-chrome-text-soft` — the
-  production rail and any other unmistakable dark chrome.
+- `--ws-chrome`, `--ws-chrome-raised`, `--ws-chrome-line`, `--ws-chrome-line-strong`, `--ws-chrome-text`,
+  `--ws-chrome-text-soft` — the production rail and any other unmistakable dark chrome.
+- `--ws-chrome-card` — a card resting inside dark chrome (the rail's site card, the editor preview tabs).
 
 **When to use no container at all.** A container must justify itself. One list, one form or one explanation on a
 page needs a heading and space, not a box. Related items share one outer boundary and separate with hairlines
@@ -352,8 +353,9 @@ Every interactive element defines all of these, and none of them may be communic
 - **Hover** — a tonal shift, never a layout shift.
 - **Active** — the control settles; it does not float.
 - **Focus-visible** — one treatment for the whole workspace: `--ws-focus-width` solid `--ws-focus` at
-  `--ws-focus-offset`. Per-component focus rings are drift; a component may only override the offset, and only
-  when the ring would otherwise be clipped.
+  `--ws-focus-offset`. Per-component focus rings are drift; a component may only override the offset (when the
+  ring would otherwise be clipped) or, inside dark chrome, the colour — and then only to
+  `--ws-accent-on-chrome`, because violet on near-black does not carry enough contrast.
 - **Disabled** — footprint preserved, opacity lowered, cursor changed, still legible.
 - **Loading** — the element keeps its size and exposes busy state semantically (`aria-busy`), so nothing jumps.
 - **Selected** — `--ws-surface-strong` fill or an accent inset cue, plus `aria-current` or `aria-selected`.
@@ -388,7 +390,9 @@ debt for whichever PR owns the marketing surfaces, not something the workspace s
 Honest state of the implementation, so nobody reads this contract as a description of the current CSS:
 class names still carry `v3`/`v4` generation labels; roughly 670 spacing declarations and 250 font sizes in the
 workspace sheet are still raw px, including 11.5/12.5/13.5px one-offs; `app.css`'s legacy dark base palette is
-still the fallback layer beneath the workspace. The gate ratchets those counts downward — later Wave 3 PRs
+still the fallback layer beneath the workspace; `--ws-chrome-card` is a bluish `#12151B` that does not belong to
+the rest of the chrome family, and Analytics and Account still carry their own tab treatments; `devin-system.css`
+still paints workspace navigation, cards and the rail with its own `--devin-*` values on top of this contract. The gate ratchets those counts downward — later Wave 3 PRs
 lower them as they touch each surface.
 
 ## Do's and Don'ts

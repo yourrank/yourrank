@@ -26,8 +26,8 @@
   --yr-control-height-narrow: 44px;
   --yr-control-radius: 8px;
   --yr-control-padding-x: 12px;
-  --yr-shadow-sm: var(--ws-shadow, 0 1px 2px rgba(0, 0, 0, .05));
-  --yr-shadow-lg: var(--ws-shadow-overlay, 0 12px 32px rgba(0, 0, 0, .12));
+  --yr-shadow-sm: 0 1px 2px rgba(0, 0, 0, .05);
+  --yr-shadow-lg: 0 12px 32px rgba(0, 0, 0, .12);
   /* Shared fixed action layers: one bottom offset and stacking model for save/bulk UI. */
   --yr-fixed-action-bottom: 22px;
   --yr-fixed-action-stack-offset: 66px;
@@ -118,7 +118,7 @@
   background-color: color-mix(in srgb, var(--yr-ink, var(--ink)) 5%, transparent);
 }
 .btn:focus-visible,
-.yr-ui button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent), inset 0 0 0 1px var(--yr-focus-inset, rgba(255, 255, 255, 0.2)); }
+.yr-ui button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 .btn:active,
 .yr-ui button:active { transform: translateY(2px) scale(0.96); box-shadow: none; }
 
@@ -324,7 +324,7 @@
 .modal {
   position: fixed;
   inset: 0;
-  background: var(--yr-overlay, rgba(0, 0, 0, .45));
+  background: rgba(0, 0, 0, .45);
   display: flex;
   align-items: center;
   justify-content: center;

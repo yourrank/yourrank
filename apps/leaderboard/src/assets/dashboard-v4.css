@@ -204,6 +204,10 @@ body:has(.v3-dash[data-auth-workspace]),
   outline-offset: var(--ws-focus-offset);
   box-shadow: none;
 }
+.v3-dash[data-auth-workspace] .lb-side :focus-visible,
+.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {
+  outline-color: var(--ws-accent-on-chrome);
+}
 .v3-dash[data-auth-workspace] [hidden] { display: none !important; }
 .v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }
 .v3-dash[data-auth-workspace] h1,

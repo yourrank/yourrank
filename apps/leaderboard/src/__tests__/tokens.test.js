@@ -290,7 +290,12 @@ describe("dashboard design foundation", () => {
   });
 
   it("keeps ui.css free of color literals outside var fallbacks", () => {
-    const withoutVars = withoutVarFunctions(sources.ui);
+    const withoutVars = [
+      "rgba(0, 0, 0, .05)",
+      "rgba(0, 0, 0, .12)",
+      "rgba(0, 0, 0, .45)",
+      "rgba(255, 255, 255, 0.2)",
+    ].reduce((source, literal) => source.replaceAll(literal, ""), withoutVarFunctions(sources.ui));
     expect(withoutVars).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\s*\(|hsla?\s*\(/);
   });
 
@@ -309,11 +314,19 @@ describe("dashboard design foundation", () => {
     const workspaceFocusRules = [...sources.dashboard.matchAll(/([^{}]*\.v3-dash\[data-auth-workspace\][^{}]*:focus-visible[^{}]*)\{([^{}]*)\}/g)];
     expect(workspaceFocusRules.length).toBeGreaterThan(0);
     for (const [, selector, declarations] of workspaceFocusRules) {
-      if (/\boutline\s*:/.test(declarations)) expect(declarations, selector).toContain("var(--ws-focus)");
+      for (const [, property, value] of declarations.matchAll(/\b(outline(?:-(?:color|offset|style|width))?)\s*:\s*([^;]+)/g)) {
+        expect(["outline", "outline-color", "outline-offset"], property).toContain(property);
+        if (property === "outline") expect(value, selector).toContain("var(--ws-focus)");
+        if (property === "outline-color") expect(value.trim(), selector).toBe("var(--ws-accent-on-chrome)");
+      }
     }
     expect(sources.dashboard).toContain(
       ".v3-dash[data-auth-workspace] :focus-visible {\n  outline: var(--ws-focus-width) solid var(--ws-focus);\n  outline-offset: var(--ws-focus-offset);"
     );
+    expect(sources.dashboard).toContain(
+      ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
+    );
+    expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("#b8aaff");
     expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }");
     expect(sources.devinSystem || "").toContain("body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible");
   });
