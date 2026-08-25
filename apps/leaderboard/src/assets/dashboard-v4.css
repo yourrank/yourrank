@@ -199,12 +199,18 @@ body:has(.v3-dash[data-auth-workspace]),
 
 .v3-dash[data-auth-workspace] a { color: var(--ws-accent); text-underline-offset: 3px; }
 .v3-dash[data-auth-workspace] a:hover { color: var(--ws-accent-hover); }
-.v3-dash[data-auth-workspace] :focus-visible {
+.v3-dash[data-auth-workspace] :focus-visible,
+.v3-dash[data-auth-workspace] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
+.v3-dash[data-auth-workspace] select:focus-visible,
+.v3-dash[data-auth-workspace] textarea:focus-visible {
   outline: var(--ws-focus-width) solid var(--ws-focus);
   outline-offset: var(--ws-focus-offset);
   box-shadow: none;
 }
 .v3-dash[data-auth-workspace] .lb-side :focus-visible,
+.v3-dash[data-auth-workspace] .lb-side input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
+.v3-dash[data-auth-workspace] .lb-side select:focus-visible,
+.v3-dash[data-auth-workspace] .lb-side textarea:focus-visible,
 .v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {
   outline-color: var(--ws-accent-on-chrome);
 }
@@ -1546,7 +1552,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] textarea:hover { border-color: var(--ws-chrome-text-soft); }
 .v3-dash[data-auth-workspace] input:focus,
 .v3-dash[data-auth-workspace] select:focus,
-.v3-dash[data-auth-workspace] textarea:focus { border-color: var(--ws-accent); box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); outline: 0; }
+.v3-dash[data-auth-workspace] textarea:focus { border-color: var(--ws-accent); box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); }
 .v3-dash[data-auth-workspace] input[type="checkbox"],
 .v3-dash[data-auth-workspace] input[type="radio"] { accent-color: var(--ws-accent); }
 .v3-dash[data-auth-workspace] .field label { color: var(--ws-text-soft); font-size: 13px; font-weight: 600; }
@@ -1875,7 +1881,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .social-row-brand .social-url:focus {
   border-color: var(--ws-accent);
   box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12);
-  outline: none;
 }
 
 /* Embed and Share */
@@ -2080,7 +2085,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .arch-form select:focus {
   border-color: var(--ws-accent);
   box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12);
-  outline: none;
 }
 .v3-dash[data-auth-workspace] .arch-form button.btn {
   height: 40px;
@@ -2380,7 +2384,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   font-variant-numeric: tabular-nums;
   text-align: inherit;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
-  outline: 0;
 }
 .v3-dash[data-auth-workspace] .v3-players-table .player-name { min-width: 160px; }
 .v3-dash[data-auth-workspace] .v3-players-table th { white-space: nowrap; }
@@ -2391,7 +2394,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-players-table input:not([type="checkbox"]):focus {
   border-color: var(--ws-accent);
   background: #ffffff;
-  outline: 0;
   box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12);
 }
 .v3-dash[data-auth-workspace] .v3-players-table tfoot td {

@@ -311,7 +311,7 @@ describe("dashboard design foundation", () => {
   });
 
   it("keeps one workspace focus outline and the workspace disabled treatment", () => {
-    const workspaceFocusRules = [...sources.dashboard.matchAll(/([^{}]*\.v3-dash\[data-auth-workspace\][^{}]*:focus-visible[^{}]*)\{([^{}]*)\}/g)];
+    const workspaceFocusRules = [...sources.dashboard.matchAll(/([^{}]*\.v3-dash\[data-auth-workspace\][^{}]*:focus(?:-visible)?[^{}]*)\{([^{}]*)\}/g)];
     expect(workspaceFocusRules.length).toBeGreaterThan(0);
     for (const [, selector, declarations] of workspaceFocusRules) {
       for (const [, property, value] of declarations.matchAll(/\b(outline(?:-(?:color|offset|style|width))?)\s*:\s*([^;]+)/g)) {
@@ -321,10 +321,10 @@ describe("dashboard design foundation", () => {
       }
     }
     expect(sources.dashboard).toContain(
-      ".v3-dash[data-auth-workspace] :focus-visible {\n  outline: var(--ws-focus-width) solid var(--ws-focus);\n  outline-offset: var(--ws-focus-offset);"
+      ".v3-dash[data-auth-workspace] :focus-visible,\n.v3-dash[data-auth-workspace] input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] select:focus-visible,\n.v3-dash[data-auth-workspace] textarea:focus-visible {\n  outline: var(--ws-focus-width) solid var(--ws-focus);\n  outline-offset: var(--ws-focus-offset);"
     );
     expect(sources.dashboard).toContain(
-      ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
+      ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-side input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] .lb-side select:focus-visible,\n.v3-dash[data-auth-workspace] .lb-side textarea:focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
     );
     expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("#b8aaff");
     expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }");
