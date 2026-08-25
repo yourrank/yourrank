@@ -131,6 +131,29 @@ describe("authenticated editor body", () => {
     expect(chkRule).toContain("min-width: 0");
   });
 
+  it("keeps the workflow strip the only top-anchored sticky layer in the editor column", () => {
+    // Two sticky layers in one column with the same `top` and `z-index` are
+    // resolved by DOM order, so a head declared after the strip swallows its
+    // clicks once the body scrolls. Only the strip may anchor to the topbar;
+    // the save bar anchors to the bottom, which cannot overlap it.
+    const topAnchored = dashboardCss
+      .split("}")
+      .filter(
+        (rule) =>
+          /position:\s*sticky/.test(rule) &&
+          /top:\s*(?:calc\()?\s*var\(--ws-topbar-h/.test(rule),
+      );
+    expect(topAnchored.length).toBeGreaterThan(0);
+    for (const rule of topAnchored) {
+      const selector = rule.slice(0, rule.indexOf("{"));
+      if (!/\.design-controls|\.v3-players|\[data-egroup=/.test(selector)) continue;
+      expect(selector).toContain(".v3-tabs");
+    }
+    // The Players head shares the editor column with the strip, so it must
+    // scroll with the rest of the step body.
+    expect(dashboardCss).not.toContain(".v3-players > .v3-head,");
+  });
+
   it("progressively discloses the rarely-changed editor settings", () => {
     const html = editorHtml("/dashboard/leaderboard/setup");
     // The essentials stay visible; optional sponsor and scheduling detail sits

@@ -943,7 +943,6 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
 .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 32px; }
 .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head,
-.v3-dash[data-auth-workspace] .v3-players > .v3-head,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
 .v3-dash[data-auth-workspace] .v3-games-page > .d-flex:first-child,
 .v3-dash[data-auth-workspace] #acc-app > .v3-head,
@@ -969,7 +968,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 /* Rewards and the leaderboard editor render their subnav before the page title,
    so the strip sticks directly under the topbar and the title scrolls normally —
-   one sticky layer, never a title sliding across its own tabs. */
+   one sticky layer, never a title sliding across its own tabs. Nothing else in
+   the editor column may stick at this offset: a second sticky head with the same
+   top and z-index wins on DOM order and swallows the strip's clicks. */
 .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
 .v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-tabs {
   top: var(--ws-topbar-h);
