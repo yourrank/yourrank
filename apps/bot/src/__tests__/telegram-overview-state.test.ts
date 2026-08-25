@@ -58,9 +58,11 @@ describe("Telegram connection state runtime", () => {
   });
 
   it("distinguishes an API failure from being disconnected", () => {
-    expect(src).toContain("function showConnectionError(msg)");
+    expect(src).toContain("function showConnectionError()");
     expect(src).toContain("'Status unavailable'");
-    expect(src).toContain("showConnectionError(err)");
+    expect(src).toContain("showConnectionError();");
+    // The raw upstream error never becomes the creator-facing sentence.
+    expect(src).toContain("Couldn't check your Telegram connection.");
   });
 
   it("keeps the masked connect code and raw provider detail out of the primary row", () => {

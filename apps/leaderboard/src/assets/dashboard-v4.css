@@ -1754,6 +1754,13 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-btn--danger:hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--danger:hover { border-color: #9b1c13; background: #9b1c13; color: #ffffff; }
 .v3-dash[data-auth-workspace] .v3-set-btn--danger-outline { border-color: #d99c97; background: #ffffff; color: var(--ws-danger); }
+/* ui.css paints every bare workspace <button> with the accent, which outranks
+   the class variants above; quiet variants have to match that specificity or a
+   section ends up with several buttons that look primary. */
+.v3-dash[data-auth-workspace] button.btn.btn--ghost { border-color: var(--ws-line-strong); background: #ffffff; color: var(--ws-text); }
+.v3-dash[data-auth-workspace] button.btn.btn--ghost:hover { border-color: var(--ws-chrome-text-soft); background: var(--ws-surface-soft); color: var(--ws-text); }
+.v3-dash[data-auth-workspace] button.btn.btn--danger { border-color: var(--ws-danger); background: var(--ws-danger); color: #ffffff; }
+.v3-dash[data-auth-workspace] button.btn.btn--danger:hover { border-color: #9b1c13; background: #9b1c13; color: #ffffff; }
 .v3-dash[data-auth-workspace] .btn--sm,
 .v3-dash[data-auth-workspace] .v3-btn--sm { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .v3-dash[data-auth-workspace] .v3-btn--xs { min-height: 30px; padding: 0 10px; font-size: 14px; }
@@ -7823,7 +7830,23 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   min-width: 0;
 }
 
+/* A scrolling table must not push its grid track wider than the viewport. */
+.v3-dash[data-auth-workspace] .lb-bento > .lb-widget:has(.v3-table-scroll) {
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .wizard-step .d-flex {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .tg-conn-actions .btn,
+  .v3-dash[data-auth-workspace] .tg-setup-actions .btn,
+  .v3-dash[data-auth-workspace] .tg-compose-rehearsal .btn,
+  .v3-dash[data-auth-workspace] .wizard-step .btn {
+    min-height: 44px;
+  }
+
   .v3-dash[data-auth-workspace] .tg-action-row .btn,
   .v3-dash[data-auth-workspace] .tg-row-actions .btn,
   .v3-dash[data-auth-workspace] .tg-row-details-actions .btn {
@@ -7848,6 +7871,12 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 @media (max-width: 430px) {
+  .v3-dash[data-auth-workspace] .wizard-step .btn,
+  .v3-dash[data-auth-workspace] .tg-setup-actions .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
   .v3-dash[data-auth-workspace] .tg-conn-actions .btn {
     flex: 1 1 100%;
     justify-content: center;

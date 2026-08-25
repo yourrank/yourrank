@@ -244,12 +244,12 @@ function showPostbackError(msg){
 
 async function load() {
   const me = await api('/me');
-  if (me.error) { toast(me.error); showLoadError(me.error); showConnectionError(me.error); return; }
+  if (me.error) { toast(me.error); showLoadError(me.error); showConnectionError(); return; }
 
   const [offers, daily, bots] = await Promise.all([api('/offers'), api('/stats/daily'), api('/bots')]);
   if (daily.error || offers.error || bots.error) {
     const err = daily.error || offers.error || bots.error;
-    toast(err); showLoadError(err); showConnectionError(err); return;
+    toast(err); showLoadError(err); showConnectionError(); return;
   }
 
   showPage(page);
@@ -382,7 +382,9 @@ function renderConnectionState(bots){
     note.hidden = !extra;
   }
 }
-function showConnectionError(msg){
+// The raw upstream error belongs in the toast and the panel it came from, not
+// in the sentence a creator reads to learn what Telegram is doing.
+function showConnectionError(){
   const badge = $('tgConnState');
   const badgeText = $('tgConnStateText');
   const sub = $('tgConnSub');
@@ -390,7 +392,7 @@ function showConnectionError(msg){
   if (!badge) return;
   badge.dataset.state = 'unknown';
   if (badgeText) badgeText.textContent = 'Status unavailable';
-  if (sub) sub.textContent = msg || "Couldn't check your Telegram connection. Try again.";
+  if (sub) sub.textContent = "Couldn't check your Telegram connection. Reload to try again.";
   if (actions) actions.hidden = true;
 }
 
