@@ -529,6 +529,7 @@ export async function getUserSite(env, uid, plan) {
         isDraft: !!site.is_draft,
         passwordProtected: !!site.password_hash,
         updatedAt: site.updated_at,
+        publishedAt: site.published_at,
         autoReset: { enabled: !!site.auto_reset_enabled, clear: site.auto_reset_clear || "wagers" },
         data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo),
         socials: (fromJsonb(site.extra_json)?.socials) ?? DEFAULT_EXTRA.socials,
@@ -598,7 +599,9 @@ export async function getUserSiteById(env, uid, siteId, plan) {
   return {
     id: site.id, slug: site.slug, published: !!site.published,
     isDraft: !!site.is_draft,
+    passwordProtected: !!site.password_hash,
     updatedAt: site.updated_at,
+    publishedAt: site.published_at,
     autoReset: { enabled: !!site.auto_reset_enabled, clear: site.auto_reset_clear || "wagers" },
     data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo),
     socials: (fromJsonb(site.extra_json)?.socials) ?? DEFAULT_EXTRA.socials,
