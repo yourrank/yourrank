@@ -1245,7 +1245,7 @@ if (!window.__yrSpaShell) {
           <td data-label="Ticket cost">${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</td>
           <td data-label="Tickets">${r.total_tickets || 0} tickets</td>
           <td data-label="Winner" class="gw-history-winner">
-            ${r.winner_name ? `<strong>${esc(r.winner_name)}</strong><span>Ticket #${r.winner_ticket_number}</span>` : "<span>No winner drawn</span>"}
+            <div>${r.winner_name ? `<strong>${esc(r.winner_name)}</strong><span>Ticket #${r.winner_ticket_number}</span>` : "<span>No winner drawn</span>"}</div>
           </td>
           <td data-label="Drawn">${r.drawn_at ? new Date(r.drawn_at).toLocaleString() : "—"}</td>
         </tr>
