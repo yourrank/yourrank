@@ -301,8 +301,8 @@ table.players th.sortable{cursor:default}
 .toast:empty{opacity:0;pointer-events:none;transform:translateY(-10px)}
 .toast--error{border-color:var(--danger);background:var(--yr-color-danger-surface);color:var(--yr-color-danger-text)}
 .toast--success{border-color:var(--ok);background:var(--ok-bg);color:var(--yr-color-live-text)}
-/* Floating save chip; shown only when there are unsaved changes */
-.savebar{position:fixed;right:22px;bottom:var(--yr-fixed-action-bottom,22px);z-index:var(--yr-fixed-action-z,95);display:inline-flex;align-items:center;gap:12px;padding:10px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow-sm);transition:opacity .2s,transform .2s;opacity:1;transform:translateY(0)}
+/* Save affordance; the authenticated editor owns its placement in dashboard-v4.css */
+.savebar{display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:12px;background:var(--panel);border:1px solid var(--line)}
 .savebar[hidden]{display:none}
 .savebar-hint{font-size:13px;color:var(--ink-mute)}
 .skel{color:var(--ink-mute);padding:40px;text-align:center}
@@ -947,7 +947,6 @@ table.ref-table td{padding:8px 8px;border-bottom:1px solid var(--line);color:var
   .lb-side-head{border-bottom:none;margin-bottom:0;padding:12px 44px 12px 12px}
   .field-flex{flex-direction:column;align-items:stretch;gap:4px}
   .field-flex label{flex:auto}
-  .savebar{right:12px;--yr-fixed-action-bottom:12px}
   .toast{left:12px;right:12px;max-width:none}
 }
 
@@ -976,7 +975,7 @@ table.ref-table td{padding:8px 8px;border-bottom:1px solid var(--line);color:var
 /* Live preview panel on the Design page */
 .design-grid{display:grid;grid-template-columns:1fr 440px;gap:20px;align-items:start}
 .design-grid>*{min-width:0}
-.design-preview{position:sticky;top:78px;max-height:calc(100vh - 96px);overflow-y:auto;scrollbar-width:thin}
+.design-preview{position:sticky;top:78px;max-height:calc(100vh - 96px);overflow-y:auto;scrollbar-width:thin;min-width:0}
 .design-preview>.card{margin-bottom:0}
 .preview-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
 .preview-header h2{margin:0 0 2px;font-size:15px}

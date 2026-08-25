@@ -100,23 +100,26 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
 <h1 class="v3-section-title" data-egroup="setup">Setup</h1>
-<div class="card" data-egroup="setup"><h2>Your leaderboard info</h2><p class="card-sub">This is what visitors see when they open your site.</p><div class="grid2">
-<div class="field"><label for="f_name">Leaderboard name</label><input id="f_name" /></div>
-<div class="field"><label for="f_tagline">Tagline</label><input id="f_tagline" placeholder="Stream community leaderboard" /></div>
+<div class="card" data-egroup="setup"><h2>Your site</h2><p class="card-sub">This is what visitors see when they open your page.</p><div class="grid2">
+<div class="field"><label for="f_name">Site name</label><input id="f_name" /></div>
+<div class="field"><label for="f_tagline">Tagline <span class="hint">Optional</span></label><input id="f_tagline" placeholder="Stream community leaderboard" /></div>
+</div>
+<details class="editor-more" data-editor-more="setup-sponsor"><summary>Sponsor and promo code</summary><div class="grid2">
 <div class="field"><label for="f_casino">Sponsor name</label><input id="f_casino" placeholder="Your brand or sponsor" /></div>
-<div class="field"><label for="f_code">Promo code</label><input id="f_code" placeholder="OPTIONAL" /></div>
+<div class="field"><label for="f_code">Promo code</label><input id="f_code" placeholder="Optional" /></div>
 <div class="field"><label for="f_cta">Sponsor website</label><input id="f_cta" placeholder="https://example.com" /></div>
-<div class="field field--full"><label for="f_blurb">About your sponsor</label><textarea id="f_blurb" rows="2" placeholder="Short pitch about the sponsor and your code (optional)."></textarea></div></div></div>
-<div class="card" data-egroup="setup"><h2>Ranking &amp; schedule</h2><p class="card-sub">Choose what decides rank and when this round runs.</p><div class="grid2">
-<div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="wagered">Amount</option><option value="score">Points / score</option></select><span class="hint">Players with the same value share a rank; tied names are shown alphabetically.</span></div>
+<div class="field field--full"><label for="f_blurb">About your sponsor</label><textarea id="f_blurb" rows="2" placeholder="Short pitch about the sponsor and your code (optional)."></textarea></div></div></details></div>
+<div class="card" data-egroup="setup"><h2>Ranking</h2><p class="card-sub">What decides rank, and when this round ends.</p><div class="grid2">
+<div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="wagered">Amount</option><option value="score">Points / score</option></select><span class="hint">Players with the same value share a rank.</span></div>
 <div class="field"><label for="f_pool">Prize pool</label><input id="f_pool" placeholder="$500" /></div>
 <div class="field"><label for="f_period">Race runs</label><select id="f_period"><option>Weekly</option><option selected>Monthly</option><option>Season</option></select></div>
-<div class="field"><label for="f_starts">Round starts on <span class="hint">Optional</span></label><input id="f_starts" type="datetime-local" /><span class="hint" id="f_starts_hint">Shown in your timezone.</span></div>
 <div class="field"><label for="f_ends">Round ends on</label><input id="f_ends" type="datetime-local" /><span class="hint" id="f_ends_hint">Shown in your timezone. After this time, final standings stay visible and automated score updates stop.</span></div>
-<div class="field field--full"><label class="chk"><input type="checkbox" id="f_auto_reset" /> Automatically start a new race when this one ends</label><label class="sr-only" for="f_auto_reset_clear">What to reset when the race ends</label><select id="f_auto_reset_clear" disabled class="mt-8"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players and start fresh</option><option value="none">Keep everything as-is</option></select><span class="hint">Your current standings will be saved automatically before the reset.</span></div></div></div>
-<div class="card" data-egroup="setup"><h2>Access &amp; visibility</h2><p class="card-sub">Control who can see your leaderboard.</p>
-<div class="field field--full"><label class="chk"><input type="checkbox" id="f_password_enabled" /> Require a password to view this site</label><input id="f_password" type="password" placeholder="Leave blank to keep current password" disabled class="mt-8" /><span class="hint">Visitors must enter this password before seeing the leaderboard.</span></div>
-<p class="hint mt-14">Use the <b>Publish</b> button at the top right to make your site live.</p></div>
+</div>
+<details class="editor-more" data-editor-more="setup-schedule"><summary>Start date and automatic restart</summary><div class="grid2">
+<div class="field"><label for="f_starts">Round starts on <span class="hint">Optional</span></label><input id="f_starts" type="datetime-local" /><span class="hint" id="f_starts_hint">Shown in your timezone.</span></div>
+<div class="field field--full"><label class="chk"><input type="checkbox" id="f_auto_reset" /> Automatically start a new race when this one ends</label><label class="sr-only" for="f_auto_reset_clear">What to reset when the race ends</label><select id="f_auto_reset_clear" disabled class="mt-8"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players and start fresh</option><option value="none">Keep everything as-is</option></select><span class="hint">Your current standings will be saved automatically before the reset.</span></div></div></details></div>
+<div class="card" data-egroup="setup"><h2>Who can see this site</h2><p class="card-sub">Your site is open to anyone with the link once you publish it.</p>
+<div class="field field--full m-0"><label class="chk"><input type="checkbox" id="f_password_enabled" /> Require a password to view this site</label><input id="f_password" type="password" placeholder="Leave blank to keep current password" disabled class="mt-8" /><span class="hint">Visitors must enter this password before seeing the leaderboard.</span></div></div>
 <h1 class="v3-section-title" data-egroup="design">Appearance</h1>
 <div class="v3-players" data-egroup="players">
 <div class="v3-head">
@@ -219,20 +222,21 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="socials-editor" id="socialsList"></div></div>
 <h1 class="v3-section-title" data-egroup="share">Share</h1>
 <div class="card" data-egroup="share" id="embedShareCard"><h2>Share your leaderboard</h2><p class="card-sub">Get your link, add it to your stream, or embed it on a website.</p>
-<div class="v3-alert v3-alert--warning" id="sharePublishWarning" hidden role="status"><strong id="sharePublishWarningTitle">This leaderboard is not published.</strong><span id="sharePublishWarningBody">Visitors will receive a 404 until you publish it.</span><button class="btn btn--sm btn--accent" id="sharePublishAction" type="button">Publish leaderboard</button></div>
+<div class="v3-alert v3-alert--warning" id="sharePublishWarning" hidden role="status"><strong id="sharePublishWarningTitle">This site is not published.</strong><span id="sharePublishWarningBody">Visitors will receive a 404 until you publish it.</span><button class="btn btn--sm btn--accent" id="sharePublishAction" type="button">Publish site</button></div>
 <div class="v3-alert v3-alert--success" id="publishHandoff" hidden role="status" aria-live="polite"><span><strong>It’s live.</strong> <code id="publishHandoffUrl"></code></span><span class="d-flex gap-8"><a class="btn btn--sm btn--ghost" id="publishHandoffOpen" target="_blank" rel="noopener noreferrer">Open</a><button class="btn btn--sm btn--accent" id="publishHandoffCopy" type="button">Copy link</button></span></div>
 <div dangerouslySetInnerHTML={{ __html: OBS_TOOLS }}></div>
 <div class="field"><label>Your public link</label><div class="d-flex gap-8 items-center flex-wrap"><code id="embedPublicLink" class="overlay-url"></code><button class="btn btn--sm btn--accent ic-btn" id="embedPublicCopy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy</button></div></div>
 <div class="embed-obs-box"><div class="d-flex items-center gap-8 mb-8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="20" height="14" x="2" y="3" rx="2" ry="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg><b class="font-14">Stream overlay</b></div><p class="hint mb-8">Add this URL as a Browser Source in OBS, Streamlabs, or any streaming software.</p><div class="field mb-8"><div class="d-flex gap-8 items-center flex-wrap"><code id="embedObsUrl" class="overlay-url"></code><button class="btn btn--sm btn--accent ic-btn" id="embedObsCopy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg> Copy</button></div></div><div class="embed-obs-row"><div><span class="hint">Width</span><div class="embed-obs-dim" id="embedObsWidth">1100px</div></div><div><span class="hint">Height</span><div class="embed-obs-dim" id="embedObsHeight">auto</div></div></div><div class="embed-tip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg><span>For best results, uncheck "Shutdown source when not visible" in OBS so the overlay stays live while switching scenes.</span></div></div>
 <div class="empty upsell-card" id="embedObsLock" hidden>Stream overlays are available on Starter and higher plans. <a href="/dashboard/settings/billing?from=overlay" id="overlayUpgrade">Upgrade your plan</a> to add this leaderboard to OBS, Streamlabs, or another streaming app.</div>
-<div class="field mt-14"><label>Embed on your website</label><div class="embed-code-block" id="embedCodeBlock"><code id="embedCodeInline"></code><button class="embed-copy-btn" id="embedCodeCopy" type="button">Copy</button></div></div>
-<div class="d-flex gap-8 flex-wrap mt-14"><label class="chk"><input type="checkbox" id="embedTransparent" /> Transparent background</label><label class="chk"><input type="checkbox" id="embedHideBranding" /> Remove YourRank branding</label></div>
+<details class="editor-more" data-editor-more="share-embed"><summary>Embed on a website</summary>
+<div class="field"><span class="hint">Paste this code where you want the leaderboard to appear.</span><div class="embed-code-block" id="embedCodeBlock"><code id="embedCodeInline"></code><button class="embed-copy-btn" id="embedCodeCopy" type="button" aria-label="Copy embed code">Copy</button></div></div>
+<div class="d-flex gap-8 flex-wrap"><label class="chk"><input type="checkbox" id="embedTransparent" /> Transparent background</label><label class="chk"><input type="checkbox" id="embedHideBranding" /> Remove YourRank branding</label></div></details>
 <h3 class="m-0 mt-18 mb-8 font-14 fw-700">Share on social</h3>
 <div class="share-cards" id="shareCards"><button class="share-card share-card--x" id="shareX" type="button"><span>Share on X</span></button><button class="share-card share-card--discord" id="shareDiscord" type="button"><span>Share on Discord</span></button><button class="share-card share-card--twitch" id="shareTwitch" type="button"><span>Share on Twitch</span></button><button class="share-card share-card--copy" id="shareCopy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>Copy link</span></button></div>
 <details class="api-access-details" id="apiAccessDetails"><summary class="font-14 fw-600">Developer tools</summary><div class="api-access locked" id="apiAccess"><div><b class="font-14">REST API</b><p class="hint mt-4">Use the API to update scores automatically from your own system.</p></div><span class="api-lock-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Pro</span></div></details>
 </div>
 <h1 class="v3-section-title" data-egroup="history">History</h1>
-<div class="card" data-egroup="history"><p class="card-sub">End a competition period and save the results. Your current leaderboard will be archived before any changes are made.</p>
+<div class="card" data-egroup="history"><p class="card-sub">End the current round and keep its final standings. Nothing is deleted — the standings are saved first.</p>
 <div class="arch-form">
 <div class="field field-flex"><label for="a_label">Name this period</label><input id="a_label" placeholder="July 2026" /></div>
 <div class="field m-0"><label for="a_clear">After archiving</label><select id="a_clear"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players</option><option value="none">Keep the board as-is</option></select></div>
@@ -241,6 +245,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="arch-list" id="archList"></div>
 <div class="v3-empty" id="archEmpty" hidden></div>
 </div>
+<div class="editor-savebar savebar" id="savebar" hidden><span class="savebar-hint">Unsaved changes</span><span class="savebar-ts" id="editorTimestamp"></span><button class="btn btn--ghost" id="discard" type="button">Discard changes</button><button class="btn btn--accent" id="save" type="button">Save changes</button></div>
 </div>
 <div class="design-preview">
 <div class="card">
@@ -470,7 +475,6 @@ const SECTIONS = {
 export function DashboardContent({ user, activePath } = {}) {
   const { activeNav, activeHash } = dashboardShellRoute(activePath);
   const sections = ROUTE_SECTIONS[activeNav] || ROUTE_SECTIONS.home;
-  const hasEditor = sections.includes("board");
   return (
     <>
       <div id="loading" class="yr-workspace-loader" role="status" aria-live="polite" aria-busy="true"><span class="sr-only">Loading your dashboard…</span>
@@ -487,8 +491,6 @@ export function DashboardContent({ user, activePath } = {}) {
     const Section = SECTIONS[key];
     return <Section active={key === activeNav} activeHash={activeHash} showTabs />;
   })}
-{hasEditor ? 
-<div class="savebar" id="savebar" hidden><span class="savebar-hint">Unsaved changes</span><span class="savebar-ts" id="editorTimestamp"></span><button class="btn btn--ghost" id="discard" type="button">Discard changes</button><button class="btn btn--accent" id="save" type="button">Save changes</button></div> : null}
 {/* Dynamic content region for fragment-loaded sections (Rewards, Engagement,
     Audience, Account). Hidden by default; shown by the dynamic-section loader
     when navigating to those areas, hidden again when returning to SPA sections. */}

@@ -209,13 +209,20 @@ function setTopbarContext(context) {
   const siteCommand = document.querySelector(".lb-site-command");
   const accountHud = document.querySelector(".lb-account-hud");
   if (availability) {
-    // Publish controls only show for "full" context (core SPA sections).
+    // Publish controls only show for "full" context (core SPA sections). The
+    // publication state owns whether the live link and draft chip are visible
+    // within that context, so this only ever hides them; #pubToggle is an
+    // internal form input and stays hidden in every context.
     const showPublish = context === "full";
-    availability.querySelectorAll("#publishAction, #liveLink, #lbTopbarDraft").forEach((el) => {
-      el.hidden = !showPublish;
-    });
+    const publishAction = availability.querySelector("#publishAction");
+    if (publishAction) publishAction.hidden = !showPublish;
+    if (!showPublish) {
+      availability.querySelectorAll("#liveLink, #lbTopbarDraft").forEach((el) => {
+        el.hidden = true;
+      });
+    }
     const pubToggle = document.getElementById("pubToggle");
-    if (pubToggle) pubToggle.hidden = !showPublish;
+    if (pubToggle) pubToggle.hidden = true;
   }
   if (siteCommand) siteCommand.hidden = context === "none";
   if (accountHud) accountHud.hidden = context !== "none";

@@ -761,18 +761,16 @@ export function renderBoardStatus() {
   const publishToggle = $("pubToggle");
   if (publishToggle && !state._dirty) publishToggle.checked = s.published;
   // A "View site" link must never be offered while the public URL would not
-  // resolve; until then the link states what is still missing instead.
+  // resolve, and it must never restate the publish action that sits next to it
+  // in the topbar: the only non-live state it takes is the email verification
+  // it cannot do itself.
   for (const id of ["liveLink", "previewLiveLink"]) {
     const link = $(id);
     if (!link) continue;
-    link.hidden = id === "liveLink" ? !s.live && !s.published : !s.live;
+    link.hidden = id === "liveLink" ? !s.live && !s.pending : !s.live;
     if (id === "liveLink") {
-      link.textContent = s.live ? "View site ↗" : s.published ? "Verify email" : "Publish site";
-      link.href = s.live
-        ? `/${state.SLUG}`
-        : s.published
-          ? "/verify-email"
-          : `/dashboard/leaderboard/share?board=${encodeURIComponent(state.ACTIVE_SITE_ID || "")}`;
+      link.textContent = s.live ? "View site ↗" : "Verify email";
+      link.href = s.live ? `/${state.SLUG}` : "/verify-email";
       if (s.live) {
         link.target = "_blank";
         link.rel = "noopener noreferrer";
