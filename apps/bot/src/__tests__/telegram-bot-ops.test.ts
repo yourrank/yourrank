@@ -348,7 +348,7 @@ describe("enabled-state consistency between UI and backend", () => {
 
   it("the dashboard renders enabled state from server data and surfaces resync warnings", () => {
     const src = clientScriptSource();
-    expect(src).toContain("c.is_enabled?'on':'off'");
+    expect(src).toContain("c.is_enabled?'On':'Off'");
     expect(src).toContain("r.warning");
   });
 });

@@ -131,7 +131,6 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
 }
 
 .card,
-.bot-card,
 .lb-widget,
 .v3-card,
 .v3-dash .modal-card {

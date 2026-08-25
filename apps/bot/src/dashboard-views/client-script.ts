@@ -244,12 +244,12 @@ function showPostbackError(msg){
 
 async function load() {
   const me = await api('/me');
-  if (me.error) { toast(me.error); showLoadError(me.error); return; }
+  if (me.error) { toast(me.error); showLoadError(me.error); showConnectionError(me.error); return; }
 
   const [offers, daily, bots] = await Promise.all([api('/offers'), api('/stats/daily'), api('/bots')]);
   if (daily.error || offers.error || bots.error) {
     const err = daily.error || offers.error || bots.error;
-    toast(err); showLoadError(err); return;
+    toast(err); showLoadError(err); showConnectionError(err); return;
   }
 
   showPage(page);
@@ -291,33 +291,107 @@ async function load() {
   if (__planInfo) renderPlanState(__planInfo);
 }
 
-// Compact bot + offer summaries and the setup checklist (overview only).
+// Compact bot + offer summaries (overview only).
 function renderOverviewSummary(bots, offers){
   const ov = $('ovBots');
   if (ov) {
     const list = (bots||[]).slice(0,4);
     ov.innerHTML = list.length
-      ? list.map(b=>{
-          const on = b.status === 'active';
-          return '<div class="lrow"><div class="l"><div class="nm">@'+esc(b.username)+'</div>'+
-            '<div class="ds">'+(on?'connected and working':'not connected yet')+'</div></div>'+
-            '<span class="badge '+(on?'on':'off')+'">'+(on?'active':'off')+'</span></div>';
-        }).join('')
-      : '<p class="muted text-sm">No bot connected yet. <a href="/dashboard/telegram/bots">Connect one →</a></p>';
+      ? '<ul class="tg-row-list">'+list.map(b=>{
+          const state = botConnectionState(b);
+          return '<li class="tg-row"><div class="tg-row-copy"><span class="tg-row-name">@'+esc(b.username)+'</span>'+
+            '<span class="tg-row-meta">'+esc(state.rowText)+'</span></div>'+
+            '<span class="tg-state" data-state="'+esc(state.key)+'"><i aria-hidden="true"></i>'+esc(state.label)+'</span></li>';
+        }).join('')+'</ul>'
+      : '<p class="muted text-sm">No bot connected yet. <a href="/dashboard/telegram/bots">Connect Telegram</a></p>';
   }
   const oo = $('ovOffers');
   if (oo) {
     const top = (offers||[]).slice().sort((a,b)=>(b.clicks||0)-(a.clicks||0)).slice(0,4);
     oo.innerHTML = top.length
-      ? top.map(o=>{
+      ? '<ul class="tg-row-list">'+top.map(o=>{
           const on = o.is_active;
-          const cr = o.cr != null ? ((o.cr)*100).toFixed(1) : '0.0';
-          return '<div class="lrow"><div class="l"><div class="nm">'+esc(o.casino)+'</div>'+
-            '<div class="ds">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</div></div>'+
-            '<span class="badge '+(on?'on':'off')+'">'+(on?'active':'off')+'</span></div>';
-        }).join('')
-      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one →</a></p>';
+          return '<li class="tg-row"><div class="tg-row-copy"><span class="tg-row-name">'+esc(o.casino)+'</span>'+
+            '<span class="tg-row-meta">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</span></div>'+
+            '<span class="tg-state" data-state="'+(on?'ok':'off')+'"><i aria-hidden="true"></i>'+(on?'Active':'Off')+'</span></li>';
+        }).join('')+'</ul>'
+      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one</a></p>';
   }
+}
+
+// ---- connection truth -------------------------------------------------------
+// One place that turns the /bots payload into the state a creator reads:
+// Connected, Setup incomplete, Needs attention or Not connected. Health checks
+// can escalate a connected bot to "Needs attention"; nothing here invents a
+// state the API did not report.
+const __botAttention = {};
+function botConnectionState(bot){
+  if (!bot) return { key: 'off', label: 'Not connected', rowText: 'Not connected' };
+  if (__botAttention[bot.id]) return { key: 'attention', label: 'Needs attention', rowText: __botAttention[bot.id] };
+  if (bot.status === 'active') return { key: 'ok', label: 'Connected', rowText: 'Connected and replying to subscribers' };
+  if (bot.status === 'revoked') return { key: 'attention', label: 'Needs attention', rowText: 'Disconnected — reconnect to keep sending updates' };
+  return { key: 'setup', label: 'Setup incomplete', rowText: 'Waiting on Telegram to finish the connection' };
+}
+function renderConnectionState(bots){
+  const card = $('tgConn');
+  if (!card) return;
+  const list = bots || [];
+  const active = list.find(b => b.status === 'active');
+  const chosen = active || list[0] || null;
+  const state = list.length ? botConnectionState(chosen) : { key: 'off', label: 'Not connected', rowText: '' };
+  const name = $('tgConnName');
+  const sub = $('tgConnSub');
+  const badge = $('tgConnState');
+  const badgeText = $('tgConnStateText');
+  const actions = $('tgConnActions');
+  const primary = $('tgConnPrimary');
+  const secondary = $('tgConnSecondary');
+  const note = $('tgConnNote');
+  if (badge) badge.dataset.state = state.key;
+  if (badgeText) badgeText.textContent = state.label;
+  if (name) name.textContent = chosen ? '@'+chosen.username : 'Telegram';
+  if (sub) {
+    sub.textContent = !list.length
+      ? 'No Telegram bot connected yet. Connect one to send updates to your subscribers.'
+      : state.rowText;
+  }
+  if (primary && secondary) {
+    if (state.key === 'ok') {
+      primary.textContent = 'Send update';
+      primary.href = '/dashboard/telegram/broadcasts';
+      secondary.textContent = 'Manage connection';
+      secondary.hidden = page === 'bots';
+    } else if (state.key === 'attention') {
+      primary.textContent = 'Manage connection';
+      primary.href = '/dashboard/telegram/bots';
+      secondary.hidden = true;
+    } else if (state.key === 'setup') {
+      primary.textContent = 'Finish setup';
+      primary.href = '/dashboard/telegram/bots';
+      secondary.hidden = true;
+    } else {
+      primary.textContent = 'Connect Telegram';
+      primary.href = '/dashboard/telegram/bots';
+      secondary.hidden = true;
+    }
+  }
+  if (actions) actions.hidden = false;
+  if (note) {
+    const extra = list.length > 1 ? (list.length - 1) + ' other bot' + (list.length === 2 ? '' : 's') + ' in this workspace.' : '';
+    note.textContent = extra;
+    note.hidden = !extra;
+  }
+}
+function showConnectionError(msg){
+  const badge = $('tgConnState');
+  const badgeText = $('tgConnStateText');
+  const sub = $('tgConnSub');
+  const actions = $('tgConnActions');
+  if (!badge) return;
+  badge.dataset.state = 'unknown';
+  if (badgeText) badgeText.textContent = 'Status unavailable';
+  if (sub) sub.textContent = msg || "Couldn't check your Telegram connection. Try again.";
+  if (actions) actions.hidden = true;
 }
 
 // Subscriber totals + deep-link attribution (overview only).
@@ -367,24 +441,30 @@ function formatBroadcastDate(value){
   const d = new Date(value);
   return isNaN(d.getTime()) ? String(value) : d.toLocaleString(undefined, {dateStyle:'medium', timeStyle:'short'});
 }
+// Backend broadcast status → plain creator words. Unknown values fall through
+// unchanged rather than being hidden behind a guess.
+const BROADCAST_STATUS_WORDS = { queued: 'Sending', sending: 'Sending', sent: 'Sent', scheduled: 'Scheduled', canceled: 'Cancelled', cancelled: 'Cancelled', failed: 'Failed' };
+function broadcastStatusLabel(status){
+  return BROADCAST_STATUS_WORDS[String(status || '').toLowerCase()] || String(status || 'Unknown');
+}
 function broadcastRow(b){
   const audience = b.total_count != null ? String(b.total_count) : '—';
   const status = String(b.status || 'unknown');
   const canCancel = status === 'scheduled';
-  return '<td><span class="badge '+esc(status)+'">'+esc(status)+'</span></td>'+
-    '<td><b>'+esc(audience)+'</b> <span class="muted">recipients</span></td>'+
+  return '<td><span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status))+'</span></td>'+
+    '<td><b>'+esc(audience)+'</b> <span class="muted">subscribers</span></td>'+
     '<td><button class="link-button" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">'+esc(String(b.body || '').slice(0,90))+(String(b.body || '').length>90?'…':'')+'</button></td>'+
     '<td>'+esc(b.bot_username || '—')+'</td>'+
     '<td>'+esc(formatBroadcastDate(b.scheduled_at))+'</td>'+
     '<td>'+esc(String(b.sent_count ?? 0))+'</td>'+
     '<td>'+esc(String(b.fail_count ?? 0))+'</td>'+
-    '<td><button class="ghost" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">View record</button>'+
+    '<td><button class="ghost" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">View</button>'+
       (canCancel ? ' <button class="ghost" data-action="cancelBroadcast" data-id="'+esc(b.id)+'" type="button">Cancel</button>' : '')+'</td>';
 }
 function broadcastAudienceText(b){
   const n = b.total_count != null ? String(b.total_count) : 'not recorded';
   const label = formatSegmentLabel(b.audience_filter_snapshot || b.segment) || 'all subscribers';
-  return label+' · '+n+' recipients';
+  return label+' · '+n+' subscribers';
 }
 let bcDetailFocusTrap = null;
 let bcDetailTrigger = null;
@@ -399,28 +479,28 @@ function renderBroadcastButtons(value){
 }
 function openBroadcastDetail(id){
   const b = __broadcasts.find(x => x.id === id);
-  if (!b) return toast('Broadcast record not found');
+  if (!b) return toast('Update not found');
   const body = $('bcDetailBody');
   if (!body) return;
   const filter = b.audience_filter_snapshot;
-  const filterText = filter ? (formatSegmentLabel(filter) || 'All subscribers') : 'Filter snapshot not retained for this older broadcast.';
+  const filterText = filter ? (formatSegmentLabel(filter) || 'All subscribers') : 'Not recorded for this older update.';
   const image = b.media_url ? '<img class="bc-detail-image" src="'+esc(b.media_url)+'" alt="Broadcast image" />' : '<span class="muted">No image</span>';
   const buttonHtml = renderBroadcastButtons(b.buttons);
   body.innerHTML =
     '<dl class="bc-detail-grid">'+
       '<div class="bc-detail-item"><dt>Bot</dt><dd>'+esc(b.bot_username || '—')+'</dd></div>'+
-      '<div class="bc-detail-item"><dt>Status</dt><dd>'+esc(b.status || '—')+'</dd></div>'+
+      '<div class="bc-detail-item"><dt>Status</dt><dd>'+esc(b.status ? broadcastStatusLabel(b.status) : '—')+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Subscribers</dt><dd>'+esc(filterText)+'</dd></div>'+
-      '<div class="bc-detail-item"><dt>Recipients captured at send</dt><dd>'+esc(b.total_count == null ? 'Not recorded' : String(b.total_count))+'</dd></div>'+
+      '<div class="bc-detail-item"><dt>Subscribers at send time</dt><dd>'+esc(b.total_count == null ? 'Not recorded' : String(b.total_count))+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Scheduled</dt><dd>'+esc(formatBroadcastDate(b.scheduled_at))+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Sent</dt><dd>'+esc(formatBroadcastDate(b.sent_at))+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Delivered</dt><dd>'+esc(String(b.sent_count ?? 0))+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Failed</dt><dd>'+esc(String(b.fail_count ?? 0))+'</dd></div>'+
     '</dl>'+
-    '<h4>Exact message</h4><div class="bc-detail-message">'+esc(b.body || '')+'</div>'+
+    '<h4>Message sent</h4><div class="bc-detail-message">'+esc(b.body || '')+'</div>'+
     '<h4>Image</h4>'+image+(b.media_url ? '<p><a href="'+esc(b.media_url)+'" target="_blank" rel="noreferrer">'+esc(b.media_url)+'</a></p>' : '')+
     '<h4>Buttons</h4>'+buttonHtml+
-    '<p class="muted">Recipient list is not retained.</p>';
+    '<p class="muted">The list of individual subscribers is not kept.</p>';
   const detail = $('bcDetail');
   if (detail) {
     bcDetailTrigger = document.activeElement;
@@ -500,7 +580,7 @@ function renderPlanState(plan){
 
 async function loadExtras(){
   const bcListLoading = $('bcList');
-  if (bcListLoading) bcListLoading.innerHTML = '<tr><td colspan="8" class="muted">Loading broadcasts…</td></tr>';
+  if (bcListLoading) bcListLoading.innerHTML = '<tr><td colspan="8" class="muted">Loading updates…</td></tr>';
   const [plan, bcs, pbStatus] = await Promise.all([api('/plan'), api('/broadcasts'), api('/postback-status')]);
   const errors = [plan.error, bcs.error, pbStatus.error].filter(Boolean);
 
@@ -515,7 +595,7 @@ async function loadExtras(){
     const bcList = $('bcList');
     if (bcList) {
       const colCount = bcList.closest('table')?.querySelectorAll('thead th').length || 1;
-      bcList.innerHTML = '<tr><td colspan="' + colCount + '">' + loadErrorMarkup(bcs.error || "Couldn’t load broadcast history.", 'retryBroadcasts') + '</td></tr>';
+      bcList.innerHTML = '<tr><td colspan="' + colCount + '">' + loadErrorMarkup(bcs.error || "Couldn’t load the updates you sent.", 'retryBroadcasts') + '</td></tr>';
     }
   } else {
     __broadcasts = bcs || [];
@@ -530,8 +610,8 @@ async function loadExtras(){
             { key: 'status', label: 'Status', fn: function(a,b){ return (a.status||'').localeCompare(b.status||''); } },
             { key: 'sent', label: 'Sent', fn: function(a,b){ return (b.sent_count||0) - (a.sent_count||0); } }
           ],
-          emptyAllText: 'No broadcasts yet. Connect an active bot to send your first message.', emptyText: 'No matching broadcasts.',
-          searchPlaceholder: 'Search broadcasts…',
+          emptyAllText: 'No updates sent yet. Your sent and scheduled updates appear here.', emptyText: 'No matching updates.',
+          searchPlaceholder: 'Search updates…',
           renderItem: broadcastRow
         });
       } else {
@@ -644,27 +724,34 @@ async function checkHealth(target){
   const r = await api('/bots/'+id+'/health');
   restoreBtn(target);
   if (r.error) { return toast(r.error); }
+  // Health is the only signal that can escalate a stored "active" bot to
+  // "Needs attention", so the summary above never claims Connected on a
+  // stored status alone once Telegram has reported a problem.
+  if (!r.configured) __botAttention[id] = 'Telegram is not delivering messages to this bot yet — reconnect it';
+  else if (r.last_error) __botAttention[id] = 'Telegram reported a delivery problem — reconnect if messages stop arriving';
+  else delete __botAttention[id];
+  renderConnectionState(__lastBots);
   const details = $('health-body-'+id);
   const wrap = $('health-'+id);
   if (details && wrap) {
     const action = r.configured
-      ? (r.last_error ? 'Your bot had an error. Try clicking <b>Reconnect</b> to restore the connection.' : 'Connected and working. If messages stop arriving, click <b>Reconnect</b>.')
-      : 'Not connected yet. Click <b>Reconnect</b> to restore the connection with Telegram.';
+      ? (r.last_error ? 'Telegram reported a problem. Reconnect the bot to restore delivery.' : 'Connected and working. If messages stop arriving, reconnect the bot.')
+      : 'Telegram is not delivering to this bot. Reconnect it to restore the connection.';
     details.innerHTML = '<ul>'+
-      '<li><b>Connection link:</b> '+(r.url ? esc(r.url) : 'none')+'</li>'+
-      '<li><b>Pending updates:</b> '+esc(String(r.pending_updates))+'</li>'+
-      (r.last_error ? '<li><b>Last error:</b> '+esc(r.last_error)+(r.last_error_at ? ' <span class="muted">('+esc(fmtTime(r.last_error_at))+')</span>' : '')+'</li>' : '')+
+      '<li><b>Delivery:</b> '+(r.configured ? 'Telegram is delivering messages to this bot' : 'Telegram is not delivering messages to this bot')+'</li>'+
+      '<li><b>Waiting to be processed:</b> '+esc(String(r.pending_updates))+'</li>'+
+      (r.last_error ? '<li><b>Last problem reported:</b> '+esc(r.last_error)+(r.last_error_at ? ' <span class="muted">('+esc(fmtTime(r.last_error_at))+')</span>' : '')+'</li>' : '')+
       '</ul><p>'+action+'</p>';
     wrap.hidden = false;
     wrap.open = true;
   }
   const summary = r.configured
-    ? 'Connected and working' + (r.last_error ? ' (had an error)' : '')
-    : 'Not connected yet';
-  toast(summary + ' — see details below');
+    ? (r.last_error ? 'Needs attention' : 'Connected')
+    : 'Needs attention';
+  toast(summary + ' — see connection details');
 }
 async function disconnectBot(btn){
-  if (!await confirmModal('Disconnect bot', 'It will stop responding, but your offers, commands and subscriber history stay in YourRank. Your connect code is saved (encrypted) so you can reconnect without pasting it again.', 'Disconnect', true)) return;
+  if (!await confirmModal('Disconnect Telegram', 'Your bot stops replying to subscribers and updates can no longer be sent. Commands, offers and subscribers stay in YourRank, and your connect code is kept encrypted so you can reconnect without pasting it again.', 'Disconnect', true)) return;
   setLoading(btn, 'Disconnecting…');
   const r = await api('/bots/'+btn.dataset.id+'/disconnect',{method:'POST'});
   if (r.error) { restoreBtn(btn); return toast(r.error); }
@@ -678,6 +765,7 @@ async function reconnectBot(btn){
   if (r.error) { restoreBtn(btn); return toast(r.error); }
   toast('Bot @'+r.username+' reconnected');
   const bot = __lastBots.find(b => b.id === btn.dataset.id); if (bot) bot.status = 'active';
+  delete __botAttention[btn.dataset.id];
   restoreBtn(btn); renderBots(__lastBots, false);
 }
 async function syncCommands(btn){
@@ -733,34 +821,40 @@ function renderBots(bots, loadCmds = true){
   const botList = $('botList');
   if (botList) {
     botList.innerHTML = bots.length
-      ? bots.map(b => {
-          const statusClass = b.status === 'active' ? 'ok' : 'off';
-          const statusText = b.status === 'active' ? 'active' : (b.status === 'revoked' ? 'disconnected' : b.status);
+      ? '<ul class="tg-row-list tg-bot-list">'+bots.map(b => {
+          const state = botConnectionState(b);
           const isActive = b.status === 'active';
-          const syncLabel = b.last_command_sync_at ? 'Synced '+fmtTime(b.last_command_sync_at) : 'Commands not synced yet';
-          return '<div class="bot-card">'+
-            '<div class="bot-card-head">'+
-              '<div class="meta"><a href="https://t.me/'+esc(b.username)+'" target="_blank" rel="noopener">@'+esc(b.username)+'</a> '+
-              '<span class="muted">(…'+esc(b.token_hint)+')</span> <span class="badge '+statusClass+'">'+esc(statusText)+'</span></div>'+
-              '<div class="muted hint">'+esc(syncLabel)+' · updated '+esc(fmtTime(b.updated_at))+'</div>'+
+          const syncLabel = b.last_command_sync_at ? 'Commands updated '+fmtTime(b.last_command_sync_at) : 'Commands not sent to Telegram yet';
+          return '<li class="tg-row tg-bot-row">'+
+            '<div class="tg-row-head">'+
+              '<div class="tg-row-copy">'+
+                '<span class="tg-row-name"><a href="https://t.me/'+esc(b.username)+'" target="_blank" rel="noopener">@'+esc(b.username)+'</a></span>'+
+                '<span class="tg-row-meta">'+esc(state.rowText)+'</span>'+
+              '</div>'+
+              '<span class="tg-state" data-state="'+esc(state.key)+'"><i aria-hidden="true"></i>'+esc(state.label)+'</span>'+
             '</div>'+
-            '<div class="actions">'+
-              (isActive ? '<button class="ghost" data-action="checkHealth" data-id="'+esc(b.id)+'" type="button">Check connection</button>' : '')+
-              (isActive ? '<button class="ghost" data-action="syncCommands" data-id="'+esc(b.id)+'" type="button">Sync commands</button>' : '')+
-              (isActive ? '<button class="ghost" data-action="disconnectBot" data-id="'+esc(b.id)+'" type="button">Disconnect</button>'
-                        : '<button class="ghost" data-action="reconnectBot" data-id="'+esc(b.id)+'" type="button">Reconnect</button>')+
+            '<div class="tg-row-actions">'+
               (isActive ? '<a class="btn btn--ghost" href="/dashboard/telegram/commands?bot='+encodeURIComponent(b.id)+'">Edit commands</a>' : '')+
-              (isActive && page === 'bots' ? '<button class="ghost" data-action="testMessage" data-id="'+esc(b.id)+'" type="button">Test message</button>' : '')+
-              (page === 'bots' ? '<button class="danger" data-action="deleteBot" data-id="'+esc(b.id)+'" type="button">Delete</button>' : '')+
+              (isActive ? '<button class="btn btn--ghost" data-action="syncCommands" data-id="'+esc(b.id)+'" type="button">Update commands in Telegram</button>' : '')+
+              (isActive && page === 'bots' ? '<button class="btn btn--ghost" data-action="testMessage" data-id="'+esc(b.id)+'" type="button">Send test message</button>' : '')+
+              (isActive ? '' : '<button class="btn btn--accent" data-action="reconnectBot" data-id="'+esc(b.id)+'" type="button">Reconnect</button>')+
             '</div>'+
-            '<details class="health-details" id="health-'+esc(b.id)+'" hidden>'+
-              '<summary>Technical details</summary>'+
-              '<div class="health-body" id="health-body-'+esc(b.id)+'">Click <b>Check connection</b> to load the latest status.</div>'+
+            '<details class="health-details tg-row-details" id="health-'+esc(b.id)+'">'+
+              '<summary>Connection details</summary>'+
+              '<div class="health-body" id="health-body-'+esc(b.id)+'">'+
+                '<p class="muted">'+esc(syncLabel)+' · last change '+esc(fmtTime(b.updated_at))+'. Connect code ending …'+esc(b.token_hint)+'.</p>'+
+                '<div class="tg-row-details-actions">'+
+                  (isActive ? '<button class="btn btn--ghost" data-action="checkHealth" data-id="'+esc(b.id)+'" type="button">Check connection</button>' : '')+
+                  (isActive ? '<button class="btn btn--ghost" data-action="disconnectBot" data-id="'+esc(b.id)+'" type="button">Disconnect</button>' : '')+
+                  (page === 'bots' ? '<button class="btn btn--ghost danger" data-action="deleteBot" data-id="'+esc(b.id)+'" type="button">Delete bot</button>' : '')+
+                '</div>'+
+              '</div>'+
             '</details>'+
-          '</div>';
-        }).join('')
-      : 'No bot connected yet — start with step 1 below.';
+          '</li>';
+        }).join('')+'</ul>'
+      : '<p class="muted text-sm">No bot connected yet. Follow the steps below to connect Telegram.</p>';
   }
+  renderConnectionState(bots);
 
   const botSelect = $('botSelect');
   const bcBotSelect = $('bcBotSelect');
@@ -890,7 +984,7 @@ function renderCommands(){
     '<td>/'+esc(c.command)+'</td>'+
     '<td class="muted">'+short+ellipsis+'</td>'+
     '<td class="muted">'+btnText+'</td>'+
-    '<td class="'+(c.is_enabled?'ok':'off')+'">'+(c.is_enabled?'on':'off')+'</td>'+
+    '<td class="'+(c.is_enabled?'ok':'off')+'">'+(c.is_enabled?'On':'Off')+'</td>'+
     '<td><button class="ghost" data-action="viewCommand" data-id="'+esc(c.id)+'">View</button> '
         +'<button class="ghost" data-action="testCommand" data-id="'+esc(c.id)+'">Test</button> '
         +'<button class="ghost" data-action="toggleCommand" data-id="'+esc(c.id)+'" data-active="'+(!c.is_enabled)+'">'+(c.is_enabled?'Disable':'Enable')+'</button> '
@@ -1143,7 +1237,7 @@ async function updateAudience(requestId){
   if (!botId) {
     if (currentRequest === __bcAudienceRequest) {
       __bcAudience = null;
-      el.textContent = 'Connect or reconnect a bot to estimate an audience.';
+      el.textContent = 'Connect or reconnect Telegram to see who would receive this.';
     }
     return;
   }
@@ -1157,12 +1251,15 @@ async function updateAudience(requestId){
   if (currentRequest !== __bcAudienceRequest || signature !== currentSignature) return;
   if (!r || r.error) {
     __bcAudience = null;
-    el.textContent = 'Could not estimate this audience. Change a filter or try again.';
+    el.textContent = "Couldn't work out who would receive this. Change a filter or try again.";
     return;
   }
   __bcAudience = r.count;
   const label = formatSegmentLabel(segment);
-  el.innerHTML = 'This'+(label?' <span class="muted">('+esc(label)+')</span>':'')+' will send to <b>'+esc(String(r.count))+'</b> subscriber'+(r.count===1?'':'s')+'.';
+  const botName = getBotNameForBroadcast();
+  el.innerHTML = 'Goes to <b>'+esc(String(r.count))+'</b> subscriber'+(r.count===1?'':'s')+
+    (botName?' of '+esc(botName):'')+
+    (label?' <span class="muted">('+esc(label)+')</span>':'')+'.';
 }
 function scheduleAudienceUpdate(){
   clearTimeout(__bcAudienceTimer);
@@ -1227,12 +1324,12 @@ function renderBroadcastPreviewAction(){
   const when = scheduled ? formatBroadcastDate(getScheduledAt()) : 'now';
   const n = __bcAudience ?? '–';
   const whenEl = $('bcPreviewTiming');
-  if (whenEl) whenEl.textContent = scheduled ? 'Scheduled to go at '+when+' local time.' : 'This broadcast will be queued immediately.';
+  if (whenEl) whenEl.textContent = scheduled ? 'Sends at '+when+' local time. You can cancel until it starts sending.' : 'Sends immediately and cannot be undone.';
   const label = $('bcPreviewScheduleLabel'); if (label) label.textContent = getScheduledAt() ? formatBroadcastDate(getScheduledAt()) : '(choose a time above)';
   const confirmBtn = $('bcConfirmBtn');
   if (confirmBtn) confirmBtn.textContent = scheduled
-    ? 'Schedule for '+when+' — '+n+' subscribers'
-    : 'Queue for '+n+' subscribers now — cannot be undone';
+    ? 'Send at '+when+' to '+n+' subscribers'
+    : 'Send now to '+n+' subscribers';
   document.querySelectorAll('input[name="bcPreviewWhen"]').forEach(r => { r.checked = (r.value === (scheduled ? 'schedule' : 'now')); });
 }
 function selectBroadcastWhen(input){
@@ -1266,7 +1363,7 @@ async function confirmSendBroadcast(btn){
   const r = await api('/broadcasts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bot_id:botId, body, media_url: mediaUrl, scheduled_at: scheduledAt, segment})});
   if (r.error) { restoreBtn(btn); setFormStatus('bcFormStatus', r.error + ' — review the draft and try again.', true); return; }
   const wasScheduled = isScheduleSelected();
-  clearBroadcastForm(); closeBroadcastPreview(); setFormStatus('bcFormStatus', wasScheduled ? 'Broadcast scheduled' : 'Broadcast queued', false); restoreBtn(btn); loadExtras();
+  clearBroadcastForm(); closeBroadcastPreview(); setFormStatus('bcFormStatus', wasScheduled ? 'Update scheduled — you can cancel it until it starts sending' : 'Update sent to your subscribers', false); restoreBtn(btn); loadExtras();
 }
 async function sendBroadcast(btn){ openBroadcastPreview(); }
 // Send a single test copy of the broadcast to one chat ID before blasting.
@@ -1286,11 +1383,11 @@ async function testBroadcast(btn){
   setFormStatus('bcFormStatus','Test sent — check that chat', false);
 }
 async function cancelBroadcast(btn){
-  if (!await confirmModal('Cancel broadcast', 'Cancel this scheduled broadcast?', 'Cancel broadcast', true)) return;
+  if (!await confirmModal('Cancel update', 'This update will not be sent. Your subscribers receive nothing.', 'Cancel update', true)) return;
   setLoading(btn, 'Cancelling…');
   const r = await api('/broadcasts/'+btn.dataset.id,{method:'DELETE'});
   if (r.error) { restoreBtn(btn); return toast(r.error); }
-  toast('Broadcast cancelled'); restoreBtn(btn); loadExtras();
+  toast('Update cancelled'); restoreBtn(btn); loadExtras();
 }
 function setLoading(el, text = 'Loading…') {
   if (!el) return;
