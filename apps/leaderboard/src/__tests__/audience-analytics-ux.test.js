@@ -42,6 +42,7 @@ describe("Audience members body", () => {
     expect(source).toContain('aria-expanded="false"');
     expect(source).toContain('/api/credits/viewer/history?kickUsername=${encodeURIComponent(memberHistoryUsername)}');
     expect(source).toContain('api("GET", `/api/credits/activity?${params}`)');
+    expect(source).toContain('if (!window.YRDialog) await import("./dialog.js")');
     expect(source).toContain("dialog.trap(drawer, closeMemberHistory)");
     expect(source).toContain("renderError(empty, {");
     expect(source).toContain('title: "No credit activity yet"');
@@ -86,5 +87,11 @@ describe("Analytics bodies", () => {
     expect(site).toContain('showLoadError($("perfActivityEmpty"), "daily activity", loadStats)');
     expect(site).toContain('showLoadError($("eventsEmpty"), "site activity", loadStats)');
     expect(site).toContain("renderStatsError()");
+  });
+
+  it("keeps Analytics exports scoped to the active site", () => {
+    const source = readFileSync(path.join(SRC_ROOT, "assets/dashboard/performance.js"), "utf8");
+    expect(source).toContain('exportLink.href = `/api/site/stats/export${query}`');
+    expect(source).toContain("encodeURIComponent(state.ACTIVE_SITE_ID)");
   });
 });

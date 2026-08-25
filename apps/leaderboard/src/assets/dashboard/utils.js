@@ -109,10 +109,6 @@ function ensureDialog() {
   return dialogReady;
 }
 
-export function loadDialog() {
-  return ensureDialog();
-}
-
 export async function showConfirmModal(title, body, confirmText = "Confirm", isDanger = false) {
   const dialog = await ensureDialog();
   return dialog.confirm({ title, body, confirmText, danger: isDanger });

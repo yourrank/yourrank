@@ -1,4 +1,4 @@
-import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError, loadDialog } from "./dashboard/utils.js";
+import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
 import { requestDashboardRoute } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
@@ -251,6 +251,10 @@ function renderViewerRow(v) {
 function openFullMemberHistory(href) {
   const destination = new URL(href, location.origin);
   requestDashboardRoute("rewards", "history", { query: destination.search });
+}
+async function loadMemberHistoryDialog() {
+  if (!window.YRDialog) await import("./dialog.js");
+  return window.YRDialog;
 }
 function renderRedemptionRow(r) { return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Item">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Ordered" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
@@ -699,7 +703,7 @@ async function openMemberHistory(viewer, trigger) {
     openFullMemberHistory(trigger.href);
     return;
   }
-  const dialog = await loadDialog();
+  const dialog = await loadMemberHistoryDialog();
   closeTip();
   closeMemberHistory();
   memberHistoryRequest++;

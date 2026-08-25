@@ -82,7 +82,12 @@ export function renderPerformance(stats) {
     rangeFilter.dataset.hasData = hasAnyData ? "1" : "0";
     rangeFilter.hidden = !hasAnyData || activePerformanceTab() === "referrals";
   }
-  if ($("perfExport")) $("perfExport").hidden = !hasAnyData;
+  const exportLink = $("perfExport");
+  if (exportLink) {
+    const query = state.ACTIVE_SITE_ID ? `?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "";
+    exportLink.href = `/api/site/stats/export${query}`;
+    exportLink.hidden = !hasAnyData;
+  }
   const previous = all.slice(Math.max(0, all.length - range * 2), Math.max(0, all.length - range));
   const currentTotals = totals(days);
   const previousTotals = totals(previous);
