@@ -4942,12 +4942,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   white-space: nowrap;
 }
 
-.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {
-  outline: var(--ws-focus-width) solid var(--ws-focus);
-  outline-offset: var(--ws-focus-offset);
-}
-
-
 .v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:not(:checked)) {
   background: transparent;
   color: var(--ws-chrome-text);
