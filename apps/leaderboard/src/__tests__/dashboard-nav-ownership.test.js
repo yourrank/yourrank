@@ -117,7 +117,9 @@ describe("dashboard navigation ownership", () => {
     expect(sites).toContain('id="newBoardForm"');
     expect(sites).toContain('id="boardLimitUpsell"');
     expect(sites).not.toContain('aria-label="Create another site"');
-    expect(sites).toContain('title="Create another leaderboard">+ New leaderboard');
+    // One plainly named creation action, owned by the Sites page.
+    expect(sites).toContain('title="Create a site">Create site');
+    expect((sites.match(/id="newBoard"/g) || []).length).toBe(1);
     expect(dashboardJs).not.toContain("#newBoardSide, #addBoardBtn");
     expect(boardsJs).not.toContain("addBoardFromBoards");
     expect(boardsJs).toContain('const newBtn = $("newBoard")');

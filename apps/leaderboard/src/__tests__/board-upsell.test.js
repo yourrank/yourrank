@@ -30,8 +30,8 @@ describe("board-limit upsell", () => {
   });
 
   it("offers Pro, Agency, or support according to the current plan", () => {
-    expect(boardsJs).toContain("Pro unlocks up to 3 independent leaderboards.");
-    expect(boardsJs).toContain("Agency supports up to 99 independent leaderboards.");
+    expect(boardsJs).toContain("Pro unlocks up to 3 independent sites.");
+    expect(boardsJs).toContain("Agency supports up to 99 independent sites.");
     expect(boardsJs).toContain('cta: "Contact support"');
   });
 });

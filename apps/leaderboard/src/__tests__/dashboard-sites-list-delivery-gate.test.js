@@ -240,3 +240,48 @@ describe("boot/render/data: one Sites-list path", () => {
     expect(relativeFiles(rawNavigations)).toEqual([]);
   });
 });
+
+describe("presentation: the Sites list stays a list", () => {
+  const boardsJs = readFileSync(path.join(SRC_ROOT, "assets/dashboard/boards.js"), "utf8");
+  const dashboardCss = readFileSync(path.join(SRC_ROOT, "assets/dashboard-v4.css"), "utf8");
+  const sitesHtml = () =>
+    DashboardContent({ user: { display_name: "Test operator", plan: "pro" }, activePath: BOARDS_PATH }).toString();
+
+  it("uses one table-like structure with one creation action", () => {
+    const html = sitesHtml();
+    expect(html).toContain('class="v3-table sites-table"');
+    expect(html.match(/id="newBoard"/g)).toHaveLength(1);
+    expect(html).toContain(">Create site<");
+    expect(html).not.toContain("New leaderboard");
+  });
+
+  it("gives each row one primary action and hides the rest behind a menu", () => {
+    // Rows carry Manage; Duplicate and Delete live in the details menu so a
+    // long list is not a wall of buttons.
+    expect(boardsJs).toContain('data-action="edit"');
+    expect(boardsJs).toContain('class="site-row-menu"');
+    for (const action of ['data-action="dup"', 'data-action="del"']) {
+      const menuBody = boardsJs.slice(boardsJs.indexOf("site-row-menu-body"), boardsJs.indexOf("</details>"));
+      expect(menuBody).toContain(action);
+    }
+    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .site-row-menu-body");
+  });
+
+  it("keeps an empty, searching and error surface for the list", () => {
+    // Every asynchronous list state has somewhere to render.
+    expect(sitesHtml()).toContain('id="boardsEmpty" class="v3-empty" hidden');
+    expect(boardsJs).toContain('title: "No sites yet"');
+    expect(boardsJs).toContain('title: "No sites match your search"');
+    expect(boardsJs).toContain('label: "Create site"');
+  });
+
+  it("adds no fixed or minimum width that could overflow a 320px viewport", () => {
+    const homeAndSites = dashboardCss.slice(
+      dashboardCss.indexOf(".v3-dash[data-auth-workspace] .ov-figures"),
+      dashboardCss.indexOf(".v3-dash[data-auth-workspace] .site-row-menu-body"),
+    );
+    expect(homeAndSites.length).toBeGreaterThan(0);
+    const widths = [...homeAndSites.matchAll(/(?:^|[;{\s])(?:min-)?width:\s*(\d+)px/g)].map((match) => Number(match[1]));
+    for (const width of widths) expect(width).toBeLessThanOrEqual(288);
+  });
+});
