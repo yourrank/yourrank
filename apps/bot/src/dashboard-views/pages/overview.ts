@@ -48,8 +48,10 @@ export function overviewPanel({ hasBot = true }: { hasBot?: boolean } = {}): str
 
     <div class="lb-widget lb-widget--half">
       <div class="mb-md"><h2>Where subscribers came from</h2></div>
-      <table class="v3-table"><thead><tr><th>Source</th><th class="num">Subscribers</th></tr></thead>
-      <tbody id="subSources"><tr><td colspan="2" class="muted">Loading…</td></tr></tbody></table>
+      <div class="v3-table-scroll">
+        <table class="v3-table"><thead><tr><th>Source</th><th class="num">Subscribers</th></tr></thead>
+        <tbody id="subSources"><tr><td colspan="2" class="muted">Loading…</td></tr></tbody></table>
+      </div>
       <p class="muted hint mt-sm">Share <code id="deepLinkExample">t.me/&lt;yourbot&gt;?start=twitch</code> to tag a source. <b>Came on their own</b> means no tagged link was used.</p>
     </div>
 

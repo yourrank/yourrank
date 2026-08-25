@@ -7830,9 +7830,19 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   min-width: 0;
 }
 
-/* A scrolling table must not push its grid track wider than the viewport. */
+/* A scrolling table must not push its grid track wider than the viewport. The
+   containing block also has to be the scroller itself: the absolutely
+   positioned `.sr-only` labels inside wide table headers keep their in-flow x,
+   so without this they escape the scroller and inflate the document width. */
 .v3-dash[data-auth-workspace] .lb-bento > .lb-widget:has(.v3-table-scroll) {
   min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-table-scroll,
+.v3-dash[data-auth-workspace] .cr-table-scroll,
+.v3-dash[data-auth-workspace] .board-table-wrap,
+.v3-dash[data-auth-workspace] .admin-table-wrap {
+  position: relative;
 }
 
 .v3-dash[data-auth-workspace] .wizard-step .d-flex {
@@ -7843,7 +7853,13 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .tg-conn-actions .btn,
   .v3-dash[data-auth-workspace] .tg-setup-actions .btn,
   .v3-dash[data-auth-workspace] .tg-compose-rehearsal .btn,
-  .v3-dash[data-auth-workspace] .wizard-step .btn {
+  .v3-dash[data-auth-workspace] .wizard-step .btn,
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="commands"] .btn {
+    min-height: 44px;
+  }
+
+  .v3-dash[data-auth-workspace] .tg-row-details > summary,
+  .v3-dash[data-auth-workspace] .tg-disclosure > summary {
     min-height: 44px;
   }
 
