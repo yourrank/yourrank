@@ -943,7 +943,6 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
 .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 32px; }
 .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head,
-.v3-dash[data-auth-workspace] .v3-players > .v3-head,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
 .v3-dash[data-auth-workspace] .v3-games-page > .d-flex:first-child,
 .v3-dash[data-auth-workspace] #acc-app > .v3-head,
@@ -969,7 +968,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 /* Rewards and the leaderboard editor render their subnav before the page title,
    so the strip sticks directly under the topbar and the title scrolls normally —
-   one sticky layer, never a title sliding across its own tabs. */
+   one sticky layer, never a title sliding across its own tabs. Nothing else in
+   the editor column may stick at this offset: a second sticky head with the same
+   top and z-index wins on DOM order and swallows the strip's clicks. */
 .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
 .v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-tabs {
   top: var(--ws-topbar-h);
@@ -2043,7 +2044,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 /* Past periods / Archives */
 .v3-dash[data-auth-workspace] .arch-form {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 1fr) auto;
+  /* The select's preferred track must be able to collapse below its 220px
+     comfort width, or the archive row forces the document wider than a phone. */
+  grid-template-columns: minmax(0, 1.2fr) minmax(min(100%, 220px), 1fr) auto;
   align-items: end;
   gap: 16px;
   margin: 24px 0 20px;
@@ -2163,7 +2166,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 600; }
-.v3-dash[data-auth-workspace] .savebar { position: fixed; inset: auto 32px 24px auto; z-index: 120; border: 1px solid var(--ws-accent-line); border-radius: var(--ws-radius); background: #ffffff; color: var(--ws-text); box-shadow: var(--ws-shadow-overlay); }
+.v3-dash[data-auth-workspace] .savebar { border: 1px solid var(--ws-accent-line); border-radius: var(--ws-radius); background: #ffffff; color: var(--ws-text); }
 
 /* Tables and data-dense states */
 .v3-dash[data-auth-workspace] .v3-table-scroll,
@@ -2698,6 +2701,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
    ========================================================================== */
 .v3-dash[data-auth-workspace] details.advanced-colors,
 .v3-dash[data-auth-workspace] details.cr-advanced,
+.v3-dash[data-auth-workspace] details.editor-more,
 .v3-dash[data-auth-workspace] details.adv {
   margin-top: 14px;
   border: 1px solid var(--ws-line);
@@ -2708,6 +2712,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 .v3-dash[data-auth-workspace] details.advanced-colors summary,
 .v3-dash[data-auth-workspace] details.cr-advanced summary,
+.v3-dash[data-auth-workspace] details.editor-more summary,
 .v3-dash[data-auth-workspace] details.adv summary {
   display: flex;
   align-items: center;
@@ -2723,11 +2728,13 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 .v3-dash[data-auth-workspace] details.advanced-colors summary:hover,
 .v3-dash[data-auth-workspace] details.cr-advanced summary:hover,
+.v3-dash[data-auth-workspace] details.editor-more summary:hover,
 .v3-dash[data-auth-workspace] details.adv summary:hover {
   background: var(--ws-surface-strong);
 }
 .v3-dash[data-auth-workspace] details.advanced-colors[open] summary,
 .v3-dash[data-auth-workspace] details.cr-advanced[open] summary,
+.v3-dash[data-auth-workspace] details.editor-more[open] summary,
 .v3-dash[data-auth-workspace] details.adv[open] summary {
   border-bottom: 1px solid var(--ws-line);
   background: var(--ws-surface-strong);
@@ -2739,6 +2746,12 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   padding: 16px;
   margin: 0;
 }
+/* Progressive disclosure inside editor cards: the summary reads as one more
+   row of the card, and the body keeps the card's field rhythm. */
+.v3-dash[data-auth-workspace] details.editor-more > div {
+  padding: 16px 16px 0;
+}
+.v3-dash[data-auth-workspace] details.editor-more .field:last-child { margin-bottom: 16px; }
 
 /* Referrals Link Row & Tiles */
 .v3-dash[data-auth-workspace] .v3-ref-link-row {
@@ -3909,7 +3922,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .plan-grid { grid-template-columns: 1fr; }
   .v3-dash[data-auth-workspace] .operator-help-actions { flex-direction: column; }
   .v3-dash[data-auth-workspace] .operator-help-actions .btn { width: 100%; }
-  .v3-dash[data-auth-workspace] .savebar { inset: auto 12px 12px; }
+  .v3-dash[data-auth-workspace] .savebar { padding: 10px 12px; }
 }
 
 /* Narrow widths: one stacked block per site, labels from the header cells,
@@ -3948,27 +3961,28 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 /* ==========================================================================
-   Smart Floating Save Bar & Overview Quick Increments
+   Editor save bar
+   The save affordance belongs to the editor column, not to the viewport: as a
+   sticky element inside the controls column it can never cover the sidebar,
+   the workflow steps or the mobile drawer.
    ========================================================================== */
 .v3-dash[data-auth-workspace] .savebar {
-  position: fixed;
-  inset: auto 32px 24px auto;
-  z-index: 120;
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 18px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
   border: 1px solid var(--ws-accent-line);
   border-radius: var(--ws-radius);
   background: #ffffff;
   color: var(--ws-text);
-  box-shadow: var(--ws-shadow-overlay);
-  animation: savebarSlideUp 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--ws-shadow);
 }
-@keyframes savebarSlideUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.v3-dash[data-auth-workspace] .savebar[hidden] { display: none; }
+.v3-dash[data-auth-workspace] .savebar .btn { flex: 0 0 auto; }
 .v3-dash[data-auth-workspace] .savebar-hint {
   display: inline-flex;
   align-items: center;
@@ -3977,19 +3991,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   font-weight: 600;
   color: var(--ws-text);
 }
+.v3-dash[data-auth-workspace] .savebar-ts { margin-right: auto; }
 .v3-dash[data-auth-workspace] .savebar-hint::before {
   content: "";
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f59e0b;
-  box-shadow: 0 0 8px #f59e0b;
-  animation: savebarDotPulse 1.4s ease-in-out infinite;
-}
-@keyframes savebarDotPulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.8); opacity: 0.5; }
+  background: var(--ws-accent);
 }
 
 /* Overview Top Players rows */
@@ -5222,13 +5231,16 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   margin-bottom: 24px;
 }
 
+/* Checkbox rows wrap: their sentences are longer than a 320px viewport, and a
+   nowrap label overflows the document instead of the label. */
 .v3-dash[data-auth-workspace] section[data-page="board"] .chk {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: 6px;
-  flex: 0 0 auto;
-  white-space: nowrap;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
   color: var(--ws-text);
   font: 400 13px var(--ws-sans);
   letter-spacing: normal;
@@ -5239,7 +5251,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   width: auto;
   min-width: 15px;
   height: 15px;
-  margin: 0;
+  margin: 2px 0 0;
   flex: 0 0 auto;
   accent-color: var(--ws-accent);
 }
@@ -5574,11 +5586,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   background: var(--ws-chrome-line-strong);
 }
 
-.v3-dash[data-auth-workspace]:has(#savebar:not([hidden])) .v3-bulkbar {
-  bottom: calc(var(--yr-fixed-action-bottom, 22px) + var(--yr-fixed-action-stack-offset, 66px));
-  z-index: var(--yr-fixed-action-top-z, 96);
-}
-
 .v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-preview { display: none;
 }
 
@@ -5588,7 +5595,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls { display: block;
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls > *:not([data-egroup="players"]) { display: none;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls > *:not([data-egroup="players"]):not(.savebar):not(.editor-steps) { display: none;
 }
 
 @media (max-width: 560px) {
@@ -5615,6 +5622,36 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   }
 
   .v3-dash[data-auth-workspace] .v3-bulkbar .v3-btn { padding: 0 8px;
+  }
+
+  /* The archive row stacks: three tracks plus a single-line button cannot fit
+     a phone viewport, and the grid would otherwise push the document wider. */
+  .v3-dash[data-auth-workspace] .arch-form { grid-template-columns: 1fr; }
+
+  .v3-dash[data-auth-workspace] .arch-form input,
+  .v3-dash[data-auth-workspace] .arch-form select { min-width: 0; }
+
+  .v3-dash[data-auth-workspace] .arch-form .btn {
+    width: 100%;
+    white-space: normal;
+  }
+
+  /* Preview chrome is a single row on desktop; at phone widths its device
+     tabs, sync chip and timestamp wrap instead of widening the panel. */
+  .v3-dash[data-auth-workspace] section[data-page="board"] .preview-header,
+  .v3-dash[data-auth-workspace] section[data-page="board"] .preview-actions {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .v3-dash[data-auth-workspace] section[data-page="board"] .preview-sync-strip {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    white-space: normal;
   }
 
 }

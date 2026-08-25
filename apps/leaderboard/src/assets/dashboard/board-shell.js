@@ -85,16 +85,19 @@ export async function loadBoardShell() {
   }
   const planBadge = $("planBadge");
   if (planBadge) planBadge.textContent = `${String(board.plan || user.plan || "free").toUpperCase()} PLAN`;
+  // The topbar publish button is the only publication action; this link only
+  // opens the public page, or points at the verification the button cannot do.
   const publicLink = $("liveLink");
   if (publicLink) {
+    publicLink.hidden = !(live && board.slug) && !pendingVerification;
     if (live && board.slug) {
       publicLink.href = `/${board.slug}`;
       publicLink.textContent = "View site ↗";
       publicLink.target = "_blank";
       publicLink.rel = "noopener noreferrer";
     } else {
-      publicLink.href = pendingVerification ? "/verify-email" : `/dashboard/leaderboard/share?board=${encodeURIComponent(current || "")}`;
-      publicLink.textContent = pendingVerification ? "Verify email" : "Publish site";
+      publicLink.href = "/verify-email";
+      publicLink.textContent = "Verify email";
       publicLink.removeAttribute("target");
       publicLink.removeAttribute("rel");
     }

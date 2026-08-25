@@ -319,6 +319,9 @@ export function setupEditorTabs() {
       buttons.forEach((b) => {
         const on = b.dataset.egroup === group;
         b.classList.toggle("is-active", on);
+        // The server marks the initially active step with is-on, which carries
+        // the same selected weight, so it has to follow the client route too.
+        b.classList.toggle("is-on", on);
         // The steps are links to their own URLs, not `role="tab"` controls, so
         // the current one is marked with aria-current; aria-selected is not
         // allowed on a plain link and screen readers ignore it there.
