@@ -27,20 +27,23 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('id="ovSetupAction"');
     expect(html).toContain('<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>');
     expect(html).toContain('id="ovActiveGiveaway"');
-    expect(html).toContain('id="ovCreditsUsed"');
     expect(html).not.toContain("Times shared");
     expect(html).toContain('id="ovActivityList"');
     expect(html).toContain('id="ovTopPlayers"');
     expect(html).not.toContain('class="ov-summary"');
     expect(html).toContain('id="ovPublishedStatus"');
     expect(html).toContain('id="ovPublicSiteAction"');
-    expect(html).toContain("View public leaderboard ↗");
+    expect(html).toContain("View site ↗");
     expect(html).toContain('href="/dashboard/leaderboard/setup"');
     expect(html).toContain('class="ov-card-empty" id="ovActivityEmpty"');
-    expect(html).toContain('id="ovCreditsCard" hidden');
-    expect(html).toContain('id="ovPendingOrdersCard" hidden');
     expect(html).toContain('href="/dashboard/rewards/redemptions"');
-    expect(html).toContain('id="ovKpiRow"');
+    // Home states the site's condition once, beside its title, and groups the
+    // remaining figures into one quiet summary instead of a KPI wall.
+    expect(html).toContain('class="ov-status" id="ovStatus"');
+    expect(html).toContain('class="ov-figures" id="ovFigures"');
+    expect(html).not.toContain('id="ovKpiRow"');
+    expect(html).not.toContain('id="ovCommandGrid"');
+    expect((html.match(/id="ovPublishedStatus"/g) || []).length).toBe(1);
   });
 
   it("models Home setup as an accessible four-step launch checklist", () => {
@@ -49,15 +52,31 @@ describe("dashboard overview quick actions", () => {
     const setupKeys = [...setupDefinition.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
     expect(setupKeys).toEqual(["brand", "players", "configure", "publish"]);
     expect(setupDefinition).not.toContain('key: "kick"');
-    expect(html).toContain('id="ovLblGiveaway">Active giveaway</span>');
-    expect(html).toContain('id="ovLblCredits">Credits used</span>');
-    expect(html).toContain('id="ovCreditsCard" hidden');
+    expect(html).toContain('id="ovLblGiveaway">Active giveaways</span>');
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
     expect(overviewJs).toContain('pendingOrders === 1 ? "pending order needs review." : "pending orders need review."');
     expect(overviewJs).toContain('pendingOrders === 1 ? "Review order" : "Review orders"');
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending orders need review.</span>');
-    expect(dashboardHtml()).toContain('id="ovPendingOrdersAction"');
-    expect(html).toContain('id="ovKpiRow"');
+    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertAction"');
+    expect(html).toContain('id="ovSetupCount"');
+  });
+
+  it("keeps one owner for the Home body and its data", () => {
+    const html = dashboardHtml();
+    // One Home body, one summary surface, one activity list, one player list.
+    for (const marker of [/data-page="home"/g, /id="ovFigures"/g, /id="ovActivityList"/g, /id="ovTopPlayers"/g]) {
+      expect(html.match(marker)).toHaveLength(1);
+    }
+    // The state and its actions are derived in overview-state.js and rendered
+    // in overview.js; nothing else may paint Home.
+    expect(overviewJs).toContain("renderOverviewSummary");
+    expect(overviewJs).toContain("nextStepAction(");
+    // Loading, empty and error surfaces exist for every asynchronous figure.
+    expect(overviewJs).toContain("setMetricLoading(");
+    expect(overviewJs).toContain("setMetricUnknown(");
+    expect(overviewJs).toContain('renderEmpty($("ovActivityEmpty")');
+    expect(overviewJs).toContain('renderEmpty($("ov_topEmpty")');
+    expect(html).toContain('class="skeleton v3-skel-kpi"');
   });
 
   it("keeps the giveaway KPI action aligned with every active-count state", () => {
@@ -197,9 +216,9 @@ describe("dashboard overview quick actions", () => {
   it("keeps authenticated cards on the v4 geometry without changing public cards", () => {
     expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.card \{[\s\S]*?padding: 24px;[\s\S]*?margin-top: 0;[\s\S]*?transition: none;/);
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .card:hover { border-color: var(--ws-line); }");
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .ov-live-grid { display: grid;");
-    expect(dashboardCss).toContain("gap: 16px; }");
-    expect(dashboardCss).not.toContain(".v3-dash[data-auth-workspace] .ov-live-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 4fr); gap: 0; overflow: hidden;");
+    // Home lists are plain sections, not framed dashboard cards.
+    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .ov-lists { display: grid;");
+    expect(dashboardCss).not.toContain(".ov-live-grid");
   });
 
   it("labels Appearance editor groups by the content they contain", () => {

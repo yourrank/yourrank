@@ -67,58 +67,27 @@ const ROUTE_SECTIONS = Object.fromEntries(
 function OverviewSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="home">
-<header class="v3-head ov-head v3-head--row"><div><h1>Home</h1><p class="v3-head-sub" id="ovHeadSub">Here's what's happening with your leaderboard.</p></div><a class="btn btn--sm btn--accent" id="ovPublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public leaderboard ↗</a></header>
-<div class="ov-first-run" id="ovFirstRun" hidden><h2>A leaderboard turns your community challenge into a page everyone can follow.</h2><p>Add players and their points or amounts, YourRank ranks them automatically, then publish and share one live link.</p><ol aria-label="How a leaderboard works"><li><b>Add players</b><span>Enter names and scores.</span></li><li><b>Rank</b><span>Choose amount or points.</span></li><li><b>Share</b><span>Publish the live standings.</span></li></ol></div>
+<header class="v3-head ov-head v3-head--row"><div><h1>Home</h1><p class="v3-head-sub" id="ovHeadSub">Checking your site…</p><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span></div><a class="btn btn--sm btn--accent" id="ovSetupAction" href="/dashboard/leaderboard/setup" hidden>Continue setup</a><a class="btn btn--sm btn--accent" id="ovPublicSiteAction" href="#" target="_blank" rel="noopener noreferrer" hidden>View site ↗</a></header>
 <div class="v3-alert v3-alert--warning" id="ovPendingOrdersAlert" role="alert" hidden><span><b id="ovPendingOrdersAlertCount">0</b> <span id="ovPendingOrdersAlertLabel">pending orders need review.</span></span><a class="btn btn--sm btn--ghost" id="ovPendingOrdersAlertAction" href="/dashboard/rewards/redemptions">Review orders →</a></div>
-<section class="ov-next-step" id="ovNextStep" aria-labelledby="ovNextStepTitle" hidden><div class="ov-next-step-copy"><span class="ov-next-step-eyebrow">Next step</span><h2 id="ovNextStepTitle">—</h2><p id="ovNextStepBody">—</p></div><a class="btn btn--sm btn--accent" id="ovNextStepAction" href="#">—</a></section>
-<div class="ov-command-grid" id="ovCommandGrid">
-<aside id="ovOnboardingBento" hidden>
-<div class="ov-setup">
-<div class="ov-setup-progress"><div class="ov-setup-head"><div class="ov-summary-copy"><span class="ov-summary-status"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking your site…</span></span><h2 id="ovSiteState">Finish setup</h2><p id="ovSetupMessage">Complete the essentials, then publish.</p></div><span class="ov-setup-count" id="ovSetupCount">0 of 4 done</span></div><div class="ov-setup-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="4" aria-labelledby="ovSetupCount" id="ovSetupBar"><i id="ovSetupFill"></i></div><div class="ov-summary-actions"><div class="ov-summary-links"><a href="/dashboard/leaderboard/setup">Edit site</a><a href="/dashboard/leaderboard/share">Share site</a></div><a class="v3-btn v3-btn--sm v3-btn--accent" id="ovSetupAction" href="/dashboard/leaderboard/setup">Continue setup</a></div></div>
-<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>
-</div></aside>
-</div>
-<div id="ovActiveBento"><div class="ov-live" aria-label="Site performance">
-<div class="kpi-row" id="ovKpiRow">
-  <div class="kpi-card">
-    <span class="kpi-lbl" id="ovLblPlayers">Players</span>
-    <div class="kpi-value-row">
-      <span class="kpi-val" id="ovPlayersCount" aria-labelledby="ovLblPlayers"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-      <a class="kpi-action" href="/dashboard/leaderboard/players">Manage →</a>
-    </div>
+<section class="ov-next-step" id="ovNextStep" aria-labelledby="ovNextStepTitle" hidden><div class="ov-next-step-copy"><h2 id="ovNextStepTitle">—</h2><p id="ovNextStepBody">—</p></div><a class="btn btn--sm btn--accent" id="ovNextStepAction" href="#">—</a></section>
+<section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Finish setup</h2><p id="ovSetupMessage">Add players and publish to open your site.</p></div><span class="ov-setup-count" id="ovSetupCount">0 of 4 done</span></div><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></section>
+<section class="ov-figures" id="ovFigures" aria-label="Site summary">
+  <div class="ov-figure">
+    <span class="ov-figure-lbl" id="ovLblViews">Visits this week</span>
+    <span class="ov-figure-val" id="ovViews14" aria-labelledby="ovLblViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
   </div>
-  <div class="kpi-card">
-    <span class="kpi-lbl" id="ovLblViews">Visits this week</span>
-    <div class="kpi-value-row">
-      <span class="kpi-val" id="ovViews14" aria-labelledby="ovLblViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-      <span id="ovViewsDelta"></span>
-    </div>
+  <div class="ov-figure">
+    <span class="ov-figure-lbl" id="ovLblPlayers">Players</span>
+    <span class="ov-figure-val" id="ovPlayersCount" aria-labelledby="ovLblPlayers"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
+    <a class="ov-figure-link" href="/dashboard/leaderboard/players">Manage players</a>
   </div>
-  <div class="kpi-card">
-    <span class="kpi-lbl" id="ovLblGiveaway">Active giveaway</span>
-    <div class="kpi-value-row">
-      <span class="kpi-val" id="ovActiveGiveaway" aria-labelledby="ovLblGiveaway"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-      <a class="kpi-action" id="ovGiveawayAction" href="/dashboard/giveaways">Start a giveaway</a>
-    </div>
+  <div class="ov-figure">
+    <span class="ov-figure-lbl" id="ovLblGiveaway">Active giveaways</span>
+    <span class="ov-figure-val" id="ovActiveGiveaway" aria-labelledby="ovLblGiveaway"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
+    <a class="ov-figure-link" id="ovGiveawayAction" href="/dashboard/giveaways">Create giveaway</a>
   </div>
-  <div class="kpi-card" id="ovCreditsCard" hidden>
-    <span class="kpi-lbl" id="ovLblCredits">Credits used</span>
-    <div class="kpi-value-row">
-      <span class="kpi-val" id="ovCreditsUsed" aria-labelledby="ovLblCredits"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-      <span class="kpi-action">All-time spend</span>
-    </div>
-  </div>
-  <div class="kpi-card" id="ovPendingOrdersCard" hidden>
-    <span class="kpi-lbl" id="ovLblPendingOrders">Pending orders</span>
-    <div class="kpi-value-row">
-      <span class="kpi-val" id="ovPendingOrders" aria-labelledby="ovLblPendingOrders">0</span>
-      <a class="kpi-action" id="ovPendingOrdersAction" href="/dashboard/rewards/redemptions">Review orders</a>
-    </div>
-  </div>
-</div>
-
-<div class="ov-live-grid"><section class="ov-live-card" aria-label="Recent activity"><div class="ov-live-card-head"><h2>Recent activity</h2><button class="lb-cardlink kpi-action ov-analytics-link" id="ovAnalyticsLink" type="button" data-jump="performance">See full stats →</button></div><div class="ov-activity-list" id="ovActivityList"></div><div class="ov-card-empty" id="ovActivityEmpty" hidden></div></section><section class="ov-live-card" aria-label="Top players"><div class="ov-live-card-head"><h2>Top players</h2><a class="kpi-action" href="/dashboard/leaderboard/players">All players →</a></div><div class="ov-players-list" id="ovTopPlayers"></div><div class="ov-card-empty" id="ov_topEmpty" hidden></div></section></div>
-</div></div>
+</section>
+<div class="ov-lists"><section class="ov-list" aria-labelledby="ovActivityTitle"><div class="ov-list-head"><h2 id="ovActivityTitle">Recent activity</h2><button class="ov-list-link" id="ovAnalyticsLink" type="button" data-jump="performance">See analytics</button></div><div class="ov-activity-list" id="ovActivityList"></div><div class="ov-card-empty" id="ovActivityEmpty" hidden></div></section><section class="ov-list" aria-labelledby="ovTopTitle"><div class="ov-list-head"><h2 id="ovTopTitle">Top players</h2><a class="ov-list-link" href="/dashboard/leaderboard/players">All players</a></div><div class="ov-players-list" id="ovTopPlayers"></div><div class="ov-card-empty" id="ov_topEmpty" hidden></div></section></div>
 </section>
   );
 }
@@ -474,17 +443,15 @@ function BoardSettingsSection({ active } = {}) {
 function BoardsSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="boards">
- <header class="v3-head v3-head--row"><div><h1>Leaderboards</h1><p class="v3-head-sub">Create and manage the public pages your community follows.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create another leaderboard">+ New leaderboard</button></header>
+ <header class="v3-head v3-head--row"><div><h1>Sites</h1><p class="v3-head-sub">Every site is a public leaderboard page your viewers can open.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create a site">Create site</button></header>
  <div class="board-upsell" id="boardLimitUpsell" role="status" hidden><div><b id="boardLimitTitle">Need another site?</b><p class="hint" id="boardLimitText"></p></div><a class="btn btn--sm btn--accent" id="boardLimitCta" href="/dashboard/settings">Upgrade plan</a></div>
- <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Leaderboard name</label><input id="nb_name" placeholder="Summer Race 2026" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><div class="field field-flex"><label for="nb_casino">Partner or sponsor <span class="hint">Optional</span></label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code <span class="hint">Optional</span></label><input id="nb_code" placeholder="Optional" /></div><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create leaderboard</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
- <div class="card">
-<div class="list-controls"><input type="search" id="boardsSearch" class="list-search" placeholder="Find site…" aria-label="Find site" /></div>
-<div class="board-table-wrap">
-<table class="board-table">
-<thead><tr><th>Leaderboard</th><th>Sponsor</th><th>Public link</th><th>Players</th><th>Status</th><th class="ta-r">Actions</th></tr></thead>
+ <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Site name</label><input id="nb_name" placeholder="Summer Race 2026" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><div class="field field-flex"><label for="nb_casino">Partner or sponsor <span class="hint">Optional</span></label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code <span class="hint">Optional</span></label><input id="nb_code" placeholder="Optional" /></div><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create site</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
+ <div class="sites-list">
+<div class="list-controls"><input type="search" id="boardsSearch" class="list-search" placeholder="Find a site…" aria-label="Find a site" /></div>
+<table class="v3-table sites-table">
+<thead><tr><th>Site</th><th>Status</th><th>Players</th><th class="ta-r">Actions</th></tr></thead>
 <tbody id="boardsBody"></tbody>
 </table>
-</div>
 <div id="boardsEmpty" class="v3-empty" hidden></div>
 </div>
 </section>

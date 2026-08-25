@@ -199,16 +199,17 @@ describe("signed-in shell navigation", () => {
     expect(menu).not.toContain("/dashboard/settings");
   });
 
-  it("composes the Overview as a 12-column run sheet", () => {
+  it("composes the Overview as a single-column operating flow", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
-    expect(html).toContain('id="ovCommandGrid"');
-    expect(html).toContain('id="ovOnboardingBento" hidden');
-    expect(html).toContain('id="ovActiveBento"');
-    expect(html).toContain('class="ov-summary-actions"');
     expect(html).toContain('id="ovSetupMessage"');
     expect(html).toContain('id="ovSetupAction"');
     expect(html).not.toContain('id="ovStepBrand"');
     expect(html).toContain(">Home</h1>");
+    // One state, one next action, one summary, then the lists — no bento grid.
+    expect(html).not.toContain('id="ovCommandGrid"');
+    expect(html).not.toContain('id="ovOnboardingBento"');
+    expect(html).not.toContain('id="ovActiveBento"');
+    expect(html).toContain('class="ov-lists"');
   });
 
   it("does not duplicate peer products below the rail", () => {
@@ -303,9 +304,10 @@ describe("signed-in shell navigation", () => {
 
   it("keeps operational data visible while launch setup is incomplete", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
-    expect(html).toContain('id="ovOnboardingBento" hidden');
-    expect(html).toContain('id="ovActiveBento"');
-    expect(html).not.toContain('id="ovActiveBento" hidden');
+    // The summary figures and lists are never gated behind setup completion.
+    expect(html).toContain('class="ov-figures" id="ovFigures"');
+    expect(html).not.toMatch(/id="ovFigures"[^>]*hidden/);
+    expect(html).not.toMatch(/class="ov-lists"[^>]*hidden/);
     expect(html).toContain("0 of 4 done");
     expect(html).not.toContain('id="ovStepKickStatus"');
   });

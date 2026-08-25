@@ -37,7 +37,7 @@ export function renderBoardSwitcher() {
   if (createBtn) createBtn.onclick = async () => {
     const name = $("nb_name").value.trim();
     let slug = $("nb_slug").value.trim() || slugify(name);
-    if (!slug) { $("nb_err").textContent = "Enter a name or web address."; return; }
+    if (!slug) { $("nb_err").textContent = "Enter a site name or public link."; return; }
     const casino = $("nb_casino").value.trim();
     $("nb_err").textContent = "Creating…";
     createBtn.disabled = true;
@@ -65,24 +65,24 @@ function boardLimitOffer() {
   const limit = state.ME?.limits?.boards || 1;
   if (plan === "agency") {
     return {
-      title: `You've reached ${limit} boards`,
-      text: "Need a higher limit? Contact support and tell us how many boards your team manages.",
+      title: `You've reached ${limit} sites`,
+      text: "Need a higher limit? Contact support and tell us how many sites your team manages.",
       cta: "Contact support",
       href: "/help/support?area=billing&return=/dashboard",
     };
   }
   if (plan === "pro") {
     return {
-      title: `You've reached ${limit} boards`,
-      text: "Agency supports up to 99 independent leaderboards.",
+      title: `You've reached ${limit} sites`,
+      text: "Agency supports up to 99 independent sites.",
       cta: "View Agency plan",
       href: "/dashboard/settings",
     };
   }
   const planName = plan === "starter" ? "Starter" : "Free";
   return {
-    title: "Need another leaderboard?",
-    text: `${planName} includes ${limit} leaderboard. Pro unlocks up to 3 independent leaderboards.`,
+    title: "Need another site?",
+    text: `${planName} includes ${limit} site. Pro unlocks up to 3 independent sites.`,
     cta: "Upgrade to Pro",
     href: "/dashboard/settings",
   };
@@ -132,7 +132,7 @@ function wireBoardLimitUpsell() {
 export async function deleteBoard(siteId) {
   const board = state.BOARDS.find((b) => b.id === siteId);
   if (!board) return;
-  if (!await showConfirmModal("Delete board", `Delete board /${board.slug}? This cannot be undone.`, "Delete", true)) return;
+  if (!await showConfirmModal("Delete site", `Delete /${board.slug}? This cannot be undone.`, "Delete", true)) return;
   try {
     const res = await fetch("/api/site", {
       method: "DELETE",
@@ -148,9 +148,9 @@ export async function deleteBoard(siteId) {
       renderBoardSwitcher();
       renderBoardSelect();
       renderBoardsPage();
-      $("status").textContent = "Board deleted.";
+      $("status").textContent = "Site deleted.";
     } else {
-      $("status").textContent = d.error || "Could not delete board.";
+      $("status").textContent = d.error || "Could not delete the site.";
     }
   } catch (err) { logError("delete-board", err); $("status").textContent = "Network error."; }
 }
@@ -168,9 +168,9 @@ export async function setActiveBoard(siteId) {
       state.ACTIVE_SITE_ID = siteId;
       renderBoardSwitcher();
       renderBoardSelect();
-      $("status").textContent = "Active board updated.";
+      $("status").textContent = "Current site updated.";
     } else {
-      $("status").textContent = d.error || "Could not set active board.";
+      $("status").textContent = d.error || "Could not change the current site.";
     }
   } catch (err) { logError("set-active-board", err); $("status").textContent = "Network error."; }
 }
@@ -183,7 +183,7 @@ export function openNewBoardForm() {
 export async function duplicateBoard(siteId) {
   const board = state.BOARDS.find((b) => b.id === siteId);
   if (!board) return;
-  if (!await showConfirmModal("Duplicate board", `Duplicate /${board.slug}? This creates an unpublished copy with the same design and players.`, "Duplicate", false)) return;
+  if (!await showConfirmModal("Duplicate site", `Duplicate /${board.slug}? This creates an unpublished copy with the same design and players.`, "Duplicate", false)) return;
   try {
     const res = await fetch("/api/site/duplicate", {
       method: "POST",
@@ -197,7 +197,7 @@ export async function duplicateBoard(siteId) {
     } else if (d.code === "board_limit") {
       showBoardLimitUpsell();
     } else {
-      $("status").textContent = d.error || "Could not duplicate board.";
+      $("status").textContent = d.error || "Could not duplicate the site.";
     }
   } catch (err) { logError("duplicate-board", err); $("status").textContent = "Network error."; }
 }
@@ -212,6 +212,31 @@ export function renderBoardSelect() {
   });
 }
 
+function closeRowMenus(root, { except = null, restoreFocus = false } = {}) {
+  root.querySelectorAll(".site-row-menu[open]").forEach((menu) => {
+    if (menu === except) return;
+    menu.open = false;
+    if (restoreFocus) menu.querySelector("summary")?.focus();
+  });
+}
+
+// <details> has no dismissal behaviour of its own, so the row menu needs the
+// same Escape and outside-pointer handling as any other popover.
+function wireRowMenuDismissal(body) {
+  if (body._menuWired) return;
+  body._menuWired = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !body.querySelector(".site-row-menu[open]")) return;
+    event.preventDefault();
+    closeRowMenus(body, { restoreFocus: true });
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const open = body.querySelector(".site-row-menu[open]");
+    if (!open || open.contains(event.target)) return;
+    closeRowMenus(body);
+  });
+}
+
 export function renderBoardsPage() {
   const body = $("boardsBody");
   const empty = $("boardsEmpty");
@@ -220,25 +245,33 @@ export function renderBoardsPage() {
   const controls = $("boardsSearch")?.closest(".list-controls");
   if (controls) controls.hidden = state.BOARDS.length === 0;
   if (!state.BOARDS.length) {
-    renderEmpty(empty, { icon: "archive", title: "No leaderboards yet", body: "Create one, add players, then publish its live link.", actions: [{ label: "Create leaderboard", id: "boardsCreateEmpty", accent: true }] });
+    renderEmpty(empty, { icon: "archive", title: "No sites yet", body: "A site is the public page where your viewers follow the standings. Create one, add players, then publish its link.", actions: [{ label: "Create site", id: "boardsCreateEmpty", accent: true }] });
     $("boardsCreateEmpty")?.addEventListener("click", openNewBoardForm);
   } else {
     if (empty) empty.hidden = true;
+    wireRowMenuDismissal(body);
     state.BOARDS.forEach((b) => {
       const tr = document.createElement("tr");
       const isActive = b.id === state.ACTIVE_SITE_ID;
-      const statusClass = b.published ? "pill--good" : "pill--muted";
       const statusText = b.published ? "Published" : "Draft";
-      tr.innerHTML = `<td><a class="board-table-name${isActive ? ' board-table-name--active' : ''}" href="/dashboard?board=${encodeURIComponent(b.id)}">${esc(b.name)}${isActive ? '<span class="board-table-badge">editing</span>' : ''}</a></td><td>${esc(b.casino || "")}${b.code ? `<span class="mono"> · ${esc(b.code)}</span>` : ""}</td><td><a class="mono" href="/${esc(b.slug)}" target="_blank">/${esc(b.slug)}</a></td><td>${b.players || 0}</td><td><span class="pill ${statusClass}">${statusText}</span></td><td class="ta-r"><button class="btn btn--xs btn--ghost" data-action="edit" type="button">Edit</button><button class="btn btn--xs" data-action="dup" type="button">Duplicate</button><button class="btn btn--xs btn--danger" data-action="del" type="button">Delete</button></td>`;
-      tr.querySelector(".board-table-name")?.addEventListener("click", (e) => {
+      // Sponsor and promo code stay searchable even though the row keeps them
+      // out of the way.
+      tr.dataset.search = [b.name, b.slug, b.casino, b.code].filter(Boolean).join(" ").toLowerCase();
+      tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}">${esc(b.name)}</a>${isActive ? '<span class="site-current">Editing now</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a>${b.casino ? ` · ${esc(b.casino)}` : ""}</span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button">Manage</button><details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}">⋯</summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details></div></td>`;
+      tr.querySelector(".site-name")?.addEventListener("click", (e) => {
         e.preventDefault();
         requestDashboardRoute("home", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true });
       });
       // "Edit" now has an address to go to, so it opens the editor rather than
       // whichever section the smart landing picks.
       tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => { requestDashboardRoute("board", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true }); });
-      tr.querySelector('[data-action="dup"]')?.addEventListener("click", () => { duplicateBoard(b.id); });
-      tr.querySelector('[data-action="del"]')?.addEventListener("click", () => { deleteBoard(b.id); });
+      tr.querySelector('[data-action="dup"]')?.addEventListener("click", () => { closeRowMenus(body); duplicateBoard(b.id); });
+      tr.querySelector('[data-action="del"]')?.addEventListener("click", () => { closeRowMenus(body); deleteBoard(b.id); });
+      // Only one row menu stays open at a time.
+      tr.querySelector(".site-row-menu")?.addEventListener("toggle", (e) => {
+        if (!e.currentTarget.open) return;
+        closeRowMenus(body, { except: e.currentTarget });
+      });
       body.appendChild(tr);
     });
     filterBoards();
@@ -253,7 +286,7 @@ function filterBoards() {
   const q = input.value.trim().toLowerCase();
   let visible = 0;
   for (const row of body.children) {
-    const hide = q && !row.textContent.toLowerCase().includes(q);
+    const hide = q && !(row.dataset.search || row.textContent.toLowerCase()).includes(q);
     row.hidden = hide;
     if (!hide) visible++;
   }
@@ -262,8 +295,8 @@ function filterBoards() {
       empty.hidden = true;
     } else {
       renderEmpty(empty, q
-        ? { icon: "archive", title: "No boards match your search.", body: "Try a different search." }
-        : { icon: "archive", title: "No boards yet", body: "Create one to get started.", actions: [{ label: "Create board", id: "boardsCreateEmpty", accent: true }] });
+        ? { icon: "archive", title: "No sites match your search", body: "Try a different name or link." }
+        : { icon: "archive", title: "No sites yet", body: "A site is the public page where your viewers follow the standings.", actions: [{ label: "Create site", id: "boardsCreateEmpty", accent: true }] });
       if (!q) $("boardsCreateEmpty")?.addEventListener("click", openNewBoardForm);
     }
   }

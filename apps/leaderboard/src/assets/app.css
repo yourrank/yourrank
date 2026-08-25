@@ -920,22 +920,8 @@ table.ref-table td{padding:8px 8px;border-bottom:1px solid var(--line);color:var
 .board-row-top{display:flex;gap:8px;align-items:baseline;min-width:0;flex-wrap:wrap}
 .board-sponsor{font-size:11px;color:var(--ink-mute);margin-top:2px}
 
-/* Boards management table */
-.board-table-wrap{overflow:auto}
-.board-table{width:100%;border-collapse:collapse;font-size:13px}
-.board-table th,.board-table td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
-.board-table th{font-weight:600;color:var(--ink-mute);font-size:11px;text-transform:uppercase;letter-spacing:.02em}
-.board-table td:first-child,.board-table th:first-child{width:100%;white-space:normal}
-.board-table-name{display:inline-flex;align-items:center;gap:6px;font-weight:600}
-.board-table-name:hover{color:var(--link)}
-.board-table-badge{font-size:10px;padding:1px 6px;border-radius:99px;background:var(--accent);color:var(--yr-color-text-inverse)}
-.board-table .mono{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
-.board-table .pill{display:inline-block;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:600}
 .pill--good{background:var(--ok-bg);color:var(--yr-color-live-text)}
 .pill--muted{background:var(--panel-2);color:var(--ink-mute)}
-.board-table .btn--xs{padding:5px 8px;font-size:11px}
-.board-table .btn--danger{background:var(--yr-color-danger-soft-5);color:var(--yr-color-danger-2);border-color:var(--yr-color-danger-line-4)}
-.board-table .btn--danger:hover{background:var(--yr-color-danger-line-5)}
 
 /* List search/sort/pagination controls */
 .list-controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
@@ -959,8 +945,6 @@ table.ref-table td{padding:8px 8px;border-bottom:1px solid var(--line);color:var
 
 @media(max-width:860px){
   .lb-side-head{border-bottom:none;margin-bottom:0;padding:12px 44px 12px 12px}
-  .board-table td:first-child,.board-table th:first-child{white-space:normal}
-  .board-table .ta-r{display:flex;gap:6px;justify-content:flex-end}
   .field-flex{flex-direction:column;align-items:stretch;gap:4px}
   .field-flex label{flex:auto}
   .savebar{right:12px;--yr-fixed-action-bottom:12px}
