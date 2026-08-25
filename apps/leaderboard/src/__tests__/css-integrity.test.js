@@ -112,14 +112,14 @@ describe("authenticated dashboard v4 contract", () => {
         selectors: selectors.split(",").map((selector) => selector.trim()),
         declarations,
       }))
-      .filter(({ selectors }) => selectors.some((selector) => selector === collapsedRoot));
-    const rootSizingDeclarations = ruleBlocks
+      .filter(({ selectors }) => selectors.includes(collapsedRoot));
+    const sizingDeclarations = ruleBlocks
       .map(({ declarations }) => declarations)
       .filter((declarations) => /\b(?:width|height|overflow)\s*:/.test(declarations));
 
-    // The shell root carries no responsive sizing; the child rail owns its width.
-    expect(rootSizingDeclarations).toEqual([]);
-    expect(css).toContain(`${collapsedRoot} .lb-side {\n    width: 44px;`);
+    // The shell root carries the rail-width token; child rail controls own icon sizing.
+    expect(sizingDeclarations).toEqual([]);
+    expect(ruleBlocks.some(({ declarations }) => /--ws-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
   });
 
   it("keeps mobile top-bar controls on the light surface and allows reflow", () => {
@@ -143,9 +143,10 @@ describe("authenticated dashboard v4 contract", () => {
     const narrowStart = css.indexOf("@media (max-width: 700px) {");
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
-    expect(narrowShell).toContain("height: 153px");
-    expect(narrowShell).toContain("min-height: 153px");
-    expect(narrowShell).toContain("padding-inline: 16px");
+    expect(narrowShell).toContain("--ws-topbar-h: 153px");
+    expect(narrowShell).toContain("height: var(--ws-topbar-h)");
+    expect(narrowShell).toContain("min-height: var(--ws-topbar-h)");
+    expect(narrowShell).toContain("--ws-main-pad-inline: 16px");
     expect(narrowShell).toContain("padding-bottom: 48px");
     expect(narrowShell).toContain("lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }");
     expect(narrowShell).not.toContain("min-height: 112px");

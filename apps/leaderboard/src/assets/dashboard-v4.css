@@ -987,15 +987,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
    Collapsed nav items get a CSS tooltip via the title attribute so icon-only
    rail never forces pure recall. */
 @media (min-width: 981px) {
-  /* Collapsed desktop rail keeps the main column aligned with the rail. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side {
-    width: 44px;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-main {
-    margin-left: 44px;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .v3-bulkbar {
-    left: calc(50% + (44px / 2));
+  /* One token drives the rail width, so top bar and main follow it. */
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] {
+    --ws-sidebar-w: 44px;
   }
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side {
     padding-inline: 0;
@@ -1626,7 +1620,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .ov-head .v3-head-sub { margin-top: 5px; }
 /* Tier A: Command grid — full width, prominent border, no shadow */
 .v3-dash[data-auth-workspace] .ov-command-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0; overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: #ffffff; }
-.v3-dash[data-auth-workspace] .ov-summary { grid-column: span 7; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; min-width: 0; padding: 24px 28px; background: var(--ws-accent-soft); }
+.v3-dash[data-auth-workspace] .ov-summary { grid-column: span 7; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; min-width: 0; padding: var(--ws-space-6) 28px; background: var(--ws-accent-soft); }
 .v3-dash[data-auth-workspace] .ov-command-grid.is-setup-complete .ov-summary { grid-column: 1 / -1; }
 .v3-dash[data-auth-workspace] #ovOnboardingBento { grid-column: 1 / -1; min-width: 0; border-left: 0; margin-bottom: 20px; }
 .v3-dash[data-auth-workspace] .ov-summary.is-attention { background: #fffaf2; }
@@ -1700,7 +1694,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .ov-live .kpi-row.has-credits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .v3-dash[data-auth-workspace] .v3-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0; }
 .v3-dash[data-auth-workspace] .ov-live .kpi-card { min-height: 74px; padding: 24px; justify-content: space-between; }
-.v3-dash[data-auth-workspace] .v3-kpi-card { min-height: 120px; padding: 20px 22px; }
+.v3-dash[data-auth-workspace] .v3-kpi-card { min-height: 120px; padding: var(--ws-space-5) 22px; }
 .v3-dash[data-auth-workspace] .kpi-card::before { display: none; }
 .v3-dash[data-auth-workspace] .kpi-lbl,
 .v3-dash[data-auth-workspace] .v3-kpi-label { margin: 0; color: var(--ws-text-soft); font: 600 11.5px var(--ws-sans); letter-spacing: 0; text-transform: none;display:flex;align-items:center;gap:6px; }
@@ -3665,10 +3659,9 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
 /* Tablet and mobile */
 @media (max-width: 1180px) and (min-width: 981px) {
-  .v3-dash[data-auth-workspace] .lb-side { width: 248px; }
-  .v3-dash[data-auth-workspace] .lb-main { margin-left: 248px; padding-inline: 24px; }
-  .v3-dash[data-auth-workspace] .lb-topbar { margin-inline: -24px; padding-inline: 24px; }
-  .v3-dash[data-auth-workspace] .v3-bulkbar { left: calc(50% + (248px / 2)); }
+  .v3-dash[data-auth-workspace] { --ws-sidebar-w: 248px; }
+  .v3-dash[data-auth-workspace] { --ws-main-pad-inline: 24px; }
+  .v3-dash[data-auth-workspace] .lb-topbar { padding-inline: 24px; }
   .v3-dash[data-auth-workspace] .lb-site-path { display: none; }
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); }
 }
@@ -3734,9 +3727,9 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-topbar > .lb-brand { display: flex; align-items: center; gap: 8px; color: var(--ws-text); text-decoration: none; flex-basis: 40px; }
   .v3-dash[data-auth-workspace] .lb-topbar > .lb-brand .lb-brand-mark { width: 32px; height: 32px; flex-basis: 32px; }
   .v3-dash[data-auth-workspace] .lb-topbar > .lb-brand .lb-brand-txt { display: none; }
-  .v3-dash[data-auth-workspace] .lb-main { margin-left: 0; padding-inline: 24px; padding-bottom: 56px; }
+  .v3-dash[data-auth-workspace] .lb-main { margin-left: 0; padding-bottom: 56px; }
   .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }
-  body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: 24px; }
+  body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
   .v3-dash[data-auth-workspace] .lb-bento { gap: 24px; }
   .v3-dash[data-auth-workspace] .lb-widget--wide,
   .v3-dash[data-auth-workspace] .lb-widget--narrow,
@@ -3752,7 +3745,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     height: auto;
     max-height: none;
     margin: 0; }
-  .v3-dash[data-auth-workspace] .cr-shop-drawer { position: fixed; inset: 76px 0 0; z-index: 130; overflow-y: auto; border-radius: 0; }
+  .v3-dash[data-auth-workspace] .cr-shop-drawer { position: fixed; inset: var(--ws-topbar-h) 0 0; z-index: 130; overflow-y: auto; border-radius: 0; }
   .v3-dash[data-auth-workspace] .operator-help-section { grid-column: 1 / -1; }
   .v3-dash[data-auth-workspace] .v3-settings-inline-form,
   .v3-dash[data-auth-workspace] .v3-settings-notify-account { grid-template-columns: 1fr; }
@@ -3773,8 +3766,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 @media (max-width: 700px) {
-  .v3-dash[data-auth-workspace] .lb-main { padding-inline: 16px; }
-  .v3-dash[data-auth-workspace] .lb-topbar { margin-inline: -16px; }
+  .v3-dash[data-auth-workspace] { --ws-topbar-h: 153px; --ws-main-pad-inline: 16px; }
   .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head,
   .v3-dash[data-auth-workspace] .v3-players > .v3-head,
   .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
@@ -3797,11 +3789,11 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     top: calc(153px + 24px);
   }
   .v3-dash[data-auth-workspace] .cr-shop-drawer {
-    inset: 153px 0 0;
+    inset: var(--ws-topbar-h) 0 0;
   }
   .v3-dash[data-auth-workspace] .lb-topbar {
-    height: 153px;
-    min-height: 153px;
+    height: var(--ws-topbar-h);
+    min-height: var(--ws-topbar-h);
     flex-wrap: wrap;
     align-content: center;
     gap: 8px;
@@ -3834,7 +3826,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .ov-next-step .btn { width: 100%; }
   .v3-dash[data-auth-workspace] .lb-main { padding-bottom: 48px; }
   .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }
-  body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: 16px; }
+  body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
   .v3-dash[data-auth-workspace] .lb-bento,
   .v3-dash[data-auth-workspace] .v3-stack,
   .v3-dash[data-auth-workspace] #acc-app,
