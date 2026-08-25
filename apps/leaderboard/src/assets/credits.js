@@ -210,19 +210,36 @@ function renderRewardRow(m) {
 function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
 }
+function memberIdentity(v) {
+  return v.kick_username || v.discord_username || "Member";
+}
+function memberPlatforms(v) {
+  return [
+    v.kick_username || v.kick_user_id ? "Kick" : "",
+    v.discord_username || v.discord_user_id ? "Discord" : "",
+  ].filter(Boolean);
+}
 function renderViewerRow(v) {
-  const uname = viewerIdentity(v);
+  const identity = memberIdentity(v);
+  const uname = identity;
+  const platforms = memberPlatforms(v);
   const avatar = v.avatar_url
     ? `<img class="cr-viewer-avatar" src="${esc(v.avatar_url)}" alt="" loading="lazy" />`
     : `<span class="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">${esc(uname.slice(0, 1).toUpperCase())}</span>`;
   const joined = fmtDate(v.created_at);
   const earned = v.last_earned_at ? fmtDate(v.last_earned_at) : "Not yet";
   const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet";
-  const identity = viewerIdentity(v);
+  const lastActiveAt = v.last_seen_at || v.last_earned_at;
   const history = identity !== "Member"
     ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}">History</a> `
     : "";
-  return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
+  const platformHtml = platforms.length
+    ? platforms.map((platform) => `<span>${platform}</span>`).join("")
+    : "<span>Account connected</span>";
+  const activity = lastActiveAt
+    ? `<b title="Last seen: ${esc(seen)} · Last earned: ${esc(earned)}">Active ${esc(relative(lastActiveAt))}</b>`
+    : "<b>No activity yet</b>";
+  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b><span class="cr-member-platforms">${platformHtml}</span>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked</span>' : ""}</span></div></td><td data-label="Recent activity"><div class="cr-member-activity">${activity}<span title="${esc(joined)}">Joined ${esc(relative(v.created_at))}</span></div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.total_earned) || 0} · Spent ${Number(v.total_spent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${Number(v.balance) || 0}" title="Tip credits to ${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></div></td>`;
 }
 function renderRedemptionRow(r) { return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Item">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Ordered" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
@@ -321,7 +338,7 @@ function render() {
   }
   if (current === "viewers") {
     const viewers = state.viewers || [];
-    if (!viewerCtrl) { viewerCtrl = new ListController({ root: $("cr-viewers"), tbody: "cr-viewer-list", emptyEl: $("cr-viewer-empty"), emptySpec: { kind: "empty", title: "No members yet", body: "Members who sign in will appear here, even before they earn or spend credits.", compact: true }, items: viewers, perPage: 15, searchFn: (v) => `${viewerIdentity(v)} ${v.block_reason || ""} ${v.blocked ? "blocked" : ""}`, sortOptions: [{ key: "balance", label: "Balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) }, { key: "earned", label: "Earned", fn: (a, b) => (b.total_earned || 0) - (a.total_earned || 0) }, { key: "spent", label: "Spent", fn: (a, b) => (b.total_spent || 0) - (a.total_spent || 0) }, { key: "last", label: "Last earned", fn: (a, b) => new Date(b.last_earned_at || b.created_at || 0) - new Date(a.last_earned_at || a.created_at || 0) }], emptyAllText: "No members yet.", emptyText: "No matching members.", renderItem: (v) => renderViewerRow(v), onRender: () => wireDynamicActions() }); }
+    if (!viewerCtrl) { viewerCtrl = new ListController({ root: $("cr-viewers"), tbody: "cr-viewer-list", emptyEl: $("cr-viewer-empty"), emptySpec: { kind: "empty", title: "No members yet", body: "Members who sign in will appear here after they use your YourRank site. Share your site to invite your first member.", compact: true, actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }] }, items: viewers, perPage: 15, searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.block_reason || ""} ${v.blocked ? "blocked" : "active"}`, sortOptions: [{ key: "activity", label: "Recently active", fn: (a, b) => new Date(b.last_seen_at || b.last_earned_at || b.created_at || 0) - new Date(a.last_seen_at || a.last_earned_at || a.created_at || 0) }, { key: "joined", label: "Newest members", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) }, { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) }], emptyAllText: "No members yet.", emptyText: "No matching members.", renderItem: (v) => renderViewerRow(v), onRender: () => wireDynamicActions() }); mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot")); }
     else viewerCtrl.setItems(viewers);
   }
   if (current === "overview") {

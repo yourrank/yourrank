@@ -9,7 +9,7 @@ import { chromeStateFor } from "../assets/dashboard/routes.js";
 // here; site visitors (anonymous traffic) already have their canonical view
 // under Analytics, so the page links there as an action instead of duplicating
 // the view or adding a tab that teleports to another product area.
-const VISITOR_ANALYTICS_CARD = `<section class="v3-table-card"><div class="v3-section-head"><div><h2>Site visitors</h2><p class="v3-head-sub">Anonymous traffic to your public site lives in Analytics.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open site visitors</a></div></section>`;
+const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Analytics.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Analytics</a></aside>`;
 
 export function AudienceMembersPage({ activePath, user, fragment } = {}) {
   const content = <div class="cr-workspace-content">
