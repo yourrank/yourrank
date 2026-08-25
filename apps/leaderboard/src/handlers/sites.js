@@ -205,8 +205,17 @@ export async function handleTrackScroll(request, env) {
   return json({ ok: true });
 }
 
-export async function handleGetSite(request, env) {
-  const { user, res } = await requireUser(request, env);
+// getUserSite/getUserSiteById already normalize the row (camelCase, booleans,
+// autoReset), so this response reads their fields — never the raw column names,
+// which are absent from the normalized object and silently read as undefined.
+export async function handleGetSite(request, env, {
+  requireUserImpl = requireUser,
+  getUserSiteImpl = getUserSite,
+  getUserSiteByIdImpl = getUserSiteById,
+  getUserBoardsListImpl = getUserBoardsList,
+  onboardingForSiteImpl = onboardingForSite,
+} = {}) {
+  const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
   if (user.status === "suspended") return bad("This account is suspended.", 403);
   const url = new URL(request.url);
@@ -214,15 +223,15 @@ export async function handleGetSite(request, env) {
   const plan = effectivePlan(user);
   let s;
   if (siteId) {
-    s = await getUserSiteById(env, user.id, siteId, plan);
+    s = await getUserSiteByIdImpl(env, user.id, siteId, plan);
   } else {
-    s = await getUserSite(env, user.id, plan);
+    s = await getUserSiteImpl(env, user.id, plan);
   }
   if (!s) return bad("No site for this account", 404);
-  const boards = await getUserBoardsList(env, user.id);
-  const onboarding = await onboardingForSite(env, s, user.id, plan);
+  const boards = await getUserBoardsListImpl(env, user.id);
+  const onboarding = await onboardingForSiteImpl(env, s, user.id, plan);
   const data = { ...(s.data || {}), playerCount: Array.isArray(s.data?.players) ? s.data.players.length : 0 };
-  return json({ ok: true, slug: s.slug, published: s.published, isDraft: s.is_draft, plan: plan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.created_at, players: a.player_count, createdAt: a.created_at ? new Date(a.created_at).toISOString() : null, winnerName: a.winner_name, playerCount: a.player_count })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updated_at, publishedAt: s.published_at, passwordProtected: !!(s.password_hash && s.password_salt), autoReset: { enabled: !!s.auto_reset_enabled, clear: s.auto_reset_clear || "wagers" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
+  return json({ ok: true, slug: s.slug, published: s.published, isDraft: !!s.isDraft, plan: plan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.at, players: a.players, createdAt: a.at ? new Date(a.at).toISOString() : null, playerCount: a.players })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updatedAt, publishedAt: s.publishedAt, passwordProtected: !!s.passwordProtected, autoReset: { enabled: !!s.autoReset?.enabled, clear: s.autoReset?.clear || "wagers" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }
 
 export async function handleListBoards(request, env) {
