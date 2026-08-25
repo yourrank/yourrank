@@ -60,6 +60,8 @@ describe("authenticated page chrome", () => {
     );
     expect(selected).toContain("font-weight: 650");
     expect(selected).toContain("border-bottom-color: var(--ws-text)");
+    // The strip is a horizontal scroll box, so an outset ring would be clipped.
+    expect(dashboardV4Css).toMatch(/\.v3-tab:focus-visible,\n\.v3-dash\[data-auth-workspace\] \.editor-step:focus-visible \{\n {2}outline-offset: -2px;/);
     // Feature areas keep their behaviour hooks but not their own tab paint.
     expect(withoutComments(giveawaysCss)).not.toMatch(/\.gw-tab-btn\.is-active/);
     expect(dashboardV4Css).not.toContain(".account-settings-tabs");
@@ -79,6 +81,17 @@ describe("authenticated page chrome", () => {
     expect(shellNavJs).toContain('["#acc-app > .v3-head + .v3-tabs", "#acc-app > .v3-head"]');
     expect(shellNavJs).toContain('["#gw-app > .v3-tabs", "#gw-app > .v3-head"]');
     expect(shellNavJs).not.toContain("account-settings");
+    // The editor renders its steps above the step title, so only the strip pins:
+    // a second sticky layer would slide the opaque title across its own tabs.
+    expect(dashboardV4Css).not.toContain(".design-controls > .v3-section-title");
+    expect(shellNavJs).not.toContain("design-controls");
+  });
+
+  it("lets a stacked page head collapse to its content height", () => {
+    // A 360px flex-basis becomes a minimum *height* once the head stacks, which
+    // left a dead gap between the supporting copy and the page action.
+    const narrow = dashboardV4Css.slice(dashboardV4Css.indexOf("@media (max-width: 700px)"));
+    expect(narrow).toMatch(/\.v3-head-col \{ flex-basis: auto; \}/);
   });
 
   it("gives every authenticated page exactly one visible H1 and a marked active tab", () => {
@@ -124,5 +137,10 @@ describe("authenticated page chrome", () => {
         .toEqual({ file, registry: false });
     }
     expect(accountSource).toContain('chromeStateFor("settings", active)');
+    // Client-side tab selection must move `aria-current`, or two tabs read as
+    // selected once the paint no longer differs by colour.
+    const accountJs = readAsset("account.js");
+    expect(accountJs).toContain('tab.setAttribute("aria-current", "page")');
+    expect(accountJs).toContain('tab.removeAttribute("aria-current")');
   });
 });

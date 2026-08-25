@@ -46,7 +46,6 @@
   document.querySelectorAll(".v3-dash[data-auth-workspace]").forEach(function (root) {
     var stickyPairs = [
       [".lb-page.is-on > .v3-head + .v3-tabs", ".lb-page.is-on > .v3-head"],
-      [".lb-page.is-on > .design-grid > .design-controls > .v3-tabs", ".lb-page.is-on > .design-grid > .design-controls > .v3-section-title"],
       [".v3-analytics-page > .v3-tabs", ".v3-analytics-page > .v3-head"],
       ["#acc-app > .v3-head + .v3-tabs", "#acc-app > .v3-head"],
       ["#gw-app > .v3-tabs", "#gw-app > .v3-head"],

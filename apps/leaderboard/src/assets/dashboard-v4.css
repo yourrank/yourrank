@@ -943,7 +943,6 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
 .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 32px; }
 .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head,
-.v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-section-title,
 .v3-dash[data-auth-workspace] .v3-players > .v3-head,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
 .v3-dash[data-auth-workspace] .v3-games-page > .d-flex:first-child,
@@ -968,9 +967,11 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   display: flex;
   width: 100%;
 }
-/* Rewards renders its subnav before the page head, so the tabs stick directly
-   under the topbar and the head scrolls normally. */
-.v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs {
+/* Rewards and the leaderboard editor render their subnav before the page title,
+   so the strip sticks directly under the topbar and the title scrolls normally —
+   one sticky layer, never a title sliding across its own tabs. */
+.v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
+.v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-tabs {
   top: var(--ws-topbar-h);
   z-index: 20;
 }
@@ -1643,6 +1644,12 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   font-weight: 650;
   box-shadow: none !important;
   border-bottom-color: var(--ws-text);
+}
+/* The strip scrolls horizontally, so an outset ring would be clipped by its own
+   scroll box: draw the focus ring inside the item instead. */
+.v3-dash[data-auth-workspace] .v3-tab:focus-visible,
+.v3-dash[data-auth-workspace] .editor-step:focus-visible {
+  outline-offset: -2px;
 }
 
 /* Overview: 3-tier hierarchy
@@ -3856,6 +3863,10 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .v3-card-head,
   .v3-dash[data-auth-workspace] .ov-summary,
   .v3-dash[data-auth-workspace] .cr-redemption-summary { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+  /* Stacked, the title block's 360px basis would act as a minimum *height* and
+     leave a dead gap above the page action. */
+  .v3-dash[data-auth-workspace] .v3-head--row > :first-child,
+  .v3-dash[data-auth-workspace] .v3-head-col { flex-basis: auto; }
   .v3-dash[data-auth-workspace] .ov-command-grid { grid-template-columns: 1fr; }
   .v3-dash[data-auth-workspace] .ov-summary,
   .v3-dash[data-auth-workspace] #ovOnboardingBento,

@@ -234,7 +234,9 @@ describe("dashboard navigation ownership", () => {
 
   it("keeps feature headings and subnavigation clear of the sticky topbar", () => {
     expect(dashboardV4Css).toContain(".lb-page.is-on > .v3-head");
-    expect(dashboardV4Css).toContain(".lb-page.is-on > .design-grid > .design-controls > .v3-section-title");
+    // The editor renders its step strip above the step title, so the strip is the
+    // layer that pins; a sticky title as well slid the title over its own tabs.
+    expect(dashboardV4Css).toContain(".lb-page.is-on > .design-grid > .design-controls > .v3-tabs");
     expect(dashboardV4Css).toContain("top: var(--ws-topbar-h);");
     expect(dashboardV4Css).toContain(".lb-page.is-on > .v3-head + .v3-tabs");
     expect(dashboardV4Css).toContain("top: calc(var(--ws-topbar-h) + var(--sticky-head-offset, 0px));");

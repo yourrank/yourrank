@@ -229,6 +229,8 @@ function wireUnifiedSettingsTabs() {
       const on = tab.dataset.settingsTab === active;
       tab.classList.toggle("is-on", on);
       tab.setAttribute("aria-selected", String(on));
+      if (on) tab.setAttribute("aria-current", "page");
+      else tab.removeAttribute("aria-current");
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== active; });
   };
