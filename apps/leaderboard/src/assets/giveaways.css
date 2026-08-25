@@ -42,7 +42,7 @@
   background: var(--ws-surface, #ffffff);
   border: 1px solid var(--ws-line, var(--ws-line));
   border-radius: var(--ws-radius);
-  box-shadow: var(--ws-shadow);
+  box-shadow: none;
   padding: 24px;
 }
 
@@ -1100,7 +1100,7 @@
   border: 1px solid var(--ws-line, #e5e7eb);
   border-radius: var(--ws-radius, 12px);
   background: var(--ws-surface, #fff);
-  box-shadow: var(--ws-shadow);
+  box-shadow: none;
 }
 
 .tournament-status-head {
@@ -1147,12 +1147,8 @@
 }
 
 .tournament-step-label {
-  padding: 4px 10px;
-  border: 1px solid var(--ws-line);
-  border-radius: 999px;
-  background: var(--ws-surface-soft);
-  color: var(--ws-text);
-  font-size: 12.5px;
+  color: var(--ws-accent);
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -1208,7 +1204,7 @@
   border: 1px solid var(--ws-line, #e5e7eb);
   border-radius: var(--ws-radius, 12px);
   background: var(--ws-surface, #fff);
-  box-shadow: var(--ws-shadow);
+  box-shadow: none;
 }
 
 .tournament-list-head {
@@ -1359,7 +1355,7 @@
   border: 1px solid var(--ws-line, #e5e7eb);
   border-radius: var(--ws-radius, 12px);
   background: var(--ws-surface, #fff);
-  box-shadow: var(--ws-shadow);
+  box-shadow: none;
 }
 
 .tournament-settings summary {
@@ -1481,18 +1477,87 @@
   gap: 24px;
 }
 
-/* ==========================================================================
-   Engage event cards — one card anatomy shared by raffles, drops and
-   predictions: identity row, emphasised figure, hairline stat band, action
-   footer. Values stay ink; cobalt is reserved for the primary action and the
-   meters so a card only ever has one accent.
-   ========================================================================== */
+/* Active raffles and drops use divided management rows. Prediction markup keeps
+   the existing card anatomy below because that area is outside this wave. */
 .gw-raffles-container,
 .gw-drops-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
+  display: flex;
+  flex-direction: column;
   margin-top: 18px;
+}
+
+.gw-event-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) minmax(280px, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--ws-line);
+}
+
+.gw-event-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.gw-event-row:last-child {
+  padding-bottom: 0;
+}
+
+.gw-event-row-main,
+.gw-event-row-progress {
+  min-width: 0;
+}
+
+.gw-event-row-main .gw-event-title {
+  margin-top: 5px;
+}
+
+.gw-event-row-details {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  min-width: 0;
+  margin: 0;
+}
+
+.gw-event-row-details div {
+  min-width: 0;
+}
+
+.gw-event-row-details dt {
+  color: var(--ws-text-mute);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gw-event-row-details dd {
+  margin: 3px 0 0;
+  color: var(--ws-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.gw-event-row-action {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
+
+.gw-event-row-action > span {
+  color: var(--ws-text-mute);
+  font-size: 11px;
+}
+
+.gw-event-row-progress {
+  width: 100%;
+}
+
+.gw-drops-container .gw-event-row {
+  grid-template-columns: minmax(200px, 1.25fr) minmax(160px, .8fr) minmax(260px, 1fr);
 }
 
 .gw-preds-container {
@@ -1811,6 +1876,74 @@
 
   .gw-event-card-foot .gw-event-foot-actions {
     margin-left: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .gw-event-row,
+  .gw-drops-container .gw-event-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .gw-event-row-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 18px;
+  }
+
+  .gw-event-row-action {
+    justify-items: stretch;
+  }
+
+  .gw-event-row-action > span {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table,
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table tbody,
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table tr,
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table thead {
+    display: none;
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table tr {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--ws-line);
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table td {
+    display: grid;
+    grid-template-columns: minmax(88px, .7fr) minmax(0, 1.3fr);
+    gap: 12px;
+    height: auto;
+    padding: 5px 0;
+    border: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table td::before {
+    color: var(--ws-text-mute);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table .gw-empty-cell {
+    display: block;
+  }
+
+  :is(#pane-chat, #pane-raffles, #pane-drops) .gw-card--table .v3-table .gw-empty-cell::before {
+    content: none;
   }
 }
 
