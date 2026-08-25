@@ -13,6 +13,7 @@ import { parseDynamicPath } from "./dashboard/routes.js";
 const statusEl = () => $("status");
 let _accountPopstate = null;
 let _unregisterRenderer = null;
+let _inviteModalKeydown = null;
 let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
@@ -501,6 +502,10 @@ function wireTeam() {
   const closeModal = () => {
     modal.hidden = true;
     modal.setAttribute("aria-hidden", "true");
+    if (_inviteModalKeydown) {
+      document.removeEventListener("keydown", _inviteModalKeydown, true);
+      _inviteModalKeydown = null;
+    }
     loadTeam();
     returnFocus?.focus();
   };
@@ -513,30 +518,35 @@ function wireTeam() {
     if (statusEl) statusEl.textContent = "";
     if (resultWrap) resultWrap.hidden = true;
     if (sendBtn) sendBtn.disabled = false;
+    _inviteModalKeydown = (event) => {
+      if (modal.hidden) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeModal();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...modal.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]")]
+        .filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", _inviteModalKeydown, true);
     emailInput?.focus();
   });
 
   closeBtn?.addEventListener("click", closeModal);
   modal.addEventListener("click", (event) => {
     if (event.target === modal) closeModal();
-  });
-  modal.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      closeModal();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [...modal.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]")].filter((el) => !el.hidden);
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
   });
 
   sendBtn?.addEventListener("click", async () => {
@@ -589,6 +599,9 @@ async function init() {
   setUserName();
   // One settings document holds every panel, so everything is wired once.
   wireUnifiedSettingsTabs();
+  const accountRoot = $("acc-app");
+  accountRoot?.addEventListener("input", (event) => event.stopPropagation());
+  accountRoot?.addEventListener("change", (event) => event.stopPropagation());
   wireAccount();
   wireTeam();
   await loadTeam();
@@ -620,6 +633,10 @@ export function leave() {
   if (_accountPopstate) {
     removeEventListener("popstate", _accountPopstate);
     _accountPopstate = null;
+  }
+  if (_inviteModalKeydown) {
+    document.removeEventListener("keydown", _inviteModalKeydown, true);
+    _inviteModalKeydown = null;
   }
   // Release the route renderer so the shell fetches the fragment fresh on the
   // next entry instead of painting into a torn-down DOM.

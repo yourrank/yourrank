@@ -29,6 +29,7 @@ describe("Site settings creator UX", () => {
   it("delegates visible settings saving to the canonical editor save owner", () => {
     expect(siteJs).toContain('export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {})');
     expect(siteJs).toContain('saveEditorDraft({ button: event.currentTarget })');
+    expect(occurrences(siteJs, "status.hidden = false;")).toBeGreaterThanOrEqual(3);
     expect(dashboardAccountJs).toContain('saveBar.hidden = !["sections", "notifications"].includes(key)');
     expect(dashboardAccountJs).toContain('for (const id of ["f_domain", "domainSearchInput"])');
   });
@@ -68,9 +69,18 @@ describe("Account settings creator UX", () => {
     expect(accountJs).not.toMatch(/\bconfirm\(/);
   });
 
+  it("keeps account controls outside the site draft and traps invite-dialog focus", () => {
+    expect(accountJs).toContain('accountRoot?.addEventListener("input", (event) => event.stopPropagation())');
+    expect(accountJs).toContain('accountRoot?.addEventListener("change", (event) => event.stopPropagation())');
+    expect(accountJs).toContain('document.addEventListener("keydown", _inviteModalKeydown, true)');
+    expect(accountJs).toContain(".filter((el) => el.offsetParent !== null)");
+  });
+
   it("keeps narrow account and settings structures free of fixed minimum widths", () => {
     expect(dashboardCss).toContain(".account-team-row");
     expect(dashboardCss).toContain("grid-template-columns: minmax(0, 1fr);");
+    expect(dashboardCss).toContain(".account-settings-panel > .account-related-setting { grid-column: 1 / -1; }");
+    expect(dashboardCss).toContain(".domain-result-name strong");
     expect(dashboardCss).not.toMatch(/#connectedAccounts\s*>\s*\.admin-table\s*\{[^}]*min-width:\s*720px/s);
     expect(dashboardCss).not.toMatch(/\.account-team-row\s*\{[^}]*min-width:\s*[1-9]\d+px/s);
   });

@@ -1665,6 +1665,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     status.textContent = justPublished && !boardStatus().emailVerified
       ? "Published — Your leaderboard will open to visitors after you confirm your email."
       : "Saved";
+    status.hidden = false;
     if (d.updatedAt) setState({ SITE_UPDATED_AT: d.updatedAt });
     if (d.publishedAt) setState({ PUBLISHED_AT: d.publishedAt });
     const saveBtn = $("save"); if (saveBtn) saveBtn.textContent = "Save changes";
@@ -1712,6 +1713,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     } else {
       status.textContent = err?.message || "Couldn't save. Your changes are still here — try again.";
     }
+    status.hidden = false;
   }
   btn.disabled = false; btn.textContent = "Save changes";
   if (publishAction) { publishAction.disabled = false; publishAction.removeAttribute("aria-busy"); }

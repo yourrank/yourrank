@@ -3734,6 +3734,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .domain-result-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
 .v3-dash[data-auth-workspace] .domain-tld-badge { font-size: 11px; font-weight: 700; color: var(--ws-accent); background: var(--ws-accent-soft); padding: 2px 6px; border-radius: var(--ws-radius-sm); }
 .v3-dash[data-auth-workspace] .domain-result-action { display: flex; align-items: center; gap: 10px; }
+.v3-dash[data-auth-workspace] .domain-result-card,
+.v3-dash[data-auth-workspace] .domain-result-name,
+.v3-dash[data-auth-workspace] .domain-result-action { min-width: 0; }
 .v3-dash[data-auth-workspace] .domain-result-price { font-size: 12.5px; font-weight: 600; color: #16a34a; }
 .v3-dash[data-auth-workspace] .domain-taken-lbl { font-size: 11.5px; color: var(--ws-text-soft); }
 .v3-dash[data-auth-workspace] .domain-auth-code { display: inline-block; padding: 4px 8px; font-family: monospace; font-size: 13px; font-weight: 700; background: var(--ws-surface-soft); border: 1px solid var(--ws-line-strong); border-radius: var(--ws-radius-sm); color: var(--ws-text); margin-top: 4px; }
@@ -3802,7 +3805,8 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   min-width: 0; }
 .v3-dash[data-auth-workspace] #acc-app { gap: 24px; }
 .v3-dash[data-auth-workspace] .account-settings-panel { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px; }
-.v3-dash[data-auth-workspace] .account-settings-panel > .lb-widget { grid-column: 1 / -1; }
+.v3-dash[data-auth-workspace] .account-settings-panel > .lb-widget,
+.v3-dash[data-auth-workspace] .account-settings-panel > .account-related-setting { grid-column: 1 / -1; }
 .v3-dash[data-auth-workspace] .plan-summary,
 .v3-dash[data-auth-workspace] .plan-usage,
 .v3-dash[data-auth-workspace] .plan-pending,
@@ -4150,6 +4154,11 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .account-team-row,
   .v3-dash[data-auth-workspace] .account-connection-row,
   .v3-dash[data-auth-workspace] .account-related-setting { align-items: stretch; flex-direction: column; }
+  .v3-dash[data-auth-workspace] .plan-summary,
+  .v3-dash[data-auth-workspace] .plan-usage,
+  .v3-dash[data-auth-workspace] .plan-pending,
+  .v3-dash[data-auth-workspace] .plan-cancel,
+  .v3-dash[data-auth-workspace] .plan-trial { grid-template-columns: minmax(0, 1fr); }
   .v3-dash[data-auth-workspace] .account-team-actions { align-items: stretch; flex-wrap: wrap; width: 100%; }
   .v3-dash[data-auth-workspace] .account-team-actions .field-select { min-width: 0; flex: 1 1 160px; }
   .v3-dash[data-auth-workspace] .account-connection-row > .btn,
@@ -6464,6 +6473,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
   .v3-dash[data-auth-workspace] .domain-results-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .domain-result-name strong {
+    overflow-wrap: anywhere;
+  }
+
+  .v3-dash[data-auth-workspace] .domain-result-action .btn {
+    width: 100%;
   }
 
   .v3-dash[data-auth-workspace] .domain-info-row {
