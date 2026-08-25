@@ -62,7 +62,11 @@ function renderSections() {
       </label>
     `).join("")}`;
   list.querySelectorAll("[data-site-section]").forEach((input) => {
-    input.addEventListener("change", () => saveSection(input));
+    input.addEventListener("input", (event) => event.stopPropagation());
+    input.addEventListener("change", (event) => {
+      event.stopPropagation();
+      saveSection(input);
+    });
   });
 }
 

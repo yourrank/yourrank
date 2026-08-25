@@ -183,7 +183,7 @@ describe("settings panels", () => {
     expect(plan).toContain("Earn free Pro days");
     expect(plan).toContain('id="refLink"');
     const site = PAGES.dashboard.Component({ activePath: "/dashboard/site", user: { email: "a@b.c" } }).toString();
-    expect(site).toContain(">Site tools<");
+    expect(site).toContain(">Advanced<");
     expect(site).not.toContain(">Integrations</button>");
   });
 });

@@ -926,7 +926,9 @@ function _beforeUnloadGuard(e) {
 subscribe((keys) => {
   if (keys.includes("_dirty")) {
     const sb = $("savebar");
+    const settingsSave = $("settingsSave");
     if (sb) sb.hidden = !state._dirty;
+    if (settingsSave) settingsSave.disabled = !state._dirty;
     if (state._dirty) window.addEventListener("beforeunload", _beforeUnloadGuard);
     else window.removeEventListener("beforeunload", _beforeUnloadGuard);
     // The badge, footer and save bar all speak the same publication language,
@@ -1180,8 +1182,16 @@ export async function renderDomain() {
   const pro = state.ME.plan === "pro" || state.ME.plan === "agency";
   const domainBody = $("domainBody");
   const domainLock = $("domainLock");
+  const overview = $("domainOverviewCard");
+  const overviewTitle = $("domainOverviewTitle");
+  const overviewText = $("domainOverviewText");
+  const overviewStatus = $("domainOverviewStatus");
   if (domainBody) domainBody.hidden = !pro;
   if (domainLock) domainLock.hidden = pro;
+  if (overview) overview.hidden = false;
+  if (overviewTitle) overviewTitle.textContent = "Checking your domain…";
+  if (overviewText) overviewText.textContent = "Your default yourrank.site address remains available while we check for a custom domain.";
+  if (overviewStatus) overviewStatus.textContent = "Checking";
 
   // Load existing domain status
   try {
@@ -1191,14 +1201,36 @@ export async function renderDomain() {
       headers: { "x-csrf-token": getCsrf() },
     });
     const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load domain status.");
     if (data.ok && data.customDomain) {
+      if (overview) overview.hidden = true;
       $("domainManageCard")?.removeAttribute("hidden");
       if ($("domainManageName")) $("domainManageName").textContent = data.customDomain;
+      const domainState = data.domainStatus || data.order?.status || "active";
+      const badge = $("domainManageBadge");
+      const manageStatus = $("domainManageStatus");
+      const stateLabels = {
+        active: "Active",
+        pending: "Verification pending",
+        saved: "Setup required",
+        error: "Needs attention",
+      };
+      const stateMessages = {
+        active: "This domain is opening your site.",
+        pending: "Verification is still in progress. DNS changes can take time.",
+        saved: "Reconnect the domain below to finish verification.",
+        error: "Reconnect the domain below to check its DNS setup.",
+      };
+      if (badge) {
+        badge.textContent = stateLabels[domainState] || "Connected";
+        badge.className = `v3-chip${domainState === "active" ? " v3-chip--fulfilled" : domainState === "pending" || domainState === "saved" ? " v3-chip--pending" : ""}`;
+      }
+      if (manageStatus) manageStatus.textContent = stateMessages[domainState] || "This domain is connected to your site.";
       if ($("domainManageExpiry")) {
         $("domainManageExpiry").textContent = data.order?.expires_at ? new Date(data.order.expires_at).toLocaleDateString() : "Managed externally";
       }
       if ($("domainManageLockStatus")) {
-        $("domainManageLockStatus").textContent = data.order?.locked ? "🔒 Enabled (Protected)" : "🔓 Unlocked (Ready for transfer)";
+        $("domainManageLockStatus").textContent = data.order?.locked ? "Enabled" : "Unlocked";
       }
       if ($("domainToggleLockBtn")) {
         $("domainToggleLockBtn").textContent = data.order?.locked ? "Unlock for transfer" : "Lock domain";
@@ -1225,7 +1257,7 @@ export async function renderDomain() {
       }
       if ($("domainGetAuthCodeBtn")) {
         $("domainGetAuthCodeBtn").onclick = async () => {
-          $("domainManageStatus").textContent = "Requesting EPP Auth code…";
+          $("domainManageStatus").textContent = "Requesting transfer code…";
           try {
             const aRes = await fetch("/api/domains/transfer-auth-code", {
               method: "POST",
@@ -1235,7 +1267,7 @@ export async function renderDomain() {
             });
             const aData = await aRes.json();
             if (aData.ok) {
-              $("domainManageStatus").innerHTML = `<b>EPP Transfer Code:</b> <code class="domain-auth-code">${esc(aData.authCode)}</code><br><small class="muted">${esc(aData.icannNote)}</small>`;
+              $("domainManageStatus").innerHTML = `<b>Transfer code:</b> <code class="domain-auth-code">${esc(aData.authCode)}</code><br><small class="muted">${esc(aData.icannNote)}</small>`;
             } else {
               $("domainManageStatus").textContent = aData.error || "Failed to retrieve transfer code.";
             }
@@ -1246,7 +1278,12 @@ export async function renderDomain() {
       }
       if ($("domainDisconnectBtn")) {
         $("domainDisconnectBtn").onclick = async () => {
-          if (!confirm(`Are you sure you want to disconnect ${data.customDomain} from this leaderboard?`)) return;
+          if (!await showConfirmModal(
+            "Disconnect custom domain",
+            `${data.customDomain} will stop opening this site. Your yourrank.site address will remain available.`,
+            "Disconnect domain",
+            true,
+          )) return;
           $("domainManageStatus").textContent = "Disconnecting…";
           try {
             const dRes = await fetch("/api/site/domain/verify", {
@@ -1260,6 +1297,8 @@ export async function renderDomain() {
               $("domainManageCard")?.setAttribute("hidden", "true");
               $("domainManageStatus").textContent = "Domain disconnected.";
               await renderDomain();
+            } else {
+              $("domainManageStatus").textContent = dData.error || "Could not disconnect the domain.";
             }
           } catch (e) {
             $("domainManageStatus").textContent = "Network error disconnecting domain.";
@@ -1268,9 +1307,15 @@ export async function renderDomain() {
       }
     } else {
       $("domainManageCard")?.setAttribute("hidden", "true");
+      if (overviewTitle) overviewTitle.textContent = "No custom domain";
+      if (overviewText) overviewText.textContent = "Your default yourrank.site address is active. Connect a domain you own or search for a new one below.";
+      if (overviewStatus) overviewStatus.textContent = "Not connected";
     }
   } catch (err) {
     logError("domain-status", err);
+    if (overviewTitle) overviewTitle.textContent = "Domain status unavailable";
+    if (overviewText) overviewText.textContent = "We could not check the current domain. Try again before making changes.";
+    if (overviewStatus) overviewStatus.textContent = "Needs attention";
   }
 
   // Domain search & 1-click purchase wiring
@@ -1302,7 +1347,7 @@ export async function renderDomain() {
             </div>
             <div class="domain-result-action">
               <span class="domain-result-price">${r.available ? esc(r.priceFormatted) : "Taken"}</span>
-              ${r.available ? `<button class="btn btn--sm btn--accent" data-buy-domain="${esc(r.domain)}" data-price="${esc(r.priceFormatted)}">Buy & Connect</button>` : `<span class="domain-taken-lbl">Unavailable</span>`}
+              ${r.available ? `<button class="btn btn--sm btn--accent" data-buy-domain="${esc(r.domain)}" data-price="${esc(r.priceFormatted)}">Buy and connect</button>` : `<span class="domain-taken-lbl">Unavailable</span>`}
             </div>
           </div>
         `).join("");
@@ -1312,10 +1357,15 @@ export async function renderDomain() {
           b.addEventListener("click", async () => {
             const domainToBuy = b.dataset.buyDomain;
             const price = b.dataset.price;
-            if (!confirm(`Register and connect ${domainToBuy} for ${price}? Automated DNS and SSL will be configured immediately.`)) return;
+            if (!await showConfirmModal(
+              "Buy and connect domain",
+              `Register ${domainToBuy} for ${price} and connect it to this site? DNS and SSL setup will start automatically.`,
+              `Buy for ${price}`,
+              false,
+            )) return;
             b.disabled = true;
             b.textContent = "Registering…";
-            $("domainSearchStatus").textContent = `Registering ${domainToBuy} and provisioning SSL certificate…`;
+            $("domainSearchStatus").textContent = `Registering ${domainToBuy} and setting up its secure connection…`;
             try {
               // AUDIT-B5: money endpoint, previously no timeout — a hung
               // request left the button at "Registering…" forever.
@@ -1331,18 +1381,18 @@ export async function renderDomain() {
               );
               const pData = await pRes.json();
               if (pData.ok) {
-                $("domainSearchStatus").innerHTML = `✅ <span class="domain-ok">${esc(pData.message)}</span>`;
+                $("domainSearchStatus").innerHTML = `<span class="domain-ok">${esc(pData.message)}</span>`;
                 resultsContainer.setAttribute("hidden", "true");
                 await renderDomain();
               } else {
-                $("domainSearchStatus").innerHTML = `❌ <span class="domain-error">${esc(pData.error || "Purchase failed.")}</span>`;
+                $("domainSearchStatus").innerHTML = `<span class="domain-error">${esc(pData.error || "Purchase failed.")}</span>`;
                 b.disabled = false;
-                b.textContent = "Buy & Connect";
+                b.textContent = "Buy and connect";
               }
             } catch (err) {
               $("domainSearchStatus").innerHTML = `<span class="domain-error">Network error.</span>`;
               b.disabled = false;
-              b.textContent = "Buy & Connect";
+              b.textContent = "Buy and connect";
             }
           });
         });
@@ -1575,8 +1625,8 @@ function closeOutErrorMessage(err) {
   return err?.message || "Couldn't close out — your changes are still here. Check your connection and try again.";
 }
 
-export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect } = {}) {
-  const btn = $("save"), status = $("status"), publishAction = $("publishAction");
+export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {}) {
+  const btn = button || $("save"), status = $("status"), publishAction = $("publishAction");
   const { payload, invalid } = collectImpl();
   if (invalid.length) {
     const first = invalid[0];
@@ -1615,6 +1665,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     status.textContent = justPublished && !boardStatus().emailVerified
       ? "Published — Your leaderboard will open to visitors after you confirm your email."
       : "Saved";
+    status.hidden = false;
     if (d.updatedAt) setState({ SITE_UPDATED_AT: d.updatedAt });
     if (d.publishedAt) setState({ PUBLISHED_AT: d.publishedAt });
     const saveBtn = $("save"); if (saveBtn) saveBtn.textContent = "Save changes";
@@ -1662,6 +1713,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     } else {
       status.textContent = err?.message || "Couldn't save. Your changes are still here — try again.";
     }
+    status.hidden = false;
   }
   btn.disabled = false; btn.textContent = "Save changes";
   if (publishAction) { publishAction.disabled = false; publishAction.removeAttribute("aria-busy"); }
@@ -1672,6 +1724,9 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
 }
 
 $("save")?.addEventListener("click", () => { saveEditorDraft(); });
+$("settingsSave")?.addEventListener("click", (event) => {
+  saveEditorDraft({ button: event.currentTarget });
+});
 
 export function discardEditorChanges({ reload = () => location.reload() } = {}) {
   clearPlayersDraft();

@@ -13,6 +13,7 @@ import { parseDynamicPath } from "./dashboard/routes.js";
 const statusEl = () => $("status");
 let _accountPopstate = null;
 let _unregisterRenderer = null;
+let _inviteModalKeydown = null;
 let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
@@ -225,14 +226,20 @@ function wireUnifiedSettingsTabs() {
   const panels = [...root.querySelectorAll("[data-settings-panel]")];
   const select = (key) => {
     const active = tabs.some((tab) => tab.dataset.settingsTab === key) ? key : "account";
+    const activeTab = tabs.find((tab) => tab.dataset.settingsTab === active);
+    const description = root.querySelector("[data-settings-page-description]");
     tabs.forEach((tab) => {
       const on = tab.dataset.settingsTab === active;
       tab.classList.toggle("is-on", on);
       tab.setAttribute("aria-selected", String(on));
+      tab.tabIndex = on ? 0 : -1;
       if (on) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== active; });
+    if (description && activeTab?.dataset.settingsDescription) {
+      description.textContent = activeTab.dataset.settingsDescription;
+    }
   };
   // Tab clicks request the destination through the shell's navigation entry
   // point, which owns the URL, history and title; this section repaints its
@@ -242,6 +249,17 @@ function wireUnifiedSettingsTabs() {
   tabs.forEach((tab) => tab.addEventListener("click", (event) => {
     event.preventDefault();
     requestDashboardRoute("settings", tab.dataset.settingsTab);
+  }));
+  tabs.forEach((tab, index) => tab.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[nextIndex].focus();
+    requestDashboardRoute("settings", tabs[nextIndex].dataset.settingsTab);
   }));
   if (!window.__yrSpaShell) {
     // Standalone document: the persistent shell's popstate handling is not
@@ -279,35 +297,29 @@ function renderConnectedAccounts(data) {
 
   const kick = data.kick;
   const telegram = data.telegram;
-  const sites = data.sites || [];
 
   let html = "";
   if (kick || telegram) {
-    html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px">`;
+    html += `<div class="account-connection-list">`;
     if (kick) {
       const expiry = kick.tokenExpiresAt ? new Date(kick.tokenExpiresAt) : null;
       const needsAttention = !expiry || expiry <= new Date();
-      html += `<div style="padding:12px;border:1px solid var(--line);border-radius:8px"><div class="hint">Kick</div><div style="font-weight:600">@${esc(kick.username || kick.userId)}</div><div class="hint">Linked ${fmtDateTime(kick.linkedAt)}</div><div class="hint" style="${needsAttention ? "color:var(--ws-warning,#b76a12);font-weight:600" : ""}">${needsAttention ? "● Needs attention — reconnect" : "● Connected"}</div><a class="btn btn--sm ${needsAttention ? "btn--accent" : "btn--ghost"}" href="/dashboard/site/connections">${needsAttention ? "Reconnect Kick" : "Manage"}</a></div>`;
+      html += `<div class="account-connection-row">
+        <div><strong>Kick</strong><p>${kick.username ? `@${esc(kick.username)}` : "Creator account"}</p></div>
+        <span class="account-connection-status${needsAttention ? " is-warning" : ""}">${needsAttention ? "Reconnect needed" : "Connected"}</span>
+        <a class="btn btn--sm ${needsAttention ? "btn--accent" : "btn--ghost"}" href="/dashboard/site/connections">${needsAttention ? "Reconnect" : "Manage"}</a>
+      </div>`;
     }
     if (telegram) {
-      html += `<div style="padding:12px;border:1px solid var(--line);border-radius:8px"><div class="hint">Telegram</div><div style="font-weight:600">@${esc(telegram.username || telegram.userId)}</div><div class="hint">Linked ${fmtDateTime(telegram.linkedAt)}</div><div class="hint">● Connected</div><button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">Disconnect</button></div>`;
+      html += `<div class="account-connection-row">
+        <div><strong>Telegram</strong><p>${telegram.username ? `@${esc(telegram.username)}` : "Creator account"}</p></div>
+        <span class="account-connection-status">Connected</span>
+        <button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">Disconnect</button>
+      </div>`;
     }
     html += `</div>`;
   } else {
-    html += `<p class="hint">No streamer accounts connected yet.</p><div class="d-flex gap-8 flex-wrap"><a class="btn btn--accent" href="/dashboard/site/connections">Connect Kick</a><a class="btn btn--ghost" href="/dashboard/telegram">Connect Telegram</a></div>`;
-  }
-
-  if (sites.length > 0) {
-    html += `<h3 class="m-0 mt-18 mb-4">Per-board connected apps</h3><table class="admin-table"><thead><tr><th>Board</th><th>Kick channel</th><th>Discord connection</th><th>Telegram chat</th></tr></thead><tbody>`;
-    for (const s of sites) {
-      html += `<tr>
-        <td><a href="/${esc(s.slug)}">${esc(s.name || s.slug)}</a></td>
-        <td>${s.kickChannel ? `<span class="badge ok">${esc(s.kickChannel.name || s.kickChannel.id)}</span>` : "—"}</td>
-        <td>${s.discordWebhook ? `<span class="badge ok">On</span>` : "—"}</td>
-        <td>${s.telegramChat ? `<span class="badge ok">${esc(s.telegramChat.chatId)}</span>` : "—"}</td>
-      </tr>`;
-    }
-    html += `</tbody></table>`;
+    html += `<div class="empty account-connection-empty"><strong>No accounts connected</strong><p>Connect a creator account when you are ready to use its YourRank features.</p><div class="d-flex gap-8 flex-wrap"><a class="btn btn--accent" href="/dashboard/site/connections">Connect Kick</a><a class="btn btn--ghost" href="/dashboard/telegram">Connect Telegram</a></div></div>`;
   }
 
   wrap.innerHTML = html;
@@ -343,108 +355,65 @@ function renderTeam(data) {
 
   const { members = [], invites = [], canManageTeam } = data;
 
-  // Render active members
   if (members.length === 0) {
-    membersEl.innerHTML = `<p class="hint">No team members found.</p>`;
+    membersEl.innerHTML = `<div class="empty"><strong>No team members yet</strong><p>Invite someone when you are ready to share site management.</p></div>`;
   } else {
     membersEl.innerHTML = `
-      <div class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Member</th>
-              <th>Role</th>
-              <th>Joined</th>
-              ${canManageTeam ? '<th>Actions</th>' : ''}
-            </tr>
-          </thead>
-          <tbody>
-            ${members.map((m) => `
-              <tr>
-                <td>
-                  <div class="d-flex items-center gap-8">
-                    <span style="display:inline-flex;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.1);align-items:center;justify-content:center;font-size:12px;">👤</span>
-                    <div>
-                      <strong>${esc(m.displayName || m.email.split('@')[0])}</strong><br/>
-                      <span class="hint">${esc(m.email)}</span>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <span class="pill ${m.role === 'owner' ? 'pill--accent' : m.role === 'manager' ? 'pill--good' : 'pill--muted'}">
-                    ${esc(m.role.toUpperCase())}
-                  </span>
-                </td>
-                <td><span class="hint">${fmtDateTime(m.createdAt)}</span></td>
-                ${canManageTeam ? `
-                  <td>
-                    ${m.role === 'owner' ? '<span class="hint">Site Owner</span>' : `
-                      <div class="d-flex gap-6">
-                        <select class="field-select team-role-select" data-user-id="${esc(m.userId)}" style="padding:4px 8px;font-size:12px;">
-                          <option value="moderator" ${m.role === 'moderator' ? 'selected' : ''}>Moderator</option>
-                          <option value="manager" ${m.role === 'manager' ? 'selected' : ''}>Manager</option>
-                        </select>
-                        <button class="btn btn--sm btn--danger team-remove-btn" data-user-id="${esc(m.userId)}" type="button">Remove</button>
-                      </div>
-                    `}
-                  </td>
-                ` : ''}
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="account-team-list">
+        ${members.map((member) => {
+          const displayName = member.displayName || member.email.split("@")[0];
+          return `
+            <div class="account-team-row">
+              <div class="account-team-person">
+                <strong>${esc(displayName)}</strong>
+                <span>${esc(member.email)} · Joined ${fmtDateTime(member.createdAt)}</span>
+              </div>
+              ${canManageTeam && member.role !== "owner" ? `
+                <div class="account-team-actions">
+                  <label class="sr-only" for="teamRole-${esc(member.userId)}">Role for ${esc(displayName)}</label>
+                  <select class="field-select team-role-select" id="teamRole-${esc(member.userId)}" data-user-id="${esc(member.userId)}">
+                    <option value="moderator" ${member.role === "moderator" ? "selected" : ""}>Moderator</option>
+                    <option value="manager" ${member.role === "manager" ? "selected" : ""}>Manager</option>
+                  </select>
+                  <button class="btn btn--sm btn--ghost team-remove-btn" data-user-id="${esc(member.userId)}" type="button">Remove</button>
+                </div>
+              ` : `<span class="account-team-role">${member.role === "owner" ? "Owner" : esc(member.role)}</span>`}
+            </div>
+          `;
+        }).join("")}
       </div>
     `;
   }
 
-  // Render pending invites
   if (invites.length === 0) {
     invitesEl.innerHTML = `<p class="hint">No pending invitations.</p>`;
   } else {
     invitesEl.innerHTML = `
-      <div class="admin-table-wrap">
-        <table class="admin-table">
-          <thead>
-            <tr>
-              <th>Invited Email</th>
-              <th>Role</th>
-              <th>Expires</th>
-              <th>Invite Link</th>
-              ${canManageTeam ? '<th>Action</th>' : ''}
-            </tr>
-          </thead>
-          <tbody>
-            ${invites.map((inv) => `
-              <tr>
-                <td><strong>${esc(inv.email)}</strong></td>
-                <td><span class="pill pill--good">${esc(inv.role)}</span></td>
-                <td><span class="hint">${fmtDateTime(inv.expiresAt)}</span></td>
-                <td>
-                  <div class="d-flex gap-6 items-center">
-                    ${inv.inviteUrl
-                      ? `<button class="btn btn--sm ic-btn team-copy-invite-btn" data-url="${esc(inv.inviteUrl)}" type="button">Copy link</button>`
-                      : '<span class="hint">Link shown once when created</span>'}
-                  </div>
-                </td>
-                ${canManageTeam ? `
-                  <td>
-                    <button class="btn btn--sm btn--ghost team-revoke-invite-btn" data-invite-id="${esc(inv.id)}" type="button">Revoke</button>
-                  </td>
-                ` : ''}
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="account-team-list">
+        ${invites.map((invite) => `
+          <div class="account-team-row">
+            <div class="account-team-person">
+              <strong>${esc(invite.email)}</strong>
+              <span>${esc(invite.role)} · Expires ${fmtDateTime(invite.expiresAt)}</span>
+            </div>
+            <div class="account-team-actions">
+              ${invite.inviteUrl
+                ? `<button class="btn btn--sm btn--ghost team-copy-invite-btn" data-url="${esc(invite.inviteUrl)}" type="button">Copy link</button>`
+                : '<span class="hint">Link shown when created</span>'}
+              ${canManageTeam ? `<button class="btn btn--sm btn--ghost team-revoke-invite-btn" data-invite-id="${esc(invite.id)}" type="button">Revoke</button>` : ""}
+            </div>
+          </div>
+        `).join("")}
       </div>
     `;
   }
 
-  // Attach action listeners
   if (canManageTeam) {
     document.querySelectorAll(".team-role-select").forEach((sel) => {
       sel.addEventListener("change", async () => {
         const targetUserId = sel.getAttribute("data-user-id");
         const newRole = sel.value;
+        sel.disabled = true;
         const res = await jsonReq("POST", "/api/site/team/role", { targetUserId, role: newRole, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Role updated successfully");
@@ -458,27 +427,36 @@ function renderTeam(data) {
 
     document.querySelectorAll(".team-remove-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!confirm("Are you sure you want to remove this member?")) return;
+        if (!await showConfirmModal("Remove team member", "They will lose access to this site. You can invite them again later.", "Remove member", true)) return;
         const targetUserId = btn.getAttribute("data-user-id");
+        btn.disabled = true;
+        btn.textContent = "Removing…";
         const res = await jsonReq("POST", "/api/site/team/remove", { targetUserId, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Member removed");
           loadTeam();
         } else {
           setStatus(res.data?.error || "Failed to remove member", true);
+          btn.disabled = false;
+          btn.textContent = "Remove";
         }
       });
     });
 
     document.querySelectorAll(".team-revoke-invite-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        if (!await showConfirmModal("Revoke invitation", "This invite link will stop working. You can create a new one later.", "Revoke invite", true)) return;
         const inviteId = btn.getAttribute("data-invite-id");
+        btn.disabled = true;
+        btn.textContent = "Revoking…";
         const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId });
         if (res.ok) {
           setStatus("Invitation revoked");
           loadTeam();
         } else {
           setStatus(res.data?.error || "Failed to revoke invite", true);
+          btn.disabled = false;
+          btn.textContent = "Revoke";
         }
       });
     });
@@ -520,18 +498,55 @@ function wireTeam() {
   const copyBtn = $("btnCopyInviteLink");
 
   if (!openBtn || !modal) return;
+  let returnFocus = null;
+  const closeModal = () => {
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+    if (_inviteModalKeydown) {
+      document.removeEventListener("keydown", _inviteModalKeydown, true);
+      _inviteModalKeydown = null;
+    }
+    loadTeam();
+    returnFocus?.focus();
+  };
 
   openBtn.addEventListener("click", () => {
+    returnFocus = document.activeElement;
     modal.hidden = false;
+    modal.setAttribute("aria-hidden", "false");
     if (emailInput) emailInput.value = "";
     if (statusEl) statusEl.textContent = "";
     if (resultWrap) resultWrap.hidden = true;
     if (sendBtn) sendBtn.disabled = false;
+    _inviteModalKeydown = (event) => {
+      if (modal.hidden) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeModal();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...modal.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]")]
+        .filter((el) => el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", _inviteModalKeydown, true);
+    emailInput?.focus();
   });
 
-  closeBtn?.addEventListener("click", () => {
-    modal.hidden = true;
-    loadTeam();
+  closeBtn?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal();
   });
 
   sendBtn?.addEventListener("click", async () => {
@@ -539,15 +554,16 @@ function wireTeam() {
     const role = roleSelect?.value || "moderator";
     if (!email || !email.includes("@")) {
       if (statusEl) statusEl.textContent = "Please enter a valid email.";
+      emailInput?.focus();
       return;
     }
 
     sendBtn.disabled = true;
-    sendBtn.textContent = "Creating...";
+    sendBtn.textContent = "Creating…";
 
     const res = await jsonReq("POST", "/api/site/team/invite", { email, role, siteId: teamSiteId });
     sendBtn.disabled = false;
-    sendBtn.textContent = "Create Invitation";
+    sendBtn.textContent = "Create invite";
 
     if (res.ok) {
       if (statusEl) statusEl.textContent = "Invitation ready!";
@@ -583,6 +599,9 @@ async function init() {
   setUserName();
   // One settings document holds every panel, so everything is wired once.
   wireUnifiedSettingsTabs();
+  const accountRoot = $("acc-app");
+  accountRoot?.addEventListener("input", (event) => event.stopPropagation());
+  accountRoot?.addEventListener("change", (event) => event.stopPropagation());
   wireAccount();
   wireTeam();
   await loadTeam();
@@ -614,6 +633,10 @@ export function leave() {
   if (_accountPopstate) {
     removeEventListener("popstate", _accountPopstate);
     _accountPopstate = null;
+  }
+  if (_inviteModalKeydown) {
+    document.removeEventListener("keydown", _inviteModalKeydown, true);
+    _inviteModalKeydown = null;
   }
   // Release the route renderer so the shell fetches the fragment fresh on the
   // next entry instead of painting into a torn-down DOM.

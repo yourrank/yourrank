@@ -255,6 +255,8 @@ function wireSettingsTabs(initialTab = "access") {
   const validTabs = new Set(tabs.map((tab) => tab.dataset.settingsTab));
   if (!validTabs.has(initialTab)) initialTab = tabs[0].dataset.settingsTab;
   const select = (key, focus = false) => {
+    const saveBar = $("settingsSaveBar");
+    const saveText = $("settingsSaveText");
     tabs.forEach((tab) => {
       const active = tab.dataset.settingsTab === key;
       tab.classList.toggle("is-on", active);
@@ -263,6 +265,12 @@ function wireSettingsTabs(initialTab = "access") {
       if (active && focus) tab.focus();
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== key; });
+    if (saveBar) saveBar.hidden = !["sections", "notifications"].includes(key);
+    if (saveText) {
+      saveText.textContent = key === "sections"
+        ? "Public page switches save immediately. Use Save changes for legal links."
+        : "Use Save changes after updating notification destinations.";
+    }
   };
   tabs.forEach((tab, index) => {
     tab.addEventListener("click", () => select(tab.dataset.settingsTab));
@@ -310,6 +318,14 @@ function wireSettingsBoardAccess() {
   if (playerFieldsLink) playerFieldsLink.href = `/dashboard/leaderboard/players?board=${board}`;
 }
 
+function keepIndependentSettingsActionsOutOfDraft() {
+  for (const id of ["f_domain", "domainSearchInput"]) {
+    const input = $(id);
+    input?.addEventListener("input", (event) => event.stopPropagation());
+    input?.addEventListener("change", (event) => event.stopPropagation());
+  }
+}
+
 function wireSettingsWebhook(sitePayload) {
   const toggle = $("settingsWebhookEnabled");
   const body = $("notifyBody");
@@ -339,6 +355,7 @@ export function setupSettingsScreen(sitePayload, initialTab = "access") {
   wireSettingsTabs(initialTab);
   wireSettingsDanger();
   wireSettingsBoardAccess();
+  keepIndependentSettingsActionsOutOfDraft();
   wireSettingsWebhook(sitePayload);
   initSiteSections();
 }
