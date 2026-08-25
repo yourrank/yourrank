@@ -448,12 +448,10 @@ function BoardsSection({ active } = {}) {
  <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Site name</label><input id="nb_name" placeholder="Summer Race 2026" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><div class="field field-flex"><label for="nb_casino">Partner or sponsor <span class="hint">Optional</span></label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code <span class="hint">Optional</span></label><input id="nb_code" placeholder="Optional" /></div><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create site</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
  <div class="sites-list">
 <div class="list-controls"><input type="search" id="boardsSearch" class="list-search" placeholder="Find a site…" aria-label="Find a site" /></div>
-<div class="v3-table-scroll">
 <table class="v3-table sites-table">
 <thead><tr><th>Site</th><th>Status</th><th>Players</th><th class="ta-r">Actions</th></tr></thead>
 <tbody id="boardsBody"></tbody>
 </table>
-</div>
 <div id="boardsEmpty" class="v3-empty" hidden></div>
 </div>
 </section>

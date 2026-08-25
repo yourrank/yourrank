@@ -212,6 +212,31 @@ export function renderBoardSelect() {
   });
 }
 
+function closeRowMenus(root, { except = null, restoreFocus = false } = {}) {
+  root.querySelectorAll(".site-row-menu[open]").forEach((menu) => {
+    if (menu === except) return;
+    menu.open = false;
+    if (restoreFocus) menu.querySelector("summary")?.focus();
+  });
+}
+
+// <details> has no dismissal behaviour of its own, so the row menu needs the
+// same Escape and outside-pointer handling as any other popover.
+function wireRowMenuDismissal(body) {
+  if (body._menuWired) return;
+  body._menuWired = true;
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !body.querySelector(".site-row-menu[open]")) return;
+    event.preventDefault();
+    closeRowMenus(body, { restoreFocus: true });
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const open = body.querySelector(".site-row-menu[open]");
+    if (!open || open.contains(event.target)) return;
+    closeRowMenus(body);
+  });
+}
+
 export function renderBoardsPage() {
   const body = $("boardsBody");
   const empty = $("boardsEmpty");
@@ -224,6 +249,7 @@ export function renderBoardsPage() {
     $("boardsCreateEmpty")?.addEventListener("click", openNewBoardForm);
   } else {
     if (empty) empty.hidden = true;
+    wireRowMenuDismissal(body);
     state.BOARDS.forEach((b) => {
       const tr = document.createElement("tr");
       const isActive = b.id === state.ACTIVE_SITE_ID;
@@ -239,12 +265,12 @@ export function renderBoardsPage() {
       // "Edit" now has an address to go to, so it opens the editor rather than
       // whichever section the smart landing picks.
       tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => { requestDashboardRoute("board", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true }); });
-      tr.querySelector('[data-action="dup"]')?.addEventListener("click", () => { duplicateBoard(b.id); });
-      tr.querySelector('[data-action="del"]')?.addEventListener("click", () => { deleteBoard(b.id); });
+      tr.querySelector('[data-action="dup"]')?.addEventListener("click", () => { closeRowMenus(body); duplicateBoard(b.id); });
+      tr.querySelector('[data-action="del"]')?.addEventListener("click", () => { closeRowMenus(body); deleteBoard(b.id); });
       // Only one row menu stays open at a time.
       tr.querySelector(".site-row-menu")?.addEventListener("toggle", (e) => {
         if (!e.currentTarget.open) return;
-        body.querySelectorAll(".site-row-menu[open]").forEach((menu) => { if (menu !== e.currentTarget) menu.open = false; });
+        closeRowMenus(body, { except: e.currentTarget });
       });
       body.appendChild(tr);
     });

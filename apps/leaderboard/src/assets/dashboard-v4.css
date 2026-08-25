@@ -2208,8 +2208,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .admin-table tbody tr:last-child td { border-bottom: 0; }
 
 /* Sites list */
+/* No scroll container here: the row menu is a popover, so any ancestor
+   overflow would clip it. Narrow widths stack the rows instead. */
 .v3-dash[data-auth-workspace] .sites-list {
-  overflow: hidden;
   border: 1px solid var(--ws-line);
   border-radius: var(--ws-radius);
   background: var(--ws-surface);
@@ -2217,6 +2218,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .list-controls {
   padding: 12px 16px;
   border-bottom: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius) var(--ws-radius) 0 0;
   background: #ffffff;
 }
 .v3-dash[data-auth-workspace] .list-search {
@@ -2331,6 +2333,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 .v3-dash[data-auth-workspace] .site-row-menu-body button:hover { background: var(--ws-surface-strong); }
 .v3-dash[data-auth-workspace] .site-row-menu-body button[data-action="del"] { color: var(--ws-danger-text); }
+
 .v3-dash[data-auth-workspace] .pill--good {
   display: inline-flex;
   align-items: center;
@@ -3907,6 +3910,41 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .operator-help-actions { flex-direction: column; }
   .v3-dash[data-auth-workspace] .operator-help-actions .btn { width: 100%; }
   .v3-dash[data-auth-workspace] .savebar { inset: auto 12px 12px; }
+}
+
+/* Narrow widths: one stacked block per site, labels from the header cells,
+   so the primary action never sits outside the viewport. */
+@media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .sites-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .v3-dash[data-auth-workspace] .sites-table,
+  .v3-dash[data-auth-workspace] .sites-table tbody,
+  .v3-dash[data-auth-workspace] .sites-table tr:not([hidden]),
+  .v3-dash[data-auth-workspace] .sites-table td:not([hidden]) { display: block; width: auto; }
+  .v3-dash[data-auth-workspace] .sites-table tr {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--ws-line);
+  }
+  .v3-dash[data-auth-workspace] .sites-table tr:last-child { border-bottom: 0; }
+  .v3-dash[data-auth-workspace] .sites-table td {
+    height: auto;
+    padding: 2px 0;
+    border-bottom: 0;
+  }
+  .v3-dash[data-auth-workspace] .sites-table td[data-label="Players"]::before {
+    content: attr(data-label) ": ";
+    color: var(--ws-text-soft);
+    font-size: 12.5px;
+  }
+  .v3-dash[data-auth-workspace] .sites-table td[data-label="Players"] {
+    color: var(--ws-text-soft);
+    font-size: 12.5px;
+  }
+  .v3-dash[data-auth-workspace] .sites-table td.ta-r { text-align: left; }
+  .v3-dash[data-auth-workspace] .sites-table .site-row-actions { justify-content: flex-start; margin-top: 8px; }
+  .v3-dash[data-auth-workspace] .site-row-actions .btn--xs,
+  .v3-dash[data-auth-workspace] .site-row-menu > summary { height: 36px; min-height: 36px; }
+  .v3-dash[data-auth-workspace] .site-row-menu > summary { width: 36px; }
+  .v3-dash[data-auth-workspace] .site-row-menu-body { right: auto; left: 0; }
 }
 
 /* ==========================================================================

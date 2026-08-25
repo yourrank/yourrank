@@ -267,6 +267,37 @@ describe("presentation: the Sites list stays a list", () => {
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .site-row-menu-body");
   });
 
+  it("keeps the row menu out of any clipping or scrolling ancestor", () => {
+    // A popover inside `.v3-table-scroll` (overflow:auto) was clipped, making
+    // Delete unclickable, and the 980px `min-width: 680px` rule pushed the row
+    // actions off-screen. The Sites table must therefore stay unwrapped.
+    const sites = sitesHtml();
+    const listStart = sites.indexOf('class="sites-list"');
+    const list = sites.slice(listStart, sites.indexOf("</section>", listStart));
+    expect(list).not.toContain("v3-table-scroll");
+    expect(list).not.toContain("table-wrap");
+    expect(dashboardCss).not.toMatch(/\.sites-list\s*{[^}]*overflow:\s*hidden/);
+  });
+
+  it("dismisses the row menu on Escape and on an outside pointer", () => {
+    expect(boardsJs).toContain("wireRowMenuDismissal");
+    const dismissal = boardsJs.slice(
+      boardsJs.indexOf("function wireRowMenuDismissal"),
+      boardsJs.indexOf("export function renderBoardsPage"),
+    );
+    expect(dismissal).toContain('"keydown"');
+    expect(dismissal).toContain('event.key !== "Escape"');
+    expect(dismissal).toContain('"pointerdown"');
+  });
+
+  it("stacks the rows instead of scrolling them sideways at narrow widths", () => {
+    const narrow = dashboardCss.slice(dashboardCss.indexOf(".v3-dash[data-auth-workspace] .sites-table thead {"));
+    expect(narrow).toContain("display: block");
+    // Hidden rows must stay hidden while filtering.
+    expect(narrow).toContain("tr:not([hidden])");
+    expect(narrow).toContain('td[data-label="Players"]::before');
+  });
+
   it("keeps an empty, searching and error surface for the list", () => {
     // Every asynchronous list state has somewhere to render.
     expect(sitesHtml()).toContain('id="boardsEmpty" class="v3-empty" hidden');
