@@ -1,5 +1,5 @@
 import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
-import { openDrawer, closeDrawer, requestDashboardRoute } from "./dashboard/shell.js";
+import { requestDashboardRoute } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
 import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricEmpty, setMetricLoading, setRowsLoading } from "./dashboard/states.js";
@@ -202,11 +202,6 @@ function statusChip(status) {
     cancelled: ["cancelled", "×", "Cancelled"],
   }[status] || ["pending", "◷", "Pending"];
   return `<span class="v3-chip v3-chip--${meta[0]}"><i aria-hidden="true">${meta[1]}</i> ${meta[2]}</span>`;
-}
-function wireShell() {
-  const backdrop = document.querySelector(".lb-backdrop") || document.body.appendChild(Object.assign(document.createElement("div"), { className: "lb-backdrop" }));
-  $("lbMenu")?.addEventListener("click", () => openDrawer()); document.querySelector("[data-close-side]")?.addEventListener("click", () => closeDrawer()); backdrop.addEventListener("click", () => closeDrawer());
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("lbSide")?.classList.contains("is-open")) closeDrawer(); });
 }
 const metric = (value) => value == null ? UNKNOWN : value;
 function renderRewardRow(m) {
@@ -770,7 +765,6 @@ function renderHistory(data) {
   }
 }
 if ($("cr-app") && !window.__yrSpaShell) {
-  wireShell();
   wireActions();
   load().then(() => window.__yrBoot?.signal()).catch(() => {});
 }
@@ -795,7 +789,6 @@ export function enter() {
   shopItemsView = [];
   shopSearch = "";
   shopSort = "cost";
-  wireShell();
   wireActions();
   load().then(() => window.__yrBoot?.signal()).catch(() => {});
 }

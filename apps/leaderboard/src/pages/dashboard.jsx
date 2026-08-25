@@ -14,7 +14,7 @@ export const dashboardConfig = {
   title: DEFAULT_DASHBOARD_TITLE,
   canonical: "https://yourrank.site/dashboard",
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/dashboard.js?v=15" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=2" defer></script>'],
+  scripts: ['<script src="/assets/dashboard.js?v=15" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
   nav: false,
   footer: false,
   wide: true,
@@ -557,7 +557,7 @@ export function DashboardNotFoundContent({ user } = {}) {
 export const dashboardNotFoundConfig = {
   ...dashboardConfig,
   title: "Dashboard page not found · YourRank",
-  scripts: ['<script src="/assets/shell-nav.js?v=2" defer></script>'],
+  scripts: ['<script src="/assets/shell-nav.js?v=3" defer></script>'],
   bootWatchdog: false,
   configFor: undefined,
 };

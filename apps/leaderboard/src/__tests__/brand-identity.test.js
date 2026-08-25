@@ -80,7 +80,6 @@ describe("brand identity", () => {
       "packages/shared/src/page-shell.ts",
       "packages/shared/src/dashboard-chrome.ts",
       "apps/leaderboard/src/pages/viewer-dashboard.js",
-      "apps/leaderboard/src/pages/dashboard-shell.jsx",
       "apps/leaderboard/src/middleware/seo.js",
       "apps/web/src/components/site-shell.tsx",
       "apps/web/src/components/home/workspace-preview.tsx",

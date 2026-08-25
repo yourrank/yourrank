@@ -23,7 +23,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
   const activeLabel = SETTINGS_TABS.find(([key]) => key === active)?.[1] || "Account";
   const content = <div class="account-body account-settings" id="acc-app" data-acc-tab="settings" data-settings-active={active}>
       <div class="account-settings-head">
-        <h1>{activeLabel}</h1>
+        <h1 data-chrome-h1>{activeLabel}</h1>
         <p class="card-sub">Account settings apply to you. To change your website, use Site settings.</p>
       </div>
       <nav class="v3-tabs account-settings-tabs" aria-label="Account settings sections">
@@ -60,7 +60,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
 
 const settingsConfigBase = {
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=2" defer></script>'],
+  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
   nav: false,
   footer: false,
   wide: true,

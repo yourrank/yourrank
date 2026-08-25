@@ -4,7 +4,7 @@ import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmMod
 import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
-import { openDrawer, closeDrawer, registerRouteRenderer, requestDashboardRoute } from "./dashboard/shell.js";
+import { registerRouteRenderer, requestDashboardRoute, syncRouteChrome } from "./dashboard/shell.js";
 import { renderReferrals } from "./dashboard/referrals.js";
 import { checkout, renderPlan, loadHistory, loadPlanUsage, wireCancelSubscription } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
@@ -245,7 +245,9 @@ function wireUnifiedSettingsTabs() {
     // Standalone document: the persistent shell's popstate handling is not
     // installed, so Back/Forward is repainted here.
     _accountPopstate = () => {
-      select(parseDynamicPath(location.pathname)?.tab || "account");
+      const tab = parseDynamicPath(location.pathname)?.tab || "account";
+      select(tab);
+      syncRouteChrome("settings", tab);
     };
     addEventListener("popstate", _accountPopstate);
   }
@@ -322,23 +324,6 @@ function renderConnectedAccounts(data) {
 async function loadConnectedAccounts() {
   const r = await jsonReq("GET", "/api/account/connected-accounts");
   renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" });
-}
-
-// The account sidebar becomes an off-canvas drawer under 980px, so the section
-// nav needs the same open/close wiring the dashboard shell does.
-function wireSectionDrawer() {
-  let backdrop = document.querySelector(".lb-backdrop");
-  if (!backdrop) {
-    backdrop = document.createElement("div");
-    backdrop.className = "lb-backdrop";
-    document.body.appendChild(backdrop);
-  }
-  backdrop.addEventListener("click", () => closeDrawer());
-  document.querySelectorAll(".lb-menu").forEach((btn) => btn.addEventListener("click", (e) => { e.stopPropagation(); openDrawer(); }));
-  document.querySelectorAll("[data-close-side]").forEach((btn) => btn.addEventListener("click", () => closeDrawer()));
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && $("lbSide")?.classList.contains("is-open")) { e.preventDefault(); closeDrawer(); }
-  });
 }
 
 function renderTeam(data) {
@@ -583,7 +568,6 @@ function wireTeam() {
 }
 
 async function init() {
-  wireSectionDrawer();
   let me;
   try {
     me = await getMe();

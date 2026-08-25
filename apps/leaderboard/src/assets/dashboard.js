@@ -170,10 +170,6 @@ async function init() {
   state.SAVED_PLAYERS = state.PLAYERS.map((player) => ({ ...player }));
   document.querySelectorAll("a[href]").forEach((link) => {
     if (!state.ACTIVE_SITE_ID) return;
-    if (link.dataset.productLink === "sites") {
-      link.href = `/dashboard/leaderboards?board=${encodeURIComponent(state.ACTIVE_SITE_ID)}`;
-      return;
-    }
     const target = new URL(link.getAttribute("href"), location.origin);
     const creditsPath = target.pathname.startsWith("/dashboard/rewards/") || target.pathname === "/dashboard/site/connections";
     const sitePath = target.pathname === "/dashboard" || target.pathname === "/dashboard/leaderboards" || target.pathname === "/dashboard/leaderboard" || target.pathname === "/dashboard/games" || target.pathname === "/dashboard/site" || target.pathname.startsWith("/dashboard/leaderboard/") || target.pathname.startsWith("/dashboard/analytics/");
@@ -369,10 +365,6 @@ async function init() {
       e.preventDefault();
       const saveBtn = document.getElementById("save");
       if (saveBtn && !saveBtn.disabled && !saveBtn.hidden) saveBtn.click();
-    }
-    // Escape: Close drawer
-    if (e.key === "Escape") {
-      import("./dashboard/shell.js").then(m => m.closeDrawer(false));
     }
   });
 

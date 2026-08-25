@@ -15,10 +15,6 @@ export const sitePath = (path, explicitSiteId = "") => {
 export function preserveSiteContextLinks(activeSiteId = "") {
   const siteId = siteQuery() || activeSiteId;
   if (!siteId) return;
-  const sitesLink = document.querySelector('[data-product-link="sites"]');
-  if (sitesLink) sitesLink.href = `/dashboard/leaderboards?board=${encodeURIComponent(siteId)}`;
-  const creditsLink = document.querySelector('[data-product-link="credits"]');
-  if (creditsLink) creditsLink.href = `/dashboard/rewards?siteId=${encodeURIComponent(siteId)}`;
   const creditsDestinations = new Set([
     "/dashboard/rewards",
     "/dashboard/rewards/redemptions",

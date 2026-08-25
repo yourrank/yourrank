@@ -109,11 +109,18 @@ export interface ChromeOpts {
   nav: NavItem[];
   active: string;
   navLabel?: string;
+  /** Override the shell root identity for callers with a distinct document. */
+  rootId?: string;
+  rootHidden?: boolean;
+  identity?: string;
   /** Rail header: label above a name (e.g. "Telegram" / the streamer). */
   headLabel?: string;
   headName?: string;
   headMeta?: string;
   railHeadHtml?: string;
+  sideLabel?: string;
+  /** Context markup rendered between the menu button and topbar actions. */
+  topbarContextHtml?: string;
   topbarHtml?: string;
   title?: string;
   titleId?: string;
@@ -131,13 +138,21 @@ export interface ChromeOpts {
   collapsible?: boolean;
   /** The surrounding document already provides the main landmark. */
   embeddedInMain?: boolean;
+  /** Render crumbs and content directly inside the bento without a stack. */
+  stack?: boolean;
+  contentId?: string;
+  overlaysHtml?: string;
+  /** Add profile-name hooks used by the browser shell's identity updater. */
+  dynamicIdentity?: boolean;
   content: string;
 }
 
 /**
- * The whole signed-in shell as a string, for Workers that render HTML without
- * JSX (the bot). The leaderboard's `DashboardShell` renders the same rail and
- * topbar from `navListHtml` / `profileMenuHtml`.
+ * The one source of authenticated dashboard shell structure. Every signed-in
+ * surface renders through here: the bot Worker's Telegram documents, the
+ * leaderboard's `DashboardShell` adapter, and signed-in Help. Products supply
+ * their own body, rail head, topbar context and overlays as slots; the tree,
+ * its ids and its `data-shell-*` markers belong to this function.
  */
 export function dashboardChromeHtml(opts: ChromeOpts): string {
   const profile = profileMenuHtml({
@@ -145,6 +160,7 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
     user: opts.user,
     logoutAction: opts.logoutAction,
     standalone: true,
+    dynamicIdentity: opts.dynamicIdentity,
   });
   const head = opts.railHeadHtml || (opts.headLabel || opts.headName
     ? `<div class="lb-side-head"><span class="label">${esc(opts.headLabel || "")}</span>` +
@@ -160,21 +176,31 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
     : "";
   const sideProfile = opts.railProfile ? `<div class="lb-side-profile">${profile}</div>` : "";
   const topProfile = opts.railProfile ? "" : `<div class="gm-profile-host">${profile}</div>`;
-  const collapse = opts.collapsible
-    ? `<button class="lb-side-collapse" type="button" aria-label="Collapse navigation" aria-pressed="false" aria-controls="lbSide" data-collapse-side>${COLLAPSE_ICON}</button>`
-    : "";
+  const contentId = opts.contentId || (opts.embeddedInMain ? "workspace-content" : "main-content");
   const contentOpen = opts.embeddedInMain
-    ? '<div class="lb-bento" id="workspace-content">'
-    : '<main class="lb-bento" id="main-content">';
+    ? `<div class="lb-bento" id="${esc(contentId)}">`
+    : `<main class="lb-bento" id="${esc(contentId)}">`;
   const contentClose = opts.embeddedInMain ? "</div>" : "</main>";
+  const contentBody = opts.stack === false
+    ? `${crumbs}${opts.content}`
+    : `<div class="v3-stack">\n${title}\n${opts.content}\n</div>`;
+  const topbarContext = opts.topbarContextHtml ? `${opts.topbarContextHtml}\n` : "";
+  const overlays = opts.overlaysHtml ? `${opts.overlaysHtml}\n` : "";
+  const rootId = opts.rootId || "dash";
+  const rootIdentity = opts.identity ? ` data-identity="${esc(opts.identity)}"` : "";
+  const rootHidden = opts.rootHidden ? ' hidden=""' : "";
+  const sideLabel = opts.sideLabel || `${opts.navLabel || "Dashboard"} sections`;
   // The workspace attribute is inherent to this shell: every stylesheet rule for
   // the rail, topbar and bento is scoped to `.v3-dash[data-auth-workspace]`, so
   // rendering it without the attribute produces unstyled workspace markup.
-  return `<div class="v3-dash" id="dash" data-auth-workspace="true" data-shell-drawer="shared">
+  const collapse = opts.collapsible
+    ? `<button class="lb-side-collapse" type="button" aria-label="Collapse navigation" aria-pressed="false" aria-controls="lbSide" data-collapse-side>${COLLAPSE_ICON}</button>`
+    : "";
+  return `<div class="v3-dash" id="${esc(rootId)}" data-auth-workspace="true"${rootIdentity} data-shell-drawer="shared"${rootHidden}>
 ${DESIGN_CONTRACT}
 <div class="toast" id="status" role="status" aria-live="polite"></div>
 <div class="lb-shell">
-<aside class="lb-side" id="lbSide" aria-label="${esc(opts.navLabel || "Dashboard")} sections">
+<aside class="lb-side" id="lbSide" aria-label="${esc(sideLabel)}">
 <div class="lb-side-brandrow">
 <a class="lb-side-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-side-brandcopy"><b>YourRank</b><small>Creator workspace</small></span></a>
 ${collapse}
@@ -189,15 +215,12 @@ ${sideProfile}
 <header class="lb-topbar" id="lbTopbar">
 <button class="lb-menu lb-topbar-menu" id="lbMenu" type="button" aria-label="Show sections" aria-expanded="false" aria-controls="lbSide">${MENU_ICON}</button>
 ${opts.railProfile ? "" : `<a class="lb-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-brand-txt">YourRank</span></a>`}
-<div class="lb-topbar-actions">${opts.topbarHtml || topProfile}</div>
+${topbarContext}<div class="lb-topbar-actions">${opts.topbarHtml || topProfile}</div>
 </header>
 ${contentOpen}
-<div class="v3-stack">
-${title}
-${opts.content}
-</div>
+${contentBody}
 ${contentClose}
-</div>
+${overlays}</div>
 </div>
 </div>`;
 }
