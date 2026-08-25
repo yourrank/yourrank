@@ -150,7 +150,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).toContain('id="gw-winner-stage" role="status" aria-live="polite"');
     expect(giveawaysHtml).toContain('id="gw-roller-track" aria-hidden="true"');
     expect(giveawaysCssSource).toContain(".gw-roller-track--spinning");
-    expect(giveawaysCssSource).toContain("color: var(--v4-success)");
+    expect(giveawaysCssSource).toContain("color: var(--ws-success)");
     expect(giveawaysCssSource).toContain("@media (prefers-reduced-motion: reduce)");
     expect(giveawaysCssSource).toContain(".gw-winner-stage");
     expect(giveawaysCssSource).toContain(".gw-winner-crown");

@@ -266,6 +266,131 @@ Leaderboard rows, reward catalogs, KPI bands, workflow steps, and operational ta
 
 **The State Before Action Rule.** When state affects a decision, show the truthful state immediately beside or before the action—published before Publish site, draft before Send, queued before Complete.
 
+## Authenticated Workspace Contract
+
+Everything above is the suite language. This section is the enforced contract for the authenticated
+workspace — every surface inside `.v3-dash[data-auth-workspace]`, which is both the leaderboard dashboard
+and the bot Worker's Telegram dashboard documents. It is executable: the tokens named here are defined once,
+in the `ws-token-contract` block of `apps/leaderboard/src/assets/dashboard-v4.css`, and
+`apps/leaderboard/src/__tests__/tokens.test.js` fails when a second definition, a second palette or a second
+spacing scale appears. A workspace rule that hardcodes a value this contract names is a defect, not a style choice.
+
+### Feel
+
+Calm, modern, confident, creator-focused. The audience is streamers and their operators, not engineers:
+approachable, non-technical, visually restrained. An operator often works mid-stream, on a second screen, in a
+dark room, deciding one thing quickly. Within seconds a screen must answer where I am, what matters now, and
+what I can do next.
+
+### Hierarchy
+
+Content outranks chrome — the production rail and top bar are quiet, and the working field carries the weight.
+Every surface has exactly one obvious primary action; secondary controls recede to ghost or text treatment;
+destructive actions are never the visual peer of the primary one. Advanced and rare controls are progressively
+disclosed (a details panel, a secondary tab, an "Advanced" group) rather than presented alongside the common path.
+
+### Typography roles
+
+Six roles, each a token pair. A raw `font-size` in a workspace rule is drift.
+
+| Role | Token | Value | Used for |
+| --- | --- | --- | --- |
+| Page title | `--ws-type-page-size` / `-leading` | 34 / 40px | The one H1 per route |
+| Section title | `--ws-type-section-size` / `-leading` | 20 / 28px | H2, section heads |
+| Card title | `--ws-type-card-size` / `-leading` | 17 / 24px | Module and card headings |
+| Body | `--ws-type-body-size` / `-leading` | 15 / 22.5px | Interface and explanatory copy |
+| Meta | `--ws-type-meta-size` / `-leading` | 13 / 18px | Supporting state, compact UI text |
+| Label | `--ws-type-label-size` / `-leading` | 11 / 16px | Uppercase mono labels that encode real scope or state |
+
+Families are `--ws-sans` (Inter) and `--ws-mono`. Numbers and data may take the mono family where it improves
+scanning; mono is never decoration.
+
+### Spacing
+
+`--ws-space-1` 4px, `-2` 8px, `-3` 12px, `-4` 16px, `-5` 20px, `-6` 24px, `-7` 32px, `-8` 48px. This is the only
+spacing vocabulary in the workspace; there is no second scale and no off-scale value. Rhythm comes from
+whitespace first — reach for space before a border, and for a border before a container.
+
+### Surfaces
+
+- `--ws-canvas` — the page field everything sits on.
+- `--ws-surface` — a raised reading surface: a module, a table card, an overlay.
+- `--ws-surface-soft` / `--ws-surface-strong` — inset and selected regions inside a surface.
+- `--ws-line` / `--ws-line-strong` — the hairline that does most grouping work; `-strong` only where a boundary
+  must survive against a soft fill.
+- `--ws-chrome`, `--ws-chrome-raised`, `--ws-chrome-line`, `--ws-chrome-text`, `--ws-chrome-text-soft` — the
+  production rail and any other unmistakable dark chrome.
+
+**When to use no container at all.** A container must justify itself. One list, one form or one explanation on a
+page needs a heading and space, not a box. Related items share one outer boundary and separate with hairlines
+instead of becoming a stack of nested cards, and a card inside a card is always wrong.
+
+### Radii
+
+`--ws-radius-sm` 8px for controls, fields and compact objects; `--ws-radius` 14px for modules and overlays;
+`--ws-radius-pill` for genuinely compact status and navigation objects only. Nothing else. Corners encode scale
+and role, so a pill-shaped panel or a 24px-radius module is drift.
+
+### Colour
+
+Neutral surfaces dominate; the workspace is mostly canvas, surface, line and text. `--ws-accent` (electric
+violet, with `--ws-accent-hover`, `--ws-accent-soft`, `--ws-accent-line`, `--ws-accent-text` and
+`--ws-accent-on-chrome`) is the single action and focus accent — if an accent-coloured thing is not an action,
+a focus cue or the current location, the colour is decoration and must go. Semantic state uses
+`--ws-success*`, `--ws-warning*`, `--ws-danger*` and `--ws-info*`, always paired with words, never colour alone.
+Decorative gradients are not part of the workspace language; the only gradient in the product is the wordmark.
+
+### Shadows
+
+`--ws-shadow` for a surface that genuinely needs separation and `--ws-shadow-overlay` for temporary layers —
+dialogs, menus, drawers. Borders, tonal shifts and spacing do the rest. A resting card has no shadow.
+
+### Interaction states
+
+Every interactive element defines all of these, and none of them may be communicated by colour alone:
+
+- **Hover** — a tonal shift, never a layout shift.
+- **Active** — the control settles; it does not float.
+- **Focus-visible** — one treatment for the whole workspace: `--ws-focus-width` solid `--ws-focus` at
+  `--ws-focus-offset`. Per-component focus rings are drift; a component may only override the offset, and only
+  when the ring would otherwise be clipped.
+- **Disabled** — footprint preserved, opacity lowered, cursor changed, still legible.
+- **Loading** — the element keeps its size and exposes busy state semantically (`aria-busy`), so nothing jumps.
+- **Selected** — `--ws-surface-strong` fill or an accent inset cue, plus `aria-current` or `aria-selected`.
+- **Destructive** — `--ws-danger` text and border on a neutral fill, never a filled red primary button.
+
+Controls are `--ws-control-h` (40px) tall, rising to `--ws-control-h-touch` (44px) on coarse pointers, and
+motion respects `prefers-reduced-motion`.
+
+### Density
+
+Low to moderate. This is an operator tool for non-technical creators, not a trading terminal: fewer things per
+screen, more room around each, and naturally tabular information rendered as a list or table rather than as a
+wall of tiles. Copy names the visible outcome — "Connect Kick", not "Configure integration".
+
+### References
+
+Quality references, not layouts or brands to copy — nothing here should make the product look like another
+company's app. Linear for precision, hierarchy, spacing restraint, navigation clarity and interaction polish;
+Stripe for form and settings clarity; Notion for approachable simplicity; Raycast for interaction polish;
+Resend for restrained data presentation; Vercel for clean status and settings surfaces.
+
+### Where the workspace differs from the suite frontmatter
+
+The frontmatter above describes the marketing and public language. The workspace intentionally diverges:
+its canvas is the warm `#f3f3ef` rather than a white field (long sessions, less glare), its control radius is
+8px rather than near-square, its module radius is 14px, and its ink is `#141414`. The frontmatter's
+`rounded.control: 2px` currently matches neither layer — marketing is predominantly 6px — which is recorded
+debt for whichever PR owns the marketing surfaces, not something the workspace should copy.
+
+### Accepted debt (not fixed by the foundation PR)
+
+Honest state of the implementation, so nobody reads this contract as a description of the current CSS:
+class names still carry `v3`/`v4` generation labels; roughly 670 spacing declarations and 250 font sizes in the
+workspace sheet are still raw px, including 11.5/12.5/13.5px one-offs; `app.css`'s legacy dark base palette is
+still the fallback layer beneath the workspace. The gate ratchets those counts downward — later Wave 3 PRs
+lower them as they touch each surface.
+
 ## Do's and Don'ts
 
 ### Do:

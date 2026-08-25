@@ -112,14 +112,14 @@ describe("authenticated dashboard v4 contract", () => {
         selectors: selectors.split(",").map((selector) => selector.trim()),
         declarations,
       }))
-      .filter(({ selectors }) => selectors.includes(collapsedRoot));
-    const sizingDeclarations = ruleBlocks
+      .filter(({ selectors }) => selectors.some((selector) => selector === collapsedRoot));
+    const rootSizingDeclarations = ruleBlocks
       .map(({ declarations }) => declarations)
       .filter((declarations) => /\b(?:width|height|overflow)\s*:/.test(declarations));
 
-    // The shell root carries the rail-width token; child rail controls own icon sizing.
-    expect(sizingDeclarations).toEqual([]);
-    expect(ruleBlocks.some(({ declarations }) => /--v3-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
+    // The shell root carries no responsive sizing; the child rail owns its width.
+    expect(rootSizingDeclarations).toEqual([]);
+    expect(css).toContain(`${collapsedRoot} .lb-side {\n    width: 44px;`);
   });
 
   it("keeps mobile top-bar controls on the light surface and allows reflow", () => {
@@ -127,26 +127,25 @@ describe("authenticated dashboard v4 contract", () => {
     const menuRule = [...css.matchAll(/\.v3-dash\[data-auth-workspace\] \.lb-topbar-menu\s*\{([^{}]*)\}/g)]
       .map(([, declarations]) => declarations)
       .join("\n");
-    expect(menuRule).toContain("var(--v4-line)");
-    expect(menuRule).toContain("var(--v4-surface)");
-    expect(menuRule).toContain("var(--v4-ink)");
-    expect(menuRule).not.toContain("var(--v3-chrome-line-2)");
-    expect(menuRule).not.toContain("var(--v3-chrome-2)");
+    expect(menuRule).toContain("var(--ws-line)");
+    expect(menuRule).toContain("var(--ws-surface)");
+    expect(menuRule).toContain("var(--ws-text)");
+    expect(menuRule).not.toContain("var(--ws-chrome-line-strong)");
+    expect(menuRule).not.toContain("var(--ws-chrome-raised)");
     expect(baseTopbar).toContain("position: sticky");
     expect(baseTopbar).toContain("top: 0");
-    expect(baseTopbar).toContain("margin-inline: calc(-1 * var(--v3-main-pad-inline))");
+    expect(baseTopbar).toContain("margin-inline: calc(-1 * var(--ws-main-pad-inline))");
     expect(baseTopbar).not.toContain("position: fixed");
     expect(baseTopbar).not.toContain("inset:");
     expect(baseTopbar).toContain("box-sizing: border-box");
-    expect(baseTopbar).toContain("background: var(--v4-surface)");
+    expect(baseTopbar).toContain("background: var(--ws-surface)");
     expect(baseTopbar).not.toMatch(/\b(?:top|left|right|width|margin|box-sizing)\s*:[^;]*!important/);
     const narrowStart = css.indexOf("@media (max-width: 700px) {");
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
-    expect(narrowShell).toContain("--v3-topbar-h: 153px");
-    expect(narrowShell).toContain("height: var(--v3-topbar-h)");
-    expect(narrowShell).toContain("min-height: var(--v3-topbar-h)");
-    expect(narrowShell).toContain("--v3-main-pad-inline: 16px");
+    expect(narrowShell).toContain("height: 153px");
+    expect(narrowShell).toContain("min-height: 153px");
+    expect(narrowShell).toContain("padding-inline: 16px");
     expect(narrowShell).toContain("padding-bottom: 48px");
     expect(narrowShell).toContain("lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }");
     expect(narrowShell).not.toContain("min-height: 112px");
