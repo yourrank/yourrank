@@ -164,6 +164,35 @@ describe("authenticated dashboard v4 contract", () => {
     expect(devinTopbar).not.toMatch(/rgba\s*\(/);
   });
 
+  // A hardcoded `margin-inline: -24px` on the narrow top bar bled 8px past the
+  // 16px page gutter, so the document scrolled sideways below 700px. Every
+  // full-bleed offset has to be derived from the gutter token it cancels.
+  it("bleeds the top bar by exactly the workspace page gutter", () => {
+    const topbarBlocks = [...css.matchAll(/\.lb-topbar\s*\{([^{}]*)\}/g)].map(([, declarations]) => declarations);
+    expect(topbarBlocks.length).toBeGreaterThan(1);
+    for (const declarations of topbarBlocks) {
+      const inlineOffsets = [...declarations.matchAll(/margin(?:-inline|-left|-right)?\s*:([^;]+)/g)].map(([, value]) => value.trim());
+      for (const value of inlineOffsets) {
+        if (!value.includes("-")) continue;
+        expect(value).toContain("calc(-1 * var(--ws-main-pad-inline))");
+      }
+      const inlinePadding = [...declarations.matchAll(/padding(?:-inline)?\s*:([^;]+)/g)].map(([, value]) => value.trim());
+      for (const value of inlinePadding) {
+        expect(value).toContain("var(--ws-main-pad-inline)");
+      }
+    }
+  });
+
+  // dashboard-v4.css owns the authenticated shell; the Devin material layer kept
+  // a second rail background and a second selected-navigation paint that fought
+  // it on every workspace page.
+  it("keeps authenticated shell chrome out of the material layer", () => {
+    expect(devinSystemCss).not.toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-side\b/);
+    expect(devinSystemCss).not.toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-nav\b/);
+    expect(devinSystemCss).not.toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-main\b/);
+    expect(devinSystemCss).not.toMatch(/body:has\(\.v3-dash\[data-auth-workspace\]\)/);
+  });
+
   it("does not retain selectors proven unused in the dashboard source tree", () => {
     expect(css).not.toMatch(/\.lb-board-new-side\b/);
     expect(css).not.toMatch(/\.lb-board-add\b/);

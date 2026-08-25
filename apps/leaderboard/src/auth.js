@@ -115,7 +115,7 @@ export { hasLegacyCookie, cookieClearLegacy };
 // Loads the full user row from Postgres for a resolved user id.
 const loadUser = (env, uid) =>
     one(
-      `SELECT id, email, plan,
+      `SELECT id, email, display_name, plan,
               (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at,
               status, is_admin, email_verified,
               telegram_user_id, telegram_username,

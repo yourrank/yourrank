@@ -257,8 +257,8 @@ function wireUnifiedSettingsTabs() {
 function setUserName() {
   const userName = $("accUserName");
   const email = state.ME?.email || "";
-  const name = state.ME?.display_name || (email ? email.split("@")[0] : "Account");
-  if (userName && state.ME) userName.textContent = state.ME.display_name || email || "Account";
+  const name = state.ME?.displayName || (email ? email.split("@")[0] : "Account");
+  if (userName && state.ME) userName.textContent = state.ME.displayName || email || "Account";
 
   const sumName = $("accSummaryName");
   if (sumName && state.ME) sumName.textContent = name;

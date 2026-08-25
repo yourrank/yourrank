@@ -106,7 +106,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --ws-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
   --ws-shadow-overlay: 0 16px 48px rgba(18, 17, 17, 0.14);
   --ws-sidebar-w: 272px;
-  --ws-topbar-h: 76px;
+  --ws-topbar-h: 64px;
   --ws-main-pad-inline: 32px;
   --ws-control-h: 40px;
   --ws-control-h-touch: 44px;
@@ -335,21 +335,22 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-topbar-menu {
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
   padding: 0;
-  border: 1px solid var(--ws-chrome-line);
+  border: 1px solid transparent;
   border-radius: var(--ws-radius-sm);
   background: transparent;
   color: var(--ws-chrome-text-soft);
   cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 .v3-dash[data-auth-workspace] .lb-side-collapse:hover,
-.v3-dash[data-auth-workspace] .lb-side-close:hover { border-color: rgba(255,255,255,0.24); background: var(--ws-chrome-raised); color: #ffffff; }
+.v3-dash[data-auth-workspace] .lb-side-close:hover { border-color: var(--ws-chrome-line); background: var(--ws-chrome-raised); color: var(--ws-chrome-text); }
 .v3-dash[data-auth-workspace] .lb-side-collapse svg,
 .v3-dash[data-auth-workspace] .lb-side-close svg,
-.v3-dash[data-auth-workspace] .lb-topbar-menu svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.v3-dash[data-auth-workspace] .lb-topbar-menu svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .v3-dash[data-auth-workspace] .lb-side-close { display: none; position: static; }
 
 .v3-dash[data-auth-workspace] .lb-side-head { display: none; }
@@ -506,59 +507,86 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   background: rgba(255, 255, 255, 0.32);
 }
 .v3-dash[data-auth-workspace] .lb-nav {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 0 0 34px;
+  flex: 0 0 auto;
   min-width: 0;
+  height: 36px;
   padding: 0 10px;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: var(--ws-radius-sm);
-  color: var(--ws-text-mute);
+  color: var(--ws-chrome-text-soft);
   font-size: 13.5px;
   font-weight: 500;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
-  transition: all 140ms ease;
-  height: 40px;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+.v3-dash[data-auth-workspace] .lb-nav-group {
+  margin-top: var(--ws-space-2);
 }
 .v3-dash[data-auth-workspace] .lb-nav-group-label {
-  padding: 12px 10px 4px;
+  padding: 8px 10px 4px;
   color: var(--ws-chrome-text-soft);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+/* The hairline is the whole "these apply to the selected site" statement: the
+   group reads as one branch of the rail instead of an explanatory panel. */
 .v3-dash[data-auth-workspace] .lb-nav-group-items {
   display: grid;
   gap: 2px;
+  margin-left: 19px;
+  padding-left: 8px;
+  border-left: 1px solid var(--ws-chrome-line);
 }
 .v3-dash[data-auth-workspace] .lb-nav-child {
-  padding-left: 28px;
+  padding-left: 8px;
 }
 .v3-dash[data-auth-workspace] .lb-nav:hover {
-  border-color: rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--ws-surface-soft);
+  background: var(--ws-chrome-raised);
+  color: var(--ws-chrome-text);
 }
+/* Selected destination: Raised Production Black plus a narrow violet inset cue,
+   never a filled accent row — the rail has to recede behind the work area. */
 .v3-dash[data-auth-workspace] .lb-nav.is-on,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"] {
-  border-color: var(--ws-accent);
-  background: var(--ws-accent);
-  color: #ffffff;
+  border-color: var(--ws-chrome-line);
+  background: var(--ws-chrome-raised);
+  color: var(--ws-chrome-text);
   font-weight: 600;
-  box-shadow: 0 6px 18px -8px rgb(var(--ws-accent-rgb) / 0.7);
+  box-shadow: none;
 }
 .v3-dash[data-auth-workspace] .lb-nav.is-on::before,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"]::before {
-  display: none !important;
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2px;
+  height: 16px;
+  transform: translateY(-50%);
+  border-radius: 1px;
+  background: var(--ws-accent-on-chrome);
 }
 .v3-dash[data-auth-workspace] .lb-nav.is-on .lb-nav-ic,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"] .lb-nav-ic {
-  color: #ffffff;
+  color: var(--ws-accent-on-chrome);
+}
+/* Touch input gets full-size rows without inflating the pointer-precise rail. */
+@media (pointer: coarse) {
+  .v3-dash[data-auth-workspace] .lb-nav,
+  .v3-dash[data-auth-workspace] .lb-side-close,
+  .v3-dash[data-auth-workspace] .lb-side-collapse,
+  .v3-dash[data-auth-workspace] .lb-topbar-menu {
+    min-height: var(--ws-control-h-touch);
+  }
 }
 .v3-dash[data-auth-workspace] .lb-nav-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 0; background: transparent; color: currentColor; }
 .v3-dash[data-auth-workspace] .lb-nav-ic svg { width: 17px; height: 17px; }
@@ -701,7 +729,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   height: var(--ws-topbar-h);
   margin: 0 calc(-1 * var(--ws-main-pad-inline));
   padding: 0 var(--ws-main-pad-inline);
@@ -727,7 +755,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   flex: 1 1 auto;
   margin: 0;
 }
-.v3-dash[data-auth-workspace] .lb-site-command { position: relative; display: flex; align-items: center; gap: 12px; width: min(100%, 620px); min-width: 0; }
+.v3-dash[data-auth-workspace] .lb-site-command { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .v3-dash[data-auth-workspace] .board-upsell {
   position: absolute;
   top: calc(100% + 10px);
@@ -752,9 +780,8 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-topbar-hud .lb-board-select-wrap,
 .v3-dash[data-auth-workspace] .lb-board-select-wrap {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   height: auto;
   padding: 0;
@@ -762,22 +789,20 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  align-items: center;
 }
 .v3-dash[data-auth-workspace] .lb-board-select-lbl {
+  flex: 0 0 auto;
+  margin: 0;
   color: var(--ws-text-soft);
-  font-size: 9px;
-  font-weight: 700;
+  font: 500 10px/1 var(--ws-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  line-height: 1;
-  margin: 0;
-  font: 500 11px var(--ws-mono);
+  white-space: nowrap;
 }
 .v3-dash[data-auth-workspace] .lb-board-select-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .v3-dash[data-auth-workspace] .lb-topbar-hud .lb-board-select,
 .v3-dash[data-auth-workspace] .lb-board-select {
-  width: clamp(130px, 16vw, 210px);
+  width: clamp(120px, 15vw, 200px);
   min-height: 32px;
   height: 32px;
   padding: 0 28px 0 10px;
@@ -791,10 +816,10 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   background-repeat: no-repeat;
   background-position: right 8px center;
   cursor: pointer;
-  transition: border-color 140ms ease, box-shadow 140ms ease; flex: 1;
-  min-width: 180px;
-  font-size: 15px;
-  font-weight: 600;
+  transition: border-color 140ms ease;
+  flex: 0 1 auto;
+  min-width: 0;
+  text-overflow: ellipsis;
 }
 .v3-dash[data-auth-workspace] .lb-topbar-hud .lb-board-select:hover,
 .v3-dash[data-auth-workspace] .lb-board-select:hover { border-color: var(--ws-chrome-text-soft); }
@@ -819,24 +844,27 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   gap: 10px;
 }
 .v3-dash[data-auth-workspace] .lb-availability .lb-status { order: 0; }
+/* Publish is the one dominant top-bar action; "View site" reads as its quiet
+   sibling so the row has a single obvious primary. */
 .v3-dash[data-auth-workspace] .lb-availability .lb-live-link {
   order: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1px solid var(--ws-accent);
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line-strong);
   border-radius: var(--ws-radius-sm);
-  background: var(--ws-accent);
-  color: var(--ws-accent-text);
+  background: var(--ws-surface);
+  color: var(--ws-text-soft);
   font: 600 13px/1 var(--ws-sans);
   text-decoration: none;
   white-space: nowrap;
 }
 .v3-dash[data-auth-workspace] .lb-availability .lb-live-link:hover {
-  border-color: var(--ws-accent-hover);
-  background: var(--ws-accent-hover);
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
 }
 .v3-dash[data-auth-workspace] .lb-availability .lb-publish-action { order: 2; }
 .v3-dash[data-auth-workspace] .lb-availability .lb-status--live,
@@ -859,10 +887,11 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 38px;
-  width: clamp(190px, 20vw, 280px);
-  padding: 0 14px;
-  border: 1px solid var(--ws-line-strong);
+  height: 34px;
+  width: clamp(150px, 16vw, 240px);
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line);
   border-radius: var(--ws-radius-sm);
   background: var(--ws-surface-soft);
   color: var(--ws-text-soft);
@@ -897,7 +926,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-status--draft { border-color: #fed7aa; background: #fff7ed; color: #c2410c; }
 .v3-dash[data-auth-workspace] .lb-status--unpublished { border-color: var(--ws-line); background: var(--ws-surface-soft); color: var(--ws-text-mute); }
 .v3-dash[data-auth-workspace] .lb-status--draft-changes { border-color: #fed7aa; background: #fff7ed; color: #c2410c; text-transform: none; letter-spacing: 0; }
-.v3-dash[data-auth-workspace] .lb-publish-action { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px; border: 1px solid var(--ws-accent); border-radius: var(--ws-radius-sm); background: var(--ws-accent); color: var(--ws-accent-text); font: 600 13px var(--ws-sans); cursor: pointer; white-space: nowrap; transition: all 0.15s ease; box-shadow: none; }
+.v3-dash[data-auth-workspace] .lb-publish-action { display: inline-flex; align-items: center; justify-content: center; height: 34px; padding: 0 14px; border: 1px solid var(--ws-accent); border-radius: var(--ws-radius-sm); background: var(--ws-accent); color: var(--ws-accent-text); font: 600 13px var(--ws-sans); cursor: pointer; white-space: nowrap; transition: all 0.15s ease; box-shadow: none; }
 .v3-dash[data-auth-workspace] .lb-publish-action:hover { border-color: var(--ws-accent-hover); background: var(--ws-accent-hover); box-shadow: none; transform: translateY(-1px); }
 .v3-dash[data-auth-workspace] .lb-publish-action--secondary { border-color: var(--ws-line-strong); background: #ffffff; color: var(--ws-text); box-shadow: none; }
 .v3-dash[data-auth-workspace] .lb-publish-action--secondary:hover { border-color: #f0aaa4; background: var(--ws-danger-soft); color: #9b1c13; transform: translateY(-1px); }
@@ -1041,6 +1070,8 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-collapse,
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav {
     justify-content: center !important;
+    /* Their borders have to sit inside the rail, or the rail scrolls sideways. */
+    box-sizing: border-box !important;
     width: 44px !important;
     min-height: 40px !important;
     height: 40px !important;
@@ -1053,6 +1084,51 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   }
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav .lb-nav-ic {
     margin: 0 !important;
+  }
+  /* Icon-only rows align on one axis, so the group hairline and indent go away
+     and the selected cue keeps its edge position. */
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-group-items {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav.is-on::before,
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav[aria-current="page"]::before {
+    height: 22px;
+  }
+  /* The control points at the edge it moves the rail toward. */
+  .v3-dash[data-auth-workspace] .lb-side-collapse svg {
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-collapse svg {
+    transform: scaleX(-1);
+  }
+  /* The plan badge has no room next to a 28px avatar. */
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-badge {
+    display: none;
+  }
+  /* The account trigger is wider than the icon rail, so it is squared to it and
+     its menu opens beside the rail instead of being clipped by it. */
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-profile {
+    padding-inline: 0;
+  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile,
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-trigger {
+    box-sizing: border-box;
+    width: 44px;
+    min-width: 0;
+    justify-content: center;
+    padding: 0;
+  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-menu {
+    right: auto;
+    left: calc(100% + 8px);
+  }
+  .v3-dash[data-auth-workspace] .lb-side {
+    transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1), padding-inline 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .v3-dash[data-auth-workspace] .lb-main {
+    transition: margin-left 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-ws-switcher {
@@ -3671,7 +3747,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 @media (max-width: 1180px) and (min-width: 981px) {
   .v3-dash[data-auth-workspace] { --ws-sidebar-w: 248px; }
   .v3-dash[data-auth-workspace] { --ws-main-pad-inline: 24px; }
-  .v3-dash[data-auth-workspace] .lb-topbar { padding-inline: 24px; }
   .v3-dash[data-auth-workspace] .lb-site-path { display: none; }
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); }
 }
@@ -3698,14 +3773,16 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     flex: 0 0 auto;
     white-space: nowrap;
   }
+  /* The drawer is a full-height overlay above the top bar, so its geometry no
+     longer has to track a top-bar height it cannot see. */
   .v3-dash[data-auth-workspace] .lb-side {
     inset: 0 auto 0 0;
     z-index: 1000;
-    width: min(88vw, 320px);
+    width: min(86vw, 304px);
+    padding: 12px;
     transform: translateX(-102%);
     box-shadow: var(--ws-shadow-overlay);
     transition: transform .25s ease;
-    top: 72px;
   }
   .v3-dash[data-auth-workspace] .lb-side.is-open { transform: translateX(0); }
   .v3-dash[data-auth-workspace] .lb-side-collapse { display: none; }
@@ -3714,17 +3791,20 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     justify-content: center;
     width: 44px;
     height: 44px;
-    border: 1px solid var(--ws-chrome-line-strong);
+    flex: 0 0 44px;
+    border: 1px solid var(--ws-chrome-line);
     border-radius: var(--ws-radius-sm);
-    background: var(--ws-chrome-raised);
+    background: transparent;
     color: var(--ws-chrome-text);
-    font-size: 20px;
     line-height: 1;
     cursor: pointer; }
+  .v3-dash[data-auth-workspace] .lb-side-close:hover { background: var(--ws-chrome-raised); }
   .v3-dash[data-auth-workspace] .lb-side-head { padding-right: 8px; }
+  /* The top bar bleeds to the viewport edge by exactly the main padding it sits
+     inside; a hardcoded bleed here is what pushed the shell past 100vw. */
   .v3-dash[data-auth-workspace] .lb-topbar {
-    margin-inline: -24px;
-    padding: 0 16px;
+    margin-inline: calc(-1 * var(--ws-main-pad-inline));
+    padding-inline: var(--ws-main-pad-inline);
   }
   .v3-dash[data-auth-workspace] .lb-topbar-menu { display: inline-grid; width: 44px; height: 44px; flex: 0 0 44px;
     place-items: center;
@@ -3807,7 +3887,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     flex-wrap: wrap;
     align-content: center;
     gap: 8px;
-    padding: 8px 10px;
+    padding: 8px var(--ws-main-pad-inline);
   }
   .v3-dash[data-auth-workspace] .lb-topbar-hud {
     order: 2;
@@ -4784,16 +4864,18 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .cr-shop-delete { opacity: 1;
   }
 
-  .v3-dash[data-auth-workspace] .lb-brand-txt { display: none; display: none;
+  .v3-dash[data-auth-workspace] .lb-brand-txt { display: none;
   }
 
   .v3-dash[data-auth-workspace] .lb-topbar-actions { gap: 8px; min-width: 0;
   }
 
-  .v3-dash[data-auth-workspace] .lb-topbar-actions .lb-status { width: 16px; height: 16px; padding: 0; gap: 0; overflow: hidden; font-size: 0; border-radius: 50%; flex: 0 0 16px;
+  /* No room for the label here, so the chip becomes a state dot. The label text
+     stays in the DOM for assistive technology. */
+  .v3-dash[data-auth-workspace] .lb-topbar-actions .lb-status { box-sizing: border-box; width: 16px; min-width: 16px; height: 16px; min-height: 16px; padding: 0; gap: 0; justify-content: center; overflow: hidden; font-size: 0; border-radius: 50%; flex: 0 0 16px;
   }
 
-  .v3-dash[data-auth-workspace] .lb-topbar-actions .lb-status::before { width: 7px; height: 7px;
+  .v3-dash[data-auth-workspace] .lb-topbar-actions .lb-status::before { width: 8px; height: 8px; flex: 0 0 8px;
   }
 
   .v3-dash[data-auth-workspace] .lb-topbar-actions .btn { padding-left: 8px; padding-right: 8px;
