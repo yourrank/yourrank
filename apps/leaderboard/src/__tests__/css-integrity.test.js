@@ -178,9 +178,26 @@ describe("authenticated dashboard v4 contract", () => {
 describe("shared UI primitives", () => {
   const ui = fs.readFileSync(path.join(assetsDir, "ui.css"), "utf8");
   const botShell = fs.readFileSync(path.resolve(import.meta.dir, "../../../../packages/shared/src/page-shell.ts"), "utf8");
+  const appCssDocuments = [
+    ...fs.readdirSync(path.resolve(import.meta.dir, "../pages"))
+      .filter((file) => /\.(js|jsx)$/.test(file))
+      .map((file) => [file, fs.readFileSync(path.resolve(import.meta.dir, "../pages", file), "utf8")]),
+    ["index.js", fs.readFileSync(path.resolve(import.meta.dir, "../index.js"), "utf8")],
+    ["page-shell.ts", botShell],
+  ].filter(([, source]) => source.includes("app.css"));
 
   it("defines the button component", () => {
     expect(ui).toMatch(/\.btn,\s*\.yr-ui button\s*\{/);
+  });
+
+  it("loads ui.css wherever app.css is loaded", () => {
+    expect(appCssDocuments.length).toBeGreaterThan(0);
+    for (const [file, source] of appCssDocuments) {
+      expect(`${file} loads ui.css`).toBe(source.includes("ui.css") ? `${file} loads ui.css` : `${file} does not load ui.css`);
+    }
+    expect(ui).toMatch(/\.field\s*\{[\s\S]*?display:\s*flex/);
+    expect(ui).toMatch(/\.field input,\s*\.field select,\s*\.field textarea\s*\{/);
+    expect(ui).toMatch(/\.field-err\s*\{/);
   });
 
   const selectorsOf = (css) =>

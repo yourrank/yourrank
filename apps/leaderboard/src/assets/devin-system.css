@@ -81,7 +81,10 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(25, 25, 25, 0.24); border: 2px solid var(--devin-bg); border-radius: var(--devin-radius-pill); }
 
 a { text-underline-offset: 4px; }
-:focus-visible { outline: 2px solid var(--devin-primary); outline-offset: 2px; }
+body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible {
+  outline: 2px solid var(--devin-primary);
+  outline-offset: 2px;
+}
 
 .btn--dark {
   border-color: var(--devin-black);
@@ -89,22 +92,22 @@ a { text-underline-offset: 4px; }
   color: #fcfcfc;
 }
 
-.field label,
-.field-label {
+body:not(:has(.v3-dash[data-auth-workspace])) .field label,
+body:not(:has(.v3-dash[data-auth-workspace])) .field-label {
   color: var(--devin-ink);
   font-size: 13px;
   font-weight: 500;
 }
 
-.field input,
-.field select,
-.field textarea,
-.v3-dash input,
-.v3-dash select,
-.v3-dash textarea,
-.yr-ui input,
-.yr-ui select,
-.yr-ui textarea {
+body:not(:has(.v3-dash[data-auth-workspace])) .field input,
+body:not(:has(.v3-dash[data-auth-workspace])) .field select,
+body:not(:has(.v3-dash[data-auth-workspace])) .field textarea,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash input,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash select,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash textarea,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui input,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui select,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea {
   border: 1px solid var(--devin-line);
   border-radius: var(--devin-radius-small);
   background: var(--devin-bg);
@@ -112,15 +115,15 @@ a { text-underline-offset: 4px; }
   box-shadow: none;
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus,
-.v3-dash input:focus,
-.v3-dash select:focus,
-.v3-dash textarea:focus,
-.yr-ui input:focus,
-.yr-ui select:focus,
-.yr-ui textarea:focus {
+body:not(:has(.v3-dash[data-auth-workspace])) .field input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .field select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .field textarea:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash textarea:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
   border-color: var(--devin-primary);
   outline: 2px solid color-mix(in srgb, var(--devin-primary) 16%, transparent);
   outline-offset: 0;

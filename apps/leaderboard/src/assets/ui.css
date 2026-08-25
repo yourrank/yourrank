@@ -26,8 +26,8 @@
   --yr-control-height-narrow: 44px;
   --yr-control-radius: 8px;
   --yr-control-padding-x: 12px;
-  --yr-shadow-sm: 0 1px 2px rgba(0, 0, 0, .05);
-  --yr-shadow-lg: 0 12px 32px rgba(0, 0, 0, .12);
+  --yr-shadow-sm: var(--ws-shadow, 0 1px 2px rgba(0, 0, 0, .05));
+  --yr-shadow-lg: var(--ws-shadow-overlay, 0 12px 32px rgba(0, 0, 0, .12));
   /* Shared fixed action layers: one bottom offset and stacking model for save/bulk UI. */
   --yr-fixed-action-bottom: 22px;
   --yr-fixed-action-stack-offset: 66px;
@@ -118,7 +118,7 @@
   background-color: color-mix(in srgb, var(--yr-ink, var(--ink)) 5%, transparent);
 }
 .btn:focus-visible,
-.yr-ui button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.yr-ui button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent), inset 0 0 0 1px var(--yr-focus-inset, rgba(255, 255, 255, 0.2)); }
 .btn:active,
 .yr-ui button:active { transform: translateY(2px) scale(0.96); box-shadow: none; }
 
@@ -214,6 +214,66 @@
 
 @keyframes ui-spin { to { transform: rotate(360deg); } }
 
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.field label {
+  font-size: 13px;
+  color: var(--yr-ink-soft, var(--ink-soft));
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  font-family: var(--yr-sans, var(--sans));
+  font-size: 14px;
+  color: var(--yr-ink, var(--ink));
+  background: var(--yr-panel-2, var(--panel-2));
+  border: 1px solid var(--yr-line, var(--line, rgba(255, 255, 255, 0.06)));
+  border-radius: var(--yr-control-radius, 8px);
+  padding: 10px var(--yr-control-padding-x, 12px);
+  width: 100%;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--yr-accent, var(--accent));
+  box-shadow: 0 0 0 1px var(--yr-accent, var(--accent)), 0 0 12px color-mix(in srgb, var(--yr-accent, var(--accent)) 20%, transparent);
+  outline: none;
+}
+
+.field input:user-invalid,
+.field textarea:user-invalid {
+  border-color: var(--yr-red, var(--danger, #ef4444));
+}
+
+.field .hint {
+  font-size: 12px;
+  color: var(--yr-ink-mute, var(--ink-mute));
+}
+
+.field-err {
+  color: var(--yr-red, var(--danger, #ef4444));
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.field-err:empty { display: none; }
+
+.field input[aria-invalid="true"],
+.field textarea[aria-invalid="true"],
+.field select[aria-invalid="true"] {
+  border-color: var(--yr-red, var(--danger, #ef4444));
+  box-shadow: 0 0 0 1px var(--yr-red, var(--danger, #ef4444)), 0 0 12px color-mix(in srgb, var(--yr-red, var(--danger, #ef4444)) 15%, transparent);
+}
+
 /* ---- badge ---- */
 .badge {
   display: inline-block;
@@ -264,7 +324,7 @@
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, .45);
+  background: var(--yr-overlay, rgba(0, 0, 0, .45));
   display: flex;
   align-items: center;
   justify-content: center;
