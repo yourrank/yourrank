@@ -243,17 +243,22 @@ export function renderGiveawayDrawersHtml() {
 export function renderGiveawaysContentHtml(activeTab = "chat") {
   const active = GIVEAWAY_TABS.some(([tab]) => tab === activeTab) ? activeTab : "chat";
   const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Giveaways";
+  const activeDescription = {
+    chat: "Collect chat entries, draw a winner, and confirm the result live.",
+    raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
+    drops: "Share limited claim codes with viewers and track remaining rewards.",
+    preds: "Engage your viewers with live chat giveaways, Credit ticket raffles, and flash drop claim codes.",
+    tournaments: "Open chat signups, review the entry list, and seed a tournament.",
+  }[active] || "Engage viewers with live community events.";
   const tabs = GIVEAWAY_TABS.map(([tab, label]) => `
   <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}>${label}</a>`).join("");
   const html = `
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
     <h1>${activeLabel}</h1>
-    <p class="v3-head-sub">${active === "tournaments"
-      ? "Let viewers join from chat, then curate the list before you pick."
-      : "Engage your viewers with live chat giveaways, Credit ticket raffles, and flash drop claim codes."}</p>
+    <p class="v3-head-sub">${activeDescription}</p>
   </div>
-  <div class="d-flex gap-8 items-center flex-wrap"${active === "tournaments" ? ' hidden' : ""}>
+  <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>
   </div>
 </div>
@@ -279,8 +284,8 @@ ${tabs}
       <section class="v3-table-card gw-card" id="gw-setup-card">
         <div class="v3-section-head">
           <div>
-            <h2>Stream &amp; Keyword</h2>
-            <p class="v3-head-sub">Configure your Kick channel and entry trigger.</p>
+            <h2>Start collecting entries</h2>
+            <p class="v3-head-sub">Choose your Kick channel and the word viewers should type.</p>
           </div>
           <div id="gw-status-badge" class="gw-status-pill gw-status--idle" aria-live="polite">
             <span class="gw-status-dot"></span>
@@ -290,7 +295,7 @@ ${tabs}
 
         <form id="gw-setup-form" class="gw-form">
           <div class="field">
-            <label for="gw-channel-input">Kick Channel Name</label>
+            <label for="gw-channel-input">Kick channel</label>
             <div class="gw-input-row">
               <span class="gw-input-prefix">kick.com/</span>
               <input id="gw-channel-input" name="channel" type="text" placeholder="channelname" required autocomplete="off" />
@@ -299,7 +304,7 @@ ${tabs}
           </div>
 
           <div class="field">
-            <label for="gw-keyword-input">Target Keyword</label>
+            <label for="gw-keyword-input">Entry keyword</label>
             <input id="gw-keyword-input" name="keyword" type="text" value="!win" placeholder="e.g. !win, !enter, YOURRANK" required />
             <span class="hint">Viewers who type this in chat will be entered into the giveaway.</span>
           </div>
@@ -435,8 +440,8 @@ ${tabs}
       <section class="v3-table-card gw-card" id="gw-feed-card">
         <div class="v3-section-head">
           <div>
-            <h2>Live Stream Chat</h2>
-            <p class="v3-head-sub">Real-time messages from your Kick channel.</p>
+            <h2>Chat activity</h2>
+            <p class="v3-head-sub">Messages from your Kick channel appear here while listening.</p>
           </div>
           <span class="gw-event-badge" id="gw-feed-counter">0 messages</span>
         </div>
@@ -454,8 +459,8 @@ ${tabs}
       <section class="v3-table-card gw-card" id="gw-stage-card">
         <div class="gw-stage-head">
           <div>
-            <h2>Live Giveaway Stage</h2>
-            <p class="v3-head-sub">Draw verified winners live on stream with transparent fair-play scoring.</p>
+            <h2>Giveaway draw</h2>
+            <p class="v3-head-sub">See who is eligible, then draw when you are ready.</p>
           </div>
           <div class="gw-metrics-row">
             <div class="gw-stat-pill">
@@ -529,8 +534,8 @@ ${tabs}
       <section class="v3-table-card gw-card gw-card--table" id="gw-entrants-card">
         <div class="v3-section-head">
           <div>
-            <h2>Verified Entrants (<span id="gw-count-header">0</span>)</h2>
-            <p class="v3-head-sub">Live participants who typed the keyword in chat.</p>
+            <h2>Entrants (<span id="gw-count-header">0</span>)</h2>
+            <p class="v3-head-sub">Viewers who used your entry keyword during this session.</p>
           </div>
           <div class="gw-entrants-tools">
             <input type="text" class="v3-search-input" id="gw-search-entrants" placeholder="Search entrant…" />
@@ -570,17 +575,16 @@ ${tabs}
     <section class="v3-table-card gw-card">
       <div class="v3-section-head">
         <div>
-          <h2>Active Ticket Raffles</h2>
-          <p class="v3-head-sub">Viewers buy tickets using Credits to win scheduled prizes.</p>
+          <h2>Active raffles</h2>
+          <p class="v3-head-sub">Draw these when ticket sales are finished.</p>
         </div>
-        <button class="btn btn--sm btn--accent" id="btn-create-raffle" type="button">+ New Raffle</button>
+        <button class="btn btn--sm btn--accent" id="btn-create-raffle" type="button">Create raffle</button>
       </div>
 
       <div class="gw-raffles-container" id="rf-active-list">
         <div class="v3-empty" id="rf-empty-active">
-          <div class="v3-empty-ic">🎟️</div>
           <h2>No active raffles</h2>
-          <p>Create a raffle to let your viewers buy tickets with Credits.</p>
+          <p>Create a raffle so viewers can buy tickets with Credits.</p>
         </div>
       </div>
     </section>
@@ -588,8 +592,8 @@ ${tabs}
     <section class="v3-table-card gw-card gw-card--table">
       <div class="v3-section-head">
         <div>
-          <h2>Past &amp; Drawn Raffles</h2>
-          <p class="v3-head-sub">History of winners and ticket sales.</p>
+          <h2>Raffle history</h2>
+          <p class="v3-head-sub">Completed raffles and winners.</p>
         </div>
       </div>
 
@@ -621,17 +625,16 @@ ${tabs}
     <section class="v3-table-card gw-card">
       <div class="v3-section-head">
         <div>
-          <h2>Active Flash Drops</h2>
-          <p class="v3-head-sub">Drop limited-claim codes in chat for instant viewer reward surges.</p>
+          <h2>Active drops</h2>
+          <p class="v3-head-sub">Copy a code into chat while claims are available.</p>
         </div>
-        <button class="btn btn--sm btn--accent" id="btn-create-drop" type="button">+ Launch New Drop</button>
+        <button class="btn btn--sm btn--accent" id="btn-create-drop" type="button">Create drop</button>
       </div>
 
       <div class="gw-drops-container" id="cd-active-list">
         <div class="v3-empty" id="cd-empty-active">
-          <div class="v3-empty-ic">⚡</div>
-          <h2>No active flash drops</h2>
-          <p>Launch a flash drop code to reward active stream viewers in real time.</p>
+          <h2>No active drops</h2>
+          <p>Create a limited claim code to reward viewers in chat.</p>
         </div>
       </div>
     </section>
@@ -639,8 +642,8 @@ ${tabs}
     <section class="v3-table-card gw-card gw-card--table">
       <div class="v3-section-head">
         <div>
-          <h2>Drop History &amp; Claims</h2>
-          <p class="v3-head-sub">Past claim codes and claim volumes.</p>
+          <h2>Drop history</h2>
+          <p class="v3-head-sub">Expired and fully claimed codes.</p>
         </div>
       </div>
 
@@ -656,7 +659,7 @@ ${tabs}
             </tr>
           </thead>
           <tbody id="cd-past-list">
-            <tr><td colspan="5" class="ta-c font-muted gw-empty-cell">No drops created yet. Create a drop to reward active viewers with a limited-claim code.</td></tr>
+            <tr><td colspan="5" class="ta-c font-muted gw-empty-cell">No drops yet. Create a limited claim code to reward viewers.</td></tr>
           </tbody>
         </table>
       </div>
@@ -721,9 +724,10 @@ ${tabs}
      ========================================================================= -->
 <div class="gw-tab-pane${active === "tournaments" ? " is-active" : ""}" id="pane-tournaments"${active === "tournaments" ? "" : " hidden"}>
   <div id="tournament-app" class="tournament-app">
-    <section class="tournament-status-card" aria-label="Tournament status">
+    <section class="tournament-status-card" aria-labelledby="tournament-status-heading">
       <div class="tournament-status-head">
         <div class="tournament-status-ident">
+          <h2 class="sr-only" id="tournament-status-heading">Current tournament</h2>
           <h2 class="tournament-title-display" id="tournament-title-display" hidden></h2>
           <p class="tournament-game-display" id="tournament-game-display" hidden></p>
           <div class="tournament-status-meta">
@@ -747,7 +751,7 @@ ${tabs}
 
       <div class="tournament-status-foot">
         <label class="tournament-channel-field" for="tournament-chat-channel">
-          <span>Kick channel for chat joins</span>
+          <span>Kick channel for signups</span>
           <div class="gw-input-row">
             <span class="gw-input-prefix">kick.com/</span>
             <input id="tournament-chat-channel" type="text" placeholder="channelname" autocomplete="off" />
@@ -759,8 +763,8 @@ ${tabs}
     <section class="tournament-list-card" id="tournament-list-card" aria-labelledby="tournament-list-heading">
       <div class="tournament-list-head">
         <div>
-          <h2 id="tournament-list-heading">Entry list</h2>
-          <p class="tournament-muted">Names appear here as viewers use your join command.</p>
+          <h2 id="tournament-list-heading">Viewer entries</h2>
+          <p class="tournament-muted">Review names before closing signups and picking participants.</p>
         </div>
         <span class="tournament-live-dot" id="tournament-chat-status">Chat off</span>
       </div>
@@ -771,7 +775,7 @@ ${tabs}
     </section>
 
     <details class="tournament-settings" id="tournament-settings">
-      <summary>Settings <span>Format, cap, anti-alt and chat command</span></summary>
+      <summary>Tournament settings <span>Title, format, entry limit, chat command, and review flags</span></summary>
       <form id="tournament-settings-form" class="tournament-settings-grid">
         <div class="field">
           <label for="tournament-title">Tournament title</label>

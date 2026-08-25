@@ -1129,14 +1129,7 @@ if (!window.__yrSpaShell) {
 
     // Drawers
     $("btn-open-event-drawer")?.addEventListener("click", (event) => {
-      const activeTab = document.querySelector(".gw-tab-btn.is-active")?.dataset.tab;
-      if (activeTab === "drops") {
-        openEventDrawer("cd-drawer", event.currentTarget);
-      } else if (activeTab === "preds") {
-        openEventDrawer("pred-drawer", event.currentTarget);
-      } else {
-        openEventDrawer("rf-drawer", event.currentTarget);
-      }
+      openEventDrawer("pred-drawer", event.currentTarget);
     });
     $("btn-create-raffle")?.addEventListener("click", (event) => openEventDrawer("rf-drawer", event.currentTarget));
     $("rf-drawer-close")?.addEventListener("click", () => closeEventDrawer("rf-drawer"));
@@ -1208,33 +1201,26 @@ if (!window.__yrSpaShell) {
 
     if (active.length === 0) {
       activeList.innerHTML = `
-        ${inlineStateHtml({ kind: "empty", title: "No active raffles", body: "Create a raffle to let viewers buy tickets with Credits." })}`;
+        ${inlineStateHtml({ kind: "empty", title: "No active raffles", body: "Create a raffle so viewers can buy tickets with Credits." })}`;
     } else {
       activeList.innerHTML = active.map((r) => `
-        <article class="gw-event-card" data-raffle-id="${esc(r.id)}">
-          <div class="gw-event-card-head">
-            <div class="gw-event-card-ident">
-              <span class="gw-event-badge gw-event-badge--live">Selling tickets</span>
-              <h3 class="gw-event-title">${esc(r.title)}</h3>
-              ${r.description ? `<p class="gw-event-sub">${esc(r.description)}</p>` : ""}
-            </div>
-            <p class="gw-event-figure">
-              <strong>${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</strong>
-              <span>per ticket</span>
-            </p>
+        <article class="gw-event-row" data-raffle-id="${esc(r.id)}">
+          <div class="gw-event-row-main">
+            <span class="gw-event-badge gw-event-badge--live">Selling tickets</span>
+            <h3 class="gw-event-title">${esc(r.title)}</h3>
+            ${r.description ? `<p class="gw-event-sub">${esc(r.description)}</p>` : ""}
           </div>
-          <div class="gw-event-stats">
-            <div class="gw-event-stat"><strong>${r.total_tickets || 0}</strong><span>Tickets sold</span></div>
-            <div class="gw-event-stat"><strong>${r.participant_count || 0}</strong><span>Viewers in</span></div>
-            <div class="gw-event-stat"><strong>${r.max_tickets_per_viewer || 10}</strong><span>Max per viewer</span></div>
-          </div>
-          <div class="gw-event-card-foot">
-            <p class="gw-event-foot-note">${(r.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for the first ticket"}</p>
-            <div class="gw-event-foot-actions">
-              <button class="btn btn--sm btn--accent btn--draw-raffle" data-id="${esc(r.id)}" type="button">
-                Draw winner
-              </button>
-            </div>
+          <dl class="gw-event-row-details">
+            <div><dt>Ticket</dt><dd>${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</dd></div>
+            <div><dt>Sold</dt><dd>${r.total_tickets || 0}</dd></div>
+            <div><dt>Viewers</dt><dd>${r.participant_count || 0}</dd></div>
+            <div><dt>Limit</dt><dd>${r.max_tickets_per_viewer || 10} each</dd></div>
+          </dl>
+          <div class="gw-event-row-action">
+            <span>${(r.total_tickets || 0) > 0 ? "Ready to draw" : "Waiting for tickets"}</span>
+            <button class="btn btn--sm btn--accent btn--draw-raffle" data-id="${esc(r.id)}" type="button">
+              Draw winner
+            </button>
           </div>
         </article>
       `).join("");
@@ -1249,13 +1235,13 @@ if (!window.__yrSpaShell) {
     } else {
       pastList.innerHTML = past.map((r) => `
         <tr>
-          <td><strong>${esc(r.title)}</strong></td>
-          <td>${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</td>
-          <td>${r.total_tickets || 0} tickets</td>
-          <td class="gw-history-winner">
+          <td data-label="Prize"><strong>${esc(r.title)}</strong></td>
+          <td data-label="Ticket cost">${r.ticket_cost === 0 ? "Free" : `${r.ticket_cost} Credits`}</td>
+          <td data-label="Tickets">${r.total_tickets || 0} tickets</td>
+          <td data-label="Winner" class="gw-history-winner">
             ${r.winner_name ? `<strong>${esc(r.winner_name)}</strong><span>Ticket #${r.winner_ticket_number}</span>` : "<span>No winner drawn</span>"}
           </td>
-          <td>${r.drawn_at ? new Date(r.drawn_at).toLocaleString() : "—"}</td>
+          <td data-label="Drawn">${r.drawn_at ? new Date(r.drawn_at).toLocaleString() : "—"}</td>
         </tr>
       `).join("");
     }
@@ -1371,40 +1357,33 @@ if (!window.__yrSpaShell) {
 
     if (active.length === 0) {
       activeList.innerHTML = `
-        ${inlineStateHtml({ kind: "empty", title: "No active flash drops", body: "Launch a flash drop code to reward active stream viewers in real time." })}`;
+        ${inlineStateHtml({ kind: "empty", title: "No active drops", body: "Create a limited claim code to reward viewers in chat." })}`;
     } else {
       activeList.innerHTML = active.map((d) => {
         const pct = Math.min(100, Math.round(((d.claimed_count || 0) / (d.max_claims || 1)) * 100));
         const remaining = Math.max(0, (d.max_claims || 0) - (d.claimed_count || 0));
         return `
-          <article class="gw-event-card">
-            <div class="gw-event-card-head">
-              <div class="gw-event-card-ident">
-                <span class="gw-event-badge gw-event-badge--live">Claimable now</span>
-                <div class="gw-event-code-row">
-                  <code class="gw-event-code">${esc(d.code)}</code>
-                  <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy</button>
-                </div>
-                <p class="gw-event-sub">Viewers type this code in chat to claim.</p>
+          <article class="gw-event-row">
+            <div class="gw-event-row-main">
+              <span class="gw-event-badge gw-event-badge--live">Claimable now</span>
+              <div class="gw-event-code-row">
+                <code class="gw-event-code">${esc(d.code)}</code>
+                <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy code</button>
               </div>
-              <p class="gw-event-figure">
-                <strong>+${d.points_reward} Credits</strong>
-                <span>per claim</span>
-              </p>
+              <p class="gw-event-sub">Viewers type this code in chat to claim ${d.points_reward} Credits.</p>
             </div>
-            <div class="gw-event-body">
-              <div>
-                <div class="gw-event-meter-head">
-                  <span>Claims</span>
-                  <strong>${d.claimed_count || 0} of ${d.max_claims} · ${pct}%</strong>
-                </div>
-                <div class="gw-event-meter"><div class="gw-event-meter-fill" style="width: ${pct}%;"></div></div>
+            <div class="gw-event-row-progress">
+              <div class="gw-event-meter-head">
+                <span>Claims used</span>
+                <strong>${d.claimed_count || 0} of ${d.max_claims}</strong>
               </div>
+              <div class="gw-event-meter" role="progressbar" aria-label="Claims used" aria-valuemin="0" aria-valuemax="${d.max_claims}" aria-valuenow="${d.claimed_count || 0}"><div class="gw-event-meter-fill" style="width: ${pct}%;"></div></div>
             </div>
-            <div class="gw-event-stats">
-              <div class="gw-event-stat"><strong>${remaining}</strong><span>Claims left</span></div>
-              <div class="gw-event-stat"><strong>${d.expires_at ? new Date(d.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "None"}</strong><span>${d.expires_at ? "Expires at" : "Time limit"}</span></div>
-            </div>
+            <dl class="gw-event-row-details">
+              <div><dt>Reward</dt><dd>+${d.points_reward} Credits</dd></div>
+              <div><dt>Remaining</dt><dd>${remaining}</dd></div>
+              <div><dt>${d.expires_at ? "Expires" : "Time limit"}</dt><dd>${d.expires_at ? new Date(d.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "None"}</dd></div>
+            </dl>
           </article>
         `;
       }).join("");
@@ -1422,11 +1401,11 @@ if (!window.__yrSpaShell) {
     } else {
       pastList.innerHTML = past.map((d) => `
         <tr>
-          <td><code class="gw-event-code">${esc(d.code)}</code></td>
-          <td>+${d.points_reward} Credits</td>
-          <td>${d.claimed_count || 0} / ${d.max_claims}</td>
-          <td><span class="gw-event-badge">${esc(d.status)}</span></td>
-          <td>${new Date(d.created_at).toLocaleString()}</td>
+          <td data-label="Code"><code class="gw-event-code">${esc(d.code)}</code></td>
+          <td data-label="Reward">+${d.points_reward} Credits</td>
+          <td data-label="Claims">${d.claimed_count || 0} / ${d.max_claims}</td>
+          <td data-label="Status"><span class="gw-event-badge">${esc(d.status)}</span></td>
+          <td data-label="Created">${new Date(d.created_at).toLocaleString()}</td>
         </tr>
       `).join("");
     }

@@ -205,7 +205,7 @@ function statusChip(status) {
 }
 const metric = (value) => value == null ? UNKNOWN : value;
 function renderRewardRow(m) {
-  return `<td><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td class="hint">Kick reward used · ${m.kick_reward_cost} points</td><td class="num"><b>+${m.credits} credits</b></td><td><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" /></td><td class="ta-r"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger" data-del-reward="${esc(m.id)}">Delete</button></td>`;
+  return `<td data-label="Kick reward"><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td data-label="How it works" class="hint">Kick reward used · ${m.kick_reward_cost} points</td><td data-label="Credits" class="num"><b>+${m.credits} credits</b></td><td data-label="Available"><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" aria-label="Make ${esc(m.kick_reward_title)} available" /></td><td data-label="Actions" class="ta-r"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger" data-del-reward="${esc(m.id)}">Disable</button></td>`;
 }
 function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
@@ -224,7 +224,7 @@ function renderViewerRow(v) {
     : "";
   return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
 }
-function renderRedemptionRow(r) { return `<td><b>${esc(viewerIdentity(r))}</b></td><td>${esc(r.item_name)}</td><td class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td>${statusChip(r.status)}</td><td title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
+function renderRedemptionRow(r) { return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Item">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Ordered" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
   const root = $("cr-shop-list"); if (!root) return;
   ensureShopControls(items.length > 0);
@@ -236,17 +236,43 @@ function renderShopCards(items) {
   if (filtered.length) {
     $("cr-shop-empty").hidden = true;
   } else {
-    renderEmpty($("cr-shop-empty"), {
-      kind: "empty",
-      title: "No shop items yet",
-      body: "Create a shop item members can order with credits.",
-      compact: true,
-      actions: [{ label: "Create shop item", id: "crShopEmptyCreate", accent: true }],
-    });
-    $("crShopEmptyCreate")?.addEventListener("click", () => openShop(), { once: true });
+    const emptySpec = items.length
+      ? {
+          kind: "search",
+          title: "No matching items",
+          body: "Try a different item name, cost, or stock value.",
+          compact: true,
+        }
+      : {
+          kind: "empty",
+          title: "No shop items yet",
+          body: "Create a shop item members can order with Credits.",
+          compact: true,
+          actions: [{ label: "Create item", id: "crShopEmptyCreate", accent: true }],
+        };
+    renderEmpty($("cr-shop-empty"), emptySpec);
+    if (!items.length) $("crShopEmptyCreate")?.addEventListener("click", () => openShop(), { once: true });
   }
   root.innerHTML = pageItems.map((i) => {
-    return `<article class="cr-shop-card${i.active ? "" : " is-inactive"}"><div class="cr-shop-card-head"><button class="cr-shop-card-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button><div class="cr-shop-card-controls"><button class="cr-shop-delete" type="button" data-del-shop="${esc(i.id)}" aria-label="Disable ${esc(i.name)}" title="Disable ${esc(i.name)}">×</button><input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Toggle ${esc(i.name)}" /></div></div><p>${esc(i.description || "")}</p><hr /><div class="cr-shop-card-foot"><b>${i.cost} <small>cr</small></b><span>Stock: ${i.stock === null ? "∞" : `${i.stock} left`}</span></div></article>`;
+    const stock = i.stock === null ? "Unlimited" : `${i.stock} left`;
+    return `<article class="cr-shop-row${i.active ? "" : " is-inactive"}">
+      <div class="cr-shop-row-main">
+        <button class="cr-shop-row-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button>
+        <p>${esc(i.description || "No description")}</p>
+      </div>
+      <dl class="cr-shop-row-facts">
+        <div><dt>Cost</dt><dd>${i.cost} Credits</dd></div>
+        <div><dt>Stock</dt><dd>${stock}</dd></div>
+      </dl>
+      <label class="cr-shop-row-availability">
+        <span>${i.active ? "Available" : "Hidden"}</span>
+        <input class="v3-toggle" type="checkbox" ${i.active ? "checked" : ""} data-toggle-shop="${esc(i.id)}" aria-label="Make ${esc(i.name)} available" />
+      </label>
+      <div class="cr-shop-row-actions">
+        <button class="btn btn--sm" type="button" data-edit-shop="${esc(i.id)}">Edit</button>
+        <button class="btn btn--sm btn--danger" type="button" data-del-shop="${esc(i.id)}">Disable</button>
+      </div>
+    </article>`;
   }).join("");
   const controls = $("cr-shop-controls"); if (controls) { controls.querySelector("[data-shop-page]").textContent = filtered.length ? `Page ${shopPage} of ${pages} (${filtered.length})` : ""; controls.querySelector("[data-shop-prev]").disabled = shopPage <= 1; controls.querySelector("[data-shop-next]").disabled = shopPage >= pages; }
   wireDynamicActions();
@@ -307,7 +333,7 @@ function render() {
   }
   if (current === "redemptions") {
     const redemptions = state.redemptions || [];
-    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No orders yet", body: "Orders will appear after a member orders a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No orders yet.", emptyText: "No matching orders.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
+    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No orders yet", body: "Orders will appear after a member orders a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Pending first", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No orders yet.", emptyText: "No matching orders.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
     else redemptionCtrl.setItems(redemptions);
   }
   if (current === "history") {
@@ -371,7 +397,7 @@ function renderAnalytics() {
   }
   const label = $("cr-analytics-days-label"); if (label) label.textContent = String(Number($("cr-analytics-days")?.value) || 30);
   const items = a.topItems || [];
-  $("cr-top-items-list").innerHTML = items.map((i) => `<tr><td>${esc(i.name)}</td><td class="num">${i.redemptions}</td><td class="num">${i.credits_spent}</td></tr>`).join("");
+  $("cr-top-items-list").innerHTML = items.map((i) => `<tr><td data-label="Item">${esc(i.name)}</td><td data-label="Orders" class="num">${i.redemptions}</td><td data-label="Credits spent" class="num">${i.credits_spent}</td></tr>`).join("");
   const topEmpty = $("cr-top-items-empty");
   if (items.length) topEmpty.hidden = true;
   else renderEmpty(topEmpty, { kind: "empty", title: "No items ordered yet", body: "Orders will appear after members order a shop item.", compact: true });
@@ -431,13 +457,13 @@ function editReward(id) {
 async function delReward(id, trigger) {
   const confirmed = await confirmPopover(trigger, "Disable way to earn", "This disables the way to earn; credit activity is retained.");
   if (!confirmed) return;
-  setLoading(trigger, true, "Deleting…");
+  setLoading(trigger, true, "Disabling…");
   try { await api("DELETE", sitePath(`/api/credits/rewards/${encodeURIComponent(id)}`)); await load(); }
   catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function delShop(id, trigger) {
   if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past orders stay in credit activity.", "Disable", true)) return;
-  setLoading(trigger, true, "Deleting…");
+  setLoading(trigger, true, "Disabling…");
   try { await api("DELETE", sitePath(`/api/credits/shop/${encodeURIComponent(id)}`)); await load(); }
   catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
 }
@@ -748,7 +774,7 @@ function renderActivity() {
       const debit = event.direction === "debit";
       const amount = `${debit ? "−" : "+"}${event.amount}`;
       const memberName = event.kickUsername || event.discordUsername || event.kickUserId || event.discordUserId || "Unknown member";
-      return `<tr><td title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td>${esc(memberName)}</td><td>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td>${esc(event.description || "—")}</td></tr>`;
+      return `<tr><td data-label="When" title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</td><td data-label="Member">${esc(memberName)}</td><td data-label="Activity">${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</td><td data-label="Change" class="num ${debit ? "cr-negative" : "cr-positive"}">${amount}</td><td data-label="Details">${esc(event.description || "—")}</td></tr>`;
     }).join("");
   }
   if (more) more.hidden = !activityCursor;
@@ -758,7 +784,7 @@ function renderHistory(data) {
   const list = $("cr-history-list");
   const empty = $("cr-history-empty");
   if (!list) return;
-  list.innerHTML = boards.map((b) => `<tr><td><b>${esc(b.name || b.slug)}</b><br><span class="hint">${esc(b.slug)}</span></td><td class="num">${b.balance}</td><td class="num">${b.totalEarned}</td><td class="num">${b.totalSpent}</td><td class="num">${b.redemptionsPending}</td><td class="num">${b.redemptionsTotal}</td><td class="ta-r"><a class="btn btn--sm" href="/dashboard/site/connections?siteId=${esc(b.siteId)}">Connect Kick</a></td></tr>`).join("");
+  list.innerHTML = boards.map((b) => `<tr><td data-label="Site"><b>${esc(b.name || b.slug)}</b><br><span class="hint">${esc(b.slug)}</span></td><td data-label="Balance" class="num">${b.balance}</td><td data-label="Earned" class="num">${b.totalEarned}</td><td data-label="Spent" class="num">${b.totalSpent}</td><td data-label="Pending" class="num">${b.redemptionsPending}</td><td data-label="Orders" class="num">${b.redemptionsTotal}</td><td data-label="Actions" class="ta-r"><a class="btn btn--sm" href="/dashboard/site/connections?siteId=${esc(b.siteId)}">Connect Kick</a></td></tr>`).join("");
   if (empty) {
     empty.innerHTML = boards.length ? "" : inlineStateHtml({ kind: "empty", title: "No sites found", body: "This member has no activity on your sites." });
     empty.hidden = boards.length > 0;
