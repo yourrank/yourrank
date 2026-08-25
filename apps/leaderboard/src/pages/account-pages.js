@@ -2,21 +2,23 @@
 // The surrounding chrome (sidebar, topbar, titles) lives in account.jsx.
 
 const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" id="profile">
-        <div class="acc-card-header">
-          <div class="acc-card-icon-wrap" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
-          <div>
-            <h2>Password &amp; Security</h2>
-            <p class="card-sub">Manage your account authentication credentials and login password.</p>
-          </div>
-        </div>
-        <div class="acc-form-wrap">
+        <section class="account-settings-section" aria-labelledby="accountIdentityTitle">
+          <h2 id="accountIdentityTitle">Profile</h2>
+          <p class="card-sub">The identity used for your YourRank account.</p>
+          <dl class="account-detail-list">
+            <div><dt>Name</dt><dd id="accSummaryName">Account</dd></div>
+            <div><dt>Email</dt><dd id="accSummaryEmail">—</dd></div>
+          </dl>
+        </section>
+        <section class="account-settings-section" aria-labelledby="accountPasswordTitle">
+          <h2 id="accountPasswordTitle">Password</h2>
+          <p class="card-sub">Use a strong password you do not use elsewhere.</p>
+          <div class="acc-form-wrap">
           <div class="field">
             <label for="accCurrentPassword">Current password</label>
             <div class="field-password-wrap">
-              <input type="password" id="accCurrentPassword" autocomplete="current-password" placeholder="••••••••" />
-              <button class="btn-pwd-toggle" type="button" data-pwd-toggle="accCurrentPassword" aria-label="Toggle current password visibility" tabindex="-1">
+              <input type="password" id="accCurrentPassword" autocomplete="current-password" />
+              <button class="btn-pwd-toggle" type="button" data-pwd-toggle="accCurrentPassword" aria-label="Show current password">
                 <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg class="eye-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="m15 18-.722-3.25"/><path d="M2 8a10.645 10.645 0 0 0 20 0"/><path d="m20 15-1.726-2.05"/><path d="m4 15 1.726-2.05"/><path d="m9 18 .722-3.25"/></svg>
               </button>
@@ -25,8 +27,8 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
           <div class="field">
             <label for="accNewPassword">New password</label>
             <div class="field-password-wrap">
-              <input type="password" id="accNewPassword" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" />
-              <button class="btn-pwd-toggle" type="button" data-pwd-toggle="accNewPassword" aria-label="Toggle new password visibility" tabindex="-1">
+              <input type="password" id="accNewPassword" autocomplete="new-password" minlength="8" aria-describedby="pwdReqs" />
+              <button class="btn-pwd-toggle" type="button" data-pwd-toggle="accNewPassword" aria-label="Show new password">
                 <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                 <svg class="eye-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="m15 18-.722-3.25"/><path d="M2 8a10.645 10.645 0 0 0 20 0"/><path d="m20 15-1.726-2.05"/><path d="m4 15 1.726-2.05"/><path d="m9 18 .722-3.25"/></svg>
               </button>
@@ -42,13 +44,13 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
             <button class="btn btn--accent" id="accChangePassword" type="button">Update password</button>
             <span class="hint" id="accPasswordStatus" role="status" aria-live="polite"></span>
           </div>
-        </div>
-        <hr class="hr" />
-        <div class="acc-sessions-section">
+          </div>
+        </section>
+        <section class="account-settings-section acc-sessions-section" aria-labelledby="accountSessionsTitle">
           <div class="d-flex justify-between items-center mb-12 flex-wrap gap-8">
             <div>
-              <h3 class="m-0">Active sessions</h3>
-              <p class="card-sub m-0 mt-2">Web browsers and devices currently signed in to your account.</p>
+              <h2 class="m-0" id="accountSessionsTitle">Signed-in devices</h2>
+              <p class="card-sub m-0 mt-2">Browsers and devices with access to this account.</p>
             </div>
             <div class="d-flex gap-8 flex-wrap">
               <button class="btn btn--ghost btn--sm" id="accSignOut" type="button">Sign out</button>
@@ -57,41 +59,49 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
           </div>
           <div id="accSessions"><p class="hint">Loading sessions…</p></div>
           <p class="hint" id="accSessionsStatus" role="status" aria-live="polite"></p>
-        </div>
+        </section>
       </div>`;
 
 const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
-        <h2>Billing</h2>
-        <p class="card-sub">Billing, usage and payment history.</p>
-
+        <section class="account-settings-section" aria-labelledby="currentPlanTitle">
+          <h2 id="currentPlanTitle">Current plan</h2>
+          <p class="card-sub">Your plan, renewal state, and any payment that needs attention.</p>
         <div class="plan-summary" id="planSummary"></div>
         <div class="plan-banner" id="planBanner" role="status" aria-live="polite" hidden></div>
-
-        <h3 class="m-0 mt-18 mb-8">Usage &amp; limits</h3>
-        <p class="card-sub">What you are using across all products. Limit messages in other dashboards link here.</p>
-        <div class="plan-usage" id="planUsage"><p class="hint">Loading usage…</p></div>
-
-        <h3 class="m-0 mt-18 mb-8">Compare plans</h3>
-        <div class="plan-grid" id="planGrid"></div>
-        <div class="plan-trial" id="planTrial" hidden><p class="hint">Not ready to pay? Try every Pro feature free for 7 days.</p><button class="btn btn--accent" id="trialBtn" type="button">Start free Pro trial</button><p class="status" id="trialStatus" role="status" aria-live="polite"></p></div>
-        <p class="hint" id="planHint">Paid plans are billed in crypto (BTC, ETH, USDT and 100+ more) and activate automatically once the network confirms.</p>
-
-        <section class="plan-referral" id="planReferral">
-          <h3 class="m-0 mt-18 mb-4">Earn free Pro days</h3>
-          <p class="card-sub">Share your link. Every sign-up adds 31 days of Pro.</p>
-          <div class="v3-ref-link-row"><input id="refLink" readonly aria-label="Your referral link" value="" /><button class="v3-btn v3-btn--accent" id="refCopy" type="button">Copy link</button></div>
-          <div class="v3-stat-tiles"><div><b id="refCount"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Streamers joined</span></div><div><b id="refDays"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Free Pro days earned</span></div><div><b id="refSaved"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Estimated value</span></div></div>
-          <p id="refStatus" role="status" aria-live="polite"></p>
-        </section>
-
         <div id="pendingPayment" hidden class="plan-pending">
           <h3 class="m-0 mb-8">Pending payment</h3>
           <p class="status" role="status" aria-live="polite"></p>
           <a class="btn btn--sm" id="pendingPaymentLink" href="#">Complete payment</a>
         </div>
+        </section>
 
-        <div id="cancelWrap" hidden class="plan-cancel">
-          <h3 class="m-0 mb-8">Cancel or change plan</h3>
+        <section class="account-settings-section" aria-labelledby="planUsageTitle">
+        <h2 id="planUsageTitle">Usage</h2>
+        <p class="card-sub">Your current use across YourRank products.</p>
+        <div class="plan-usage" id="planUsage"><p class="hint">Loading usage…</p></div>
+        </section>
+
+        <details class="account-settings-disclosure">
+        <summary>Compare plans</summary>
+        <div class="account-settings-disclosure-body">
+        <div class="plan-grid" id="planGrid"></div>
+        <div class="plan-trial" id="planTrial" hidden><p class="hint">Not ready to pay? Try every Pro feature free for 7 days.</p><button class="btn btn--accent" id="trialBtn" type="button">Start free Pro trial</button><p class="status" id="trialStatus" role="status" aria-live="polite"></p></div>
+        <p class="hint" id="planHint">Payment options and activation timing are shown when you choose a plan.</p>
+        </div>
+        </details>
+
+        <details class="account-settings-disclosure" id="planReferral">
+          <summary>Earn free Pro days</summary>
+          <div class="account-settings-disclosure-body">
+          <p class="card-sub">Share your link. Every sign-up adds 31 days of Pro.</p>
+          <div class="v3-ref-link-row"><input id="refLink" readonly aria-label="Your referral link" value="" /><button class="v3-btn v3-btn--accent" id="refCopy" type="button">Copy link</button></div>
+          <div class="v3-stat-tiles"><div><b id="refCount"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Streamers joined</span></div><div><b id="refDays"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Free Pro days earned</span></div><div><b id="refSaved"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Estimated value</span></div></div>
+          <p id="refStatus" role="status" aria-live="polite"></p>
+          </div>
+        </details>
+
+        <section id="cancelWrap" hidden class="account-settings-section plan-cancel" aria-labelledby="cancelPlanTitle">
+          <h2 id="cancelPlanTitle">Cancel plan</h2>
           <p class="card-sub">What happens before you cancel or downgrade.</p>
           <ul class="hint plan-cancel-list">
             <li>You keep your current plan features until the expiry date shown above.</li>
@@ -101,20 +111,21 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
           </ul>
           <p class="hint" id="cancelStatus" role="status" aria-live="polite"></p>
           <button class="btn btn--sm btn--danger" id="cancelBtn" type="button">Cancel subscription</button>
-        </div>
+        </section>
 
-        <div id="historyCard" hidden>
-          <h3 class="m-0 mt-18 mb-4">Payment history</h3>
+        <section class="account-settings-section" id="historyCard" hidden aria-labelledby="paymentHistoryTitle">
+          <h2 id="paymentHistoryTitle">Payment history</h2>
           <p class="card-sub">Your past payments and receipts.</p>
           <div class="admin-table-wrap"><table class="admin-table" id="historyTable"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
           <div class="empty" id="historyEmpty" hidden>No payments yet. Completed payments and receipts will appear here after you upgrade.</div>
           <p class="hint">Receipts are also emailed to your account address after each successful payment.</p>
-        </div>
+        </section>
       </div>`;
 
-const postbacksWidget = `<div class="lb-widget lb-widget--full" id="postbacks">
-        <h2>Automatic sponsor score updates</h2>
-        <p class="card-sub">Automatically update player scores and track sponsor-reported sign-ups and deposits directly from your casino or brand sponsor.</p>
+const postbacksWidget = `<details class="lb-widget lb-widget--full account-settings-disclosure" id="postbacks">
+        <summary>Sponsor score updates</summary>
+        <div class="account-settings-disclosure-body">
+        <p class="card-sub">Connect a sponsor so confirmed activity can update player scores automatically.</p>
 
         <div id="postbackStatusCard" class="card card--status" hidden>
           <div class="d-flex items-center gap-8">
@@ -162,7 +173,7 @@ const postbacksWidget = `<div class="lb-widget lb-widget--full" id="postbacks">
         </div>
 
         <details class="adv" id="postbackAdvanced" hidden>
-            <summary>Advanced settings</summary>
+            <summary>Legacy setup</summary>
           <div class="field mt-14">
             <label>Legacy link (sunset {{NEXT_YEAR}})</label>
             <div class="d-flex gap-8 items-center flex-wrap">
@@ -182,31 +193,29 @@ const postbacksWidget = `<div class="lb-widget lb-widget--full" id="postbacks">
         <h3 class="m-0 mt-18 mb-4">Recent sponsor activity</h3>
         <div class="admin-table-wrap"><table class="admin-table" id="conversionsTable"><thead><tr><th>Time</th><th>Event</th><th>Score / Amount</th><th>Currency</th><th>Campaign / Offer</th></tr></thead><tbody id="conversionsBody"></tbody></table></div>
         <p class="empty" id="conversionsEmpty" hidden>No sponsor activity yet. Connect deposit tracking to see updates here.</p>
-      </div>`;
+        </div>
+      </details>`;
 
 const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
         <h2>Connected accounts</h2>
-        <p class="card-sub">Accounts and connected apps linked to your streamer profile.</p>
+        <p class="card-sub">Services linked to your creator account.</p>
         <div id="connectedAccounts"><p class="hint">Loading…</p></div>
-        <p class="hint">Identities are not merged across providers unless you explicitly enable linking.</p>
       </div>`;
 
 const dataWidget = `<div class="lb-widget lb-widget--full" id="data">
-          <h2>Account data &amp; backup</h2>
-          <p class="card-sub">Download complete backups of your leaderboards, scores, and creator settings, or manage account deletion.</p>
-          <section class="account-data-export" aria-labelledby="accountExportTitle">
-            <h3 class="m-0" id="accountExportTitle">Download Creator Backup</h3>
-            <p class="card-sub">Download a full backup of everything: settings, players, shop items, and analytics.</p>
+          <section class="account-settings-section account-data-export" aria-labelledby="accountExportTitle">
+            <h2 id="accountExportTitle">Export your data</h2>
+            <p class="card-sub">Download a copy of your settings, players, shop items, and analytics.</p>
             <div class="d-flex gap-8 items-center flex-wrap">
-              <button class="btn btn--accent" id="accExportData" type="button">Generate Account Backup</button>
+              <button class="btn btn--accent" id="accExportData" type="button">Generate export</button>
               <span class="hint" id="accExportStatus" role="status" aria-live="polite"></span>
             </div>
           </section>
-          <hr class="hr" />
-          <section class="account-danger-zone" aria-labelledby="accountDangerTitle">
-            <h3 class="m-0 mt-18 mb-4" id="accountDangerTitle">Permanently delete creator account</h3>
-            <p class="card-sub">Permanently delete your master streamer account and all live leaderboards. This action is irreversible.</p>
-            <button class="btn btn--danger" id="deleteAccountBtn" type="button">Delete Creator Account</button>
+          <section class="account-settings-section account-danger-zone" aria-labelledby="accountDangerTitle">
+            <h2 id="accountDangerTitle">Danger zone</h2>
+            <h3>Delete account</h3>
+            <p class="card-sub">Permanently delete your creator account and all of its sites. This cannot be undone.</p>
+            <button class="btn btn--danger" id="deleteAccountBtn" type="button">Delete account</button>
           </section>
         </div>`;
 
@@ -228,107 +237,68 @@ const deleteAccountModal = `<div class="modal" id="deleteAccountModal" role="dia
 const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
         <div class="d-flex justify-between items-center mb-16 flex-wrap gap-12">
           <div>
-            <h2 class="m-0">Team &amp; Moderators</h2>
-            <p class="card-sub m-0 mt-2">Delegate leaderboard score updates and shop fulfillment to trusted mods without sharing your login or billing credentials.</p>
+            <h2 class="m-0">Team members</h2>
+            <p class="card-sub m-0 mt-2">Invite trusted people to help manage the selected site without sharing your login.</p>
           </div>
           <button class="btn btn--accent" id="btnOpenInviteModal" type="button">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true" style="margin-right:6px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Moderator / Manager
+            Invite member
           </button>
         </div>
 
         <div class="acc-team-section">
-          <h3 class="m-0 mb-8">Active Team Members</h3>
+          <h3 class="m-0 mb-8">Current team</h3>
           <div id="teamMembersList">
             <p class="hint">Loading team members…</p>
           </div>
         </div>
 
-        <hr class="hr" />
-
         <div class="acc-team-section">
-          <h3 class="m-0 mb-8">Pending Invitations</h3>
+          <h3 class="m-0 mb-8">Pending invites</h3>
           <div id="teamInvitesList">
             <p class="hint">No pending invitations.</p>
           </div>
         </div>
 
-        <hr class="hr" />
-
-        <div class="acc-team-roles-guide">
-          <h3 class="m-0 mb-8">Role Permissions Overview</h3>
-          <div class="admin-table-wrap">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>Capability</th>
-                  <th>Owner (You)</th>
-                  <th>Manager</th>
-                  <th>Moderator (Mod)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>Leaderboards &amp; scores</strong><br/><span class="hint">Update players, scores, reset period</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Rewards fulfilment</strong><br/><span class="hint">Approve and fulfil member orders</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Telegram</strong><br/><span class="hint">Manage commands, offers, and broadcasts</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--muted">No access</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Billing &amp; Subscription</strong><br/><span class="hint">Payment methods, crypto checkouts, plans</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--muted">No access</span></td>
-                  <td><span class="pill pill--muted">No access</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Account Security &amp; Credentials</strong><br/><span class="hint">Change password, email, delete site</span></td>
-                  <td><span class="pill pill--good">Full access</span></td>
-                  <td><span class="pill pill--muted">No access</span></td>
-                  <td><span class="pill pill--muted">No access</span></td>
-                </tr>
-              </tbody>
-            </table>
+        <details class="account-settings-disclosure acc-team-roles-guide">
+          <summary>Choosing a role</summary>
+          <div class="account-settings-disclosure-body account-role-list">
+            <div>
+              <strong>Manager</strong>
+              <p>Can manage leaderboards, rewards, and Telegram for this site. Cannot manage billing or account security.</p>
+            </div>
+            <div>
+              <strong>Moderator</strong>
+              <p>Can update leaderboards and fulfil reward orders. Cannot manage Telegram, billing, or account security.</p>
+            </div>
           </div>
-        </div>
+        </details>
       </div>
 
-<div class="modal" id="inviteMemberModal" role="dialog" aria-modal="true" aria-labelledby="inviteModalTitle" hidden>
+<div class="modal" id="inviteMemberModal" role="dialog" aria-modal="true" aria-labelledby="inviteModalTitle" aria-describedby="inviteModalDescription" aria-hidden="true" hidden>
   <div class="modal-card">
-    <h3 id="inviteModalTitle">Invite Team Member</h3>
-    <p class="card-sub">Invite a moderator or manager to help operate this site. They will receive a unique link to join.</p>
+    <h3 id="inviteModalTitle">Invite team member</h3>
+    <p class="card-sub" id="inviteModalDescription">Choose what this person can manage for the selected site.</p>
     <div class="field">
-      <label for="inviteEmail">Member email</label>
-      <input id="inviteEmail" type="email" placeholder="mod@example.com" required />
+      <label for="inviteEmail">Email address</label>
+      <input id="inviteEmail" type="email" autocomplete="email" placeholder="creator@example.com" required />
     </div>
     <div class="field">
-      <label for="inviteRole">Assigned Role</label>
+      <label for="inviteRole">Role</label>
       <select id="inviteRole" class="field-select">
-        <option value="moderator" selected>Moderator (Can update leaderboards and fulfil shop orders)</option>
-        <option value="manager">Manager (Can manage leaderboards, shop, and Telegram bot)</option>
+        <option value="moderator" selected>Moderator — leaderboards and reward orders</option>
+        <option value="manager">Manager — leaderboards, rewards, and Telegram</option>
       </select>
     </div>
     <div class="d-flex gap-10 flex-wrap mt-14">
-      <button class="btn btn--accent" id="btnSendInvite" type="button">Create Invitation</button>
+      <button class="btn btn--accent" id="btnSendInvite" type="button">Create invite</button>
       <button class="btn btn--ghost" id="btnCloseInviteModal" type="button">Cancel</button>
     </div>
     <p class="status" id="inviteModalStatus" role="status" aria-live="polite"></p>
     <div id="inviteResultWrap" class="mt-14" hidden>
-      <label>Shareable Invite Link</label>
+      <label for="inviteLinkInput">Invite link</label>
       <div class="d-flex gap-8 items-center flex-wrap">
-        <input type="text" id="inviteLinkInput" readonly style="flex:1;background:rgba(0,0,0,0.3);color:#fff;" />
-        <button class="btn btn--sm" id="btnCopyInviteLink" type="button">Copy Link</button>
+        <input type="text" id="inviteLinkInput" readonly />
+        <button class="btn btn--sm" id="btnCopyInviteLink" type="button">Copy link</button>
       </div>
       <p class="hint">This link is valid for 7 days.</p>
     </div>

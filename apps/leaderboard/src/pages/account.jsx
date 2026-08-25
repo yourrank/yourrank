@@ -13,40 +13,48 @@ export const SETTINGS_TABS = [
   ["data", "Data"],
 ];
 
-function settingsPanel(key, html) {
-  return <section class="account-settings-panel" data-settings-panel={key} hidden={key !== "account"} dangerouslySetInnerHTML={{ __html: html }} />;
+const SETTINGS_DESCRIPTIONS = {
+  account: "Your profile, password, and signed-in devices.",
+  team: "People who can help manage the selected site.",
+  plan: "Your current plan, usage, and payment history.",
+  connections: "Accounts and services connected to YourRank.",
+  data: "Export your account data or permanently close your account.",
+};
+
+function settingsPanel(key, html, active) {
+  return <section class="account-settings-panel" data-settings-panel={key} hidden={key !== active} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function UnifiedSettingsPage({ activePath, user, tab = "account", fragment } = {}) {
   const active = SETTINGS_TABS.some(([key]) => key === tab) ? tab : "account";
   const activeLabel = SETTINGS_TABS.find(([key]) => key === active)?.[1] || "Account";
+  const activeDescription = SETTINGS_DESCRIPTIONS[active];
   const content = <div class="account-body account-settings" id="acc-app" data-acc-tab="settings" data-settings-active={active}>
       <div class="v3-head">
         <h1 data-chrome-h1>{activeLabel}</h1>
-        <p class="v3-head-sub">Account settings apply to you. To change your website, use Site settings.</p>
+        <p class="v3-head-sub" data-settings-page-description>{activeDescription}</p>
       </div>
-      <nav class="v3-tabs" aria-label="Account settings sections">
+      <nav class="v3-tabs" role="tablist" aria-label="Account settings sections">
         {SETTINGS_TABS.map(([key, label]) => (
-          <a class={"v3-tab" + (key === active ? " is-on" : "")} href={`/dashboard/settings/${key === "plan" ? "billing" : key}`} data-settings-tab={key} aria-current={key === active ? "page" : undefined}>
+          <a class={"v3-tab" + (key === active ? " is-on" : "")} href={`/dashboard/settings/${key === "plan" ? "billing" : key}`} data-settings-tab={key} data-settings-description={SETTINGS_DESCRIPTIONS[key]} role="tab" aria-selected={key === active ? "true" : "false"} aria-current={key === active ? "page" : undefined} tabindex={key === active ? "0" : "-1"}>
             {label}
           </a>
         ))}
       </nav>
       <div class="account-settings-layout">
         <div class="account-settings-main">
-          {settingsPanel("account", settingsWidgets.account)}
-          {settingsPanel("team", settingsWidgets.team)}
-          {settingsPanel("plan", settingsWidgets.plan)}
-          {settingsPanel("connections", `${settingsWidgets.postbacks}<div class="lb-widget lb-widget--full"><h2>Connected accounts</h2><p class="card-sub">Streamer identities and connected services.</p><div id="connectedAccounts"><p class="hint">Loading…</p></div></div><div class="lb-widget lb-widget--full"><h2>Site connections</h2><p class="card-sub">The Kick connection that powers rewards belongs to the selected site, so it is managed in Site settings, not here.</p><a class="btn btn--accent" href="/dashboard/site/connections">Manage connections for the selected site →</a></div>`)}
-          {settingsPanel("data", `${settingsWidgets.data}<div class="lb-widget lb-widget--full lb-widget--danger"><h2>Selected site data</h2><p class="card-sub">Resetting, archiving, or deleting a site affects one selected site, not your whole account, so those controls live in Site settings.</p><div class="d-flex gap-8 flex-wrap"><a class="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data in Site settings →</a></div></div>`)}
+          {settingsPanel("account", settingsWidgets.account, active)}
+          {settingsPanel("team", settingsWidgets.team, active)}
+          {settingsPanel("plan", settingsWidgets.plan, active)}
+          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.postbacks}<div class="account-related-setting"><div><strong>Kick rewards for the selected site</strong><p>The channel connection that powers rewards is managed separately for each site.</p></div><a class="btn btn--ghost" href="/dashboard/site/connections">Manage site connection</a></div>`, active)}
+          {settingsPanel("data", `${settingsWidgets.data}<div class="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a class="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div>`, active)}
         </div>
-        <aside class="account-settings-sidebar" aria-label="Related settings">
-          <div class="account-scope-helper">
-            <strong>Need help?</strong>
-            <p>Help and feedback are kept in one place so you do not have to hunt through settings.</p>
-            <a href="/help/support?area=account">Open Help &amp; feedback</a>
-          </div>
-        </aside>
+        <div class="account-settings-help">
+          <span>Account settings apply to you. To change your website, use Site settings.</span>
+          <a href="/dashboard/site">Open Site settings</a>
+          <span aria-hidden="true">·</span>
+          <a href="/help/support?area=account">Open Help &amp; feedback</a>
+        </div>
       </div>
     </div>;
   const chrome = chromeStateFor("settings", active);

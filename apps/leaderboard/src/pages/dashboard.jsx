@@ -361,84 +361,107 @@ function BoardSettingsSection({ active } = {}) {
 <div class="v3-settings">
   <header class="v3-head">
     <h1>Site settings</h1>
-    <p class="v3-head-sub" id="settingsSubline">These settings apply to the site selected above. Your plan, account password, billing, and automatic score update keys live in <a href="/dashboard/settings">account settings</a>.</p>
+    <p class="v3-head-sub" id="settingsSubline">Control the selected site's access, public pages, notifications, domain, and data. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
   </header>
   <div class="v3-tabs" role="tablist" aria-label="Site settings sections">
-    <button class="v3-tab is-on" id="settingsTabAccess" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelAccess" data-settings-tab="access">Access &amp; alerts</button>
-    <button class="v3-tab" id="settingsTabSections" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSections" data-settings-tab="sections">Sections</button>
-    <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Site tools</button>
+    <button class="v3-tab is-on" id="settingsTabAccess" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelAccess" data-settings-tab="access">Access</button>
+    <button class="v3-tab" id="settingsTabSections" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSections" data-settings-tab="sections">Pages</button>
+    <button class="v3-tab" id="settingsTabNotifications" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelNotifications" data-settings-tab="notifications">Notifications</button>
     <button class="v3-tab" id="settingsTabDomain" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDomain" data-settings-tab="domain">Domain</button>
+    <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Advanced</button>
     <button class="v3-tab" id="settingsTabDanger" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDanger" data-settings-tab="danger">Danger zone</button>
   </div>
+  <div class="v3-settings-save" id="settingsSaveBar" hidden>
+    <p id="settingsSaveText">Use Save changes after updating these settings.</p>
+    <button class="btn btn--accent" id="settingsSave" type="button" disabled>Save changes</button>
+  </div>
   <section class="v3-settings-panel" id="settingsPanelAccess" role="tabpanel" aria-labelledby="settingsTabAccess" data-settings-panel="access">
-    <div class="v3-settings-card"><div class="v3-settings-row"><div><h2>Visibility &amp; password</h2><p>You can require a password before anyone can view this leaderboard.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Change access settings</a></div></div>
-    <div class="v3-settings-card"><div class="v3-settings-row v3-settings-row--top"><div><h2>Discord notifications <span class="v3-chip v3-chip--pro">PRO</span></h2><p>Get a Discord message when your leaderboard resets or a player reaches the top 3.</p></div><input class="v3-toggle" id="settingsWebhookEnabled" type="checkbox" aria-label="Enable Discord notifications" /></div><div class="v3-settings-notify-body" id="notifyBody"><div class="v3-settings-inline-form"><input id="f_webhook" aria-label="Discord connection URL" placeholder="Paste the link from Discord here" /><button class="v3-set-btn v3-set-btn--outline" id="testDiscord" type="button">Send test message</button><span class="v3-settings-status" id="testDiscordStatus" role="status"></span></div><p class="v3-settings-muted">In Discord, open Channel settings → Integrations → Webhooks, then choose Copy Webhook URL.</p></div><div class="v3-settings-inline" id="notifyLock" hidden>Notifications are a Pro feature. <a href="/dashboard/settings/billing?from=notifications">Upgrade to unlock them</a>.</div></div>
+    <div class="v3-settings-card">
+      <div class="v3-settings-card-head"><div><h2>Who can view this site?</h2><p>Choose whether anyone with the link can view it or a password is required.</p></div></div>
+      <div class="v3-settings-row"><div><b>Visibility and password</b><p>Site name, public address, publication, and password controls stay together in the site editor.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div>
+    </div>
   </section>
   <section class="v3-settings-panel" id="settingsPanelSections" role="tabpanel" aria-labelledby="settingsTabSections" data-settings-panel="sections" hidden>
-    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Public page sections</h2><p>Choose which pages your public site shows. Turning one off removes it from navigation and disables its URL.</p></div></div><div id="siteSectionRows"></div></div>
-    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Leaderboard page blocks</h2><p>Current block visibility on your leaderboard page. Edit the layout itself in Appearance.</p></div><span class="v3-chip v3-chip--pro">PRO</span></div><div class="v3-block-grid" id="leaderboardBlockRows"></div><div class="v3-note" id="leaderboardBlockNote">Block visibility follows your site settings.</div><a class="btn btn--sm btn--accent mt-12" href="/dashboard/leaderboard/design">Edit layout &amp; blocks in Appearance →</a></div>
+    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Public page sections</h2><p>Choose which destinations appear on your public site. Turning one off also disables its public address.</p></div></div><div id="siteSectionRows"></div></div>
+    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Leaderboard page blocks</h2><p>Current block visibility on your leaderboard page. Edit the layout itself in Appearance.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div><div class="v3-block-grid" id="leaderboardBlockRows"></div><div class="v3-note" id="leaderboardBlockNote">Block visibility follows your site settings.</div><a class="btn btn--sm btn--accent mt-12" href="/dashboard/leaderboard/design">Edit layout &amp; blocks in Appearance →</a></div>
+    <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
+  </section>
+  <section class="v3-settings-panel" id="settingsPanelNotifications" role="tabpanel" aria-labelledby="settingsTabNotifications" data-settings-panel="notifications" hidden>
+    <div class="v3-settings-card">
+      <div class="v3-settings-card-head"><div><h2>Where should YourRank send updates?</h2><p>Send reset and top-three activity to the services your community already uses.</p></div></div>
+      <div class="v3-settings-row v3-settings-row--top"><div><b>Discord</b><p>Send updates to a Discord channel.</p></div><input class="v3-toggle" id="settingsWebhookEnabled" type="checkbox" aria-label="Send site updates to Discord" /></div>
+      <div class="v3-settings-notify-body" id="notifyBody">
+        <div class="v3-settings-field">
+          <label class="v3-settings-label" for="f_webhook">Discord webhook URL</label>
+          <div class="v3-settings-inline-form"><input id="f_webhook" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="Paste the webhook URL from Discord" /><button class="v3-set-btn v3-set-btn--outline" id="testDiscord" type="button">Send test</button><span class="v3-settings-status" id="testDiscordStatus" role="status" aria-live="polite"></span></div>
+        </div>
+        <details class="v3-settings-help"><summary>How to find the webhook URL</summary><p class="v3-settings-muted">In Discord, open Channel settings, then Integrations and Webhooks. Create or open a webhook and copy its URL.</p></details>
+      </div>
+      <div class="v3-settings-inline" id="notifyLock" hidden>Discord notifications are available on Pro. <a href="/dashboard/settings/billing?from=notifications">View billing</a>.</div>
+      <div class="v3-settings-divider"></div>
+      <div class="v3-settings-notify-account">
+        <div><b>Telegram</b><p class="v3-settings-muted">Send updates to a Telegram group you manage.</p></div>
+        <label class="v3-settings-label" for="f_tgChatId">Telegram group ID</label>
+        <input id="f_tgChatId" autocomplete="off" inputmode="numeric" placeholder="Enter the group or chat ID" />
+        <label class="v3-settings-check"><input type="checkbox" id="f_tgNotify" /> Send site updates to this group</label>
+        <div class="v3-settings-actions"><button class="v3-set-btn v3-set-btn--outline" id="testTelegram" type="button">Send test</button><span class="v3-settings-status" id="testTelegramStatus" role="status" aria-live="polite"></span></div>
+        <details class="v3-settings-help"><summary>How to find the group ID</summary><p class="v3-settings-muted">Use @getidsbot in Telegram, then paste the group ID here.</p></details>
+      </div>
+    </div>
   </section>
   <section class="v3-settings-panel" id="settingsPanelTools" role="tabpanel" aria-labelledby="settingsTabTools" data-settings-panel="tools" hidden>
-    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Site tools</h2><p>Connect services and manage the site-facing tools around your leaderboard.</p></div></div><div class="v3-settings-row"><div><b>Kick channel rewards</b><p>Let viewers earn credits by claiming Kick channel rewards.</p><span class="v3-settings-muted" id="kickStatus"><span class="skeleton skeleton-text" aria-hidden="true"></span></span></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/site/connections" id="kickRewardsLink">Manage connection</a></div><div class="v3-settings-row"><div><b>Automatic score updates</b><p id="postbackStatus">Let your sponsor update scores automatically without manual imports. Connection keys belong to your account.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/settings/connections">Open Account → Connections</a></div><div class="v3-settings-row"><div><b>Stream overlay</b><p>Get stream overlay links and browser-source setup.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/leaderboard/share">Go to sharing</a></div><div class="v3-settings-divider"></div><div class="v3-settings-notify-account"><label class="v3-settings-label" for="f_tgChatId">Telegram group ID</label><input id="f_tgChatId" placeholder="Enter your group or chat ID" /><p class="v3-settings-muted">You can find your group ID using the @getidsbot on Telegram.</p><label class="v3-settings-check"><input type="checkbox" id="f_tgNotify" /> Send notifications to this Telegram group</label><button class="v3-set-btn v3-set-btn--outline" id="testTelegram" type="button">Send a test message</button><span class="v3-settings-status" id="testTelegramStatus" role="status"></span></div><div class="v3-settings-divider"></div><div class="v3-settings-legal"><h3>Legal pages</h3><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div>
+    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Advanced site tools</h2><p>Connections and stream tools that support this selected site.</p></div></div><div class="v3-settings-row"><div><b>Kick channel rewards</b><p>Let viewers earn credits by claiming Kick channel rewards.</p><span class="v3-settings-muted" id="kickStatus"><span class="skeleton skeleton-text" aria-hidden="true"></span></span></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/site/connections" id="kickRewardsLink">Manage connection</a></div><div class="v3-settings-row"><div><b>Automatic score updates</b><p id="postbackStatus">Let a sponsor send score updates without manual imports. The private connection belongs to your account.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/settings/connections">Manage connection</a></div><div class="v3-settings-row"><div><b>Stream overlay</b><p>Get the browser-source link for OBS, Streamlabs, or another streaming app.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/leaderboard/share">Open sharing</a></div></div>
   </section>
   <section class="v3-settings-panel" id="settingsPanelDomain" role="tabpanel" aria-labelledby="settingsTabDomain" data-settings-panel="domain" hidden>
-      <div class="v3-settings-card" id="domainManageCard" hidden>
+    <div class="v3-settings-card v3-domain-overview" id="domainOverviewCard">
+      <div><span class="v3-settings-eyebrow">Current domain</span><h2 id="domainOverviewTitle">Checking your domain…</h2><p id="domainOverviewText">Your default yourrank.site address remains available while we check for a custom domain.</p></div>
+      <span class="v3-settings-status-text" id="domainOverviewStatus" role="status" aria-live="polite">Checking</span>
+    </div>
+    <div class="v3-settings-card" id="domainManageCard" hidden>
       <div class="v3-settings-card-head">
         <div>
           <h2>Your custom domain</h2>
-          <p>Active custom domain connected to this site.</p>
+          <p>This is the public address connected to the selected site.</p>
         </div>
-        <span class="v3-chip v3-chip--fulfilled" id="domainManageBadge">● Active</span>
+        <span class="v3-chip v3-chip--fulfilled" id="domainManageBadge">Active</span>
       </div>
       <div class="domain-info-box">
-        <div class="domain-info-row"><span>Connected domain:</span><strong id="domainManageName">—</strong></div>
-        <div class="domain-info-row"><span>Renewal date:</span><span id="domainManageExpiry">—</span></div>
-        <div class="domain-info-row"><span>Transfer lock (ICANN):</span><span id="domainManageLockStatus">🔒 Enabled</span></div>
+        <div class="domain-info-row"><span>Domain</span><strong id="domainManageName">—</strong></div>
+        <div class="domain-info-row"><span>Renews</span><span id="domainManageExpiry">—</span></div>
       </div>
-      <div class="d-flex gap-8 mt-12 flex-wrap">
-        <button class="btn btn--sm" id="domainToggleLockBtn" type="button">Unlock for transfer</button>
-        <button class="btn btn--sm btn--accent" id="domainGetAuthCodeBtn" type="button">Get EPP Transfer Code</button>
-        <button class="btn btn--sm btn--danger-outline" id="domainDisconnectBtn" type="button">Disconnect domain</button>
-      </div>
+      <details class="v3-settings-help v3-domain-transfer"><summary>Transfer this domain</summary><div class="domain-info-row"><span>Transfer lock</span><span id="domainManageLockStatus">Enabled</span></div><div class="d-flex gap-8 mt-12 flex-wrap"><button class="btn btn--sm" id="domainToggleLockBtn" type="button">Unlock for transfer</button><button class="btn btn--sm btn--accent" id="domainGetAuthCodeBtn" type="button">Get transfer code</button></div></details>
+      <div class="v3-settings-divider"></div>
+      <button class="btn btn--sm btn--danger-outline" id="domainDisconnectBtn" type="button">Disconnect domain</button>
       <div id="domainManageStatus" class="v3-settings-status mt-8" role="status"></div>
-    </div>
-
-    <div class="v3-settings-card" id="domainBuyCard">
-      <div class="v3-settings-card-head">
-        <div>
-          <h2>⚡ Buy a custom domain (1-Click Setup)</h2>
-          <p>Search, register, and connect your brand domain with instant automated DNS and free SSL.</p>
-        </div>
-      </div>
-      <div id="domainSearchBody">
-        <div class="domain-search-bar">
-          <input id="domainSearchInput" placeholder="Search your brand name (e.g. ninjarank, streamhub)..." />
-          <button class="btn btn--accent" id="domainSearchBtn" type="button">Search</button>
-        </div>
-        <div id="domainSearchResults" class="domain-results-grid" hidden></div>
-        <div id="domainSearchStatus" class="v3-settings-status" role="status"></div>
-      </div>
     </div>
 
     <div class="v3-settings-card" id="domainConnectCard">
       <div class="v3-settings-card-head">
         <div>
-          <h2>Connect an existing domain you already own</h2>
-          <p>If you already purchased a domain on GoDaddy, Namecheap, or Cloudflare, connect it via CNAME.</p>
+          <h2>Connect a domain you own</h2>
+          <p>Use a domain from your current provider, such as GoDaddy, Namecheap, or Cloudflare.</p>
         </div>
       </div>
       <div id="domainBody">
-        <label class="v3-settings-label" for="f_domain">Your existing domain</label>
-        <input id="f_domain" placeholder="board.mystream.com" />
-        <p class="v3-settings-muted">Add a CNAME record in your domain provider pointing to <code>yourrank.site</code>, then verify connection.</p>
-        <button class="v3-set-btn v3-set-btn--dark" id="domainVerify" type="button">Verify connection</button>
-        <div id="domainStatus" class="v3-settings-status" role="status"></div>
+        <label class="v3-settings-label" for="f_domain">Domain</label>
+        <input id="f_domain" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="board.mystream.com" />
+        <div class="v3-settings-actions"><button class="v3-set-btn v3-set-btn--dark" id="domainVerify" type="button">Check connection</button><div id="domainStatus" class="v3-settings-status" role="status" aria-live="polite"></div></div>
+        <details class="v3-settings-help"><summary>DNS setup</summary><p class="v3-settings-muted">Add a CNAME record at your domain provider that points to <code>yourrank.site</code>, then return here to check the connection.</p></details>
       </div>
       <div class="v3-settings-inline" id="domainLock" hidden>Custom domains are a Pro feature. <a href="/dashboard/settings/billing?from=domain">Upgrade to unlock it</a>.</div>
     </div>
+    <details class="v3-settings-card v3-settings-disclosure" id="domainBuyCard">
+      <summary>Buy a new domain</summary>
+      <div class="v3-settings-disclosure-body" id="domainSearchBody">
+        <p class="v3-settings-muted">Search for a domain and connect it to this site. DNS and SSL setup are handled automatically.</p>
+        <div class="domain-search-bar"><label class="sr-only" for="domainSearchInput">Search for a domain</label><input id="domainSearchInput" autocomplete="off" spellcheck="false" placeholder="Search a name, such as mystream" /><button class="btn btn--accent" id="domainSearchBtn" type="button">Search domains</button></div>
+        <div id="domainSearchResults" class="domain-results-grid" hidden></div>
+        <div id="domainSearchStatus" class="v3-settings-status" role="status" aria-live="polite"></div>
+      </div>
+    </details>
   </section>
   <section class="v3-settings-panel" id="settingsPanelDanger" role="tabpanel" aria-labelledby="settingsTabDanger" data-settings-panel="danger" hidden>
-    <div class="v3-settings-card v3-danger-card"><div class="v3-danger-lbl">DANGER ZONE</div><div class="v3-settings-row"><div><b>Wipe all scores and history</b><p>Deletes all player scores, prize amounts, and activity history. This cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger-outline" id="settingsResetData" type="button">Reset everything</button></div><div class="v3-settings-row"><div><b>Delete this site</b><p>Permanently delete this site and its settings. This action cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger" id="settingsDeleteBoard" type="button">Delete site</button></div></div>
+    <div class="v3-settings-card v3-danger-card"><div class="v3-settings-card-head"><div><h2>Danger zone</h2><p>These actions permanently change or remove data for the selected site.</p></div></div><div class="v3-settings-row"><div><b>Reset site data</b><p>Archive this period, then remove all players, scores, prize amounts, and activity history.</p></div><button class="v3-set-btn v3-set-btn--danger-outline" id="settingsResetData" type="button">Reset data</button></div><div class="v3-settings-row"><div><b>Delete this site</b><p>Permanently delete this site and its settings. This cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger" id="settingsDeleteBoard" type="button">Delete site</button></div></div>
   </section>
 </div>
 </section>
