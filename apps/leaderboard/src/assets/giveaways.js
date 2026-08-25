@@ -603,9 +603,11 @@ if (!window.__yrSpaShell) {
 
     const numberCell = document.createElement("td");
     numberCell.className = "ta-c gw-number-cell";
+    numberCell.dataset.label = "#";
     numberCell.textContent = String(index);
 
     const userCell = document.createElement("td");
+    userCell.dataset.label = "Viewer";
     const userWrap = document.createElement("div");
     userWrap.className = "gw-entrant-user";
     const avatar = document.createElement("img");
@@ -639,6 +641,7 @@ if (!window.__yrSpaShell) {
 
     // Status Badge Column
     const trustCell = document.createElement("td");
+    trustCell.dataset.label = "Status";
     const trustBadge = document.createElement("span");
     const score = entrant.trustScore || 75;
     if (score >= 70) {
@@ -654,6 +657,7 @@ if (!window.__yrSpaShell) {
     trustCell.append(trustBadge);
 
     const messageCell = document.createElement("td");
+    messageCell.dataset.label = "Chat message";
     const message = document.createElement("span");
     message.className = "gw-entrant-msg";
     message.textContent = entrant.message;
@@ -661,10 +665,12 @@ if (!window.__yrSpaShell) {
 
     const timeCell = document.createElement("td");
     timeCell.className = "gw-time-cell";
+    timeCell.dataset.label = "Entered";
     timeCell.textContent = entrant.time;
 
     const actionCell = document.createElement("td");
     actionCell.className = "ta-r";
+    actionCell.dataset.label = "Action";
     const removeButton = document.createElement("button");
     removeButton.className = "btn btn--sm btn--ghost btn--danger-text";
     removeButton.type = "button";
