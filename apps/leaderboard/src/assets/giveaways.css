@@ -8,22 +8,8 @@
   width: 100%;
 }
 
-.gw-workspace-content .v3-head h1 {
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
-  color: var(--ws-text, var(--ws-text));
-  margin: 0 0 6px;
-}
-
-.gw-workspace-content .v3-head-sub {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ws-text-soft, var(--ws-text-mute));
-  letter-spacing: 0;
-  margin: 0;
-}
+/* Page head typography is the shared authenticated page chrome; see
+   dashboard-v4.css. */
 
 .gw-layout {
   display: grid;
@@ -67,13 +53,6 @@
   letter-spacing: -0.01em;
   color: var(--ws-text, var(--ws-text));
   margin: 0;
-}
-
-.gw-card .v3-head-sub {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--ws-text-soft, var(--ws-text-mute));
-  margin-top: 4px;
 }
 
 .gw-card .field {
@@ -1091,49 +1070,11 @@
    COMMUNITY EVENTS HUB STYLES (Tabs, Raffles, Drops, Drawers, Chips)
    ========================================================================== */
 
-/* Top Navigation Tabs */
-.gw-nav-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 24px;
-  border-bottom: 1px solid var(--ws-line, var(--ws-line));
-  padding-bottom: 12px;
-}
-.gw-tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-radius: var(--ws-radius-sm);
-  background: transparent;
-  color: var(--ws-text-soft, var(--ws-text-mute));
-  font-size: 13.5px;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 140ms ease;
-}
-.gw-tab-btn:hover {
-  background: var(--ws-surface-soft, var(--ws-surface-soft));
-}
-.gw-tab-btn.is-active {
-  background: #ffffff;
-  border-color: var(--ws-line, var(--ws-line));
-  box-shadow: none;
-}
-/* Tabs are anchors, so their ink has to outrank the workspace link colour. */
-.v3-dash[data-auth-workspace] .gw-tab-btn {
-  color: var(--ws-text-soft, var(--ws-text-mute));
-}
-.v3-dash[data-auth-workspace] .gw-tab-btn:hover {
-  color: var(--ws-text, var(--ws-text));
-}
-.v3-dash[data-auth-workspace] .gw-tab-btn.is-active {
-  color: var(--ws-accent, var(--ws-accent));
-}
-
+/* Engage page tabs are painted by the shared authenticated tab strip
+   (.v3-tabs/.v3-tab in dashboard-v4.css). These two selectors stay behind only
+   as the controller's scroll-the-active-tab-into-view hooks. */
+.gw-nav-tabs { scroll-behavior: auto; }
+.gw-tab-btn { scroll-margin-inline: 16px; }
 .gw-tab-pane { display: none; }
 .gw-tab-pane.is-active { display: block; }
 

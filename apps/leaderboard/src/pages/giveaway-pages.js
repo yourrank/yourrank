@@ -246,9 +246,9 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   const tabs = GIVEAWAY_TABS.map(([tab, label]) => `
   <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}>${label}</a>`).join("");
   const html = `
-<div class="v3-head">
+<div class="v3-head v3-head--row">
   <div class="v3-head-col">
-  <h1>${activeLabel}</h1>
+    <h1>${activeLabel}</h1>
     <p class="v3-head-sub">${active === "tournaments"
       ? "Let viewers join from chat, then curate the list before you pick."
       : "Engage your viewers with live chat giveaways, Credit ticket raffles, and flash drop claim codes."}</p>
@@ -258,7 +258,6 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   </div>
 </div>
 
-<!-- Segmented Navigation Tabs -->
 <div class="gw-nav-tabs v3-tabs" role="tablist" aria-label="Engage pages">
 ${tabs}
 </div>
