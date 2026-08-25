@@ -45,6 +45,13 @@ const statusClearTimers = new Map();
 let activityEvents = [];
 let activityCursor = null;
 let activityLoading = false;
+let memberHistoryEvents = [];
+let memberHistoryCursor = null;
+let memberHistoryLoading = false;
+let memberHistoryUsername = "";
+let memberHistoryRelease;
+let memberHistoryTrigger;
+let memberHistoryRequest = 0;
 let shopItemsView = [];
 let shopSearch = "";
 let shopSort = "cost";
@@ -210,19 +217,44 @@ function renderRewardRow(m) {
 function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
 }
+function memberIdentity(v) {
+  return v.kick_username || v.discord_username || "Member";
+}
+function memberPlatforms(v) {
+  return [
+    v.kick_username || v.kick_user_id ? "Kick" : "",
+    v.discord_username || v.discord_user_id ? "Discord" : "",
+  ].filter(Boolean);
+}
 function renderViewerRow(v) {
-  const uname = viewerIdentity(v);
+  const identity = memberIdentity(v);
+  const uname = identity;
+  const platforms = memberPlatforms(v);
   const avatar = v.avatar_url
     ? `<img class="cr-viewer-avatar" src="${esc(v.avatar_url)}" alt="" loading="lazy" />`
     : `<span class="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">${esc(uname.slice(0, 1).toUpperCase())}</span>`;
   const joined = fmtDate(v.created_at);
   const earned = v.last_earned_at ? fmtDate(v.last_earned_at) : "Not yet";
   const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet";
-  const identity = viewerIdentity(v);
+  const lastActiveAt = v.last_seen_at || v.last_earned_at;
   const history = identity !== "Member"
-    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}">History</a> `
+    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}" data-member-history="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">History</a> `
     : "";
-  return `<td><div class="cr-viewer-identity">${avatar}<span><b>${esc(uname)}</b>${v.blocked ? ' <span class="v3-chip v3-chip--cancelled">blocked</span>' : ""}</span></div></td><td class="num"><b>${v.balance}</b></td><td class="num">${v.total_earned}</td><td class="num">${v.total_spent}</td><td><span title="Joined ${esc(joined)}">${esc(joined)}</span><br><span class="hint">Earned: ${esc(earned)}</span><br><span class="hint">Seen: ${esc(seen)}</span></td><td class="ta-r">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${v.balance}" title="Tip credits to @${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "btn--accent" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></td>`;
+  const platformHtml = platforms.length
+    ? platforms.map((platform) => `<span>${platform}</span>`).join("")
+    : "<span>Account connected</span>";
+  const activity = lastActiveAt
+    ? `<b title="Last seen: ${esc(seen)} · Last earned: ${esc(earned)}">Active ${esc(relative(lastActiveAt))}</b>`
+    : "<b>No activity yet</b>";
+  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b><span class="cr-member-platforms">${platformHtml}</span>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked</span>' : ""}</span></div></td><td data-label="Recent activity"><div class="cr-member-activity">${activity}<span title="${esc(joined)}">Joined ${esc(relative(v.created_at))}</span></div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.total_earned) || 0} · Spent ${Number(v.total_spent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${Number(v.balance) || 0}" title="Tip credits to ${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></div></td>`;
+}
+function openFullMemberHistory(href) {
+  const destination = new URL(href, location.origin);
+  requestDashboardRoute("rewards", "history", { query: destination.search });
+}
+async function loadMemberHistoryDialog() {
+  if (!window.YRDialog) await import("./dialog.js");
+  return window.YRDialog;
 }
 function renderRedemptionRow(r) { return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Item">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Ordered" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
 function renderShopCards(items) {
@@ -321,7 +353,7 @@ function render() {
   }
   if (current === "viewers") {
     const viewers = state.viewers || [];
-    if (!viewerCtrl) { viewerCtrl = new ListController({ root: $("cr-viewers"), tbody: "cr-viewer-list", emptyEl: $("cr-viewer-empty"), emptySpec: { kind: "empty", title: "No members yet", body: "Members who sign in will appear here, even before they earn or spend credits.", compact: true }, items: viewers, perPage: 15, searchFn: (v) => `${viewerIdentity(v)} ${v.block_reason || ""} ${v.blocked ? "blocked" : ""}`, sortOptions: [{ key: "balance", label: "Balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) }, { key: "earned", label: "Earned", fn: (a, b) => (b.total_earned || 0) - (a.total_earned || 0) }, { key: "spent", label: "Spent", fn: (a, b) => (b.total_spent || 0) - (a.total_spent || 0) }, { key: "last", label: "Last earned", fn: (a, b) => new Date(b.last_earned_at || b.created_at || 0) - new Date(a.last_earned_at || a.created_at || 0) }], emptyAllText: "No members yet.", emptyText: "No matching members.", renderItem: (v) => renderViewerRow(v), onRender: () => wireDynamicActions() }); }
+    if (!viewerCtrl) { viewerCtrl = new ListController({ root: $("cr-viewers"), tbody: "cr-viewer-list", emptyEl: $("cr-viewer-empty"), emptySpec: { kind: "empty", title: "No members yet", body: "Members who sign in will appear here after they use your YourRank site. Share your site to invite your first member.", compact: true, actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }] }, items: viewers, perPage: 15, searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.block_reason || ""} ${v.blocked ? "blocked" : "active"}`, sortOptions: [{ key: "activity", label: "Recently active", fn: (a, b) => new Date(b.last_seen_at || b.last_earned_at || b.created_at || 0) - new Date(a.last_seen_at || a.last_earned_at || a.created_at || 0) }, { key: "joined", label: "Newest members", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) }, { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) }], emptyAllText: "No members yet.", emptyText: "No matching members.", renderItem: (v) => renderViewerRow(v), onRender: () => wireDynamicActions() }); mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot")); }
     else viewerCtrl.setItems(viewers);
   }
   if (current === "overview") {
@@ -484,6 +516,23 @@ function wireDynamicActions() {
   document.querySelectorAll("[data-cancel]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => updateRedemption(b.dataset.cancel, "cancelled", b)); });
   document.querySelectorAll("[data-block]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => toggleBlock(b.dataset.block, b.dataset.blocked === "1", b)); });
   document.querySelectorAll("[data-tip-viewer]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => openTip(b.dataset.tipViewer, b.dataset.viewerName)); });
+  document.querySelectorAll("[data-member-history]:not([data-wired])").forEach((link) => {
+    link.dataset.wired = "1";
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const viewer = (state.viewers || []).find((item) => String(item.id) === String(link.dataset.memberHistory));
+      if (!viewer) {
+        openFullMemberHistory(link.href);
+        return;
+      }
+      try {
+        await openMemberHistory(viewer, link);
+      } catch (error) {
+        logError("open-member-history", error);
+        openFullMemberHistory(link.href);
+      }
+    });
+  });
   document.querySelectorAll("[data-toggle-shop]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("change", () => toggleShop(b.dataset.toggleShop, b)); });
   document.querySelectorAll("[data-toggle-reward]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("change", () => toggleReward(b.dataset.toggleReward, b)); });
 }
@@ -533,6 +582,145 @@ function closeTip() {
   if (!drawer) return;
   drawer.hidden = true;
   $("cr-viewers")?.classList.remove("has-drawer");
+}
+function closeMemberHistory() {
+  memberHistoryRequest++;
+  memberHistoryLoading = false;
+  memberHistoryTrigger?.setAttribute("aria-expanded", "false");
+  const drawer = $("cr-member-history-drawer");
+  const backdrop = $("cr-member-history-backdrop");
+  if (drawer) drawer.hidden = true;
+  if (backdrop) backdrop.hidden = true;
+  document.documentElement.classList.remove("yr-modal-open");
+  memberHistoryRelease?.();
+  memberHistoryRelease = undefined;
+  memberHistoryTrigger = undefined;
+}
+function renderMemberHistory() {
+  const list = $("cr-member-history-list");
+  const empty = $("cr-member-history-empty");
+  const more = $("cr-member-history-more");
+  if (!list) return;
+  list.removeAttribute("aria-busy");
+  if (!memberHistoryEvents.length) {
+    list.innerHTML = "";
+    list.hidden = true;
+    if (empty) {
+      renderEmpty(empty, {
+        kind: "empty",
+        title: "No credit activity yet",
+        body: "This member has not earned or spent Credits on this site.",
+        compact: true,
+      });
+    }
+  } else {
+    list.hidden = false;
+    if (empty) empty.hidden = true;
+    list.innerHTML = memberHistoryEvents.map((event) => {
+      const debit = event.direction === "debit";
+      const amount = `${debit ? "−" : "+"}${event.amount}`;
+      return `<li><div><strong>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</strong><span>${esc(event.description || "No details")}</span></div><div class="cr-member-history-event-meta"><b class="${debit ? "cr-negative" : "cr-positive"}">${amount}</b><time datetime="${esc(event.createdAt)}" title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</time></div></li>`;
+    }).join("");
+  }
+  if (more) more.hidden = !memberHistoryCursor;
+}
+function renderMemberHistorySummary(data) {
+  const board = (data.boards || []).find((item) => String(item.siteId) === String(activeSiteId));
+  if (!board) return;
+  $("cr-member-history-balance").textContent = `${Number(board.balance) || 0} Credits`;
+  $("cr-member-history-earned").textContent = Number(board.totalEarned) || 0;
+  $("cr-member-history-spent").textContent = Number(board.totalSpent) || 0;
+}
+async function loadMemberHistory({ reset }) {
+  if (memberHistoryLoading || !memberHistoryUsername) return;
+  const request = memberHistoryRequest;
+  const list = $("cr-member-history-list");
+  const empty = $("cr-member-history-empty");
+  const more = $("cr-member-history-more");
+  memberHistoryLoading = true;
+  if (reset) {
+    memberHistoryEvents = [];
+    memberHistoryCursor = null;
+    if (empty) {
+      empty.hidden = true;
+      empty.removeAttribute("role");
+    }
+    if (more) more.hidden = true;
+    if (list) {
+      list.hidden = false;
+      list.setAttribute("aria-busy", "true");
+      list.innerHTML = Array.from({ length: 4 }, () => '<li><span class="skeleton v3-skel-line" aria-hidden="true"></span></li>').join("");
+    }
+  } else {
+    setLoading(more, true, "Loading…");
+  }
+  try {
+    const params = new URLSearchParams({
+      siteId: activeSiteId,
+      kickUsername: memberHistoryUsername,
+      limit: "25",
+    });
+    if (memberHistoryCursor) params.set("cursor", memberHistoryCursor);
+    const [data, summary] = await Promise.all([
+      api("GET", `/api/credits/activity?${params}`),
+      reset
+        ? api("GET", `/api/credits/viewer/history?kickUsername=${encodeURIComponent(memberHistoryUsername)}`)
+        : Promise.resolve(null),
+    ]);
+    if (request !== memberHistoryRequest) return;
+    if (summary) renderMemberHistorySummary(summary);
+    memberHistoryEvents = reset ? data.events || [] : memberHistoryEvents.concat(data.events || []);
+    memberHistoryCursor = data.nextCursor || null;
+    renderMemberHistory();
+    setStatus("cr-member-history-status", `${memberHistoryEvents.length} entries loaded.`);
+  } catch (error) {
+    if (request !== memberHistoryRequest) return;
+    if (reset && empty) {
+      if (list) {
+        list.innerHTML = "";
+        list.hidden = true;
+        list.removeAttribute("aria-busy");
+      }
+      renderError(empty, {
+        title: "Couldn't load this member's history",
+        body: "Their Credits activity could not be loaded.",
+        retry: () => loadMemberHistory({ reset: true }),
+      });
+    } else {
+      setStatus("cr-member-history-status", error.message, true);
+    }
+  } finally {
+    if (request === memberHistoryRequest) {
+      memberHistoryLoading = false;
+      setLoading(more, false);
+    }
+  }
+}
+async function openMemberHistory(viewer, trigger) {
+  const drawer = $("cr-member-history-drawer");
+  const backdrop = $("cr-member-history-backdrop");
+  if (!drawer || !backdrop) {
+    openFullMemberHistory(trigger.href);
+    return;
+  }
+  const dialog = await loadMemberHistoryDialog();
+  closeTip();
+  closeMemberHistory();
+  memberHistoryRequest++;
+  memberHistoryUsername = memberIdentity(viewer);
+  memberHistoryTrigger = trigger;
+  memberHistoryTrigger.setAttribute("aria-expanded", "true");
+  $("cr-member-history-title").textContent = `${memberHistoryUsername}'s history`;
+  $("cr-member-history-balance").textContent = `${Number(viewer.balance) || 0} Credits`;
+  $("cr-member-history-earned").textContent = Number(viewer.total_earned) || 0;
+  $("cr-member-history-spent").textContent = Number(viewer.total_spent) || 0;
+  $("cr-member-history-full").href = trigger.href;
+  setStatus("cr-member-history-status", "");
+  drawer.hidden = false;
+  backdrop.hidden = false;
+  document.documentElement.classList.add("yr-modal-open");
+  memberHistoryRelease = dialog.trap(drawer, closeMemberHistory);
+  await loadMemberHistory({ reset: true });
 }
 let activePopover;
 function closePopover(result = false) {
@@ -649,6 +837,9 @@ function wireActions() {
   $("cr-tip-open-btn")?.addEventListener("click", () => openTip("", ""));
   $("cr-tip-close")?.addEventListener("click", closeTip);
   $("cr-tip-cancel")?.addEventListener("click", closeTip);
+  $("cr-member-history-close")?.addEventListener("click", closeMemberHistory);
+  $("cr-member-history-backdrop")?.addEventListener("click", closeMemberHistory);
+  $("cr-member-history-more")?.addEventListener("click", () => loadMemberHistory({ reset: false }));
   document.querySelectorAll(".cr-tip-preset").forEach((b) => b.addEventListener("click", () => {
     const amt = b.dataset.amount;
     const input = $("cr-tip-amount");
@@ -812,6 +1003,13 @@ export function enter() {
   activityEvents = [];
   activityCursor = null;
   activityLoading = false;
+  memberHistoryEvents = [];
+  memberHistoryCursor = null;
+  memberHistoryLoading = false;
+  memberHistoryUsername = "";
+  memberHistoryRelease = undefined;
+  memberHistoryTrigger = undefined;
+  memberHistoryRequest = 0;
   shopItemsView = [];
   shopSearch = "";
   shopSort = "cost";
@@ -820,6 +1018,7 @@ export function enter() {
 }
 
 export function leave() {
+  closeMemberHistory();
   // Clear all status toast timers so they don't fire into a detached DOM.
   for (const timer of statusClearTimers.values()) clearTimeout(timer);
   statusClearTimers.clear();

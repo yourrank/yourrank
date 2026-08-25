@@ -2,7 +2,7 @@
 import { $, esc, fromLocalInput, getCsrf, guardAuth, logError, timeZoneOffsetLabel, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError } from "./utils.js";
 import { serializeWebhookUrl } from "./notifications.js";
 import { state, boardStatus, markDirty, setState, subscribe } from "./state.js";
-import { renderEmpty } from "./states.js";
+import { renderEmpty, setMetricUnknown } from "./states.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./boards.js";
 import { renderOverviewSummary } from "./overview.js";
 import { renderPerformance, renderPerformanceLoading } from "./performance.js";
@@ -1807,26 +1807,37 @@ export async function loadStats() {
     logError("load-stats", err);
     setState({ STATS_STATUS: "error" });
     showLoadError($("statsEmpty"), "your stats", loadStats);
+    renderStatsError();
     return null;
   }
   setState({ STATS: s, STATS_STATUS: "ready" });
-  const bars = $("statBars"); const days = s.days || [];
-  if (bars) {
-    const max = Math.max(1, ...days.map((x) => x.views));
-    bars.innerHTML = days.map((x) => {
-      const h = Math.max(2, Math.round((x.views / max) * 100));
-      const nice = new Date(x.day + "T00:00:00Z").toUTCString().slice(5, 11);
-      return `<div class="stat-bar" style="height:${h}%" title="${nice}: ${x.views} views, ${x.copies} copies, ${x.clicks} clicks"></div>`;
-    }).join("");
-    bars.setAttribute("role", "img");
-    const total = days.reduce((a, x) => a + x.views + x.copies + x.clicks, 0);
-    bars.setAttribute("aria-label", `Bar chart of daily activity for the last ${days.length} days. Total: ${total} events.`);
-    clearLoadError($("statsEmpty"), s.last30.views === 0 && s.last30.copies === 0 && s.last30.clicks === 0);
-  }
-
   renderOverviewSummary();
   renderPerformance(s);
   return s;
+}
+
+function renderStatsError() {
+  ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfKpiCtr", "perfTotalViews"].forEach((id) => setMetricUnknown($(id), "error"));
+  ["perfKpiViewsDelta", "perfKpiClicksDelta", "perfKpiCopiesDelta", "perfKpiCtrDelta"].forEach((id) => {
+    const node = $(id);
+    if (node) node.textContent = "";
+  });
+  if ($("perfExport")) $("perfExport").hidden = true;
+  const rangeFilter = $("perfRangeFilter");
+  if (rangeFilter) {
+    rangeFilter.dataset.hasData = "0";
+    rangeFilter.hidden = true;
+  }
+  if ($("statBars")) $("statBars").innerHTML = "";
+  if ($("perfActivityBody")) $("perfActivityBody").innerHTML = "";
+  showLoadError($("perfActivityEmpty"), "daily activity", loadStats);
+  const events = $("eventsList");
+  if (events) {
+    events.removeAttribute("aria-busy");
+    events.innerHTML = "";
+    events.hidden = true;
+  }
+  showLoadError($("eventsEmpty"), "site activity", loadStats);
 }
 
 // Cross-tab sign-out is handled by the shared /assets/shell-nav.js script so
