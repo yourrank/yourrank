@@ -373,12 +373,10 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
   box-shadow: none;
 }
 
-/* Creator and Telegram workspace. */
+/* Creator and Telegram workspace. The shell itself — canvas, rail, top bar and
+   selected navigation — is owned by dashboard-v4.css; only page-body material
+   and the shared .gm-* chrome are shaped here. */
 
-body:has(.v3-dash[data-auth-workspace]),
-.v3-dash[data-auth-workspace] .lb-main { background: var(--devin-bg); color: var(--devin-ink); }
-.v3-dash[data-auth-workspace] .lb-side { background: var(--devin-black); }
-.v3-dash[data-auth-workspace] .lb-topbar { border-color: var(--devin-line-soft); }
 .v3-dash[data-auth-workspace] .v3-card,
 .v3-dash[data-auth-workspace] .card,
 .v3-dash[data-auth-workspace] .lb-widget,
@@ -390,10 +388,6 @@ body:has(.v3-dash[data-auth-workspace]),
   background: var(--devin-surface);
   box-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
 }
-.v3-dash[data-auth-workspace] .lb-nav[aria-current="page"],
-.v3-dash[data-auth-workspace] .lb-nav.is-active,
-.v3-dash[data-auth-workspace] .lb-nav.is-on { background: var(--devin-primary); box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--devin-primary) 70%, transparent); color: #ffffff; }
-.v3-dash[data-auth-workspace] .lb-side-brandmark,
 .gm-brand-mark,
 .gm-who-avatar { border-radius: var(--devin-radius-small); background: var(--devin-primary); }
 .gm-tab { font-family: var(--devin-font); letter-spacing: 0; text-transform: none; }

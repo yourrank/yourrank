@@ -102,7 +102,7 @@ body[data-wide] .gm-shell-inner{max-width:none}
    by the same links inside the account menu. */
 @media(max-width:860px){
     .gm-tabs-wrap{display:none;}
-    .gm-who-id{display:none;}
+    .gm-shell-inner .gm-who-id{display:none;}
     .gm-profile-nav{display:flex;}
     .gm-profile-id{display:flex;}
     .gm-profile > summary{padding:5px 8px;}

@@ -5,6 +5,7 @@
 //   or: bun test   (from apps/leaderboard/)
 
 import { test, expect, describe } from "bun:test";
+import { readFileSync } from "node:fs";
 
 // ── stub heavy deps so auth.js loads without a real DB or session KV ──────
 // We use import.meta.resolve() to get the exact resolved URL that auth.js will
@@ -259,5 +260,26 @@ describe("RESERVED", () => {
     for (const slug of ["demo", "dashboard", "account", "bot", "api", "login"]) {
       expect(RESERVED.has(slug)).toBe(true);
     }
+  });
+});
+
+// The shell renders an identity from the session user and the browser refreshes
+// it from /api/auth/me. Both read the same column, so the loader has to select
+// it or every surface falls back to the email (or the "—" placeholder).
+describe("session identity", () => {
+  const read = (relative) => readFileSync(new URL(relative, import.meta.url), "utf8");
+
+  test("the session user loader selects the display name", () => {
+    const source = read("../auth.js");
+    const loader = source.slice(source.indexOf("const loadUser"), source.indexOf("FROM users WHERE id=$1"));
+    expect(loader).toContain("display_name");
+  });
+
+  test("/api/auth/me exposes the display name and the client reads that field", () => {
+    expect(read("../handlers/auth.js")).toContain("displayName: user.display_name");
+    const menu = read("../assets/dashboard/profile-menu.js");
+    expect(menu).toContain("user?.displayName");
+    expect(menu).toContain('user?.email || "Account"');
+    expect(read("../assets/account.js")).not.toContain("state.ME?.display_name");
   });
 });
