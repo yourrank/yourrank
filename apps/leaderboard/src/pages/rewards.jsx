@@ -25,7 +25,7 @@ export const REWARDS_TABS = [
 function SubTabs({ tab }) {
   const tabs = REWARDS_TABS;
   return (
-    <nav class="v3-tabs" aria-label="Rewards pages" style="margin-bottom: 20px;">
+    <nav class="v3-tabs" aria-label="Rewards pages">
       {tabs.map((t) => (
         <a
           class={"v3-tab" + (t.key === tab ? " is-on" : "")}

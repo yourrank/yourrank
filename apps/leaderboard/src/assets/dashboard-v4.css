@@ -947,7 +947,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-players > .v3-head,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
 .v3-dash[data-auth-workspace] .v3-games-page > .d-flex:first-child,
-.v3-dash[data-auth-workspace] #acc-app > .account-settings-head,
+.v3-dash[data-auth-workspace] #acc-app > .v3-head,
 .v3-dash[data-auth-workspace] #cr-app > .v3-head,
 .v3-dash[data-auth-workspace] #gw-app > .v3-head {
   position: sticky;
@@ -955,24 +955,12 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   z-index: 20;
   background: var(--ws-canvas);
 }
-/* Engage page head reads as one row: title/lede left, primary action right. */
-.v3-dash[data-auth-workspace] #gw-app > .v3-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-.v3-dash[data-auth-workspace] #gw-app > .v3-head .v3-head-col {
-  min-width: 0;
-  flex: 1 1 360px;
-}
 .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head + .v3-tabs,
 .v3-dash[data-auth-workspace] .lb-page.is-on > .design-grid > .design-controls > .v3-tabs,
-.v3-dash[data-auth-workspace] #acc-app > .account-settings-tabs,
+.v3-dash[data-auth-workspace] #acc-app > .v3-head + .v3-tabs,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-tabs,
 .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
-.v3-dash[data-auth-workspace] #gw-app > .gw-nav-tabs {
+.v3-dash[data-auth-workspace] #gw-app > .v3-tabs {
   position: sticky;
   top: calc(var(--ws-topbar-h) + var(--sticky-head-offset, 0px));
   z-index: 19;
@@ -1024,7 +1012,13 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace]#account-dash .v3-crumbs { max-width: 1100px; width: 100%; margin: 0 auto 14px; justify-self: center; }
 .v3-dash[data-auth-workspace] .v3-crumbs a { color: var(--ws-text-soft); text-decoration: none; }
 .v3-dash[data-auth-workspace] .v3-crumbs a:hover { color: var(--ws-accent); text-decoration: underline; }
-.v3-dash[data-auth-workspace] .v3-crumb-sep { color: var(--ws-line-strong); }
+.v3-dash[data-auth-workspace] .v3-crumb-sep { color: var(--ws-line-strong); flex: 0 0 auto; }
+/* Narrow screens truncate the ancestry first; the current leaf stays readable. */
+.v3-dash[data-auth-workspace] .v3-crumbs { min-width: 0; flex-wrap: nowrap; }
+.v3-dash[data-auth-workspace] .v3-crumbs a,
+.v3-dash[data-auth-workspace] .v3-crumbs > span:not(.v3-crumb-sep) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v3-dash[data-auth-workspace] .v3-crumbs a { flex: 0 1 auto; }
+.v3-dash[data-auth-workspace] .v3-crumbs > [aria-current="page"] { flex: 0 0 auto; max-width: 60%; }
 
 /* Collapsed desktop rail: every route remains present and icon-addressable.
    Collapsed nav items get a CSS tooltip via the title attribute so icon-only
@@ -1165,70 +1159,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   margin: 0 auto;
   grid-column: 1 / -1;
   justify-self: center;
-}
-.v3-dash[data-auth-workspace] .account-settings-head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0 0 20px;
-}
-.v3-dash[data-auth-workspace] .account-settings-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--ws-radius);
-  background: var(--ws-accent-soft);
-  color: #4338ca;
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 2px;
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 0 24px;
-  padding: 4px;
-  border: 1px solid var(--ws-line);
-  border-radius: var(--ws-radius);
-  background: var(--ws-surface-soft);
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs .v3-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--ws-radius-sm);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ws-text-mute);
-  text-decoration: none;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs .v3-tab:hover {
-  color: var(--ws-text);
-  background: rgba(255, 255, 255, 0.7);
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs .v3-tab.is-on {
-  color: var(--ws-text);
-  background: #ffffff;
-  box-shadow: none;
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs .v3-tab .tab-icon {
-  opacity: 0.7;
-  flex-shrink: 0;
-}
-.v3-dash[data-auth-workspace] .account-settings-tabs .v3-tab.is-on .tab-icon {
-  opacity: 1;
-  color: var(--ws-accent);
 }
 .v3-dash[data-auth-workspace] .account-settings-layout {
   display: grid;
@@ -1473,7 +1403,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 
 
-.v3-dash[data-auth-workspace] .v3-head--row,
 .v3-dash[data-auth-workspace] .v3-section-head,
 .v3-dash[data-auth-workspace] .v3-card-head,
 .v3-dash[data-auth-workspace] .ov-live-card-head {
@@ -1483,8 +1412,23 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   gap: 20px;margin-bottom:18px;
   flex-wrap: wrap; padding: 20px 20px 16px;
 }
+/* Page head with actions: title block left, one primary action right. No card
+   padding — page chrome sits on the canvas, not in a box. */
+.v3-dash[data-auth-workspace] .v3-head--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 0;
+}
+.v3-dash[data-auth-workspace] .v3-head--row > :first-child,
+.v3-dash[data-auth-workspace] .v3-head-col {
+  min-width: 0;
+  flex: 1 1 360px;
+}
 .v3-dash[data-auth-workspace] .v3-head h1,
-.v3-dash[data-auth-workspace] .account-settings-head h1,
+.v3-dash[data-auth-workspace] .v3-section-title,
 .v3-dash[data-auth-workspace] .lb-widget > h1 {
   margin: 0;
   color: var(--ws-text);
@@ -1492,14 +1436,16 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   letter-spacing: -0.025em;
 }
 .v3-dash[data-auth-workspace] .v3-head h2 { margin: 0; }
+/* Route-owned workflow step title (editor steps): same page-head hierarchy,
+   its own trailing rhythm because it stands without a `.v3-head` wrapper. */
+.v3-dash[data-auth-workspace] .v3-section-title { margin-bottom: 24px; padding-bottom: 2px; }
 .v3-dash[data-auth-workspace] .v3-head-sub,
 .v3-dash[data-auth-workspace] .card-sub,
 .v3-dash[data-auth-workspace] .sub,
 .v3-dash[data-auth-workspace] .hint { color: var(--ws-text-soft);
   font-size: 13px;
   margin: 0 0 18px; }
-.v3-dash[data-auth-workspace] .v3-head-sub,
-.v3-dash[data-auth-workspace] .account-settings-head .card-sub { max-width: 72ch; margin: 2px 0 0; font-size: 14px; line-height: 1.5; }
+.v3-dash[data-auth-workspace] .v3-head-sub { max-width: 72ch; margin: 2px 0 0; font-size: 14px; line-height: 1.5; }
 .v3-dash[data-auth-workspace] .v3-head-sub--mono { font-family: var(--ws-sans); letter-spacing: 0;
   font: 500 12px var(--ws-mono);
   text-transform: uppercase;
@@ -1634,65 +1580,65 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .field label { color: var(--ws-text-soft); font-size: 13px; font-weight: 600; }
 .v3-dash[data-auth-workspace] .hr { border-color: var(--ws-line); }
 
-.v3-dash[data-auth-workspace] .v3-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 0 24px;
-  padding: 4px;
-  overflow-x: auto;
-  border: 1px solid var(--ws-line);
-  border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface-strong);
-  width: fit-content;
-  max-width: 100%;
-  scrollbar-width: none; flex-wrap: nowrap;
-}
+/* Primary page tabs — one authenticated language: a text-led strip on a
+   hairline rule, selected by ink weight plus a 2px underline (never colour
+   alone). Feature areas reuse `.v3-tabs`/`.v3-tab`; the workflow variant
+   (`.editor-steps`) only differs in the meaning of its items, not its paint. */
+.v3-dash[data-auth-workspace] .v3-tabs,
 .v3-dash[data-auth-workspace] .editor-steps {
-  display: flex !important;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 20px;
-  padding: 4px;
-  background: var(--ws-surface-soft);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: var(--ws-radius-sm);
-  width: fit-content;
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--ws-line);
+  border-radius: 0;
+  background: transparent;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
+  flex-wrap: nowrap;
+}
+.v3-dash[data-auth-workspace] .v3-tabs::-webkit-scrollbar,
+.v3-dash[data-auth-workspace] .editor-steps::-webkit-scrollbar {
+  display: none;
 }
 .v3-dash[data-auth-workspace] .v3-tab,
 .v3-dash[data-auth-workspace] .editor-step {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--ws-radius-sm);
-  color: var(--ws-text-mute) !important;
-  font: 550 13px/1 var(--ws-sans);
+  min-height: 38px;
+  padding: 0 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--ws-text-soft) !important;
+  font: 500 15px/1 var(--ws-sans);
   text-decoration: none;
   white-space: nowrap;
   background: transparent;
-  transition: all 140ms ease;
+  transition: color 140ms ease, border-color 140ms ease;
   user-select: none;
   appearance: none;
-  cursor: pointer; flex: 0 0 auto;
+  cursor: pointer;
+  flex: 0 0 auto;
 }
 .v3-dash[data-auth-workspace] .v3-tab:hover,
 .v3-dash[data-auth-workspace] .editor-step:hover {
   color: var(--ws-text) !important;
-  background: rgba(255, 255, 255, 0.6);
+  background: transparent;
+  border-bottom-color: var(--ws-line-strong);
 }
 .v3-dash[data-auth-workspace] .v3-tab.is-on,
 .v3-dash[data-auth-workspace] .v3-tab.is-active,
 .v3-dash[data-auth-workspace] .v3-tab[aria-current="page"],
+.v3-dash[data-auth-workspace] .v3-tab[aria-selected="true"],
 .v3-dash[data-auth-workspace] .editor-step.is-active,
 .v3-dash[data-auth-workspace] .editor-step[aria-current="page"] {
-  border-color: rgba(0, 0, 0, 0.05) !important;
-  background: #ffffff !important;
+  background: transparent !important;
   color: var(--ws-text) !important;
   font-weight: 650;
   box-shadow: none !important;
@@ -1706,7 +1652,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
    Quick-increment buttons are hidden on Overview (belong on Players page). */
 .v3-dash[data-auth-workspace] [data-page="home"] { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px; width: 100%; max-width: none; margin: 0; }
 .v3-dash[data-auth-workspace] .ov-head { grid-column: 1 / -1; margin: 0; }
-.v3-dash[data-auth-workspace] .ov-head h1 { font-size: var(--ws-type-page-size); line-height: var(--ws-type-page-leading); letter-spacing: -.03em; }
 .v3-dash[data-auth-workspace] .ov-head .v3-head-sub { margin-top: 5px; }
 /* Tier A: Command grid — full width, prominent border, no shadow */
 .v3-dash[data-auth-workspace] .ov-command-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0; overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: #ffffff; }
@@ -3857,26 +3802,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
 @media (max-width: 700px) {
   .v3-dash[data-auth-workspace] { --ws-topbar-h: 153px; --ws-main-pad-inline: 16px; }
-  .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head,
-  .v3-dash[data-auth-workspace] .v3-players > .v3-head,
-  .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-head,
-  .v3-dash[data-auth-workspace] .v3-games-page > .d-flex:first-child,
-  .v3-dash[data-auth-workspace] #acc-app > .account-settings-head,
-  .v3-dash[data-auth-workspace] #cr-app > .v3-head,
-  .v3-dash[data-auth-workspace] #gw-app > .v3-head {
-    top: 153px;
-  }
-  .v3-dash[data-auth-workspace] .lb-page.is-on > .v3-head + .v3-tabs,
-  .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-tabs,
-  .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
-  .v3-dash[data-auth-workspace] #gw-app > .gw-nav-tabs {
-    top: calc(153px + var(--sticky-head-offset, 0px));
-  }
-  .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs {
-    top: 153px;
-  }
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-preview {
-    top: calc(153px + 24px);
+    top: calc(var(--ws-topbar-h) + 24px);
   }
   .v3-dash[data-auth-workspace] .cr-shop-drawer {
     inset: var(--ws-topbar-h) 0 0;
@@ -3924,9 +3851,9 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .cr-redemptions-wrap,
   .v3-dash[data-auth-workspace] .cr-shop-layout { gap: 20px; }
   .v3-dash[data-auth-workspace] .v3-head--row,
+  .v3-dash[data-auth-workspace] .v3-head-col,
   .v3-dash[data-auth-workspace] .v3-section-head,
   .v3-dash[data-auth-workspace] .v3-card-head,
-  .v3-dash[data-auth-workspace] .account-settings-head,
   .v3-dash[data-auth-workspace] .ov-summary,
   .v3-dash[data-auth-workspace] .cr-redemption-summary { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .v3-dash[data-auth-workspace] .ov-command-grid { grid-template-columns: 1fr; }
@@ -3937,7 +3864,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-notice { align-items: flex-start; flex-wrap: wrap; }
   .v3-dash[data-auth-workspace] .lb-notice .btn { width: 100%; }
   .v3-dash[data-auth-workspace] .v3-head h1,
-  .v3-dash[data-auth-workspace] .account-settings-head h1,
   .v3-dash[data-auth-workspace] .lb-widget > h1 {
     font-size: var(--ws-type-page-size);
     line-height: var(--ws-type-page-leading);
@@ -4732,15 +4658,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-analytics-page .metric-glossary {margin-top:24px;
 }
 
-.v3-dash[data-auth-workspace] .v3-analytics-page .v3-tabs {display:flex;gap:4px;margin:0 0 20px;
-}
-
-.v3-dash[data-auth-workspace] .v3-analytics-page .v3-tab {padding:9px 14px;border-radius:var(--ws-radius-sm);font:12px var(--ws-mono);text-decoration:none;
-}
-
-.v3-dash[data-auth-workspace] .v3-analytics-page .v3-tab.is-on {background:var(--ws-text);color:var(--ws-surface);
-}
-
 .v3-dash[data-auth-workspace] .v3-chart-total {font:11px var(--ws-mono);
 }
 
@@ -4841,11 +4758,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .v3-table-card { overflow-x: auto;
   }
 
-  .v3-dash[data-auth-workspace] section[data-page="board"] .editor-steps {
-    width: 100%;
-    max-width: 100%;
-  }
-
   .v3-dash[data-auth-workspace] .cr-status-grid { grid-template-columns: repeat(2, 1fr);
   }
 
@@ -4891,9 +4803,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   }
 
   .v3-dash[data-auth-workspace] .lb-board-select-lbl { display: none;
-  }
-
-  .v3-dash[data-auth-workspace] .v3-tabs { overflow-x: auto;
   }
 
   .v3-dash[data-auth-workspace] input[type="checkbox"]:not(.v3-toggle) {
@@ -5270,47 +5179,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] .v3-meter--warn > i { background: var(--ws-warning);
-}
-
-.v3-dash[data-auth-workspace] section[data-page="board"] .editor-steps {
-  width: auto;
-  max-width: none;
-  margin: 0 0 24px;
-  padding: 0 0 10px;
-  gap: 24px;
-  box-sizing: border-box;
-  height: 41px;
-  min-height: 41px;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-  align-content: flex-start;
-  overflow-x: auto;
-  scrollbar-width: none;
-  border: 0;
-  border-bottom: 1px solid var(--ws-line);
-  border-radius: 0;
-  position: static;
-  z-index: auto;
-  background: transparent;
-}
-
-.v3-dash[data-auth-workspace] section[data-page="board"] .editor-steps::-webkit-scrollbar {
-  display: none;
-}
-
-.v3-dash[data-auth-workspace] section[data-page="board"] .editor-step.v3-tab {
-  flex: 0 0 auto;
-  width: max-content;
-  min-width: max-content;
-  min-height: 0;
-  align-self: flex-start;
-  vertical-align: top;
-  padding: 0 0 10px;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  font: 500 15px var(--ws-sans);
-  color: var(--ws-text-soft);
-  box-shadow: none;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .field {
@@ -5966,19 +5834,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .cr-shop-delete:hover { color: var(--ws-danger-text); border-color: var(--ws-danger);
 }
 
-.v3-dash[data-auth-workspace] .v3-settings .v3-head { margin-bottom: 26px;
-}
-
-.v3-dash[data-auth-workspace] .v3-settings .v3-head h1 { margin: 0; font: 700 var(--ws-type-page-size)/var(--ws-type-page-leading) var(--ws-sans); color: var(--ws-text);
-}
-
-.v3-dash[data-auth-workspace] .v3-settings .v3-head-sub { margin: 8px 0 0; color: var(--ws-text-soft); font-size: 14px;
-}
-
 .v3-dash[data-auth-workspace] .v3-settings .v3-head-sub a { color: var(--ws-accent);
-}
-
-.v3-dash[data-auth-workspace] .v3-crumbs { font-size: 13px;
 }
 
 .v3-dash[data-auth-workspace] .v3-settings-card.v3-danger-card { border-color: var(--ws-danger);
@@ -6071,10 +5927,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .v3-plan-card .v3-set-btn { width: 100%;
   }
 
-  .v3-dash[data-auth-workspace] .v3-tabs { overflow-x: auto; gap: 22px; scrollbar-width: none;
-  }
-
-  .v3-dash[data-auth-workspace] .v3-tab { flex: 0 0 auto;
+  .v3-dash[data-auth-workspace] .v3-tabs,
+  .v3-dash[data-auth-workspace] .editor-steps { gap: 20px;
   }
 }
 
