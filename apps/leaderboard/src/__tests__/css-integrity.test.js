@@ -158,7 +158,9 @@ describe("authenticated dashboard v4 contract", () => {
     expect(compactTablet).toContain(".lb-topbar-cmd kbd { display: none; }");
     expect(compactTablet).toContain(".lb-availability { gap: 4px; }");
     expect(css).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.lb-topbar\s*\{[\s\S]*?flex-wrap:\s*wrap/);
-    expect(css).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.lb-topbar-hud\s*\{[\s\S]*?flex:\s*1 0 100%/);
+    expect(narrowShell).toMatch(/\.lb-topbar-hud\s*\{[\s\S]*?order:\s*2;[\s\S]*?flex:\s*1 0 100%/);
+    expect(narrowShell).toMatch(/\.lb-topbar-actions\s*\{\s*order:\s*1;\s*\}/);
+    expect(narrowShell).toContain(".lb-status { min-height: 26px; padding-inline: 7px; font-size: 11px; }");
     const devinTopbar = devinSystemCss.match(/\.v3-dash\[data-auth-workspace\] \.lb-topbar\s*\{([^{}]*)\}/)?.[1] || "";
     expect(devinTopbar).not.toMatch(/background\s*:/);
     expect(devinTopbar).not.toMatch(/rgba\s*\(/);
@@ -193,6 +195,18 @@ describe("authenticated dashboard v4 contract", () => {
     expect(css).toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-nav\.is-on::before,[\s\S]*?width:\s*2px/);
     expect(css).toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-nav\.is-on::before,[\s\S]*?background:\s*var\(--ws-accent-on-chrome\)/);
     expect(dashboardChromeSource).toContain("isActive ? ' aria-current=\"page\"' : \"\"");
+  });
+
+  it("keeps workspace status variants quiet and semantic", () => {
+    const statusRules = [...css.matchAll(/([^{}]*\.v3-dash\[data-auth-workspace\][^{}]*\.lb-status--(?:live|published|pending|draft|unpublished|draft-changes)[^{}]*)\{([^{}]*)\}/g)];
+    expect(statusRules.length).toBeGreaterThanOrEqual(4);
+    for (const [, , declarations] of statusRules) {
+      expect(declarations.match(/background\s*:\s*([^;]+)/)?.[1].trim()).toBe("transparent");
+      expect(declarations).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    }
+    expect(css).toContain("border-color: var(--ws-success-line); background: transparent; color: var(--ws-success-text);");
+    expect(css).toContain("border-color: var(--ws-warning); background: transparent; color: var(--ws-warning-text);");
+    expect(css).toContain("border-color: var(--ws-line); background: transparent; color: var(--ws-text-mute);");
   });
 
   it("does not retain selectors proven unused in the dashboard source tree", () => {

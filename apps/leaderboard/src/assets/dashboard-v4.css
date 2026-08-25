@@ -893,11 +893,11 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-status { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-sm); background: transparent; color: var(--ws-text-soft); font: 600 12px var(--ws-sans); letter-spacing: 0; text-transform: none; white-space: nowrap; }
 .v3-dash[data-auth-workspace] .lb-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .v3-dash[data-auth-workspace] .lb-status--live,
-.v3-dash[data-auth-workspace] .lb-status--published { border-color: var(--ws-success-line); background: #ecfdf5; color: #047857; }
+.v3-dash[data-auth-workspace] .lb-status--published { border-color: var(--ws-success-line); background: transparent; color: var(--ws-success-text); }
 .v3-dash[data-auth-workspace] .lb-status--pending,
-.v3-dash[data-auth-workspace] .lb-status--draft { border-color: #fed7aa; background: #fff7ed; color: #c2410c; }
-.v3-dash[data-auth-workspace] .lb-status--unpublished { border-color: var(--ws-line); background: var(--ws-surface-soft); color: var(--ws-text-mute); }
-.v3-dash[data-auth-workspace] .lb-status--draft-changes { border-color: #fed7aa; background: #fff7ed; color: #c2410c; text-transform: none; letter-spacing: 0; }
+.v3-dash[data-auth-workspace] .lb-status--draft { border-color: var(--ws-warning); background: transparent; color: var(--ws-warning-text); }
+.v3-dash[data-auth-workspace] .lb-status--unpublished { border-color: var(--ws-line); background: transparent; color: var(--ws-text-mute); }
+.v3-dash[data-auth-workspace] .lb-status--draft-changes { border-color: var(--ws-warning); background: transparent; color: var(--ws-warning-text); text-transform: none; letter-spacing: 0; }
 .v3-dash[data-auth-workspace] .lb-publish-action { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 16px; border: 1px solid var(--ws-accent); border-radius: var(--ws-radius-sm); background: var(--ws-accent); color: var(--ws-accent-text); font: 600 13px var(--ws-sans); cursor: pointer; white-space: nowrap; transition: all 0.15s ease; box-shadow: none; }
 .v3-dash[data-auth-workspace] .lb-publish-action:hover { border-color: var(--ws-accent-hover); background: var(--ws-accent-hover); box-shadow: none; transform: translateY(-1px); }
 .v3-dash[data-auth-workspace] .lb-publish-action--secondary { border-color: var(--ws-line-strong); background: #ffffff; color: var(--ws-text); box-shadow: none; }
@@ -3835,10 +3835,12 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     padding-inline: var(--ws-main-pad-inline);
   }
   .v3-dash[data-auth-workspace] .lb-topbar-hud {
+    order: 2;
     flex: 1 0 100%;
     width: 100%;
     min-width: 0;
   }
+  .v3-dash[data-auth-workspace] .lb-topbar-actions { order: 1; }
   .v3-dash[data-auth-workspace] .lb-site-command { gap: 6px; width: 100%; }
   .v3-dash[data-auth-workspace] .lb-site-command-icon,
   .v3-dash[data-auth-workspace] .lb-board-select-lbl,
@@ -3851,7 +3853,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-board-new { width: 38px; min-width: 38px; height: 38px; }
   .v3-dash[data-auth-workspace] .lb-topbar-actions,
   .v3-dash[data-auth-workspace] .lb-availability { gap: 6px; }
-  .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 10px; }
+  .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 11px; }
   .v3-dash[data-auth-workspace] .lb-publish-action { min-height: 44px; padding-inline: 9px; font-size: 11px; }
   .v3-dash[data-auth-workspace] .lb-board-select { min-height: 44px; }
   .v3-dash[data-auth-workspace] .ov-first-run ol { grid-template-columns: 1fr; }
@@ -4938,11 +4940,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   font-weight: 700;
   font-size: 17px;
   letter-spacing: -0.02em; font-size: 20px; flex: 0 1 auto;
-}
-
-.v3-dash[data-auth-workspace] .lb-status--published::before {
-  background: var(--ws-accent);
-  box-shadow: 0 0 0 2px var(--yr-color-live-line-2);
 }
 
 .v3-dash[data-auth-workspace] .lb-pub-toggle {

@@ -838,7 +838,7 @@ body:not(:has(.v3-dash[data-auth-workspace])) .lb-nav.is-on{color:var(--accent);
 body:not(:has(.v3-dash[data-auth-workspace])) .lb-nav.is-on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--accent)}
 .lb-nav-ic{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--ink-mute)}
 .lb-nav-ic svg{width:18px;height:18px;display:block}
-.lb-nav:hover .lb-nav-ic,body:not(:has(.v3-dash[data-auth-workspace])) .lb-nav.is-on .lb-nav-ic{color:var(--accent)}
+body:not(:has(.v3-dash[data-auth-workspace])) .lb-nav:hover .lb-nav-ic,body:not(:has(.v3-dash[data-auth-workspace])) .lb-nav.is-on .lb-nav-ic{color:var(--accent)}
 .lb-nav-label{flex:1}
 .lb-nav-count{margin-left:auto;font:500 12px var(--mono);padding:2px 8px;border-radius:var(--radius-full,999px);background:var(--panel-2);color:var(--ink-soft);border:1px solid var(--line)}
 .ic-btn{display:inline-flex;align-items:center;gap:6px}
