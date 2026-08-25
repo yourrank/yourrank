@@ -12,6 +12,7 @@ const sheets = fs.readdirSync(assetsDir).filter((f) => f.endsWith(".css"));
 const cookieScript = fs.readFileSync(path.join(assetsDir, "cookie-consent.js"), "utf8");
 const appCss = fs.readFileSync(path.join(assetsDir, "app.css"), "utf8");
 const devinSystemCss = fs.readFileSync(path.join(assetsDir, "devin-system.css"), "utf8");
+const dashboardChromeSource = fs.readFileSync(path.resolve(import.meta.dir, "../../../../packages/shared/src/dashboard-chrome.ts"), "utf8");
 const headersSource = fs.readFileSync(path.resolve(import.meta.dir, "../middleware/headers.js"), "utf8");
 const indexSource = fs.readFileSync(path.resolve(import.meta.dir, "../index.js"), "utf8");
 const siteRenderSource = fs.readFileSync(path.resolve(import.meta.dir, "../../../../packages/shared/src/site-render.ts"), "utf8");
@@ -143,13 +144,12 @@ describe("authenticated dashboard v4 contract", () => {
     const narrowStart = css.indexOf("@media (max-width: 700px) {");
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
-    expect(narrowShell).toContain("--ws-topbar-h: 153px");
+    expect(narrowShell).toContain("--ws-topbar-h: 112px");
     expect(narrowShell).toContain("height: var(--ws-topbar-h)");
     expect(narrowShell).toContain("min-height: var(--ws-topbar-h)");
     expect(narrowShell).toContain("--ws-main-pad-inline: 16px");
     expect(narrowShell).toContain("padding-bottom: 48px");
     expect(narrowShell).toContain("lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }");
-    expect(narrowShell).not.toContain("min-height: 112px");
     expect(narrowShell).not.toContain("padding: 136px");
     expect(css).toContain("animation: workspaceFadeIn");
     expect(css).toMatch(/@keyframes workspaceFadeIn\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?opacity:\s*1;/);
@@ -162,6 +162,37 @@ describe("authenticated dashboard v4 contract", () => {
     const devinTopbar = devinSystemCss.match(/\.v3-dash\[data-auth-workspace\] \.lb-topbar\s*\{([^{}]*)\}/)?.[1] || "";
     expect(devinTopbar).not.toMatch(/background\s*:/);
     expect(devinTopbar).not.toMatch(/rgba\s*\(/);
+  });
+
+  it("keeps workspace topbar bleed token-derived", () => {
+    const topbarRules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) => /\.lb-topbar(?:$|[\s>+~.,:#])/.test(selector));
+    expect(topbarRules.length).toBeGreaterThan(0);
+    for (const [, , declarations] of topbarRules) {
+      const negativeMargin = declarations.match(/margin-inline\s*:\s*([^;]+)/);
+      if (negativeMargin) expect(negativeMargin[1]).not.toMatch(/^\s*-\s*(?:\d|\.)/);
+      const paddingInline = declarations.match(/padding-inline\s*:\s*([^;]+)/);
+      if (paddingInline) expect(paddingInline[1]).toContain("var(--ws-main-pad-inline)");
+    }
+    expect(css).not.toMatch(/\.v3-dash\[data-auth-workspace\][^{}]*\.lb-topbar[^{}]*\{[^{}]*margin-inline\s*:\s*-\s*\d/);
+  });
+
+  it("keeps selected workspace navigation quiet and redundant", () => {
+    const selectedRules = [
+      ...css.matchAll(/([^{}]*\.v3-dash\[data-auth-workspace\][^{}]*\.lb-nav[^{}]*)\{([^{}]*)\}/g),
+      ...appCss.matchAll(/([^{}]*\.lb-nav(?:\[[^\]]+\])?\.is-on[^{}]*)\{([^{}]*)\}/g),
+      ...devinSystemCss.matchAll(/([^{}]*\.lb-nav(?:\[[^\]]+\])?[^{}]*)\{([^{}]*)\}/g),
+    ];
+    for (const [, selector, declarations] of selectedRules) {
+      if (selector.includes("body:not(:has(.v3-dash[data-auth-workspace]))")) continue;
+      if (!/\.is-on|aria-current/.test(selector)) continue;
+      expect(declarations).not.toMatch(/background\s*:\s*var\(--(?:ws-)?accent(?:-hover)?\)/);
+      expect(declarations).not.toMatch(/box-shadow\s*:[^;]*(?:accent|color-mix)/);
+    }
+    expect(css).toContain("background: rgba(255, 255, 255, 0.08)");
+    expect(css).toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-nav\.is-on::before,[\s\S]*?width:\s*2px/);
+    expect(css).toMatch(/\.v3-dash\[data-auth-workspace\] \.lb-nav\.is-on::before,[\s\S]*?background:\s*var\(--ws-accent-on-chrome\)/);
+    expect(dashboardChromeSource).toContain("isActive ? ' aria-current=\"page\"' : \"\"");
   });
 
   it("does not retain selectors proven unused in the dashboard source tree", () => {

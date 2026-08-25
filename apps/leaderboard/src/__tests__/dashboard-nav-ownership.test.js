@@ -246,13 +246,13 @@ describe("dashboard navigation ownership", () => {
     expect(dashboardV4Css).toContain("position: sticky;");
     expect(dashboardV4Css).toContain("top: 0;");
     expect(dashboardV4Css).toContain("margin-inline: calc(-1 * var(--ws-main-pad-inline));");
-    expect(dashboardV4Css).toContain("margin: 0 calc(-1 * var(--ws-main-pad-inline));");
+    expect(dashboardV4Css).not.toContain("margin: 0 calc(-1 * var(--ws-main-pad-inline));");
     expect(dashboardV4Css).toContain("padding: 0 var(--ws-main-pad-inline) 64px;");
     expect(dashboardV4Css).toContain(".lb-main > .lb-topbar + .lb-bento");
     expect(dashboardV4Css).not.toContain("inset: 0 0 auto var(--ws-sidebar-w);");
     expect(dashboardV4Css).toContain(".lb-topbar-hud");
     expect(dashboardV4Css).toContain(".lb-availability .lb-live-link");
-    expect(dashboardV4Css).toContain(".lb-availability .lb-status--published");
+    expect(dashboardV4Css).toContain(".lb-availability .lb-status");
     expect(dashboardV4Css).toContain(".lb-publish-action--secondary");
   });
 

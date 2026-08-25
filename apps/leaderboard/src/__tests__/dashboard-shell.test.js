@@ -3,6 +3,7 @@ import { RewardsChannelPage, RewardsHistoryPage, RewardsRedemptionsPage } from "
 import { AudienceMembersPage } from "../pages/audience.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { PAGES } from "../pages.jsx";
+import { profileIdentity } from "../assets/dashboard/profile-menu.js";
 
 const user = { display_name: "Pro user", plan: "pro" };
 
@@ -93,6 +94,20 @@ describe("server-rendered dashboard profile", () => {
     const html = renderPage(UnifiedSettingsPage);
     expect(html).toContain("gm-badge--paid\">Pro</span>");
     expect(html).not.toContain("gm-badge--free\">Free</span>");
+  });
+});
+
+describe("client profile identity normalization", () => {
+  it("accepts the server and API display-name spellings", () => {
+    expect(profileIdentity({ display_name: "Snake case", displayName: "Camel case" })).toBe("Snake case");
+    expect(profileIdentity({ displayName: "Camel case" })).toBe("Camel case");
+  });
+
+  it("uses the email local part, then the full email, then Account", () => {
+    expect(profileIdentity({ email: "creator@example.com" })).toBe("creator");
+    expect(profileIdentity({ email: "@example.com" })).toBe("@example.com");
+    expect(profileIdentity({})).toBe("Account");
+    expect(profileIdentity({ displayName: "   " })).toBe("Account");
   });
 });
 
