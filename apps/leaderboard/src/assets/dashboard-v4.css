@@ -2043,7 +2043,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 /* Past periods / Archives */
 .v3-dash[data-auth-workspace] .arch-form {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 1fr) auto;
+  /* The select's preferred track must be able to collapse below its 220px
+     comfort width, or the archive row forces the document wider than a phone. */
+  grid-template-columns: minmax(0, 1.2fr) minmax(min(100%, 220px), 1fr) auto;
   align-items: end;
   gap: 16px;
   margin: 24px 0 20px;
@@ -5592,7 +5594,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls { display: block;
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls > *:not([data-egroup="players"]):not(.savebar) { display: none;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls > *:not([data-egroup="players"]):not(.savebar):not(.editor-steps) { display: none;
 }
 
 @media (max-width: 560px) {
@@ -5619,6 +5621,18 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   }
 
   .v3-dash[data-auth-workspace] .v3-bulkbar .v3-btn { padding: 0 8px;
+  }
+
+  /* The archive row stacks: three tracks plus a single-line button cannot fit
+     a phone viewport, and the grid would otherwise push the document wider. */
+  .v3-dash[data-auth-workspace] .arch-form { grid-template-columns: 1fr; }
+
+  .v3-dash[data-auth-workspace] .arch-form input,
+  .v3-dash[data-auth-workspace] .arch-form select { min-width: 0; }
+
+  .v3-dash[data-auth-workspace] .arch-form .btn {
+    width: 100%;
+    white-space: normal;
   }
 
   /* Preview chrome is a single row on desktop; at phone widths its device

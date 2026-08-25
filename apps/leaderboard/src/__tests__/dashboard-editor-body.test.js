@@ -94,8 +94,23 @@ describe("authenticated editor body", () => {
     }
     expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.savebar \{[\s\S]*?position: sticky/);
     expect(appCss).not.toMatch(/\.savebar\{[^}]*position:fixed/);
-    // The Players step hides the other step bodies but must keep the save bar.
-    expect(dashboardCss).toContain('.design-controls > *:not([data-egroup="players"]):not(.savebar)');
+    // The Players step hides the other step bodies but must keep the save bar
+    // and the workflow steps, which are siblings of those bodies.
+    expect(dashboardCss).toContain(
+      '.design-controls > *:not([data-egroup="players"]):not(.savebar):not(.editor-steps)',
+    );
+    expect(editorHtml("/dashboard/leaderboard/players")).toContain('class="editor-steps v3-tabs" id="editorTabs"');
+  });
+
+  it("stacks the archive row instead of widening the document on phones", () => {
+    // A three-track grid with a single-line button cannot fit a phone
+    // viewport; History overflowed the document at 320-500px because of it.
+    const base = /\.arch-form \{([^}]*)\}/.exec(dashboardCss)?.[1] || "";
+    expect(base).not.toMatch(/minmax\(220px/);
+    expect(base).toContain("minmax(min(100%, 220px), 1fr)");
+    const narrow = dashboardCss.slice(dashboardCss.indexOf("@media (max-width: 560px)"));
+    expect(narrow).toMatch(/\.arch-form \{ grid-template-columns: 1fr; \}/);
+    expect(narrow).toMatch(/\.arch-form \.btn \{[\s\S]*?white-space: normal/);
   });
 
   it("keeps the editor body inside a 320px viewport", () => {
