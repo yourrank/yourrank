@@ -7854,12 +7854,20 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .tg-setup-actions .btn,
   .v3-dash[data-auth-workspace] .tg-compose-rehearsal .btn,
   .v3-dash[data-auth-workspace] .wizard-step .btn,
-  .v3-dash[data-auth-workspace] .lb-bento[data-page="commands"] .btn {
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="commands"] .btn,
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="broadcasts"] .btn {
     min-height: 44px;
   }
 
   .v3-dash[data-auth-workspace] .tg-row-details > summary,
   .v3-dash[data-auth-workspace] .tg-disclosure > summary {
+    min-height: 44px;
+  }
+
+  /* Recovery and rehearsal actions are tapped as often as the primary one. */
+  .v3-dash[data-auth-workspace] .lb-bento .empty--error .btn,
+  .v3-dash[data-auth-workspace] .tg-compose-rehearsal .btn,
+  .v3-dash[data-auth-workspace] .tg-compose-rehearsal .v3-input {
     min-height: 44px;
   }
 
