@@ -57,7 +57,7 @@
         var tabs = root.querySelector(pair[0]);
         var head = root.querySelector(pair[1]);
         if (!tabs || !head) return;
-        tabs.style.setProperty("--v3-sticky-head-offset", head.getBoundingClientRect().height + "px");
+        tabs.style.setProperty("--sticky-head-offset", head.getBoundingClientRect().height + "px");
       });
     }
 

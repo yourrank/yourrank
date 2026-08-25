@@ -170,8 +170,8 @@ describe("dashboard overview quick actions", () => {
   });
 
   it("keeps account plan panels readable on the dark dashboard", () => {
-    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.plan-usage-row \{[\s\S]*?background: var\(--v4-surface\);/);
-    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.plan-pending,[\s\S]*?\.v3-dash\[data-auth-workspace\] \.plan-cancel \{[\s\S]*?background: var\(--v4-surface-soft\);/);
+    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.plan-usage-row \{[\s\S]*?background: var\(--ws-surface\);/);
+    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.plan-pending,[\s\S]*?\.v3-dash\[data-auth-workspace\] \.plan-cancel \{[\s\S]*?background: var\(--ws-surface-soft\);/);
   });
 
   it("styles the Home alert and block status rows in the v4 workspace", () => {
@@ -196,7 +196,7 @@ describe("dashboard overview quick actions", () => {
 
   it("keeps authenticated cards on the v4 geometry without changing public cards", () => {
     expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.card \{[\s\S]*?padding: 24px;[\s\S]*?margin-top: 0;[\s\S]*?transition: none;/);
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .card:hover { border-color: var(--v4-line); }");
+    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .card:hover { border-color: var(--ws-line); }");
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .ov-live-grid { display: grid;");
     expect(dashboardCss).toContain("gap: 16px; }");
     expect(dashboardCss).not.toContain(".v3-dash[data-auth-workspace] .ov-live-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 4fr); gap: 0; overflow: hidden;");

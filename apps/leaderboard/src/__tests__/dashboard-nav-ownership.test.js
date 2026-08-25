@@ -235,21 +235,21 @@ describe("dashboard navigation ownership", () => {
   it("keeps feature headings and subnavigation clear of the sticky topbar", () => {
     expect(dashboardV4Css).toContain(".lb-page.is-on > .v3-head");
     expect(dashboardV4Css).toContain(".lb-page.is-on > .design-grid > .design-controls > .v3-section-title");
-    expect(dashboardV4Css).toContain("top: var(--v3-topbar-h);");
+    expect(dashboardV4Css).toContain("top: var(--ws-topbar-h);");
     expect(dashboardV4Css).toContain(".lb-page.is-on > .v3-head + .v3-tabs");
-    expect(dashboardV4Css).toContain("top: calc(var(--v3-topbar-h) + var(--v3-sticky-head-offset, 0px));");
+    expect(dashboardV4Css).toContain("top: calc(var(--ws-topbar-h) + var(--sticky-head-offset, 0px));");
     expect(shellNavJs).toContain("ResizeObserver");
-    expect(shellNavJs).toContain("--v3-sticky-head-offset");
+    expect(shellNavJs).toContain("--sticky-head-offset");
   });
 
   it("aligns the topbar band and content to the main column", () => {
     expect(dashboardV4Css).toContain("position: sticky;");
     expect(dashboardV4Css).toContain("top: 0;");
-    expect(dashboardV4Css).toContain("margin-inline: calc(-1 * var(--v3-main-pad-inline));");
-    expect(dashboardV4Css).toContain("margin: 0 calc(-1 * var(--v3-main-pad-inline));");
-    expect(dashboardV4Css).toContain("padding: 0 var(--v3-main-pad-inline) 64px;");
+    expect(dashboardV4Css).toContain("margin-inline: calc(-1 * var(--ws-main-pad-inline));");
+    expect(dashboardV4Css).toContain("margin: 0 calc(-1 * var(--ws-main-pad-inline));");
+    expect(dashboardV4Css).toContain("padding: 0 var(--ws-main-pad-inline) 64px;");
     expect(dashboardV4Css).toContain(".lb-main > .lb-topbar + .lb-bento");
-    expect(dashboardV4Css).not.toContain("inset: 0 0 auto var(--v3-sidebar-w);");
+    expect(dashboardV4Css).not.toContain("inset: 0 0 auto var(--ws-sidebar-w);");
     expect(dashboardV4Css).toContain(".lb-topbar-hud");
     expect(dashboardV4Css).toContain(".lb-availability .lb-live-link");
     expect(dashboardV4Css).toContain(".lb-availability .lb-status--published");
@@ -260,11 +260,11 @@ describe("dashboard navigation ownership", () => {
     expect(dashboardV4Css).toContain(".v3-dash[data-auth-workspace] .v3-players-table .player-name {");
     expect(dashboardV4Css).toContain("width: 200px;");
     expect(dashboardV4Css).toContain("min-width: 200px;");
-    expect(dashboardV4Css).toContain("min-width: var(--v3-players-table-min-width, 620px);");
+    expect(dashboardV4Css).toContain("min-width: var(--players-table-min-width, 620px);");
     expect(dashboardV4Css).not.toContain("min-width: 1180px;");
     expect(playersJs).toContain("PLAYER_TABLE_BASE_WIDTH = 44 + 56 + 200 + 112 + 112 + 96");
     expect(playersJs).toContain("PLAYER_OPTIONAL_COLUMN_WIDTH = 112");
-    expect(playersJs).toContain("--v3-players-table-min-width");
+    expect(playersJs).toContain("--players-table-min-width");
     expect(dashboardV4Css).not.toContain(".v3-players-table th:nth-child(3)");
     expect(dashboardV4Css).not.toContain(".v3-players-table td:nth-child(3)");
     expect(dashboardV4Css).toContain(".ov-player-name {\n  min-width: 0;");

@@ -81,7 +81,10 @@ body {
 ::-webkit-scrollbar-thumb { background: rgba(25, 25, 25, 0.24); border: 2px solid var(--devin-bg); border-radius: var(--devin-radius-pill); }
 
 a { text-underline-offset: 4px; }
-:focus-visible { outline: 2px solid var(--devin-primary); outline-offset: 2px; }
+body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible {
+  outline: 2px solid var(--devin-primary);
+  outline-offset: 2px;
+}
 
 .btn--dark {
   border-color: var(--devin-black);
@@ -89,22 +92,22 @@ a { text-underline-offset: 4px; }
   color: #fcfcfc;
 }
 
-.field label,
-.field-label {
+body:not(:has(.v3-dash[data-auth-workspace])) .field label,
+body:not(:has(.v3-dash[data-auth-workspace])) .field-label {
   color: var(--devin-ink);
   font-size: 13px;
   font-weight: 500;
 }
 
-.field input,
-.field select,
-.field textarea,
-.v3-dash input,
-.v3-dash select,
-.v3-dash textarea,
-.yr-ui input,
-.yr-ui select,
-.yr-ui textarea {
+body:not(:has(.v3-dash[data-auth-workspace])) .field input,
+body:not(:has(.v3-dash[data-auth-workspace])) .field select,
+body:not(:has(.v3-dash[data-auth-workspace])) .field textarea,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash input,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash select,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash textarea,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui input,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui select,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea {
   border: 1px solid var(--devin-line);
   border-radius: var(--devin-radius-small);
   background: var(--devin-bg);
@@ -112,15 +115,15 @@ a { text-underline-offset: 4px; }
   box-shadow: none;
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus,
-.v3-dash input:focus,
-.v3-dash select:focus,
-.v3-dash textarea:focus,
-.yr-ui input:focus,
-.yr-ui select:focus,
-.yr-ui textarea:focus {
+body:not(:has(.v3-dash[data-auth-workspace])) .field input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .field select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .field textarea:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .v3-dash textarea:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui input:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui select:focus,
+body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
   border-color: var(--devin-primary);
   outline: 2px solid color-mix(in srgb, var(--devin-primary) 16%, transparent);
   outline-offset: 0;
@@ -371,62 +374,6 @@ a { text-underline-offset: 4px; }
 }
 
 /* Creator and Telegram workspace. */
-.v3-dash,
-.v3-dash[data-auth-workspace],
-body.yr-ui {
-  --v3-accent: var(--devin-primary);
-  --v3-accent-ink: #ffffff;
-  --v3-accent-soft: color-mix(in srgb, var(--devin-primary) 8%, transparent);
-  --v3-accent-line: color-mix(in srgb, var(--devin-primary) 28%, transparent);
-  --v3-chrome: var(--devin-black);
-  --v3-chrome-2: #191919;
-  --v3-chrome-3: #232323;
-  --v3-chrome-card: #191919;
-  --v3-chrome-line: rgba(255, 255, 255, 0.12);
-  --v3-chrome-line-2: rgba(255, 255, 255, 0.2);
-  --v3-ink: #fcfcfc;
-  --v3-ink-soft: #d8d8d8;
-  --v3-ink-mute: #989898;
-  --v3-main-bg: var(--devin-bg);
-  --v3-main-panel: var(--devin-surface);
-  --v3-main-line: var(--devin-line-soft);
-  --v3-main-line-2: var(--devin-line);
-  --v3-main-ink: var(--devin-ink);
-  --v3-main-ink-soft: var(--devin-muted);
-  --v3-main-ink-mute: var(--devin-faint);
-  --v3-radius: var(--devin-radius-card);
-  --v3-radius-sm: var(--devin-radius-small);
-  --v3-radius-xs: var(--devin-radius-control);
-  --v3-shadow: none;
-  --v3-shadow-lg: 0 16px 48px rgba(18, 17, 17, 0.14);
-  --v3-sans: var(--devin-font);
-  --v3-mono: var(--devin-mono);
-}
-
-.v3-dash[data-auth-workspace] {
-  --v4-canvas: var(--devin-bg);
-  --v4-surface: var(--devin-surface);
-  --v4-surface-soft: #f7f7f3;
-  --v4-surface-strong: var(--devin-surface-2);
-  --v4-ink: var(--devin-ink);
-  --v4-ink-soft: var(--devin-muted);
-  --v4-ink-mute: var(--devin-faint);
-  --v4-line: var(--devin-line-soft);
-  --v4-line-strong: var(--devin-line);
-  --v4-navy: var(--devin-black);
-  --v4-navy-raised: #232323;
-  --v4-navy-line: rgba(255, 255, 255, 0.12);
-  --v4-navy-ink: #fcfcfc;
-  --v4-navy-soft: #989898;
-  --v4-cobalt: var(--devin-primary);
-  --v4-cobalt-hover: var(--devin-primary-hover);
-  --v4-cobalt-soft: color-mix(in srgb, var(--devin-primary) 7%, var(--devin-bg));
-  --v4-radius: var(--devin-radius-card);
-  --v4-radius-sm: var(--devin-radius-small);
-  --v4-radius-control: var(--devin-radius-control);
-  --v4-shadow: 0 1px 2px rgba(18, 17, 17, 0.05), 0 10px 28px -18px rgba(18, 17, 17, 0.18);
-  --v4-shadow-overlay: 0 16px 48px rgba(18, 17, 17, 0.14);
-}
 
 body:has(.v3-dash[data-auth-workspace]),
 .v3-dash[data-auth-workspace] .lb-main { background: var(--devin-bg); color: var(--devin-ink); }

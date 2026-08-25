@@ -119,7 +119,7 @@ describe("authenticated dashboard v4 contract", () => {
 
     // The shell root carries the rail-width token; child rail controls own icon sizing.
     expect(sizingDeclarations).toEqual([]);
-    expect(ruleBlocks.some(({ declarations }) => /--v3-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
+    expect(ruleBlocks.some(({ declarations }) => /--ws-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
   });
 
   it("keeps mobile top-bar controls on the light surface and allows reflow", () => {
@@ -127,26 +127,26 @@ describe("authenticated dashboard v4 contract", () => {
     const menuRule = [...css.matchAll(/\.v3-dash\[data-auth-workspace\] \.lb-topbar-menu\s*\{([^{}]*)\}/g)]
       .map(([, declarations]) => declarations)
       .join("\n");
-    expect(menuRule).toContain("var(--v4-line)");
-    expect(menuRule).toContain("var(--v4-surface)");
-    expect(menuRule).toContain("var(--v4-ink)");
-    expect(menuRule).not.toContain("var(--v3-chrome-line-2)");
-    expect(menuRule).not.toContain("var(--v3-chrome-2)");
+    expect(menuRule).toContain("var(--ws-line)");
+    expect(menuRule).toContain("var(--ws-surface)");
+    expect(menuRule).toContain("var(--ws-text)");
+    expect(menuRule).not.toContain("var(--ws-chrome-line-strong)");
+    expect(menuRule).not.toContain("var(--ws-chrome-raised)");
     expect(baseTopbar).toContain("position: sticky");
     expect(baseTopbar).toContain("top: 0");
-    expect(baseTopbar).toContain("margin-inline: calc(-1 * var(--v3-main-pad-inline))");
+    expect(baseTopbar).toContain("margin-inline: calc(-1 * var(--ws-main-pad-inline))");
     expect(baseTopbar).not.toContain("position: fixed");
     expect(baseTopbar).not.toContain("inset:");
     expect(baseTopbar).toContain("box-sizing: border-box");
-    expect(baseTopbar).toContain("background: var(--v4-surface)");
+    expect(baseTopbar).toContain("background: var(--ws-surface)");
     expect(baseTopbar).not.toMatch(/\b(?:top|left|right|width|margin|box-sizing)\s*:[^;]*!important/);
     const narrowStart = css.indexOf("@media (max-width: 700px) {");
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
-    expect(narrowShell).toContain("--v3-topbar-h: 153px");
-    expect(narrowShell).toContain("height: var(--v3-topbar-h)");
-    expect(narrowShell).toContain("min-height: var(--v3-topbar-h)");
-    expect(narrowShell).toContain("--v3-main-pad-inline: 16px");
+    expect(narrowShell).toContain("--ws-topbar-h: 153px");
+    expect(narrowShell).toContain("height: var(--ws-topbar-h)");
+    expect(narrowShell).toContain("min-height: var(--ws-topbar-h)");
+    expect(narrowShell).toContain("--ws-main-pad-inline: 16px");
     expect(narrowShell).toContain("padding-bottom: 48px");
     expect(narrowShell).toContain("lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }");
     expect(narrowShell).not.toContain("min-height: 112px");
@@ -178,9 +178,26 @@ describe("authenticated dashboard v4 contract", () => {
 describe("shared UI primitives", () => {
   const ui = fs.readFileSync(path.join(assetsDir, "ui.css"), "utf8");
   const botShell = fs.readFileSync(path.resolve(import.meta.dir, "../../../../packages/shared/src/page-shell.ts"), "utf8");
+  const appCssDocuments = [
+    ...fs.readdirSync(path.resolve(import.meta.dir, "../pages"))
+      .filter((file) => /\.(js|jsx)$/.test(file))
+      .map((file) => [file, fs.readFileSync(path.resolve(import.meta.dir, "../pages", file), "utf8")]),
+    ["index.js", fs.readFileSync(path.resolve(import.meta.dir, "../index.js"), "utf8")],
+    ["page-shell.ts", botShell],
+  ].filter(([, source]) => source.includes("app.css"));
 
   it("defines the button component", () => {
     expect(ui).toMatch(/\.btn,\s*\.yr-ui button\s*\{/);
+  });
+
+  it("loads ui.css wherever app.css is loaded", () => {
+    expect(appCssDocuments.length).toBeGreaterThan(0);
+    for (const [file, source] of appCssDocuments) {
+      expect(`${file} loads ui.css`).toBe(source.includes("ui.css") ? `${file} loads ui.css` : `${file} does not load ui.css`);
+    }
+    expect(ui).toMatch(/\.field\s*\{[\s\S]*?display:\s*flex/);
+    expect(ui).toMatch(/\.field input,\s*\.field select,\s*\.field textarea\s*\{/);
+    expect(ui).toMatch(/\.field-err\s*\{/);
   });
 
   const selectorsOf = (css) =>

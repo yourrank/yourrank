@@ -447,7 +447,7 @@ export function applyPlayerFieldVisibility(fields) {
   const merged = { ...state.EXTRA?.playerFields, ...(fields || {}) };
   const visibleOptionalCount = Object.keys(FIELD_COLS).reduce((count, key) => count + (merged[key] !== false ? 1 : 0), 0);
   table?.style.setProperty(
-    "--v3-players-table-min-width",
+    "--players-table-min-width",
     `${PLAYER_TABLE_BASE_WIDTH + visibleOptionalCount * PLAYER_OPTIONAL_COLUMN_WIDTH}px`
   );
   for (const [key, cls] of Object.entries(FIELD_COLS)) {
