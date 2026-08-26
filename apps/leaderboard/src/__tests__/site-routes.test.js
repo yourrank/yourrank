@@ -358,8 +358,8 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Alice");
-    expect(html).toContain('class="yr-side"');
-    expect(html).toContain('class="yr-header"');
+    expect(html).toContain('class="yr-top"');
+    expect(html).toContain('class="yr-drawer"');
     expect(html).toContain("Leaderboard");
   });
 });

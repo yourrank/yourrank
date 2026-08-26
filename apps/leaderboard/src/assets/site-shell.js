@@ -1,6 +1,6 @@
 // Public streamer site — shell behaviour.
 // Progressive enhancement only: every section renders and is navigable with
-// this file blocked. Handles the mobile sidebar, the standings board tabs and
+// this file blocked. Handles the narrow-width menu drawer, the standings tabs and
 // filter, the shop redeem call, the reset countdown and the feedback dialog.
 (function () {
   "use strict";
@@ -9,7 +9,6 @@
   var scrim = document.getElementById("yr-scrim");
   var menu = document.getElementById("yr-menu");
   var sideClose = document.getElementById("yr-side-close");
-  var region = document.querySelector(".yr-region");
   var sideOpener = null;
   var bodyOverflow = "";
   var inertBackground = [];

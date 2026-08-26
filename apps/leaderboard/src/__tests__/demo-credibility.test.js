@@ -63,10 +63,13 @@ describe("demo credibility invariants", () => {
       me: "My credits",
     };
 
+    // Each section names itself in its own heading; the shared chrome no
+    // longer restates the current section next to the creator identity.
     for (const [section, label] of Object.entries(expected)) {
       const html = await render(section);
       expect(html).toContain(`data-section="${section}"`);
-      if (section !== "leaderboard") expect(html).toContain(`<span>${label}</span>`);
+      if (section === "home") expect(html).toContain('<h1 class="yr-intro-name">Demo Challenge</h1>');
+      else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
     }
 
     const shop = await render("shop");
@@ -85,8 +88,11 @@ describe("demo credibility invariants", () => {
     expect(data.shopItems.length).toBeLessThanOrEqual(5);
     expect(data.demoActivity.length).toBeGreaterThan(0);
     expect(data.demoGiveaway).toMatchObject({ name: "Demo Drop" });
-    expect(home).toContain("Recent activity");
-    expect(home).toContain("LIVE GIVEAWAY");
+    // Home previews the board and the cheapest rewards; the activity feed and
+    // giveaway panel belong to the sections that own them, not the landing page.
+    expect(home).not.toContain("Recent activity");
+    expect(home).not.toContain("LIVE GIVEAWAY");
+    expect(home).toContain(data.shopItems[0].name);
     for (const item of data.shopItems) expect(shop).toContain(item.name);
     expect(shop).not.toContain("yr-item-art");
 
