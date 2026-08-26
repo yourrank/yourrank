@@ -479,6 +479,78 @@
 .yr-you-tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-accent-readable); margin-left: 8px; font-weight: 700; }
 .yr-gold { color: var(--yr-fog); }
 
+/* ── Public leaderboard: intro and standings ─────────────────────────── */
+
+.yr-lbh-title { margin-bottom: 12px; }
+.yr-lbh-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; line-height: 20px; color: var(--yr-mute); }
+.yr-lbh-meta > * + *::before { content: "·"; margin-right: 10px; color: var(--yr-faint); }
+.yr-lbh-meta b { font-family: var(--yr-mono); font-weight: 600; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
+.yr-lbh-state {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
+  border: 1px solid var(--yr-edge); border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint);
+}
+.yr-lbh-state.is-live { color: var(--yr-success); border-color: var(--yr-success); }
+.yr-lbh-state.is-soon { color: var(--yr-warning); border-color: var(--yr-warning); }
+.yr-lbh-meta > .yr-lbh-state + *::before { content: none; margin-right: 0; }
+.yr-lbh-note { margin-top: 10px; font-size: 13px; line-height: 1.55; color: var(--yr-faint); max-width: 62ch; }
+
+/* Standings are one list of players at every width: the phone stacks the
+   values under the name, wide viewports line the same cells up in columns. */
+.yr-stand-head, .yr-srow {
+  display: grid; align-items: center;
+  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto;
+  grid-template-areas: "rank name val" "rank name prize";
+  gap: 0 12px; padding: 6px 16px;
+}
+.yr-stand-head { display: none; }
+.yr-stand { list-style: none; margin: 0; padding: 0; }
+.yr-srow { border-top: 1px solid var(--yr-edge-soft); }
+.yr-srow:first-child { border-top: 0; }
+.yr-srow:hover { background: rgba(255, 255, 255, 0.02); }
+.yr-srow[hidden] { display: none; }
+.yr-srow-rank {
+  grid-area: rank; font-family: var(--yr-mono); font-size: 13px; font-weight: 600;
+  color: var(--yr-faint); font-variant-numeric: tabular-nums; text-align: right;
+}
+/* The player identity owns the row's primary width and the full name always
+   stays in the DOM as the link's accessible name; an extreme username only ever
+   shows two lines so it cannot turn one row into a 250px block on a phone. */
+.yr-srow-name {
+  grid-area: name; min-width: 0; min-height: 44px;
+  /* Transparent borders, not padding, give the link its 44px touch height:
+     `overflow: hidden` clips at the padding edge, so vertical padding would
+     leak the top of the clamped-away line into the row. */
+  border-top: 12px solid transparent; border-bottom: 12px solid transparent;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  font-size: 15px; line-height: 20px; font-weight: 600; color: var(--yr-fog);
+  overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: var(--yr-edge); text-underline-offset: 4px;
+}
+.yr-srow-name:hover { text-decoration-color: var(--yr-accent-readable); }
+.yr-srow-name:visited { color: var(--yr-mute); }
+/* The values stay secondary: on a phone they may claim only 10ch of the row, so
+   an unusually large figure wraps in its own cell instead of reserving half the
+   row and squeezing the player identity into a column two characters wide. */
+.yr-srow-val {
+  grid-area: val; font-family: var(--yr-mono); font-size: 13px; color: var(--yr-fog);
+  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 10ch;
+}
+.yr-srow-prize {
+  grid-area: prize; font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute);
+  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 10ch;
+}
+/* The head of the board is rank typography, not a trophy shelf. */
+.yr-srow--top .yr-srow-rank, .yr-srow--first .yr-srow-rank { color: var(--yr-fog); font-size: 14px; font-weight: 700; }
+.yr-srow--first .yr-srow-rank { color: var(--yr-accent-readable); }
+.yr-srow--first .yr-srow-name { font-size: 16px; font-weight: 700; }
+
+.yr-nomatch, .yr-page-status { padding: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
+.yr-page-status { padding: 0; }
+.yr-page-status:empty { display: none; }
+.yr-page-status.is-error { color: var(--yr-warning); }
+.yr-pagination { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px; border-top: 1px solid var(--yr-edge-soft); }
+
 .yr-list > * + * { border-top: 1px solid var(--yr-edge-soft); }
 .yr-list-item { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .yr-list-h { font-size: 11px; line-height: 16px; font-weight: 700; color: var(--yr-fog); margin-bottom: 4px; }
@@ -530,7 +602,6 @@
    nonce for style-src, which never applies to style="" attributes. */
 .yr-btn--sm { min-height: 44px; height: 44px; padding: 0 16px; }
 .yr-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 12px; }
-.yr-nomatch td { text-align: center; color: var(--yr-faint); }
 .yr-split { display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
 .yr-note--w { max-width: 28rem; }
 .yr-table th.yr-w-auto { width: auto; }
@@ -559,6 +630,26 @@
 /* ── Breakpoints ─────────────────────────────────────────────────────── */
 
 @media (min-width: 640px) {
+  /* Wide enough for real columns: the same cells line up on one line and the
+     column labels appear. Fixed track widths keep every row aligned. */
+  .yr-stand-head { display: grid; }
+  .yr-stand-head, .yr-srow {
+    grid-template-columns: 3rem minmax(0, 1fr) 9rem 7rem;
+    grid-template-areas: "rank name val prize";
+    padding: 4px 24px;
+  }
+  .yr-srow-name { -webkit-line-clamp: 3; line-clamp: 3; }
+  .yr-srow-val, .yr-srow-prize { max-width: none; }
+  .yr-stand-head[data-hide-prizes="true"], .yr-stand[data-hide-prizes="true"] .yr-srow {
+    grid-template-columns: 3rem minmax(0, 1fr) 9rem;
+    grid-template-areas: "rank name val";
+  }
+  .yr-stand-head {
+    padding-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--yr-edge-soft);
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-mute);
+  }
+  .yr-stand-head .yr-r, .yr-stand-head > span:first-child { text-align: right; }
+  .yr-srow-prize { font-size: 13px; }
   .yr-g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yr-hero-r { flex-direction: row; align-items: center; }
   .yr-hero-r--stack { flex-direction: column; align-items: flex-end; }
