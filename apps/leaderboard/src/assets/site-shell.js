@@ -274,8 +274,15 @@
         loadMore.textContent = loadMoreLabel;
         setPageStatus(added ? plural(query ? visiblePlayerCount() : loadedCount) + " shown." : "No more players to load.");
         // The button disappears with the last page, so the status it leaves
-        // behind takes the focus instead of dropping it back to the document.
-        if (loadMore.hidden && loadMoreStatus && typeof loadMoreStatus.focus === "function") loadMoreStatus.focus();
+        // behind takes the focus instead of dropping it back to the document —
+        // without scrolling the viewer away from the rows they just loaded.
+        if (loadMore.hidden && loadMoreStatus && typeof loadMoreStatus.focus === "function") {
+          var restoreX = window.scrollX;
+          var restoreY = window.scrollY;
+          loadMoreStatus.focus({ preventScroll: true });
+          // Browsers that ignore preventScroll get the viewport put back.
+          if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);
+        }
       }).catch(function () {
         if (requestId !== pageRequest || query !== activeSearch) return;
         loadMore.disabled = false;

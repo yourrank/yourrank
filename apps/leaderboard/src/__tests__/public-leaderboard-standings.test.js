@@ -123,6 +123,36 @@ describe("public leaderboard standings", () => {
     expect(css).toMatch(/\.yr-srow-name \{[^}]*min-width: 0/);
   });
 
+  it("bounds an extreme username visually without shortening it anywhere", async () => {
+    const long = "L".repeat(100);
+    const html = await render("leaderboard", { data: { ...baseData, players: [player(long, 1, 1e12, 0)] } });
+    // The whole name is the link text and the link target: nothing is cut.
+    expect(html).toContain(`>${long}</a>`);
+    expect(html).toContain(`/creator/player/${long}`);
+    expect(html).not.toContain("…</a>");
+
+    const nameRule = css.match(/\.yr-srow-name \{([^}]*)\}/)[1];
+    // Two visible lines on a phone, so one username cannot build a 250px row.
+    expect(nameRule).toContain("-webkit-line-clamp: 2");
+    expect(nameRule).toContain("line-clamp: 2");
+    expect(nameRule).toContain("-webkit-box-orient: vertical");
+    expect(nameRule).toContain("overflow: hidden");
+    // Identity keeps the row's primary width; the value column is bounded.
+    const rowRule = css.match(/\.yr-stand-head, \.yr-srow \{([^}]*)\}/)[1];
+    expect(rowRule).toContain("minmax(0, 1fr) minmax(0, 10ch)");
+  });
+
+  it("leaves normal names and the wide layout alone", async () => {
+    const html = await render();
+    expect(html).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
+    // A one-line name still occupies the same 44px target as before.
+    expect(css).toMatch(/\.yr-srow-name \{[^}]*min-height: 44px/);
+    expect(css).toMatch(/\.yr-srow-name \{[^}]*line-height: 20px/);
+    const wide = css.slice(css.indexOf("@media (min-width: 640px)"));
+    expect(wide).toMatch(/\.yr-srow-name \{ -webkit-line-clamp: 3; line-clamp: 3; \}/);
+    expect(wide).toMatch(/grid-template-areas: "rank name val prize"/);
+  });
+
   it("links players on slug sites and on custom domains", async () => {
     const slugged = await render();
     expect(slugged).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
@@ -174,7 +204,14 @@ describe("public leaderboard standings", () => {
     expect(shell).toContain("loadMore.disabled = true;");
     expect(shell).toContain('setPageStatus("Couldn’t load more players.", true)');
     expect(shell).toContain("addRetry(loadMoreStatus, loadNextPage)");
-    expect(shell).toContain("if (loadMore.hidden && loadMoreStatus && typeof loadMoreStatus.focus === \"function\") loadMoreStatus.focus();");
+    // Focus follows the vanished button for continuity, but the viewport stays
+    // where the reader was: never a scroll jump, never a drop to the document.
+    expect(shell).toContain("loadMoreStatus.focus({ preventScroll: true })");
+    expect(shell).toContain("if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);");
+    expect(shell).not.toMatch(/loadMoreStatus\.focus\(\)/);
+    expect(shell).not.toContain("scrollIntoView");
+    expect(shell).toContain("loadMore.hidden && loadMoreStatus");
+    expect(html).toContain('data-load-more-status role="status" aria-live="polite" tabindex="-1"');
     // Search paging and board paging are separate offsets.
     expect(shell).toContain("fetchPage(query ? searchOffset : loadedCount, query)");
     expect(shell).not.toContain("IntersectionObserver");
