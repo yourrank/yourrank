@@ -25,7 +25,6 @@ export function overviewPanel({ hasBot = true }: { hasBot?: boolean } = {}): str
       <ul class="tg-action-list">
         <li class="tg-action-row"><div class="tg-action-copy"><span class="tg-action-name">Send update</span><span class="tg-action-purpose">Message everyone subscribed to your bot</span></div><a class="btn btn--ghost" href="/dashboard/telegram/broadcasts">Send update</a></li>
         <li class="tg-action-row"><div class="tg-action-copy"><span class="tg-action-name">Commands</span><span class="tg-action-purpose">Choose what your bot replies to subscribers</span></div><a class="btn btn--ghost" href="/dashboard/telegram/commands">Edit commands</a></li>
-        <li class="tg-action-row"><div class="tg-action-copy"><span class="tg-action-name">Offers</span><span class="tg-action-purpose">Make a tracked link to share with subscribers</span></div><a class="btn btn--ghost" href="/dashboard/telegram/offers">View offers</a></li>
       </ul>
     </div>
 

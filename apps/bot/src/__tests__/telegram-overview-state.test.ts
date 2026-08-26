@@ -32,6 +32,9 @@ describe("Telegram overview states", () => {
     expect(page).toContain('id="deepLinkExample"');
     expect(page).toContain('id="totClicks"');
     expect(page).toContain('id="chart"');
+    // The offer surface keeps the presentation it already had.
+    expect(page).toContain('<h2>Top offers</h2>');
+    expect(page).not.toContain('class="tg-action-name">Offers<');
   });
 
   it("puts the same connection summary on the connection page and nowhere twice", () => {
@@ -73,10 +76,74 @@ describe("Telegram connection state runtime", () => {
     expect(src.slice(rowStart, detailsStart)).not.toContain("token_hint");
   });
 
-  it("no longer renders the retired bot-card mosaic or unstyled row classes", () => {
+  it("no longer renders the retired bot-card mosaic for bot surfaces", () => {
     expect(src).not.toContain('class="bot-card"');
-    expect(src).not.toContain('class="lrow"');
-    expect(src).not.toContain('class="nm"');
+    // The only remaining legacy rows belong to the offer summary, which this
+    // change deliberately leaves as it is.
+    const offerSummaryStart = src.indexOf("const oo = $('ovOffers');");
+    expect(offerSummaryStart).toBeGreaterThan(-1);
+    for (const legacy of ['class="lrow"', 'class="nm"']) {
+      const hits = [...src.matchAll(new RegExp(legacy, "g"))].map(m => m.index ?? -1);
+      expect(hits.length).toBe(1);
+      expect(hits[0]).toBeGreaterThan(offerSummaryStart);
+    }
+  });
+
+  // Runs the real guard from the shipped script against stubbed responses, so
+  // the connection panel can only speak for the request that owns it.
+  function runLoadGuard(results: { offers: unknown; daily: unknown; bots: unknown }) {
+    const start = src.indexOf("  // Only /bots speaks for the connection");
+    const end = src.indexOf("showPage(page);", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+
+    const calls: string[] = [];
+    const guard = new Function(
+      "offers",
+      "daily",
+      "bots",
+      "toast",
+      "showLoadError",
+      "showConnectionError",
+      "renderConnectionState",
+      src.slice(start, end) + "\nreturn 'loaded';",
+    );
+    const outcome = guard(
+      results.offers,
+      results.daily,
+      results.bots,
+      () => calls.push("toast"),
+      () => calls.push("showLoadError"),
+      () => calls.push("showConnectionError"),
+      () => calls.push("renderConnectionState"),
+    );
+    return { calls, outcome };
+  }
+
+  it("keeps an offers failure out of the connection summary", () => {
+    const { calls } = runLoadGuard({ offers: { error: "offers down" }, daily: [], bots: [] });
+    expect(calls).not.toContain("showConnectionError");
+    expect(calls).toContain("renderConnectionState");
+    expect(calls).toContain("showLoadError");
+  });
+
+  it("keeps a daily-stats failure out of the connection summary", () => {
+    const { calls } = runLoadGuard({ offers: [], daily: { error: "stats down" }, bots: [] });
+    expect(calls).not.toContain("showConnectionError");
+    expect(calls).toContain("renderConnectionState");
+    expect(calls).toContain("showLoadError");
+  });
+
+  it("marks the connection unavailable only when the bots request fails", () => {
+    const { calls } = runLoadGuard({ offers: [], daily: [], bots: { error: "bots down" } });
+    expect(calls).toContain("showConnectionError");
+    expect(calls).not.toContain("renderConnectionState");
+  });
+
+  it("renders connection state from bot data when every request succeeds", () => {
+    const { calls, outcome } = runLoadGuard({ offers: [], daily: [], bots: [] });
+    expect(calls).toEqual(["renderConnectionState"]);
+    expect(outcome).toBe("loaded");
   });
 
   it("says who a broadcast goes to and maps send status to plain words", () => {

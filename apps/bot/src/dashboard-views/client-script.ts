@@ -247,9 +247,12 @@ async function load() {
   if (me.error) { toast(me.error); showLoadError(me.error); showConnectionError(); return; }
 
   const [offers, daily, bots] = await Promise.all([api('/offers'), api('/stats/daily'), api('/bots')]);
+  // Only /bots speaks for the connection: metrics or offers failing says
+  // nothing about whether Telegram is connected.
+  if (bots.error) showConnectionError(); else renderConnectionState(bots);
   if (daily.error || offers.error || bots.error) {
     const err = daily.error || offers.error || bots.error;
-    toast(err); showLoadError(err); showConnectionError(); return;
+    toast(err); showLoadError(err); return;
   }
 
   showPage(page);
@@ -309,13 +312,13 @@ function renderOverviewSummary(bots, offers){
   if (oo) {
     const top = (offers||[]).slice().sort((a,b)=>(b.clicks||0)-(a.clicks||0)).slice(0,4);
     oo.innerHTML = top.length
-      ? '<ul class="tg-row-list">'+top.map(o=>{
+      ? top.map(o=>{
           const on = o.is_active;
-          return '<li class="tg-row"><div class="tg-row-copy"><span class="tg-row-name">'+esc(o.casino)+'</span>'+
-            '<span class="tg-row-meta">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</span></div>'+
-            '<span class="tg-state" data-state="'+(on?'ok':'off')+'"><i aria-hidden="true"></i>'+(on?'Active':'Off')+'</span></li>';
-        }).join('')+'</ul>'
-      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one</a></p>';
+          return '<div class="lrow"><div class="l"><div class="nm">'+esc(o.casino)+'</div>'+
+            '<div class="ds">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</div></div>'+
+            '<span class="badge '+(on?'on':'off')+'">'+(on?'active':'off')+'</span></div>';
+        }).join('')
+      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one →</a></p>';
   }
 }
 
