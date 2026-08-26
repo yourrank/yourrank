@@ -290,8 +290,8 @@ describe("logged-out vs logged-in rendering", () => {
       isCustomDomain: false,
     });
     const html = await res.text();
-    const rows = html.match(/<tbody data-rows>([\s\S]*?)<\/tbody>/)?.[1] || "";
-    const rowBodies = [...rows.matchAll(/<tr[^>]*>([\s\S]*?)<td/g)].map((match) => match[1]);
+    const rows = html.match(/<ol class="yr-stand"[^>]*>([\s\S]*?)<\/ol>/)?.[1] || "";
+    const rowBodies = [...rows.matchAll(/<li class="yr-srow[^>]*>([\s\S]*?)<a /g)].map((match) => match[1]);
     expect(rowBodies.length).toBeGreaterThan(0);
     expect(rowBodies.join("")).not.toContain("U-09");
     expect(rowBodies.join("")).not.toContain("//");

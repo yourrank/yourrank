@@ -632,64 +632,63 @@ function boardMain(ctx) {
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
   const playerHref = (name) => isCustomDomain ? `/player/${encodeURIComponent(name)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(name)}`;
 
-  const heroHtml = hero({
-    eyebrow: [pool ? `${esc(pool)} ${poolLabel.toUpperCase()}` : "", `${period.toUpperCase()} LEADERBOARD`].filter(Boolean).join(" · "),
-    title: data.ended ? "Final standings" : data.scheduled ? "Standings open soon" : "Standings",
-    lede: data.ended
-      ? `This round has ended. These final results are ranked by ${wagerLabel.toLowerCase()}; tied players share a rank.`
-      : data.scheduled
-        ? `This round has not started yet. Pre-start standings are visible, and score updates open when the round begins.`
-        : `Ranked by ${wagerLabel.toLowerCase()} on ${esc(b.name || slug)}'s leaderboard. Players with the same value share a rank.`,
-    right: cd && !data.ended
-      ? `<div class="yr-hero-r yr-hero-r--stack">${heroStat(data.scheduled ? "Starts in" : "Ends in", cd.text, { cd: cd.ms })}</div>`
-      : (data.ended ? `<div class="yr-hero-r yr-hero-r--stack">${heroStat("Round", "Ended")}</div>` : (pool ? `<div class="yr-hero-r yr-hero-r--stack">${heroStat(poolLabel, esc(pool))}</div>` : "")),
-  });
+  // Compact intro: the title, one state line built only from board data that is
+  // already public, then the ranking rule. No KPI strip, no promoted amounts.
+  const stateLabel = data.ended ? "Ended" : data.scheduled ? "Not started" : "Live";
+  const stateClass = data.ended ? "is-ended" : data.scheduled ? "is-soon" : "is-live";
+  const metaItems = [
+    `<span class="yr-lbh-state ${stateClass}">${stateLabel}</span>`,
+    `<span>${esc(period)} leaderboard</span>`,
+    playerCount ? `<span>${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}</span>` : "",
+    cd && !data.ended ? `<span>${data.scheduled ? "Starts in" : "Ends in"} <b data-ends-at="${cd.ms}">${esc(cd.text)}</b></span>` : "",
+    pool && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
+  ].filter(Boolean).join("");
 
-  const podium = players.slice(0, 3).map((p, i) => {
+  const introHtml = `<section class="yr-lbh">
+<h1 class="yr-h1 yr-lbh-title">${data.ended ? "Final standings" : data.scheduled ? "Standings open soon" : "Standings"}</h1>
+<p class="yr-lbh-meta">${metaItems}</p>
+<p class="yr-lbh-note">${data.scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
+</section>`;
+
+  // One row per player: the top of the board is expressed through rank
+  // typography instead of a second, duplicate representation of the top three.
+  const rows = players.map((p, i) => {
     const rank = Number(p.rank) || i + 1;
-    const first = rank === 1;
-    return `<div class="yr-card yr-lb${first ? " yr-card--on" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}">
-<div class="yr-card-top"><span class="yr-label${first ? " is-accent" : ""}">#${rank}</span>${first ? ICONS.crown : ICONS.medal}</div>
-<p class="yr-card-name"><a href="${playerHref(p.name)}">${esc(p.name)}</a></p>
-<p class="yr-num">${esc(rankValue(p))}</p>
-<p class="yr-sub">${wagerLabel}${!hidePrizes && p.prize ? ` · <span class="yr-gold">${esc(formatMoney(currency, p.prize))}</span>` : ""}</p>
-</div>`;
+    const prize = !hidePrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
+    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}">
+<span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
+<a class="yr-srow-name" href="${playerHref(p.name)}">${esc(p.name)}</a>
+<span class="yr-srow-val"><span class="yr-sr">${wagerLabel}: </span>${esc(rankValue(p))}</span>
+${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span>${prize}</span>` : ""}
+</li>`;
   }).join("");
 
-  const rows = players.map((p, i) => `<tr data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${Number(p.rank) || i + 1}">
-<td class="yr-idx">${Number(p.rank) || i + 1}</td>
-<td><a href="${playerHref(p.name)}">${esc(p.name)}</a></td>
-<td class="yr-mono yr-r">${esc(rankValue(p))}</td>
-<td class="yr-mono yr-r${!hidePrizes && p.prize ? " yr-gold" : ""}">${hidePrizes ? "—" : (p.prize ? esc(formatMoney(currency, p.prize)) : "—")}</td>
-</tr>`).join("");
+  // Column labels are a wide-viewport reading aid only: every cell already
+  // carries its own screen-reader label, so announcing them twice is noise.
+  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${hidePrizes ? "true" : "false"}"><span>#</span><span>Player</span><span class="yr-r">${wagerLabel}</span>${hidePrizes ? "" : `<span class="yr-r">${prizeLabel}</span>`}</div>`;
 
-  const table = players.length
-    ? `<div class="yr-table-wrap" data-table-wrap><table class="yr-table"><caption class="yr-sr">Public standings for ${esc(b.name || slug)}</caption><thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col" class="yr-r">${wagerLabel}</th><th scope="col" class="yr-r">${prizeLabel}</th></tr></thead>
-<tbody data-rows>${rows}<tr class="yr-nomatch" id="yr-no-match" hidden><td colspan="4">No player matches that search.</td></tr></tbody></table></div>
+  const standings = players.length
+    ? `${columns}
+<ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${wagerLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${hidePrizes ? "true" : "false"}">${rows}</ol>
+<p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
-${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more</button><span data-load-more-status role="status" aria-live="polite"></span></div>` : ""}`
-    : `<div class="yr-empty">No players on the leaderboard yet</div>`;
+${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
+    : `<p class="yr-empty">${data.scheduled ? "No players yet. Standings fill in once the round starts." : "No players yet."}</p>`;
 
-  const poolPanel = pool && !hidePrizes
-    ? `<div class="yr-card yr-lb yr-split">
-<div><p class="yr-label">${poolLabel}</p><p class="yr-num yr-gold">${esc(pool)}</p></div>
-<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>
-</div>`
-    : "";
+  const notes = [
+    data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
+    pool && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
+  ].filter(Boolean).join("");
 
-  const note = data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "";
-
-  return `${heroHtml}
+  return `${introHtml}
 <div data-player-board>
-${poolPanel}
-${podium ? `<div class="yr-g3">${podium}</div>` : ""}
 ${panel({
     title: "Standings",
-    meta: `<span data-player-count-badge>${formatNumber(playerCount)} players</span>`,
-    // Player search filters this table, so it lives with the table rather than
+    meta: `<span data-player-count-badge>${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}</span>`,
+    // Player search filters this list, so it lives with the list rather than
     // in shared chrome every other section has to carry.
-    body: `${players.length ? `<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players…" autocomplete="off" /></div>` : ""}${table}`,
-    foot: note,
+    body: `${players.length ? `<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div>` : ""}${standings}`,
+    foot: notes,
   })}</div>`;
 }
 

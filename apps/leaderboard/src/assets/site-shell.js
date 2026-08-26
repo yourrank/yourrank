@@ -99,7 +99,7 @@
   var loadMoreStatus = document.querySelector("[data-load-more-status]");
   var slug = document.body.dataset.slug || "";
   var isCustomDomain = document.body.dataset.customDomain === "true";
-  var loadedCount = rowsRoot ? rowsRoot.querySelectorAll("tr[data-player-name]").length : 0;
+  var loadedCount = rowsRoot ? rowsRoot.querySelectorAll("[data-player-name]").length : 0;
   var totalCount = Number((countBadge || {}).textContent?.replace(/[^\d]/g, "")) || loadedCount;
   var activeSearch = "";
   var searchOffset = 0;
@@ -109,8 +109,12 @@
   var searchTimer = null;
   var searchRequest = 0;
   var searchController = null;
+  var pageRequest = 0;
   var currency = document.body.dataset.currency || "$";
   var rankBy = document.body.dataset.rankBy === "score" ? "score" : "wagered";
+  var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
+  var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
+  var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";
   var money = function (v) { return currency + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); };
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]); }); };
   var representations = function () {
@@ -123,24 +127,31 @@
     });
     return Object.keys(names).length;
   };
-  var updatePlayerCount = function (count) {
-    if (!countBadge) return;
-    countBadge.textContent = String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (count === 1 ? " player" : " players");
+  var plural = function (count) {
+    return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (count === 1 ? " player" : " players");
   };
-  var rowHtml = function (p) {
-    var rank = Number(p.rank) || 0;
+  // The badge always states the size of the board. Match counts belong to the
+  // search status, so a filtered view never rewrites the board's own total.
+  var updatePlayerCount = function (count) {
+    if (countBadge) countBadge.textContent = plural(count);
+  };
+  var rowHtml = function (p, rank) {
     var name = esc(String(p.name || "").toLowerCase());
-    return '<tr data-player-name="' + name + '" data-position="' + rank + '">' +
-      '<td class="yr-idx">' + String(rank).padStart(2, "0") + '</td>' +
-      '<td><a href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + esc(p.name) + '</a></td>' +
-      '<td class="yr-mono yr-r">' + esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.wagered)) + '</td>' +
-      '<td class="yr-mono yr-r">' + (p.prize ? esc(money(p.prize)) : "—") + '</td></tr>';
+    var value = esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.wagered));
+    var prize = !hidePrizes && p.prize ? esc(money(p.prize)) : "";
+    return '<li class="yr-srow' + (rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : "") +
+      '" data-player-name="' + name + '" data-position="' + rank + '">' +
+      '<span class="yr-srow-rank"><span class="yr-sr">Rank </span>' + rank + "</span>" +
+      '<a class="yr-srow-name" href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + esc(p.name) + "</a>" +
+      '<span class="yr-srow-val"><span class="yr-sr">' + esc(valueLabel) + ': </span>' + value + "</span>" +
+      (prize ? '<span class="yr-srow-prize"><span class="yr-sr">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
+      "</li>";
   };
   var fetchPage = function (offset, q, signal) {
     var params = new URLSearchParams({ limit: "100", offset: String(offset) });
     if (q) params.set("search", q);
     return fetch("/api/public/" + encodeURIComponent(slug) + "/players?" + params.toString(), signal ? { signal: signal } : undefined).then(function (res) {
-      if (!res.ok) throw new Error("Could not load players.");
+      if (!res.ok) throw new Error("request failed");
       return res.json();
     });
   };
@@ -149,14 +160,36 @@
     searchStatus.textContent = message || "";
     searchStatus.classList.toggle("is-error", !!isError);
   };
+  var addRetry = function (host, run) {
+    if (!host || host.querySelector("button")) return;
+    var retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "yr-search-retry";
+    retry.textContent = "Try again";
+    retry.addEventListener("click", run);
+    host.appendChild(retry);
+  };
+  // One row per player: a name already on the board is never appended twice,
+  // however often the button is pressed or a page is replayed.
   var appendPage = function (page, replace) {
-    if (!rowsRoot) return;
-    var html = (page.players || []).map(rowHtml).join("");
-    if (replace) rowsRoot.innerHTML = html;
-    else rowsRoot.insertAdjacentHTML("beforeend", html);
-    loadedCount = replace ? (page.players || []).length : loadedCount + (page.players || []).length;
-    totalCount = Number(page.total) || totalCount;
+    if (!rowsRoot) return 0;
+    if (replace) rowsRoot.innerHTML = "";
+    var known = {};
+    rowsRoot.querySelectorAll("[data-player-name]").forEach(function (row) { known[row.dataset.playerName] = true; });
+    var html = "";
+    var added = 0;
+    (page.players || []).forEach(function (p, i) {
+      var key = String(p.name || "").toLowerCase();
+      if (known[key]) return;
+      known[key] = true;
+      added += 1;
+      html += rowHtml(p, Number(p.rank) || i + 1);
+    });
+    if (html) rowsRoot.insertAdjacentHTML("beforeend", html);
+    loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
+    if (!activeSearch && Number(page.total)) totalCount = Number(page.total);
     if (loadMore) loadMore.hidden = !page.hasMore;
+    return added;
   };
   if (search && rowsRoot && playerBoard) {
     search.addEventListener("input", function () {
@@ -164,6 +197,7 @@
       activeSearch = q;
       searchOffset = 0;
       searchRequest += 1;
+      pageRequest += 1;
       var requestId = searchRequest;
       if (searchController) searchController.abort();
       searchController = null;
@@ -174,11 +208,11 @@
         representation.hidden = !hit;
         if (hit) shown += 1;
       });
-      if (q) updatePlayerCount(visiblePlayerCount());
       if (!q) {
+        // Clearing the field restores exactly the standings the server sent.
         if (rowsRoot && savedRowsHtml) rowsRoot.innerHTML = savedRowsHtml;
         representations().forEach(function (representation) { representation.hidden = false; });
-        loadedCount = rowsRoot.querySelectorAll("tr[data-player-name]").length;
+        loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
         updatePlayerCount(totalCount);
         if (loadMore) loadMore.hidden = loadedCount >= totalCount;
         if (empty) empty.hidden = true;
@@ -186,13 +220,12 @@
         return;
       }
       if (shown > 0) {
-        updatePlayerCount(visiblePlayerCount());
         if (empty) empty.hidden = true;
-        setSearchStatus("");
+        setSearchStatus(plural(visiblePlayerCount()) + " match “" + q + "”.");
         return;
       }
-      setSearchStatus("Searching…");
       searchTimer = window.setTimeout(function () {
+        setSearchStatus("Searching…");
         searchController = typeof AbortController === "function" ? new AbortController() : null;
         fetchPage(0, q, searchController && searchController.signal).then(function (page) {
           if (requestId !== searchRequest || activeSearch !== q) return;
@@ -202,41 +235,56 @@
           representations().forEach(function (representation) {
             representation.hidden = representation.dataset.playerName.indexOf(q) === -1;
           });
-          updatePlayerCount(visiblePlayerCount());
           if (empty) empty.hidden = found;
-          setSearchStatus(found ? "" : "No matches.");
+          setSearchStatus(found ? plural(visiblePlayerCount()) + " match “" + q + "”." : "");
         }).catch(function (err) {
           if (requestId !== searchRequest || activeSearch !== q || (err && err.name === "AbortError")) return;
           if (empty) empty.hidden = true;
-          setSearchStatus("Couldn't load results.", true);
-          if (searchStatus && !searchStatus.querySelector("button")) {
-            var retry = document.createElement("button");
-            retry.type = "button";
-            retry.className = "yr-search-retry";
-            retry.textContent = "Retry";
-            retry.addEventListener("click", function () { search.dispatchEvent(new Event("input", { bubbles: true })); });
-            searchStatus.appendChild(retry);
-          }
+          setSearchStatus("Couldn’t search players.", true);
+          addRetry(searchStatus, function () { search.dispatchEvent(new Event("input", { bubbles: true })); });
         });
       }, 250);
     });
   }
 
   if (loadMore) {
-    loadMore.addEventListener("click", function () {
+    var loadMoreLabel = loadMore.textContent;
+    var setPageStatus = function (message, isError) {
+      if (!loadMoreStatus) return;
+      loadMoreStatus.textContent = message || "";
+      loadMoreStatus.classList.toggle("is-error", !!isError);
+    };
+    var loadNextPage = function () {
+      pageRequest += 1;
+      var requestId = pageRequest;
+      var query = activeSearch;
       loadMore.disabled = true;
-      if (loadMoreStatus) loadMoreStatus.textContent = "Loading…";
-      var offset = activeSearch ? searchOffset : loadedCount;
-      fetchPage(offset, activeSearch).then(function (page) {
-        appendPage(page, !!activeSearch && searchOffset === 0);
-        if (activeSearch) searchOffset += (page.players || []).length;
+      loadMore.textContent = "Loading…";
+      setPageStatus("Loading more players…");
+      fetchPage(query ? searchOffset : loadedCount, query).then(function (page) {
+        if (requestId !== pageRequest || query !== activeSearch) return;
+        var added = appendPage(page, false);
+        if (query) {
+          searchOffset += (page.players || []).length;
+          representations().forEach(function (representation) {
+            representation.hidden = representation.dataset.playerName.indexOf(query) === -1;
+          });
+        }
         loadMore.disabled = false;
-        if (loadMoreStatus) loadMoreStatus.textContent = "";
-      }).catch(function (err) {
+        loadMore.textContent = loadMoreLabel;
+        setPageStatus(added ? plural(query ? visiblePlayerCount() : loadedCount) + " shown." : "No more players to load.");
+        // The button disappears with the last page, so the status it leaves
+        // behind takes the focus instead of dropping it back to the document.
+        if (loadMore.hidden && loadMoreStatus && typeof loadMoreStatus.focus === "function") loadMoreStatus.focus();
+      }).catch(function () {
+        if (requestId !== pageRequest || query !== activeSearch) return;
         loadMore.disabled = false;
-        if (loadMoreStatus) loadMoreStatus.textContent = err.message;
+        loadMore.textContent = loadMoreLabel;
+        setPageStatus("Couldn’t load more players.", true);
+        addRetry(loadMoreStatus, loadNextPage);
       });
-    });
+    };
+    loadMore.addEventListener("click", loadNextPage);
   }
 
   // ── Authenticated public actions ────────────────────────────────────

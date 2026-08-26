@@ -34,23 +34,23 @@ describe("demo credibility invariants", () => {
     expect(html).not.toContain("500 points");
   });
 
-  it("filters every player representation through one generic marker", async () => {
+  it("gives every player exactly one representation behind one generic marker", async () => {
     const data = demoLeaderboardData();
     const html = await render("leaderboard", data);
     const markerCount = (html.match(/data-player-name="/g) || []).length;
-    const expectedRepresentations = data.players.length + Math.min(data.players.length, 3);
     const shell = readFileSync(new URL("../assets/site-shell.js", import.meta.url), "utf8");
 
-    expect(markerCount).toBe(expectedRepresentations);
+    // One row per player: no podium copy of the top three to filter, announce
+    // or keep in sync with the standings below it.
+    expect(markerCount).toBe(data.players.length);
     expect(html).toContain("<div data-player-board>");
     expect(html).not.toContain('data-name="');
+    expect(html).not.toContain("yr-card-name");
     expect(shell).toContain('playerBoard.querySelectorAll("[data-player-name]")');
     expect(shell).not.toContain('document.querySelectorAll("[data-player-name]")');
-    expect(shell).not.toContain('querySelectorAll("tr[data-name]")');
     expect(shell).toContain("representation.dataset.playerName");
     expect(shell).toContain("representation.hidden = representation.dataset.playerName.indexOf(q) === -1");
     expect(shell).toContain("representations().forEach(function (representation) { representation.hidden = false; });");
-    expect(shell).toContain("updatePlayerCount(visiblePlayerCount())");
     expect(shell).toContain("updatePlayerCount(totalCount)");
   });
 

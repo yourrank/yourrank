@@ -77,11 +77,11 @@ describe("shared public board renderer", () => {
     expect(html).toContain("/board%20fixture/leaderboard");
     expect(html).toContain("Ampersand &amp; Board");
     expect(html).not.toContain("Ampersand &amp;amp; Board");
-    expect(html).toContain("Q&amp;A LEADERBOARD");
+    expect(html).toContain("Q&amp;A leaderboard");
     expect(html).not.toContain("Join sponsor");
     expect(html).not.toContain("U-09");
     expect(html).not.toContain("// Alignment is preserved");
-    const firstRowPrefix = html.match(/<tr[^>]*>[\s\S]*?<td/)?.[0] || "";
+    const firstRowPrefix = html.match(/<li class="yr-srow[\s\S]*?<a /)?.[0] || "";
     expect(firstRowPrefix).not.toContain("U-09");
     expect(firstRowPrefix).not.toContain("//");
   });
