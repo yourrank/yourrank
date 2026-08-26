@@ -101,7 +101,7 @@ describe("new-shell auxiliary renderers", () => {
       viewerData: null,
       opts,
     });
-    expect(html).toContain("This site has no players or rewards yet");
+    expect(html).toContain("hasn't added players or rewards yet");
     expect(html).not.toContain("How credits work");
     expect(html).not.toContain("Top of the leaderboard");
     expect(html).not.toContain("Prize pool");
@@ -146,7 +146,9 @@ describe("new-shell auxiliary renderers", () => {
       .slice(html.indexOf("<body"), html.indexOf("</body>"))
       .replace(/<[^>]*>/g, " ")
       .replace(/\s+/g, " ");
-    expect((visible.match(/Demo Board/g) || []).length).toBe(3);
+    // Four jobs: the top bar identity, the home introduction heading, the
+    // narrow-width drawer identity, and the copyright line.
+    expect((visible.match(/Demo Board/g) || []).length).toBe(4);
     expect(html).toContain("Tell us what works and what doesn't.");
     expect(html).not.toContain("Tell Demo Board what works");
   });

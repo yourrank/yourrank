@@ -2,9 +2,10 @@
 // Multi-section, branded streamer site shell (Home, Leaderboard, Rewards, Games,
 // Credits).
 //
-// The chrome is a live-production credential system: a fixed navigation rail,
-// an operational header, asphalt panels, cobalt actions and a board-specific
-// accent cue. It ships as a single stylesheet (/assets/site-shell.css) plus a small
+// The chrome is a creator destination, not a workspace: one compact top bar
+// carrying creator identity, the section links and the viewer's own controls,
+// then the page. Narrow widths disclose the same links in a modal drawer. It
+// ships as a single stylesheet (/assets/site-shell.css) plus a small
 // progressive-enhancement script (/assets/site-shell.js) — no CDN, no runtime
 // CSS framework, no chart library.
 //
@@ -50,12 +51,15 @@ const FONT_GF_PARAMS = {
   Rajdhani:           "family=Rajdhani:wght@400;500;600;700",
   "Bebas Neue":       "family=Bebas+Neue",
 };
-const FIRA_PARAMS = "family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700";
+// Public links are opened from chat on phones: request the one text family the
+// board actually uses plus the one mono family the numerals use. Inter and IBM
+// Plex Mono stay in the CSS stacks as local fallbacks instead of downloads.
+const DEFAULT_SANS_PARAMS = "family=Fira+Sans:wght@300;400;500;600;700";
+const MONO_PARAMS = "family=Fira+Code:wght@400;500;600;700";
 
 function buildFontsHref(font) {
-  const custom = font && font !== "Fira Sans" ? FONT_GF_PARAMS[font] : null;
-  const params = custom ? `${FIRA_PARAMS}&${custom}` : FIRA_PARAMS;
-  return `https://fonts.googleapis.com/css2?${params}&display=swap`;
+  const sans = (font && FONT_GF_PARAMS[font]) || DEFAULT_SANS_PARAMS;
+  return `https://fonts.googleapis.com/css2?${sans}&${MONO_PARAMS}&display=swap`;
 }
 
 /* ── tiny inline icon set (replaces the mockup's Font Awesome) ────────── */
@@ -105,17 +109,6 @@ function formatDate(d) {
   if (!d) return "—";
   const dt = new Date(d);
   return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-/** "02H_AGO" / "3D_AGO" — the mockup's mono log timestamps. */
-function agoStamp(d) {
-  const t = d ? new Date(d).getTime() : NaN;
-  if (Number.isNaN(t)) return "—";
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
-  if (mins < 60) return `${String(mins).padStart(2, "0")}M_AGO`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${String(hours).padStart(2, "0")}H_AGO`;
-  return `${Math.floor(hours / 24)}D_AGO`;
 }
 
 function sectionList(sections) {
@@ -173,7 +166,18 @@ function navItem({ key, label, href, active, badge }) {
   return `<a class="${cls}" href="${href}"${aria}>${icon} ${esc(label)}</a>`;
 }
 
-function sidebar({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, ctaHref, hasCta, casino, kickUrl }) {
+/** The creator's mark: real configured logo only, never a placeholder block. */
+function creatorMark(logoUrl, cls, px) {
+  if (!logoUrl) return "";
+  return `<img class="${cls}" src="${esc(logoUrl)}" srcset="${logoSrcSet(logoUrl)}" sizes="${px}px" width="${px}" height="${px}" alt="" />`;
+}
+
+/**
+ * The top bar's sections, disclosed at narrow widths and modal while open.
+ * It carries nothing the bar and footer do not already own, so it is never a
+ * second navigation surface.
+ */
+function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance }) {
   const enabled = sectionList(siteSections);
   const items = enabled.map((s) => navItem({
     key: s,
@@ -183,32 +187,21 @@ function sidebar({ b, slug, section, siteSections, homeUrl, isCustomDomain, logo
     badge: s === "me" && viewer ? compact(balance) : null,
   })).join("");
 
-  const resources = [
-    kickUrl && kickUrl !== "#" ? `<a class="yr-nav-a" href="${kickUrl}" target="_blank" rel="noopener">${ICONS.kick} Watch on Kick</a>` : "",
-    hasCta && casino ? `<a class="yr-nav-a" href="${ctaHref}" target="_blank" rel="noopener">${ICONS.gift} Join ${esc(casino)}</a>` : "",
-    viewer ? `<a class="yr-nav-a" href="/me">${ICONS.account} Your sites &amp; account</a>` : "",
-    `<button class="yr-nav-a" type="button" data-feedback-open>${ICONS.book} Send feedback</button>`,
-  ].filter(Boolean).join("");
-
-  const mark = logoUrl
-    ? `<img class="yr-brand-logo" src="${esc(logoUrl)}" srcset="${logoSrcSet(logoUrl)}" sizes="28px" alt="" />`
-    : "";
   const name = esc(b.name || slug);
-
   const boardCreditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
-  const foot = viewer
-    ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">My credits on this site</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
-    : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
+  // The account row only exists where the streamer kept the credits section on;
+  // otherwise there is nothing on this site for a viewer to hold.
+  const foot = siteSections.me === false
+    ? ""
+    : viewer
+      ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">${formatNumber(balance)} credits here</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
+      : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
 
-  return `<aside class="yr-side" id="yr-side" aria-label="Site sections" tabindex="-1">
-<div class="yr-side-head"><div class="yr-board-id"><a class="yr-brand" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${mark}${name}</a><span class="yr-board-kind">Public site</span></div><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close sections">${ICONS.close}</button></div>
-<nav class="yr-nav yr-noscroll" aria-label="Sections">
-${items}
-<div class="yr-nav-group">Resources</div>
-${resources}
-</nav>
-<div class="yr-side-foot">${foot}</div>
-</aside>
+  return `<div class="yr-drawer" id="yr-side" aria-label="${name} menu" tabindex="-1">
+<div class="yr-drawer-head"><a class="yr-drawer-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-drawer-logo", 32)}${name}</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu">${ICONS.close}</button></div>
+<nav class="yr-nav yr-noscroll" aria-label="Sections">${items}</nav>
+${foot ? `<div class="yr-drawer-foot">${foot}</div>` : ""}
+</div>
 <button class="yr-scrim" id="yr-scrim" type="button" aria-label="Close menu" hidden></button>`;
 }
 
@@ -222,27 +215,31 @@ function avatarHtml(viewer) {
     : generateAvatarSvg(viewerName(viewer), 26);
 }
 
-function header({ r, viewer, balance, returnTo, searchable, section, homeUrl, slug, isCustomDomain }) {
-  // U-02 / 1.14: The non-searchable state was an <a> that looked like an <input>.
-  // Now it is an unambiguous labelled link, clearly distinct from the real input.
-  // L-03 / 1.13: Removed the floating bare ${ICONS.search} SVG between the menu
-  // button and the search input — it had no wrapper and produced a stray flex item.
-  const search = searchable
-    ? `<label class="yr-search-label yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players…" aria-label="Search players" autocomplete="off" />`
-    : `<a class="yr-search-link" href="${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}" aria-label="Go to leaderboard">${ICONS.search}<span>${esc(SECTION_LABELS[section] || "Leaderboard")}</span></a>`;
+/**
+ * One public chrome: the creator on the left, their sections in the middle,
+ * the viewer's own controls on the right. No workspace rail, no search field —
+ * player search belongs to the leaderboard it filters.
+ */
+function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl }) {
+  const name = esc(b.name || slug);
+  const tagline = b.tagline ? esc(b.tagline) : "";
+  const nav = sectionList(siteSections).map((s) => {
+    const href = `${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}`;
+    const active = s === section ? ' aria-current="page"' : "";
+    return `<a class="yr-tab${s === section ? " is-on" : ""}" href="${href}"${active}><span>${esc(SECTION_LABELS[s])}</span></a>`;
+  }).join("");
 
   const right = viewer
-    ? `<a class="yr-account-link" href="/me" aria-label="Your sites and account">${ICONS.account}<span>Your sites</span></a>
-<span class="yr-vr"></span>
-<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-txt"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></span><span class="yr-ava">${avatarHtml(viewer)}</span></a>`
+    ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>
+<a class="yr-account-link" href="/me" aria-label="Your sites and account"><span class="yr-ava">${avatarHtml(viewer)}</span><span class="yr-account-txt">Your sites</span></a>`
     : signInLink(r, returnTo, "yr-btn yr-btn--ghost");
 
-  return `<header class="yr-header">
-<div class="yr-header-l">
-<button class="yr-menu" id="yr-menu" type="button" aria-label="Open sections" aria-controls="yr-side" aria-expanded="false">${ICONS.bars}</button>
-${search}
+  return `<header class="yr-top">
+<div class="yr-top-in">
+<a class="yr-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-id-logo", 36)}<span class="yr-id-txt"><span class="yr-id-name">${name}</span>${tagline ? `<span class="yr-id-sub">${tagline}</span>` : ""}</span></a>
+<nav class="yr-tabs" aria-label="Sections">${nav}</nav>
+<div class="yr-top-r">${right}<button class="yr-menu" id="yr-menu" type="button" aria-label="Open menu" aria-controls="yr-side" aria-expanded="false">${ICONS.bars}</button></div>
 </div>
-<div class="yr-header-r">${right}</div>
 </header>`;
 }
 
@@ -302,37 +299,6 @@ function sectionHead(title, right = "") {
   return `<div class="yr-sec-head"><h2 class="yr-sec-title">${esc(title)}</h2>${right}</div>`;
 }
 
-/** Inline 7-day line chart. No chart library: one path, one average line. */
-function creditsChart(series) {
-  const CHART_GRID_COLOR = "#2b2b30";
-  const CHART_AVG_COLOR  = "#3d3d45";
-
-  const w = 800;
-  const h = 320;
-  const padL = 8;
-  const padB = 28;
-  const values = series.map((p) => p.value);
-  const max = Math.max(1, ...values);
-  const avg = values.reduce((a, v) => a + v, 0) / (values.length || 1);
-  const step = (w - padL * 2) / Math.max(1, values.length - 1);
-  const y = (v) => (h - padB) - (v / max) * (h - padB - 16);
-  const pts = values.map((v, i) => `${(padL + i * step).toFixed(1)},${y(v).toFixed(1)}`);
-  const line = `M${pts.join("L")}`;
-  const grid = [0.25, 0.5, 0.75, 1].map((f) => {
-    const gy = (y(max * f)).toFixed(1);
-    return `<line x1="${padL}" x2="${w - padL}" y1="${gy}" y2="${gy}" stroke="${CHART_GRID_COLOR}" stroke-width="1" vector-effect="non-scaling-stroke" />`;
-  }).join("");
-  const labels = series.map((p) => `<span>${esc(p.label)}</span>`).join("");
-  return `<div class="yr-chart">
-<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Credits earned per day, last 7 days">
-${grid}
-<path d="${line}" fill="none" stroke="var(--yr-accent-readable)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
-<line x1="${padL}" x2="${w - padL}" y1="${y(avg).toFixed(1)}" y2="${y(avg).toFixed(1)}" stroke="${CHART_AVG_COLOR}" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke" />
-</svg>
-<div class="yr-legend yr-legend--x">${labels}</div>
-</div>`;
-}
-
 /** Last 7 calendar days of positive ledger movement. */
 function dailyEarned(ledger) {
   const days = [];
@@ -360,38 +326,6 @@ const LEDGER_KIND = {
   game_bet: "GAME_ROUND",
   game_win: "GAME_ROUND",
 };
-
-function activityFeed(ledger) {
-  if (!ledger.length) return `<div class="yr-empty">No credit activity yet</div>`;
-  return `<div class="yr-feed yr-noscroll">${ledger.slice(0, 20).map((row) => {
-    const amount = Number(row.amount) || 0;
-    const kind = LEDGER_KIND[row.type] || String(row.type || "CREDIT_ACTIVITY").toUpperCase();
-    const sign = amount >= 0 ? `<span class="yr-pos">+${formatNumber(amount)}</span>` : `<span class="yr-neg">${formatNumber(amount)}</span>`;
-    const text = row.description ? `${esc(row.description)} · ${sign} credits` : `${sign} credits`;
-    return `<div class="yr-feed-item">
-<div class="yr-feed-top"><span class="yr-feed-kind">${esc(kind)}</span><span class="yr-feed-time">${esc(agoStamp(row.created_at))}</span></div>
-<p class="yr-feed-txt">${text}</p>
-</div>`;
-  }).join("")}</div>`;
-}
-
-function demoActivityFeed(rows) {
-  if (!rows.length) return `<div class="yr-empty">No demo activity yet</div>`;
-  return `<div class="yr-feed yr-noscroll">${rows.slice(0, 8).map((row) => `<div class="yr-feed-item">
-<div class="yr-feed-top"><span class="yr-feed-kind">${esc(row.kind || "ACTIVITY")}</span><span class="yr-feed-time">${esc(row.when || "RECENTLY")}</span></div>
-<p class="yr-feed-txt">${esc(row.text || "")}</p>
-</div>`).join("")}</div>`;
-}
-
-function demoGiveawayCard(giveaway) {
-  if (!giveaway) return "";
-  return `<div class="yr-card yr-lb">
-<div class="yr-card-top"><span class="yr-label is-accent">LIVE GIVEAWAY</span>${ICONS.gift}</div>
-<p class="yr-card-name">${esc(giveaway.name || "Demo giveaway")}</p>
-<p class="yr-num yr-gold">${esc(giveaway.prize || "Prize")}</p>
-<p class="yr-sub">${esc(giveaway.entries || "Entries open")} · ${esc(giveaway.ends || "Running now")}</p>
-</div>`;
-}
 
 /* ── reward cards ─────────────────────────────────────────────────────── */
 
@@ -495,7 +429,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
-  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark });
+  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null });
 
   // B-01: Dynamic font URL based on board's active font.
   const fontsHref = buildFontsHref(data.theme?.font);
@@ -524,23 +458,19 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
 
   const body = `<body class="yr-site" data-template="${esc(template)}" data-section="${esc(section)}" data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "score" ? "score" : "wagered"}">
 <!-- PUBLIC-VIEWER-DIRECTION
-THESIS: A production cue sheet for following one board, not a generic gaming dashboard.
-OWN-WORLD: Asphalt surfaces, fog-white type, cobalt actions, board-accent credentials, orange warnings, mint success, 6–10px geometry.
-STORY: Identify the board, follow standings, use board credits, and reach the account without losing scope.
-FIRST VIEWPORT: Board credential rail, operational header, then one bordered briefing field with the current page task and action.
-FORM: Brief-pinned live-production credential system; no concept roll.
+THESIS: A creator's own destination for one board, not a workspace and not a gaming dashboard.
+OWN-WORLD: Deep asphalt surfaces, fog-white type, one creator accent, orange warnings, mint success, 6–10px geometry, one shared foundation for every template.
+STORY: Whose site this is, what the board is doing, what this viewer has here, what they can get, where else to find the creator.
+FIRST VIEWPORT: Creator identity and sections in one compact bar, then the creator's own introduction and the live board.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->
 <a class="yr-sr" href="#main-content">Skip to content</a>
-${sidebar({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, ctaHref, hasCta, casino, kickUrl: kickUrl ? safeUrl(kickUrl) : null })}
-<div class="yr-region">
-<div class="yr-gridbg" aria-hidden="true"></div>
-${header({ r, viewer, balance, returnTo, searchable: section === "leaderboard", section, homeUrl, slug, isCustomDomain })}
+${topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl })}
 <main class="yr-main" id="main-content">
 ${mainInner}
 ${footer}
 </main>
-</div>
+${drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance })}
 ${feedbackModal({ slug })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
 <script src="/assets/site-shell.js" nonce="${nonce}" defer></script>
@@ -566,127 +496,124 @@ function feedbackModal({ slug }) {
 </dialog>`;
 }
 
-function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark }) {
+/**
+ * The footer owns the site map and the secondary links the old workspace rail
+ * used to hold, so the drawer stays a narrow-width disclosure of the top bar.
+ */
+function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl }) {
   const enabled = sectionList(siteSections);
   const legalHref = (page) => `${homeUrl}${siteSectionHref(page, slug, isCustomDomain)}`;
   const legalLinks = renderLegalSidebar(data, legalHref).split("\n").filter(Boolean).join("");
+  const secondary = [
+    kickUrl && kickUrl !== "#" ? `<a href="${kickUrl}" target="_blank" rel="noopener noreferrer">Watch on Kick<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
+    hasCta && casino ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(casino)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
+    viewer ? `<a href="/me">Your sites &amp; account</a>` : "",
+    `<button type="button" data-feedback-open>Send feedback</button>`,
+  ].filter(Boolean).join("");
   return `<footer class="yr-foot">
 <p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <div class="yr-foot-links">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${legalLinks}</div>
+<div class="yr-foot-links yr-foot-links--more">${secondary}</div>
 <p class="yr-fine">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
 </footer>`;
 }
 
 /* ── Home ─────────────────────────────────────────────────────────────── */
 
+/**
+ * Home is the creator's landing page, not a report: who this is, what the
+ * board is doing, what the signed-in viewer has here, what they can get, and
+ * where else to find the creator. Nothing is rendered from data the streamer
+ * has not configured.
+ */
 function homeMain(ctx) {
-  const { r, data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, balance, viewerOnSite, period, pool, returnTo, siteSections } = ctx;
+  const { r, data, b, slug, isCustomDomain, homeUrl, logoUrl, viewer, viewerData, balance, period, pool, returnTo, siteSections } = ctx;
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
   const boardHref = `${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}`;
   const meHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
+  const name = esc(b.name || slug);
+  const currency = prizeCurrency(data);
   const cd = countdownText(data.scheduled ? data.startsAt : data.endsAt);
   const players = Array.isArray(data.players) ? data.players : [];
+  const playerCount = Number(data.playerCount) || players.length;
   const rankBy = data.rankBy === "score" ? "score" : "wagered";
+  const hidePrizes = !!data.brand?.hidePrizeAmounts;
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
+  const playerHref = (player) => isCustomDomain ? `/player/${encodeURIComponent(player)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(player)}`;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false);
-  const demoActivity = Array.isArray(data.demoActivity) ? data.demoActivity : [];
-  const demoGiveaway = data.demoGiveaway || null;
-  const currency = prizeCurrency(data);
-  const ledger = viewerData?.ledger || [];
-  const redemptions = viewerData?.redemptions || [];
-  const pending = redemptions.filter((x) => x.status === "pending").length;
   const shopEnabled = siteSections.shop !== false;
-  const emptyBoard = players.length === 0 && items.length === 0;
+  const boardEnabled = siteSections.leaderboard !== false;
+  const meEnabled = siteSections.me !== false;
+  const socials = (Array.isArray(data.socials) ? data.socials : [])
+    .filter((s) => s && s.enabled !== false && s.url)
+    .map((s) => ({ label: s.name || s.brand || s.type || "Channel", href: safeUrl(s.url) }))
+    .filter((s) => s.href !== "#");
+  const kickLink = socials.find((s) => /kick/i.test(s.label));
 
-  const timing = data.ended ? "ROUND ENDED" : cd ? `${data.scheduled ? "STARTS" : "ENDS"} IN ${cd.text.toUpperCase()}` : "";
-  const eyebrow = [period.toUpperCase(), timing].filter(Boolean).join(" · ");
+  const intro = `<section class="yr-intro">
+<div class="yr-intro-id">${creatorMark(logoUrl, "yr-intro-logo", 64)}<div class="yr-intro-txt"><h1 class="yr-intro-name">${name}</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div></div>
+<div class="yr-intro-acts">${kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : ""}${viewer ? "" : signInButton(r, returnTo)}</div>
+</section>`;
 
-  // "N more credits unlocks X" — the closest reward the viewer cannot afford yet.
-  const nextReward = viewer
-    ? items.filter((i) => Number(i.cost) > balance).sort((x, z) => Number(x.cost) - Number(z.cost))[0]
-    : null;
+  const timing = data.ended
+    ? "Round ended"
+    : cd
+      ? `${data.scheduled ? "Starts in" : "Ends in"} ${cd.text}`
+      : data.scheduled ? "Not started yet" : "";
+  const boardMeta = [
+    `${esc(period)} leaderboard`,
+    timing,
+    playerCount ? `${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}` : "",
+    pool && !hidePrizes ? `${esc(pool)} prize pool` : "",
+  ].filter(Boolean).join(" · ");
 
-  const heroRight = viewer
-    ? `<div class="yr-hero-r">${heroStat("Loyalty credits", formatNumber(balance))}${shopEnabled ? `<a class="yr-btn" href="${shopHref}">Spend credits</a>` : ""}</div>`
-    : emptyBoard
-      ? `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>`
-      : `<div class="yr-hero-r">${heroStat(pool ? "Prize pool" : "Players", pool ? esc(pool) : formatNumber(players.length))}${signInButton(r, returnTo)}</div>`;
+  const leaders = players.slice(0, 5).map((p, i) => `<li class="yr-lead">
+<span class="yr-lead-rank">${String(Number(p.rank) || i + 1).padStart(2, "0")}</span>
+<a class="yr-lead-name" href="${playerHref(p.name)}">${esc(p.name)}</a>
+<span class="yr-lead-val yr-mono">${esc(rankValue(p))}</span>
+</li>`).join("");
 
-  const lede = viewer
-    ? `Use a channel-point reward on Kick and credits land here automatically.${nextReward ? ` <b>${formatNumber(Number(nextReward.cost) - balance)}</b> more credits unlocks ${esc(nextReward.name)}.` : ""}`
-    : esc(b.tagline || `Compete on the ${period.toLowerCase()} leaderboard and turn free channel-point credits into real rewards.`);
-
-  const heroHtml = hero({
-    eyebrow,
-    title: viewer ? `Welcome back, ${viewerName(viewer)}` : (b.name || slug),
-    lede,
-    right: heroRight,
-  });
-
-  const kpiItems = viewer
-    ? [
-        kpi("Credits / 7d", "chart", `+${formatNumber(dailyEarned(ledger).reduce((a, d) => a + d.value, 0))}`, `${ledger.length} recent entries`, { accent: true }),
-        kpi("Earned all time", "trophy", formatNumber(viewerOnSite?.total_earned || 0), `${formatNumber(viewerOnSite?.total_spent || 0)} spent so far`),
-        kpi("Pending orders", "hourglass", formatNumber(pending), pending ? `${esc(b.name || slug)} fulfils by hand` : "Nothing waiting"),
-      ]
-    : [
-        pool ? null : kpi("Leaderboard", "trophy", period, `${period} leaderboard`),
-        kpi("Players", "chart", formatNumber(players.length), "On the current leaderboard"),
-        kpi(data.ended ? "Round" : data.scheduled ? "Starts in" : "Ends in", "hourglass", data.ended ? "Ended" : (cd ? cd.text : "—"), data.ended ? "Final standings" : data.scheduled ? "Until score updates open" : (cd ? "Until final standings" : "No end date set")),
-      ].filter(Boolean);
-  const kpis = kpiItems.join("");
-  const kpiGridClass = kpiItems.length === 2 ? "yr-g3 yr-g3--pair" : "yr-g3";
-
-  const series = dailyEarned(ledger);
-  const chartOrHow = viewer
-    ? `<div class="yr-c8 yr-panel yr-lb yr-chart-panel">
-<div class="yr-chart-head"><h3 class="yr-panel-title">Credits earned</h3><div class="yr-legend"><span><i></i>Credits</span><span><i class="is-avg"></i>7-day average</span></div></div>
-${creditsChart(series)}
-</div>`
-    : `<div class="yr-c8">${panel({
-        title: "How credits work",
-        meta: "Free · no purchase",
-        pad: true,
-        body: `<ol class="yr-lede yr-steps">
-<li>Watch on Kick and use one of the channel-point rewards.</li>
-<li>Credits land on this site automatically — nothing to type in, no codes.</li>
-<li>Spend them on rewards. The streamer fulfils every order by hand, and cancelled orders are refunded in full.</li>
-</ol>`,
-      })}</div>`;
-
-  const rightCol = viewer
-    ? `<div class="yr-c4">${panel({
-        title: "Log activity",
-        meta: `<a class="yr-sec-link" href="${meHref}">All</a>`,
-        body: activityFeed(ledger),
-      })}</div>`
-    : `<div class="yr-c4">${panel({
-        title: demoActivity.length ? "Recent activity" : "Top of the leaderboard",
-        meta: `<a class="yr-sec-link" href="${boardHref}">All</a>`,
-        body: demoActivity.length
-          ? demoActivityFeed(demoActivity)
-          : players.length
-          ? `<div class="yr-feed yr-noscroll">${players.slice(0, 8).map((p, i) => `<div class="yr-feed-item"><div class="yr-feed-top"><span class="yr-feed-kind">${String(Number(p.rank) || i + 1).padStart(2, "0")} · ${esc(p.name)}</span><span class="yr-feed-time yr-prize-value">${esc(rankValue(p))}</span></div></div>`).join("")}</div>`
-          : `<div class="yr-empty">No players yet</div>`,
-      })}</div>`;
-
-  const featured = shopEnabled && items.length
-    ? `<div>${sectionHead("Featured rewards", `<a class="yr-sec-link" href="${shopHref}">Go to rewards ${ICONS.arrow}</a>`)}
-<div class="yr-g4">${items.slice().sort((x, z) => Number(x.cost) - Number(z.cost)).slice(0, 4).map((item) => rewardCard({
-        item, viewer, balance, blocked: viewerOnSite?.blocked, signIn: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`,
-      })).join("")}</div></div>`
+  const boardSection = boardEnabled
+    ? `<section class="yr-sec">
+${sectionHead("Leaderboard", `<a class="yr-sec-link" href="${boardHref}">View leaderboard ${ICONS.arrow}</a>`)}
+<p class="yr-sec-meta">${boardMeta}</p>
+${leaders ? `<ol class="yr-leads">${leaders}</ol>` : `<p class="yr-sec-note">No players on the board yet — the first scores show up here.</p>`}
+</section>`
     : "";
 
-  if (emptyBoard) {
-    return `${heroHtml}
-<div class="yr-empty">This site has no players or rewards yet</div>`;
-  }
+  const viewerNote = viewer
+    ? `<section class="yr-vnote">
+<p class="yr-vnote-bal"><span class="yr-vnote-num">${formatNumber(balance)}</span> <span class="yr-vnote-unit">credits on this site</span></p>
+<p class="yr-vnote-p">Free credits from ${name}'s channel-point rewards. No purchase, no cash value.</p>
+<div class="yr-vnote-acts">${shopEnabled ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">Spend credits</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My credits ${ICONS.arrow}</a>` : ""}</div>
+</section>`
+    : "";
 
-return `${heroHtml}
-${kpis ? `<div class="${kpiGridClass}">${kpis}</div>` : ""}
-<div class="yr-g12">${chartOrHow}${rightCol}</div>
-${demoGiveaway ? `<div class="yr-g12">${demoGiveawayCard(demoGiveaway)}</div>` : ""}
-${featured}`;
+  const preview = items.slice().sort((x, z) => Number(x.cost) - Number(z.cost)).slice(0, 3);
+  const rewardsSection = shopEnabled && preview.length
+    ? `<section class="yr-sec">
+${sectionHead("Rewards", `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>`)}
+<ul class="yr-preview">${preview.map((item) => `<li class="yr-preview-row"><span class="yr-preview-n">${esc(item.name)}</span><span class="yr-preview-c">${formatNumber(Number(item.cost) || 0)} credits</span></li>`).join("")}</ul>
+</section>`
+    : "";
+
+  const linksSection = socials.length
+    ? `<section class="yr-sec">
+${sectionHead(`Find ${b.name || slug}`)}
+<div class="yr-chips">${socials.map((s) => `<a class="yr-chip" href="${s.href}" target="_blank" rel="noopener noreferrer">${esc(s.label)}<span class="yr-sr"> (opens in a new tab)</span></a>`).join("")}</div>
+</section>`
+    : "";
+
+  const nothingYet = !leaders && !preview.length
+    ? `<p class="yr-sec-note">${name} hasn't added players or rewards yet. Check back soon.</p>`
+    : "";
+
+  return `${intro}
+${viewerNote}
+${boardSection}
+${rewardsSection}
+${nothingYet}
+${linksSection}`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
@@ -756,7 +683,14 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
 <div data-player-board>
 ${poolPanel}
 ${podium ? `<div class="yr-g3">${podium}</div>` : ""}
-${panel({ title: "Standings", meta: `<span data-player-count-badge>${formatNumber(playerCount)} players</span>`, body: table, foot: note })}</div>`;
+${panel({
+    title: "Standings",
+    meta: `<span data-player-count-badge>${formatNumber(playerCount)} players</span>`,
+    // Player search filters this table, so it lives with the table rather than
+    // in shared chrome every other section has to carry.
+    body: `${players.length ? `<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players…" autocomplete="off" /></div>` : ""}${table}`,
+    foot: note,
+  })}</div>`;
 }
 
 /* ── Rewards ──────────────────────────────────────────────────────────── */

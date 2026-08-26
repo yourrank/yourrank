@@ -1,8 +1,9 @@
-/* Public streamer site — live-production credential shell.
-   The public viewer reads like a cue sheet used during a broadcast: board scope
-   is explicit, data is dense but calm, and every state is backed by real data.
-   Product actions stay electric cobalt; --yr-accent remains the board's local
-   identity cue. This boundary is public-viewer-only. */
+/* Public streamer site — the creator's own destination.
+   One chrome for every public page: the creator's identity and their sections in
+   a single compact top bar, the page below it, the same links disclosed in a
+   drawer on phones. Product actions stay electric cobalt; --yr-accent remains
+   the creator's local identity cue, and every template shares this foundation.
+   This boundary is public-viewer-only. */
 
 .yr-site {
   --yr-ink: #080a0d;
@@ -21,14 +22,16 @@
   --yr-accent: var(--yr-color-board-accent);
   --yr-accent-readable: color-mix(in srgb, var(--yr-accent), white 50%);
   --yr-accent-ink: #ffffff;
-  --yr-side-w: 272px;
-  --yr-bar-h: 72px;
+  --yr-drawer-w: min(86vw, 320px);
+  --yr-bar-h: 64px;
+  --yr-page-w: 1120px;
   --yr-sans: var(--yr-font, "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
   --yr-mono: "Fira Code", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   margin: 0;
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--yr-ink);
@@ -67,21 +70,29 @@
 
 .yr-lb { position: relative; border: 1px solid var(--yr-edge); border-radius: 8px; }
 
-/* ── Sidebar ─────────────────────────────────────────────────────────── */
+/* ── Mobile drawer ───────────────────────────────────────────────────── */
 
-.yr-side {
-  width: var(--yr-side-w);
-  flex-shrink: 0;
+/* The drawer is the narrow-width disclosure of the top bar, never a second
+   navigation owner: it is removed from the layout and the tab order until the
+   viewer opens it, and does not exist at all once the bar fits. */
+.yr-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--yr-drawer-w);
   display: flex;
   flex-direction: column;
   background: var(--yr-panel);
   border-right: 1px solid var(--yr-edge);
   z-index: 30;
+  transform: translateX(-102%);
+  visibility: hidden;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.2s;
 }
+.yr-drawer[data-open] { transform: none; visibility: visible; }
 
-.yr-side-head {
+.yr-drawer-head {
   min-height: var(--yr-bar-h);
-  padding: 12px 16px 12px 20px;
+  padding: 12px 12px 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -89,32 +100,18 @@
   flex-shrink: 0;
   border-bottom: 1px solid var(--yr-edge);
 }
-
-.yr-board-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.yr-board-kind {
-  font-family: var(--yr-mono); font-size: 10px; line-height: 16px;
-  color: var(--yr-accent-readable); text-transform: uppercase; letter-spacing: 0.12em;
+.yr-drawer-id {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
+.yr-drawer-logo { width: 32px; height: 32px; flex-shrink: 0; object-fit: cover; border-radius: 8px; }
 .yr-side-close {
-  display: none; width: 44px; height: 44px; flex: 0 0 44px;
-  align-items: center; justify-content: center; border: 1px solid var(--yr-edge);
-  border-radius: 8px; color: var(--yr-mute);
+  width: 44px; height: 44px; flex: 0 0 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--yr-edge); border-radius: 8px; color: var(--yr-mute);
 }
 .yr-side-close svg { width: 18px; height: 18px; }
-
-.yr-brand {
-  font-family: var(--yr-mono);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.yr-brand-logo { width: 28px; height: 28px; object-fit: cover; flex-shrink: 0; border-radius: 6px; }
-.yr-brand { display: flex; align-items: center; gap: 10px; min-height: 28px; }
 
 .yr-nav { flex: 1; padding: 16px; overflow-y: auto; }
 .yr-nav > * + * { margin-top: 4px; }
@@ -160,7 +157,7 @@
   font-weight: 700;
 }
 
-.yr-side-foot { padding: 16px; border-top: 1px solid var(--yr-edge); }
+.yr-drawer-foot { padding: 16px; border-top: 1px solid var(--yr-edge); }
 
 .yr-user {
   display: flex;
@@ -191,45 +188,56 @@
 .yr-user-go { width: 16px; color: var(--yr-faint); flex: 0 0 16px; }
 .yr-user-go svg { width: 16px; height: 16px; }
 
-/* ── Right region: header + main ──────────────────────────────────────── */
+/* ── Creator top bar ─────────────────────────────────────────────────── */
 
-.yr-region { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.yr-region > .yr-gridbg { position: absolute; inset: 0; pointer-events: none; }
-
-.yr-header {
-  height: var(--yr-bar-h);
-  padding: 0 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--yr-edge);
-  background: var(--yr-panel);
+.yr-top {
   position: sticky;
   top: 0;
   z-index: 10;
   flex-shrink: 0;
+  background: var(--yr-panel);
+  border-bottom: 1px solid var(--yr-edge);
+}
+.yr-top-in {
+  max-width: var(--yr-page-w);
+  margin: 0 auto;
+  min-height: var(--yr-bar-h);
+  padding: 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
 }
 
-.yr-header-l { display: flex; align-items: center; gap: 12px; width: 100%; max-width: 32rem; min-width: 0; }
-.yr-header-l > svg, .yr-search-link svg { width: 16px; height: 16px; color: var(--yr-faint); flex-shrink: 0; }
-
-.yr-search {
-  min-width: 0; min-height: 44px; width: 100%;
-  background: var(--yr-surface); border: 1px solid var(--yr-edge); border-radius: 8px; outline: none;
-  padding: 0 14px; caret-color: var(--yr-primary);
-  font-family: var(--yr-mono); font-size: 13px; color: var(--yr-fog);
+.yr-id { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; }
+.yr-id-logo { width: 36px; height: 36px; flex-shrink: 0; object-fit: cover; border-radius: 8px; }
+.yr-id-txt { min-width: 0; display: flex; flex-direction: column; }
+/* The full name always stays in the DOM for assistive technology; the bar only
+   ever shows two lines of it so one long name cannot grow the sticky header. */
+.yr-id-name {
+  font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -0.02em;
+  color: var(--yr-fog); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
-.yr-search:hover { border-color: var(--yr-faint); }
-.yr-search:focus { border-color: var(--yr-primary); }
-.yr-search::placeholder { color: var(--yr-faint); }
+.yr-id-sub {
+  font-size: 12px; line-height: 16px; color: var(--yr-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch;
+}
 
-.yr-search-link, .yr-account-link, .yr-bal {
-  min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+.yr-top-r { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+
+.yr-account-link, .yr-bal {
+  min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid transparent; border-radius: 8px;
 }
-.yr-search-link { gap: 10px; padding: 0 12px; color: var(--yr-mute); }
-.yr-search-link:hover { color: var(--yr-fog); border-color: var(--yr-edge); background: var(--yr-surface); }
+.yr-account-link { gap: 8px; padding: 0 8px; color: var(--yr-mute); font-size: 12px; font-weight: 700; }
+.yr-account-link:hover { color: var(--yr-fog); border-color: var(--yr-edge); background: var(--yr-surface); }
+.yr-account-txt { white-space: nowrap; }
+
+.yr-bal { gap: 6px; padding: 0 12px; border-color: var(--yr-edge); background: var(--yr-surface); }
+.yr-bal:hover { border-color: var(--yr-accent-readable); }
+.yr-bal-num { font-family: var(--yr-mono); font-size: 13px; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
+.yr-bal-unit { font-size: 10px; color: var(--yr-mute); text-transform: uppercase; letter-spacing: 0.08em; }
 
 .yr-menu {
   display: none; width: 44px; height: 44px; flex: 0 0 44px;
@@ -239,21 +247,28 @@
 .yr-menu:hover { color: var(--yr-fog); background: var(--yr-surface); }
 .yr-menu svg { width: 18px; height: 18px; }
 
-.yr-header-r { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.yr-account-link { gap: 8px; padding: 0 12px; color: var(--yr-mute); font-size: 12px; font-weight: 700; }
-.yr-account-link:hover { color: var(--yr-fog); border-color: var(--yr-edge); background: var(--yr-surface); }
-.yr-account-link svg { width: 16px; height: 16px; }
+.yr-search {
+  min-width: 0; min-height: 44px; width: 100%;
+  background: var(--yr-surface); border: 1px solid var(--yr-edge); border-radius: 8px; outline: none;
+  padding: 0 14px; caret-color: var(--yr-primary);
+  font-size: 14px; color: var(--yr-fog);
+}
+.yr-search:hover { border-color: var(--yr-faint); }
+.yr-search:focus { border-color: var(--yr-primary); }
+.yr-search::placeholder { color: var(--yr-faint); }
+.yr-search-row { padding: 16px 24px 0; }
 
-.yr-vr { height: 24px; width: 1px; background: var(--yr-edge); }
-
-.yr-bal { gap: 10px; padding: 4px 6px 4px 10px; border-color: var(--yr-edge); background: var(--yr-surface); }
-.yr-bal:hover { border-color: var(--yr-accent-readable); }
-.yr-bal-txt { display: flex; flex-direction: column; text-align: right; line-height: 1; }
-.yr-bal-num { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
-.yr-bal-unit { font-size: 9px; color: var(--yr-mute); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px; }
-
-.yr-main { flex: 1; overflow: visible; padding: 32px; position: relative; z-index: 0; }
-.yr-main > * + * { margin-top: 32px; }
+.yr-main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--yr-page-w);
+  margin: 0 auto;
+  overflow: visible;
+  padding: 32px 24px 48px;
+  position: relative;
+  z-index: 0;
+}
+.yr-main > * + * { margin-top: 40px; }
 
 /* ── Hero banner ─────────────────────────────────────────────────────── */
 
@@ -329,26 +344,55 @@
 .yr-panel-foot { padding: 16px 24px; border-top: 1px solid var(--yr-edge); }
 .yr-panel-pad { padding: 24px; }
 
-.yr-chart-panel { padding: 24px; }
-.yr-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-.yr-legend { display: flex; gap: 16px; }
-.yr-legend span { display: flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); }
-.yr-legend i { width: 6px; height: 6px; border-radius: 999px; background: var(--yr-accent-readable); }
-.yr-legend i.is-avg { background: var(--yr-edge); }
-.yr-chart { height: 320px; width: 100%; }
-.yr-chart svg { width: 100%; height: 100%; }
-
-.yr-feed { overflow-y: auto; height: 320px; }
-.yr-feed-item { padding: 16px 24px; border-top: 1px solid var(--yr-edge-soft); transition: background 0.15s; }
-.yr-feed-item:first-child { border-top: 0; }
-.yr-feed-item:hover { background: rgba(255, 255, 255, 0.02); }
-.yr-feed-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
-.yr-feed-kind { font-size: 11px; line-height: 16px; font-weight: 700; color: var(--yr-fog); }
-.yr-feed-time { font-size: 11px; line-height: 1.2; font-family: var(--yr-mono); color: var(--yr-mute); white-space: nowrap; }
-.yr-feed-time.yr-prize-value { font-size: 18px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; color: var(--yr-fog); }
-.yr-feed-txt { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-mute); }
 .yr-pos { color: var(--yr-success); }
 .yr-neg { color: var(--yr-fog); }
+
+/* ── Home: creator introduction and section previews ─────────────────── */
+
+.yr-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.yr-intro-id { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.yr-intro-logo { width: 64px; height: 64px; flex-shrink: 0; object-fit: cover; border-radius: 12px; border: 1px solid var(--yr-edge); }
+.yr-intro-txt { min-width: 0; }
+.yr-intro-name { font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; }
+.yr-intro-sub { margin-top: 4px; font-size: 15px; line-height: 22px; color: var(--yr-mute); max-width: 52ch; overflow-wrap: anywhere; }
+.yr-intro-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.yr-vnote {
+  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel);
+  border-top-color: var(--yr-accent-readable);
+  padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.yr-vnote-bal { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.yr-vnote-num { font-family: var(--yr-mono); font-size: 28px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.yr-vnote-unit { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); font-weight: 700; }
+.yr-vnote-p { flex: 1 1 22ch; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
+.yr-vnote-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.yr-sec-meta { margin-top: -12px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-mute); }
+.yr-sec-note { font-size: 14px; line-height: 1.6; color: var(--yr-faint); }
+
+.yr-leads { list-style: none; margin: 0; padding: 0; border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); }
+.yr-lead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--yr-edge-soft); }
+.yr-lead:first-child { border-top: 0; }
+.yr-lead-rank { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-faint); flex: 0 0 auto; }
+.yr-lead-name { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: var(--yr-edge); text-underline-offset: 4px; }
+.yr-lead-name:hover { text-decoration-color: var(--yr-accent-readable); }
+.yr-lead-val { font-size: 13px; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.yr-preview { list-style: none; margin: 0; padding: 0; border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); }
+.yr-preview-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--yr-edge-soft); }
+.yr-preview-row:first-child { border-top: 0; }
+.yr-preview-n { min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.yr-preview-c { font-family: var(--yr-mono); font-size: 13px; color: var(--yr-accent-readable); white-space: nowrap; }
+
+.yr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.yr-chip {
+  min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center;
+  border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel);
+  font-size: 13px; font-weight: 600; color: var(--yr-mute);
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.yr-chip:hover { color: var(--yr-fog); border-color: var(--yr-faint); background: var(--yr-surface); }
 
 .yr-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 .yr-sec-title { font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-faint); font-weight: 700; }
@@ -396,15 +440,19 @@
 
 /* ── Tabs, tables, lists ─────────────────────────────────────────────── */
 
-.yr-tabs { display: flex; align-items: center; gap: 32px; border-bottom: 1px solid var(--yr-edge); }
+/* Section links in the top bar. Ordinary links, never ARIA tabs: the current
+   one is marked with aria-current and carries a visible accent underline. */
+.yr-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; }
 .yr-tab {
-  min-height: 44px; padding: 0 2px; margin-bottom: -1px; border-bottom: 1px solid transparent;
-  display: inline-flex; align-items: center;
-  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-mute);
-  transition: color 0.15s;
+  min-height: 44px; padding: 0 12px; border-radius: 8px;
+  display: inline-flex; align-items: center; white-space: nowrap;
+  font-size: 14px; font-weight: 600; color: var(--yr-mute);
+  border: 1px solid transparent;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
-.yr-tab:hover { color: #fff; }
-.yr-tab.is-on { color: var(--yr-fog); border-bottom-color: var(--yr-accent-readable); }
+.yr-site .yr-tab:hover { color: var(--yr-fog); background: var(--yr-surface); }
+.yr-site .yr-tab.is-on { color: var(--yr-fog); background: var(--yr-surface); border-color: var(--yr-accent-readable); }
+.yr-tab.is-on > span { box-shadow: inset 0 -2px 0 var(--yr-accent-readable); }
 
 .yr-table-wrap { position: relative; max-width: 100%; overflow-x: auto; }
 .yr-table-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 2px; pointer-events: none; background: var(--yr-accent-readable); opacity: 0; transition: opacity 0.15s; }
@@ -452,7 +500,8 @@
 
 .yr-foot { border-top: 1px solid var(--yr-edge); padding-top: 24px; display: flex; flex-direction: column; gap: 12px; }
 .yr-foot-links { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.yr-foot-links a { min-height: 44px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); }
+.yr-foot-links--more { border-top: 1px solid var(--yr-edge-soft); padding-top: 4px; }
+.yr-foot-links a, .yr-foot-links button { min-height: 44px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); }
 .yr-foot-links a:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
@@ -480,8 +529,6 @@
 /* Utility classes replace inline style attributes: the site's CSP uses a
    nonce for style-src, which never applies to style="" attributes. */
 .yr-btn--sm { min-height: 44px; height: 44px; padding: 0 16px; }
-.yr-search--link { line-height: var(--yr-bar-h); }
-.yr-legend--x { justify-content: space-between; margin-top: 8px; }
 .yr-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 12px; }
 .yr-nomatch td { text-align: center; color: var(--yr-faint); }
 .yr-split { display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
@@ -509,7 +556,7 @@
 .yr-meter i[data-fill="95"] { width: 95%; }
 .yr-meter i[data-fill="100"] { width: 100%; }
 
-/* ── Breakpoints (mockup: sm 640, lg 1024) ───────────────────────────── */
+/* ── Breakpoints ─────────────────────────────────────────────────────── */
 
 @media (min-width: 640px) {
   .yr-g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -528,44 +575,45 @@
   .yr-hero { flex-direction: row; align-items: center; }
 }
 
-@media (max-width: 767px) {
-  .yr-side {
-    width: min(88vw, 320px);
-    position: fixed; inset: 0 auto 0 0; transform: translateX(-100%);
-    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform;
-  }
-  .yr-side[data-open] { transform: none; }
-  .yr-side-close, .yr-menu { display: inline-flex; }
-  .yr-header { height: 64px; padding: 0 12px; gap: 8px; }
-  .yr-header-l { gap: 8px; }
-  .yr-header-r { gap: 8px; }
-  .yr-main { padding: 16px 12px 24px; }
-  .yr-main > * + * { margin-top: 24px; }
+/* The bar holds the sections itself once they fit; below that the same links
+   live only in the drawer, so the two are never present at the same time. */
+@media (min-width: 900px) {
+  .yr-drawer, .yr-scrim { display: none; }
+}
+
+@media (max-width: 899px) {
+  .yr-menu { display: inline-flex; }
+  .yr-tabs { display: none; }
+  .yr-top-in { padding: 8px 12px; gap: 8px; }
+  .yr-top-r { gap: 6px; }
+  .yr-id-logo { width: 32px; height: 32px; }
+  .yr-id-name { font-size: 16px; line-height: 20px; }
+  .yr-id-sub { max-width: 16ch; }
+  .yr-account-link { width: 44px; padding: 0; justify-content: center; }
+  .yr-account-txt { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .yr-main { padding: 20px 12px 32px; }
+  .yr-main > * + * { margin-top: 28px; }
+  .yr-intro { align-items: flex-start; gap: 16px; }
+  .yr-intro-logo { width: 52px; height: 52px; }
+  .yr-intro-name { font-size: 26px; line-height: 31px; }
+  .yr-intro-sub { font-size: 14px; }
+  .yr-vnote { padding: 16px; }
+  .yr-search-row { padding: 12px 16px 0; }
   .yr-hero { padding: 24px 20px; gap: 24px; }
   .yr-h1 { font-size: 28px; line-height: 34px; }
   .yr-big { font-size: 38px; }
   .yr-table { min-width: 620px; }
   .yr-table th, .yr-table td { padding: 10px 16px; white-space: nowrap; }
-  .yr-feed-item, .yr-list-item { padding: 16px; }
+  .yr-list-item { padding: 16px; }
   .yr-panel-head, .yr-panel-pad { padding: 16px; }
-  .yr-account-link { width: 44px; padding: 0; }
-  .yr-account-link span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  .yr-vr { display: none; }
-  .yr-bal { padding-left: 8px; }
-  .yr-bal .yr-ava { display: none; }
-  .yr-bal-txt { text-align: left; }
-}
-
-@media (min-width: 768px) {
-  .yr-scrim { display: none; }
 }
 
 @media (max-width: 479px) {
-  .yr-search-link { width: 44px; padding: 0; }
-  .yr-search-link span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  .yr-search { padding: 0 10px; font-size: 12px; }
-  .yr-header-r .yr-btn { padding: 0 10px; font-size: 10px; letter-spacing: 0.05em; }
-  .yr-bal { min-width: 56px; }
+  .yr-id-sub { display: none; }
+  .yr-bal { padding: 0 8px; }
+  .yr-bal-unit { display: none; }
+  .yr-top-r .yr-btn { padding: 0 12px; font-size: 10px; letter-spacing: 0.05em; }
+  .yr-intro-acts, .yr-vnote-acts { width: 100%; }
   .yr-list-item { align-items: flex-start; flex-direction: column; gap: 12px; }
 }
 
@@ -574,71 +622,34 @@
 }
 
 /* ==========================================================================
-   PUBLIC STREAMER SIGNATURE TEMPLATES
-   1. Cyber Arcade (data-template="cyber_arcade")
-   2. Esports Arena (data-template="esports_pro")
-   3. Creator Glass (data-template="creator_glass")
+   PUBLIC STREAMER TEMPLATES
+   Stored ids (cyber_arcade, esports_pro, creator_glass) keep rendering without
+   migration, but they now only shift surface depth on the one shared public
+   foundation: no glow, no glass, no template-specific navigation geometry.
    ========================================================================== */
 
-/* ── 1. Cyber Arcade: High-Contrast OLED Dark, Neon Accents, Arcade Glow ─ */
 .yr-site[data-template="cyber_arcade"] {
   --yr-ink: #05070a;
   --yr-panel: #0b0f17;
   --yr-surface: #111827;
-  --yr-edge: #1e293b;
-  --yr-edge-soft: #141d2b;
-}
-.yr-site[data-template="cyber_arcade"] .yr-card,
-.yr-site[data-template="cyber_arcade"] .yr-panel,
-.yr-site[data-template="cyber_arcade"] .yr-hero {
-  border-color: rgba(47, 107, 255, 0.22);
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6), 0 0 16px -4px color-mix(in srgb, var(--yr-accent), transparent 85%);
-}
-.yr-site[data-template="cyber_arcade"] .yr-table tr:hover td {
-  background: rgba(47, 107, 255, 0.05);
+  --yr-edge: #263449;
+  --yr-edge-soft: #1a2331;
 }
 
-/* ── 2. Esports Arena: Stadium Hierarchy, Tournament Podium Cards ─────── */
 .yr-site[data-template="esports_pro"] {
   --yr-ink: #090a0d;
   --yr-panel: #12141a;
   --yr-surface: #191c24;
-  --yr-edge: #2a303c;
-  --yr-edge-soft: #1e232d;
-}
-.yr-site[data-template="esports_pro"] .yr-hero {
-  border-left: 4px solid var(--yr-accent);
-}
-.yr-site[data-template="esports_pro"] .yr-card,
-.yr-site[data-template="esports_pro"] .yr-panel {
-  border-radius: 4px;
-}
-.yr-site[data-template="esports_pro"] .yr-table th {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 11px;
+  --yr-edge: #333a47;
+  --yr-edge-soft: #232833;
 }
 
-/* ── 3. Creator Glass: Frosted Glassmorphism, Rounded Geometry, Soft Glow ─ */
 .yr-site[data-template="creator_glass"] {
   --yr-ink: #080a10;
-  --yr-panel: rgba(16, 22, 34, 0.78);
-  --yr-surface: rgba(24, 32, 48, 0.65);
-  --yr-edge: rgba(255, 255, 255, 0.14);
-  --yr-edge-soft: rgba(255, 255, 255, 0.08);
-}
-.yr-site[data-template="creator_glass"] .yr-side,
-.yr-site[data-template="creator_glass"] .yr-bar,
-.yr-site[data-template="creator_glass"] .yr-card,
-.yr-site[data-template="creator_glass"] .yr-panel,
-.yr-site[data-template="creator_glass"] .yr-hero {
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-radius: 12px;
-}
-.yr-site[data-template="creator_glass"] .yr-btn,
-.yr-site[data-template="creator_glass"] .yr-nav-a {
-  border-radius: 9999px;
+  --yr-panel: #121724;
+  --yr-surface: #1a2133;
+  --yr-edge: #333c50;
+  --yr-edge-soft: #232b3b;
 }
 
 /* ── Gamer Profile Card ─────────────────────────────────────────────────── */
