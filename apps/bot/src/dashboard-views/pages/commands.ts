@@ -53,7 +53,7 @@ export function commandsPanel(): string {
           <label class="sr-only" for="cmdBtnUrl">Button URL</label>
           <div class="d-flex gap-8">
             <input class="v3-input command-button-url" id="cmdBtnUrl" type="url" placeholder="https://example.com (optional)">
-            <button class="btn btn--ghost" data-action="addCommandButton" type="button" title="Add button">+</button>
+            <button class="btn btn--ghost btn--icon" data-action="addCommandButton" type="button" aria-label="Add button">+</button>
           </div>
         </div>
       </div>

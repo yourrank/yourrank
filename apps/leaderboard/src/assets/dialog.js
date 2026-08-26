@@ -10,6 +10,7 @@
 (function () {
   var FOCUSABLE = 'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])';
   var openCount = 0;
+  var INERT_SKIP = /^(HEAD|SCRIPT|STYLE|LINK|META|TEMPLATE|TITLE)$/;
 
   function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 
@@ -20,12 +21,38 @@
   }
 
   /**
+   * Take everything outside `el` out of the tab order and the accessibility
+   * tree. The Tab handler below keeps keyboard focus in the dialog, but without
+   * this the page behind it is still clickable and still readable by a screen
+   * reader, which is what "modal" is supposed to rule out. Live regions stay
+   * announceable so a toast raised by the dialog is not silenced.
+   */
+  function inertOutside(el) {
+    var applied = [];
+    var node = el;
+    while (node && node.parentElement) {
+      Array.prototype.forEach.call(node.parentElement.children, function (sibling) {
+        if (sibling === node || sibling.inert) return;
+        if (INERT_SKIP.test(sibling.tagName)) return;
+        if (sibling.hasAttribute("aria-live") || sibling.getAttribute("role") === "status" || sibling.getAttribute("role") === "alert") return;
+        sibling.inert = true;
+        applied.push(sibling);
+      });
+      node = node.parentElement;
+    }
+    return function release() {
+      applied.forEach(function (element) { element.inert = false; });
+    };
+  }
+
+  /**
    * Keep Tab and Escape inside `el` until the returned function is called, and
    * put focus back where it was. Markup-rendered dialogs (the broadcast
    * preview) use this rather than owning another copy of the trap.
    */
   function trap(el, onEscape) {
     var trigger = document.activeElement;
+    var releaseInert = inertOutside(el);
     function handler(e) {
       if (e.key === "Escape") { e.preventDefault(); onEscape(); return; }
       if (e.key !== "Tab") return;
@@ -42,6 +69,7 @@
     if (first) first.focus();
     return function release() {
       document.removeEventListener("keydown", handler, true);
+      releaseInert();
       if (trigger && trigger.focus) trigger.focus();
     };
   }

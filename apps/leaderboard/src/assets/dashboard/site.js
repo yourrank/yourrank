@@ -1101,12 +1101,18 @@ const SOCIAL_ICONS = {
       return `<div class="social-row-brand" data-social="${esc(c.brand)}">
 <div class="social-brand-icon social-brand-icon--${esc(c.brand)}">${icon}</div>
 <div><span class="social-name">${esc(c.name)}</span><span class="social-handle">${esc(c.handle)}</span>
-<input id="social_${esc(c.brand)}" class="social-url" type="url" inputmode="url" placeholder="${esc(c.placeholder)}" value="${esc(url)}" /></div>
-<label class="yr-toggle" title="Show on public page"><input type="checkbox" class="social-toggle" ${enabled ? "checked" : ""} /><span class="yr-slider"></span></label>
+<input id="social_${esc(c.brand)}" class="social-url" type="url" inputmode="url" aria-label="${esc(c.name)} link" placeholder="${esc(c.placeholder)}" value="${esc(url)}" /></div>
+<label class="yr-toggle" title="Show on public page"><input type="checkbox" class="social-toggle" aria-label="Show ${esc(c.name)} on public page" ${enabled ? "checked" : ""} /><span class="yr-slider"></span></label>
 </div>`;
     }).join("");
-    list.addEventListener("input", collectSocials);
-    list.addEventListener("change", collectSocials);
+    // renderSocials runs again on every editor entry and after a save; the
+    // listeners live on the container that survives, so binding them per render
+    // stacked one collectSocials call per past render.
+    if (!list.dataset.socialsWired) {
+      list.addEventListener("input", collectSocials);
+      list.addEventListener("change", collectSocials);
+      list.dataset.socialsWired = "1";
+    }
     collectSocials();
   }
 

@@ -72,8 +72,10 @@ describe("Account settings creator UX", () => {
   it("keeps account controls outside the site draft and traps invite-dialog focus", () => {
     expect(accountJs).toContain('accountRoot?.addEventListener("input", (event) => event.stopPropagation())');
     expect(accountJs).toContain('accountRoot?.addEventListener("change", (event) => event.stopPropagation())');
-    expect(accountJs).toContain('document.addEventListener("keydown", _inviteModalKeydown, true)');
-    expect(accountJs).toContain(".filter((el) => el.offsetParent !== null)");
+    // The invite modal uses the one shared trap (Escape, focus loop, inert
+    // background, focus return) rather than a second local implementation.
+    expect(accountJs).toContain('window.YRDialog.trap(modal, closeModal)');
+    expect(accountJs).not.toMatch(/_inviteModalKeydown/);
   });
 
   it("keeps narrow account and settings structures free of fixed minimum widths", () => {

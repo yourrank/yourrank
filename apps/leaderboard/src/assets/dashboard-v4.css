@@ -1740,9 +1740,11 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-btn--accent:hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--dark:hover { border-color: var(--ws-accent-hover); background: var(--ws-accent-hover); color: #ffffff; }
 .v3-dash[data-auth-workspace] .btn--ghost,
+.v3-dash[data-auth-workspace] .btn--outline,
 .v3-dash[data-auth-workspace] .v3-btn:not(.v3-btn--accent):not(.v3-btn--dark):not(.v3-btn--danger),
 .v3-dash[data-auth-workspace] .v3-set-btn--outline { border-color: var(--ws-line-strong); background: #ffffff; color: var(--ws-text); }
 .v3-dash[data-auth-workspace] .btn--ghost:hover,
+.v3-dash[data-auth-workspace] .btn--outline:hover,
 .v3-dash[data-auth-workspace] .v3-btn:not(.v3-btn--accent):not(.v3-btn--dark):not(.v3-btn--danger):hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--outline:hover { border-color: var(--ws-chrome-text-soft); background: var(--ws-surface-soft); color: var(--ws-text); }
 .v3-dash[data-auth-workspace] .v3-btn--dark { border-color: var(--ws-chrome-raised); background: var(--ws-chrome-raised); color: var(--ws-surface-soft); }
@@ -1754,13 +1756,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-btn--danger:hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--danger:hover { border-color: #9b1c13; background: #9b1c13; color: #ffffff; }
 .v3-dash[data-auth-workspace] .v3-set-btn--danger-outline { border-color: #d99c97; background: #ffffff; color: var(--ws-danger); }
-/* ui.css paints every bare workspace <button> with the accent, which outranks
-   the class variants above; quiet variants have to match that specificity or a
-   section ends up with several buttons that look primary. */
-.v3-dash[data-auth-workspace] button.btn.btn--ghost { border-color: var(--ws-line-strong); background: #ffffff; color: var(--ws-text); }
-.v3-dash[data-auth-workspace] button.btn.btn--ghost:hover { border-color: var(--ws-chrome-text-soft); background: var(--ws-surface-soft); color: var(--ws-text); }
-.v3-dash[data-auth-workspace] button.btn.btn--danger { border-color: var(--ws-danger); background: var(--ws-danger); color: #ffffff; }
-.v3-dash[data-auth-workspace] button.btn.btn--danger:hover { border-color: #9b1c13; background: #9b1c13; color: #ffffff; }
 .v3-dash[data-auth-workspace] .btn--sm,
 .v3-dash[data-auth-workspace] .v3-btn--sm { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .v3-dash[data-auth-workspace] .v3-btn--xs { min-height: 30px; padding: 0 10px; font-size: 14px; }
@@ -3989,8 +3984,13 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     transform: translateX(-102%);
     box-shadow: var(--ws-shadow-overlay);
     transition: transform .25s ease;
+    /* Off-canvas is not "hidden": a translated drawer keeps its links in the tab
+       order, so a keyboard user walked the whole closed menu before reaching the
+       page. visibility takes them out of the tab order and the a11y tree while
+       the transform still animates. */
+    visibility: hidden;
   }
-  .v3-dash[data-auth-workspace] .lb-side.is-open { transform: translateX(0); }
+  .v3-dash[data-auth-workspace] .lb-side.is-open { transform: translateX(0); visibility: visible; }
   .v3-dash[data-auth-workspace] .lb-side-collapse { display: none; }
   .v3-dash[data-auth-workspace] .lb-side-close { display: inline-flex; margin-left: auto;
     align-items: center;
@@ -7915,5 +7915,52 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
   .v3-dash[data-auth-workspace] .tg-action-row .btn {
     width: 100%;
+  }
+}
+
+/* ==========================================================================
+   Touch targets
+   Compact controls are drawn small on purpose: a row menu that looks like a
+   full button would compete with the page's real actions. On a touch device
+   the *drawn* size is not what the finger has to hit, so the small controls
+   keep their painted box and grow an invisible centred hit area instead. The
+   pseudo-element sits behind its own content and outside the flow, so nothing
+   reflows and nothing overlaps a neighbouring control's own hit area.
+   ========================================================================== */
+@media (pointer: coarse) {
+  .v3-dash[data-auth-workspace] .site-row-actions .btn--xs,
+  .v3-dash[data-auth-workspace] .site-row-menu > summary,
+  .v3-dash[data-auth-workspace] .btn-pwd-toggle,
+  .v3-dash[data-auth-workspace] .preview-tab,
+  .v3-dash[data-auth-workspace] .v3-tab,
+  .v3-dash[data-auth-workspace] .v3-players-table .row-edit,
+  .v3-dash[data-auth-workspace] .v3-pager button {
+    position: relative;
+  }
+
+  .v3-dash[data-auth-workspace] .site-row-actions .btn--xs::after,
+  .v3-dash[data-auth-workspace] .site-row-menu > summary::after,
+  .v3-dash[data-auth-workspace] .btn-pwd-toggle::after,
+  .v3-dash[data-auth-workspace] .preview-tab::after,
+  .v3-dash[data-auth-workspace] .v3-tab::after,
+  .v3-dash[data-auth-workspace] .v3-players-table .row-edit::after,
+  .v3-dash[data-auth-workspace] .v3-pager button::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: -1;
+    width: max(100%, var(--tap, 44px));
+    height: max(100%, var(--tap, 44px));
+    transform: translate(-50%, -50%);
+  }
+
+  /* A checkbox has no pseudo-element to grow, so the box itself has to be
+     bigger. The whole 44px would read as a design element; this is the size
+     that stays honest to the row and is still hittable. */
+  .v3-dash[data-auth-workspace] .v3-table td.sel input[type="checkbox"],
+  .v3-dash[data-auth-workspace] .v3-table th.sel input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
   }
 }

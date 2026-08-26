@@ -156,7 +156,10 @@
       backdrop.classList.add("is-open");
       if (main) main.inert = true;
       menuButtons.forEach(function (button) { button.setAttribute("aria-expanded", "true"); });
-      var first = side.querySelector(".lb-nav");
+      // The trigger lives in .lb-main, which just became inert, so focus has to
+      // move into the drawer or it is lost behind the backdrop: a container
+      // element is not focusable, only a real control is.
+      var first = side.querySelector("[data-close-side], .lb-nav a[href], .lb-nav button:not([disabled])");
       if (first) first.focus();
     }
 
