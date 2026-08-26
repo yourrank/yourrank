@@ -166,4 +166,19 @@ describe("authenticated editor body", () => {
     }
     expect(dashboardCss).toContain("details.editor-more summary");
   });
+
+  // A placeholder is not a name: it disappears the moment the field has a value
+  // and a screen reader announces "edit text, blank".
+  it("names every editor field that only had a placeholder", () => {
+    const html = editorHtml("/dashboard/leaderboard/setup");
+    expect(html).toContain('<label class="sr-only" for="f_password">Site password</label>');
+    expect(siteJs).toContain('aria-label="${esc(c.name)} link"');
+    expect(siteJs).toContain('aria-label="Show ${esc(c.name)} on public page"');
+  });
+
+  // renderSocials runs on every editor entry; the listeners live on the
+  // container that survives it.
+  it("wires the socials editor's listeners once", () => {
+    expect(siteJs).toContain("if (!list.dataset.socialsWired) {");
+  });
 });

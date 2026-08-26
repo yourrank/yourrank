@@ -538,6 +538,7 @@ ${tabs}
             <p class="v3-head-sub">Viewers who used your entry keyword during this session.</p>
           </div>
           <div class="gw-entrants-tools">
+            <label class="sr-only" for="gw-search-entrants">Search entrants</label>
             <input type="text" class="v3-search-input" id="gw-search-entrants" placeholder="Search entrant…" />
             <button class="btn btn--sm btn--ghost" id="gw-btn-export" type="button">Export CSV</button>
           </div>

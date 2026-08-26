@@ -13,7 +13,7 @@ import { parseDynamicPath } from "./dashboard/routes.js";
 const statusEl = () => $("status");
 let _accountPopstate = null;
 let _unregisterRenderer = null;
-let _inviteModalKeydown = null;
+let _inviteModalRelease = null;
 let teamSiteId = "";
 function setStatus(message, isError) {
   const el = statusEl();
@@ -498,49 +498,28 @@ function wireTeam() {
   const copyBtn = $("btnCopyInviteLink");
 
   if (!openBtn || !modal) return;
-  let returnFocus = null;
   const closeModal = () => {
     modal.hidden = true;
     modal.setAttribute("aria-hidden", "true");
-    if (_inviteModalKeydown) {
-      document.removeEventListener("keydown", _inviteModalKeydown, true);
-      _inviteModalKeydown = null;
-    }
+    // Releasing the shared trap also drops the inert background and hands focus
+    // back to the opener.
+    _inviteModalRelease?.();
+    _inviteModalRelease = null;
     loadTeam();
-    returnFocus?.focus();
   };
 
-  openBtn.addEventListener("click", () => {
-    returnFocus = document.activeElement;
+  openBtn.addEventListener("click", async () => {
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     if (emailInput) emailInput.value = "";
     if (statusEl) statusEl.textContent = "";
     if (resultWrap) resultWrap.hidden = true;
     if (sendBtn) sendBtn.disabled = false;
-    _inviteModalKeydown = (event) => {
-      if (modal.hidden) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeModal();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...modal.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]")]
-        .filter((el) => el.offsetParent !== null);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener("keydown", _inviteModalKeydown, true);
+    // One trap implementation for every dialog: the markup dialog gets the same
+    // Escape handling, focus loop, inert background and focus return as the
+    // scripted ones instead of a second local copy.
+    if (!window.YRDialog) await import("./dialog.js");
+    _inviteModalRelease = window.YRDialog.trap(modal, closeModal);
     emailInput?.focus();
   });
 
@@ -634,10 +613,8 @@ export function leave() {
     removeEventListener("popstate", _accountPopstate);
     _accountPopstate = null;
   }
-  if (_inviteModalKeydown) {
-    document.removeEventListener("keydown", _inviteModalKeydown, true);
-    _inviteModalKeydown = null;
-  }
+  _inviteModalRelease?.();
+  _inviteModalRelease = null;
   // Release the route renderer so the shell fetches the fragment fresh on the
   // next entry instead of painting into a torn-down DOM.
   _unregisterRenderer?.();

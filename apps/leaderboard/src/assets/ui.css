@@ -134,17 +134,24 @@
   transform: none;
 }
 
-/* The bot's default button is the accent one: it has no .btn--accent to opt in
-   with, so anything that isn't explicitly ghost/danger is the primary action. */
+/* A classless button is the primary action: the bot's older markup writes bare
+   <button> elements with no variant to opt in with. It stops there. The rule
+   used to be `button:not(.ghost):not(.danger):not(.plain)`, which outranked
+   every variant class below (four compound selectors against one) and painted
+   ghost, outline, danger and the shared shell's own chrome buttons — the drawer
+   trigger, the drawer close button, Sign out — solid accent on any page whose
+   body carries .yr-ui. A button that names its own appearance now keeps it. */
 .btn--accent,
-.yr-ui button:not(.ghost):not(.danger):not(.plain) {
+.yr-ui button.btn--accent,
+.yr-ui button:not([class]) {
   background: var(--yr-accent, var(--accent));
   color: var(--yr-accent-ink, var(--accent-ink));
   border-color: var(--yr-accent, var(--accent));
 }
 
 .btn--accent:hover,
-.yr-ui button:not(.ghost):not(.danger):not(.plain):hover {
+.yr-ui button.btn--accent:hover,
+.yr-ui button:not([class]):hover {
   filter: brightness(1.15);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent);
@@ -152,6 +159,7 @@
 }
 
 .btn--ghost,
+.yr-ui button.btn--ghost,
 .yr-ui button.ghost {
   background: transparent;
   color: var(--yr-ink-soft, var(--ink-soft));
@@ -159,12 +167,55 @@
 }
 
 .btn--ghost:hover,
+.yr-ui button.btn--ghost:hover,
 .yr-ui button.ghost:hover {
   background: var(--yr-panel-2, var(--panel-2));
   color: var(--yr-ink, var(--ink));
 }
 
+/* An icon-only button has no label to give it width, so it needs a floor to
+   stay reachable by a finger. */
+.btn--icon,
+.yr-ui button.btn--icon {
+  min-width: var(--tap, 44px);
+  padding-inline: 8px;
+}
+
+/* A cell of text that happens to be clickable (a broadcast body opening its
+   detail) is a link, not a button-shaped block. */
+.link-button,
+.yr-ui button.link-button {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--yr-ink, var(--ink));
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover,
+.yr-ui button.link-button:hover { color: var(--yr-accent, var(--accent)); }
+
+/* Secondary: reads as an action but never competes with the primary one. */
+.btn--outline,
+.yr-ui button.btn--outline {
+  background: transparent;
+  color: var(--yr-ink, var(--ink));
+  border-color: var(--yr-ink-soft, var(--ink-soft));
+}
+
+.btn--outline:hover,
+.yr-ui button.btn--outline:hover {
+  background: var(--yr-panel-2, var(--panel-2));
+  border-color: var(--yr-ink, var(--ink));
+}
+
 .btn--danger,
+.yr-ui button.btn--danger,
 .yr-ui button.danger {
   background: transparent;
   color: var(--yr-red, var(--danger));
@@ -172,6 +223,7 @@
 }
 
 .btn--danger:hover,
+.yr-ui button.btn--danger:hover,
 .yr-ui button.danger:hover { background: var(--yr-color-danger-soft-2, rgba(239, 68, 68, .06)); }
 
 .btn--sm,

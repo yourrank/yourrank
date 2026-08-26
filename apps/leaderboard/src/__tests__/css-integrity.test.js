@@ -294,3 +294,50 @@ describe("nonce'd CSP pages", () => {
     }
   });
 });
+
+// The legacy "a button with no variant class is the accent one" rule was written
+// as `.yr-ui button:not(.ghost):not(.danger):not(.plain)`, which outranks every
+// single-class variant below it: `.btn--outline` buttons, `.btn--danger` buttons
+// and the shared shell's own chrome (drawer trigger, drawer close, Sign out) all
+// painted solid accent on any page whose body carries .yr-ui.
+describe("shared button variants", () => {
+  const ui = fs.readFileSync(path.join(assetsDir, "ui.css"), "utf8");
+
+  it("only claims buttons that declare no appearance of their own", () => {
+    expect(ui).not.toMatch(/\.yr-ui button:not\(\.ghost\)/);
+    expect(ui).toMatch(/\.yr-ui button:not\(\[class\]\)\s*(,|\{)/);
+  });
+
+  it("defines every variant for both anchors and buttons", () => {
+    for (const variant of ["accent", "ghost", "outline", "danger", "icon"]) {
+      expect(ui).toContain(`.btn--${variant},`);
+      expect(ui).toContain(`.yr-ui button.btn--${variant}`);
+    }
+  });
+
+  it("keeps a clickable cell of text looking like text", () => {
+    expect(ui).toMatch(/\.link-button,\s*\.yr-ui button\.link-button\s*\{[^}]*background:\s*none/);
+  });
+});
+
+describe("the mobile drawer and touch targets", () => {
+  const dash = stripped(fs.readFileSync(path.join(assetsDir, "dashboard-v4.css"), "utf8"));
+
+  // A drawer parked off-screen with a transform is still in the tab order and
+  // still in the accessibility tree: keyboard users walked the whole closed
+  // menu before reaching the page.
+  it("takes the closed drawer out of the tab order", () => {
+    expect(dash).toMatch(/\.lb-side\s*\{[^}]*transform:\s*translateX\(-102%\);[^}]*visibility:\s*hidden/);
+    expect(dash).toMatch(/\.lb-side\.is-open\s*\{[^}]*visibility:\s*visible/);
+  });
+
+  it("grows compact controls' hit area on touch without redrawing them", () => {
+    expect(dash).toContain("@media (pointer: coarse)");
+    const coarse = dash.slice(dash.indexOf("@media (pointer: coarse)"));
+    expect(coarse).toMatch(/width:\s*max\(100%,\s*var\(--tap, 44px\)\)/);
+    expect(coarse).toMatch(/height:\s*max\(100%,\s*var\(--tap, 44px\)\)/);
+    for (const control of [".site-row-menu > summary", ".btn-pwd-toggle", ".preview-tab", ".v3-tab", ".row-edit"]) {
+      expect(coarse).toContain(control);
+    }
+  });
+});
