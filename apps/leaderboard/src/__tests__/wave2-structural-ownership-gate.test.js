@@ -81,7 +81,13 @@ function assertClientNavigationOwnership() {
     /pushState/.test(executableSource(path))
   );
   expect((shellRuntime.match(/export (?:async )?function requestDashboardRoute/g) || []).length).toBe(1);
-  expect(navigationOwners).toEqual([join(leaderboardAssets, "dashboard/shell.js")]);
+  // Dashboard routing stays singular in dashboard/shell.js. The public viewer
+  // account page keeps the creator it has open in its own /me?site= history and
+  // shares nothing with the dashboard shell.
+  expect(navigationOwners).toEqual([
+    join(leaderboardAssets, "dashboard/shell.js"),
+    join(leaderboardAssets, "viewer-dashboard.js"),
+  ]);
 }
 
 function assertShellStructureOwnership() {

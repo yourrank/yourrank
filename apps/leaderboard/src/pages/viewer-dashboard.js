@@ -2,15 +2,19 @@ import { brandMarkSvg } from "@yourrank/shared/brand-assets";
 import { leaderboardPageHtml } from "@yourrank/shared/page-shell";
 
 export const viewerDashboardPage = leaderboardPageHtml({
-  title: "My credits · YourRank",
+  title: "Your sites & account · YourRank",
   canonical: "https://yourrank.site/me",
   mainClass: "wrap cr-wrap",
   nav: false,
-  scripts: ['<script src="/assets/viewer-dashboard.js?v=1" type="module"></script>'],
+  // dialog.js first: both are deferred and run in order, so window.YRDialog
+  // exists before the viewer client asks for a confirmation.
+  scripts: [
+    '<script src="/assets/dialog.js" defer></script>',
+    '<script src="/assets/viewer-dashboard.js?v=2" type="module"></script>',
+  ],
   content: `
 <header class="gm-shell-nav"><div class="gm-shell-inner">
   <a class="gm-brand" href="/"><span class="gm-brand-mark">${brandMarkSvg()}</span><span class="gm-brand-word">YourRank</span></a>
-  <nav id="vd-nav" aria-label="Account"></nav>
 </div></header>
 
 <main class="wrap cr-wrap" id="main-content">
@@ -18,8 +22,8 @@ export const viewerDashboardPage = leaderboardPageHtml({
   <div class="an-head">
     <div>
       <div class="an-eyebrow">Your account</div>
-      <h1 class="an-title" id="vd-title">My credits</h1>
-      <p class="an-sub">See your credits across all streamer sites and order items.</p>
+      <h1 class="an-title" id="vd-title">Your sites &amp; account</h1>
+      <p class="an-sub">Your YourRank account, plus your credits and orders on every streamer site you've joined.</p>
     </div>
   </div>
 
@@ -45,11 +49,13 @@ export const viewerDashboardPage = leaderboardPageHtml({
       </div>
     </div>
     <p class="hint" id="vd-wrong-account" hidden>Wrong account? <button class="btn btn--ghost btn--sm" id="vd-switch" type="button">Use a different login</button></p>
+    <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
   </section>
 
   <section class="card" id="vd-boards-card" hidden>
-    <h2>Your sites</h2>
-    <p class="card-sub">Each card shows your credits for a streamer's site. Select one to view rewards and your orders.</p>
+    <h2 id="vd-boards-heading" tabindex="-1">Your sites</h2>
+    <p class="card-sub">Each card shows your credits on one streamer's site. Open a site to see its rewards and your orders there.</p>
+    <p class="status" id="vd-boards-status" role="status" aria-live="polite" tabindex="-1"></p>
     <div id="vd-boards"></div>
     <p class="empty" id="vd-boards-empty" hidden>You don't have credits on any site yet. Use one of the streamer's linked Kick rewards to earn credits.</p>
   </section>
@@ -57,12 +63,13 @@ export const viewerDashboardPage = leaderboardPageHtml({
   <section class="card" id="vd-site-card" hidden>
     <div class="vd-site-head">
       <div>
-        <h2 id="vd-site-name">Site</h2>
+        <h2 id="vd-site-name" tabindex="-1">Site</h2>
         <p class="card-sub" id="vd-site-streamer">Streamer site</p>
       </div>
-      <button class="btn btn--sm" id="vd-back" type="button">Back to sites</button>
+      <button class="btn btn--sm" id="vd-back" type="button">Back to your sites</button>
     </div>
     <p class="card-sub">Balance: <b id="vd-site-balance">0</b> credits</p>
+    <p class="status" id="vd-site-status" role="status" aria-live="polite" tabindex="-1"></p>
     <p class="hint" id="vd-earn-hint">Earn credits by using the streamer's linked Kick rewards during a live stream.</p>
 
     <h3>Rewards</h3>

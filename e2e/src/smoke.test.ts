@@ -308,10 +308,12 @@ describe("YourRank E2E smoke", () => {
   });
 
   describe("public credits and viewer overlay", () => {
-    it("GET /me returns the viewer dashboard page", async () => {
+    it("GET /me returns the viewer account page", async () => {
       const res = await client.get("/me");
       expect(res.status).toBe(200);
-      expect(res.body).toContain("My credits");
+      // The global surface is "your sites & account"; "My credits" is the
+      // creator-scoped page at /<slug>/me.
+      expect(res.body).toContain("Your sites");
     });
 
     it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /<slug>/credits redirects to the canonical shop page", async () => {

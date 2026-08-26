@@ -1237,10 +1237,14 @@ html{color-scheme:light}
 .vd-site-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .vd-card-row{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;gap:12px;flex-wrap:wrap}
 .vd-card-main{flex:1;min-width:0}
-.vd-card-title{font-weight:600;margin-bottom:2px}
+.vd-card-title{font-weight:600;margin-bottom:2px;overflow-wrap:anywhere}
+.vd-card-main .hint{overflow-wrap:anywhere}
 .vd-card-side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .vd-card-cost{font-size:1.4rem;font-weight:700}
 .vd-redemption-row .vd-card-side{justify-content:center}
+/* Viewer errors must not be colour-only. */
+#vd-login-status.error::before,#vd-account-status.error::before,#vd-boards-status.error::before,#vd-site-status.error::before,#vd-drop-status.error::before{content:"⚠ "}
+#vd-account-status:empty,#vd-boards-status:empty,#vd-site-status:empty{margin:0}
 .mt-32{margin-top:32px}.mt-48{margin-top:48px}.mt-64{margin-top:64px}.text-accent{color:var(--accent)}.text-center{text-align:center}
 .pg-narrow{max-width:620px;margin:0 auto;padding:48px 24px}
 .tfa-icon{display:inline-flex;vertical-align:-4px;margin-right:8px}

@@ -27,7 +27,10 @@ const SECTION_LABELS = {
   leaderboard: "Leaderboard",
   shop: "Rewards",
   games: "Games",
-  me: "Credits",
+  // "My credits" is always this site only; the global account surface at /me is
+  // "Your sites & account". Keeping the two names distinct is what stops the
+  // two scopes reading as one destination.
+  me: "My credits",
 };
 
 // C-10: Widened to accept 3-, 6-, and 8-digit hex values.
@@ -183,7 +186,7 @@ function sidebar({ b, slug, section, siteSections, homeUrl, isCustomDomain, logo
   const resources = [
     kickUrl && kickUrl !== "#" ? `<a class="yr-nav-a" href="${kickUrl}" target="_blank" rel="noopener">${ICONS.kick} Watch on Kick</a>` : "",
     hasCta && casino ? `<a class="yr-nav-a" href="${ctaHref}" target="_blank" rel="noopener">${ICONS.gift} Join ${esc(casino)}</a>` : "",
-    viewer ? `<a class="yr-nav-a" href="/me">${ICONS.account} All sites &amp; account</a>` : "",
+    viewer ? `<a class="yr-nav-a" href="/me">${ICONS.account} Your sites &amp; account</a>` : "",
     `<button class="yr-nav-a" type="button" data-feedback-open>${ICONS.book} Send feedback</button>`,
   ].filter(Boolean).join("");
 
@@ -194,8 +197,8 @@ function sidebar({ b, slug, section, siteSections, homeUrl, isCustomDomain, logo
 
   const boardCreditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
   const foot = viewer
-    ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">Credits on this site</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
-    : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">Credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
+    ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">My credits on this site</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
+    : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
 
   return `<aside class="yr-side" id="yr-side" aria-label="Site sections" tabindex="-1">
 <div class="yr-side-head"><div class="yr-board-id"><a class="yr-brand" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${mark}${name}</a><span class="yr-board-kind">Public site</span></div><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close sections">${ICONS.close}</button></div>
@@ -229,9 +232,9 @@ function header({ r, viewer, balance, returnTo, searchable, section, homeUrl, sl
     : `<a class="yr-search-link" href="${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}" aria-label="Go to leaderboard">${ICONS.search}<span>${esc(SECTION_LABELS[section] || "Leaderboard")}</span></a>`;
 
   const right = viewer
-    ? `<a class="yr-account-link" href="/me" aria-label="All sites and account">${ICONS.account}<span>All sites</span></a>
+    ? `<a class="yr-account-link" href="/me" aria-label="Your sites and account">${ICONS.account}<span>Your sites</span></a>
 <span class="yr-vr"></span>
-<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="Credits on this site: ${formatNumber(balance)}"><span class="yr-bal-txt"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></span><span class="yr-ava">${avatarHtml(viewer)}</span></a>`
+<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-txt"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></span><span class="yr-ava">${avatarHtml(viewer)}</span></a>`
     : signInLink(r, returnTo, "yr-btn yr-btn--ghost");
 
   return `<header class="yr-header">
@@ -856,7 +859,7 @@ ${mount}`;
 function meMain(ctx) {
   const { r, b, slug, viewer, viewerData, viewerOnSite, balance, returnTo, homeUrl, isCustomDomain, siteSections } = ctx;
   if (!viewer) {
-    return `${hero({ eyebrow: "THIS SITE ONLY", title: "Credits", lede: "Sign in to see the balance, credit history and orders tied to this site.", right: `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>` })}
+    return `${hero({ eyebrow: "THIS SITE ONLY", title: "My credits", lede: "Sign in to see the balance, credit history and orders tied to this site.", right: `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>` })}
 <div class="yr-gate"><h2>Sign in to see credits</h2><p>${esc(CREDITS_DISCLAIMER)}</p>${signInButton(r, returnTo)}</div>`;
   }
 
@@ -898,8 +901,8 @@ function meMain(ctx) {
 
   const heroHtml = hero({
     eyebrow: "THIS SITE ONLY",
-    title: "Credits",
-    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Every credit here came from ${esc(b.name || slug)}'s Kick channel-point rewards. <a class="yr-inline-link" href="/me">View all sites and your account</a>. ${esc(CREDITS_DISCLAIMER)}`,
+    title: "My credits",
+    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Every credit here came from ${esc(b.name || slug)}'s Kick channel-point rewards. <a class="yr-inline-link" href="/me">Your sites &amp; account</a>. ${esc(CREDITS_DISCLAIMER)}`,
     right: `<div class="yr-hero-r">${heroStat("Balance on this site", formatNumber(balance))}${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Spend credits</a>` : ""}</div>`,
   });
 

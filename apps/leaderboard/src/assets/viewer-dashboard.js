@@ -1,5 +1,12 @@
-// Viewer dashboard (/me) client.
-import { showConfirmModal } from "./dashboard/utils.js";
+// Viewer account (/me) client: the member's YourRank account, their credits on
+// every streamer site, and one creator's detail at a time.
+//
+// The open creator lives in the URL as /me?site=<slug>, so Back, Forward, a
+// hard refresh and a shared link all land where the member expects. The page
+// owns its own confirmation dialog (window.YRDialog, loaded by the page) and
+// never imports dashboard code.
+const SITE_PARAM = "site";
+
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString() : "—"; }
@@ -19,13 +26,44 @@ async function api(method, path, body) {
 }
 
 let state = {};
+let selectedSlug = null;
 let redeemingItemId = null;
 const redeemKeys = {};
 
+// The API answers with short internal codes for some failures. Members see a
+// sentence they can act on; anything unrecognised falls back to the caller's
+// own wording rather than leaking server vocabulary.
+const ERROR_MESSAGES = Object.freeze({
+  unauthorized: "Your session expired. Log in again.",
+  "site not found": "That site isn't available any more.",
+  "rate limited": "Too many attempts. Wait a moment and try again.",
+  "insufficient balance": "You don't have enough credits for that yet.",
+  "item not found": "That reward is no longer available.",
+  "out of stock": "That reward just went out of stock.",
+  "viewer blocked": "You can't order on this site right now. Ask the streamer.",
+  "invalid csrf": "Your session expired. Reload the page and try again.",
+});
+
+function errorText(message, fallback) {
+  if (!message) return fallback;
+  if (ERROR_MESSAGES[message]) return ERROR_MESSAGES[message];
+  // Server-authored sentences (capacity, monthly limits, password) are already
+  // member-facing; terse codes and "HTTP 500" are not.
+  const sentence = /^[A-Z].*[.!?]$/.test(message) && !/^HTTP /.test(message);
+  return sentence ? message : fallback;
+}
+
+const STATUS_IDS = ["vd-login-status", "vd-account-status", "vd-boards-status", "vd-site-status", "vd-drop-status"];
+
 function setStatus(id, msg, err) {
   const el = $(id);
-  el.textContent = msg;
-  el.className = err ? "status error" : "status";
+  if (!el) return;
+  el.textContent = msg || "";
+  el.className = msg && err ? "status error" : "status";
+}
+
+function clearStatuses(ids) {
+  (ids || STATUS_IDS).forEach((id) => setStatus(id, ""));
 }
 
 function setLoading(idOrEl, loading, text = "Loading…") {
@@ -51,39 +89,106 @@ function setGlobalLoading(loading) {
   if (el) el.hidden = !loading;
 }
 
-async function load() {
-  setGlobalLoading(true);
-  try {
-    const data = await api("GET", "/api/viewer/me");
-    state = data;
-    render();
-  } catch (err) {
-    if (err.message === "unauthorized") {
-      renderLoggedOut();
-    } else {
-      setStatus("vd-login-status", err.message, true);
-    }
-  } finally {
-    setGlobalLoading(false);
+function focusEl(id) {
+  const el = $(id);
+  if (el && typeof el.focus === "function") el.focus();
+}
+
+// One client shape for an order. The API returns camelCase; a freshly placed
+// order is built locally, and both must render identically.
+function normalizeRedemption(r) {
+  return {
+    id: r.id,
+    itemName: r.itemName || r.item_name || "Reward",
+    cost: Number(r.cost || 0),
+    status: r.status || "pending",
+    createdAt: r.createdAt || r.created_at || null,
+  };
+}
+
+/* ── history ─────────────────────────────────────────────────────── */
+
+function siteFromUrl() {
+  return new URLSearchParams(window.location.search).get(SITE_PARAM) || null;
+}
+
+function setUrl(slug, replace) {
+  const url = new URL(window.location.href);
+  if (slug) url.searchParams.set(SITE_PARAM, slug);
+  else url.searchParams.delete(SITE_PARAM);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({ site: slug || null }, "", next);
+}
+
+// Back/Forward: the URL is the source of truth, so re-derive the view from it.
+window.addEventListener("popstate", () => { syncFromUrl().catch(() => {}); });
+
+async function syncFromUrl() {
+  if (!state.viewer) return;
+  const slug = siteFromUrl();
+  if (!slug) {
+    selectedSlug = null;
+    state.current = null;
+    showList({ focus: true });
+    return;
   }
+  if (slug === selectedSlug && state.current) {
+    showDetail({ focus: true });
+    return;
+  }
+  await openSite(slug, { history: "none", focus: true });
+}
+
+/* ── views ───────────────────────────────────────────────────────── */
+
+function showList({ focus = false } = {}) {
+  $("vd-login-card").hidden = true;
+  $("vd-profile").hidden = false;
+  $("vd-boards-card").hidden = false;
+  $("vd-site-card").hidden = true;
+  setStatus("vd-site-status", "");
+  if (focus) focusEl("vd-boards-heading");
+}
+
+function showDetail({ focus = false } = {}) {
+  $("vd-login-card").hidden = true;
+  $("vd-profile").hidden = false;
+  $("vd-boards-card").hidden = true;
+  $("vd-site-card").hidden = false;
+  if (focus) focusEl("vd-site-name");
 }
 
 function renderLoggedOut() {
+  state = {};
+  selectedSlug = null;
   $("vd-login-card").hidden = false;
   $("vd-profile").hidden = true;
   $("vd-boards-card").hidden = true;
   $("vd-site-card").hidden = true;
 }
 
-function render() {
+async function load() {
+  setGlobalLoading(true);
+  try {
+    const data = await api("GET", "/api/viewer/me");
+    state = { ...data, redemptions: (data.redemptions || []).map(normalizeRedemption), current: state.current };
+    if (!state.viewer) { renderLoggedOut(); return; }
+    renderAccount();
+    renderBoards();
+    if (selectedSlug && state.current) showDetail();
+    else showList();
+  } catch (err) {
+    if (err.message === "unauthorized") renderLoggedOut();
+    else setStatus("vd-login-status", errorText(err.message, "We couldn't load your account. Try again."), true);
+  } finally {
+    setGlobalLoading(false);
+  }
+}
+
+function renderAccount() {
   const v = state.viewer;
-  if (!v) return renderLoggedOut();
-
-  $("vd-login-card").hidden = true;
-  $("vd-profile").hidden = false;
-  $("vd-boards-card").hidden = false;
-  $("vd-site-card").hidden = true;
-
+  if (!v) return;
   const name = v.discordUsername || v.kickUsername || "Member";
   $("vd-username").textContent = name;
   if (v.avatarUrl) {
@@ -93,14 +198,13 @@ function render() {
   } else {
     $("vd-avatar").hidden = true;
   }
-
   const providerName = v.provider === "kick" ? "Kick" : v.provider === "discord" ? "Discord" : "YourRank";
   const linkedAt = v.provider === "kick" ? v.kickLinkedAt : v.provider === "discord" ? v.discordLinkedAt : null;
   $("vd-identity").textContent = `Logged in with ${providerName} as @${name}${linkedAt ? " · linked " + fmtDate(linkedAt) : ""}`;
   $("vd-wrong-account").hidden = false;
+}
 
-  $("vd-nav").innerHTML = `<a class="btn btn--sm" href="/me">My credits</a>`;
-
+function renderBoards() {
   const boards = state.boards || [];
   $("vd-boards-empty").hidden = boards.length > 0;
   $("vd-boards").innerHTML = boards.map((b) => `
@@ -113,32 +217,46 @@ function render() {
       <div class="vd-card-side">
         <div class="vd-card-cost">${b.balance}</div>
         <div class="hint">credits</div>
-        <button class="btn btn--sm" data-view-site="${esc(b.slug)}">View shop</button>
+        <button class="btn btn--sm" type="button" data-view-site="${esc(b.slug)}" aria-label="Open ${esc(b.name || b.slug)}">Open</button>
       </div>
     </div>
   `).join("");
 
-  document.querySelectorAll("[data-view-site]").forEach((b) => {
-    b.addEventListener("click", () => viewSite(b.dataset.viewSite, b));
+  $("vd-boards").querySelectorAll("[data-view-site]").forEach((b) => {
+    b.addEventListener("click", () => openSite(b.dataset.viewSite, { btn: b, focus: true }));
   });
 }
 
-async function viewSite(slug, btn) {
-  if (btn) setLoading(btn, true);
+/* ── creator detail ──────────────────────────────────────────────── */
+
+// history: "push" from the list, "replace" for a deep link, "none" for popstate.
+async function openSite(slug, { btn = null, history = "push", focus = false } = {}) {
+  if (btn) setLoading(btn, true, "Opening…");
+  setStatus("vd-boards-status", "");
   try {
     const data = await api("GET", `/api/viewer/site?slug=${encodeURIComponent(slug)}`);
+    data.redemptions = (data.redemptions || []).map(normalizeRedemption);
     state.current = data;
+    selectedSlug = slug;
+    if (history === "push") setUrl(slug, false);
+    else if (history === "replace") setUrl(slug, true);
     renderSite();
-  } catch (err) { setStatus("vd-login-status", err.message, true); }
-  finally { if (btn) setLoading(btn, false); }
+    showDetail({ focus });
+  } catch (err) {
+    state.current = null;
+    selectedSlug = null;
+    setUrl(null, true);
+    showList({ focus });
+    setStatus("vd-boards-status", errorText(err.message, "We couldn't open that site. Try again."), true);
+  } finally {
+    if (btn) setLoading(btn, false);
+  }
 }
 
 function renderSite() {
   const data = state.current;
   if (!data) return;
 
-  $("vd-boards-card").hidden = true;
-  $("vd-site-card").hidden = false;
   $("vd-site-name").textContent = data.site.name || data.site.slug;
   const channel = data.site.kickChannelName;
   $("vd-site-streamer").textContent = channel
@@ -159,7 +277,7 @@ function renderSite() {
   $("vd-shop-empty").hidden = items.length > 0;
   $("vd-shop-list").innerHTML = items.map((i) => {
     const isRedeeming = redeemingItemId === i.id;
-  const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0) && !isRedeeming;
+    const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0) && !isRedeeming;
     return `
       <div class="vd-card-row">
         <div class="vd-card-main">
@@ -169,24 +287,24 @@ function renderSite() {
         <div class="vd-card-side">
           <div class="vd-card-cost">${i.cost} credits</div>
           ${i.stock !== null ? `<div class="hint">Stock: ${i.stock}</div>` : ""}
-          <button class="btn btn--sm" data-redeem="${esc(i.id)}" ${canBuy ? "" : "disabled"}>Order</button>
+          <button class="btn btn--sm" type="button" data-redeem="${esc(i.id)}" aria-label="Order ${esc(i.name)}" ${canBuy ? "" : "disabled"}>Order</button>
         </div>
       </div>
     `;
   }).join("");
 
-  document.querySelectorAll("[data-redeem]").forEach((b) => {
+  $("vd-shop-list").querySelectorAll("[data-redeem]").forEach((b) => {
     b.addEventListener("click", () => redeem(b.dataset.redeem, b));
   });
 
-  const redemptions = data.redemptions || [];
+  const redemptions = (data.redemptions || []).map(normalizeRedemption);
   $("vd-redemptions-empty").hidden = redemptions.length > 0;
   $("vd-redemptions-list").innerHTML = redemptions.map((r) => {
     const statusLabel = r.status === "pending" ? "Pending" : r.status === "fulfilled" ? "Fulfilled" : "Cancelled";
     return `
     <div class="vd-card-row vd-redemption-row">
       <div class="vd-card-main">
-        <div class="vd-card-title">${esc(r.item_name)}</div>
+        <div class="vd-card-title">${esc(r.itemName)}</div>
         <div class="hint">${r.cost} credits · ${fmtDate(r.createdAt)}</div>
       </div>
       <div class="vd-card-side">
@@ -228,10 +346,25 @@ async function claimDrop() {
     $("vd-drop-code").value = "";
     renderSite();
   } catch (err) {
-    setStatus("vd-drop-status", err.message, true);
+    setStatus("vd-drop-status", errorText(err.message, "We couldn't claim that code. Check it and try again."), true);
   } finally {
     setLoading(btn, false);
   }
+}
+
+// The page loads /assets/dialog.js before this module; without it we refuse the
+// order rather than fall back to the browser's native confirm().
+async function confirmOrder(item) {
+  const dialog = window.YRDialog;
+  if (!dialog) {
+    setStatus("vd-site-status", "Ordering is unavailable right now. Reload the page and try again.", true);
+    return false;
+  }
+  return dialog.confirm({
+    title: "Confirm order",
+    body: `Spend ${item.cost} credits on ${item.name}?`,
+    confirmText: "Place order",
+  });
 }
 
 async function redeem(shopItemId, btn) {
@@ -239,7 +372,8 @@ async function redeem(shopItemId, btn) {
   if (!slug) return;
   const item = (state.current.shopItems || []).find((i) => i.id === shopItemId);
   if (!item) return;
-  if (!await showConfirmModal("Confirm order", `Spend ${item.cost} credits on ${item.name}?`, "Place order", false)) return;
+  setStatus("vd-site-status", "");
+  if (!await confirmOrder(item)) return;
   if (btn) setLoading(btn, true, "Placing order…");
 
   // Tie the idempotency key to the item, not just the DOM node, so retries and
@@ -252,29 +386,39 @@ async function redeem(shopItemId, btn) {
   if (btn) btn.dataset.redeemKey = idempotencyKey;
 
   redeemingItemId = shopItemId;
-  renderSite();
 
   try {
     const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId, idempotencyKey });
+    // The member stays in this creator's detail: apply the server's balance and
+    // the new order in place instead of reloading the whole account.
+    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
     state.current.viewer.balance = data.balance;
     state.current.redemptions = state.current.redemptions || [];
-    state.current.redemptions.unshift({
+    state.current.redemptions.unshift(normalizeRedemption({
       id: data.redemptionId,
-      itemName: item.name,
-      cost: item.cost,
-      status: "pending",
+      itemName: data.itemName || item.name,
+      cost: data.itemCost ?? item.cost,
+      status: data.status || "pending",
       createdAt: new Date().toISOString(),
-    });
+    }));
+    const board = (state.boards || []).find((b) => b.slug === slug);
+    if (board) board.balance = data.balance;
     delete redeemKeys[shopItemId];
-    // Refresh sites list to update balances; site view will re-render below.
-    load().catch(() => {});
-  } catch (err) { setStatus("vd-login-status", err.message, true); }
-  finally {
+    setStatus("vd-site-status", `Order placed for ${item.name}. The streamer will confirm it.`, false);
+  } catch (err) {
+    setStatus("vd-site-status", errorText(err.message, "We couldn't place that order. Try again."), true);
+  } finally {
     redeemingItemId = null;
     if (btn) setLoading(btn, false);
-    // Re-render so the visible Order button is re-enabled after a failure and
-    // reflects the latest balance/order state after success.
-    if (state.current) renderSite();
+    // Re-render so the visible Order button reflects the latest balance and
+    // order state, then put focus back on the control the member used.
+    if (state.current) {
+      renderSite();
+      renderBoards();
+      const again = $("vd-shop-list").querySelector(`[data-redeem="${shopItemId}"]`);
+      if (again && !again.disabled) again.focus();
+      else focusEl("vd-site-status");
+    }
   }
 }
 
@@ -283,16 +427,18 @@ $("vd-logout")?.addEventListener("click", async () => {
   setLoading(btn, true, "Logging out…");
   try {
     await api("POST", "/api/viewer/logout");
-    state = {};
+    clearStatuses();
+    setUrl(null, true);
     renderLoggedOut();
-  } catch (err) { setStatus("vd-login-status", err.message, true); }
+  } catch (err) { setStatus("vd-account-status", errorText(err.message, "We couldn't sign you out. Try again."), true); }
   finally { setLoading(btn, false); }
 });
 
 $("vd-back")?.addEventListener("click", () => {
   state.current = null;
-  $("vd-site-card").hidden = true;
-  $("vd-boards-card").hidden = false;
+  selectedSlug = null;
+  setUrl(null, false);
+  showList({ focus: true });
   load().catch(() => {});
 });
 
@@ -318,6 +464,19 @@ if (urlParams.get("error")) {
   window.history.replaceState({}, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
 }
 
-load().catch((err) => {
-  setStatus("vd-login-status", err.message, true);
+async function boot() {
+  const slug = siteFromUrl();
+  await load();
+  if (!state.viewer) {
+    // A ?site= link is meaningless until the member logs in.
+    if (slug) setUrl(null, true);
+    return;
+  }
+  if (slug) await openSite(slug, { history: "replace" });
+  else setUrl(null, true);
+}
+
+// Exposed so tests and runtime checks can await the first render.
+window.__yrViewerReady = boot().catch((err) => {
+  setStatus("vd-login-status", errorText(err.message, "We couldn't load your account. Try again."), true);
 });
