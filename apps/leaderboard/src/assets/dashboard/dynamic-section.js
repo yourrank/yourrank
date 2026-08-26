@@ -53,16 +53,6 @@ function existingStyleLink(key) {
 }
 
 /**
- * Remove a link whose stylesheet never became usable. A parsed sheet is left
- * alone — only a dead element is dropped, so the next attempt inserts a fresh
- * link and the browser actually re-requests the file.
- */
-function dropUnusableStyleLink(key) {
-  const link = existingStyleLink(key);
-  if (link && !link.sheet) link.remove();
-}
-
-/**
  * Resolve once `href` is usable in the document. An already-present sheet
  * resolves immediately (its load event may have fired long ago); a newly
  * inserted link resolves on load and rejects on error.
@@ -80,8 +70,10 @@ function ensureStyle(href) {
   // covers the cached case where no event is coming.
   if (existing?.sheet) return Promise.resolve();
 
+  let requested = null;
   const request = new Promise((resolve, reject) => {
     const link = existing || document.createElement("link");
+    requested = link;
     let done = false;
     const settle = (fn, arg) => {
       if (done) return;
@@ -104,13 +96,14 @@ function ensureStyle(href) {
     }
   });
 
-  // A failed load is not cached: the retry path gets a fresh attempt. The
-  // unusable link is dropped too, so re-inserting one issues a new request
-  // instead of re-listening to an element the browser is done with.
+  // A failed load is not cached: the retry path gets a fresh attempt. The link
+  // is dropped too — a browser leaves a rule-less sheet attached to a link
+  // whose load failed, so keeping it would make the next attempt resolve from
+  // dead markup instead of issuing a request.
   styleRequests.set(key, request);
   request.catch(() => {
     styleRequests.delete(key);
-    dropUnusableStyleLink(key);
+    requested?.remove();
   });
   return request;
 }

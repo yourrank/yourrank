@@ -43,9 +43,12 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
         // Model the network: resolve or fail on a later turn, like a browser.
         queueMicrotask(() => {
           if (network.failing.has(v)) {
+            // A browser attaches an empty stylesheet even to a link whose load
+            // failed, so `sheet` alone never proves a stylesheet is usable.
+            this.sheet = { cssRules: [] };
             (listeners.error || []).forEach((fn) => fn());
           } else {
-            this.sheet = { cssRules: [] };
+            this.sheet = { cssRules: [{}] };
             (listeners.load || []).forEach((fn) => fn());
           }
         });
