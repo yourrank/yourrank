@@ -143,11 +143,6 @@ const BOT_STYLE_ATTR_CSS = `
 `;
 
 const BOT_BASE_CSS = `
-  .bot-card { display:flex; flex-direction:column; gap:12px; margin-bottom:12px; padding:12px; border:1px solid var(--yr-line, var(--line)); border-radius:8px; background:var(--yr-panel, var(--panel)); box-shadow:var(--yr-shadow-sm, none); }
-  .bot-card-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px; }
-  .bot-card .meta { flex:1; min-width:180px; }
-  .bot-card .actions { display:flex; gap:8px; flex-wrap:wrap; }
-  .bot-card button { padding:6px 12px; font-size:13px; }
   .health-details { width:100%; font-size:13px; color:var(--yr-ink-soft, var(--ink-soft)); }
   .health-details summary { cursor:pointer; color:var(--yr-ink, var(--ink)); margin-bottom:6px; }
   .health-details ul { margin:0 0 8px; padding-left:18px; }

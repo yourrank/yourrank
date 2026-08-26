@@ -183,7 +183,7 @@ describe("dashboard views", () => {
     expect(broadcasts).toContain('id="bcList"');
     expect(broadcasts).toContain('id="bcSetupState"');
     expect(broadcasts).toMatch(/id="bcComposer"[^>]*\shidden/);
-    expect(clientScriptSource()).toContain("No broadcasts yet. Connect an active bot to send your first message.");
+    expect(clientScriptSource()).toContain("No updates sent yet. Your sent and scheduled updates appear here.");
     expect(appHtml(user, "https://yourrank.site", "nonce123", "bots")).toContain('href="https://t.me/BotFather"');
   });
 
