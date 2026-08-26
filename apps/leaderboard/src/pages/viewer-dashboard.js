@@ -17,7 +17,6 @@ export const viewerDashboardPage = leaderboardPageHtml({
   <a class="gm-brand" href="/"><span class="gm-brand-mark">${brandMarkSvg()}</span><span class="gm-brand-word">YourRank</span></a>
 </div></header>
 
-<main class="wrap cr-wrap" id="main-content">
   <div id="vd-loading" class="ui-loading" hidden><div class="ui-loading__spinner"></div></div>
   <div class="an-head">
     <div>
@@ -90,7 +89,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
         <p class="status" id="vd-drop-status" role="status" aria-live="polite"></p>
       </div>
       <div class="vd-card-side">
-        <input type="text" id="vd-drop-code" placeholder="CODE" style="width:120px;text-transform:uppercase" aria-label="Drop code" />
+        <input type="text" id="vd-drop-code" class="vd-drop-code" placeholder="CODE" aria-label="Drop code" />
         <button class="btn btn--sm" id="vd-drop-claim-btn" type="button">Claim</button>
       </div>
     </div>
@@ -98,6 +97,5 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <div id="vd-predictions"></div>
     <p class="empty" id="vd-events-empty" hidden>No live events right now.</p>
   </section>
-</main>
 `,
 });

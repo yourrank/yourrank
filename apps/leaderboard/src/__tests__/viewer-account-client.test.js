@@ -356,6 +356,13 @@ describe("the viewer account page's ownership", () => {
     }
   });
 
+  it("leaves the main landmark and the CSP to the shell", () => {
+    const page = String(viewerDashboardPage);
+    expect((page.match(/<main\b/g) || []).length).toBe(1);
+    expect((page.match(/id="main-content"/g) || []).length).toBe(1);
+    expect(page).not.toContain(' style="');
+  });
+
   it("names the global surface apart from a creator's own credits page", () => {
     const page = String(viewerDashboardPage);
     expect(page).toContain("Your sites &amp; account");

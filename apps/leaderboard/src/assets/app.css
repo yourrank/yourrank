@@ -1242,6 +1242,7 @@ html{color-scheme:light}
 .vd-card-side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .vd-card-cost{font-size:1.4rem;font-weight:700}
 .vd-redemption-row .vd-card-side{justify-content:center}
+.vd-drop-code{width:120px;text-transform:uppercase}
 /* Viewer errors must not be colour-only. */
 #vd-login-status.error::before,#vd-account-status.error::before,#vd-boards-status.error::before,#vd-site-status.error::before,#vd-drop-status.error::before{content:"⚠ "}
 #vd-account-status:empty,#vd-boards-status:empty,#vd-site-status:empty{margin:0}
