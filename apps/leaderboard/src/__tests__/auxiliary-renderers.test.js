@@ -127,10 +127,12 @@ describe("new-shell auxiliary renderers", () => {
       viewerData: { ledger: [], redemptions: [] },
       opts,
     });
-    expect(shop).toContain("Rewards will appear here when the streamer adds them.");
-    expect(shop).toContain("No rewards available right now");
-    expect(shop).not.toContain("All rewards");
-    expect(me).toContain("No credit activity or orders yet");
+    // An empty page says so plainly, in the viewer's terms, and invents no
+    // rewards, no activity and no dashboard statistics to fill the space.
+    expect(shop).toContain("Rewards will appear here when");
+    expect(shop).not.toContain("yr-rwd ");
+    expect(me).toContain("No credit activity yet");
+    expect(me).toContain("No orders yet");
     expect(me).not.toContain("Credits / 7d");
   });
 

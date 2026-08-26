@@ -10,6 +10,7 @@ const SITE_PARAM = "site";
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString() : "—"; }
+function fmtNum(n) { return Number(n || 0).toLocaleString("en-US"); }
 
 function csrf() {
   const m = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
@@ -93,6 +94,15 @@ function focusEl(id) {
   const el = $(id);
   if (el && typeof el.focus === "function") el.focus();
 }
+
+// Every state the backend can report, named in the member's words. Cancelled
+// and refunded are distinct outcomes and are never collapsed into one label.
+const ORDER_STATUS = Object.freeze({
+  pending: "Pending",
+  fulfilled: "Fulfilled",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+});
 
 // One client shape for an order. The API returns camelCase; a freshly placed
 // order is built locally, and both must render identically.
@@ -211,12 +221,9 @@ function renderBoards() {
     <div class="vd-card-row">
       <div class="vd-card-main">
         <div class="vd-card-title">${esc(b.name || b.slug)}</div>
-        <div class="hint">${esc(b.slug)}</div>
-        ${b.blocked ? `<span class="pill pill--bad">blocked</span>` : ""}
+        <div class="hint">${fmtNum(b.balance)} free credits${b.blocked ? " · ordering disabled" : ""}</div>
       </div>
       <div class="vd-card-side">
-        <div class="vd-card-cost">${b.balance}</div>
-        <div class="hint">credits</div>
         <button class="btn btn--sm" type="button" data-view-site="${esc(b.slug)}" aria-label="Open ${esc(b.name || b.slug)}">Open</button>
       </div>
     </div>
@@ -264,7 +271,15 @@ function renderSite() {
     : "Streamer site";
 
   const v = data.viewer || { balance: 0, blocked: false };
-  $("vd-site-balance").textContent = v.balance;
+  $("vd-site-balance").textContent = fmtNum(v.balance);
+
+  // The creator's own site is the canonical place to see everything they offer.
+  const visit = $("vd-site-visit");
+  if (visit) {
+    visit.href = `/${encodeURIComponent(data.site.slug)}`;
+    visit.textContent = `Visit ${data.site.name || data.site.slug}`;
+    visit.hidden = false;
+  }
 
   const earnHint = $("vd-earn-hint");
   if (earnHint) {
@@ -277,16 +292,28 @@ function renderSite() {
   $("vd-shop-empty").hidden = items.length > 0;
   $("vd-shop-list").innerHTML = items.map((i) => {
     const isRedeeming = redeemingItemId === i.id;
-    const canBuy = v && !v.blocked && v.balance >= i.cost && (i.stock === null || i.stock > 0) && !isRedeeming;
+    const inStock = i.stock === null || i.stock === undefined || i.stock > 0;
+    const canBuy = v && !v.blocked && v.balance >= i.cost && inStock && !isRedeeming;
+    // Why an Order button is unavailable is said in words, never left to the
+    // disabled styling alone.
+    const state = v.blocked
+      ? "Ordering disabled on this site"
+      : !inStock
+        ? "Out of stock"
+        : v.balance < i.cost
+          ? `Not enough credits — ${fmtNum(i.cost - v.balance)} more needed`
+          : i.stock !== null && i.stock !== undefined && i.stock <= 3
+            ? `${i.stock} left`
+            : "";
     return `
       <div class="vd-card-row">
         <div class="vd-card-main">
           <div class="vd-card-title">${esc(i.name)}</div>
-          <div class="hint">${esc(i.description || "")}</div>
+          ${i.description ? `<div class="hint">${esc(i.description)}</div>` : ""}
         </div>
         <div class="vd-card-side">
-          <div class="vd-card-cost">${i.cost} credits</div>
-          ${i.stock !== null ? `<div class="hint">Stock: ${i.stock}</div>` : ""}
+          <div class="vd-card-cost">${fmtNum(i.cost)} credits</div>
+          ${state ? `<div class="hint">${esc(state)}</div>` : ""}
           <button class="btn btn--sm" type="button" data-redeem="${esc(i.id)}" aria-label="Order ${esc(i.name)}" ${canBuy ? "" : "disabled"}>Order</button>
         </div>
       </div>
@@ -300,15 +327,15 @@ function renderSite() {
   const redemptions = (data.redemptions || []).map(normalizeRedemption);
   $("vd-redemptions-empty").hidden = redemptions.length > 0;
   $("vd-redemptions-list").innerHTML = redemptions.map((r) => {
-    const statusLabel = r.status === "pending" ? "Pending" : r.status === "fulfilled" ? "Fulfilled" : "Cancelled";
+    const statusLabel = ORDER_STATUS[r.status] || "Pending";
     return `
     <div class="vd-card-row vd-redemption-row">
       <div class="vd-card-main">
         <div class="vd-card-title">${esc(r.itemName)}</div>
-        <div class="hint">${r.cost} credits · ${fmtDate(r.createdAt)}</div>
+        <div class="hint">${fmtNum(r.cost)} credits · ${fmtDate(r.createdAt)}</div>
       </div>
       <div class="vd-card-side">
-        <span class="pill pill--${r.status === "pending" ? "muted" : r.status === "fulfilled" ? "good" : "bad"}">${statusLabel}</span>
+        <span class="pill pill--${r.status === "pending" ? "muted" : r.status === "fulfilled" ? "good" : "bad"}">${esc(statusLabel)}</span>
       </div>
     </div>
   `}).join("");
@@ -360,9 +387,13 @@ async function confirmOrder(item) {
     setStatus("vd-site-status", "Ordering is unavailable right now. Reload the page and try again.", true);
     return false;
   }
+  const balance = state.current?.viewer?.balance;
+  const left = typeof balance === "number" && balance >= item.cost
+    ? ` You'd have ${fmtNum(balance - item.cost)} credits left.`
+    : "";
   return dialog.confirm({
     title: "Confirm order",
-    body: `Spend ${item.cost} credits on ${item.name}?`,
+    body: `Order ${item.name} for ${fmtNum(item.cost)} free credits.${left} Credits have no cash value.`,
     confirmText: "Place order",
   });
 }

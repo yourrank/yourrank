@@ -263,7 +263,7 @@ describe("placing an order from the viewer account page", () => {
 
     expect(env.$("vd-site-card").hidden).toBe(false);
     expect(env.$("vd-boards-card").hidden).toBe(true);
-    expect(env.$("vd-site-balance").textContent).toBe(400);
+    expect(env.$("vd-site-balance").textContent).toBe("400");
     expect(env.$("vd-redemptions-list").innerHTML).toContain("Shoutout");
     expect(env.$("vd-redemptions-list").innerHTML).not.toContain("undefined");
     expect(env.$("vd-site-status").textContent).toContain("Order placed for Shoutout.");

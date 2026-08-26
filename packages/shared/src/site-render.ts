@@ -230,7 +230,7 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
   }).join("");
 
   const right = viewer
-    ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-num">${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>
+    ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" data-credit-balance="${Number(balance) || 0}" data-credit-balance-label="My credits on this site" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-num" data-credit-balance-num>${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>
 <a class="yr-account-link" href="/me" aria-label="Your sites and account"><span class="yr-ava">${avatarHtml(viewer)}</span><span class="yr-account-txt">Your sites</span></a>`
     : signInLink(r, returnTo, "yr-btn yr-btn--ghost");
 
@@ -279,14 +279,6 @@ function heroStat(label, value, { cd = null } = {}) {
   return `<div><p class="yr-label">${esc(label)}</p><p class="yr-big"${attr}>${value}</p></div>`;
 }
 
-function kpi(label, iconKey, value, sub, { accent = false } = {}) {
-  return `<div class="yr-card yr-lb">
-<div class="yr-card-top"><span class="yr-label">${esc(label)}</span>${ICONS[iconKey] || ""}</div>
-<p class="yr-num">${esc(String(value))}</p>
-<p class="yr-sub${accent ? " is-accent" : ""}">${esc(sub)}</p>
-</div>`;
-}
-
 function panel({ title, meta = "", body, foot = "", pad = false }) {
   return `<div class="yr-panel yr-lb">
 <div class="yr-panel-head"><h2 class="yr-panel-title">${esc(title)}</h2>${meta ? `<span class="yr-panel-meta">${meta}</span>` : ""}</div>
@@ -299,79 +291,102 @@ function sectionHead(title, right = "") {
   return `<div class="yr-sec-head"><h2 class="yr-sec-title">${esc(title)}</h2>${right}</div>`;
 }
 
-/** Last 7 calendar days of positive ledger movement. */
-function dailyEarned(ledger) {
-  const days = [];
-  const now = new Date();
-  for (let i = 6; i >= 0; i -= 1) {
-    const d = new Date(now.getTime() - i * 86400000);
-    days.push({ key: d.toISOString().slice(0, 10), label: d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(), value: 0 });
-  }
-  const index = new Map(days.map((d) => [d.key, d]));
-  for (const row of ledger) {
-    const amount = Number(row.amount) || 0;
-    if (amount <= 0) continue;
-    const key = String(row.created_at || "").slice(0, 10);
-    const bucket = index.get(key);
-    if (bucket) bucket.value += amount;
-  }
-  return days;
-}
-
 const LEDGER_KIND = {
-  earn: "EARNED_CREDITS",
-  spend: "ORDER",
-  refund: "REFUND_ISSUED",
-  adjust: "MANUAL_ADJUSTMENT",
-  game_bet: "GAME_ROUND",
-  game_win: "GAME_ROUND",
+  earn: "Credits earned",
+  spend: "Order",
+  refund: "Refund",
+  adjust: "Adjustment by the streamer",
+  game_bet: "Game round",
+  game_win: "Game round",
 };
 
-/* ── reward cards ─────────────────────────────────────────────────────── */
+const ORDER_STATUS_LABEL = {
+  pending: "Pending",
+  fulfilled: "Fulfilled",
+  cancelled: "Cancelled",
+  refunded: "Refunded",
+};
 
-function rewardCard({ item, viewer, balance, blocked, signIn }) {
+const ORDER_STATUS_NOTE = "Pending means the streamer hasn't handed it over yet. Fulfilled means they have. Cancelled and refunded both mean the credits went back to your balance.";
+
+/**
+ * The one page opening every viewer surface uses: what the page is, what it is
+ * for, the fine print, and the viewer's own balance stated once in plain text.
+ */
+function viewerHead({ title, lede, balance = null, actions = "", disclaimer = true }) {
+  return `<section class="yr-vhead">
+<h1 class="yr-h1">${esc(title)}</h1>
+<p class="yr-vhead-lede">${lede}</p>
+${balance === null ? "" : `<p class="yr-vbal" data-credit-balance="${Number(balance) || 0}"><span class="yr-vbal-num" data-credit-balance-num>${formatNumber(balance)}</span> <span class="yr-vbal-unit">free credits</span></p>`}
+${disclaimer ? `<p class="yr-vhead-fine">${esc(CREDITS_DISCLAIMER)}</p>` : ""}
+${actions ? `<div class="yr-vhead-acts">${actions}</div>` : ""}
+</section>`;
+}
+
+/* ── reward rows ──────────────────────────────────────────────────────── */
+
+/**
+ * One reward as a row in a plain list: name and description on the left, cost,
+ * state and the single Order action on the right. Every state is stated in
+ * words — a greyed-out button is not an explanation — and the cost is ordinary
+ * text rather than a headline, because free credits are not a price tag.
+ */
+function rewardRow({ item, viewer, balance, blocked, signIn }) {
   const cost = Number(item.cost) || 0;
-  const inStock = item.stock === null || item.stock === undefined || item.stock > 0;
+  const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
+  const inStock = stock === null || stock > 0;
   const short = viewer ? Math.max(0, cost - balance) : 0;
-  const affordable = viewer && !blocked && inStock && short === 0;
-  const off = !affordable;
 
-  let flag = "";
-  if (!inStock) flag = `<span class="yr-flag yr-flag--ghost">Out of stock</span>`;
-  else if (item.stock !== null && item.stock !== undefined && item.stock <= 3) flag = `<span class="yr-flag">${formatNumber(item.stock)} left</span>`;
-
+  let state = "";
   let action;
-  if (!viewer) action = `<a class="yr-act" href="${signIn}">Sign in</a>`;
-  else if (blocked) action = `<span class="yr-act yr-act--off">Unavailable</span>`;
-  else if (!inStock) action = `<span class="yr-act yr-act--off">Out of stock</span>`;
-  else if (short > 0) action = `<span class="yr-act yr-act--off">${formatNumber(short)} short</span>`;
-  else action = `<button class="yr-act" type="button" data-redeem="${esc(item.id)}" data-reward-name="${esc(item.name)}" data-reward-cost="${cost}">Order</button>`;
+  if (!viewer) {
+    action = `<a class="yr-act" href="${signIn}">Sign in to order</a>`;
+  } else if (blocked) {
+    state = "Ordering disabled on this site";
+    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
+  } else if (!inStock) {
+    state = "Out of stock";
+    action = `<span class="yr-act yr-act--off" role="note">Out of stock</span>`;
+  } else if (short > 0) {
+    state = `Not enough credits — ${formatNumber(short)} more needed`;
+    action = `<span class="yr-act yr-act--off" role="note">Not enough credits</span>`;
+  } else {
+    if (stock !== null && stock <= 3) state = `${formatNumber(stock)} left`;
+    action = `<button class="yr-act" type="button" data-redeem="${esc(item.id)}" data-reward-name="${esc(item.name)}" data-reward-cost="${cost}">Order</button>`;
+  }
 
-  // A-08: was aria-hidden="true" with no alternative; replaced with a proper progressbar.
-  const fill = viewer && inStock && short > 0 && cost > 0
-    ? Math.min(100, Math.round((balance / cost) * 20) * 5)
-    : null;
-  const meter = fill !== null
-    ? `<div class="yr-meter" role="progressbar" aria-valuenow="${fill}" aria-valuemin="0" aria-valuemax="100" aria-label="Reward progress: ${fill}%"><i data-fill="${fill}"></i></div>`
-    : "";
+  // A configured reward image belongs to the creator, so it still shows — as a
+  // small thumbnail in the row, not a 160px art panel per reward.
   const image = item.image_url || item.image || item.imageUrl;
-  const art = image
-    ? `<div class="yr-item-art yr-gridbg"><img src="${esc(image)}" alt="" /><span class="yr-shade"></span>${flag}</div>`
-    : "";
-  const inlineFlag = !image && flag
-    ? flag.replace('class="yr-flag', 'class="yr-flag yr-flag--inline')
-    : "";
 
-  return `<article class="yr-item${off ? " yr-item--off" : ""}">
-${art}
-<div class="yr-item-body">
-${inlineFlag}
-<h4 class="yr-item-h">${esc(item.name)}</h4>
-<p class="yr-item-p">${esc(item.description || "Fulfilled by the streamer.")}</p>
-${meter}
-<div class="yr-item-foot"><span class="yr-cost">${formatNumber(cost)} <i>CR</i></span>${action}</div>
+  return `<li class="yr-rwd">
+${image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="48" height="48" loading="lazy" />` : ""}
+<div class="yr-rwd-main">
+<h3 class="yr-rwd-n">${esc(item.name)}</h3>
+${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ""}
 </div>
-</article>`;
+<div class="yr-rwd-side">
+<p class="yr-rwd-c">${formatNumber(cost)} credits</p>
+${state ? `<p class="yr-rwd-state">${esc(state)}</p>` : ""}
+${action}
+</div>
+</li>`;
+}
+
+/** The viewer's own confirmation step for an order. Native <dialog> so the
+ *  focus trap, Escape and background inertness are the platform's, not ours. */
+function orderConfirmDialog() {
+  return `<dialog class="yr-modal" id="yr-order-confirm" aria-labelledby="yr-order-confirm-t" aria-describedby="yr-order-confirm-d">
+<div class="yr-modal-in">
+<h2 id="yr-order-confirm-t">Confirm order</h2>
+<p class="yr-fine" id="yr-order-confirm-d" data-order-detail></p>
+<p class="yr-note">Credits have no cash value.</p>
+<div class="yr-modal-acts">
+<button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-order-cancel>Cancel</button>
+<button class="yr-btn yr-btn--sm" type="button" data-order-confirm>Order</button>
+</div>
+</div>
+</dialog>`;
 }
 
 /* ── page renderer ────────────────────────────────────────────────────── */
@@ -695,63 +710,62 @@ ${panel({
 /* ── Rewards ──────────────────────────────────────────────────────────── */
 
 function shopMain(ctx) {
-  const { r, b, data, viewer, viewerData, viewerOnSite, balance, returnTo, slug } = ctx;
+  const { r, b, data, viewer, viewerData, viewerOnSite, balance, returnTo, slug, homeUrl, isCustomDomain, siteSections } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
   const redemptions = viewerData?.redemptions || [];
-  const pending = redemptions.filter((x) => x.status === "pending").length;
+  const blocked = !!viewerOnSite?.blocked;
   const signIn = r.viewerKickAuthEnabled
     ? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`
     : (r.viewerDiscordAuthEnabled ? `/api/viewer/auth/discord?returnTo=${encodeURIComponent(returnTo)}` : "/me");
+  const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
-  const heroHtml = hero({
-    eyebrow: items.length ? `${formatNumber(items.length)} REWARDS${viewer && pending ? ` · ${pending} PENDING` : ""}` : "REWARDS",
+  const head = viewerHead({
     title: "Rewards",
-    lede: items.length
-      ? `${esc(b.name || slug)} hands every one of these over personally. Credits are deducted when you place an order and returned in full if it's cancelled.`
-      : "Rewards will appear here when the streamer adds them.",
-    right: viewer
-      ? `<div class="yr-hero-r yr-hero-r--stack">${heroStat("Loyalty credits", formatNumber(balance))}</div>`
-      : `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>`,
+    lede: `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`,
+    balance: viewer ? balance : null,
+    actions: viewer
+      ? (siteSections.me !== false ? `<a class="yr-sec-link" href="${creditsHref}">My credits ${ICONS.arrow}</a>` : "")
+      : signInButton(r, returnTo),
   });
 
-  const blockedNote = items.length && viewerOnSite?.blocked
-    ? `<div class="yr-card yr-lb"><p class="yr-label">Ordering disabled</p><p class="yr-note">${esc(viewerOnSite.block_reason || "The streamer has paused orders for your account.")}</p></div>`
+  const blockedNote = viewer && blocked
+    ? `<p class="yr-note yr-note--w">Ordering is disabled on this site. ${esc(viewerOnSite.block_reason || "The streamer has paused orders for your account.")}</p>`
     : "";
 
-  const grid = items.length
-    ? `<div>${sectionHead("All rewards", `<span class="yr-panel-meta">Sorted by cost</span>`)}
-<div class="yr-g4">${items.map((item) => rewardCard({ item, viewer, balance, blocked: viewerOnSite?.blocked, signIn })).join("")}</div></div>`
-    : `<div class="yr-empty">No rewards available right now</div>`;
+  const list = items.length
+    ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
+<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, balance, blocked, signIn })).join("")}</ul></section>`
+    : `<section class="yr-vsec">${sectionHead("All rewards")}<p class="yr-empty">No rewards yet. Rewards will appear here when ${esc(b.name || slug)} adds them.</p></section>`;
 
   const history = viewer
-    ? panel({
-        title: "Your orders",
-        meta: "Fulfilled by hand",
-        body: redemptions.length
-          ? `<div class="yr-list">${redemptions.slice(0, 10).map(redemptionRow).join("")}</div>`
-          : `<div class="yr-empty">No orders yet</div>`,
-      })
+    ? `<section class="yr-vsec">${sectionHead("Recent orders")}
+${redemptions.length
+      ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
+      : `<p class="yr-empty">No orders yet.</p>`}</section>`
     : "";
 
-  return `${heroHtml}
+  const canOrder = viewer && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
+
+  return `${head}
 ${blockedNote}
-<p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite"></p>
-${grid}
-${history}`;
+<p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
+${list}
+${history}
+${canOrder ? orderConfirmDialog() : ""}`;
 }
 
-function redemptionRow(row) {
+/** One placed order: what it was, what it cost, when, and where it stands. */
+function orderRow(row) {
   const status = String(row.status || "pending");
+  const label = ORDER_STATUS_LABEL[status] || status;
   const tagCls = status === "pending" ? "yr-tag yr-tag--pending" : status === "fulfilled" ? "yr-tag yr-tag--done" : "yr-tag";
-  const detail = status === "refunded"
-    ? `${formatDate(row.created_at)} · ${formatNumber(row.cost)} credits refunded in full`
-    : status === "cancelled"
-      ? `${formatDate(row.created_at)} · cancelled, ${formatNumber(row.cost)} credits returned`
-      : `${formatDate(row.created_at)} · ${formatNumber(row.cost)} credits deducted`;
-  return `<div class="yr-list-item">
-<div><p class="yr-list-h">${esc(row.item_name || "Order")}</p><p class="yr-list-p">${esc(detail)}</p></div>
-<span class="${tagCls}">${esc(status)}</span>
-</div>`;
+  return `<li class="yr-ord">
+<div class="yr-ord-main">
+<p class="yr-ord-n">${esc(row.item_name || "Order")}</p>
+<p class="yr-ord-p">${formatNumber(row.cost)} credits · ${esc(formatDate(row.created_at))}</p>
+</div>
+<span class="${tagCls}">${esc(label)}</span>
+</li>`;
 }
 
 /* ── Games ────────────────────────────────────────────────────────────── */
@@ -790,97 +804,53 @@ ${mount}`;
 /* ── Credits ────────────────────────────────────────────────────── */
 
 function meMain(ctx) {
-  const { r, b, slug, viewer, viewerData, viewerOnSite, balance, returnTo, homeUrl, isCustomDomain, siteSections } = ctx;
+  const { r, b, slug, viewer, viewerData, balance, returnTo, homeUrl, isCustomDomain, siteSections } = ctx;
+  const creator = esc(b.name || slug);
   if (!viewer) {
-    return `${hero({ eyebrow: "THIS SITE ONLY", title: "My credits", lede: "Sign in to see the balance, credit history and orders tied to this site.", right: `<div class="yr-hero-r">${signInButton(r, returnTo)}</div>` })}
-<div class="yr-gate"><h2>Sign in to see credits</h2><p>${esc(CREDITS_DISCLAIMER)}</p>${signInButton(r, returnTo)}</div>`;
+    return `${viewerHead({
+      title: "My credits",
+      lede: `Sign in to see your free credit balance, activity and orders on ${creator}.`,
+      actions: signInButton(r, returnTo),
+    })}`;
   }
 
   const ledger = viewerData?.ledger || [];
   const redemptions = viewerData?.redemptions || [];
-  const emptyCredits = ledger.length === 0 && redemptions.length === 0 && Number(balance || 0) === 0;
-  const earned7 = dailyEarned(ledger).reduce((a, d) => a + d.value, 0);
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
 
-  const gamerCard = `
-<div class="yr-card yr-gamer-card mb-16">
-  <div class="yr-gamer-card-head">
-    <div class="yr-gamer-id">
-      <span class="yr-gamer-ava">${avatarHtml(viewer)}</span>
-      <div>
-        <h2 class="yr-gamer-name">${esc(viewerName(viewer))}</h2>
-      </div>
-    </div>
-  </div>
-  <div class="yr-gamer-stats-grid">
-    <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Balance</span>
-      <strong class="yr-gstat-val yr-pos">${formatNumber(balance)} CR</strong>
-    </div>
-    <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Lifetime Earned</span>
-      <strong class="yr-gstat-val">${formatNumber(viewerOnSite?.total_earned || 0)} CR</strong>
-    </div>
-    <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Lifetime Spent</span>
-      <strong class="yr-gstat-val">${formatNumber(viewerOnSite?.total_spent || 0)} CR</strong>
-    </div>
-    <div class="yr-gstat-item">
-      <span class="yr-gstat-lbl">Orders</span>
-      <strong class="yr-gstat-val">${formatNumber(redemptions.length)} orders</strong>
-    </div>
-  </div>
-</div>`;
-
-  const heroHtml = hero({
-    eyebrow: "THIS SITE ONLY",
+  const head = viewerHead({
     title: "My credits",
-    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Every credit here came from ${esc(b.name || slug)}'s Kick channel-point rewards. <a class="yr-inline-link" href="/me">Your sites &amp; account</a>. ${esc(CREDITS_DISCLAIMER)}`,
-    right: `<div class="yr-hero-r">${heroStat("Balance on this site", formatNumber(balance))}${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Spend credits</a>` : ""}</div>`,
+    lede: `Signed in as <b>${esc(viewerName(viewer))}</b>. Free loyalty credits on ${creator}.`,
+    balance,
+    actions: `${siteSections.shop !== false ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">View rewards</a>` : ""}<a class="yr-sec-link" href="/me">Your account ${ICONS.arrow}</a>`,
   });
 
-  if (emptyCredits) {
-    return `${heroHtml}
-<div class="yr-empty">No credit activity or orders yet</div>`;
-  }
+  // Activity reads as rows rather than a four-column table: on a phone a table
+  // this wide either scrolls sideways or shreds the detail column. Sign is
+  // spelled out with + and − so it never depends on the colour of the number.
+  const historyRows = ledger.map((row) => {
+    const amount = Number(row.amount) || 0;
+    return `<li class="yr-hist">
+<div class="yr-hist-main">
+<p class="yr-hist-n">${esc(LEDGER_KIND[row.type] || String(row.type || "Activity"))}</p>
+${row.description ? `<p class="yr-hist-p">${esc(row.description)}</p>` : ""}
+</div>
+<div class="yr-hist-side">
+<p class="yr-hist-amt${amount >= 0 ? " yr-pos" : ""}">${amount >= 0 ? "+" : "−"}${formatNumber(Math.abs(amount))}<span class="yr-sr"> credits</span></p>
+<p class="yr-hist-d">${esc(formatDate(row.created_at))}</p>
+</div>
+</li>`;
+  }).join("");
 
-  const kpis = [
-    kpi("Credits / 7d", "chart", `+${formatNumber(earned7)}`, `${ledger.length} recent entries`, { accent: true }),
-    kpi("Earned all time", "trophy", formatNumber(viewerOnSite?.total_earned || 0), `${formatNumber(viewerOnSite?.total_spent || 0)} spent so far`),
-    kpi("Pending orders", "hourglass", formatNumber(redemptions.filter((x) => x.status === "pending").length), `${esc(b.name || slug)} fulfils by hand`),
-  ].join("");
+  const history = `<section class="yr-vsec">${sectionHead("Credit history", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
+${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<p class="yr-empty">No credit activity yet. Use ${creator}'s channel-point rewards to earn credits.</p>`}</section>`;
 
-  const ledgerRows = ledger.length
-    ? ledger.map((row) => {
-        const amount = Number(row.amount) || 0;
-        return `<tr>
-<td class="yr-mono">${esc(formatDate(row.created_at))}</td>
-<td>${esc(LEDGER_KIND[row.type] || String(row.type || "").toUpperCase())}</td>
-<td class="yr-mono yr-r"><span class="${amount >= 0 ? "yr-pos" : ""}">${amount >= 0 ? "+" : ""}${formatNumber(amount)}</span></td>
-<td class="yr-mono yr-r">${esc(row.description || "—")}</td>
-</tr>`;
-      }).join("")
-    : "";
+  const orders = `<section class="yr-vsec">${sectionHead("Orders")}
+${redemptions.length
+    ? `<ul class="yr-ords" role="list">${redemptions.map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
+    : `<p class="yr-empty">No orders yet.${siteSections.shop !== false ? ` <a class="yr-inline-link" href="${shopHref}">View rewards</a>.` : ""}</p>`}</section>`;
 
-  const historyPanel = panel({
-    title: "Credit history",
-    meta: `${formatNumber(ledger.length)} entries`,
-    body: ledgerRows
-      ? `<div class="yr-table-wrap" data-table-wrap><table class="yr-table"><caption class="yr-sr">Credit history</caption><thead><tr><th scope="col" class="yr-w-auto">Date</th><th scope="col">Activity</th><th scope="col" class="yr-r">Amount</th><th scope="col" class="yr-r">Detail</th></tr></thead><tbody>${ledgerRows}</tbody></table></div>`
-      : `<div class="yr-empty">No credit history yet</div>`,
-  });
-
-  const redemptionsPanel = panel({
-    title: "Orders",
-    meta: "Fulfilled by hand",
-    body: redemptions.length
-      ? `<div class="yr-list">${redemptions.map(redemptionRow).join("")}</div>`
-      : `<div class="yr-empty">No orders yet</div>`,
-  });
-
-  return `${heroHtml}
-${gamerCard}
-<div class="yr-g3">${kpis}</div>
-${historyPanel}
-${redemptionsPanel}`;
+  return `${head}
+${history}
+${orders}`;
 }

@@ -66,8 +66,6 @@
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-.yr-gridbg { background: transparent; }
-
 .yr-lb { position: relative; border: 1px solid var(--yr-edge); border-radius: 8px; }
 
 /* ── Mobile drawer ───────────────────────────────────────────────────── */
@@ -318,7 +316,7 @@
 
 /* ── Cards, panels, grids ────────────────────────────────────────────── */
 
-.yr-g3, .yr-g4, .yr-g12 { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+.yr-g3, .yr-g12 { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
 .yr-g12 { gap: 32px; }
 
 .yr-card { border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); padding: 24px; }
@@ -400,33 +398,54 @@
 .yr-sec-link:hover { color: var(--yr-fog); background: var(--yr-surface); }
 .yr-sec-link svg { width: 10px; height: 10px; }
 
-/* ── Reward / game cards ─────────────────────────────────────────────── */
+/* ── Viewer surfaces: page head, reward / activity / order rows ──────── */
 
-.yr-item { border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); display: flex; flex-direction: column; overflow: hidden; transition: border-color 0.2s; }
-.yr-item:hover { border-color: var(--yr-faint); }
-.yr-item--off:hover { border-color: var(--yr-edge); }
-.yr-item-art { height: 160px; position: relative; overflow: hidden; display: grid; place-items: center; background: var(--yr-ink); }
-.yr-item-art img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1); transition: filter 0.5s; }
-.yr-item:hover .yr-item-art img { filter: grayscale(0); }
-.yr-item-art .yr-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
-.yr-item--off .yr-item-art .yr-shade { background: rgba(0, 0, 0, 0.6); }
-.yr-item-art svg { width: 30px; height: 30px; color: var(--yr-accent-readable); }
-.yr-flag {
-  position: absolute; top: 12px; left: 12px; z-index: 1;
-  background: var(--yr-warning); color: #11151a; padding: 3px 7px; border-radius: 6px;
-  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+/* Rewards and My credits open with the page, what it is for, the balance and
+   the fine print — no hero slab, no KPI wall. */
+.yr-vhead { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.yr-vhead .yr-h1 { margin-bottom: 0; }
+.yr-vhead-lede { font-size: 15px; line-height: 22px; color: var(--yr-mute); max-width: 60ch; overflow-wrap: anywhere; }
+.yr-vhead-fine { font-family: var(--yr-sans); font-size: 12px; line-height: 1.5; color: var(--yr-faint); max-width: 70ch; }
+.yr-vhead-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.yr-vbal { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.yr-vbal-num { font-family: var(--yr-mono); font-size: 28px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.yr-vbal-unit { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); font-weight: 700; }
+.yr-vsec { display: block; }
+
+/* One row shape for rewards, credit activity and orders.
+   `flex: 1 1 <n>ch` on the main column is what keeps the title readable at
+   every width: the moment the row can no longer give the title that much
+   space, the side column wraps to its own line instead of squeezing the title
+   down to a few characters. No width breakpoints are involved. */
+.yr-rwds, .yr-hists, .yr-ords {
+  list-style: none; margin: 0; padding: 0;
+  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel);
 }
-.yr-flag--accent { background: var(--yr-accent); color: var(--yr-accent-ink); }
-.yr-flag--ghost { background: var(--yr-panel); color: var(--yr-faint); border: 1px solid var(--yr-edge); }
-.yr-flag--inline { position: static; align-self: flex-start; margin-bottom: 12px; }
-.yr-item-body { padding: 20px; display: flex; flex-direction: column; flex: 1; }
-.yr-item-h { font-size: 14px; line-height: 20px; font-weight: 700; margin-bottom: 4px; }
-.yr-item-p { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-faint); margin-bottom: 16px; }
-.yr-meter { height: 2px; background: rgba(255, 255, 255, 0.1); margin: 0 0 16px; }
-.yr-meter i { display: block; height: 100%; background: var(--yr-accent-readable); }
-.yr-item-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; border-top: 1px solid var(--yr-edge); margin-top: auto; }
-.yr-cost { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-fog); }
-.yr-cost i { font-size: 11px; color: var(--yr-mute); font-style: normal; }
+.yr-rwd, .yr-hist, .yr-ord {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 16px; border-top: 1px solid var(--yr-edge-soft);
+}
+.yr-rwd:first-child, .yr-hist:first-child, .yr-ord:first-child { border-top: 0; }
+.yr-rwd-main, .yr-hist-main, .yr-ord-main { flex: 1 1 24ch; min-width: 0; }
+.yr-rwd-side, .yr-hist-side {
+  flex: 0 1 auto; min-width: 0; margin-left: auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+}
+.yr-rwd-img { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; border: 1px solid var(--yr-edge); }
+.yr-rwd-n { font-size: 15px; line-height: 21px; font-weight: 700; overflow-wrap: anywhere; }
+.yr-rwd-p, .yr-hist-p, .yr-ord-p {
+  margin-top: 2px; font-family: var(--yr-sans); font-size: 13px; line-height: 1.5;
+  color: var(--yr-faint); overflow-wrap: anywhere;
+}
+.yr-rwd-c { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.yr-rwd-state { font-family: var(--yr-sans); font-size: 12px; line-height: 1.4; color: var(--yr-faint); flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
+.yr-hist-n, .yr-ord-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
+.yr-hist-side { flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.yr-hist-amt { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yr-hist-d { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute); white-space: nowrap; }
+.yr-ord { justify-content: space-between; }
+
 .yr-act { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--yr-primary); border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; background: var(--yr-primary); transition: color 0.15s, border-color 0.15s, background-color 0.15s, opacity 0.15s; }
 .yr-act:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 .yr-btn:focus-visible, .yr-act:focus-visible { outline: 2px solid var(--yr-primary-hover); outline-offset: 2px; }
@@ -650,7 +669,6 @@
   }
   .yr-stand-head .yr-r, .yr-stand-head > span:first-child { text-align: right; }
   .yr-srow-prize { font-size: 13px; }
-  .yr-g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yr-hero-r { flex-direction: row; align-items: center; }
   .yr-hero-r--stack { flex-direction: column; align-items: flex-end; }
   .yr-hero-r--stack .yr-label, .yr-hero-r--stack .yr-big { text-align: right; }
@@ -659,7 +677,6 @@
 @media (min-width: 1024px) {
   .yr-g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .yr-g3--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .yr-g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .yr-g12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   .yr-c8 { grid-column: span 8 / span 8; }
   .yr-c4 { grid-column: span 4 / span 4; }

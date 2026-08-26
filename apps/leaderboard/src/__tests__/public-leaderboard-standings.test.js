@@ -210,7 +210,8 @@ describe("public leaderboard standings", () => {
     expect(shell).toContain("addRetry(loadMoreStatus, loadNextPage)");
     // Focus follows the vanished button for continuity, but the viewport stays
     // where the reader was: never a scroll jump, never a drop to the document.
-    expect(shell).toContain("loadMoreStatus.focus({ preventScroll: true })");
+    expect(shell).toContain("focusWithoutScroll(loadMoreStatus)");
+    expect(shell).toContain("el.focus({ preventScroll: true });");
     expect(shell).toContain("if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);");
     expect(shell).not.toMatch(/loadMoreStatus\.focus\(\)/);
     expect(shell).not.toContain("scrollIntoView");
