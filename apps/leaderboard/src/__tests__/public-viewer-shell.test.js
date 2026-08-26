@@ -98,16 +98,45 @@ describe("public viewer shell", () => {
     expect(withoutLogo).toContain('<span class="yr-id-name">Creator Name</span>');
   });
 
-  it("keeps a long creator name breakable rather than clipped", async () => {
-    const long = "Streamerwithaverylongsinglewordchannelname Extended Championship Board";
+  it("clamps a long creator name in the bar without dropping it from the markup", async () => {
+    const long =
+      "Streamerwithaverylongsinglewordchannelname Extended Championship Board Season Finale";
     const html = await render("home", {
       data: { ...baseData, brand: { ...baseData.brand, name: long } },
     });
     const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    // Full name in the DOM (so it stays the accessible name) even though the bar clips it.
     expect(html).toContain(`<span class="yr-id-name">${long}</span>`);
     expect(html).toContain(`<h1 class="yr-intro-name">${long}</h1>`);
-    expect(css).toMatch(/\.yr-id-name \{[^}]*overflow-wrap: anywhere/);
+    const bar = css.match(/\.yr-id-name \{([^}]*)\}/);
+    expect(bar).not.toBeNull();
+    expect(bar[1]).toContain("overflow-wrap: anywhere");
+    expect(bar[1]).toContain("-webkit-line-clamp: 2");
+    expect(bar[1]).toContain("overflow: hidden");
+    // No JS truncation, and the page heading itself is never clamped.
+    expect(readFileSync(join(assets, "site-shell.js"), "utf8")).not.toContain("yr-id-name");
     expect(css).toMatch(/\.yr-intro-name \{[^}]*overflow-wrap: anywhere/);
+    expect(css).not.toMatch(/\.yr-intro-name \{[^}]*line-clamp/);
+  });
+
+  it("keeps the narrow balance and account controls at a 44px minimum target", async () => {
+    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    const shared = css.match(/\.yr-account-link, \.yr-bal \{([^}]*)\}/);
+    expect(shared).not.toBeNull();
+    expect(shared[1]).toContain("min-width: 44px");
+    expect(shared[1]).toContain("min-height: 44px");
+    // The narrow override may only trim padding, never the target box.
+    const narrow = css.slice(css.indexOf("@media (max-width: 479px)"));
+    expect(narrow).not.toMatch(/\.yr-bal \{[^}]*(width|height): (?!auto)/);
+
+    const signedIn = await render("home", { viewer, viewerData });
+    expect(signedIn).toContain('<span class="yr-bal-num">1,234</span>');
+    const big = await render("home", {
+      viewer,
+      viewerData: { ...viewerData, viewerOnSite: { balance: 1234567 } },
+    });
+    expect(big).toContain('<span class="yr-bal-num">1,234,567</span>');
+    expect(big).toContain('aria-label="My credits on this site: 1,234,567"');
   });
 
   it("swaps the sign-in action for the viewer's own controls", async () => {

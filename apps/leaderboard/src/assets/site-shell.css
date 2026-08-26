@@ -211,9 +211,13 @@
 .yr-id { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; }
 .yr-id-logo { width: 36px; height: 36px; flex-shrink: 0; object-fit: cover; border-radius: 8px; }
 .yr-id-txt { min-width: 0; display: flex; flex-direction: column; }
+/* The full name always stays in the DOM for assistive technology; the bar only
+   ever shows two lines of it so one long name cannot grow the sticky header. */
 .yr-id-name {
   font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -0.02em;
   color: var(--yr-fog); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
 .yr-id-sub {
   font-size: 12px; line-height: 16px; color: var(--yr-faint);
@@ -223,7 +227,7 @@
 .yr-top-r { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 
 .yr-account-link, .yr-bal {
-  min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid transparent; border-radius: 8px;
 }
 .yr-account-link { gap: 8px; padding: 0 8px; color: var(--yr-mute); font-size: 12px; font-weight: 700; }
