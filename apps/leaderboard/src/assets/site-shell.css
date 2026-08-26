@@ -499,7 +499,7 @@
    values under the name, wide viewports line the same cells up in columns. */
 .yr-stand-head, .yr-srow {
   display: grid; align-items: center;
-  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) minmax(0, 10ch);
+  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto;
   grid-template-areas: "rank name val" "rank name prize";
   gap: 0 12px; padding: 6px 16px;
 }
@@ -517,7 +517,11 @@
    stays in the DOM as the link's accessible name; an extreme username only ever
    shows two lines so it cannot turn one row into a 250px block on a phone. */
 .yr-srow-name {
-  grid-area: name; min-width: 0; min-height: 44px; padding: 12px 0;
+  grid-area: name; min-width: 0; min-height: 44px;
+  /* Transparent borders, not padding, give the link its 44px touch height:
+     `overflow: hidden` clips at the padding edge, so vertical padding would
+     leak the top of the clamped-away line into the row. */
+  border-top: 12px solid transparent; border-bottom: 12px solid transparent;
   display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
   font-size: 15px; line-height: 20px; font-weight: 600; color: var(--yr-fog);
@@ -525,13 +529,16 @@
 }
 .yr-srow-name:hover { text-decoration-color: var(--yr-accent-readable); }
 .yr-srow-name:visited { color: var(--yr-mute); }
+/* The values stay secondary: on a phone they may claim only 10ch of the row, so
+   an unusually large figure wraps in its own cell instead of reserving half the
+   row and squeezing the player identity into a column two characters wide. */
 .yr-srow-val {
   grid-area: val; font-family: var(--yr-mono); font-size: 13px; color: var(--yr-fog);
-  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 10ch;
 }
 .yr-srow-prize {
   grid-area: prize; font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute);
-  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; max-width: 10ch;
 }
 /* The head of the board is rank typography, not a trophy shelf. */
 .yr-srow--top .yr-srow-rank, .yr-srow--first .yr-srow-rank { color: var(--yr-fog); font-size: 14px; font-weight: 700; }
@@ -632,6 +639,7 @@
     padding: 4px 24px;
   }
   .yr-srow-name { -webkit-line-clamp: 3; line-clamp: 3; }
+  .yr-srow-val, .yr-srow-prize { max-width: none; }
   .yr-stand-head[data-hide-prizes="true"], .yr-stand[data-hide-prizes="true"] .yr-srow {
     grid-template-columns: 3rem minmax(0, 1fr) 9rem;
     grid-template-areas: "rank name val";

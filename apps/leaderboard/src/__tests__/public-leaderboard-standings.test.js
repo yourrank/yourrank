@@ -137,9 +137,12 @@ describe("public leaderboard standings", () => {
     expect(nameRule).toContain("line-clamp: 2");
     expect(nameRule).toContain("-webkit-box-orient: vertical");
     expect(nameRule).toContain("overflow: hidden");
-    // Identity keeps the row's primary width; the value column is bounded.
+    // Identity keeps the row's primary width because a phone lets the secondary
+    // values claim at most 10ch instead of reserving half the row for a figure.
     const rowRule = css.match(/\.yr-stand-head, \.yr-srow \{([^}]*)\}/)[1];
-    expect(rowRule).toContain("minmax(0, 1fr) minmax(0, 10ch)");
+    expect(rowRule).toContain("grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto");
+    expect(css).toMatch(/\.yr-srow-val \{[^}]*max-width: 10ch/);
+    expect(css).toMatch(/\.yr-srow-prize \{[^}]*max-width: 10ch/);
   });
 
   it("leaves normal names and the wide layout alone", async () => {
@@ -150,6 +153,7 @@ describe("public leaderboard standings", () => {
     expect(css).toMatch(/\.yr-srow-name \{[^}]*line-height: 20px/);
     const wide = css.slice(css.indexOf("@media (min-width: 640px)"));
     expect(wide).toMatch(/\.yr-srow-name \{ -webkit-line-clamp: 3; line-clamp: 3; \}/);
+    expect(wide).toMatch(/\.yr-srow-val, \.yr-srow-prize \{ max-width: none; \}/);
     expect(wide).toMatch(/grid-template-areas: "rank name val prize"/);
   });
 
