@@ -9,6 +9,7 @@
 //         → run previous section's leave()
 //         → show local loading state
 //         → fetch /dashboard/_content?path=<route>
+//         → ensure the stylesheets that fragment declares are usable
 //         → inject HTML into the dynamic content region
 //         → dynamically import the boot module
 //         → call module.enter()
@@ -32,6 +33,90 @@ const BOOT_IMPORTERS = {
 
 // Cached boot modules so we don't re-import on every visit.
 const bootModuleCache = {};
+
+// In-flight/settled stylesheet requests keyed by absolute URL, so repeated
+// navigation reuses the one link element the first visit inserted.
+const styleRequests = new Map();
+
+// A stylesheet that never loads must not hang navigation forever.
+const STYLE_TIMEOUT_MS = 10000;
+
+/** Absolute form of a stylesheet URL, so equivalent spellings compare equal. */
+function styleKey(href) {
+  try { return new URL(href, location.href).href; } catch { return String(href); }
+}
+
+/** The stylesheet link already in the document for this URL, if any. */
+function existingStyleLink(key) {
+  return [...document.querySelectorAll('link[rel="stylesheet"][href]')]
+    .find((link) => styleKey(link.getAttribute("href")) === key) || null;
+}
+
+/**
+ * Resolve once `href` is usable in the document. An already-present sheet
+ * resolves immediately (its load event may have fired long ago); a newly
+ * inserted link resolves on load and rejects on error.
+ *
+ * @param {string} href
+ * @returns {Promise<void>}
+ */
+function ensureStyle(href) {
+  const key = styleKey(href);
+  const pending = styleRequests.get(key);
+  if (pending) return pending;
+
+  const existing = existingStyleLink(key);
+  // `link.sheet` is only non-null once the stylesheet has been parsed, which
+  // covers the cached case where no event is coming.
+  if (existing?.sheet) return Promise.resolve();
+
+  const request = new Promise((resolve, reject) => {
+    const link = existing || document.createElement("link");
+    let done = false;
+    const settle = (fn, arg) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      link.removeEventListener("load", onLoad);
+      link.removeEventListener("error", onError);
+      fn(arg);
+    };
+    const onLoad = () => settle(resolve);
+    const onError = () => settle(reject, new Error(`Failed to load ${href}`));
+    const timer = setTimeout(() => settle(reject, new Error(`Timed out loading ${href}`)), STYLE_TIMEOUT_MS);
+
+    link.addEventListener("load", onLoad);
+    link.addEventListener("error", onError);
+    if (!existing) {
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  });
+
+  // A failed load is not cached: the retry path gets a fresh attempt.
+  styleRequests.set(key, request);
+  request.catch(() => styleRequests.delete(key));
+  return request;
+}
+
+/**
+ * Ensure every stylesheet a fragment declares is usable before its markup is
+ * shown. Rejects if one fails, so the caller can use the section error path.
+ *
+ * @param {string[]} hrefs
+ */
+export function ensureStyles(hrefs) {
+  const seen = new Set();
+  const unique = (hrefs || []).filter((href) => {
+    if (!href) return false;
+    const key = styleKey(href);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return Promise.all(unique.map((href) => ensureStyle(href))).then(() => undefined);
+}
 
 let currentController = null;
 let currentLeave = null;
@@ -108,6 +193,12 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
 
     // Stale-response guard: if the user navigated again while we were fetching,
     // discard this result entirely.
+    if (myToken !== navToken) return false;
+
+    // The fragment's markup is styled by the destination's own stylesheets,
+    // so they have to be usable before it becomes visible — otherwise the
+    // section paints unstyled until the CSS arrives.
+    await ensureStyles(data.styles);
     if (myToken !== navToken) return false;
 
     // Inject the fragment HTML. Links inside the fragment (sub-tabs and

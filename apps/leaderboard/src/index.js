@@ -182,6 +182,29 @@ export function resolveFragment(targetPath) {
   return null;
 }
 
+/**
+ * Render a dynamic section's content fragment plus the delivery metadata the
+ * persistent shell needs. Title and stylesheets both come from the page's own
+ * config — the same owner the full document renders from — so direct and SPA
+ * delivery cannot drift apart.
+ *
+ * Exported for the delivery-parity tests.
+ *
+ * @param {object} pageObj  Entry from PAGES (Component + config/configFor)
+ * @param {{ user?: object, tab?: string }} opts
+ * @returns {Promise<{ html: string, title: string, styles: string[] }>}
+ */
+export async function renderFragmentPayload(pageObj, { user, tab } = {}) {
+  let node = pageObj.Component({ user, tab, fragment: true });
+  if (node instanceof Promise) node = await node;
+  const config = pageObj.configFor ? pageObj.configFor({ user, tab }) : pageObj.config;
+  return {
+    html: node.toString(),
+    title: config?.title || "Dashboard · YourRank",
+    styles: Array.isArray(config?.styles) ? config.styles : [],
+  };
+}
+
 function findProfilePlayer(data, rawName) {
   const name = decodeURIComponent(rawName).trim();
   const players = (data.players || []).slice().sort((a, b) => (Number(b.wagered) || 0) - (Number(a.wagered) || 0));
@@ -802,11 +825,12 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           if (!fragment) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", ...csrfHeader } });
           const pageObj = PAGES[fragment.pageKey];
           if (!pageObj?.Component) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", ...csrfHeader } });
-          let node = pageObj.Component({ user, tab: fragment.tab, fragment: true });
-          if (node instanceof Promise) node = await node;
-          const html = node.toString();
-          const title = (pageObj.configFor ? pageObj.configFor({ user, tab: fragment.tab }) : pageObj.config)?.title || "Dashboard · YourRank";
-          return new Response(JSON.stringify({ html, title }), {
+          // The destination's own page config is the single owner of its style
+          // requirements, so the fragment reports the same list the full
+          // document would render. The shell already has the baseline
+          // stylesheets; the client dedupes against what is in the document.
+          const payload = await renderFragmentPayload(pageObj, { user, tab: fragment.tab });
+          return new Response(JSON.stringify(payload), {
             headers: {
               "content-type": "application/json",
               ...csrfHeader,
