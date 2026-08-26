@@ -1243,6 +1243,12 @@ html{color-scheme:light}
 .vd-card-cost{font-size:1.4rem;font-weight:700}
 .vd-redemption-row .vd-card-side{justify-content:center}
 .vd-drop-code{width:120px;text-transform:uppercase}
+/* Below ~360px the cost column alone needs most of the row, so stack instead of
+   squeezing the title into a one-character column. */
+@media (max-width:360px){
+  .vd-card-row{flex-direction:column;align-items:stretch}
+  .vd-card-side{text-align:left;align-items:flex-start}
+}
 /* Viewer errors must not be colour-only. */
 #vd-login-status.error::before,#vd-account-status.error::before,#vd-boards-status.error::before,#vd-site-status.error::before,#vd-drop-status.error::before{content:"⚠ "}
 #vd-account-status:empty,#vd-boards-status:empty,#vd-site-status:empty{margin:0}
