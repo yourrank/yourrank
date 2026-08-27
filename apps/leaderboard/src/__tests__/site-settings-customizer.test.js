@@ -85,7 +85,7 @@ describe("markup: Site settings answers what viewers see", () => {
       .flatMap((match) => [...match[1].matchAll(/value="([^"]+)"/g)].map((option) => option[1]));
     expect(options.length).toBeGreaterThan(0);
     expect(options.filter((font) => !FONT_KEYS.includes(font))).toEqual([]);
-    expect(customize).toContain("Only fonts your public site can serve are listed.");
+    expect(customize).toContain("Text style applies to creator names and display headings. Body text stays easy to read.");
   });
 
   it("keeps navigation, links and the public address on the same page", () => {
@@ -108,15 +108,15 @@ describe("markup: Site settings answers what viewers see", () => {
     expect(preview).toBeGreaterThanOrEqual(0);
     expect(preview).toBeLessThan(controls);
     // Desktop reads controls-first; the sticky preview sits beside them.
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-customize-controls {\n    order: -1;\n  }");
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-customize-preview {\n    position: sticky;");
+    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.v3-customize-controls \{\r?\n {4}order: -1;\r?\n {2}\}/);
+    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.v3-customize-preview \{\r?\n {4}position: sticky;/);
     // The save bar follows the tabs so an edit at the top of Customize
     // surfaces Save without scrolling; sticky CSS keeps it available while
     // scrolling further down.
     const saveBar = html.indexOf('id="settingsSaveBar"');
     expect(saveBar).toBeGreaterThan(html.indexOf('data-settings-tab="danger"'));
     expect(saveBar).toBeLessThan(html.indexOf('data-settings-panel="customize"'));
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-settings-save {\n  position: sticky;");
+    expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.v3-settings-save \{\r?\n {2}position: sticky;/);
     expect(html).toMatch(/id="settingsSave" type="button" disabled="">Save changes<\/button>/);
     // One save action only.
     expect(html.match(/id="settingsSave"/g)).toHaveLength(1);

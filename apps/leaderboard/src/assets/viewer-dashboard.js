@@ -11,6 +11,7 @@ function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function fmtDate(iso) { return iso ? new Date(iso).toLocaleString() : "—"; }
 function fmtNum(n) { return Number(n || 0).toLocaleString("en-US"); }
+function initial(value) { return Array.from(String(value || "").trim())[0]?.toUpperCase() || "Y"; }
 
 function csrf() {
   const m = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
@@ -216,12 +217,15 @@ function renderAccount() {
   if (!v) return;
   const name = v.discordUsername || v.kickUsername || "Member";
   $("vd-username").textContent = name;
+  $("vd-avatar-fallback").textContent = initial(name);
   if (v.avatarUrl) {
     $("vd-avatar").src = v.avatarUrl;
     $("vd-avatar").alt = name;
     $("vd-avatar").hidden = false;
+    $("vd-avatar-fallback").hidden = true;
   } else {
     $("vd-avatar").hidden = true;
+    $("vd-avatar-fallback").hidden = false;
   }
   const providerName = v.provider === "kick" ? "Kick" : v.provider === "discord" ? "Discord" : "YourRank";
   const linkedAt = v.provider === "kick" ? v.kickLinkedAt : v.provider === "discord" ? v.discordLinkedAt : null;
@@ -234,6 +238,7 @@ function renderBoards() {
   $("vd-boards-empty").hidden = boards.length > 0;
   $("vd-boards").innerHTML = boards.map((b) => `
     <div class="vd-card-row">
+      <span class="vd-site-mark" aria-hidden="true">${esc(initial(b.name || b.slug))}</span>
       <div class="vd-card-main">
         <div class="vd-card-title">${esc(b.name || b.slug)}</div>
         <div class="hint">${fmtNum(b.balance)} free credits${b.blocked ? " · ordering disabled" : ""}</div>

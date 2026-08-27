@@ -79,9 +79,42 @@ function credits({ balance = 1234567 } = {}) {
   });
 }
 
+function signedOut(section) {
+  return renderSite({
+    r: record,
+    section,
+    viewer: null,
+    viewerData: null,
+    opts,
+  });
+}
+
+function zeroCredits() {
+  return renderSite({
+    r: record,
+    section: "me",
+    viewer: { kick_username: "member" },
+    viewerData: {
+      viewerOnSite: { balance: 0, blocked: false },
+      shopItems: [],
+      ledger: [],
+      redemptions: [],
+    },
+    opts,
+  });
+}
+
 /* ── a creator's Rewards page ─────────────────────────────────────── */
 
 describe("a creator's Rewards page", () => {
+  it("uses the header as the only sign-in owner in the empty signed-out state", async () => {
+    const html = await signedOut("shop");
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).not.toContain('class="yr-vhead-aside"');
+    expect(html).toContain("Sign in from the header to use your credits.");
+    expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
+  });
+
   it("is a plain list of rewards with one action each, not a shop", async () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
@@ -161,9 +194,45 @@ describe("a creator's Rewards page", () => {
   });
 });
 
+describe("the creator home credit state", () => {
+  it("keeps the signed-out introduction whole and leaves sign-in to the header", async () => {
+    const html = await signedOut("home");
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).toContain('class="yr-home-top yr-home-top--solo"');
+    expect(html).not.toContain("yr-vnote");
+  });
+
+  it("treats a signed-in zero as quiet status rather than spending power", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "home",
+      viewer: { kick_username: "member" },
+      viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: [] },
+      opts,
+    });
+    expect(html).toContain('class="yr-vnote is-zero"');
+    expect(html).toContain(">View rewards</a>");
+    expect(html).not.toContain(">Spend credits</a>");
+  });
+});
+
 /* ── a creator's My credits page ──────────────────────────────────── */
 
 describe("a creator's My credits page", () => {
+  it("explains the signed-out state without repeating the header sign-in action", async () => {
+    const html = await signedOut("me");
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).not.toContain('class="yr-vhead-aside"');
+    expect(html).toContain("Sign in from the header to see your balance, activity and orders");
+  });
+
+  it("keeps a signed-in zero balance and empty activity compact", async () => {
+    const html = await zeroCredits();
+    expect(html).toContain('class="yr-vbal is-zero"');
+    expect(html).toContain('class="yr-vcols yr-vcols--empty"');
+    expect((html.match(/class="yr-empty /g) || []).length).toBe(2);
+  });
+
   it("shows the balance, activity and orders without a stat dashboard", async () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
@@ -222,15 +291,19 @@ describe("the global account page", () => {
   });
 
   it("keeps one identity row, your sites, and one creator detail", () => {
+    expect(page).toContain('<main class="wrap cr-wrap vd-account-shell"');
     expect(page).toContain('id="vd-avatar"');
+    expect(page).toContain('id="vd-avatar-fallback"');
     expect(page).toContain('id="vd-username"');
     expect(page).toContain('id="vd-identity"');
     expect(page).toContain('id="vd-logout"');
+    expect(page).toContain('class="vd-profile-actions"');
     expect(page).toContain(">Your sites<");
     expect(page).toContain('id="vd-back" type="button">Back to your sites<');
     expect(page).toContain('id="vd-site-visit"');
     expect(page).toContain('id="vd-site-balance"');
     expect(page).toContain("Cancelled and refunded both mean the credits went back to your balance.");
+    expect(clientSource).toContain('class="vd-site-mark"');
   });
 
   it("keeps ?site=<slug> history, with no hash route and no router library", () => {

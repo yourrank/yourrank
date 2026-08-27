@@ -4,7 +4,8 @@ import { leaderboardPageHtml } from "@yourrank/shared/page-shell";
 export const viewerDashboardPage = leaderboardPageHtml({
   title: "Your sites & account · YourRank",
   canonical: "https://yourrank.site/me",
-  mainClass: "wrap cr-wrap",
+  bodyClass: "viewer-account-page",
+  mainClass: "wrap cr-wrap vd-account-shell",
   nav: false,
   // dialog.js first: both are deferred and run in order, so window.YRDialog
   // exists before the viewer client asks for a confirmation.
@@ -20,7 +21,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
   <div id="vd-loading" class="ui-loading" hidden><div class="ui-loading__spinner"></div></div>
   <div class="vd-head">
     <h1 class="vd-h1" id="vd-title">Your account</h1>
-    <p class="vd-sub">Your YourRank login and your free credits on every creator you've joined. Credits are loyalty points: no purchase, no cash value, no cashout.</p>
+    <p class="vd-sub">Your login and free credits across every creator you've joined. Credits are loyalty points: no purchase, no cash value, no cashout.</p>
   </div>
 
   <section class="card" id="vd-login-card">
@@ -35,16 +36,17 @@ export const viewerDashboardPage = leaderboardPageHtml({
 
   <section class="vd-identity-card" id="vd-profile" hidden>
     <div class="vd-profile-head">
-      <img id="vd-avatar" class="vd-avatar" src="" alt="" hidden />
+      <img id="vd-avatar" class="vd-avatar" alt="" hidden />
+      <span id="vd-avatar-fallback" class="vd-avatar-fallback" aria-hidden="true">M</span>
       <div class="vd-profile-txt">
         <h2 id="vd-username">Member</h2>
         <p class="card-sub" id="vd-identity">Loading identity…</p>
       </div>
-      <div class="vd-profile-actions">
+      <div class="vd-profile-actions" id="vd-wrong-account" hidden>
+        <button class="btn btn--ghost btn--sm" id="vd-switch" type="button">Use a different login</button>
         <button class="btn btn--sm" id="vd-logout" type="button">Sign out</button>
       </div>
     </div>
-    <p class="hint" id="vd-wrong-account" hidden>Wrong account? <button class="btn btn--ghost btn--sm" id="vd-switch" type="button">Use a different login</button></p>
     <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
   </section>
 
