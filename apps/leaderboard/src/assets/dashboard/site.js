@@ -657,10 +657,14 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
       // Site settings previews what viewers see, so the editor's
       // click-to-edit overlay stays with the editor that owns those fields.
       if (mount.dataset.previewEdit === "0") params.edit = "0";
+      // Without a named frame the POST would open a new window, so a mount
+      // that names no target renders nothing rather than something wrong.
+      const target = mount.dataset.previewTarget || iframe.name;
+      if (!target) return;
       if (!local.form) {
         local.form = document.createElement("form");
         local.form.method = "post";
-        local.form.target = mount.dataset.previewTarget || iframe.name;
+        local.form.target = target;
         local.form.hidden = true;
         const draftInput = document.createElement("input");
         draftInput.type = "hidden";
@@ -1040,9 +1044,7 @@ subscribe((keys) => {
     renderEditorTimestamps();
     renderBoardStatus();
     // A disabled button is not an explanation; the strip says why it is quiet.
-    setSaveStatusText(state._dirty
-      ? "You have unsaved changes."
-      : "Navigation switches save immediately. Use Save changes for everything else.");
+    setSaveStatusText(state._dirty ? "You have unsaved changes." : cleanSaveStatusText());
   }
   if (keys.includes("draft")) updateDesignPreview();
 });
@@ -1835,6 +1837,17 @@ let _saving = false;
 
 function saveButtons() {
   return [$("save"), $("settingsSave")].filter(Boolean);
+}
+
+/**
+ * What the quiet save strip says, which depends on which settings tab the
+ * creator is on: only Customize has controls that save on their own.
+ */
+export function cleanSaveStatusText() {
+  const active = document.querySelector("[data-settings-tab].is-on")?.dataset.settingsTab;
+  return active === "notifications"
+    ? "Use Save changes after updating notification destinations."
+    : "Navigation switches save immediately. Use Save changes for everything else.";
 }
 
 /** Mirror the save status where the creator is looking, not only in the toast. */

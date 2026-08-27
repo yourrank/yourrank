@@ -4,7 +4,7 @@ import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
-import { refreshDesignPreview, renderSitePublicAddress } from "./site.js";
+import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress } from "./site.js";
 
 async function jsonPost(path, body) {
   const res = await fetch(path, {
@@ -267,11 +267,7 @@ function wireSettingsTabs(initialTab = "customize") {
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== key; });
     if (saveBar) saveBar.hidden = !["customize", "notifications"].includes(key);
-    if (saveText && !state._dirty) {
-      saveText.textContent = key === "customize"
-        ? "Navigation switches save immediately. Use Save changes for everything else."
-        : "Use Save changes after updating notification destinations.";
-    }
+    if (saveText && !state._dirty) saveText.textContent = cleanSaveStatusText();
     // The preview only renders while its section is on screen, so entering the
     // tab that owns it is what asks for the first render.
     if (key === "customize") refreshDesignPreview();
