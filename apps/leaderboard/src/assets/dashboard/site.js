@@ -1008,12 +1008,6 @@ function updateThemeSelection() {
   if (state.CURRENT_BRANDING.accentA) $("c_a").value = state.CURRENT_BRANDING.accentA;
   if (state.CURRENT_BRANDING.accentB) $("c_b").value = state.CURRENT_BRANDING.accentB;
   const font = $("f_font"); if (font) font.value = state.CURRENT_BRANDING.font || "Inter";
-  const activeTpl = state.CURRENT_BRANDING.template || "cyber_arcade";
-  document.querySelectorAll("#templateSelectorGrid [data-template]").forEach((btn) => {
-    const isSel = btn.dataset.template === activeTpl;
-    btn.classList.toggle("is-selected", isSel);
-    btn.setAttribute("aria-pressed", String(isSel));
-  });
   renderColorPresets();
   updateDesignPreview();
 }
@@ -1070,6 +1064,9 @@ export function applyTheme(accentA, accentB, label, font = null) {
   markDirty();
 }
 
+// `template` is not a creator-facing choice: the public viewer is one coherent
+// system. The stored value still travels render → collect → save untouched so
+// legacy rows keep whatever the backend gave them.
 export function renderBranding(br) {
   state.CURRENT_BRANDING = {
     template: br.template || "cyber_arcade",
@@ -1165,17 +1162,6 @@ $("logoFile")?.addEventListener("change", () => {
 $("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Custom colors"));
 $("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accentA, COLOR_PRESETS[0].accentB, COLOR_PRESETS[0].name));
 $("f_font")?.addEventListener("change", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Font"));
-
-document.querySelectorAll("#templateSelectorGrid [data-template]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const tpl = btn.dataset.template;
-    state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, template: tpl };
-    updateThemeSelection();
-    markDirty();
-    const status = $("status");
-    if (status) status.textContent = `Template switched — click Save changes to publish.`;
-  });
-});
 
 export function renderNotifications(n) {
   const paid = state.ME.plan !== "free";
@@ -1331,18 +1317,34 @@ function setPublicDomainSummary(text) {
   if (el) el.textContent = text;
 }
 
+// Only a domain the backend calls active is a public address; a pending, saved
+// or failed one would send viewers nowhere, so it never replaces the default.
+let _activePublicDomain = null;
+
+/** The one resolved public URL every address affordance reads. */
+export function publicSiteUrl() {
+  if (_activePublicDomain) return `https://${_activePublicDomain}/`;
+  return `${location.origin}/${state.SLUG}`;
+}
+
+/** Domain truth arrives after first paint; it repaints the address in place. */
+export function setActivePublicDomain(domain) {
+  _activePublicDomain = domain || null;
+  renderSitePublicAddress();
+}
+
 /** Publish-independent facts about where the site lives, stated once. */
 export function renderSitePublicAddress() {
   const card = $("sitePublicAddressCard");
-  if (!card || !state.SLUG) return;
-  const publicUrl = `${location.origin}/${state.SLUG}`;
+  if (!card || (!state.SLUG && !_activePublicDomain)) return;
+  const publicUrl = publicSiteUrl();
   const urlEl = $("sitePublicUrl");
   if (urlEl) urlEl.textContent = publicUrl;
   for (const id of ["sitePublicOpen", "sitePublicSiteAction"]) {
     const link = $(id);
     if (link) {
       link.href = publicUrl;
-      link.title = `${location.host}/${state.SLUG}`;
+      link.title = publicUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
     }
   }
   const copy = $("sitePublicCopy");
@@ -1350,10 +1352,13 @@ export function renderSitePublicAddress() {
   if (copy && !copy._wired) {
     copy._wired = true;
     copy.addEventListener("click", async () => {
-      const copied = await copyToClipboard(publicUrl);
+      // Read the URL at click time so a domain that went active mid-session
+      // is the one that gets copied.
+      const url = publicSiteUrl();
+      const copied = await copyToClipboard(url);
       flashButton(copy, copied ? "Copied!" : "Copy failed");
       // Colour and a flashing label are not a message: say what happened.
-      if (copyStatus) copyStatus.textContent = copied ? `Copied ${publicUrl} to your clipboard.` : "Could not copy the link. Select it and copy manually.";
+      if (copyStatus) copyStatus.textContent = copied ? `Copied ${url} to your clipboard.` : "Could not copy the link. Select it and copy manually.";
     });
   }
 }
@@ -1408,6 +1413,7 @@ export async function renderDomain() {
       }
       if (manageStatus) manageStatus.textContent = stateMessages[domainState] || "This domain is connected to your site.";
       setPublicDomainSummary(`${data.customDomain} — ${(stateLabels[domainState] || "Connected").toLowerCase()}.`);
+      setActivePublicDomain(domainState === "active" ? data.customDomain : null);
       if ($("domainManageExpiry")) {
         $("domainManageExpiry").textContent = data.order?.expires_at ? new Date(data.order.expires_at).toLocaleDateString() : "Managed externally";
       }
@@ -1489,6 +1495,7 @@ export async function renderDomain() {
       }
     } else {
       $("domainManageCard")?.setAttribute("hidden", "true");
+      setActivePublicDomain(null);
       if (overviewTitle) overviewTitle.textContent = "No custom domain";
       if (overviewText) overviewText.textContent = "Your default yourrank.site address is active. Connect a domain you own or search for a new one below.";
       if (overviewStatus) overviewStatus.textContent = "Not connected";
@@ -1498,6 +1505,7 @@ export async function renderDomain() {
     }
   } catch (err) {
     logError("domain-status", err);
+    setActivePublicDomain(null);
     setPublicDomainSummary("We could not check your domain. Open the Domain tab to retry.");
     if (overviewTitle) overviewTitle.textContent = "Domain status unavailable";
     if (overviewText) overviewText.textContent = "We could not check the current domain. Try again before making changes.";

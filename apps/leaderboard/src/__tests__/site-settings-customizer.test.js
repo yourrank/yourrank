@@ -3,7 +3,7 @@
 // public site. These tests pin the parts a creator depends on — labelled
 // controls, a viewer-accurate preview mount, an honest save state — so the
 // section cannot silently lose them.
-import { beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { DashboardContent } from "../pages/dashboard.jsx";
 import { FONT_KEYS } from "../site.js";
@@ -61,6 +61,20 @@ describe("markup: Site settings answers what viewers see", () => {
     expect(customize).toContain("Used for active navigation, buttons and highlights.");
     expect(customize).toContain('<details class="advanced-colors"><summary>Custom colors</summary>');
     expect(customize).toContain('<label for="c_a" class="sr-only">Accent color start</label>');
+  });
+
+  it("offers no template marketplace, only the supported brand controls", () => {
+    // The public viewer is one coherent system; three radically different
+    // "templates" would promise products that do not exist.
+    for (const gone of ["templateSelectorGrid", "template-select-card", "data-template=", "Cyber Arcade", "Esports Arena", "Creator Glass", "glassmorphism"]) {
+      expect(customize).not.toContain(gone);
+    }
+    expect(dashboardCss).not.toContain("template-select");
+    expect(siteJs).not.toContain("templateSelectorGrid");
+    expect(customize).toContain("Your logo, accent color and text style.");
+    // The stored template value still rides through save for legacy rows.
+    expect(siteJs).toContain('template: state.CURRENT_BRANDING?.template || "cyber_arcade"');
+    expect(siteJs).toContain('template: br.template || "cyber_arcade"');
   });
 
   it("offers only fonts the public site can serve", () => {
@@ -296,5 +310,53 @@ describe("behavior: save state is honest about unsaved changes", () => {
     expect(url.textContent).toBe("http://localhost/kick-cup");
     expect(open.href).toBe("http://localhost/kick-cup");
     expect(action.href).toBe("http://localhost/kick-cup");
+  });
+});
+
+describe("behavior: the public address follows domain truth", () => {
+  function addressElements() {
+    elements.clear();
+    register("sitePublicAddressCard");
+    register("sitePublicCopy");
+    state.SLUG = "kick-cup";
+    return {
+      url: register("sitePublicUrl"),
+      open: register("sitePublicOpen"),
+      action: register("sitePublicSiteAction"),
+    };
+  }
+
+  afterEach(() => { site.setActivePublicDomain(null); });
+
+  it("uses the default YourRank address with no custom domain", () => {
+    const { url, open, action } = addressElements();
+    site.setActivePublicDomain(null);
+    expect(site.publicSiteUrl()).toBe("http://localhost/kick-cup");
+    expect(url.textContent).toBe("http://localhost/kick-cup");
+    expect(open.href).toBe("http://localhost/kick-cup");
+    expect(action.href).toBe("http://localhost/kick-cup");
+  });
+
+  it("promotes an active custom domain to the primary public URL everywhere", () => {
+    const { url, open, action } = addressElements();
+    site.setActivePublicDomain("cup.gg");
+    expect(site.publicSiteUrl()).toBe("https://cup.gg/");
+    // Address, Open site and the header action resolve to one URL.
+    expect(url.textContent).toBe("https://cup.gg/");
+    expect(open.href).toBe("https://cup.gg/");
+    expect(action.href).toBe("https://cup.gg/");
+    expect(open.title).toBe("cup.gg");
+  });
+
+  it("never advertises a domain the backend has not activated", () => {
+    const { url, action } = addressElements();
+    // A pending, saved or failed domain would send viewers nowhere.
+    site.setActivePublicDomain(null);
+    expect(url.textContent).toBe("http://localhost/kick-cup");
+    expect(action.href).toBe("http://localhost/kick-cup");
+    // Only the "active" branch of the domain status feeds the resolver.
+    expect(siteJs).toContain('setActivePublicDomain(domainState === "active" ? data.customDomain : null)');
+    // Every address surface reads the resolver, not location.origin directly.
+    expect(siteJs.match(/publicSiteUrl\(\)/g).length).toBeGreaterThanOrEqual(2);
   });
 });

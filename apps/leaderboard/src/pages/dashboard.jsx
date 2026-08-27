@@ -364,7 +364,7 @@ function BoardSettingsSection({ active } = {}) {
           </div>
         </div>
         <div class="v3-settings-card" id="brandCard">
-          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your logo, colors, template and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
+          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
           <div id="brandBody">
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="logoFile">Logo</label>
@@ -379,26 +379,6 @@ function BoardSettingsSection({ active } = {}) {
               <details class="advanced-colors"><summary>Custom colors</summary>
               <div class="color-row"><label for="c_a" class="sr-only">Accent color start</label><input type="color" id="c_a" value="#5b5bf5" /><label for="c_b" class="sr-only">Accent color end</label><input type="color" id="c_b" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply colors</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset palette</button></div>
               </details>
-            </div>
-            <div class="v3-settings-field">
-              <span class="v3-settings-label" id="siteTemplateLabel">Template</span>
-              <div class="template-selector-grid" id="templateSelectorGrid" role="group" aria-labelledby="siteTemplateLabel">
-                <button class="template-select-card is-selected" type="button" data-template="cyber_arcade">
-                  <div class="template-select-badge">🎮 Default</div>
-                  <strong>Cyber Arcade</strong>
-                  <span>High-contrast OLED dark, neon glow &amp; gaming cards</span>
-                </button>
-                <button class="template-select-card" type="button" data-template="esports_pro">
-                  <div class="template-select-badge">🏆 Tournament</div>
-                  <strong>Esports Arena</strong>
-                  <span>Stadium hierarchy, competitive rankings &amp; podiums</span>
-                </button>
-                <button class="template-select-card" type="button" data-template="creator_glass">
-                  <div class="template-select-badge">💎 Boutique</div>
-                  <strong>Creator Glass</strong>
-                  <span>Frosted glassmorphism, soft glow &amp; rewards focus</span>
-                </button>
-              </div>
             </div>
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="f_font">Text style</label>
