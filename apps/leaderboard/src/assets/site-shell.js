@@ -276,13 +276,7 @@
         // The button disappears with the last page, so the status it leaves
         // behind takes the focus instead of dropping it back to the document —
         // without scrolling the viewer away from the rows they just loaded.
-        if (loadMore.hidden && loadMoreStatus && typeof loadMoreStatus.focus === "function") {
-          var restoreX = window.scrollX;
-          var restoreY = window.scrollY;
-          loadMoreStatus.focus({ preventScroll: true });
-          // Browsers that ignore preventScroll get the viewport put back.
-          if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);
-        }
+        if (loadMore.hidden && loadMoreStatus) focusWithoutScroll(loadMoreStatus);
       }).catch(function () {
         if (requestId !== pageRequest || query !== activeSearch) return;
         loadMore.disabled = false;
@@ -292,6 +286,16 @@
       });
     };
     loadMore.addEventListener("click", loadNextPage);
+  }
+
+  // Focus continuity without a viewport jump: the replacement element takes
+  // focus, and browsers that ignore preventScroll get the viewport put back.
+  function focusWithoutScroll(el) {
+    if (!el || typeof el.focus !== "function") return;
+    var restoreX = window.scrollX;
+    var restoreY = window.scrollY;
+    el.focus({ preventScroll: true });
+    if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);
   }
 
   // ── Authenticated public actions ────────────────────────────────────
@@ -307,52 +311,117 @@
     redeemStatus.textContent = message || "";
     redeemStatus.classList.toggle("is-error", !!isError);
   };
+
+  // The confirmation is the viewer's own dialog, not the browser's: it can name
+  // the reward, its cost in free credits and what is left afterwards. A native
+  // <dialog> owns the focus trap, Escape and background inertness; cancelling
+  // or pressing Escape sends nothing and returns focus to the button used.
+  var confirmDialog = document.getElementById("yr-order-confirm");
+  var confirmDetail = confirmDialog && confirmDialog.querySelector("[data-order-detail]");
+  var confirmOk = confirmDialog && confirmDialog.querySelector("[data-order-confirm]");
+  var confirmCancel = confirmDialog && confirmDialog.querySelector("[data-order-cancel]");
+  var pendingConfirm = null;
+  var creditBalance = function () {
+    var el = document.querySelector("[data-credit-balance]");
+    var value = el ? Number(el.dataset.creditBalance) : NaN;
+    return Number.isFinite(value) ? value : null;
+  };
+  if (confirmDialog) {
+    confirmDialog.addEventListener("close", function () {
+      var resolve = pendingConfirm;
+      pendingConfirm = null;
+      if (resolve) resolve(confirmDialog.returnValue === "order");
+    });
+    if (confirmCancel) confirmCancel.addEventListener("click", function () { confirmDialog.close("cancel"); });
+    if (confirmOk) confirmOk.addEventListener("click", function () { confirmDialog.close("order"); });
+  }
+  var askToOrder = function (name, cost) {
+    if (!confirmDialog || !confirmDialog.showModal) {
+      setRedeemStatus("Ordering is unavailable right now. Reload the page and try again.", true);
+      return Promise.resolve(false);
+    }
+    var balance = creditBalance();
+    var detail = "Order “" + name + "” for " + Number(cost).toLocaleString("en-US") + " free credits.";
+    if (balance !== null && balance >= Number(cost)) {
+      detail += " You'd have " + (balance - Number(cost)).toLocaleString("en-US") + " credits left.";
+    }
+    if (confirmDetail) confirmDetail.textContent = detail;
+    return new Promise(function (resolve) {
+      pendingConfirm = resolve;
+      confirmDialog.returnValue = "";
+      confirmDialog.showModal();
+      // Cancel takes the initial focus so a second Enter keypress on the reward
+      // button cannot spend credits by accident.
+      if (confirmCancel) confirmCancel.focus();
+      else if (confirmOk) confirmOk.focus();
+    });
+  };
+
   document.querySelectorAll("[data-redeem]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var label = btn.textContent;
       var name = btn.dataset.rewardName || "this reward";
       var cost = btn.dataset.rewardCost || "0";
-      if (!window.confirm("Order “" + name + "” for " + cost + " credits?")) return;
-      var focusTarget = btn;
-      btn.disabled = true;
-      btn.textContent = "Placing order…";
-      setRedeemStatus("Ordering “" + name + "”…");
-      var idempotencyKey = btn.dataset.redeemKey;
-      if (!idempotencyKey) {
-        idempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : Date.now() + "-" + Math.random().toString(36).slice(2);
-        btn.dataset.redeemKey = idempotencyKey;
-      }
-      fetch("/api/viewer/redeem", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
-        body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem, idempotencyKey: idempotencyKey }),
-      })
-        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
-        .then(function (r) {
-          if (r.ok && r.data.ok) {
-            delete btn.dataset.redeemKey;
-            btn.textContent = "Requested";
-            btn.classList.add("is-success");
-            setRedeemStatus("Order placed: “" + name + "”. " + cost + " credits deducted.");
-            focusTarget.focus();
-          } else {
-            btn.textContent = label;
-            btn.disabled = false;
-            setRedeemStatus(r.data.error || "Couldn’t place that order. Please try again.", true);
-            focusTarget.focus();
-          }
-        })
-        .catch(function () {
-          btn.textContent = label;
-          btn.disabled = false;
-          setRedeemStatus("Network error. Your credits were not confirmed as deducted; please try again.", true);
-          focusTarget.focus();
-        });
+      askToOrder(name, cost).then(function (confirmed) {
+        if (confirmed) placeOrder(btn, label, name, cost);
+      });
     });
   });
+
+  function placeOrder(btn, label, name, cost) {
+    var recover = function (message) {
+      btn.textContent = label;
+      btn.disabled = false;
+      btn.removeAttribute("aria-busy");
+      setRedeemStatus(message, true);
+      focusWithoutScroll(btn);
+    };
+    btn.disabled = true;
+    btn.setAttribute("aria-busy", "true");
+    btn.textContent = "Placing order…";
+    setRedeemStatus("Ordering “" + name + "”…");
+    var idempotencyKey = btn.dataset.redeemKey;
+    if (!idempotencyKey) {
+      idempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Date.now() + "-" + Math.random().toString(36).slice(2);
+      btn.dataset.redeemKey = idempotencyKey;
+    }
+    fetch("/api/viewer/redeem", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+      body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem, idempotencyKey: idempotencyKey }),
+    })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (r) {
+        if (r.ok && r.data.ok) {
+          delete btn.dataset.redeemKey;
+          btn.textContent = "Ordered";
+          btn.removeAttribute("aria-busy");
+          btn.classList.add("is-success");
+          setRedeemStatus("Order placed: “" + name + "”. " + cost + " free credits used. The streamer fulfils it by hand.");
+          if (typeof r.data.balance === "number") updateBalance(r.data.balance);
+          // The button is spent, so the status region keeps focus on the page.
+          focusWithoutScroll(redeemStatus || btn);
+        } else {
+          recover(r.data.error || "Couldn’t place that order. Please try again.");
+        }
+      })
+      .catch(function () {
+        recover("Network error. Your credits were not confirmed as deducted; please try again.");
+      });
+  }
+
+  function updateBalance(balance) {
+    document.querySelectorAll("[data-credit-balance]").forEach(function (el) {
+      el.dataset.creditBalance = String(balance);
+      var text = Number(balance).toLocaleString("en-US");
+      var num = el.querySelector("[data-credit-balance-num]") || el;
+      num.textContent = text;
+      if (el.dataset.creditBalanceLabel) el.setAttribute("aria-label", el.dataset.creditBalanceLabel + ": " + text);
+    });
+  }
 
   // ── Table overflow affordance ───────────────────────────────────────
   document.querySelectorAll("[data-table-wrap]").forEach(function (wrap) {

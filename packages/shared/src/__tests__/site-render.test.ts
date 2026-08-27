@@ -58,11 +58,16 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("VIP");
     expect(html).not.toContain("Active Streak");
     expect(html).not.toContain("Events & Duels");
-    expect(html).toContain("Lifetime Earned");
-    expect(html).toContain("Lifetime Spent");
-    expect(html).toContain("1,000 CR");
-    expect(html).toContain("300 CR");
-    expect(html).toContain("2 orders");
+    // The page states the viewer's own balance, activity and orders — no stat
+    // grid and no analytics reading of a loyalty balance.
+    expect(html).toContain("Free loyalty credits on Ampersand &amp; Board.");
+    expect(html).toContain(">500</span> <span class=\"yr-vbal-unit\">free credits");
+    expect(html).toContain("Credits earned");
+    expect(html).toContain("+100");
+    expect(html).toContain("Pending");
+    expect(html).toContain("Fulfilled");
+    expect(html).not.toContain("yr-gamer-stats-grid");
+    expect(html).not.toContain("Credits / 7d");
   });
 
   it("covers the reconciled public-board behavior", async () => {

@@ -18,12 +18,9 @@ export const viewerDashboardPage = leaderboardPageHtml({
 </div></header>
 
   <div id="vd-loading" class="ui-loading" hidden><div class="ui-loading__spinner"></div></div>
-  <div class="an-head">
-    <div>
-      <div class="an-eyebrow">Your account</div>
-      <h1 class="an-title" id="vd-title">Your sites &amp; account</h1>
-      <p class="an-sub">Your YourRank account, plus your credits and orders on every streamer site you've joined.</p>
-    </div>
+  <div class="vd-head">
+    <h1 class="vd-h1" id="vd-title">Your account</h1>
+    <p class="vd-sub">Your YourRank login and your free credits on every creator you've joined. Credits are loyalty points: no purchase, no cash value, no cashout.</p>
   </div>
 
   <section class="card" id="vd-login-card">
@@ -36,10 +33,10 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <p class="status" id="vd-login-status" role="status" aria-live="polite"></p>
   </section>
 
-  <section class="card" id="vd-profile" hidden>
+  <section class="vd-identity-card" id="vd-profile" hidden>
     <div class="vd-profile-head">
       <img id="vd-avatar" class="vd-avatar" src="" alt="" hidden />
-      <div>
+      <div class="vd-profile-txt">
         <h2 id="vd-username">Member</h2>
         <p class="card-sub" id="vd-identity">Loading identity…</p>
       </div>
@@ -51,23 +48,24 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
   </section>
 
-  <section class="card" id="vd-boards-card" hidden>
+  <section class="vd-sec" id="vd-boards-card" hidden>
     <h2 id="vd-boards-heading" tabindex="-1">Your sites</h2>
-    <p class="card-sub">Each card shows your credits on one streamer's site. Open a site to see its rewards and your orders there.</p>
+    <p class="card-sub">One row per creator, with the free credits you hold there.</p>
     <p class="status" id="vd-boards-status" role="status" aria-live="polite" tabindex="-1"></p>
     <div id="vd-boards"></div>
     <p class="empty" id="vd-boards-empty" hidden>You don't have credits on any site yet. Use one of the streamer's linked Kick rewards to earn credits.</p>
   </section>
 
-  <section class="card" id="vd-site-card" hidden>
+  <section class="vd-sec" id="vd-site-card" hidden>
+    <button class="btn btn--ghost btn--sm" id="vd-back" type="button">Back to your sites</button>
     <div class="vd-site-head">
       <div>
         <h2 id="vd-site-name" tabindex="-1">Site</h2>
         <p class="card-sub" id="vd-site-streamer">Streamer site</p>
       </div>
-      <button class="btn btn--sm" id="vd-back" type="button">Back to your sites</button>
+      <a class="btn btn--sm" id="vd-site-visit" href="/" hidden>Visit site</a>
     </div>
-    <p class="card-sub">Balance: <b id="vd-site-balance">0</b> credits</p>
+    <p class="vd-balance"><b id="vd-site-balance">0</b> free credits here</p>
     <p class="status" id="vd-site-status" role="status" aria-live="polite" tabindex="-1"></p>
     <p class="hint" id="vd-earn-hint">Earn credits by using the streamer's linked Kick rewards during a live stream.</p>
 
@@ -78,7 +76,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <h3 class="mt-24">Your orders</h3>
     <div id="vd-redemptions-list"></div>
     <p class="empty" id="vd-redemptions-empty" hidden>No orders yet. Place an order from Rewards to see it here.</p>
-    <p class="hint"><b>Pending</b> = waiting for the streamer; <b>Fulfilled</b> = approved; <b>Cancelled</b> = refunded.</p>
+    <p class="hint">Pending means the creator hasn't handed it over yet. Fulfilled means they have. Cancelled and refunded both mean the credits went back to your balance.</p>
 
     <h3 class="mt-24">Live events</h3>
     <p class="status" id="vd-events-status" role="status" aria-live="polite"></p>

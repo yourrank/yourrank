@@ -130,12 +130,12 @@ describe("public viewer shell", () => {
     expect(narrow).not.toMatch(/\.yr-bal \{[^}]*(width|height): (?!auto)/);
 
     const signedIn = await render("home", { viewer, viewerData });
-    expect(signedIn).toContain('<span class="yr-bal-num">1,234</span>');
+    expect(signedIn).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234</span>');
     const big = await render("home", {
       viewer,
       viewerData: { ...viewerData, viewerOnSite: { balance: 1234567 } },
     });
-    expect(big).toContain('<span class="yr-bal-num">1,234,567</span>');
+    expect(big).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234,567</span>');
     expect(big).toContain('aria-label="My credits on this site: 1,234,567"');
   });
 
@@ -145,7 +145,7 @@ describe("public viewer shell", () => {
     expect(signedOut).not.toContain("yr-bal-num");
 
     const signedIn = await render("home", { viewer, viewerData });
-    expect(signedIn).toContain('<span class="yr-bal-num">1,234</span>');
+    expect(signedIn).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234</span>');
     expect(signedIn).toContain('aria-label="My credits on this site: 1,234"');
     expect(signedIn).toContain('<a class="yr-account-link" href="/me"');
     expect(signedIn).not.toContain(">Sign in<");

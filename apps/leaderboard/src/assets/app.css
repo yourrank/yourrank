@@ -1231,24 +1231,33 @@ html{color-scheme:light}
 .cr-bar-spend{flex:1;background:var(--ink-mute,#8b949e)}
 /* Viewer dashboard + public contact utilities */
 .vd-login-actions{display:flex;gap:12px;flex-wrap:wrap}
+/* The account page is a consumer surface: a page title, a small identity row
+   and plain sections — no eyebrow, no hero slab, no KPI cards. */
+.vd-head{margin-bottom:22px}
+.vd-h1{font-size:var(--an-fs-h1);font-weight:700;letter-spacing:-.02em;line-height:1.08;margin:0}
+.vd-sub{color:var(--ink-soft);font-size:13px;margin:8px 0 0;max-width:62ch}
+.vd-identity-card{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-bottom:1px solid var(--line)}
+.vd-sec{margin-top:28px}
+.vd-sec>h2{margin:0}
+.vd-balance{font-size:1.25rem;font-weight:700;margin:10px 0 0}
 .vd-profile-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.vd-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover}
+.vd-profile-txt{min-width:0}
+.vd-profile-txt h2{font-size:1.05rem;margin:0}
+.vd-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
 .vd-profile-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
-.vd-site-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.vd-card-row{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;gap:12px;flex-wrap:wrap}
-.vd-card-main{flex:1;min-width:0}
+.vd-site-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+/* The row keeps its title readable at any width: the main column asks for a
+   readable measure, so when the row can no longer grant it the side column
+   wraps onto its own line instead of squeezing the title into a few
+   characters. No width breakpoint decides this. */
+.vd-card-row{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;gap:8px 12px;flex-wrap:wrap}
+.vd-card-main{flex:1 1 22ch;min-width:0}
 .vd-card-title{font-weight:600;margin-bottom:2px;overflow-wrap:anywhere}
 .vd-card-main .hint{overflow-wrap:anywhere}
-.vd-card-side{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
-.vd-card-cost{font-size:1.4rem;font-weight:700}
-.vd-redemption-row .vd-card-side{justify-content:center}
-.vd-drop-code{width:120px;text-transform:uppercase}
-/* Below ~360px the cost column alone needs most of the row, so stack instead of
-   squeezing the title into a one-character column. */
-@media (max-width:360px){
-  .vd-card-row{flex-direction:column;align-items:stretch}
-  .vd-card-side{text-align:left;align-items:flex-start}
-}
+.vd-card-side{flex:0 1 auto;min-width:0;margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.vd-card-side .hint{min-width:0;overflow-wrap:anywhere}
+.vd-card-cost{font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.vd-drop-code{width:120px;max-width:100%;text-transform:uppercase}
 /* Viewer errors must not be colour-only. */
 #vd-login-status.error::before,#vd-account-status.error::before,#vd-boards-status.error::before,#vd-site-status.error::before,#vd-drop-status.error::before{content:"⚠ "}
 #vd-account-status:empty,#vd-boards-status:empty,#vd-site-status:empty{margin:0}

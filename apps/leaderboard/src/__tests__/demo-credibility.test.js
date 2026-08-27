@@ -101,6 +101,7 @@ describe("demo credibility invariants", () => {
       shopItems: [{ ...data.shopItems[0], image_url: "https://example.test/reward.png" }],
     };
     const illustratedShop = await render("shop", illustrated);
-    expect(illustratedShop).toContain('<img src="https://example.test/reward.png" alt="" />');
+    // A configured reward image still renders, now as a row thumbnail.
+    expect(illustratedShop).toContain('<img class="yr-rwd-img" src="https://example.test/reward.png" alt=""');
   });
 });
