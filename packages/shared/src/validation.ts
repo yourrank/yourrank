@@ -119,7 +119,16 @@ const textSchema = z.record(z.string().max(MAX_MEDIUM_TEXT)).optional();
 const brandingSchema = z
   .object({
     template: z.string().max(50).optional(),
-    logo: z.union([z.string().max(MAX_LOGO_BASE64), z.null()]).optional(),
+    // The dashboard sends a responsive set (`{ 64: dataUri, 128: … }`), which
+    // the save path already normalises; a single data URI stays accepted for
+    // older clients. Per-entry and total limits belong to `validateLogoData`.
+    logo: z
+      .union([
+        z.string().max(MAX_LOGO_BASE64),
+        z.record(z.string().max(MAX_LOGO_BASE64)),
+        z.null(),
+      ])
+      .optional(),
     accentA: z.string().max(8).optional(),
     accentB: z.string().max(8).optional(),
     font: z.string().max(50).optional(),

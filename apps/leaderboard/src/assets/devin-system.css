@@ -416,7 +416,10 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
      hairlines. Fill roles keep the bright tokens. */
   --yr-warning-readable: #a33c00;
   --yr-success-readable: #0d6b4b;
-  --yr-sans: var(--devin-font);
+  /* The creator's chosen text style still wins here: this layer supplies the
+     fallback family only, so a board's `--yr-font` token is not discarded by
+     the light material mapping. */
+  --yr-sans: var(--yr-font, var(--devin-font));
   --yr-mono: var(--devin-mono);
   background: var(--devin-bg);
   color: var(--devin-ink);
