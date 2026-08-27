@@ -6,7 +6,7 @@
 // here. The API (/api/site/sections, keyed by siteId) is unchanged.
 import { $, getCsrf, guardAuth, logError, showToast } from "./utils.js";
 import { state } from "./state.js";
-import { DEFAULT_SECTIONS, isPro } from "./site.js";
+import { DEFAULT_SECTIONS, isPro, refreshDesignPreview } from "./site.js";
 
 const SECTION_ROWS = [
   ["shop", "Shop", "Let members browse and redeem your shop items.", "Turning off removes Shop from navigation and disables the /shop URL."],
@@ -94,6 +94,9 @@ async function saveSection(input) {
     state.EXTRA.siteSections = { ...state.EXTRA.siteSections, shop: next.shop, games: next.games, me: next.credits };
     setInlineSave(input, "Saved");
     showToast("Public page sections saved.", "success");
+    // These toggles save immediately, so the preview beside them has to follow
+    // the new navigation instead of keeping the pre-toggle render.
+    refreshDesignPreview();
   } catch (err) {
     input.checked = previous;
     setInlineSave(input, "Couldn't save", true);

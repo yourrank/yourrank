@@ -460,15 +460,21 @@ export function applyPlayerFieldVisibility(fields) {
 /**
  * Stable comparison key for a set of player rows. Stored drafts hold raw input
  * strings while the server holds numbers, so both sides are normalized before
- * comparison.
+ * comparison. The score field mirrors the same fallback the row renders with,
+ * otherwise a redrawn-but-unedited table reads as a change and resurrects the
+ * unsaved-changes state on the next load.
  */
 function playersFingerprint(rows) {
   return JSON.stringify((Array.isArray(rows) ? rows : []).map((row) => [
     String(row?.name ?? "").trim(),
     ...PLAYER_NUMBER_FIELDS.map(({ key }) => {
-      const raw = row?.[key];
+      const raw = key === "score" && (row?.score === undefined || row?.score === null || String(row?.score).trim() === "")
+        ? row?.wagered
+        : row?.[key];
       if (raw === undefined || raw === null || String(raw).trim() === "") return null;
-      const number = Number(String(raw).replace(/,/g, ""));
+      // Money inputs hold their formatted display value ("$9,500.00"), so the
+      // currency dressing comes off before the numeric comparison.
+      const number = Number(String(raw).replace(/[$,\s]/g, ""));
       return Number.isFinite(number) ? number : String(raw).trim();
     }),
   ]));

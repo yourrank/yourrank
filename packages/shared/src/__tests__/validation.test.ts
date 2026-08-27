@@ -106,6 +106,24 @@ describe("validateJson", () => {
     expect(result.ok).toBe(true);
   });
 
+  test("accepts the responsive logo set the dashboard uploads", async () => {
+    const uri = "data:image/webp;base64,UklGRg==";
+    const put = (logo: unknown) => validateJson(
+      new Request("http://test/api/site", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ branding: { logo } }),
+      }),
+      handlerSchemas.handlePutSite,
+    );
+
+    expect((await put({ 64: uri, 128: uri, 256: uri, 512: uri })).ok).toBe(true);
+    expect((await put(uri)).ok).toBe(true);
+    expect((await put(null)).ok).toBe(true);
+    // The image itself is still checked further in: the schema only guards shape.
+    expect((await put({ 64: 12 })).ok).toBe(false);
+  });
+
   test("validates array lengths on board saves", async () => {
     const request = new Request("http://test/api/site", {
       method: "PUT",

@@ -17,11 +17,13 @@ describe("Site settings creator UX", () => {
   const html = DashboardContent({ user: { email: "creator@example.com" }, activePath: "/dashboard/site" }).toString();
 
   it("keeps one tabbed settings body with common tasks before advanced actions", () => {
-    for (const tab of ["access", "sections", "notifications", "domain", "tools", "danger"]) {
+    // Branding, navigation, links and the public address are one creator task,
+    // so they share the Customize tab that also owns the viewer preview.
+    for (const tab of ["customize", "notifications", "domain", "tools", "danger"]) {
       expect(html).toContain(`data-settings-tab="${tab}"`);
       expect(html).toContain(`data-settings-panel="${tab}"`);
     }
-    expect(html.indexOf("data-settings-tab=\"access\"")).toBeLessThan(html.indexOf("data-settings-tab=\"tools\""));
+    expect(html.indexOf("data-settings-tab=\"customize\"")).toBeLessThan(html.indexOf("data-settings-tab=\"tools\""));
     expect(html.indexOf("data-settings-tab=\"domain\"")).toBeLessThan(html.indexOf("data-settings-tab=\"danger\""));
     expect(occurrences(html, 'id="settingsSave"')).toBe(1);
   });
@@ -30,7 +32,12 @@ describe("Site settings creator UX", () => {
     expect(siteJs).toContain('export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {})');
     expect(siteJs).toContain('saveEditorDraft({ button: event.currentTarget })');
     expect(occurrences(siteJs, "status.hidden = false;")).toBeGreaterThanOrEqual(3);
-    expect(dashboardAccountJs).toContain('saveBar.hidden = !["sections", "notifications"].includes(key)');
+    // The save bar is dirty-driven from one owner: tab switches defer to the
+    // same sync the draft subscriber uses, and only Customize/Notifications —
+    // the tabs whose fields the bar saves — can show it.
+    expect(dashboardAccountJs).toContain("syncSettingsSaveBar()");
+    expect(siteJs).toContain("export function syncSettingsSaveBar()");
+    expect(siteJs).toContain('bar.hidden = !(state._dirty && (tab === "customize" || tab === "notifications"))');
     expect(dashboardAccountJs).toContain('for (const id of ["f_domain", "domainSearchInput"])');
   });
 

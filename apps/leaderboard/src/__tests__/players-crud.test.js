@@ -227,6 +227,19 @@ describe("Players CRUD validation", () => {
     expect(players.draftHasChanges(null, saved)).toBe(false);
   });
 
+  // A redrawn table used to read as a change — the score input falls back to
+  // the amount and money inputs hold formatted values — so the unsaved-changes
+  // state came back on every later load of the same page.
+  it("does not read a redrawn table's formatting as a change", () => {
+    const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
+    const redrawn = {
+      players: [{ name: "Alice", wagered: "$1,000.00", prize: "$0.00", score: "1000.00", hands: "", netProfit: "", winRate: "", change: "" }],
+      quickAdd: { name: "", wagered: "", prize: "" },
+    };
+    expect(players.draftHasChanges(redrawn, saved)).toBe(false);
+    expect(players.draftHasChanges({ players: [{ ...redrawn.players[0], score: "5" }] }, saved)).toBe(true);
+  });
+
   it("discard restores the saved snapshot and clears dirty state", () => {
     dashboardState.SAVED_PLAYERS = [{ name: "Saved", wagered: 1, prize: 0 }];
     dashboardState._dirty = true;

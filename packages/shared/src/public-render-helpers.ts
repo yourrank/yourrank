@@ -15,7 +15,9 @@ export const safeUrl = (u) => {
 };
 
 export function logoSrcSet(baseUrl) {
-  if (!baseUrl) return "";
+  // An inline draft logo carries its own bytes, so there is no width to ask the
+  // logo route for and appending one would corrupt the data URI.
+  if (!baseUrl || /^data:/i.test(String(baseUrl).trim())) return "";
   const sep = baseUrl.includes("?") ? "&" : "?";
   return LOGO_WIDTHS.map((w) => `${esc(baseUrl)}${sep}w=${w} ${w}w`).join(", ");
 }

@@ -4,6 +4,7 @@ import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
+import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress, syncSettingsSaveBar } from "./site.js";
 
 async function jsonPost(path, body) {
   const res = await fetch(path, {
@@ -248,14 +249,13 @@ export function wireAccount() {
   loadSessions();
 }
 
-function wireSettingsTabs(initialTab = "access") {
+function wireSettingsTabs(initialTab = "customize") {
   const tabs = [...document.querySelectorAll("[data-settings-tab]")];
   const panels = [...document.querySelectorAll("[data-settings-panel]")];
   if (!tabs.length) return;
   const validTabs = new Set(tabs.map((tab) => tab.dataset.settingsTab));
   if (!validTabs.has(initialTab)) initialTab = tabs[0].dataset.settingsTab;
   const select = (key, focus = false) => {
-    const saveBar = $("settingsSaveBar");
     const saveText = $("settingsSaveText");
     tabs.forEach((tab) => {
       const active = tab.dataset.settingsTab === key;
@@ -265,13 +265,19 @@ function wireSettingsTabs(initialTab = "access") {
       if (active && focus) tab.focus();
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== key; });
-    if (saveBar) saveBar.hidden = !["sections", "notifications"].includes(key);
-    if (saveText) {
-      saveText.textContent = key === "sections"
-        ? "Public page switches save immediately. Use Save changes for legal links."
-        : "Use Save changes after updating notification destinations.";
-    }
+    // The save bar answers "is there anything unsaved?", not "which tab am I
+    // on" — a clean draft shows no bar on any tab.
+    syncSettingsSaveBar();
+    if (saveText && !state._dirty) saveText.textContent = cleanSaveStatusText();
+    // The preview only renders while its section is on screen, so entering the
+    // tab that owns it is what asks for the first render.
+    if (key === "customize") refreshDesignPreview();
   };
+  // A pointer from one panel to another moves to that panel instead of asking
+  // the creator to find the tab themselves.
+  for (const link of document.querySelectorAll("[data-settings-tab-link]")) {
+    link.addEventListener("click", () => select(link.dataset.settingsTabLink, true));
+  }
   tabs.forEach((tab, index) => {
     tab.addEventListener("click", () => select(tab.dataset.settingsTab));
     tab.addEventListener("keydown", (event) => {
@@ -350,12 +356,38 @@ function wireSettingsWebhook(sitePayload) {
 
 // Board settings (`/dashboard/site`). Plan, usage and account-level
 // providers live in the account settings document, not here.
-export function setupSettingsScreen(sitePayload, initialTab = "access") {
+export function setupSettingsScreen(sitePayload, initialTab = "customize") {
   if (!document.querySelector('[data-page="site"]')) return;
+  wireBrandFields();
+  renderSitePublicAddress();
   wireSettingsTabs(initialTab);
   wireSettingsDanger();
   wireSettingsBoardAccess();
   keepIndependentSettingsActionsOutOfDraft();
   wireSettingsWebhook(sitePayload);
   initSiteSections();
+}
+
+// Length limits are the public renderer's, not a guess: the viewer clamps long
+// names and taglines, so the editor states the budget instead of letting a
+// creator discover the clamp on their live site.
+function wireBrandFields() {
+  const fields = [
+    { input: $("f_name"), counter: $("siteNameCounter"), noun: "name" },
+    { input: $("f_tagline"), counter: $("siteTaglineCounter"), noun: "tagline" },
+  ];
+  for (const { input, counter, noun } of fields) {
+    if (!input || !counter) continue;
+    const max = Number(input.getAttribute("maxlength")) || 0;
+    const render = () => {
+      const left = max - input.value.length;
+      counter.textContent = left > 20
+        ? `${input.value.length} of ${max} characters`
+        : left === 0
+          ? `Maximum length reached — long ${noun}s are shortened on your public site.`
+          : `${left} character${left === 1 ? "" : "s"} left`;
+    };
+    input.addEventListener("input", render);
+    render();
+  }
 }

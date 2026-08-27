@@ -427,10 +427,18 @@ export function collect({ reportPlayerErrors = true } = {}) {
   if (state.ME && state.ME.plan !== "free") {
     out.branding = {
       template: state.CURRENT_BRANDING?.template || "cyber_arcade",
-      accentA: $("c_a").value,
-      accentB: $("c_b").value,
       font: $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter",
     };
+    // accentA comes from the canonical branding state, never from the raw
+    // picker DOM: `applyTheme()` is the only writer, so an in-flight picker
+    // value can never be saved as an accent the rest of the page disagrees
+    // with, and a later updateThemeSelection() can never revert it.
+    // accentB is legacy stored data with no visible effect in the viewer; it
+    // round-trips from state untouched so an accent edit never rewrites it.
+    // An accent the site does not have is omitted rather than sent as null,
+    // which the branding schema rejects.
+    if (state.CURRENT_BRANDING?.accentA) out.branding.accentA = state.CURRENT_BRANDING.accentA;
+    if (state.CURRENT_BRANDING?.accentB) out.branding.accentB = state.CURRENT_BRANDING.accentB;
     if (state.LOGO !== undefined) out.branding.logo = state.LOGO;
   }
   if (isPro()) {
@@ -457,16 +465,80 @@ export function collect({ reportPlayerErrors = true } = {}) {
     enabled: !!(arToggle && arToggle.checked),
     clear: arClear && !arClear.disabled ? arClear.value : "wagers",
   };
-  return { payload: out, invalid: playerResult.invalid };
+  return { payload: out, invalid: [...brandInvalid(), ...playerResult.invalid] };
+}
+
+/**
+ * Branding fields are validated where they are collected, so the save bar, the
+ * preview and the invalid-field focus all read the same verdict: an empty name
+ * would render a nameless public header, and a malformed link would render a
+ * dead public button.
+ */
+function brandInvalid() {
+  const invalid = [];
+  const nameInput = $("f_name");
+  const missingName = !!nameInput && !nameInput.value.trim();
+  if (missingName) invalid.push({ label: "Site name", input: nameInput, message: "Enter a site name." });
+  // A field the creator is still filling in is not yet a field they got wrong,
+  // so the message waits for a blur or a save attempt to mark it touched.
+  setFieldError(nameInput, missingName && isTouched(nameInput) ? "Enter a site name." : "");
+  return [...invalid, ...socialInvalid()];
+}
+
+function isTouched(input) {
+  return input?.dataset.touched === "1";
+}
+
+document.addEventListener("blur", (event) => {
+  const input = event.target;
+  if (!input || typeof input.matches !== "function" || !input.matches("#f_name, .social-url")) return;
+  input.dataset.touched = "1";
+  brandInvalid();
+}, true);
+
+/** Show or clear the error message a field's `aria-describedby` already points at. */
+function setFieldError(input, message) {
+  if (!input) return;
+  const el = document.querySelector(`[data-field-error="${input.id}"]`);
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = !message;
+  input.setAttribute("aria-invalid", message ? "true" : "false");
+}
+
+function isPublicUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function socialInvalid() {
+  const list = $("socialsList");
+  if (!list) return [];
+  const invalid = [];
+  for (const row of list.querySelectorAll("[data-social]")) {
+    const input = row.querySelector(".social-url");
+    if (!input) continue;
+    const url = input.value.trim();
+    const bad = !!url && !isPublicUrl(url);
+    setFieldError(input, bad && isTouched(input) ? "Enter a valid URL, starting with https://" : "");
+    if (bad) invalid.push({ label: `${row.dataset.social} link`, input, message: "Enter a valid URL, starting with https://" });
+  }
+  return invalid;
 }
 
 /* --- branding --- */
+// One accent, one swatch: the public viewer renders a single accent color, so
+// a preset that showed two would promise a gradient the viewer never paints.
 const COLOR_PRESETS = [
-  { name: "Indigo", accentA: "#5b5bf5", accentB: "#7b7bf8" },
-  { name: "Cyan", accentA: "#06b6d4", accentB: "#42e6ff" },
-  { name: "Sunset", accentA: "#ff7a59", accentB: "#ff4d9d" },
-  { name: "Emerald", accentA: "#3cf2b1", accentB: "#35a7ff" },
-  { name: "Gold", accentA: "#ffd15c", accentB: "#ff9f43" },
+  { name: "Indigo", accent: "#5b5bf5" },
+  { name: "Cyan", accent: "#06b6d4" },
+  { name: "Sunset", accent: "#ff7a59" },
+  { name: "Emerald", accent: "#3cf2b1" },
+  { name: "Gold", accent: "#ffd15c" },
 ];
 
 function renderColorPresets() {
@@ -474,127 +546,167 @@ function renderColorPresets() {
   if (!list) return;
   list.innerHTML = "";
   COLOR_PRESETS.forEach((preset) => {
-    const active = preset.accentA.toLowerCase() === String(state.CURRENT_BRANDING.accentA || "").toLowerCase()
-      && preset.accentB.toLowerCase() === String(state.CURRENT_BRANDING.accentB || "").toLowerCase();
+    const active = preset.accent.toLowerCase() === String(state.CURRENT_BRANDING.accentA || "").toLowerCase();
     const button = document.createElement("button");
     button.className = "preset-btn" + (active ? " is-selected" : "");
     button.type = "button";
     button.setAttribute("aria-pressed", String(active));
-    button.innerHTML = `<span class="preset-swatch"><i data-color="${esc(preset.accentA)}"></i><i data-color="${esc(preset.accentB)}"></i></span><span>${esc(preset.name)}</span>`;
+    button.innerHTML = `<span class="preset-swatch"><i data-color="${esc(preset.accent)}"></i></span><span>${esc(preset.name)}</span>`;
     button.querySelectorAll("[data-color]").forEach((swatch) => { swatch.style.background = swatch.dataset.color; });
-    button.addEventListener("click", () => applyTheme(preset.accentA, preset.accentB, preset.name));
+    button.addEventListener("click", () => applyTheme(preset.accent, preset.name));
     list.appendChild(button);
   });
 }
 
 const PREVIEW_TIMEOUT_MS = 8000;
-let _previewTimeout = null;
-let _previewForm = null;
-let _previewWatchdog = null;
-let _previewSyncedAt = null;
+const PREVIEW_DEBOUNCE_MS = 300;
 
-function setPreviewSyncStatus(status, syncedAt = _previewSyncedAt) {
-  const chip = $("previewSyncStatus");
-  const timestamp = $("previewSyncTime");
-  if (chip) {
-    chip.textContent = status;
-    chip.classList.toggle("is-syncing", status === "SYNCING");
+// Every preview surface — the leaderboard editor and Site settings — renders
+// the real public site through /dashboard/preview, which POSTs the current
+// draft to the shared renderer. A surface declares its frame, device tabs and
+// status elements with data attributes; nothing about the public markup is
+// reproduced in the dashboard, and a second surface adds no preview logic.
+function previewMounts() {
+  return [...document.querySelectorAll("[data-preview-mount]")];
+}
+
+function previewParts(mount) {
+  return {
+    iframe: mount.querySelector("iframe"),
+    stage: mount.querySelector("[data-preview-stage]"),
+    frame: mount.querySelector("[data-preview-frame]"),
+    error: mount.querySelector("[data-preview-error]"),
+    status: mount.querySelector("[data-preview-status]"),
+    time: mount.querySelector("[data-preview-time]"),
+    device: mount.querySelector(".preview-tab.is-active"),
+  };
+}
+
+/** Don't waste CPU/network rendering a preview whose section isn't on screen. */
+function previewVisible(mount) {
+  const section = mount.closest("section[data-page]");
+  return !section || section.classList.contains("is-on");
+}
+
+function previewLocalState(mount) {
+  if (!mount._yrPreview) mount._yrPreview = { timeout: null, watchdog: null, form: null, syncedAt: null };
+  return mount._yrPreview;
+}
+
+function setPreviewSyncStatus(mount, phase) {
+  const { status, time } = previewParts(mount);
+  const local = previewLocalState(mount);
+  if (status) {
+    status.textContent = phase === "syncing"
+      ? mount.dataset.previewLabelSyncing || "SYNCING"
+      : mount.dataset.previewLabelSynced || "SYNCED";
+    status.classList.toggle("is-syncing", phase === "syncing");
   }
-  if (timestamp) {
-    const seconds = syncedAt ? Math.max(0, Math.floor((Date.now() - syncedAt) / 1000)) : null;
-    timestamp.textContent = seconds === null ? "Last synced —" : seconds === 0 ? "Last synced just now" : `Last synced ${seconds}s ago`;
+  if (time) {
+    const seconds = local.syncedAt ? Math.max(0, Math.floor((Date.now() - local.syncedAt) / 1000)) : null;
+    time.textContent = seconds === null ? "Last synced —" : seconds === 0 ? "Last synced just now" : `Last synced ${seconds}s ago`;
   }
 }
 
 /**
- * Replace the preview frame with a fresh one. A form submission into an
+ * Replace a preview frame with a fresh one. A form submission into an
  * existing frame appends an entry to the joint session history, which both
  * pollutes Back and truncates the forward stack, so every render targets a
  * newly created frame whose first navigation replaces instead of pushing.
  */
-function resetPreviewFrame() {
-  const current = $("designPreview");
+function resetPreviewFrame(mount) {
+  const current = previewParts(mount).iframe;
   if (!current) return null;
   const fresh = document.createElement("iframe");
   for (const attr of current.attributes) {
     if (attr.name !== "src") fresh.setAttribute(attr.name, attr.value);
   }
   fresh.addEventListener("load", () => {
-    clearTimeout(_previewWatchdog);
-    _previewSyncedAt = Date.now();
-    setPreviewSyncStatus("SYNCED", _previewSyncedAt);
-    fitDesignPreview();
+    const local = previewLocalState(mount);
+    // A brand-new frame fires `load` for its initial empty document before the
+    // draft submission lands. Treating that as synced would clear the watchdog
+    // and claim the stale preview matches the draft, so only the render's own
+    // navigation counts.
+    const loaded = fresh.contentWindow?.location?.href;
+    if (!loaded || loaded === "about:blank") return;
+    clearTimeout(local.watchdog);
+    local.syncedAt = Date.now();
+    setPreviewSyncStatus(mount, "synced");
+    fitPreviewMount(mount);
   });
   current.replaceWith(fresh);
   return fresh;
 }
 
-export function updateDesignPreview() {
-  const iframe = $("designPreview");
-  if (!iframe || !state.ACTIVE_SITE_ID) return;
-  // Don't waste CPU/network rendering a preview that isn't on screen.
-  const editorVisible = document.querySelector('section[data-page="board"].is-on');
-  if (!editorVisible) return;
+function wirePreviewMount(mount) {
+  if (mount._previewWired) return;
+  mount._previewWired = true;
+  mount.addEventListener("click", (event) => {
+    if (!event.target.closest("[data-preview-retry]")) return;
+    const { error } = previewParts(mount);
+    if (error) error.hidden = true;
+    renderPreviewMount(mount, { immediate: true });
+  });
+}
 
-  const active = document.querySelector(".preview-tab.is-active");
-  const device = active?.dataset.device || "desktop";
-
-  // Wire retry button once.
-  const retry = $("previewRetry");
-  if (retry && !retry._wired) {
-    retry._wired = true;
-    retry.addEventListener("click", () => { $("previewError").hidden = true; updateDesignPreview(); });
-  }
-
-  // Debounce the live preview update so typing doesn't repeatedly re-render.
-  clearTimeout(_previewTimeout);
-  _previewTimeout = setTimeout(() => {
+function renderPreviewMount(mount, { immediate = false } = {}) {
+  const { iframe } = previewParts(mount);
+  if (!iframe || !state.ACTIVE_SITE_ID || !previewVisible(mount)) return;
+  wirePreviewMount(mount);
+  const local = previewLocalState(mount);
+  // Debounce so typing doesn't repeatedly re-render the same draft.
+  clearTimeout(local.timeout);
+  local.timeout = setTimeout(() => {
+    const { error, device } = previewParts(mount);
     try {
       const { payload: draft, invalid } = collect({ reportPlayerErrors: false });
       if (invalid.length) return;
-      const url = "/dashboard/preview?" + new URLSearchParams({ board: state.ACTIVE_SITE_ID, device }).toString();
-      if (!_previewForm) {
-        _previewForm = document.createElement("form");
-        _previewForm.method = "post";
-        _previewForm.target = "designPreview";
-        _previewForm.hidden = true;
+      const params = { board: state.ACTIVE_SITE_ID, device: device?.dataset.device || "desktop" };
+      if (mount.dataset.previewSection) params.section = mount.dataset.previewSection;
+      // Site settings previews what viewers see, so the editor's
+      // click-to-edit overlay stays with the editor that owns those fields.
+      if (mount.dataset.previewEdit === "0") params.edit = "0";
+      // Without a named frame the POST would open a new window, so a mount
+      // that names no target renders nothing rather than something wrong.
+      const target = mount.dataset.previewTarget || iframe.name;
+      if (!target) return;
+      if (!local.form) {
+        local.form = document.createElement("form");
+        local.form.method = "post";
+        local.form.target = target;
+        local.form.hidden = true;
         const draftInput = document.createElement("input");
         draftInput.type = "hidden";
         draftInput.name = "draft";
-        _previewForm.appendChild(draftInput);
-        document.body.appendChild(_previewForm);
+        local.form.appendChild(draftInput);
+        document.body.appendChild(local.form);
       }
-      _previewForm.action = url;
-      _previewForm.querySelector("input[name='draft']").value = JSON.stringify(draft);
-      setPreviewSyncStatus("SYNCING");
-      if (!resetPreviewFrame()) return;
-      _previewForm.submit();
-      const errorOverlay = $("previewError");
-      if (errorOverlay) errorOverlay.hidden = true;
-      clearTimeout(_previewWatchdog);
-      _previewWatchdog = setTimeout(() => {
-        if (errorOverlay) errorOverlay.hidden = false;
+      local.form.action = "/dashboard/preview?" + new URLSearchParams(params).toString();
+      local.form.querySelector("input[name='draft']").value = JSON.stringify(draft);
+      setPreviewSyncStatus(mount, "syncing");
+      if (!resetPreviewFrame(mount)) return;
+      local.form.submit();
+      if (error) error.hidden = true;
+      clearTimeout(local.watchdog);
+      local.watchdog = setTimeout(() => {
+        if (error) error.hidden = false;
       }, PREVIEW_TIMEOUT_MS);
     } catch (e) {
       logError("preview-submit", e);
-      const errorOverlay = $("previewError");
-      if (errorOverlay) errorOverlay.hidden = false;
+      if (error) error.hidden = false;
     }
-  }, 300);
+  }, immediate ? 0 : PREVIEW_DEBOUNCE_MS);
 }
 
 /**
- * Scale the preview iframe so a `deviceWidth`-wide page fits the stage: the
+ * Scale a preview iframe so a `deviceWidth`-wide page fits its stage: the
  * iframe renders at the device width and is transform-scaled down, so the stage
  * is sized in unscaled pixels and the frame in scaled ones.
  */
-export function fitDesignPreview() {
-  const iframe = $("designPreview");
-  const stage = $("previewStage");
-  const frame = $("previewFrame");
+function fitPreviewMount(mount) {
+  const { iframe, stage, frame, device } = previewParts(mount);
   if (!iframe || !stage || !frame) return;
-  const active = document.querySelector(".preview-tab.is-active");
-  const deviceWidth = parseInt(active?.dataset.width || "1100", 10) || 1100;
+  const deviceWidth = parseInt(device?.dataset.width || "1100", 10) || 1100;
   const cw = frame.clientWidth;
   if (!cw) return;
   const doc = iframe.contentDocument;
@@ -612,7 +724,17 @@ export function fitDesignPreview() {
   frame.style.height = Math.min(contentHeight * scale, maxHeight) + "px";
 }
 
-/** Re-render the preview and re-fit it: what every "show me the draft" path wants. */
+export function updateDesignPreview() {
+  for (const mount of previewMounts()) renderPreviewMount(mount);
+}
+
+export function fitDesignPreview() {
+  for (const mount of previewMounts()) {
+    if (previewVisible(mount)) fitPreviewMount(mount);
+  }
+}
+
+/** Re-render the visible previews and re-fit them: what every "show me the draft" path wants. */
 export function refreshDesignPreview() {
   updateDesignPreview();
   fitDesignPreview();
@@ -902,15 +1024,8 @@ export function renderSavebarCopy() {
 }
 
 function updateThemeSelection() {
-  if (state.CURRENT_BRANDING.accentA) $("c_a").value = state.CURRENT_BRANDING.accentA;
-  if (state.CURRENT_BRANDING.accentB) $("c_b").value = state.CURRENT_BRANDING.accentB;
+  if (state.CURRENT_BRANDING.accentA && $("c_a")) $("c_a").value = state.CURRENT_BRANDING.accentA;
   const font = $("f_font"); if (font) font.value = state.CURRENT_BRANDING.font || "Inter";
-  const activeTpl = state.CURRENT_BRANDING.template || "cyber_arcade";
-  document.querySelectorAll("#templateSelectorGrid [data-template]").forEach((btn) => {
-    const isSel = btn.dataset.template === activeTpl;
-    btn.classList.toggle("is-selected", isSel);
-    btn.setAttribute("aria-pressed", String(isSel));
-  });
   renderColorPresets();
   updateDesignPreview();
 }
@@ -936,19 +1051,23 @@ subscribe((keys) => {
     renderSavebarCopy();
     renderEditorTimestamps();
     renderBoardStatus();
+    // A disabled button is not an explanation; the strip says why it is quiet.
+    setSaveStatusText(state._dirty ? "You have unsaved changes." : cleanSaveStatusText());
+    syncSettingsSaveBar();
   }
   if (keys.includes("draft")) updateDesignPreview();
 });
 
-export function applyTheme(accentA, accentB, label, font = null) {
+// A theme choice sets the one accent the viewer paints. `accentB` is legacy
+// stored data and is deliberately not touched here, so picking a preset or a
+// custom color never overwrites what a legacy row carries.
+export function applyTheme(accentA, label, font = null) {
   const selectedFont = font || $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter";
   state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, font: selectedFont };
   const isPaid = state.ME.plan !== "free";
-  if (isPaid && accentA && accentB) {
+  if (isPaid && accentA) {
     state.CURRENT_BRANDING.accentA = accentA;
-    state.CURRENT_BRANDING.accentB = accentB;
-    $("c_a").value = accentA;
-    $("c_b").value = accentB;
+    if ($("c_a")) $("c_a").value = accentA;
   }
   const fontEl = $("f_font"); if (fontEl) fontEl.value = selectedFont;
   updateThemeSelection();
@@ -963,6 +1082,9 @@ export function applyTheme(accentA, accentB, label, font = null) {
   markDirty();
 }
 
+// `template` is not a creator-facing choice: the public viewer is one coherent
+// system. The stored value still travels render → collect → save untouched so
+// legacy rows keep whatever the backend gave them.
 export function renderBranding(br) {
   state.CURRENT_BRANDING = {
     template: br.template || "cyber_arcade",
@@ -990,12 +1112,61 @@ export function renderPrizes(prizes = {}) {
   $("f_hidePrizeAmounts").checked = !!p.hidePrizeAmounts;
 }
 
-$("logoPick")?.setAttribute("aria-label", "Upload logo");
-$("logoPick")?.addEventListener("click", () => $("logoFile")?.click());
-$("logoClear")?.setAttribute("aria-label", "Remove logo");
-$("logoClear")?.addEventListener("click", () => { state.LOGO = null; $("logoPreview").hidden = true; $("logoClear").hidden = true; $("status").textContent = "Logo will be removed when you save."; });
-$("logoFile")?.addEventListener("change", () => {
-  const f = $("logoFile").files[0]; if (!f) return;
+// The logo lives next to the field that changed it, so its outcome is reported
+// there instead of only in the editor's save strip further down the page.
+const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+function setLogoStatus(message) {
+  const local = $("logoStatus");
+  if (local) local.textContent = message;
+  const status = $("status");
+  if (status) { status.textContent = message; status.hidden = false; }
+}
+
+// Same event-ownership rule as the accent picker: the file input's own
+// input/change must not reach the dashboard's global dirty owner, because a
+// rejected file (wrong type, over 2 MB, undecodable) would otherwise show
+// "unsaved changes" for a logo that was never accepted. Only assigning a
+// converted logo to `state.LOGO` marks dirty. Stopping propagation never
+// *clears* dirty, so a legitimate edit made earlier keeps its unsaved state.
+export function wireLogoControls() {
+  $("logoPick")?.setAttribute("aria-label", "Upload logo");
+  $("logoPick")?.addEventListener("click", () => $("logoFile")?.click());
+  $("logoClear")?.setAttribute("aria-label", "Remove logo");
+  $("logoClear")?.addEventListener("click", () => {
+    state.LOGO = null;
+    $("logoPreview").hidden = true;
+    $("logoClear").hidden = true;
+    setLogoStatus("Logo will be removed when you save.");
+    markDirty();
+  });
+  $("logoFile")?.addEventListener("input", (event) => event.stopPropagation());
+  $("logoFile")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    handleLogoSelection($("logoFile").files[0]);
+  });
+}
+wireLogoControls();
+
+// Exported so the rejection paths can be proven directly: every early return
+// below leaves the draft exactly as dirty as it already was.
+export function handleLogoSelection(f) {
+  if (!f) return;
+  // Reject before decoding: a rejected file should never look half-accepted.
+  if (f.type && !LOGO_TYPES.includes(f.type)) {
+    setLogoStatus("That file type isn't supported. Use a PNG, JPG or WebP image.");
+    if ($("logoFile")) $("logoFile").value = "";
+    return;
+  }
+  if (f.size > LOGO_MAX_BYTES) {
+    setLogoStatus(`That image is ${(f.size / (1024 * 1024)).toFixed(1)} MB. Use one under 2 MB.`);
+    if ($("logoFile")) $("logoFile").value = "";
+    return;
+  }
+  // The dashboard's CSP allows `data:` images but not `blob:`, so the picked
+  // file is decoded from a data URL rather than an object URL.
+  const reader = new FileReader();
   const img = new Image();
   img.onload = () => {
     const aspect = img.width / img.height;
@@ -1012,33 +1183,37 @@ $("logoFile")?.addEventListener("change", () => {
       srcset[w] = uri;
     }
     const entries = Object.values(srcset);
-    if (entries.length === 0) { $("status").textContent = "Couldn't convert that image."; URL.revokeObjectURL(img.src); return; }
+    if (entries.length === 0) { setLogoStatus("Couldn't convert that image."); return; }
     const totalChars = entries.reduce((a, b) => a + b.length, 0);
-    if (totalChars > 300000) { $("status").textContent = "That image is too big even after resizing. Try a simpler one."; return; }
+    if (totalChars > 300000) { setLogoStatus("That image is too big even after resizing. Try a simpler one."); return; }
     state.LOGO = srcset;
     $("logoPreview").src = entries[entries.length - 1];
     $("logoPreview").hidden = false; $("logoClear").hidden = false;
-    $("status").textContent = "Logo ready — hit Save to publish it.";
-    URL.revokeObjectURL(img.src);
-  };
-  img.onerror = () => { $("status").textContent = "Couldn't read that image."; };
-  img.src = URL.createObjectURL(f);
-  $("logoFile").value = "";
-});
-$("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Custom colors"));
-$("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accentA, COLOR_PRESETS[0].accentB, COLOR_PRESETS[0].name));
-$("f_font")?.addEventListener("change", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Font"));
-
-document.querySelectorAll("#templateSelectorGrid [data-template]").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const tpl = btn.dataset.template;
-    state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, template: tpl };
-    updateThemeSelection();
+    setLogoStatus("Logo ready — hit Save to publish it.");
     markDirty();
-    const status = $("status");
-    if (status) status.textContent = `Template switched — click Save changes to publish.`;
+  };
+  img.onerror = () => { setLogoStatus("Couldn't read that image."); };
+  reader.onload = () => { img.src = String(reader.result); };
+  reader.onerror = () => { setLogoStatus("Couldn't read that image."); };
+  reader.readAsDataURL(f);
+  if ($("logoFile")) $("logoFile").value = "";
+}
+// The custom accent picker owns its own dirty/update path. The dashboard marks
+// every bubbled input/change dirty, which would flag unsaved work for a colour
+// the canonical branding state had not accepted yet; stopping propagation here
+// makes `applyTheme()` the single writer. `input` fires continuously while the
+// native picker is open, so it is swallowed and the committed `change` is the
+// one that applies. There is no separate Apply step: one picker, one state.
+export function wireAccentPicker() {
+  $("c_a")?.addEventListener("input", (event) => event.stopPropagation());
+  $("c_a")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    applyTheme($("c_a")?.value, "Custom color");
   });
-});
+  $("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accent, COLOR_PRESETS[0].name));
+}
+wireAccentPicker();
+$("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 
 export function renderNotifications(n) {
   const paid = state.ME.plan !== "free";
@@ -1070,6 +1245,7 @@ const SOCIAL_CATALOG = [
 function collectSocials() {
   const list = $("socialsList");
   if (!list) return;
+  socialInvalid();
   state.EXTRA.socials = SOCIAL_CATALOG.map((c) => {
     const row = list.querySelector(`[data-social="${c.brand}"]`);
     const url = row ? row.querySelector(".social-url").value.trim() : "";
@@ -1101,7 +1277,7 @@ const SOCIAL_ICONS = {
       return `<div class="social-row-brand" data-social="${esc(c.brand)}">
 <div class="social-brand-icon social-brand-icon--${esc(c.brand)}">${icon}</div>
 <div><span class="social-name">${esc(c.name)}</span><span class="social-handle">${esc(c.handle)}</span>
-<input id="social_${esc(c.brand)}" class="social-url" type="url" inputmode="url" aria-label="${esc(c.name)} link" placeholder="${esc(c.placeholder)}" value="${esc(url)}" /></div>
+<input id="social_${esc(c.brand)}" class="social-url" type="url" inputmode="url" aria-label="${esc(c.name)} link" aria-describedby="social_${esc(c.brand)}_error" placeholder="${esc(c.placeholder)}" value="${esc(url)}" /><span class="field-err" id="social_${esc(c.brand)}_error" data-field-error="social_${esc(c.brand)}" role="alert" hidden></span></div>
 <label class="yr-toggle" title="Show on public page"><input type="checkbox" class="social-toggle" aria-label="Show ${esc(c.name)} on public page" ${enabled ? "checked" : ""} /><span class="yr-slider"></span></label>
 </div>`;
     }).join("");
@@ -1184,6 +1360,61 @@ export function renderLegal() {
   }).join("");
 }
 
+/**
+ * The Customize tab states the public address; the Domain tab owns changing it.
+ * Both read the one domain status this function already fetches.
+ */
+function setPublicDomainSummary(text) {
+  const el = $("sitePublicDomainSummary");
+  if (el) el.textContent = text;
+}
+
+// Only a domain the backend calls active is a public address; a pending, saved
+// or failed one would send viewers nowhere, so it never replaces the default.
+let _activePublicDomain = null;
+
+/** The one resolved public URL every address affordance reads. */
+export function publicSiteUrl() {
+  if (_activePublicDomain) return `https://${_activePublicDomain}/`;
+  return `${location.origin}/${state.SLUG}`;
+}
+
+/** Domain truth arrives after first paint; it repaints the address in place. */
+export function setActivePublicDomain(domain) {
+  _activePublicDomain = domain || null;
+  renderSitePublicAddress();
+}
+
+/** Publish-independent facts about where the site lives, stated once. */
+export function renderSitePublicAddress() {
+  const card = $("sitePublicAddressCard");
+  if (!card || (!state.SLUG && !_activePublicDomain)) return;
+  const publicUrl = publicSiteUrl();
+  const urlEl = $("sitePublicUrl");
+  if (urlEl) urlEl.textContent = publicUrl;
+  for (const id of ["sitePublicOpen", "sitePublicSiteAction"]) {
+    const link = $(id);
+    if (link) {
+      link.href = publicUrl;
+      link.title = publicUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    }
+  }
+  const copy = $("sitePublicCopy");
+  const copyStatus = $("sitePublicCopyStatus");
+  if (copy && !copy._wired) {
+    copy._wired = true;
+    copy.addEventListener("click", async () => {
+      // Read the URL at click time so a domain that went active mid-session
+      // is the one that gets copied.
+      const url = publicSiteUrl();
+      const copied = await copyToClipboard(url);
+      flashButton(copy, copied ? "Copied!" : "Copy failed");
+      // Colour and a flashing label are not a message: say what happened.
+      if (copyStatus) copyStatus.textContent = copied ? `Copied ${url} to your clipboard.` : "Could not copy the link. Select it and copy manually.";
+    });
+  }
+}
+
 export async function renderDomain() {
   const pro = state.ME.plan === "pro" || state.ME.plan === "agency";
   const domainBody = $("domainBody");
@@ -1198,6 +1429,7 @@ export async function renderDomain() {
   if (overviewTitle) overviewTitle.textContent = "Checking your domain…";
   if (overviewText) overviewText.textContent = "Your default yourrank.site address remains available while we check for a custom domain.";
   if (overviewStatus) overviewStatus.textContent = "Checking";
+  setPublicDomainSummary("Checking your domain…");
 
   // Load existing domain status
   try {
@@ -1232,6 +1464,8 @@ export async function renderDomain() {
         badge.className = `v3-chip${domainState === "active" ? " v3-chip--fulfilled" : domainState === "pending" || domainState === "saved" ? " v3-chip--pending" : ""}`;
       }
       if (manageStatus) manageStatus.textContent = stateMessages[domainState] || "This domain is connected to your site.";
+      setPublicDomainSummary(`${data.customDomain} — ${(stateLabels[domainState] || "Connected").toLowerCase()}.`);
+      setActivePublicDomain(domainState === "active" ? data.customDomain : null);
       if ($("domainManageExpiry")) {
         $("domainManageExpiry").textContent = data.order?.expires_at ? new Date(data.order.expires_at).toLocaleDateString() : "Managed externally";
       }
@@ -1313,12 +1547,18 @@ export async function renderDomain() {
       }
     } else {
       $("domainManageCard")?.setAttribute("hidden", "true");
+      setActivePublicDomain(null);
       if (overviewTitle) overviewTitle.textContent = "No custom domain";
       if (overviewText) overviewText.textContent = "Your default yourrank.site address is active. Connect a domain you own or search for a new one below.";
       if (overviewStatus) overviewStatus.textContent = "Not connected";
+      setPublicDomainSummary(pro
+        ? "No custom domain. Connect one you own, or buy one from the Domain tab."
+        : "Custom domains are a Pro feature. Your yourrank.site address stays active.");
     }
   } catch (err) {
     logError("domain-status", err);
+    setActivePublicDomain(null);
+    setPublicDomainSummary("We could not check your domain. Open the Domain tab to retry.");
     if (overviewTitle) overviewTitle.textContent = "Domain status unavailable";
     if (overviewText) overviewText.textContent = "We could not check the current domain. Try again before making changes.";
     if (overviewStatus) overviewStatus.textContent = "Needs attention";
@@ -1631,17 +1871,66 @@ function closeOutErrorMessage(err) {
   return err?.message || "Couldn't close out — your changes are still here. Check your connection and try again.";
 }
 
+// One save can be in flight at a time, whichever save button started it: the
+// editor save bar and the Site settings save bar are two views of one draft.
+let _saving = false;
+
+function saveButtons() {
+  return [$("save"), $("settingsSave")].filter(Boolean);
+}
+
+/**
+ * What the quiet save strip says, which depends on which settings tab the
+ * creator is on: only Customize has controls that save on their own.
+ */
+export function cleanSaveStatusText() {
+  const active = document.querySelector("[data-settings-tab].is-on")?.dataset.settingsTab;
+  return active === "notifications"
+    ? "Use Save changes after updating notification destinations."
+    : "Navigation switches save immediately. Use Save changes for everything else.";
+}
+
+/** Mirror the save status where the creator is looking, not only in the toast. */
+function setSaveStatusText(text) {
+  const settingsText = $("settingsSaveText");
+  if (settingsText) settingsText.textContent = text || "Use Save changes after updating these settings.";
+}
+
+/**
+ * The settings save bar sits directly under the tabs so an edit anywhere on
+ * the page surfaces Save without scrolling. It appears only while the draft
+ * is dirty on a tab whose fields it saves, and hides again the moment a save
+ * (or a tab that saves on its own, like Navigation switches) leaves nothing
+ * unsaved.
+ */
+export function syncSettingsSaveBar() {
+  const bar = $("settingsSaveBar");
+  if (!bar) return;
+  const tab = document.querySelector("[data-settings-tab].is-on")?.dataset.settingsTab || "customize";
+  bar.hidden = !(state._dirty && (tab === "customize" || tab === "notifications"));
+}
+
 export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {}) {
   const btn = button || $("save"), status = $("status"), publishAction = $("publishAction");
+  if (_saving) return;
   const { payload, invalid } = collectImpl();
   if (invalid.length) {
     const first = invalid[0];
-    status.textContent = `Fix the invalid ${first.label.toLowerCase()} before saving.`;
+    for (const entry of invalid) {
+      if (entry.input) entry.input.dataset.touched = "1";
+    }
+    collectImpl();
+    const message = first.message || `Fix the invalid ${first.label.toLowerCase()} before saving.`;
+    status.textContent = message;
     status.hidden = false;
     status.setAttribute("role", "alert");
+    setSaveStatusText(message);
     first.input?.focus();
     return;
   }
+  _saving = true;
+  for (const other of saveButtons()) other.disabled = true;
+  setSaveStatusText("Saving your changes…");
   btn.disabled = true; btn.textContent = "Saving…"; status.textContent = "";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
@@ -1721,8 +2010,15 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     }
     status.hidden = false;
   }
+  _saving = false;
+  for (const other of saveButtons()) other.disabled = false;
   btn.disabled = false; btn.textContent = "Save changes";
+  // A clean draft has nothing to save, so the settings save button goes quiet
+  // again instead of inviting a second identical request.
+  const settingsSave = $("settingsSave");
+  if (settingsSave) settingsSave.disabled = !state._dirty;
   if (publishAction) { publishAction.disabled = false; publishAction.removeAttribute("aria-busy"); }
+  setSaveStatusText(status.textContent);
   const savedMsg = status.textContent;
   if (justPublished || savedMsg === "Saved") {
     setTimeout(() => { if (status.textContent === savedMsg) status.textContent = ""; }, 6000);

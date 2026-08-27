@@ -61,6 +61,17 @@ function buildFontsHref(font) {
   return `https://fonts.googleapis.com/css2?${sans}&${MONO_PARAMS}&display=swap`;
 }
 
+/**
+ * The creator's text style, from wherever the caller shaped the board. `Inter`
+ * is the dashboard's "Default" option rather than a chosen family, so it keeps
+ * the site's own type stack instead of overriding it.
+ */
+function resolveFont(data) {
+  const font = data.theme?.font || data.branding?.font;
+  if (!font || font === "Inter") return null;
+  return Object.prototype.hasOwnProperty.call(FONT_GF_PARAMS, font) ? font : null;
+}
+
 /* ── tiny inline icon set (replaces the mockup's Font Awesome) ────────── */
 const S = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
 const ICONS = {
@@ -172,7 +183,9 @@ function navItem({ key, label, href, active, badge }) {
  */
 function creatorMark(logoUrl, cls, px, fallback = "") {
   if (!logoUrl) return fallback;
-  return `<img class="${cls}" src="${esc(logoUrl)}" srcset="${logoSrcSet(logoUrl)}" sizes="${px}px" width="${px}" height="${px}" alt="" />`;
+  const srcset = logoSrcSet(logoUrl);
+  const responsive = srcset ? ` srcset="${srcset}" sizes="${px}px"` : "";
+  return `<img class="${cls}" src="${esc(logoUrl)}"${responsive} width="${px}" height="${px}" alt="" />`;
 }
 
 /** First character of a name, as a quiet typographic mark. */
@@ -493,7 +506,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null });
 
   // B-01: Dynamic font URL based on board's active font.
-  const fontsHref = buildFontsHref(data.theme?.font);
+  const font = resolveFont(data);
+  const fontsHref = buildFontsHref(font);
   // U-01: Compute ink once and share between .yr-site and #gx-root.
   const accentInkValue = accentInkFor(accent);
 
@@ -511,7 +525,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/devin-system.css" />
 ${section === "games" ? gamesIslandHead() : ""}
-<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>
+<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>
 ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />` : ""}
 </head>`;
 

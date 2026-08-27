@@ -310,7 +310,7 @@ async function init() {
     });
   }
   if (hasBoardSettings) {
-    setupSettingsScreen(p, urlParams.get("tab") || "access");
+    setupSettingsScreen(p, urlParams.get("tab") || "customize");
   }
 
   // The save bar, unload guard and preview react to the same notification in

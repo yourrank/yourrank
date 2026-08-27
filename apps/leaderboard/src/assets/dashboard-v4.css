@@ -2752,58 +2752,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .empty--error,
 .v3-dash[data-auth-workspace] .error-state { border-color: #efb8b3; background: var(--ws-danger-soft); color: var(--ws-danger); }
 
-/* Template Selector Grid */
-.v3-dash[data-auth-workspace] .template-selector-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin: 10px 0 16px;
-}
-.v3-dash[data-auth-workspace] .template-select-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 14px 16px;
-  border: 1px solid var(--ws-line);
-  border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface-soft);
-  text-align: left;
-  cursor: pointer;
-  transition: all 140ms ease;
-}
-.v3-dash[data-auth-workspace] .template-select-card:hover {
-  border-color: var(--ws-line-strong);
-  background: #ffffff;
-  transform: translateY(-1px);
-}
-.v3-dash[data-auth-workspace] .template-select-card.is-selected {
-  border-color: var(--ws-accent);
-  background: #ffffff;
-  box-shadow: 0 0 0 2px rgb(var(--ws-accent-rgb) / 0.2);
-}
-.v3-dash[data-auth-workspace] .template-select-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface-soft);
-  color: var(--ws-text);
-}
-.v3-dash[data-auth-workspace] .template-select-card.is-selected .template-select-badge {
-  background: var(--ws-accent-soft);
-  color: var(--ws-accent);
-}
-.v3-dash[data-auth-workspace] .template-select-card strong {
-  font-size: 14px;
-  color: var(--ws-text);
-}
-.v3-dash[data-auth-workspace] .template-select-card span {
-  font-size: 12px;
-  color: var(--ws-text-soft);
-  line-height: 1.4;
-}
-
 /* Theme Presets */
 .v3-dash[data-auth-workspace] .preset-list {
   display: flex;
@@ -6292,6 +6240,84 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   box-shadow: none;
 }
 
+/* Site settings customize tab: the preview is the subject of the page, so it
+   keeps a column of its own and stays in view while the controls scroll. On
+   narrow viewports the source order (preview, then controls) is the layout. */
+.v3-dash[data-auth-workspace] .v3-customize {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-customize-controls {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-customize-preview {
+  min-width: 0;
+}
+
+/* The preview title, viewport tabs and Refresh sit on one line while they fit
+   and wrap below it on a phone instead of pushing the page wider. */
+.v3-dash[data-auth-workspace] .v3-customize-preview .preview-header,
+.v3-dash[data-auth-workspace] .v3-customize-preview .preview-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-settings-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A public address can be long: it wraps instead of widening the page. */
+.v3-dash[data-auth-workspace] .v3-settings-address > code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--ws-type-meta-size);
+}
+
+.v3-dash[data-auth-workspace] .v3-settings-address > .v3-settings-actions {
+  margin-top: 0;
+}
+
+@media (min-width: 1100px) {
+  .v3-dash[data-auth-workspace] .v3-customize {
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize-preview {
+    position: sticky;
+    top: calc(var(--ws-topbar-h) + 76px);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize-controls {
+    order: -1;
+  }
+}
+
+/* Touch widths get the full tap target on the actions a creator uses most. */
+@media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .v3-customize .color-row {
+    flex-wrap: wrap;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize .preview-tab,
+  .v3-dash[data-auth-workspace] .v3-customize .btn,
+  .v3-dash[data-auth-workspace] .v3-settings-address .btn,
+  .v3-dash[data-auth-workspace] .v3-settings-save .btn {
+    min-height: var(--tap, 44px);
+  }
+}
+
 .v3-dash[data-auth-workspace] .v3-settings-save {
   position: sticky;
   top: calc(var(--ws-topbar-h) + 12px);
@@ -6325,6 +6351,17 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-settings-field > .v3-settings-label {
   display: inline-block;
   margin-top: 16px;
+}
+
+/* Helper, counter and status lines are inline <span>s in the markup; inside a
+   settings field each one gets its own line with a compact gap so "…on your
+   public site." and "38 of 120 characters" can never run together. */
+.v3-dash[data-auth-workspace] .v3-settings-field > .v3-settings-muted,
+.v3-dash[data-auth-workspace] .v3-settings-field > .v3-settings-status,
+.v3-dash[data-auth-workspace] .v3-settings-field > .field-err {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
 }
 
 .v3-dash[data-auth-workspace] .v3-settings-help {

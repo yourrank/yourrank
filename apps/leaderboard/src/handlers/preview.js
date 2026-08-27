@@ -7,6 +7,25 @@ import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed"
 import { redirectResponse } from "../login-redirect.js";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+const DATA_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/**
+ * The logo the creator is looking at right now. A picked image travels in the
+ * draft as one data URI or a responsive set of them, and an explicit `null`
+ * means "remove on save", so the preview shows the change before it is stored.
+ * Anything else falls back to the saved logo route.
+ */
+function draftLogoUrl(draftData, site) {
+  const saved = site.data.branding?.hasLogo ? `/logo/${site.slug}` : null;
+  const draft = draftData.branding ? draftData.branding.logo : undefined;
+  if (draft === undefined) return saved;
+  if (draft === null) return null;
+  const candidates = typeof draft === "string"
+    ? [draft]
+    : (draft && typeof draft === "object" ? Object.keys(draft).sort((a, b) => Number(b) - Number(a)).map((k) => draft[k]) : []);
+  const inline = candidates.find((value) => typeof value === "string" && DATA_IMAGE.test(value.trim()));
+  return inline ? inline.trim() : saved;
+}
 
 export async function handleDashboardPreview(request, env, nonce, {
   currentUserImpl = currentUser,
@@ -27,6 +46,9 @@ export async function handleDashboardPreview(request, env, nonce, {
   const accentB = url.searchParams.get("accentB");
   const font = url.searchParams.get("font");
   const device = url.searchParams.get("device") === "mobile" ? "mobile" : "desktop";
+  // Site settings previews are read-only viewer previews: the creator edits in
+  // the form beside them, so the editor's in-canvas text editing is opted out.
+  const editable = url.searchParams.get("edit") !== "0";
   
   let draftData = {};
   if (request.method === "POST") {
@@ -94,7 +116,7 @@ ${gamesIslandHead()}
       slug: site.slug,
       isCustomDomain: false,
       nonce,
-      logoUrl: plan !== "free" && site.data.branding?.hasLogo ? `/logo/${site.slug}` : null,
+      logoUrl: plan !== "free" ? draftLogoUrl(draftData, site) : null,
       watermark,
       preview: true,
       previewDevice: device,
@@ -103,13 +125,14 @@ ${gamesIslandHead()}
 
   const previewMinWidth = device === "mobile" ? 390 : 1100;
   const editableSelectors = ".yr-brand, .yr-h1, .yr-lede, .yr-hero-r .yr-big";
-  html = html.replace("</head>", `<style nonce="${nonce}">
-    html, body { min-width: ${previewMinWidth}px; overflow: hidden; }
+  const editableCss = editable ? `
     ${editableSelectors} { cursor: text; transition: outline 0.15s ease, outline-offset 0.15s ease; }
-    ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }
+    ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }` : "";
+  html = html.replace("</head>", `<style nonce="${nonce}">
+    html, body { min-width: ${previewMinWidth}px; overflow: hidden; }${editableCss}
   </style></head>`);
 
-  if (device === "desktop") {
+  if (device === "desktop" && editable) {
     html = html.replace('</body>', `<script nonce="${nonce}">
       document.addEventListener("click", (e) => {
         const targetSelectors = "${editableSelectors}";
