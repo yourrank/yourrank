@@ -336,7 +336,7 @@ describe("logged-out vs logged-in rendering", () => {
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain(">500</p>"); // balance in the shop hero
+    expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the shop hero
     expect(html).toContain(">Order<");
     expect(html).not.toContain("Sign in with Kick");
   });
@@ -348,7 +348,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Credits");
-    expect(html).toContain(">500</p>"); // balance in the hero
+    expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the hero
     expect(html).toContain("Shoutout"); // order
     expect(html).toContain("Stream"); // ledger description
   });
