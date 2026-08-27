@@ -116,6 +116,31 @@ describe("handleDashboardPreview", () => {
     expect(readOnlyHtml).toContain('class="yr-site"');
   });
 
+  it("shows a picked logo before it is saved, and its removal too", async () => {
+    const uri = "data:image/webp;base64,UklGRgAAAABXRUJQ";
+    const html = async (branding) => (await handleDashboardPreview(
+      previewRequest("board=site-1&device=desktop&edit=0", branding ? { branding } : {}),
+      {},
+      "nonce123",
+      impls(),
+    )).text();
+
+    const picked = await html({ logo: { 64: uri, 512: uri } });
+    expect(picked).toContain(`src="${uri}"`);
+    // A data URI carries its own bytes: asking the logo route for widths would
+    // corrupt it, so the inline mark ships without a srcset.
+    expect(picked).not.toContain(`${uri}?w=64`);
+
+    const single = await html({ logo: uri });
+    expect(single).toContain(`src="${uri}"`);
+
+    mockGetUserSiteById.mockResolvedValue({ ...SITE, data: { ...SITE.data, branding: { ...SITE.data.branding, hasLogo: true } } });
+    const removed = await html({ logo: null });
+    expect(removed).not.toContain("/logo/actual-board");
+    const untouched = await html(null);
+    expect(untouched).toContain("/logo/actual-board");
+  });
+
   it("renders the mobile viewport at the width a phone viewer gets", async () => {
     const res = await handleDashboardPreview(previewRequest("board=site-1&device=mobile&edit=0", {}), {}, "nonce123", impls());
     const html = await res.text();

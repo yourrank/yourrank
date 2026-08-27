@@ -227,6 +227,19 @@ describe("Players CRUD validation", () => {
     expect(players.draftHasChanges(null, saved)).toBe(false);
   });
 
+  // The score input falls back to the amount when the server holds no score, so
+  // a redrawn table reported a change and the unsaved-changes state came back
+  // on every later load of the same page.
+  it("does not read the score field's amount fallback as a change", () => {
+    const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
+    const redrawn = {
+      players: [{ name: "Alice", wagered: "1000", prize: "0", score: "1000", hands: "", netProfit: "", winRate: "", change: "" }],
+      quickAdd: { name: "", wagered: "", prize: "" },
+    };
+    expect(players.draftHasChanges(redrawn, saved)).toBe(false);
+    expect(players.draftHasChanges({ players: [{ ...redrawn.players[0], score: "5" }] }, saved)).toBe(true);
+  });
+
   it("discard restores the saved snapshot and clears dirty state", () => {
     dashboardState.SAVED_PLAYERS = [{ name: "Saved", wagered: 1, prize: 0 }];
     dashboardState._dirty = true;

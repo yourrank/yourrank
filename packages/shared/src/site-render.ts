@@ -183,7 +183,9 @@ function navItem({ key, label, href, active, badge }) {
  */
 function creatorMark(logoUrl, cls, px, fallback = "") {
   if (!logoUrl) return fallback;
-  return `<img class="${cls}" src="${esc(logoUrl)}" srcset="${logoSrcSet(logoUrl)}" sizes="${px}px" width="${px}" height="${px}" alt="" />`;
+  const srcset = logoSrcSet(logoUrl);
+  const responsive = srcset ? ` srcset="${srcset}" sizes="${px}px"` : "";
+  return `<img class="${cls}" src="${esc(logoUrl)}"${responsive} width="${px}" height="${px}" alt="" />`;
 }
 
 /** First character of a name, as a quiet typographic mark. */
