@@ -25,16 +25,58 @@ describe("new-shell auxiliary renderers", () => {
     expect(legal).toContain("Privacy Policy");
     expect(profile).toContain("No channel links yet.");
     expect(profile).toContain("No public leaderboards yet.");
+    expect(profile).toContain('class="yr-vhead"');
+    expect(profile).not.toContain("STREAMER PROFILE");
   });
 
   it("renders archive empty state and chrome-less embed", async () => {
     const hall = await renderNewHallOfFame(record.data, opts);
     const embed = renderNewEmbed(record.data, opts);
     expect(hall).toContain("No past winners yet.");
+    expect(hall).toContain('id="yr-hof-title"');
     expect(embed).toContain('class="yr-embed"');
     expect(embed).not.toContain("yr-region");
     expect(embed).toContain("Alex");
     expect(embed).toContain("$100");
+  });
+
+  it("renders creator channels and boards as the same flat viewer rows", async () => {
+    const profile = await renderNewStreamerProfile({
+      ...record.data,
+      socials: [
+        { name: "Twitch", url: "https://twitch.tv/example", enabled: true },
+        { name: "Unsafe", url: "javascript:alert(1)", enabled: true },
+      ],
+    }, {
+      ...opts,
+      boards: [
+        { slug: "alpha", name: "Alpha Community" },
+        { slug: "beta", name: "Beta Community" },
+      ],
+    });
+    expect(profile).toContain('class="yr-rwds"');
+    expect(profile).toContain("Twitch");
+    expect(profile).toContain("Open channel");
+    expect(profile).toContain('rel="noopener noreferrer"');
+    expect(profile).not.toContain("javascript:alert(1)");
+    expect(profile).toContain('href="/alpha"');
+    expect(profile).toContain("Open leaderboard");
+    expect(profile).not.toContain('class="yr-g12"');
+  });
+
+  it("renders Hall of Fame winners as flat rows with explicit winner text", async () => {
+    const hall = await renderNewHallOfFame({
+      ...record.data,
+      pastWinners: [
+        { label: "Spring", players: 42, winner: "A very long winner name ✨" },
+        { label: "Summer", players: 0, winner: "" },
+      ],
+    }, opts);
+    expect(hall).toContain('class="yr-rwds"');
+    expect(hall).toContain("42 players");
+    expect(hall).toContain("Winner: A very long winner name ✨");
+    expect(hall).toContain("Winner: Not recorded");
+    expect(hall).not.toContain('class="yr-card yr-lb"');
   });
 
   it("keeps auxiliary pages neutral in navigation and preserves free-plan attribution", async () => {
