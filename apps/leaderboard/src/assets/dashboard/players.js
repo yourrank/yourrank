@@ -472,7 +472,9 @@ function playersFingerprint(rows) {
         ? row?.wagered
         : row?.[key];
       if (raw === undefined || raw === null || String(raw).trim() === "") return null;
-      const number = Number(String(raw).replace(/,/g, ""));
+      // Money inputs hold their formatted display value ("$9,500.00"), so the
+      // currency dressing comes off before the numeric comparison.
+      const number = Number(String(raw).replace(/[$,\s]/g, ""));
       return Number.isFinite(number) ? number : String(raw).trim();
     }),
   ]));

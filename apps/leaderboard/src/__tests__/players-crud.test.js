@@ -227,13 +227,13 @@ describe("Players CRUD validation", () => {
     expect(players.draftHasChanges(null, saved)).toBe(false);
   });
 
-  // The score input falls back to the amount when the server holds no score, so
-  // a redrawn table reported a change and the unsaved-changes state came back
-  // on every later load of the same page.
-  it("does not read the score field's amount fallback as a change", () => {
+  // A redrawn table used to read as a change — the score input falls back to
+  // the amount and money inputs hold formatted values — so the unsaved-changes
+  // state came back on every later load of the same page.
+  it("does not read a redrawn table's formatting as a change", () => {
     const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
     const redrawn = {
-      players: [{ name: "Alice", wagered: "1000", prize: "0", score: "1000", hands: "", netProfit: "", winRate: "", change: "" }],
+      players: [{ name: "Alice", wagered: "$1,000.00", prize: "$0.00", score: "1000.00", hands: "", netProfit: "", winRate: "", change: "" }],
       quickAdd: { name: "", wagered: "", prize: "" },
     };
     expect(players.draftHasChanges(redrawn, saved)).toBe(false);
