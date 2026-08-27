@@ -106,7 +106,7 @@ export function renderNewPlayerProfile(data, player, history, opts) {
     ? `<ul class="yr-hists" role="list">${history.map((h) => {
       const place = Number(h.rank) > 0 ? `Rank #${Number(h.rank)}` : "Unranked";
       const prize = hidePrizes ? "" : `<p class="yr-hist-d">Prize ${esc(formatMoney(currency, h.prize))}</p>`;
-      return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${esc(formatMoney(currency, h.wagered))}</p>${prize}</div></li>`;
+      return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt"><span class="yr-hist-lbl">Wagered</span>${esc(formatMoney(currency, h.wagered))}</p>${prize}</div></li>`;
     }).join("")}</ul>`
     : '<p class="yr-empty">No archived results yet.</p>';
   const content = `<header class="yr-vhead"><span class="yr-cue">Player</span><h1 class="yr-h1">${esc(name)}</h1><p class="yr-vhead-lede">Where this player stands on ${esc(r.data.brand?.name || r.slug)} right now, and their archived results.</p></header><section class="yr-vsec" aria-labelledby="yr-player-standing"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-standing">Current standing</h2></div><ul class="yr-hists" role="list">${standing}</ul></section><section class="yr-vsec" aria-labelledby="yr-player-history"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-history">Archived results</h2></div>${rows}</section>`;

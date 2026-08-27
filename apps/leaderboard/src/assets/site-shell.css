@@ -466,6 +466,9 @@
 .yr-hist-n, .yr-ord-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
 .yr-hist-side { flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .yr-hist-amt { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A value in a row has no column heading to lean on, so it names its own field
+   on the line above it: the label reads as a caption, not as a second figure. */
+.yr-hist-lbl { display: block; font-family: var(--yr-sans); font-size: 11px; line-height: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yr-faint); }
 .yr-hist-d { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute); white-space: nowrap; }
 .yr-ord { justify-content: space-between; }
 

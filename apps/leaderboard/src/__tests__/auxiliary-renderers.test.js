@@ -127,6 +127,27 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).not.toMatch(/medal|trophy|achievement/i);
   });
 
+  it("names the field an archived row's leading value belongs to", async () => {
+    const profile = await renderNewPlayerProfile(
+      record.data,
+      { name: "Alex", rank: 3, wagered: 12500, prize: 250 },
+      [{ label: "Monthly", rank: 2, wagered: 9900, prize: 40 }],
+      opts,
+    );
+    // The row has no column heading, so the value carries its own label for both
+    // a sighted phone reader and a screen reader.
+    expect(profile).toContain('<p class="yr-hist-amt"><span class="yr-hist-lbl">Wagered</span>$9,900</p>');
+    expect(profile).toContain('<p class="yr-hist-d">Prize $40</p>');
+    expect(profile).not.toContain('<p class="yr-hist-amt">$9,900</p>');
+    // Current standing keeps its own labelled rows unchanged.
+    expect(profile).toContain('<p class="yr-hist-n">Current rank</p></div><div class="yr-hist-side"><p class="yr-hist-amt">#3</p>');
+    expect(profile).toContain('<p class="yr-hist-n">Wagered</p></div><div class="yr-hist-side"><p class="yr-hist-amt">$12,500</p>');
+    expect(profile).toContain('<p class="yr-hist-n">Prize</p></div><div class="yr-hist-side"><p class="yr-hist-amt">$250</p>');
+    expect(profile).not.toContain('class="yr-table"');
+    expect(profile).not.toContain("<table");
+    expect(profile).not.toContain('class="yr-kpi');
+  });
+
   it("keeps a pathological player name safe while retaining the accessible name", async () => {
     const long = "Ω".repeat(50) + "🎮".repeat(10) + "x".repeat(40);
     const profile = await renderNewPlayerProfile(record.data, { name: long, rank: 0, wagered: 9e15, prize: 0 }, [], opts);
@@ -146,8 +167,10 @@ describe("new-shell auxiliary renderers", () => {
       opts,
     );
     expect(profile).toContain("Wagered");
+    expect(profile).toContain('<span class="yr-hist-lbl">Wagered</span>$100');
     expect(profile).not.toContain(">Prize<");
     expect(profile).not.toContain("Prize $25");
+    expect(profile).not.toContain('class="yr-hist-d"');
     expect(profile).not.toContain("—");
   });
 
