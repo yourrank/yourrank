@@ -41,7 +41,9 @@ describe("public leaderboard standings", () => {
     expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Standings</h1>');
     expect(html).toContain('<span class="yr-lbh-state is-live">Live</span>');
     expect(html).toContain("<span>Monthly leaderboard</span>");
-    expect(html).toContain("<span>3 players</span>");
+    // The count belongs to the list it counts, stated once above the rows.
+    expect(html).toContain('<span data-player-count-badge>3 players</span>');
+    expect((html.match(/3 players/g) || []).length).toBe(1);
     expect(html).toContain("Ranked by wagered. Tied players share a rank.");
     // The intro states the board, it does not become a KPI or prize hero.
     expect(html).not.toContain("yr-kpi");
@@ -63,14 +65,17 @@ describe("public leaderboard standings", () => {
 
   it("says so plainly when the board has no players", async () => {
     const html = await render("leaderboard", { data: { ...baseData, players: [] } });
-    expect(html).toContain("No players yet.");
+    // The empty board is a designed state: what is empty, and one line about
+    // when it fills — not a sentence floating in a blank panel.
+    expect(html).toContain('<p class="yr-empty-t">No players yet</p>');
+    expect(html).toContain('<p class="yr-empty-p">The board fills in when');
     expect(rowsOf(html).length).toBe(0);
     expect(html).not.toContain('id="yr-search"');
     expect(html).not.toContain("data-load-more");
     expect(html).not.toContain("No players match that search.");
 
     const soon = await render("leaderboard", { data: { ...baseData, players: [], scheduled: true } });
-    expect(soon).toContain("No players yet. Standings fill in once the round starts.");
+    expect(soon).toContain('<p class="yr-empty-p">Standings fill in once the round starts.</p>');
   });
 
   it("ranks one player, three players and twenty players through the same rows", async () => {

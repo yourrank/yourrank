@@ -28,7 +28,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <a class="yr-sr" href="#main-content">Skip to content</a>
 <header class="yr-top">
 <div class="yr-top-in">
-<a class="yr-id" href="https://example.test/board%20fixture"><span class="yr-id-txt"><span class="yr-id-name">Ampersand &amp; Board</span><span class="yr-id-sub">A &amp; B</span></span></a>
+<a class="yr-id" href="https://example.test/board%20fixture"><span class="yr-mark" aria-hidden="true">A</span><span class="yr-id-txt"><span class="yr-id-name">Ampersand &amp; Board</span><span class="yr-id-sub">A &amp; B</span></span></a>
 <nav class="yr-tabs" aria-label="Sections"><a class="yr-tab" href="https://example.test/board%20fixture"><span>Home</span></a><a class="yr-tab is-on" href="https://example.test/board%20fixture/leaderboard" aria-current="page"><span>Leaderboard</span></a><a class="yr-tab" href="https://example.test/board%20fixture/shop"><span>Rewards</span></a><a class="yr-tab" href="https://example.test/board%20fixture/me"><span>My credits</span></a></nav>
 <div class="yr-top-r"><a class="yr-btn yr-btn--ghost yr-btn--sm" href="/me">Sign in</a><button class="yr-menu" id="yr-menu" type="button" hidden aria-label="Open sections" aria-controls="yr-side" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button></div>
 </div>
@@ -36,12 +36,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <main class="yr-main" id="main-content">
 <section class="yr-lbh">
 <h1 class="yr-h1 yr-lbh-title">Standings</h1>
-<p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span><span>2 players</span></p>
+<p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span></p>
 <p class="yr-lbh-note">Ranked by wagered. Tied players share a rank.</p>
 </section>
 <div data-player-board>
 <div class="yr-panel yr-lb">
-<div class="yr-panel-head"><h2 class="yr-panel-title">Standings</h2><span class="yr-panel-meta"><span data-player-count-badge>2 players</span></span></div>
+<div class="yr-panel-head yr-panel-head--quiet"><h2 class="yr-sr">Standings</h2><span class="yr-panel-meta"><span data-player-count-badge>2 players</span></span></div>
 <div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div><div class="yr-stand-head" aria-hidden="true" data-hide-prizes="false"><span>#</span><span>Player</span><span class="yr-r">Wagered</span><span class="yr-r">Prize</span></div>
 <ol class="yr-stand" data-rows aria-label="Standings for Ampersand &amp; Board" data-value-label="Wagered" data-prize-label="Prize" data-hide-prizes="false"><li class="yr-srow yr-srow--first" data-player-name="alice &lt;3" data-position="1">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>1</span>
@@ -61,13 +61,15 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 </div></div>
 <footer class="yr-foot">
 <p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
-<div class="yr-foot-links"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My credits</a>            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a></div>
-<div class="yr-foot-links yr-foot-links--more"><button type="button" data-feedback-open>Send feedback</button></div>
-<p class="yr-fine">&copy; 2026 Ampersand &amp; Board.</p>
+<div class="yr-foot-bar">
+<p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
+<div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a></div>
+</div>
+<div class="yr-foot-links yr-foot-links--more"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My credits</a><button type="button" data-feedback-open>Send feedback</button></div>
 </footer>
 </main>
 <div class="yr-drawer" id="yr-side" aria-label="Ampersand &amp; Board menu" tabindex="-1">
-<div class="yr-drawer-head"><a class="yr-drawer-id" href="https://example.test/board%20fixture">Ampersand &amp; Board</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+<div class="yr-drawer-head"><a class="yr-drawer-id" href="https://example.test/board%20fixture"><span class="yr-mark yr-mark--sm" aria-hidden="true">A</span>Ampersand &amp; Board</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
 <nav class="yr-nav yr-noscroll" aria-label="Sections"><a class="yr-nav-a" href="https://example.test/board%20fixture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg> Home</a><a class="yr-nav-a is-on" href="https://example.test/board%20fixture/leaderboard" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3"/><path d="M7 5H4v2a3 3 0 0 0 3 3"/></svg> Leaderboard</a><a class="yr-nav-a" href="https://example.test/board%20fixture/shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 9h18l-1.5 11H4.5z"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/></svg> Rewards</a><a class="yr-nav-a" href="https://example.test/board%20fixture/me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v11c0 1.7 3.1 3 7 3s7-1.3 7-3v-11"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg> My credits</a></nav>
 <div class="yr-drawer-foot"><a class="yr-user" href="https://example.test/board%20fixture/me"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a></div>
 </div>

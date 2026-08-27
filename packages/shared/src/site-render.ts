@@ -20,7 +20,6 @@ import {
   safeUrl,
 } from "./public-render-helpers.js";
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
-import { generateAvatarSvg } from "@yourrank/shared/avatar";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
 const SECTION_LABELS = {
@@ -166,10 +165,20 @@ function navItem({ key, label, href, active, badge }) {
   return `<a class="${cls}" href="${href}"${aria}>${icon} ${esc(label)}</a>`;
 }
 
-/** The creator's mark: real configured logo only, never a placeholder block. */
-function creatorMark(logoUrl, cls, px) {
-  if (!logoUrl) return "";
+/**
+ * The creator's mark: their real configured logo, or a monogram cut from the
+ * name they chose. A monogram is still their own data, so identity never falls
+ * back to an invented avatar or an empty slot in the bar.
+ */
+function creatorMark(logoUrl, cls, px, fallback = "") {
+  if (!logoUrl) return fallback;
   return `<img class="${cls}" src="${esc(logoUrl)}" srcset="${logoSrcSet(logoUrl)}" sizes="${px}px" width="${px}" height="${px}" alt="" />`;
+}
+
+/** First character of a name, as a quiet typographic mark. */
+function monogram(name, cls) {
+  const first = Array.from(String(name || "").trim())[0] || "Y";
+  return `<span class="${cls}" aria-hidden="true">${esc(first.toUpperCase())}</span>`;
 }
 
 /**
@@ -198,7 +207,7 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
       : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
 
   return `<div class="yr-drawer" id="yr-side" aria-label="${name} menu" tabindex="-1">
-<div class="yr-drawer-head"><a class="yr-drawer-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-drawer-logo", 32)}${name}</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu">${ICONS.close}</button></div>
+<div class="yr-drawer-head"><a class="yr-drawer-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-drawer-logo", 32, monogram(b.name || slug, "yr-mark yr-mark--sm"))}${name}</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu">${ICONS.close}</button></div>
 <nav class="yr-nav yr-noscroll" aria-label="Sections">${items}</nav>
 ${foot ? `<div class="yr-drawer-foot">${foot}</div>` : ""}
 </div>
@@ -209,10 +218,16 @@ function viewerName(viewer) {
   return viewer?.kick_username || viewer?.discord_username || "Member";
 }
 
+/**
+ * The viewer's own mark. Their connected avatar when they have one, otherwise a
+ * monogram of the name they signed in with — a quiet consumer treatment, and
+ * one that emits no gradient or filter ids, so the bar and the drawer can both
+ * show it without colliding on document-unique ids.
+ */
 function avatarHtml(viewer) {
   return viewer?.avatar_url
     ? `<img src="${esc(viewer.avatar_url)}" alt="" />`
-    : generateAvatarSvg(viewerName(viewer), 26);
+    : monogram(viewerName(viewer), "yr-ava-mono");
 }
 
 /**
@@ -236,7 +251,7 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
 
   return `<header class="yr-top">
 <div class="yr-top-in">
-<a class="yr-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-id-logo", 36)}<span class="yr-id-txt"><span class="yr-id-name">${name}</span>${tagline ? `<span class="yr-id-sub">${tagline}</span>` : ""}</span></a>
+<a class="yr-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-id-logo", 36, monogram(b.name || slug, "yr-mark"))}<span class="yr-id-txt"><span class="yr-id-name">${name}</span>${tagline ? `<span class="yr-id-sub">${tagline}</span>` : ""}</span></a>
 <nav class="yr-tabs" aria-label="Sections">${nav}</nav>
 <div class="yr-top-r">${right}<button class="yr-menu" id="yr-menu" type="button" hidden aria-label="Open sections" aria-controls="yr-side" aria-expanded="false">${ICONS.bars}</button></div>
 </div>
@@ -253,14 +268,16 @@ function signInLink(r, returnTo, cls = "yr-btn") {
   return `<a class="${cls} yr-btn--sm" href="/me">Sign in</a>`;
 }
 
-function signInButton(r, returnTo) {
+// `cls` exists so a page that already has one primary action can keep signing
+// in as the quieter second choice instead of showing two filled buttons.
+function signInButton(r, returnTo, cls = "yr-btn") {
   if (r.viewerKickAuthEnabled) {
-    return `<a class="yr-btn" href="/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}">Sign in with Kick</a>`;
+    return `<a class="${cls}" href="/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}">Sign in with Kick</a>`;
   }
   if (r.viewerDiscordAuthEnabled) {
-    return `<a class="yr-btn" href="/api/viewer/auth/discord?returnTo=${encodeURIComponent(returnTo)}">Sign in with Discord</a>`;
+    return `<a class="${cls}" href="/api/viewer/auth/discord?returnTo=${encodeURIComponent(returnTo)}">Sign in with Discord</a>`;
   }
-  return `<a class="yr-btn" href="/me">Sign in</a>`;
+  return `<a class="${cls}" href="/me">Sign in</a>`;
 }
 
 function hero({ eyebrow, title, lede, right }) {
@@ -279,9 +296,12 @@ function heroStat(label, value, { cd = null } = {}) {
   return `<div><p class="yr-label">${esc(label)}</p><p class="yr-big"${attr}>${value}</p></div>`;
 }
 
-function panel({ title, meta = "", body, foot = "", pad = false }) {
+// `titleHidden` is for the case where the page heading already said it: the
+// heading stays in the outline for assistive technology, but a sighted reader
+// is not told "Standings" twice in eighty pixels.
+function panel({ title, meta = "", body, foot = "", pad = false, titleHidden = false }) {
   return `<div class="yr-panel yr-lb">
-<div class="yr-panel-head"><h2 class="yr-panel-title">${esc(title)}</h2>${meta ? `<span class="yr-panel-meta">${meta}</span>` : ""}</div>
+<div class="yr-panel-head${titleHidden ? " yr-panel-head--quiet" : ""}"><h2 class="${titleHidden ? "yr-sr" : "yr-panel-title"}">${esc(title)}</h2>${meta ? `<span class="yr-panel-meta">${meta}</span>` : ""}</div>
 ${pad ? `<div class="yr-panel-pad">${body}</div>` : body}
 ${foot ? `<div class="yr-panel-foot">${foot}</div>` : ""}
 </div>`;
@@ -289,6 +309,15 @@ ${foot ? `<div class="yr-panel-foot">${foot}</div>` : ""}
 
 function sectionHead(title, right = "") {
   return `<div class="yr-sec-head"><h2 class="yr-sec-title">${esc(title)}</h2>${right}</div>`;
+}
+
+/**
+ * One empty state everywhere: a quiet mark, what is empty, and one sentence
+ * saying when it fills. Modest height on purpose — an empty list is not an
+ * event worth half a viewport.
+ */
+function emptyState(icon, title, note = "", extra = "") {
+  return `<div class="yr-empty">${icon ? `<span class="yr-empty-ico" aria-hidden="true">${icon}</span>` : ""}<p class="yr-empty-t">${esc(title)}</p>${note ? `<p class="yr-empty-p">${note}</p>` : ""}${extra}</div>`;
 }
 
 const LEDGER_KIND = {
@@ -314,12 +343,18 @@ const ORDER_STATUS_NOTE = "Pending means the streamer hasn't handed it over yet.
  * for, the fine print, and the viewer's own balance stated once in plain text.
  */
 function viewerHead({ title, lede, balance = null, actions = "", disclaimer = true }) {
-  return `<section class="yr-vhead">
+  // The balance and the way onward travel together beside the explanation
+  // instead of spreading down the page, so the head reads as one module.
+  const aside = balance === null && !actions
+    ? ""
+    : `<div class="yr-vhead-aside">${balance === null ? "" : `<p class="yr-vbal" data-credit-balance="${Number(balance) || 0}"><span class="yr-vbal-num" data-credit-balance-num>${formatNumber(balance)}</span> <span class="yr-vbal-unit">free credits</span></p>`}${actions ? `<div class="yr-vhead-acts">${actions}</div>` : ""}</div>`;
+  return `<section class="yr-vhead${aside ? " yr-vhead--split" : ""}">
+<div class="yr-vhead-txt">
 <h1 class="yr-h1">${esc(title)}</h1>
 <p class="yr-vhead-lede">${lede}</p>
-${balance === null ? "" : `<p class="yr-vbal" data-credit-balance="${Number(balance) || 0}"><span class="yr-vbal-num" data-credit-balance-num>${formatNumber(balance)}</span> <span class="yr-vbal-unit">free credits</span></p>`}
 ${disclaimer ? `<p class="yr-vhead-fine">${esc(CREDITS_DISCLAIMER)}</p>` : ""}
-${actions ? `<div class="yr-vhead-acts">${actions}</div>` : ""}
+</div>
+${aside}
 </section>`;
 }
 
@@ -345,10 +380,10 @@ function rewardRow({ item, viewer, balance, blocked, signIn }) {
     state = "Ordering disabled on this site";
     action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
   } else if (!inStock) {
-    state = "Out of stock";
+    // The control already says it in words, so the row does not say it twice.
     action = `<span class="yr-act yr-act--off" role="note">Out of stock</span>`;
   } else if (short > 0) {
-    state = `Not enough credits — ${formatNumber(short)} more needed`;
+    state = `${formatNumber(short)} more needed`;
     action = `<span class="yr-act yr-act--off" role="note">Not enough credits</span>`;
   } else {
     if (stock !== null && stock <= 3) state = `${formatNumber(stock)} left`;
@@ -527,11 +562,16 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
     viewer ? `<a href="/me">Your sites &amp; account</a>` : "",
     `<button type="button" data-feedback-open>Send feedback</button>`,
   ].filter(Boolean).join("");
+  // The primary line is the creator's own: their copyright, the legal pages and
+  // the platform credit. Section links stay for a viewer without JavaScript,
+  // but they read as a quiet site map underneath rather than as link soup.
   return `<footer class="yr-foot">
 <p class="yr-fine">${CREDITS_DISCLAIMER}</p>
-<div class="yr-foot-links">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${legalLinks}</div>
-<div class="yr-foot-links yr-foot-links--more">${secondary}</div>
-<p class="yr-fine">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
+<div class="yr-foot-bar">
+<p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
+<div class="yr-foot-links">${legalLinks}</div>
+</div>
+<div class="yr-foot-links yr-foot-links--more">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</div>
 </footer>`;
 }
 
@@ -567,9 +607,18 @@ function homeMain(ctx) {
     .filter((s) => s.href !== "#");
   const kickLink = socials.find((s) => /kick/i.test(s.label));
 
+  // Home opens with the creator, not with the product: their mark, their name,
+  // their line, and the one thing a visitor is here to do. A signed-in viewer
+  // gets their balance module beside it instead of a second rewards button.
+  const introActs = [
+    !viewer && shopEnabled ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
+    kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
+    viewer ? "" : signInButton(r, returnTo, shopEnabled ? "yr-btn yr-btn--ghost" : "yr-btn"),
+  ].filter(Boolean).join("");
+
   const intro = `<section class="yr-intro">
-<div class="yr-intro-id">${creatorMark(logoUrl, "yr-intro-logo", 64)}<div class="yr-intro-txt"><h1 class="yr-intro-name">${name}</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div></div>
-<div class="yr-intro-acts">${kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : ""}${viewer ? "" : signInButton(r, returnTo)}</div>
+<div class="yr-intro-id">${creatorMark(logoUrl, "yr-intro-logo", 64, monogram(b.name || slug, "yr-mark yr-mark--lg"))}<div class="yr-intro-txt"><h1 class="yr-intro-name">${name}</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div></div>
+${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 </section>`;
 
   const timing = data.ended
@@ -594,7 +643,7 @@ function homeMain(ctx) {
     ? `<section class="yr-sec">
 ${sectionHead("Leaderboard", `<a class="yr-sec-link" href="${boardHref}">View leaderboard ${ICONS.arrow}</a>`)}
 <p class="yr-sec-meta">${boardMeta}</p>
-${leaders ? `<ol class="yr-leads">${leaders}</ol>` : `<p class="yr-sec-note">No players on the board yet — the first scores show up here.</p>`}
+${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "No players on the board yet", "The first scores show up here once the board opens.")}
 </section>`
     : "";
 
@@ -607,10 +656,12 @@ ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : `<p class="yr-sec-note">No 
     : "";
 
   const preview = items.slice().sort((x, z) => Number(x.cost) - Number(z.cost)).slice(0, 3);
-  const rewardsSection = shopEnabled && preview.length
+  const rewardsSection = shopEnabled
     ? `<section class="yr-sec">
-${sectionHead("Rewards", `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>`)}
-<ul class="yr-preview">${preview.map((item) => `<li class="yr-preview-row"><span class="yr-preview-n">${esc(item.name)}</span><span class="yr-preview-c">${formatNumber(Number(item.cost) || 0)} credits</span></li>`).join("")}</ul>
+${sectionHead("Rewards", preview.length ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}
+${preview.length
+      ? `<ul class="yr-preview">${preview.map((item) => `<li class="yr-preview-row"><span class="yr-preview-n">${esc(item.name)}</span><span class="yr-preview-c">${formatNumber(Number(item.cost) || 0)} credits</span></li>`).join("")}</ul>`
+      : emptyState(ICONS.gift, "No rewards yet", "Rewards will appear here once there are some to claim.")}
 </section>`
     : "";
 
@@ -621,14 +672,16 @@ ${sectionHead(`Find ${b.name || slug}`)}
 </section>`
     : "";
 
-  const nothingYet = !leaders && !preview.length
+  // The previews carry their own empty states, so a page-level "nothing yet"
+  // line only earns its place when neither preview is on the page at all.
+  const nothingYet = !boardSection && !rewardsSection
     ? `<p class="yr-sec-note">${name} hasn't added players or rewards yet. Check back soon.</p>`
     : "";
 
-  return `${intro}
-${viewerNote}
-${boardSection}
-${rewardsSection}
+  // Two balanced previews on a wide viewport, one stack on a phone: the creator
+  // and their balance first, then the board, then the rewards.
+  return `<div class="yr-home-top">${intro}${viewerNote}</div>
+${boardSection || rewardsSection ? `<div class="yr-home-cols">${boardSection}${rewardsSection}</div>` : ""}
 ${nothingYet}
 ${linksSection}`;
 }
@@ -656,7 +709,7 @@ function boardMain(ctx) {
   const metaItems = [
     `<span class="yr-lbh-state ${stateClass}">${stateLabel}</span>`,
     `<span>${esc(period)} leaderboard</span>`,
-    playerCount ? `<span>${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}</span>` : "",
+
     cd && !data.ended ? `<span>${data.scheduled ? "Starts in" : "Ends in"} <b data-ends-at="${cd.ms}">${esc(cd.text)}</b></span>` : "",
     pool && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
   ].filter(Boolean).join("");
@@ -690,7 +743,7 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
-    : `<p class="yr-empty">${data.scheduled ? "No players yet. Standings fill in once the round starts." : "No players yet."}</p>`;
+    : emptyState(ICONS.trophy, "No players yet", data.scheduled ? "Standings fill in once the round starts." : `The board fills in when ${esc(b.name || slug)} publishes the first scores.`);
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
@@ -701,6 +754,7 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
 <div data-player-board>
 ${panel({
     title: "Standings",
+    titleHidden: true,
     meta: `<span data-player-count-badge>${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}</span>`,
     // Player search filters this list, so it lives with the list rather than
     // in shared chrome every other section has to carry.
@@ -737,13 +791,13 @@ function shopMain(ctx) {
   const list = items.length
     ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
 <ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, balance, blocked, signIn })).join("")}</ul></section>`
-    : `<section class="yr-vsec">${sectionHead("All rewards")}<p class="yr-empty">No rewards yet. Rewards will appear here when ${esc(b.name || slug)} adds them.</p></section>`;
+    : `<section class="yr-vsec">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer
     ? `<section class="yr-vsec">${sectionHead("Recent orders")}
 ${redemptions.length
       ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
-      : `<p class="yr-empty">No orders yet.</p>`}</section>`
+      : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.")}</section>`
     : "";
 
   const canOrder = viewer && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
@@ -845,14 +899,15 @@ ${row.description ? `<p class="yr-hist-p">${esc(row.description)}</p>` : ""}
   }).join("");
 
   const history = `<section class="yr-vsec">${sectionHead("Credit history", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
-${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<p class="yr-empty">No credit activity yet. Use ${creator}'s channel-point rewards to earn credits.</p>`}</section>`;
+${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : emptyState(ICONS.me, "No credit activity yet", `Use ${creator}'s channel-point rewards to earn credits.`)}</section>`;
 
   const orders = `<section class="yr-vsec">${sectionHead("Orders")}
 ${redemptions.length
     ? `<ul class="yr-ords" role="list">${redemptions.map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
-    : `<p class="yr-empty">No orders yet.${siteSections.shop !== false ? ` <a class="yr-inline-link" href="${shopHref}">View rewards</a>.` : ""}</p>`}</section>`;
+    : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.", siteSections.shop !== false ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}</section>`;
 
+  // Two columns of the viewer's own record on a wide viewport, one stack on a
+  // phone: history and orders are peers, not a page each.
   return `${head}
-${history}
-${orders}`;
+<div class="yr-vcols">${history}${orders}</div>`;
 }

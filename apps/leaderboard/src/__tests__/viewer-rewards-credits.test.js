@@ -100,8 +100,10 @@ describe("a creator's Rewards page", () => {
 
   it("says in words why a reward cannot be ordered", async () => {
     const html = await shop();
-    expect(html).toContain("Not enough credits — 450 more needed");
-    expect(html).toContain("Out of stock");
+    expect(html).toContain('<span class="yr-act yr-act--off" role="note">Not enough credits</span>');
+    expect(html).toContain('<p class="yr-rwd-state">450 more needed</p>');
+    // Each unorderable state is named once, by the control the viewer reaches for.
+    expect((html.match(/Out of stock/g) || []).length).toBe(1);
     expect(html).toContain("2 left");
     expect(html).toContain(">Order</button>");
   });

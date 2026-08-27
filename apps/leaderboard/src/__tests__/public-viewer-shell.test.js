@@ -114,10 +114,20 @@ describe("public viewer shell", () => {
     expect(bar[1]).toContain("overflow-wrap: anywhere");
     expect(bar[1]).toContain("-webkit-line-clamp: 2");
     expect(bar[1]).toContain("overflow: hidden");
-    // No JS truncation, and the page heading itself is never clamped.
+    // No JS truncation. The home heading breaks inside the word and stops after
+    // three lines, the same bound the Rewards and My credits heading uses, so an
+    // extreme name cannot push the board and the rewards off the phone.
     expect(readFileSync(join(assets, "site-shell.js"), "utf8")).not.toContain("yr-id-name");
-    expect(css).toMatch(/\.yr-intro-name \{[^}]*overflow-wrap: anywhere/);
-    expect(css).not.toMatch(/\.yr-intro-name \{[^}]*line-clamp/);
+    const intro = css.match(/\.yr-intro-name \{([^}]*)\}/);
+    expect(intro).not.toBeNull();
+    expect(intro[1]).toContain("overflow-wrap: anywhere");
+    expect(intro[1]).toContain("line-clamp: 3");
+    expect(intro[1]).toContain("overflow: hidden");
+    // Copy that quotes the creator's name must break inside the word too, or a
+    // single unbreakable name widens the whole document on a phone.
+    expect(css).toMatch(/\.yr-vnote-p \{[^}]*overflow-wrap: anywhere/);
+    expect(css).toMatch(/\.yr-foot-c \{[^}]*overflow-wrap: anywhere/);
+    expect(css).toMatch(/\.yr-sec-title \{([^}]*)overflow-wrap: anywhere/);
   });
 
   it("keeps the narrow balance and account controls at a 44px minimum target", async () => {
@@ -215,7 +225,7 @@ describe("public viewer shell", () => {
     };
     const html = await render("home", { data: bare });
     expect(html).toContain("Leaderboard and free-credit rewards.");
-    expect(html).toContain("hasn't added players or rewards yet");
+    expect(html).toContain('<p class="yr-empty-t">No players on the board yet</p>');
     expect(html).not.toContain("yr-chips");
     expect(html).not.toContain("yr-vnote");
     expect(html).not.toContain(">My credits<");
@@ -381,6 +391,63 @@ describe("public viewer shell", () => {
     expect(shell).toContain("That reward just went out of stock.");
     // Unrecognised codes and HTTP wording fall back instead of leaking.
     expect(shell).toMatch(/!\/\^HTTP \/\.test\(message\)/);
+  });
+
+  it("gives the creator a visible mark in the header, drawer and home introduction", async () => {
+    const plain = await render("home");
+    // Without a logo the creator still has a mark: an initial, not a generated
+    // SVG whose gradient ids would repeat three times in one document.
+    expect(plain).toContain('<span class="yr-mark" aria-hidden="true">C</span>');
+    expect(plain).toContain('<span class="yr-mark yr-mark--sm" aria-hidden="true">C</span>');
+    expect(plain).toContain('<span class="yr-mark yr-mark--lg" aria-hidden="true">C</span>');
+    expect(plain).not.toContain("<linearGradient");
+    expect(plain).toContain('<h1 class="yr-intro-name">Creator Name</h1>');
+
+    const logo = await render("home", { data: { ...baseData, logoUrl: "https://cdn.test/logo.png" } });
+    expect(logo).toContain('class="yr-id-logo"');
+    expect(logo).toContain('class="yr-intro-logo"');
+    expect(logo).not.toContain('class="yr-mark"');
+  });
+
+  it("leaves one primary action per band and one heading per module", async () => {
+    const html = await render("home");
+    const intro = html.slice(html.indexOf('class="yr-intro-acts"'), html.indexOf("</section>", html.indexOf('class="yr-intro-acts"')));
+    // View rewards is the primary; signing in is the same size but quieter.
+    expect((intro.match(/class="yr-btn"/g) || []).length).toBe(1);
+    expect(intro).toContain('class="yr-btn yr-btn--ghost"');
+
+    // The leaderboard page named itself in the H1, so its panel does not
+    // repeat the word in a second visible heading.
+    const board = await render("leaderboard");
+    expect((board.match(/>Standings</g) || []).length).toBe(2);
+    expect(board).toContain('<h2 class="yr-sr">Standings</h2>');
+    expect(board).not.toContain('<h2 class="yr-panel-title">Standings</h2>');
+  });
+
+  it("states every empty list in the same shape", async () => {
+    const bare = { ...baseData, players: [], shopItems: [], socials: [] };
+    const home = await render("home", { data: bare });
+    const shop = await render("shop", { data: bare, viewer, viewerData });
+    const me = await render("me", { data: bare, viewer, viewerData });
+    for (const html of [home, shop, me]) {
+      const block = html.slice(html.indexOf('class="yr-empty"'));
+      expect(block).toContain('class="yr-empty-ico"');
+      expect(block).toContain('class="yr-empty-t"');
+      expect(block).toContain('class="yr-empty-p"');
+    }
+    expect(shop).toContain("Rewards will appear here when Creator Name adds them.");
+    expect(me).toContain('<p class="yr-empty-t">No orders yet</p>');
+  });
+
+  it("puts the creator's own line first in the footer and keeps section links quiet", async () => {
+    const html = await render("home");
+    const foot = html.slice(html.indexOf('<footer class="yr-foot">'));
+    expect(foot.indexOf('class="yr-foot-c"')).toBeLessThan(foot.indexOf("yr-foot-links--more"));
+    expect(foot).toContain("&copy; ");
+    expect(foot).toContain("Terms of Service");
+    // The no-JS section fallback survives, one step quieter.
+    expect(foot).toContain('<div class="yr-foot-links yr-foot-links--more">');
+    expect(foot).toContain(">Leaderboard</a>");
   });
 
   it("preserves canonical, social and section metadata", async () => {
