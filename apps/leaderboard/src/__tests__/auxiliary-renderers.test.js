@@ -40,7 +40,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(embed).toContain("$100");
   });
 
-  it("renders creator channels and boards as the same flat viewer rows", async () => {
+  it("renders creator channels and boards as flat rows with real actions", async () => {
     const profile = await renderNewStreamerProfile({
       ...record.data,
       socials: [
@@ -56,15 +56,16 @@ describe("new-shell auxiliary renderers", () => {
     });
     expect(profile).toContain('class="yr-rwds"');
     expect(profile).toContain("Twitch");
-    expect(profile).toContain("Open channel");
+    expect(profile).toContain('class="yr-act" href="https://twitch.tv/example"');
     expect(profile).toContain('rel="noopener noreferrer"');
+    expect(profile).toContain('class="yr-sr"> (opens in a new tab)</span>');
+    expect(profile).not.toContain('class="sr-only"');
     expect(profile).not.toContain("javascript:alert(1)");
-    expect(profile).toContain('href="/alpha"');
-    expect(profile).toContain("Open leaderboard");
+    expect(profile).toContain('class="yr-act" href="/alpha">Open leaderboard</a>');
     expect(profile).not.toContain('class="yr-g12"');
   });
 
-  it("renders Hall of Fame winners as flat rows with explicit winner text", async () => {
+  it("renders Hall of Fame winners as flat rows with neutral result text", async () => {
     const hall = await renderNewHallOfFame({
       ...record.data,
       pastWinners: [
@@ -76,6 +77,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(hall).toContain("42 players");
     expect(hall).toContain("Winner: A very long winner name ✨");
     expect(hall).toContain("Winner: Not recorded");
+    expect(hall).not.toContain('class="yr-rwd-state">Winner:');
     expect(hall).not.toContain('class="yr-card yr-lb"');
   });
 
