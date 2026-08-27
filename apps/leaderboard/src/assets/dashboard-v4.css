@@ -6259,6 +6259,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   min-width: 0;
 }
 
+/* The preview title, viewport tabs and Refresh sit on one line while they fit
+   and wrap below it on a phone instead of pushing the page wider. */
+.v3-dash[data-auth-workspace] .v3-customize-preview .preview-header,
+.v3-dash[data-auth-workspace] .v3-customize-preview .preview-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .v3-dash[data-auth-workspace] .v3-settings-address {
   display: flex;
   flex-wrap: wrap;
@@ -6293,6 +6301,20 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
   .v3-dash[data-auth-workspace] .v3-customize-controls {
     order: -1;
+  }
+}
+
+/* Touch widths get the full tap target on the actions a creator uses most. */
+@media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .v3-customize .color-row {
+    flex-wrap: wrap;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize .preview-tab,
+  .v3-dash[data-auth-workspace] .v3-customize .btn,
+  .v3-dash[data-auth-workspace] .v3-settings-address .btn,
+  .v3-dash[data-auth-workspace] .v3-settings-save .btn {
+    min-height: var(--tap, 44px);
   }
 }
 

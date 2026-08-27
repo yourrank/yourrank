@@ -614,6 +614,12 @@ function resetPreviewFrame(mount) {
   }
   fresh.addEventListener("load", () => {
     const local = previewLocalState(mount);
+    // A brand-new frame fires `load` for its initial empty document before the
+    // draft submission lands. Treating that as synced would clear the watchdog
+    // and claim the stale preview matches the draft, so only the render's own
+    // navigation counts.
+    const loaded = fresh.contentWindow?.location?.href;
+    if (!loaded || loaded === "about:blank") return;
     clearTimeout(local.watchdog);
     local.syncedAt = Date.now();
     setPreviewSyncStatus(mount, "synced");
@@ -1129,6 +1135,9 @@ $("logoFile")?.addEventListener("change", () => {
     $("logoFile").value = "";
     return;
   }
+  // The dashboard's CSP allows `data:` images but not `blob:`, so the picked
+  // file is decoded from a data URL rather than an object URL.
+  const reader = new FileReader();
   const img = new Image();
   img.onload = () => {
     const aspect = img.width / img.height;
@@ -1145,7 +1154,7 @@ $("logoFile")?.addEventListener("change", () => {
       srcset[w] = uri;
     }
     const entries = Object.values(srcset);
-    if (entries.length === 0) { setLogoStatus("Couldn't convert that image."); URL.revokeObjectURL(img.src); return; }
+    if (entries.length === 0) { setLogoStatus("Couldn't convert that image."); return; }
     const totalChars = entries.reduce((a, b) => a + b.length, 0);
     if (totalChars > 300000) { setLogoStatus("That image is too big even after resizing. Try a simpler one."); return; }
     state.LOGO = srcset;
@@ -1153,10 +1162,11 @@ $("logoFile")?.addEventListener("change", () => {
     $("logoPreview").hidden = false; $("logoClear").hidden = false;
     setLogoStatus("Logo ready — hit Save to publish it.");
     markDirty();
-    URL.revokeObjectURL(img.src);
   };
   img.onerror = () => { setLogoStatus("Couldn't read that image."); };
-  img.src = URL.createObjectURL(f);
+  reader.onload = () => { img.src = String(reader.result); };
+  reader.onerror = () => { setLogoStatus("Couldn't read that image."); };
+  reader.readAsDataURL(f);
   $("logoFile").value = "";
 });
 $("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Custom colors"));

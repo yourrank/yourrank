@@ -70,6 +70,28 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("Credits / 7d");
   });
 
+  it("applies a chosen text style and leaves the default stack alone", async () => {
+    const render = (branding) => renderSite({
+      r: { ...fixture, data: { ...fixture.data, branding } },
+      section: "leaderboard",
+      viewer: null,
+      viewerData: null,
+      opts,
+    });
+
+    const chosen = await render({ ...fixture.data.branding, font: "Bebas Neue" });
+    expect(chosen).toContain("family=Bebas+Neue");
+    expect(chosen).toContain('--yr-font:"Bebas Neue"');
+
+    // "Inter" is the dashboard's Default option, so it must not override the
+    // site's own type stack, and an unknown family never reaches the CSS.
+    const dflt = await render(fixture.data.branding);
+    expect(dflt).not.toContain("--yr-font");
+    const bogus = await render({ ...fixture.data.branding, font: "Comic Sans MS" });
+    expect(bogus).not.toContain("--yr-font");
+    expect(bogus).toContain("family=Fira+Sans");
+  });
+
   it("covers the reconciled public-board behavior", async () => {
     const html = await renderSite({
       r: fixture,
