@@ -88,7 +88,7 @@ export function renderNewHallOfFame(data, opts) {
   const r = record(data, opts);
   const winners = (r.data.pastWinners || []).slice(0, 20);
   const rows = winners.length
-    ? `<ul class="yr-rwds" role="list">${winners.map((w) => `<li class="yr-rwd"><div class="yr-rwd-main"><p class="yr-rwd-n">${esc(w.label || "Past board")}</p><p class="yr-rwd-p">${Number(w.players) || 0} players</p></div><div class="yr-rwd-side"><span class="yr-rwd-state">Winner: ${esc(w.winner || "Not recorded")}</span></div></li>`).join("")}</ul>`
+    ? `<ul class="yr-rwds" role="list">${winners.map((w) => `<li class="yr-rwd"><div class="yr-rwd-main"><p class="yr-rwd-n">${esc(w.label || "Past board")}</p><p class="yr-rwd-p">${Number(w.players) || 0} players</p></div><div class="yr-rwd-side"><span class="yr-rwd-p">Winner: ${esc(w.winner || "Not recorded")}</span></div></li>`).join("")}</ul>`
     : '<p class="yr-empty">No past winners yet.</p>';
   const content = `<header class="yr-vhead"><span class="yr-cue">Archive</span><h1 class="yr-h1">Hall of Fame</h1><p class="yr-vhead-lede">Past boards and winners for ${esc(r.data.brand?.name || r.slug)}.</p></header><section class="yr-vsec" aria-labelledby="yr-hof-title"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-hof-title">Past winners</h2></div>${rows}</section>`;
   return shell({ r, ...opts, contentHtml: content, title: `Hall of Fame · ${r.data.brand?.name || r.slug}`, description: `Past winners for ${r.data.brand?.name || r.slug}.` });
@@ -103,10 +103,10 @@ export function renderNewStreamerProfile(data, opts) {
     .filter((s) => s.safeHref !== "#");
   const boards = (r.boards || []).filter((b) => b.slug && b.name);
   const channelRows = socials.length
-    ? `<ul class="yr-rwds" role="list">${socials.map((s) => `<li class="yr-rwd"><div class="yr-rwd-main"><a class="yr-rwd-n" href="${s.safeHref}" target="_blank" rel="noopener noreferrer">${esc(s.name || s.brand || "Channel")}<span class="sr-only"> (opens in a new tab)</span></a></div><div class="yr-rwd-side"><span class="yr-rwd-state">Open channel</span></div></li>`).join("")}</ul>`
+    ? `<ul class="yr-rwds" role="list">${socials.map((s) => `<li class="yr-rwd"><div class="yr-rwd-main"><p class="yr-rwd-n">${esc(s.name || s.brand || "Channel")}</p></div><div class="yr-rwd-side"><a class="yr-act" href="${s.safeHref}" target="_blank" rel="noopener noreferrer">Open channel<span class="yr-sr"> (opens in a new tab)</span></a></div></li>`).join("")}</ul>`
     : '<p class="yr-empty">No channel links yet.</p>';
   const boardRows = boards.length
-    ? `<ul class="yr-rwds" role="list">${boards.map((b) => `<li class="yr-rwd"><div class="yr-rwd-main"><a class="yr-rwd-n" href="/${esc(b.slug)}">${esc(b.name)}</a></div><div class="yr-rwd-side"><span class="yr-rwd-state">Open leaderboard</span></div></li>`).join("")}</ul>`
+    ? `<ul class="yr-rwds" role="list">${boards.map((b) => `<li class="yr-rwd"><div class="yr-rwd-main"><p class="yr-rwd-n">${esc(b.name)}</p></div><div class="yr-rwd-side"><a class="yr-act" href="/${esc(b.slug)}">Open leaderboard</a></div></li>`).join("")}</ul>`
     : '<p class="yr-empty">No public leaderboards yet.</p>';
   const content = `<header class="yr-vhead"><span class="yr-cue">Creator</span><h1 class="yr-h1">${esc(profileData.brand?.name || r.slug)}</h1><p class="yr-vhead-lede">${esc(profileData.brand?.tagline || "No profile description yet.")}</p></header><section class="yr-vsec" aria-labelledby="yr-profile-channels"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-profile-channels">Channel links</h2></div>${channelRows}</section><section class="yr-vsec" aria-labelledby="yr-profile-boards"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-profile-boards">Leaderboards</h2></div>${boardRows}</section>`;
   return shell({ r, ...opts, contentHtml: content, title: `${profileData.brand?.name || r.slug} · Streamer profile`, description: `Streamer profile for ${profileData.brand?.name || r.slug}.` });
