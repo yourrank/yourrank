@@ -70,4 +70,56 @@ describe("handleDashboardPreview", () => {
       accentB: "#222222",
     });
   });
+
+  function previewRequest(query, draft) {
+    const body = new URLSearchParams({ draft: JSON.stringify(draft) });
+    return new Request(`https://test.com/dashboard/preview?${query}`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+  }
+
+  function impls() {
+    return { currentUserImpl: (...args) => mockCurrentUser(...args), getUserSiteByIdImpl: (...args) => mockGetUserSiteById(...args) };
+  }
+
+  it("renders unsaved brand text through the renderer's escaping, never as markup", async () => {
+    const res = await handleDashboardPreview(
+      previewRequest("board=site-1&device=desktop", {
+        brand: { name: "Draft <script>alert(1)</script>", tagline: "Nightly races" },
+      }),
+      {},
+      "nonce123",
+      impls(),
+    );
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    expect(html).toContain("Nightly races");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>alert(1)</script>");
+    // A draft preview is never cacheable or shareable.
+    expect(res.headers.get("cache-control")).toContain("private");
+    expect(res.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it("drops in-canvas editing for read-only settings previews", async () => {
+    const editable = await handleDashboardPreview(previewRequest("board=site-1&device=desktop", {}), {}, "nonce123", impls());
+    const readOnly = await handleDashboardPreview(previewRequest("board=site-1&device=desktop&edit=0", {}), {}, "nonce123", impls());
+    const editableHtml = await editable.text();
+    const readOnlyHtml = await readOnly.text();
+
+    expect(editableHtml).toContain("yr_edit_request");
+    expect(editableHtml).toContain("cursor: text");
+    expect(readOnlyHtml).not.toContain("yr_edit_request");
+    expect(readOnlyHtml).not.toContain("cursor: text");
+    expect(readOnlyHtml).toContain('class="yr-site"');
+  });
+
+  it("renders the mobile viewport at the width a phone viewer gets", async () => {
+    const res = await handleDashboardPreview(previewRequest("board=site-1&device=mobile&edit=0", {}), {}, "nonce123", impls());
+    const html = await res.text();
+    expect(html).toContain("min-width: 390px");
+    expect(html).not.toContain("min-width: 1100px");
+  });
 });

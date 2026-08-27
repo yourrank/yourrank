@@ -14,7 +14,7 @@ export const dashboardConfig = {
   title: DEFAULT_DASHBOARD_TITLE,
   canonical: "https://yourrank.site/dashboard",
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/dashboard.js?v=15" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
+  scripts: ['<script src="/assets/dashboard.js?v=16" type="module"></script>', '<script src="/assets/dashboard/preview-tabs.js?v=2" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
   nav: false,
   footer: false,
   wide: true,
@@ -100,10 +100,8 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
 <h1 class="v3-section-title" data-egroup="setup">Setup</h1>
-<div class="card" data-egroup="setup"><h2>Your site</h2><p class="card-sub">This is what visitors see when they open your page.</p><div class="grid2">
-<div class="field"><label for="f_name">Site name</label><input id="f_name" /></div>
-<div class="field"><label for="f_tagline">Tagline <span class="hint">Optional</span></label><input id="f_tagline" placeholder="Stream community leaderboard" /></div>
-</div>
+<div class="card" data-egroup="setup"><h2>Your site</h2><p class="card-sub">This is what visitors see when they open your page.</p>
+<p class="card-sub"><a href="/dashboard/site" id="setupBrandLink">Name, tagline, logo, colors and links live in Site settings →</a></p>
 <details class="editor-more" data-editor-more="setup-sponsor"><summary>Sponsor and promo code</summary><div class="grid2">
 <div class="field"><label for="f_casino">Sponsor name</label><input id="f_casino" placeholder="Your brand or sponsor" /></div>
 <div class="field"><label for="f_code">Promo code</label><input id="f_code" placeholder="Optional" /></div>
@@ -167,42 +165,6 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 <div class="card" data-egroup="design" id="playerFieldsCard"><h2>Player table columns</h2><p class="card-sub">Choose which extra columns show on the player table.</p><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage columns in Players →</a></div>
 <div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
-<div class="card" data-egroup="design" id="brandCard"><h3>Your brand <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Add your logo and pick your colors. Upgrade to Pro to customize.</p>
-<div id="brandBody">
-<div class="grid2">
-<div class="field"><label for="logoFile">Your logo</label>
-<div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Logo preview" aria-hidden="true" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" hidden />
-<button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove</button></div>
-<span class="hint">PNG, JPG or WebP. Shows in your page header and as the link preview image.</span></div>
-<div class="field"><label>Website Template</label>
-<div class="template-selector-grid" id="templateSelectorGrid">
-  <button class="template-select-card is-selected" type="button" data-template="cyber_arcade">
-    <div class="template-select-badge">🎮 Default</div>
-    <strong>Cyber Arcade</strong>
-    <span>High-contrast OLED dark, neon glow &amp; gaming cards</span>
-  </button>
-  <button class="template-select-card" type="button" data-template="esports_pro">
-    <div class="template-select-badge">🏆 Tournament</div>
-    <strong>Esports Arena</strong>
-    <span>Stadium hierarchy, competitive rankings &amp; podiums</span>
-  </button>
-  <button class="template-select-card" type="button" data-template="creator_glass">
-    <div class="template-select-badge">💎 Boutique</div>
-    <strong>Creator Glass</strong>
-    <span>Frosted glassmorphism, soft glow &amp; rewards focus</span>
-  </button>
-</div>
-<span class="hint">Choose a signature layout &amp; visual style for your public site.</span>
-</div>
-<div class="field"><label>Color theme</label>
-<div class="preset-list" id="colorPresets"></div>
-<span class="hint">Pick a color theme for your page.</span>
-<details class="advanced-colors"><summary>Custom colors</summary>
-<div class="color-row"><label for="c_a" class="sr-only">Accent color start</label><input type="color" id="c_a" value="#5b5bf5" /><label for="c_b" class="sr-only">Accent color end</label><input type="color" id="c_b" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply colors</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset palette</button></div>
-</details></div>
-<div class="field"><label for="f_font">Text style</label><select id="f_font"><option value="Inter">Inter — Default</option><option value="Oswald">Oswald — Bold &amp; Sporty</option><option value="Playfair Display">Playfair Display — Premium &amp; Elegant</option><option value="Rajdhani">Rajdhani — Techy &amp; Esports</option><option value="Bebas Neue">Bebas Neue — Impact &amp; Hype</option></select><span class="hint">Changes the personality of your public page text.</span></div>
-</div></div>
-<div class="empty upsell-card" id="brandLock" hidden>Branding is a Pro feature. <a href="/dashboard/settings/billing?from=branding" id="brandUpgrade">Upgrade to Pro to unlock branding</a>.</div></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
 <div id="sectionsBody"><div class="sections-editor" id="sectionsList"></div></div>
 <div class="empty upsell-card" id="sectionsLock" hidden>Page block controls are a Pro feature. <a href="/dashboard/settings/billing?from=sections" id="sectionsUpgrade">Upgrade to unlock them</a>.</div></div>
@@ -217,9 +179,6 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <label class="hint chk"><input type="checkbox" id="f_hidePrizeAmounts" /> Hide exact prize amounts from visitors</label>
 </div>
 <div class="empty upsell-card" id="prizesLock" hidden>Prize customization is a Pro feature. <a href="/dashboard/settings/billing?from=prizes" id="prizesUpgrade">Upgrade to unlock it</a>.</div></div>
-<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>
-<div class="card" data-egroup="design" id="socialsCard"><h3>Social links</h3><p class="card-sub">Add your social media profiles. Toggle each one on or off to control what appears on your page.</p>
-<div class="socials-editor" id="socialsList"></div></div>
 <h1 class="v3-section-title" data-egroup="share">Share</h1>
 <div class="card" data-egroup="share" id="embedShareCard"><h2>Share your leaderboard</h2><p class="card-sub">Get your link, add it to your stream, or embed it on a website.</p>
 <div class="v3-alert v3-alert--warning" id="sharePublishWarning" hidden role="status"><strong id="sharePublishWarningTitle">This site is not published.</strong><span id="sharePublishWarningBody">Visitors will receive a 404 until you publish it.</span><button class="btn btn--sm btn--accent" id="sharePublishAction" type="button">Publish site</button></div>
@@ -248,16 +207,16 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="editor-savebar savebar" id="savebar" hidden><span class="savebar-hint">Unsaved changes</span><span class="savebar-ts" id="editorTimestamp"></span><button class="btn btn--ghost" id="discard" type="button">Discard changes</button><button class="btn btn--accent" id="save" type="button">Save changes</button></div>
 </div>
 <div class="design-preview">
-<div class="card">
+<div class="card preview-mount" data-preview-mount="board" data-preview-target="designPreview">
 <div class="preview-header">
 <div class="preview-header-text"><h2>Live Preview</h2><p class="preview-sub">Click elements on the board to edit them directly.</p></div>
 <div class="preview-actions">
 <div class="preview-tabs" role="tablist" aria-label="Preview device"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
-<span class="v3-chip v3-chip--pro preview-sync" id="previewSyncStatus">SYNCED</span>
+<span class="v3-chip v3-chip--pro preview-sync" id="previewSyncStatus" data-preview-status>SYNCED</span>
 </div>
 </div>
-<div class="preview-sync-strip"><span><i aria-hidden="true"></i> PREVIEW MODE</span><small id="previewSyncTime">Last synced —</small></div>
-<div class="preview-frame" id="previewFrame"><div class="preview-stage" id="previewStage"><iframe id="designPreview" name="designPreview" src="" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" hidden><p>Preview could not load. <button class="btn btn--sm" id="previewRetry" type="button">Retry</button></p></div></div>
+<div class="preview-sync-strip"><span><i aria-hidden="true"></i> PREVIEW MODE</span><small id="previewSyncTime" data-preview-time>Last synced —</small></div>
+<div class="preview-frame" id="previewFrame" data-preview-frame><div class="preview-stage" id="previewStage" data-preview-stage><iframe id="designPreview" name="designPreview" src="" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" data-preview-error hidden><p>Preview could not load. <button class="btn btn--sm" id="previewRetry" type="button" data-preview-retry>Retry</button></p></div></div>
 <a class="preview-live-link" id="previewLiveLink" href="#" target="_blank" rel="noopener noreferrer">Open live page ↗</a>
 </div>
 </div>
@@ -288,7 +247,7 @@ function GamesSection({ active } = {}) {
       </div>
       <div class="v3-table-card">
         <div class="v3-card-head"><div><h2>Public page visibility</h2><p class="v3-head-sub">Hiding or showing the public Shop, Rewards, and Games pages is a site setting.</p></div></div>
-        <a class="btn btn--sm btn--accent" href="/dashboard/site?tab=sections">Manage public sections in Site settings →</a>
+        <a class="btn btn--sm btn--accent" href="/dashboard/site?tab=customize">Manage public sections in Site settings →</a>
       </div>
     </div>
     <div class="v3-games-right">
@@ -359,32 +318,121 @@ function BoardSettingsSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="site">
 <div class="v3-settings">
-  <header class="v3-head">
-    <h1>Site settings</h1>
-    <p class="v3-head-sub" id="settingsSubline">Control the selected site's access, public pages, notifications, domain, and data. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
+  <header class="v3-head v3-head--row">
+    <div>
+      <h1>Site settings</h1>
+      <p class="v3-head-sub" id="settingsSubline">Customize what viewers see on your public site. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
+    </div>
+    <a class="btn btn--sm btn--accent" id="sitePublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public site ↗</a>
   </header>
   <div class="v3-tabs" role="tablist" aria-label="Site settings sections">
-    <button class="v3-tab is-on" id="settingsTabAccess" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelAccess" data-settings-tab="access">Access</button>
-    <button class="v3-tab" id="settingsTabSections" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelSections" data-settings-tab="sections">Pages</button>
+    <button class="v3-tab is-on" id="settingsTabCustomize" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelCustomize" data-settings-tab="customize">Customize</button>
     <button class="v3-tab" id="settingsTabNotifications" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelNotifications" data-settings-tab="notifications">Notifications</button>
     <button class="v3-tab" id="settingsTabDomain" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDomain" data-settings-tab="domain">Domain</button>
     <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Advanced</button>
     <button class="v3-tab" id="settingsTabDanger" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDanger" data-settings-tab="danger">Danger zone</button>
   </div>
-  <div class="v3-settings-save" id="settingsSaveBar" hidden>
-    <p id="settingsSaveText">Use Save changes after updating these settings.</p>
-    <button class="btn btn--accent" id="settingsSave" type="button" disabled>Save changes</button>
-  </div>
-  <section class="v3-settings-panel" id="settingsPanelAccess" role="tabpanel" aria-labelledby="settingsTabAccess" data-settings-panel="access">
-    <div class="v3-settings-card">
-      <div class="v3-settings-card-head"><div><h2>Who can view this site?</h2><p>Choose whether anyone with the link can view it or a password is required.</p></div></div>
-      <div class="v3-settings-row"><div><b>Visibility and password</b><p>Site name, public address, publication, and password controls stay together in the site editor.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div>
+  <section class="v3-settings-panel" id="settingsPanelCustomize" role="tabpanel" aria-labelledby="settingsTabCustomize" data-settings-panel="customize">
+    <div class="v3-customize">
+      <div class="v3-customize-preview">
+        <div class="v3-settings-card preview-mount" data-preview-mount="site" data-preview-target="sitePreview" data-preview-edit="0" data-preview-label-syncing="Updating preview…" data-preview-label-synced="Preview matches your changes">
+          <div class="preview-header">
+            <div class="preview-header-text"><h2 id="sitePreviewTitle">Viewer preview</h2><p class="preview-sub">Your real public site, rendered with the changes on this page.</p></div>
+            <div class="preview-actions">
+              <div class="preview-tabs" role="tablist" aria-label="Preview viewport"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
+              <button class="btn btn--sm btn--ghost" id="sitePreviewRefresh" type="button" data-preview-retry>Refresh preview</button>
+            </div>
+          </div>
+          <div class="preview-sync-strip"><span><i aria-hidden="true"></i> PREVIEW MODE</span><small id="sitePreviewStatus" data-preview-status role="status" aria-live="polite">Preview matches your changes</small></div>
+          <div class="preview-frame" id="sitePreviewFrame" data-preview-frame><div class="preview-stage" id="sitePreviewStage" data-preview-stage><iframe id="sitePreview" name="sitePreview" src="" loading="lazy" title="Public site preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="sitePreviewError" data-preview-error hidden><p>Preview could not load. <button class="btn btn--sm" type="button" data-preview-retry>Try again</button></p></div></div>
+        </div>
+      </div>
+      <div class="v3-customize-controls">
+        <div class="v3-settings-card" id="siteIdentityCard">
+          <div class="v3-settings-card-head"><div><h2>Name and tagline</h2><p>Viewers see these at the top of every public page.</p></div></div>
+          <div class="v3-settings-field">
+            <label class="v3-settings-label" for="f_name">Site name</label>
+            <input id="f_name" maxlength="80" autocomplete="off" aria-describedby="siteNameCounter siteNameError" />
+            <span class="v3-settings-muted" id="siteNameCounter" role="status" aria-live="polite"></span>
+            <span class="field-err" id="siteNameError" data-field-error="f_name" role="alert" hidden></span>
+          </div>
+          <div class="v3-settings-field">
+            <label class="v3-settings-label" for="f_tagline">Tagline <span class="v3-settings-muted">Optional</span></label>
+            <input id="f_tagline" maxlength="120" autocomplete="off" placeholder="Stream community leaderboard" aria-describedby="siteTaglineHint siteTaglineCounter" />
+            <span class="v3-settings-muted" id="siteTaglineHint">Short line shown under your name. Long taglines are shortened on your public site.</span>
+            <span class="v3-settings-muted" id="siteTaglineCounter" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="v3-settings-card" id="brandCard">
+          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your logo, colors, template and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
+          <div id="brandBody">
+            <div class="v3-settings-field">
+              <label class="v3-settings-label" for="logoFile">Logo</label>
+              <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" /><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>
+              <span class="v3-settings-muted" id="siteLogoHint">PNG, JPG or WebP, up to 2 MB. Shows in your page header and as the link preview image.</span>
+              <span class="v3-settings-status" id="logoStatus" role="status" aria-live="polite"></span>
+            </div>
+            <div class="v3-settings-field">
+              <span class="v3-settings-label" id="siteAccentLabel">Accent color</span>
+              <div class="preset-list" id="colorPresets" role="group" aria-labelledby="siteAccentLabel"></div>
+              <span class="v3-settings-muted">Used for active navigation, buttons and highlights.</span>
+              <details class="advanced-colors"><summary>Custom colors</summary>
+              <div class="color-row"><label for="c_a" class="sr-only">Accent color start</label><input type="color" id="c_a" value="#5b5bf5" /><label for="c_b" class="sr-only">Accent color end</label><input type="color" id="c_b" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply colors</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset palette</button></div>
+              </details>
+            </div>
+            <div class="v3-settings-field">
+              <span class="v3-settings-label" id="siteTemplateLabel">Template</span>
+              <div class="template-selector-grid" id="templateSelectorGrid" role="group" aria-labelledby="siteTemplateLabel">
+                <button class="template-select-card is-selected" type="button" data-template="cyber_arcade">
+                  <div class="template-select-badge">🎮 Default</div>
+                  <strong>Cyber Arcade</strong>
+                  <span>High-contrast OLED dark, neon glow &amp; gaming cards</span>
+                </button>
+                <button class="template-select-card" type="button" data-template="esports_pro">
+                  <div class="template-select-badge">🏆 Tournament</div>
+                  <strong>Esports Arena</strong>
+                  <span>Stadium hierarchy, competitive rankings &amp; podiums</span>
+                </button>
+                <button class="template-select-card" type="button" data-template="creator_glass">
+                  <div class="template-select-badge">💎 Boutique</div>
+                  <strong>Creator Glass</strong>
+                  <span>Frosted glassmorphism, soft glow &amp; rewards focus</span>
+                </button>
+              </div>
+            </div>
+            <div class="v3-settings-field">
+              <label class="v3-settings-label" for="f_font">Text style</label>
+              <select id="f_font" aria-describedby="siteFontHint"><option value="Inter">Inter — Default</option><option value="Oswald">Oswald — Bold &amp; Sporty</option><option value="Playfair Display">Playfair Display — Premium &amp; Elegant</option><option value="Rajdhani">Rajdhani — Techy &amp; Esports</option><option value="Bebas Neue">Bebas Neue — Impact &amp; Hype</option></select>
+              <span class="v3-settings-muted" id="siteFontHint">Only fonts your public site can serve are listed.</span>
+            </div>
+          </div>
+          <div class="v3-settings-inline" id="brandLock" hidden>Branding is a Pro feature. <a href="/dashboard/settings/billing?from=branding" id="brandUpgrade">Upgrade to Pro to unlock branding</a>.</div>
+        </div>
+        <div class="v3-settings-card" id="siteNavigationCard">
+          <div class="v3-settings-card-head"><div><h2>Navigation</h2><p>Choose which destinations appear on your public site. Turning one off also disables its public address.</p></div></div>
+          <div id="siteSectionRows"></div>
+        </div>
+        <div class="v3-settings-card" id="siteLinksCard">
+          <div class="v3-settings-card-head"><div><h2>Links</h2><p>Add the channels viewers should follow. Only the ones you switch on appear publicly.</p></div></div>
+          <div class="socials-editor" id="socialsList"></div>
+        </div>
+        <div class="v3-settings-card" id="sitePublicAddressCard">
+          <div class="v3-settings-card-head"><div><h2>Public address</h2><p>This is where viewers find your site.</p></div></div>
+          <div class="v3-settings-address">
+            <code id="sitePublicUrl">Loading your address…</code>
+            <div class="v3-settings-actions">
+              <button class="btn btn--sm btn--accent" id="sitePublicCopy" type="button">Copy link</button>
+              <a class="btn btn--sm" id="sitePublicOpen" href="#" target="_blank" rel="noopener noreferrer">Open site ↗</a>
+            </div>
+          </div>
+          <p class="v3-settings-status" id="sitePublicCopyStatus" role="status" aria-live="polite"></p>
+          <div class="v3-settings-row"><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
+        </div>
+        <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Leaderboard page blocks</h2><p>Current block visibility on your leaderboard page. Edit the layout itself in Appearance.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div><div class="v3-block-grid" id="leaderboardBlockRows"></div><div class="v3-note" id="leaderboardBlockNote">Block visibility follows your site settings.</div><a class="btn btn--sm btn--accent mt-12" href="/dashboard/leaderboard/design">Edit layout &amp; blocks in Appearance →</a></div>
+        <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Viewer access</h2><p>Publication and the optional site password stay with the leaderboard editor.</p></div></div><div class="v3-settings-row"><div><b>Visibility and password</b><p>Choose whether anyone with the link can view this site or a password is required.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div></div>
+        <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
+      </div>
     </div>
-  </section>
-  <section class="v3-settings-panel" id="settingsPanelSections" role="tabpanel" aria-labelledby="settingsTabSections" data-settings-panel="sections" hidden>
-    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Public page sections</h2><p>Choose which destinations appear on your public site. Turning one off also disables its public address.</p></div></div><div id="siteSectionRows"></div></div>
-    <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Leaderboard page blocks</h2><p>Current block visibility on your leaderboard page. Edit the layout itself in Appearance.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div><div class="v3-block-grid" id="leaderboardBlockRows"></div><div class="v3-note" id="leaderboardBlockNote">Block visibility follows your site settings.</div><a class="btn btn--sm btn--accent mt-12" href="/dashboard/leaderboard/design">Edit layout &amp; blocks in Appearance →</a></div>
-    <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
   </section>
   <section class="v3-settings-panel" id="settingsPanelNotifications" role="tabpanel" aria-labelledby="settingsTabNotifications" data-settings-panel="notifications" hidden>
     <div class="v3-settings-card">
@@ -461,8 +509,12 @@ function BoardSettingsSection({ active } = {}) {
     </details>
   </section>
   <section class="v3-settings-panel" id="settingsPanelDanger" role="tabpanel" aria-labelledby="settingsTabDanger" data-settings-panel="danger" hidden>
-    <div class="v3-settings-card v3-danger-card"><div class="v3-settings-card-head"><div><h2>Danger zone</h2><p>These actions permanently change or remove data for the selected site.</p></div></div><div class="v3-settings-row"><div><b>Reset site data</b><p>Archive this period, then remove all players, scores, prize amounts, and activity history.</p></div><button class="v3-set-btn v3-set-btn--danger-outline" id="settingsResetData" type="button">Reset data</button></div><div class="v3-settings-row"><div><b>Delete this site</b><p>Permanently delete this site and its settings. This cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger" id="settingsDeleteBoard" type="button">Delete site</button></div></div>
+    <div class="v3-settings-card v3-danger-card" id="settingsDangerCard"><div class="v3-settings-card-head"><div><h2>Danger zone</h2><p>These actions permanently change or remove data for the selected site.</p></div></div><div class="v3-settings-row"><div><b>Reset site data</b><p>Archive this period, then remove all players, scores, prize amounts, and activity history.</p></div><button class="v3-set-btn v3-set-btn--danger-outline" id="settingsResetData" type="button">Reset data</button></div><div class="v3-settings-row"><div><b>Delete this site</b><p>Permanently delete this site and its settings. This cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger" id="settingsDeleteBoard" type="button">Delete site</button></div></div>
   </section>
+  <div class="v3-settings-save" id="settingsSaveBar" hidden>
+    <p id="settingsSaveText">Use Save changes after updating these settings.</p>
+    <button class="btn btn--accent" id="settingsSave" type="button" disabled>Save changes</button>
+  </div>
 </div>
 </section>
   );

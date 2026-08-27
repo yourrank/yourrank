@@ -237,8 +237,8 @@ describe("Giveaway Chatroom Handler", () => {
     expect(gamesSource).toContain("loadSimulatorFrame(iframe, embedUrl);");
     expect(gamesSource).toContain('loadSimulatorFrame(iframe, iframe.dataset.currentSrc + "&_t=" + Date.now());');
 
-    const resetIndex = siteSource.indexOf("if (!resetPreviewFrame()) return;");
-    const submitIndex = siteSource.indexOf("_previewForm.submit()");
+    const resetIndex = siteSource.indexOf("if (!resetPreviewFrame(mount)) return;");
+    const submitIndex = siteSource.indexOf("local.form.submit()");
     expect(resetIndex).toBeGreaterThanOrEqual(0);
     expect(submitIndex).toBeGreaterThan(resetIndex);
   });

@@ -27,6 +27,9 @@ export async function handleDashboardPreview(request, env, nonce, {
   const accentB = url.searchParams.get("accentB");
   const font = url.searchParams.get("font");
   const device = url.searchParams.get("device") === "mobile" ? "mobile" : "desktop";
+  // Site settings previews are read-only viewer previews: the creator edits in
+  // the form beside them, so the editor's in-canvas text editing is opted out.
+  const editable = url.searchParams.get("edit") !== "0";
   
   let draftData = {};
   if (request.method === "POST") {
@@ -103,13 +106,14 @@ ${gamesIslandHead()}
 
   const previewMinWidth = device === "mobile" ? 390 : 1100;
   const editableSelectors = ".yr-brand, .yr-h1, .yr-lede, .yr-hero-r .yr-big";
-  html = html.replace("</head>", `<style nonce="${nonce}">
-    html, body { min-width: ${previewMinWidth}px; overflow: hidden; }
+  const editableCss = editable ? `
     ${editableSelectors} { cursor: text; transition: outline 0.15s ease, outline-offset 0.15s ease; }
-    ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }
+    ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }` : "";
+  html = html.replace("</head>", `<style nonce="${nonce}">
+    html, body { min-width: ${previewMinWidth}px; overflow: hidden; }${editableCss}
   </style></head>`);
 
-  if (device === "desktop") {
+  if (device === "desktop" && editable) {
     html = html.replace('</body>', `<script nonce="${nonce}">
       document.addEventListener("click", (e) => {
         const targetSelectors = "${editableSelectors}";

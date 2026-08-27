@@ -6292,6 +6292,62 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   box-shadow: none;
 }
 
+/* Site settings customize tab: the preview is the subject of the page, so it
+   keeps a column of its own and stays in view while the controls scroll. On
+   narrow viewports the source order (preview, then controls) is the layout. */
+.v3-dash[data-auth-workspace] .v3-customize {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-customize-controls {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-customize-preview {
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-settings-address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* A public address can be long: it wraps instead of widening the page. */
+.v3-dash[data-auth-workspace] .v3-settings-address > code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: var(--ws-type-meta-size);
+}
+
+.v3-dash[data-auth-workspace] .v3-settings-address > .v3-settings-actions {
+  margin-top: 0;
+}
+
+@media (min-width: 1100px) {
+  .v3-dash[data-auth-workspace] .v3-customize {
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize-preview {
+    position: sticky;
+    top: calc(var(--ws-topbar-h) + 76px);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-customize-controls {
+    order: -1;
+  }
+}
+
 .v3-dash[data-auth-workspace] .v3-settings-save {
   position: sticky;
   top: calc(var(--ws-topbar-h) + 12px);

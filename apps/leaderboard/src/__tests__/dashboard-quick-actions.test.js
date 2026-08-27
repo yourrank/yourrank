@@ -206,10 +206,13 @@ describe("dashboard overview quick actions", () => {
     const games = dashboardHtml("/dashboard/games");
     expect(games).toContain("Public page visibility");
     expect(games).toContain("Manage public sections in Site settings →");
+    expect(games).toContain("/dashboard/site?tab=customize");
     expect(games).not.toContain("Page block visibility");
     expect(games).not.toContain("Choose which blocks appear on your leaderboard page");
     const site = dashboardHtml("/dashboard/site");
-    expect(site).toContain("Public page sections");
+    // Public destinations are presented as the site's navigation, next to the
+    // preview that shows them, rather than as a separate "sections" concept.
+    expect(site).toContain("<h2>Navigation</h2>");
     expect(site).toContain('id="siteSectionRows"');
     expect(site).toContain("Leaderboard page blocks");
     expect(site).toContain("Current block visibility on your leaderboard page");
@@ -228,7 +231,9 @@ describe("dashboard overview quick actions", () => {
     const html = dashboardHtml("/dashboard/leaderboard/design");
     expect(html).toContain('<h1 class="v3-section-title" data-egroup="design">Appearance</h1>');
     expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>');
-    expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>');
+    // Brand text and links moved to Site settings, so Appearance no longer
+    // carries a "Content" group; it owns layout, blocks and prize labels.
+    expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>');
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Appearance</h2></div>');
     expect(html).not.toContain("<h2>Theme &amp; branding</h2>");
   });
