@@ -595,7 +595,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
  * has not configured.
  */
 function homeMain(ctx) {
-  const { r, data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, balance, period, pool, returnTo, siteSections } = ctx;
+  const { data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, balance, period, pool, siteSections } = ctx;
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
   const boardHref = `${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}`;
   const meHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
@@ -622,10 +622,11 @@ function homeMain(ctx) {
   // repeat that composition: it states what this page is, in the creator's own
   // name, keeps their line, and offers the one thing a visitor came to do. A
   // signed-in viewer gets their balance module beside it, not a second button.
+  // Signing in belongs to the bar on every page, so these are the creator's own
+  // actions only: a visitor never reads the same sign-in twice in one viewport.
   const introActs = [
     !viewer && shopEnabled ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
     kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
-    viewer ? "" : signInButton(r, returnTo, shopEnabled ? "yr-btn yr-btn--ghost" : "yr-btn"),
   ].filter(Boolean).join("");
 
   const intro = `<section class="yr-intro">

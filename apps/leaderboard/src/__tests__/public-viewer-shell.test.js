@@ -30,9 +30,9 @@ const baseData = {
   siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
 };
 
-function render(section, { data = baseData, viewer = null, viewerData = null, custom = false } = {}) {
+function render(section, { data = baseData, viewer = null, viewerData = null, custom = false, r = {} } = {}) {
   return renderSite({
-    r: { slug: "creator", plan: "pro", data },
+    r: { slug: "creator", plan: "pro", data, ...r },
     section,
     viewer,
     viewerData,
@@ -148,6 +148,36 @@ describe("public viewer shell", () => {
     });
     expect(big).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234,567</span>');
     expect(big).toContain('aria-label="My credits on this site: 1,234,567"');
+  });
+
+  it("leaves signing in to the bar alone on a signed-out page", async () => {
+    const signedOut = await render("home");
+    const intro = signedOut.slice(signedOut.indexOf('class="yr-intro"'), signedOut.indexOf("</section>", signedOut.indexOf('class="yr-intro"')));
+    // The bar owns authentication on every page, so the introduction carries the
+    // creator's own actions and never repeats sign-in in the same viewport.
+    // One sign-in action on the page: the bar's. (The drawer's credit row still
+    // explains itself with "Sign in for credits" text, which is not a second one.)
+    expect((signedOut.match(/Sign in( with (Kick|Discord))?<\/a>/g) || []).length).toBe(1);
+    expect(signedOut.search(/Sign in( with (Kick|Discord))?<\/a>/)).toBeLessThan(signedOut.indexOf("</header>"));
+    expect(intro).not.toContain("Sign in");
+
+    // The bar's real Kick and Discord entry points are untouched, and each is
+    // still the only sign-in on the page.
+    const kick = await render("home", { r: { viewerKickAuthEnabled: true } });
+    expect(kick).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Kick</a>');
+    expect((kick.match(/\/api\/viewer\/auth\//g) || []).length).toBe(1);
+    const discord = await render("home", { r: { viewerDiscordAuthEnabled: true } });
+    expect(discord).toContain('href="/api/viewer/auth/discord?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Discord</a>');
+    expect((discord.match(/\/api\/viewer\/auth\//g) || []).length).toBe(1);
+    expect(intro).toContain('<a class="yr-btn" href="https://example.test/creator/shop">View rewards</a>');
+    expect(intro).toContain("Watch on Kick");
+
+    // Signed in, the introduction keeps exactly the actions it had before.
+    const signedIn = await render("home", { viewer, viewerData });
+    const inIntro = signedIn.slice(signedIn.indexOf('class="yr-intro"'), signedIn.indexOf("</section>", signedIn.indexOf('class="yr-intro"')));
+    expect(inIntro).toContain("Watch on Kick");
+    expect(inIntro).not.toContain("View rewards");
+    expect(signedIn).not.toContain("/api/viewer/auth/");
   });
 
   it("swaps the sign-in action for the viewer's own controls", async () => {
@@ -449,7 +479,7 @@ describe("public viewer shell", () => {
   it("leaves one primary action per band and one heading per module", async () => {
     const html = await render("home");
     const intro = html.slice(html.indexOf('class="yr-intro-acts"'), html.indexOf("</section>", html.indexOf('class="yr-intro-acts"')));
-    // View rewards is the primary; signing in is the same size but quieter.
+    // View rewards is the primary; watching the creator is the quiet second.
     expect((intro.match(/class="yr-btn"/g) || []).length).toBe(1);
     expect(intro).toContain('class="yr-btn yr-btn--ghost"');
 
