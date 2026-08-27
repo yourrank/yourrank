@@ -332,6 +332,10 @@ function BoardSettingsSection({ active } = {}) {
     <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Advanced</button>
     <button class="v3-tab" id="settingsTabDanger" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDanger" data-settings-tab="danger">Danger zone</button>
   </div>
+  <div class="v3-settings-save" id="settingsSaveBar" hidden>
+    <p id="settingsSaveText">Use Save changes after updating these settings.</p>
+    <button class="btn btn--accent" id="settingsSave" type="button" disabled>Save changes</button>
+  </div>
   <section class="v3-settings-panel" id="settingsPanelCustomize" role="tabpanel" aria-labelledby="settingsTabCustomize" data-settings-panel="customize">
     <div class="v3-customize">
       <div class="v3-customize-preview">
@@ -339,7 +343,7 @@ function BoardSettingsSection({ active } = {}) {
           <div class="preview-header">
             <div class="preview-header-text"><h2 id="sitePreviewTitle">Viewer preview</h2><p class="preview-sub">Your real public site, rendered with the changes on this page.</p></div>
             <div class="preview-actions">
-              <div class="preview-tabs" role="tablist" aria-label="Preview viewport"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
+              <div class="preview-tabs" role="tablist" aria-label="Preview viewport" data-preview-default-device="auto"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
               <button class="btn btn--sm btn--ghost" id="sitePreviewRefresh" type="button" data-preview-retry>Refresh preview</button>
             </div>
           </div>
@@ -368,7 +372,7 @@ function BoardSettingsSection({ active } = {}) {
           <div id="brandBody">
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="logoFile">Logo</label>
-              <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" /><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>
+              <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" hidden /><button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>
               <span class="v3-settings-muted" id="siteLogoHint">PNG, JPG or WebP, up to 2 MB. Shows in your page header and as the link preview image.</span>
               <span class="v3-settings-status" id="logoStatus" role="status" aria-live="polite"></span>
             </div>
@@ -376,8 +380,8 @@ function BoardSettingsSection({ active } = {}) {
               <span class="v3-settings-label" id="siteAccentLabel">Accent color</span>
               <div class="preset-list" id="colorPresets" role="group" aria-labelledby="siteAccentLabel"></div>
               <span class="v3-settings-muted">Used for active navigation, buttons and highlights.</span>
-              <details class="advanced-colors"><summary>Custom colors</summary>
-              <div class="color-row"><label for="c_a" class="sr-only">Accent color start</label><input type="color" id="c_a" value="#5b5bf5" /><label for="c_b" class="sr-only">Accent color end</label><input type="color" id="c_b" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply colors</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset palette</button></div>
+              <details class="advanced-colors"><summary>Custom accent color</summary>
+              <div class="color-row"><label for="c_a" class="sr-only">Accent color</label><input type="color" id="c_a" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset</button></div>
               </details>
             </div>
             <div class="v3-settings-field">
@@ -491,10 +495,6 @@ function BoardSettingsSection({ active } = {}) {
   <section class="v3-settings-panel" id="settingsPanelDanger" role="tabpanel" aria-labelledby="settingsTabDanger" data-settings-panel="danger" hidden>
     <div class="v3-settings-card v3-danger-card" id="settingsDangerCard"><div class="v3-settings-card-head"><div><h2>Danger zone</h2><p>These actions permanently change or remove data for the selected site.</p></div></div><div class="v3-settings-row"><div><b>Reset site data</b><p>Archive this period, then remove all players, scores, prize amounts, and activity history.</p></div><button class="v3-set-btn v3-set-btn--danger-outline" id="settingsResetData" type="button">Reset data</button></div><div class="v3-settings-row"><div><b>Delete this site</b><p>Permanently delete this site and its settings. This cannot be undone.</p></div><button class="v3-set-btn v3-set-btn--danger" id="settingsDeleteBoard" type="button">Delete site</button></div></div>
   </section>
-  <div class="v3-settings-save" id="settingsSaveBar" hidden>
-    <p id="settingsSaveText">Use Save changes after updating these settings.</p>
-    <button class="btn btn--accent" id="settingsSave" type="button" disabled>Save changes</button>
-  </div>
 </div>
 </section>
   );

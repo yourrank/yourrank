@@ -4,7 +4,7 @@ import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
-import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress } from "./site.js";
+import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress, syncSettingsSaveBar } from "./site.js";
 
 async function jsonPost(path, body) {
   const res = await fetch(path, {
@@ -256,7 +256,6 @@ function wireSettingsTabs(initialTab = "customize") {
   const validTabs = new Set(tabs.map((tab) => tab.dataset.settingsTab));
   if (!validTabs.has(initialTab)) initialTab = tabs[0].dataset.settingsTab;
   const select = (key, focus = false) => {
-    const saveBar = $("settingsSaveBar");
     const saveText = $("settingsSaveText");
     tabs.forEach((tab) => {
       const active = tab.dataset.settingsTab === key;
@@ -266,7 +265,9 @@ function wireSettingsTabs(initialTab = "customize") {
       if (active && focus) tab.focus();
     });
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== key; });
-    if (saveBar) saveBar.hidden = !["customize", "notifications"].includes(key);
+    // The save bar answers "is there anything unsaved?", not "which tab am I
+    // on" — a clean draft shows no bar on any tab.
+    syncSettingsSaveBar();
     if (saveText && !state._dirty) saveText.textContent = cleanSaveStatusText();
     // The preview only renders while its section is on screen, so entering the
     // tab that owns it is what asks for the first render.

@@ -427,8 +427,10 @@ export function collect({ reportPlayerErrors = true } = {}) {
   if (state.ME && state.ME.plan !== "free") {
     out.branding = {
       template: state.CURRENT_BRANDING?.template || "cyber_arcade",
-      accentA: $("c_a").value,
-      accentB: $("c_b").value,
+      // accentB is legacy stored data with no visible effect in the viewer; it
+      // round-trips from state untouched so an accent edit never rewrites it.
+      accentA: $("c_a")?.value || state.CURRENT_BRANDING?.accentA || null,
+      accentB: state.CURRENT_BRANDING?.accentB || null,
       font: $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter",
     };
     if (state.LOGO !== undefined) out.branding.logo = state.LOGO;
@@ -523,12 +525,14 @@ function socialInvalid() {
 }
 
 /* --- branding --- */
+// One accent, one swatch: the public viewer renders a single accent color, so
+// a preset that showed two would promise a gradient the viewer never paints.
 const COLOR_PRESETS = [
-  { name: "Indigo", accentA: "#5b5bf5", accentB: "#7b7bf8" },
-  { name: "Cyan", accentA: "#06b6d4", accentB: "#42e6ff" },
-  { name: "Sunset", accentA: "#ff7a59", accentB: "#ff4d9d" },
-  { name: "Emerald", accentA: "#3cf2b1", accentB: "#35a7ff" },
-  { name: "Gold", accentA: "#ffd15c", accentB: "#ff9f43" },
+  { name: "Indigo", accent: "#5b5bf5" },
+  { name: "Cyan", accent: "#06b6d4" },
+  { name: "Sunset", accent: "#ff7a59" },
+  { name: "Emerald", accent: "#3cf2b1" },
+  { name: "Gold", accent: "#ffd15c" },
 ];
 
 function renderColorPresets() {
@@ -536,15 +540,14 @@ function renderColorPresets() {
   if (!list) return;
   list.innerHTML = "";
   COLOR_PRESETS.forEach((preset) => {
-    const active = preset.accentA.toLowerCase() === String(state.CURRENT_BRANDING.accentA || "").toLowerCase()
-      && preset.accentB.toLowerCase() === String(state.CURRENT_BRANDING.accentB || "").toLowerCase();
+    const active = preset.accent.toLowerCase() === String(state.CURRENT_BRANDING.accentA || "").toLowerCase();
     const button = document.createElement("button");
     button.className = "preset-btn" + (active ? " is-selected" : "");
     button.type = "button";
     button.setAttribute("aria-pressed", String(active));
-    button.innerHTML = `<span class="preset-swatch"><i data-color="${esc(preset.accentA)}"></i><i data-color="${esc(preset.accentB)}"></i></span><span>${esc(preset.name)}</span>`;
+    button.innerHTML = `<span class="preset-swatch"><i data-color="${esc(preset.accent)}"></i></span><span>${esc(preset.name)}</span>`;
     button.querySelectorAll("[data-color]").forEach((swatch) => { swatch.style.background = swatch.dataset.color; });
-    button.addEventListener("click", () => applyTheme(preset.accentA, preset.accentB, preset.name));
+    button.addEventListener("click", () => applyTheme(preset.accent, preset.name));
     list.appendChild(button);
   });
 }
@@ -1015,8 +1018,7 @@ export function renderSavebarCopy() {
 }
 
 function updateThemeSelection() {
-  if (state.CURRENT_BRANDING.accentA) $("c_a").value = state.CURRENT_BRANDING.accentA;
-  if (state.CURRENT_BRANDING.accentB) $("c_b").value = state.CURRENT_BRANDING.accentB;
+  if (state.CURRENT_BRANDING.accentA && $("c_a")) $("c_a").value = state.CURRENT_BRANDING.accentA;
   const font = $("f_font"); if (font) font.value = state.CURRENT_BRANDING.font || "Inter";
   renderColorPresets();
   updateDesignPreview();
@@ -1045,19 +1047,21 @@ subscribe((keys) => {
     renderBoardStatus();
     // A disabled button is not an explanation; the strip says why it is quiet.
     setSaveStatusText(state._dirty ? "You have unsaved changes." : cleanSaveStatusText());
+    syncSettingsSaveBar();
   }
   if (keys.includes("draft")) updateDesignPreview();
 });
 
-export function applyTheme(accentA, accentB, label, font = null) {
+// A theme choice sets the one accent the viewer paints. `accentB` is legacy
+// stored data and is deliberately not touched here, so picking a preset or a
+// custom color never overwrites what a legacy row carries.
+export function applyTheme(accentA, label, font = null) {
   const selectedFont = font || $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter";
   state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, font: selectedFont };
   const isPaid = state.ME.plan !== "free";
-  if (isPaid && accentA && accentB) {
+  if (isPaid && accentA) {
     state.CURRENT_BRANDING.accentA = accentA;
-    state.CURRENT_BRANDING.accentB = accentB;
-    $("c_a").value = accentA;
-    $("c_b").value = accentB;
+    if ($("c_a")) $("c_a").value = accentA;
   }
   const fontEl = $("f_font"); if (fontEl) fontEl.value = selectedFont;
   updateThemeSelection();
@@ -1171,9 +1175,9 @@ $("logoFile")?.addEventListener("change", () => {
   reader.readAsDataURL(f);
   $("logoFile").value = "";
 });
-$("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Custom colors"));
-$("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accentA, COLOR_PRESETS[0].accentB, COLOR_PRESETS[0].name));
-$("f_font")?.addEventListener("change", () => applyTheme($("c_a")?.value, $("c_b")?.value, "Font"));
+$("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, "Custom color"));
+$("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accent, COLOR_PRESETS[0].name));
+$("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 
 export function renderNotifications(n) {
   const paid = state.ME.plan !== "free";
@@ -1854,6 +1858,20 @@ export function cleanSaveStatusText() {
 function setSaveStatusText(text) {
   const settingsText = $("settingsSaveText");
   if (settingsText) settingsText.textContent = text || "Use Save changes after updating these settings.";
+}
+
+/**
+ * The settings save bar sits directly under the tabs so an edit anywhere on
+ * the page surfaces Save without scrolling. It appears only while the draft
+ * is dirty on a tab whose fields it saves, and hides again the moment a save
+ * (or a tab that saves on its own, like Navigation switches) leaves nothing
+ * unsaved.
+ */
+export function syncSettingsSaveBar() {
+  const bar = $("settingsSaveBar");
+  if (!bar) return;
+  const tab = document.querySelector("[data-settings-tab].is-on")?.dataset.settingsTab || "customize";
+  bar.hidden = !(state._dirty && (tab === "customize" || tab === "notifications"));
 }
 
 export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {}) {

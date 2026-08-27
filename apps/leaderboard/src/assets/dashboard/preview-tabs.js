@@ -15,6 +15,22 @@ function setupPreviewTabs() {
   }
 }
 
+// A tablist marked data-preview-default-device="auto" (the Site settings
+// preview) opens on the viewport that matches the dashboard: a narrow screen
+// gets the Mobile preview instead of a shrunken desktop frame. The choice is
+// made once, here — afterwards the creator's own clicks and keys own the
+// selection, and resizing never re-forces it.
+const NARROW_DASHBOARD_QUERY = "(max-width: 899px)";
+
+function initialTab(tablist, tabs) {
+  if (tablist.dataset.previewDefaultDevice === "auto" && typeof window.matchMedia === "function") {
+    const device = window.matchMedia(NARROW_DASHBOARD_QUERY).matches ? "mobile" : "desktop";
+    const preferred = tabs.find((tab) => tab.dataset.device === device);
+    if (preferred) return preferred;
+  }
+  return tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0];
+}
+
 function wireTablist(tablist) {
   if (!tablist || tablist._previewTabsWired) return;
   const tabs = [...tablist.querySelectorAll(".preview-tab")];
@@ -54,10 +70,10 @@ function wireTablist(tablist) {
     setActive(next);
   });
 
-  setActive(tabs.find((tab) => tab.classList.contains("is-active")) || tabs[0]);
+  setActive(initialTab(tablist, tabs));
 }
 
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setupPreviewTabs, { once: true });
 else setupPreviewTabs();
 
-export { setupPreviewTabs };
+export { setupPreviewTabs, initialTab };

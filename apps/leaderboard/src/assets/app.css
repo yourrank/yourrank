@@ -550,6 +550,7 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 .preset-btn.is-selected{border-color:var(--accent);color:var(--ink);box-shadow:0 0 0 1px var(--accent)}
 .preset-swatch{display:flex;width:32px;height:18px;overflow:hidden;border-radius:5px;border:1px solid var(--yr-color-shadow-6)}
 .preset-swatch i{display:block;width:50%;height:100%}
+.preset-swatch i:only-child{width:100%}
 .advanced-colors{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .advanced-colors summary{color:var(--ink-soft);font-size:12px;cursor:pointer;margin-bottom:10px}
 

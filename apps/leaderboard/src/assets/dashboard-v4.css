@@ -6353,6 +6353,17 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   margin-top: 16px;
 }
 
+/* Helper, counter and status lines are inline <span>s in the markup; inside a
+   settings field each one gets its own line with a compact gap so "…on your
+   public site." and "38 of 120 characters" can never run together. */
+.v3-dash[data-auth-workspace] .v3-settings-field > .v3-settings-muted,
+.v3-dash[data-auth-workspace] .v3-settings-field > .v3-settings-status,
+.v3-dash[data-auth-workspace] .v3-settings-field > .field-err {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+}
+
 .v3-dash[data-auth-workspace] .v3-settings-help {
   margin-top: 14px;
   border-top: 1px solid var(--ws-line);

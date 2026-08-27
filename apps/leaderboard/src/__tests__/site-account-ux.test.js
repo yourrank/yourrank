@@ -32,7 +32,12 @@ describe("Site settings creator UX", () => {
     expect(siteJs).toContain('export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {})');
     expect(siteJs).toContain('saveEditorDraft({ button: event.currentTarget })');
     expect(occurrences(siteJs, "status.hidden = false;")).toBeGreaterThanOrEqual(3);
-    expect(dashboardAccountJs).toContain('saveBar.hidden = !["customize", "notifications"].includes(key)');
+    // The save bar is dirty-driven from one owner: tab switches defer to the
+    // same sync the draft subscriber uses, and only Customize/Notifications —
+    // the tabs whose fields the bar saves — can show it.
+    expect(dashboardAccountJs).toContain("syncSettingsSaveBar()");
+    expect(siteJs).toContain("export function syncSettingsSaveBar()");
+    expect(siteJs).toContain('bar.hidden = !(state._dirty && (tab === "customize" || tab === "notifications"))');
     expect(dashboardAccountJs).toContain('for (const id of ["f_domain", "domainSearchInput"])');
   });
 

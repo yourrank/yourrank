@@ -51,16 +51,19 @@ describe("markup: Site settings answers what viewers see", () => {
     expect(customize).toMatch(/id="siteNameError"[^>]*data-field-error="f_name"[^>]*role="alert"/);
     expect(customize).toContain("Short line shown under your name.");
     expect(customize).toMatch(/id="f_tagline" maxlength="120"/);
-    // Logo: the accepted types and the size ceiling are stated before upload.
-    expect(customize).toMatch(/id="logoFile" accept="image\/png,image\/jpeg,image\/webp"/);
+    // Logo: the accepted types and the size ceiling are stated before upload,
+    // and the visible controls are buttons, not a raw file input.
+    expect(customize).toMatch(/id="logoFile" accept="image\/png,image\/jpeg,image\/webp"[^>]*hidden/);
     expect(customize).toContain("PNG, JPG or WebP, up to 2 MB.");
+    expect(customize).toMatch(/<button class="btn btn--sm" id="logoPick" type="button">Upload logo<\/button>/);
     expect(customize).toContain('id="logoClear"');
     expect(customize).toMatch(/id="logoStatus"[^>]*aria-live="polite"/);
+    expect(siteJs).toContain('$("logoPick")?.addEventListener("click", () => $("logoFile")?.click())');
     // Accent: curated choices first, custom picker behind a disclosure.
     expect(customize).toMatch(/id="colorPresets"[^>]*role="group"[^>]*aria-labelledby="siteAccentLabel"/);
     expect(customize).toContain("Used for active navigation, buttons and highlights.");
-    expect(customize).toContain('<details class="advanced-colors"><summary>Custom colors</summary>');
-    expect(customize).toContain('<label for="c_a" class="sr-only">Accent color start</label>');
+    expect(customize).toContain('<details class="advanced-colors"><summary>Custom accent color</summary>');
+    expect(customize).toContain('<label for="c_a" class="sr-only">Accent color</label>');
   });
 
   it("offers no template marketplace, only the supported brand controls", () => {
@@ -99,7 +102,7 @@ describe("markup: Site settings answers what viewers see", () => {
     expect(customize).toMatch(/id="sitePublicDomainManage"[^>]*data-settings-tab-link="domain"/);
   });
 
-  it("puts the preview before the controls, and the save bar last", () => {
+  it("puts the save bar directly under the tabs, ahead of every panel", () => {
     const preview = customize.indexOf("v3-customize-preview");
     const controls = customize.indexOf("v3-customize-controls");
     expect(preview).toBeGreaterThanOrEqual(0);
@@ -107,9 +110,16 @@ describe("markup: Site settings answers what viewers see", () => {
     // Desktop reads controls-first; the sticky preview sits beside them.
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-customize-controls {\n    order: -1;\n  }");
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-customize-preview {\n    position: sticky;");
-    // The save bar belongs after every panel, never above one.
-    expect(html.indexOf('id="settingsSaveBar"')).toBeGreaterThan(html.indexOf('data-settings-panel="danger"'));
+    // The save bar follows the tabs so an edit at the top of Customize
+    // surfaces Save without scrolling; sticky CSS keeps it available while
+    // scrolling further down.
+    const saveBar = html.indexOf('id="settingsSaveBar"');
+    expect(saveBar).toBeGreaterThan(html.indexOf('data-settings-tab="danger"'));
+    expect(saveBar).toBeLessThan(html.indexOf('data-settings-panel="customize"'));
+    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-settings-save {\n  position: sticky;");
     expect(html).toMatch(/id="settingsSave" type="button" disabled="">Save changes<\/button>/);
+    // One save action only.
+    expect(html.match(/id="settingsSave"/g)).toHaveLength(1);
   });
 
   it("owns no second stylesheet and no games or wagering mechanics", () => {
@@ -157,12 +167,53 @@ describe("client: one owner for preview, brand fields and save", () => {
   });
 });
 
+describe("markup: accent is one real control, not two fake colors", () => {
+  it("exposes a single accent picker and no second color anywhere", () => {
+    expect(customize).toContain('<label for="c_a" class="sr-only">Accent color</label>');
+    expect(customize).not.toContain('id="c_b"');
+    expect(customize).not.toContain("Accent color start");
+    expect(customize).not.toContain("Accent color end");
+    expect(siteJs).not.toContain('$("c_b")');
+  });
+
+  it("offers single-color presets that claim no gradient", () => {
+    expect(siteJs).toContain('{ name: "Indigo", accent: "#5b5bf5" }');
+    const presetBlock = siteJs.slice(siteJs.indexOf("const COLOR_PRESETS"), siteJs.indexOf("];", siteJs.indexOf("const COLOR_PRESETS")));
+    expect(presetBlock).not.toContain("accentB");
+    // One swatch per preset button — the two-chip swatch promised a gradient.
+    expect(siteJs).toContain('<span class="preset-swatch"><i data-color="${esc(preset.accent)}"></i></span>');
+    expect(siteJs).not.toContain('data-color="${esc(preset.accentB)}"');
+  });
+
+  it("saves the picker value as accentA while legacy accentB rides through untouched", () => {
+    expect(siteJs).toContain('accentA: $("c_a")?.value || state.CURRENT_BRANDING?.accentA || null');
+    expect(siteJs).toContain("accentB: state.CURRENT_BRANDING?.accentB || null");
+    // The preview posts the same collect() payload, so the preview accent is
+    // the accent the public renderer uses.
+    expect(siteJs).toContain('local.form.querySelector("input[name=\'draft\']").value = JSON.stringify(draft)');
+  });
+
+  it("keeps helper, counter and status text on separate compact lines", () => {
+    expect(dashboardCss).toMatch(/\.v3-settings-field > \.v3-settings-muted,[\s\S]*?\.v3-settings-field > \.field-err \{\s*display: block;/);
+  });
+
+  it("defaults the Site settings preview device from the dashboard breakpoint", () => {
+    // Only this mount opts in; the leaderboard editor preview keeps its
+    // desktop-first default.
+    expect(customize).toContain('aria-label="Preview viewport" data-preview-default-device="auto"');
+    expect(html.match(/data-preview-default-device="auto"/g)).toHaveLength(1);
+    expect(previewTabsJs).toContain('"(max-width: 899px)"');
+    expect(previewTabsJs).toContain('tablist.dataset.previewDefaultDevice === "auto"');
+  });
+});
+
 /* --- behavior: dirty, save and public address --- */
 
 class FakeClassList {
   constructor() { this.values = new Set(); }
   add(...values) { values.forEach((value) => this.values.add(value)); }
   remove(...values) { values.forEach((value) => this.values.delete(value)); }
+  contains(value) { return this.values.has(value); }
   toggle(value, force) {
     const next = force === undefined ? !this.values.has(value) : force;
     if (next) this.add(value); else this.remove(value);
@@ -240,15 +291,18 @@ describe("behavior: save state is honest about unsaved changes", () => {
     const saveBar = register("savebar");
     const settingsSave = register("settingsSave");
     const saveText = register("settingsSaveText");
+    const settingsSaveBar = register("settingsSaveBar");
 
     setState({ _dirty: true });
     expect(settingsSave.disabled).toBe(false);
     expect(saveBar.hidden).toBe(false);
+    expect(settingsSaveBar.hidden).toBe(false);
     expect(saveText.textContent).toBe("You have unsaved changes.");
 
     setState({ _dirty: false });
     expect(settingsSave.disabled).toBe(true);
     expect(saveBar.hidden).toBe(true);
+    expect(settingsSaveBar.hidden).toBe(true);
     expect(saveText.textContent).toContain("Navigation switches save immediately.");
   });
 
@@ -256,8 +310,10 @@ describe("behavior: save state is honest about unsaved changes", () => {
     register("publishAction");
     const editorSave = register("save");
     const settingsSave = register("settingsSave");
+    const settingsSaveBar = register("settingsSaveBar");
     register("status");
     setState({ _dirty: true });
+    expect(settingsSaveBar.hidden).toBe(false);
 
     let requests = 0;
     const fetchImpl = async () => {
@@ -276,12 +332,14 @@ describe("behavior: save state is honest about unsaved changes", () => {
     // A saved draft is a clean one: the settings action goes quiet again.
     expect(settingsSave.disabled).toBe(true);
     expect(editorSave.disabled).toBe(false);
+    expect(settingsSaveBar.hidden).toBe(true);
   });
 
   it("re-enables both save actions and keeps the draft after a failed save", async () => {
     register("publishAction");
     const editorSave = register("save");
     const settingsSave = register("settingsSave");
+    const settingsSaveBar = register("settingsSaveBar");
     const status = register("status");
     setState({ _dirty: true });
 
@@ -295,6 +353,8 @@ describe("behavior: save state is honest about unsaved changes", () => {
     expect(state._dirty).toBe(true);
     expect(settingsSave.disabled).toBe(false);
     expect(editorSave.disabled).toBe(false);
+    // A failed save leaves the draft dirty, so the bar stays up and enabled.
+    expect(settingsSaveBar.hidden).toBe(false);
   });
 
   it("shows the public address on the copy and open actions", () => {
@@ -358,5 +418,66 @@ describe("behavior: the public address follows domain truth", () => {
     expect(siteJs).toContain('setActivePublicDomain(domainState === "active" ? data.customDomain : null)');
     // Every address surface reads the resolver, not location.origin directly.
     expect(siteJs.match(/publicSiteUrl\(\)/g).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("behavior: the chosen accent is the only accent", () => {
+  beforeEach(() => {
+    elements.clear();
+    state.ACTIVE_SITE_ID = "site-1";
+    state.BOARDS = [];
+    state.ME = { plan: "pro" };
+    state.CURRENT_BRANDING = { template: "cyber_arcade", accentA: "#5b5bf5", accentB: "#7b7bf8", font: "Inter" };
+  });
+
+  it("writes the selected accent to accentA and mirrors it into the picker", () => {
+    const picker = register("c_a");
+    site.applyTheme("#ff7a59", "Sunset");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#ff7a59");
+    expect(picker.value).toBe("#ff7a59");
+  });
+
+  it("never overwrites the legacy accentB when the real accent changes", () => {
+    register("c_a");
+    site.applyTheme("#06b6d4", "Cyan");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#06b6d4");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+    // A font-only change leaves both stored accents alone.
+    site.applyTheme(null, "Font");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#06b6d4");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+  });
+});
+
+describe("behavior: the Site settings preview opens on the matching device", () => {
+  const tab = (device, active = false) => {
+    const el = new FakeElement();
+    el.dataset.device = device;
+    if (active) el.classList.add("is-active");
+    return el;
+  };
+  const tablist = (auto) => {
+    const el = new FakeElement();
+    if (auto) el.dataset.previewDefaultDevice = "auto";
+    return el;
+  };
+
+  it("picks Mobile below 900px and Desktop at 900px and up, once", async () => {
+    const { initialTab } = await import("../assets/dashboard/preview-tabs.js");
+    const desktop = tab("desktop", true);
+    const mobile = tab("mobile");
+    const tabs = [desktop, mobile];
+
+    globalThis.window.matchMedia = () => ({ matches: true });
+    expect(initialTab(tablist(true), tabs)).toBe(mobile);
+
+    globalThis.window.matchMedia = () => ({ matches: false });
+    expect(initialTab(tablist(true), tabs)).toBe(desktop);
+
+    // A tablist without the opt-in keeps its declared active tab either way.
+    globalThis.window.matchMedia = () => ({ matches: true });
+    expect(initialTab(tablist(false), tabs)).toBe(desktop);
+
+    delete globalThis.window.matchMedia;
   });
 });
