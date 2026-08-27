@@ -106,6 +106,81 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).not.toContain(">12500<");
   });
 
+  it("puts the player's name, rank and archived results first without a KPI wall", async () => {
+    const profile = await renderNewPlayerProfile(
+      record.data,
+      { name: "Alex", rank: 3, wagered: 12500, prize: 250 },
+      [{ label: "Monthly", rank: 1, wagered: 12500, prize: 250 }],
+      opts,
+    );
+    expect(profile).toContain('<h1 class="yr-h1">Alex</h1>');
+    expect(profile).toContain('id="yr-player-standing">Current standing');
+    expect(profile).toContain('id="yr-player-history">Archived results');
+    expect(profile).toContain("Current rank");
+    expect(profile).toContain(">#3<");
+    expect(profile).toContain('class="yr-hists"');
+    expect(profile).not.toContain('class="yr-hero"');
+    expect(profile).not.toContain('class="yr-kpi');
+    expect(profile).not.toContain('class="yr-table"');
+    // one H1 only, and no medal/trophy gamification
+    expect(profile.match(/<h1\b/g)).toHaveLength(1);
+    expect(profile).not.toMatch(/medal|trophy|achievement/i);
+  });
+
+  it("keeps a pathological player name safe while retaining the accessible name", async () => {
+    const long = "Ω".repeat(50) + "🎮".repeat(10) + "x".repeat(40);
+    const profile = await renderNewPlayerProfile(record.data, { name: long, rank: 0, wagered: 9e15, prize: 0 }, [], opts);
+    expect(profile).toContain(long);
+    expect(profile).toContain(`<h1 class="yr-h1">${long}</h1>`);
+    expect(profile).toContain("Unranked");
+    expect(profile).toContain("No archived results yet.");
+    expect(profile).not.toContain("…");
+  });
+
+  it("omits the prize row entirely when the streamer hides prize amounts", async () => {
+    const hidden = { ...record.data, prizes: { hidePrizeAmounts: true } };
+    const profile = await renderNewPlayerProfile(
+      hidden,
+      { name: "Alex", rank: 1, wagered: 100, prize: 25 },
+      [{ label: "Monthly", rank: 1, wagered: 100, prize: 25 }],
+      opts,
+    );
+    expect(profile).toContain("Wagered");
+    expect(profile).not.toContain(">Prize<");
+    expect(profile).not.toContain("Prize $25");
+    expect(profile).not.toContain("—");
+  });
+
+  it("gives legal pages the viewer heading, readable prose and a help region", async () => {
+    const legal = await renderNewLegalPage(record.data, "terms", opts);
+    expect(legal).toContain('class="yr-vhead"');
+    expect(legal).toContain('class="yr-prose"');
+    expect(legal).toContain('id="yr-legal-help">Need help?');
+    expect(legal.match(/<h1\b/g)).toHaveLength(1);
+    expect(legal).not.toContain('class="yr-card"');
+  });
+
+  it("hides external new-tab disclosures with the public shell utility", async () => {
+    const legal = await renderNewLegalPage(record.data, "responsible", opts);
+    expect(legal).toContain('rel="noopener noreferrer"');
+    expect(legal).toContain('class="yr-sr"> (opens in a new tab)</span>');
+    expect(legal).not.toContain('class="sr-only"');
+  });
+
+  it("canonicalises auxiliary pages to their own URL on both host shapes", async () => {
+    const legal = await renderNewLegalPage(record.data, "terms", opts);
+    const player = await renderNewPlayerProfile(record.data, { name: "Alex Doe", rank: 1 }, [], opts);
+    const hall = await renderNewHallOfFame(record.data, opts);
+    const profile = await renderNewStreamerProfile(record.data, opts);
+    expect(legal).toContain('<link rel="canonical" href="https://test.com/demo-board/terms" />');
+    expect(player).toContain('<link rel="canonical" href="https://test.com/demo-board/player/Alex%20Doe" />');
+    expect(hall).toContain('<link rel="canonical" href="https://test.com/demo-board/hall-of-fame" />');
+    expect(profile).toContain('<link rel="canonical" href="https://test.com/demo-board/profile" />');
+    const custom = await renderNewLegalPage(record.data, "privacy", { ...opts, isCustomDomain: true, homeUrl: "https://board.example" });
+    expect(custom).toContain('<link rel="canonical" href="https://board.example/privacy" />');
+    expect(custom).toContain('<meta property="og:url" content="https://board.example/privacy" />');
+  });
+
   it("does not let custom content leak into a real section render", async () => {
     const html = await renderSite({
       r: { ...record, plan: "free" },

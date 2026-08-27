@@ -64,27 +64,31 @@ export function withNonce(headers, nonce) {
 // is light with the brand blue, so landing on one felt like leaving the site.
 // Self-contained on purpose: these also serve custom domains and must render
 // even when nothing else about the request worked.
-const STATUS_CSS = `:root{--bg:#fff;--panel:#fcfcfc;--line:rgba(0,0,0,.12);--ink:#191919;--dim:#5c5c5c;--accent:#2200ff;--accent-ink:#fff}
+// The status pages are the one document that has to render when everything
+// else has failed, so they stay self-contained: no stylesheet request, no font
+// request, and the same tokens, control radius and focus ring as the public
+// viewer so a viewer who mistypes a creator's link does not land in an
+// unrelated template.
+const STATUS_CSS = `:root{--bg:#f3f3ef;--panel:#fff;--line:rgba(20,20,12,.1);--ink:#191919;--dim:#5c5c5c;--accent:#2200ff;--accent-ink:#fff}
 *{box-sizing:border-box;margin:0}
-body{background:var(--bg);color:var(--ink);font:15px/1.6 "Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;gap:22px}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 "Inter","Fira Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;gap:20px}
 .brand{font-weight:600;font-size:20px;letter-spacing:-.03em;color:var(--ink);text-decoration:none}
 .brand b{color:inherit;font-weight:600}
-.card{width:100%;max-width:460px;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:none;padding:32px;text-align:center}
-h1{font-size:28px;line-height:1.1;font-weight:500;letter-spacing:-.03em;margin-bottom:12px}
-p{color:var(--dim);font-size:14px}
+.card{width:100%;max-width:460px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 24px;text-align:center}
+h1{font-size:26px;line-height:1.15;font-weight:500;letter-spacing:-.03em;margin-bottom:12px;overflow-wrap:anywhere}
+p{color:var(--dim);font-size:14px;overflow-wrap:anywhere}
 p+p{margin-top:8px}
 p a{color:var(--ink);font-weight:500;text-underline-offset:4px}
-code{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;word-break:break-all}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;word-break:break-all}
 .actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border-radius:2px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-weight:500;font-size:14px;text-decoration:none}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 18px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-weight:500;font-size:14px;text-decoration:none}
 .btn--accent{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn:hover{border-color:var(--accent)}`;
+.btn:hover{border-color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}`;
 
 function statusPage({ title, heading, body, actions, nonce }) {
   const n = nonce ? ` nonce="${nonce}"` : "";
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>${esc(title)} · YourRank</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style${n}>${STATUS_CSS}</style></head>
 <body><a class="brand" href="/">Your<b>Rank</b></a>
 <main class="card"><h1>${esc(heading)}</h1>${body}

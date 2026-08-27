@@ -41,12 +41,18 @@
   `;
   document.body.appendChild(banner);
 
-  banner.querySelector("#cookieAccept").addEventListener("click", () => {
-    setConsent("all");
+  // Removing the banner takes the focused button away with it, so focus moves to
+  // the page content instead of falling to the document body.
+  function dismiss(value) {
+    setConsent(value);
     banner.remove();
-  });
-  banner.querySelector("#cookieReject").addEventListener("click", () => {
-    setConsent("essential");
-    banner.remove();
-  });
+    const main = document.getElementById("main-content") || document.querySelector("main");
+    if (main && typeof main.focus === "function") {
+      if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+      main.focus({ preventScroll: true });
+    }
+  }
+
+  banner.querySelector("#cookieAccept").addEventListener("click", () => dismiss("all"));
+  banner.querySelector("#cookieReject").addEventListener("click", () => dismiss("essential"));
 })();

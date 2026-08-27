@@ -30,7 +30,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <div class="yr-top-in">
 <a class="yr-id" href="https://example.test/board%20fixture"><span class="yr-id-txt"><span class="yr-id-name">Ampersand &amp; Board</span><span class="yr-id-sub">A &amp; B</span></span></a>
 <nav class="yr-tabs" aria-label="Sections"><a class="yr-tab" href="https://example.test/board%20fixture"><span>Home</span></a><a class="yr-tab is-on" href="https://example.test/board%20fixture/leaderboard" aria-current="page"><span>Leaderboard</span></a><a class="yr-tab" href="https://example.test/board%20fixture/shop"><span>Rewards</span></a><a class="yr-tab" href="https://example.test/board%20fixture/me"><span>My credits</span></a></nav>
-<div class="yr-top-r"><a class="yr-btn yr-btn--ghost yr-btn--sm" href="/me">Sign in</a><button class="yr-menu" id="yr-menu" type="button" aria-label="Open menu" aria-controls="yr-side" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button></div>
+<div class="yr-top-r"><a class="yr-btn yr-btn--ghost yr-btn--sm" href="/me">Sign in</a><button class="yr-menu" id="yr-menu" type="button" hidden aria-label="Open sections" aria-controls="yr-side" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button></div>
 </div>
 </header>
 <main class="yr-main" id="main-content">

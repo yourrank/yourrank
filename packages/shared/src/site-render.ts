@@ -238,7 +238,7 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
 <div class="yr-top-in">
 <a class="yr-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-id-logo", 36)}<span class="yr-id-txt"><span class="yr-id-name">${name}</span>${tagline ? `<span class="yr-id-sub">${tagline}</span>` : ""}</span></a>
 <nav class="yr-tabs" aria-label="Sections">${nav}</nav>
-<div class="yr-top-r">${right}<button class="yr-menu" id="yr-menu" type="button" aria-label="Open menu" aria-controls="yr-side" aria-expanded="false">${ICONS.bars}</button></div>
+<div class="yr-top-r">${right}<button class="yr-menu" id="yr-menu" type="button" hidden aria-label="Open sections" aria-controls="yr-side" aria-expanded="false">${ICONS.bars}</button></div>
 </div>
 </header>`;
 }
@@ -415,7 +415,9 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const balance = Number(viewerOnSite?.balance || 0);
   const kickUrl = (Array.isArray(data.socials) ? data.socials : []).find((s) => /kick/i.test(s?.type || s?.name || ""))?.url;
 
-  const sectionUrl = `${homeUrl}${siteSectionHref(section || "home", slug, isCustomDomain)}`;
+  // Pages rendered through contentHtml (player, legal, archive, profile) own their
+  // own URL, so they pass it in rather than canonicalising to the creator home.
+  const sectionUrl = `${homeUrl}${opts.canonicalPath || siteSectionHref(section || "home", slug, isCustomDomain)}`;
   const canonicalUrl = esc(sectionUrl);
   const returnTo = sectionUrl;
 
