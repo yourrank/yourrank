@@ -91,11 +91,11 @@ describe("public viewer shell", () => {
     expect(withLogo).toContain('class="yr-id-logo" src="https://cdn.example.test/logo.png"');
     expect(withLogo).toContain('srcset="https://cdn.example.test/logo.png?w=64 64w');
     expect(withLogo).toContain('width="36" height="36" alt=""');
-    expect(withLogo).toContain('class="yr-intro-logo"');
+    // The bar and the drawer own the mark; Home does not print a second copy.
+    expect(withLogo).not.toContain("yr-intro-logo");
 
     const withoutLogo = await render("home");
     expect(withoutLogo).not.toContain("yr-id-logo");
-    expect(withoutLogo).not.toContain("yr-intro-logo");
     expect(withoutLogo).toContain('<span class="yr-id-name">Creator Name</span>');
   });
 
@@ -108,7 +108,7 @@ describe("public viewer shell", () => {
     const css = readFileSync(join(assets, "site-shell.css"), "utf8");
     // Full name in the DOM (so it stays the accessible name) even though the bar clips it.
     expect(html).toContain(`<span class="yr-id-name">${long}</span>`);
-    expect(html).toContain(`<h1 class="yr-intro-name">${long}</h1>`);
+    expect(html).toContain(`<h1 class="yr-intro-name">Welcome to ${long}'s channel</h1>`);
     const bar = css.match(/\.yr-id-name \{([^}]*)\}/);
     expect(bar).not.toBeNull();
     expect(bar[1]).toContain("overflow-wrap: anywhere");
@@ -268,7 +268,9 @@ describe("public viewer shell", () => {
     const html = await render("home");
     const css = readFileSync(join(assets, "site-shell.css"), "utf8");
     const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
-    expect((html.match(/<nav\b/g) || []).length).toBe(2); // top bar + drawer disclosure
+    // Top bar, drawer disclosure, and the footer's server-rendered fallback map
+    // that the stylesheet hides once the shell script reports ready.
+    expect((html.match(/<nav\b/g) || []).length).toBe(3);
     expect(html).toContain('id="yr-menu"');
     expect(html).toContain('aria-controls="yr-side"');
     expect(html).toContain('<div class="yr-drawer" id="yr-side"');
@@ -399,14 +401,49 @@ describe("public viewer shell", () => {
     // SVG whose gradient ids would repeat three times in one document.
     expect(plain).toContain('<span class="yr-mark" aria-hidden="true">C</span>');
     expect(plain).toContain('<span class="yr-mark yr-mark--sm" aria-hidden="true">C</span>');
-    expect(plain).toContain('<span class="yr-mark yr-mark--lg" aria-hidden="true">C</span>');
     expect(plain).not.toContain("<linearGradient");
-    expect(plain).toContain('<h1 class="yr-intro-name">Creator Name</h1>');
+    // Home states the purpose of the page in the creator's name instead of
+    // repeating the identity composition the bar already carries.
+    expect(plain).toContain('<h1 class="yr-intro-name">Welcome to Creator Name\'s channel</h1>');
+    expect(plain).toContain('<p class="yr-intro-sub">Weekly board and free rewards</p>');
+    expect(plain).not.toContain("yr-intro-id");
+    expect(plain).not.toContain("yr-mark--lg");
 
     const logo = await render("home", { data: { ...baseData, logoUrl: "https://cdn.test/logo.png" } });
     expect(logo).toContain('class="yr-id-logo"');
-    expect(logo).toContain('class="yr-intro-logo"');
+    expect(logo).not.toContain('class="yr-intro-logo"');
     expect(logo).not.toContain('class="yr-mark"');
+  });
+
+  it("keeps Home's opening at its own height beside the balance card", () => {
+    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    const wide = css.slice(css.indexOf("@media (min-width: 900px)"));
+    const band = wide.match(/\.yr-home-top \{([^}]*)\}/);
+    expect(band).not.toBeNull();
+    expect(band[1]).toContain("grid-template-columns");
+    // A sparse introduction is never stretched to the balance card's height.
+    expect(band[1]).not.toContain("align-items: stretch");
+  });
+
+  it("drops the viewer's account shortcut from the narrow bar and keeps it in the drawer", async () => {
+    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    const narrow = css.slice(css.indexOf("@media (max-width: 899px)"), css.indexOf("@media (max-width: 479px)"));
+    // Below the drawer breakpoint the bar keeps creator, balance and menu only.
+    expect(narrow).toMatch(/\.yr-account-link \{ display: none; \}/);
+    expect(narrow).toContain(".yr-menu { display: inline-flex; }");
+    expect(css).toMatch(/\.yr-account-link, \.yr-bal \{[^}]*min-height: 44px/);
+
+    const signedIn = await render("home", { viewer, viewerData });
+    // The desktop treatment and both account destinations survive.
+    expect(signedIn).toContain('<a class="yr-account-link" href="/me"');
+    const drawer = signedIn.slice(signedIn.indexOf('class="yr-drawer-foot"'));
+    expect(drawer).toContain('class="yr-user" href="https://example.test/creator/me"');
+    expect(drawer).toContain('class="yr-sec-link yr-drawer-acct" href="/me"');
+
+    const signedOut = await render("home");
+    expect(signedOut).not.toContain("yr-account-link");
+    expect(signedOut).not.toContain("yr-drawer-acct");
+    expect(signedOut).toContain(">Sign in<");
   });
 
   it("leaves one primary action per band and one heading per module", async () => {
@@ -442,12 +479,27 @@ describe("public viewer shell", () => {
   it("puts the creator's own line first in the footer and keeps section links quiet", async () => {
     const html = await render("home");
     const foot = html.slice(html.indexOf('<footer class="yr-foot">'));
-    expect(foot.indexOf('class="yr-foot-c"')).toBeLessThan(foot.indexOf("yr-foot-links--more"));
+    expect(foot.indexOf('class="yr-foot-c"')).toBeLessThan(foot.indexOf("yr-foot-nav"));
     expect(foot).toContain("&copy; ");
     expect(foot).toContain("Terms of Service");
-    // The no-JS section fallback survives, one step quieter.
-    expect(foot).toContain('<div class="yr-foot-links yr-foot-links--more">');
+    // The section fallback survives for a browser that never ran the shell
+    // script, and only the stylesheet — keyed on the flag that script sets —
+    // hides it, so a blocked or failed script leaves it visible and usable.
+    expect(foot).toContain('<nav class="yr-foot-links yr-foot-nav" aria-label="All sections">');
     expect(foot).toContain(">Leaderboard</a>");
+
+    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    expect(css).toContain('[data-yr-shell="ready"] .yr-foot-nav { display: none; }');
+    expect(css).not.toMatch(/^\.yr-foot-nav \{[^}]*display: none/m);
+    const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
+    expect(shell).toContain('document.documentElement.setAttribute("data-yr-shell", "ready");');
+    // Quiet in the normal view means the working header's destinations are not
+    // repeated outside that fallback.
+    const quiet = foot.slice(0, foot.indexOf("yr-foot-nav"));
+    for (const section of [">Home</a>", ">Leaderboard</a>", ">Rewards</a>", ">My credits</a>"]) {
+      expect(quiet).not.toContain(section);
+    }
+    expect(quiet).toContain("data-feedback-open");
   });
 
   it("preserves canonical, social and section metadata", async () => {

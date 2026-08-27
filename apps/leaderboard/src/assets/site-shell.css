@@ -170,7 +170,10 @@
   font-weight: 700;
 }
 
-.yr-drawer-foot { padding: 16px; border-top: 1px solid var(--yr-edge); }
+.yr-drawer-foot { padding: 16px; border-top: 1px solid var(--yr-edge); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+/* The bar's account shortcut is desktop-only, so the drawer keeps the viewer's
+   global account destination reachable at the widths the drawer exists for. */
+.yr-drawer-acct { min-height: 44px; }
 
 .yr-user {
   display: flex;
@@ -238,7 +241,6 @@
   font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
 }
 .yr-mark--sm { width: 32px; height: 32px; font-size: 14px; border-radius: 8px; }
-.yr-mark--lg { width: 64px; height: 64px; font-size: 26px; border-radius: 16px; }
 .yr-id-txt { min-width: 0; display: flex; flex-direction: column; }
 /* The full name always stays in the DOM for assistive technology; the bar only
    ever shows two lines of it so one long name cannot grow the sticky header. */
@@ -287,8 +289,9 @@
 .yr-search:hover { border-color: var(--yr-faint); }
 .yr-search:focus { border-color: var(--yr-primary); }
 .yr-search::placeholder { color: var(--yr-faint); }
+/* Search belongs to the standings module, so it takes the module's width
+   instead of stopping short of it and leaving the panel top unfinished. */
 .yr-search-row { padding: 16px 24px 0; }
-.yr-search-row .yr-search { max-width: 420px; }
 
 .yr-main {
   flex: 1;
@@ -372,7 +375,7 @@
 }
 /* The page heading already named this panel, so its head carries only the
    count and sits tight to the list it belongs to. */
-.yr-panel-head--quiet { padding: 14px 24px 0; border-bottom: 0; justify-content: flex-start; }
+.yr-panel-head--quiet { padding: 14px 24px 0; border-bottom: 0; justify-content: flex-end; }
 .yr-panel-title { font-size: 17px; line-height: 24px; letter-spacing: -0.015em; color: var(--yr-fog); font-weight: 700; }
 .yr-panel-meta { font-size: 13px; line-height: 20px; font-weight: 500; color: var(--yr-faint); font-variant-numeric: tabular-nums; }
 .yr-panel-foot { padding: 16px 24px; border-top: 1px solid var(--yr-edge-soft); }
@@ -391,13 +394,13 @@
    push the whole column past the viewport. Every band child stays shrinkable. */
 .yr-home-top > *, .yr-home-cols > *, .yr-vcols > *, .yr-vhead--split > * { min-width: 0; }
 
+/* The bar owns creator identity, so Home's opening is a sentence and the one
+   action that belongs to it — no second mark, no hero, no filler height. */
 .yr-intro {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
   padding: 28px; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card);
   background: linear-gradient(180deg, color-mix(in srgb, var(--yr-accent) 7%, var(--yr-panel)), var(--yr-panel));
 }
-.yr-intro-id { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.yr-intro-logo { width: 64px; height: 64px; flex-shrink: 0; object-fit: cover; border-radius: 16px; border: 1px solid var(--yr-edge); }
 .yr-intro-txt { min-width: 0; }
 /* A pathological creator name breaks inside the word and then stops: the whole
    name stays in the document and in the accessible name, but it cannot push the
@@ -720,7 +723,11 @@
 .yr-foot-c { min-width: 0; font-size: 13px; line-height: 20px; color: var(--yr-mute); overflow-wrap: anywhere; }
 .yr-foot-c a { text-decoration: underline; text-underline-offset: 3px; }
 .yr-foot-links { display: flex; flex-wrap: wrap; gap: 0 16px; }
-.yr-foot-links--more { opacity: 0.75; }
+/* The section map is the fallback for a browser that never ran the shell
+   script. Once the script reports ready the bar and the drawer own navigation,
+   so the footer drops it and keeps only the creator's sign-off and legal. */
+.yr-foot-nav { opacity: 0.75; }
+[data-yr-shell="ready"] .yr-foot-nav { display: none; }
 .yr-foot-links a, .yr-foot-links button { min-height: 44px; padding: 0 2px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--yr-faint); }
 .yr-foot-links a:hover, .yr-foot-links button:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 
@@ -807,9 +814,9 @@
   /* Wide enough for two real modules side by side: the creator's introduction
      next to the viewer's balance, the board preview next to the rewards
      preview, credit history next to orders. */
-  /* The creator's introduction and the viewer's balance read as one band, so
-     they share a baseline instead of leaving a blank shelf under the shorter. */
-  .yr-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); align-items: stretch; }
+  /* The introduction and the balance share the band at their own heights: a
+     sparse intro is not stretched to the balance card and left half empty. */
+  .yr-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
   .yr-home-cols, .yr-vcols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yr-vhead--split { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; }
 }
@@ -835,12 +842,13 @@
   .yr-id-logo, .yr-mark { width: 36px; height: 36px; font-size: 15px; }
   .yr-id-name { font-size: 17px; line-height: 21px; }
   .yr-id-sub { max-width: 16ch; }
-  .yr-account-link { width: 44px; padding: 0; justify-content: center; }
-  .yr-account-txt { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  /* The viewer's own avatar beside the creator's mark reads as a duplicated
+     identity here and has no room for its label, so the bar keeps creator,
+     balance and menu, and the drawer carries the account destination. */
+  .yr-account-link { display: none; }
   .yr-main { padding: 20px 12px 32px; }
   .yr-main > * + * { margin-top: 28px; }
-  .yr-intro { align-items: flex-start; gap: 16px; padding: 20px; }
-  .yr-intro-logo, .yr-mark--lg { width: 52px; height: 52px; font-size: 22px; }
+  .yr-intro { gap: 16px; padding: 20px; }
   .yr-intro-name { font-size: 25px; line-height: 30px; }
   .yr-intro-sub { font-size: 14px; }
   .yr-vnote { padding: 18px; }

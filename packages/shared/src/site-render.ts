@@ -200,11 +200,16 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
   const boardCreditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
   // The account row only exists where the streamer kept the credits section on;
   // otherwise there is nothing on this site for a viewer to hold.
-  const foot = siteSections.me === false
+  // The bar's account shortcut is desktop-only, so the drawer carries the
+  // viewer's global account destination at narrow widths as well as their
+  // balance on this site.
+  const acct = viewer ? `<a class="yr-sec-link yr-drawer-acct" href="/me">Your sites &amp; account ${ICONS.arrow}</a>` : "";
+  const userRow = siteSections.me === false
     ? ""
     : viewer
       ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">${formatNumber(balance)} credits here</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
       : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My credits</span><span class="yr-user-sub">Sign in for credits</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
+  const foot = `${userRow}${acct}`;
 
   return `<div class="yr-drawer" id="yr-side" aria-label="${name} menu" tabindex="-1">
 <div class="yr-drawer-head"><a class="yr-drawer-id" href="${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}">${creatorMark(logoUrl, "yr-drawer-logo", 32, monogram(b.name || slug, "yr-mark yr-mark--sm"))}${name}</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu">${ICONS.close}</button></div>
@@ -244,6 +249,10 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
     return `<a class="yr-tab${s === section ? " is-on" : ""}" href="${href}"${active}><span>${esc(SECTION_LABELS[s])}</span></a>`;
   }).join("");
 
+  // The account shortcut is the desktop treatment only: below the drawer
+  // breakpoint the viewer's own avatar next to the creator's mark reads as a
+  // second unlabelled identity, so the stylesheet hides it there and the
+  // drawer's account row — the same destination — carries it instead.
   const right = viewer
     ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" data-credit-balance="${Number(balance) || 0}" data-credit-balance-label="My credits on this site" aria-label="My credits on this site: ${formatNumber(balance)}"><span class="yr-bal-num" data-credit-balance-num>${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>
 <a class="yr-account-link" href="/me" aria-label="Your sites and account"><span class="yr-ava">${avatarHtml(viewer)}</span><span class="yr-account-txt">Your sites</span></a>`
@@ -560,18 +569,20 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
     kickUrl && kickUrl !== "#" ? `<a href="${kickUrl}" target="_blank" rel="noopener noreferrer">Watch on Kick<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     hasCta && casino ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(casino)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     viewer ? `<a href="/me">Your sites &amp; account</a>` : "",
-    `<button type="button" data-feedback-open>Send feedback</button>`,
   ].filter(Boolean).join("");
-  // The primary line is the creator's own: their copyright, the legal pages and
-  // the platform credit. Section links stay for a viewer without JavaScript,
-  // but they read as a quiet site map underneath rather than as link soup.
+  // What a viewer normally reads at the bottom is the creator's sign-off: the
+  // fine print, their copyright, the legal pages and one way to reach us. The
+  // section map below it is the fallback for a browser that never ran the shell
+  // script; it is always server-rendered and the stylesheet hides it only once
+  // the script reports ready, because from then on the bar and the drawer own
+  // navigation and a second copy of it is noise.
   return `<footer class="yr-foot">
 <p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
-<div class="yr-foot-links">${legalLinks}</div>
+<div class="yr-foot-links">${legalLinks}<button type="button" data-feedback-open>Send feedback</button></div>
 </div>
-<div class="yr-foot-links yr-foot-links--more">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</div>
+<nav class="yr-foot-links yr-foot-nav" aria-label="All sections">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</nav>
 </footer>`;
 }
 
@@ -584,7 +595,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
  * has not configured.
  */
 function homeMain(ctx) {
-  const { r, data, b, slug, isCustomDomain, homeUrl, logoUrl, viewer, viewerData, balance, period, pool, returnTo, siteSections } = ctx;
+  const { r, data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, balance, period, pool, returnTo, siteSections } = ctx;
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
   const boardHref = `${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}`;
   const meHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
@@ -607,9 +618,10 @@ function homeMain(ctx) {
     .filter((s) => s.href !== "#");
   const kickLink = socials.find((s) => /kick/i.test(s.label));
 
-  // Home opens with the creator, not with the product: their mark, their name,
-  // their line, and the one thing a visitor is here to do. A signed-in viewer
-  // gets their balance module beside it instead of a second rewards button.
+  // The bar already carries the creator's mark, name and line, so Home does not
+  // repeat that composition: it states what this page is, in the creator's own
+  // name, keeps their line, and offers the one thing a visitor came to do. A
+  // signed-in viewer gets their balance module beside it, not a second button.
   const introActs = [
     !viewer && shopEnabled ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
     kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
@@ -617,7 +629,7 @@ function homeMain(ctx) {
   ].filter(Boolean).join("");
 
   const intro = `<section class="yr-intro">
-<div class="yr-intro-id">${creatorMark(logoUrl, "yr-intro-logo", 64, monogram(b.name || slug, "yr-mark yr-mark--lg"))}<div class="yr-intro-txt"><h1 class="yr-intro-name">${name}</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div></div>
+<div class="yr-intro-txt"><h1 class="yr-intro-name">Welcome to ${name}'s channel</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div>
 ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 </section>`;
 

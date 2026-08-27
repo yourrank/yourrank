@@ -183,6 +183,13 @@ describe("public leaderboard standings", () => {
     expect(html).toContain('<p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite">');
     expect(css).toMatch(/\.yr-search \{[^}]*min-height: 44px/);
     expect(shell).toContain('setSearchStatus(plural(visiblePlayerCount()) + " match');
+    // Search takes the standings module's width on every viewport: no desktop
+    // cap that stops it short of the panel and leaves the composition open.
+    expect(css).toMatch(/\.yr-search \{[^}]*width: 100%/);
+    expect(css).not.toMatch(/\.yr-search-row \.yr-search \{[^}]*max-width/);
+    // The count stays as quiet metadata at the top of the panel, to the side.
+    expect(html).toContain('<span data-player-count-badge>3 players</span>');
+    expect(css).toMatch(/\.yr-panel-head--quiet \{[^}]*justify-content: flex-end/);
   });
 
   it("keeps the no-match, failure and cleared states of search honest", async () => {

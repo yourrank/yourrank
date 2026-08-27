@@ -14,6 +14,11 @@
   // script blocked the top bar has no dead control and the footer keeps every
   // section link; with the script running the drawer behaves exactly as before.
   if (menu && side) menu.hidden = false;
+  // Same contract for the footer's section map: it is server-rendered so a
+  // viewer whose browser never ran this file can still reach every section,
+  // and it is hidden by the stylesheet only once this flag says the bar and
+  // the drawer are live. Blocked or failed script keeps the fallback visible.
+  document.documentElement.setAttribute("data-yr-shell", "ready");
   var sideOpener = null;
   var bodyOverflow = "";
   var inertBackground = [];

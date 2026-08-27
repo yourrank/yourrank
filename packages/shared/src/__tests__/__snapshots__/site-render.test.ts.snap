@@ -63,9 +63,9 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
-<div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a></div>
+<div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-feedback-open>Send feedback</button></div>
 </div>
-<div class="yr-foot-links yr-foot-links--more"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My credits</a><button type="button" data-feedback-open>Send feedback</button></div>
+<nav class="yr-foot-links yr-foot-nav" aria-label="All sections"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My credits</a></nav>
 </footer>
 </main>
 <div class="yr-drawer" id="yr-side" aria-label="Ampersand &amp; Board menu" tabindex="-1">
