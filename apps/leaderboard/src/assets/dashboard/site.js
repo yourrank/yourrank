@@ -427,12 +427,18 @@ export function collect({ reportPlayerErrors = true } = {}) {
   if (state.ME && state.ME.plan !== "free") {
     out.branding = {
       template: state.CURRENT_BRANDING?.template || "cyber_arcade",
-      // accentB is legacy stored data with no visible effect in the viewer; it
-      // round-trips from state untouched so an accent edit never rewrites it.
-      accentA: $("c_a")?.value || state.CURRENT_BRANDING?.accentA || null,
-      accentB: state.CURRENT_BRANDING?.accentB || null,
       font: $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter",
     };
+    // accentA comes from the canonical branding state, never from the raw
+    // picker DOM: `applyTheme()` is the only writer, so an in-flight picker
+    // value can never be saved as an accent the rest of the page disagrees
+    // with, and a later updateThemeSelection() can never revert it.
+    // accentB is legacy stored data with no visible effect in the viewer; it
+    // round-trips from state untouched so an accent edit never rewrites it.
+    // An accent the site does not have is omitted rather than sent as null,
+    // which the branding schema rejects.
+    if (state.CURRENT_BRANDING?.accentA) out.branding.accentA = state.CURRENT_BRANDING.accentA;
+    if (state.CURRENT_BRANDING?.accentB) out.branding.accentB = state.CURRENT_BRANDING.accentB;
     if (state.LOGO !== undefined) out.branding.logo = state.LOGO;
   }
   if (isPro()) {
@@ -1118,27 +1124,44 @@ function setLogoStatus(message) {
   if (status) { status.textContent = message; status.hidden = false; }
 }
 
-$("logoPick")?.setAttribute("aria-label", "Upload logo");
-$("logoPick")?.addEventListener("click", () => $("logoFile")?.click());
-$("logoClear")?.setAttribute("aria-label", "Remove logo");
-$("logoClear")?.addEventListener("click", () => {
-  state.LOGO = null;
-  $("logoPreview").hidden = true;
-  $("logoClear").hidden = true;
-  setLogoStatus("Logo will be removed when you save.");
-  markDirty();
-});
-$("logoFile")?.addEventListener("change", () => {
-  const f = $("logoFile").files[0]; if (!f) return;
+// Same event-ownership rule as the accent picker: the file input's own
+// input/change must not reach the dashboard's global dirty owner, because a
+// rejected file (wrong type, over 2 MB, undecodable) would otherwise show
+// "unsaved changes" for a logo that was never accepted. Only assigning a
+// converted logo to `state.LOGO` marks dirty. Stopping propagation never
+// *clears* dirty, so a legitimate edit made earlier keeps its unsaved state.
+export function wireLogoControls() {
+  $("logoPick")?.setAttribute("aria-label", "Upload logo");
+  $("logoPick")?.addEventListener("click", () => $("logoFile")?.click());
+  $("logoClear")?.setAttribute("aria-label", "Remove logo");
+  $("logoClear")?.addEventListener("click", () => {
+    state.LOGO = null;
+    $("logoPreview").hidden = true;
+    $("logoClear").hidden = true;
+    setLogoStatus("Logo will be removed when you save.");
+    markDirty();
+  });
+  $("logoFile")?.addEventListener("input", (event) => event.stopPropagation());
+  $("logoFile")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    handleLogoSelection($("logoFile").files[0]);
+  });
+}
+wireLogoControls();
+
+// Exported so the rejection paths can be proven directly: every early return
+// below leaves the draft exactly as dirty as it already was.
+export function handleLogoSelection(f) {
+  if (!f) return;
   // Reject before decoding: a rejected file should never look half-accepted.
   if (f.type && !LOGO_TYPES.includes(f.type)) {
     setLogoStatus("That file type isn't supported. Use a PNG, JPG or WebP image.");
-    $("logoFile").value = "";
+    if ($("logoFile")) $("logoFile").value = "";
     return;
   }
   if (f.size > LOGO_MAX_BYTES) {
     setLogoStatus(`That image is ${(f.size / (1024 * 1024)).toFixed(1)} MB. Use one under 2 MB.`);
-    $("logoFile").value = "";
+    if ($("logoFile")) $("logoFile").value = "";
     return;
   }
   // The dashboard's CSP allows `data:` images but not `blob:`, so the picked
@@ -1173,10 +1196,23 @@ $("logoFile")?.addEventListener("change", () => {
   reader.onload = () => { img.src = String(reader.result); };
   reader.onerror = () => { setLogoStatus("Couldn't read that image."); };
   reader.readAsDataURL(f);
-  $("logoFile").value = "";
-});
-$("applyCustomColors")?.addEventListener("click", () => applyTheme($("c_a")?.value, "Custom color"));
-$("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accent, COLOR_PRESETS[0].name));
+  if ($("logoFile")) $("logoFile").value = "";
+}
+// The custom accent picker owns its own dirty/update path. The dashboard marks
+// every bubbled input/change dirty, which would flag unsaved work for a colour
+// the canonical branding state had not accepted yet; stopping propagation here
+// makes `applyTheme()` the single writer. `input` fires continuously while the
+// native picker is open, so it is swallowed and the committed `change` is the
+// one that applies. There is no separate Apply step: one picker, one state.
+export function wireAccentPicker() {
+  $("c_a")?.addEventListener("input", (event) => event.stopPropagation());
+  $("c_a")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    applyTheme($("c_a")?.value, "Custom color");
+  });
+  $("colorsReset")?.addEventListener("click", () => applyTheme(COLOR_PRESETS[0].accent, COLOR_PRESETS[0].name));
+}
+wireAccentPicker();
 $("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 
 export function renderNotifications(n) {

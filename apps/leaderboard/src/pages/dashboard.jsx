@@ -381,7 +381,7 @@ function BoardSettingsSection({ active } = {}) {
               <div class="preset-list" id="colorPresets" role="group" aria-labelledby="siteAccentLabel"></div>
               <span class="v3-settings-muted">Used for active navigation, buttons and highlights.</span>
               <details class="advanced-colors"><summary>Custom accent color</summary>
-              <div class="color-row"><label for="c_a" class="sr-only">Accent color</label><input type="color" id="c_a" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="applyCustomColors" type="button">Apply</button><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset</button></div>
+              <div class="color-row"><label for="c_a" class="sr-only">Accent color</label><input type="color" id="c_a" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset</button></div>
               </details>
             </div>
             <div class="v3-settings-field">

@@ -176,6 +176,25 @@ describe("markup: accent is one real control, not two fake colors", () => {
     expect(siteJs).not.toContain('$("c_b")');
   });
 
+  it("commits the custom accent on the picker itself, with no separate Apply step", () => {
+    // A second "Apply" click was a second state path: the picker could be
+    // changed, look dirty, and be saved without the canonical branding state
+    // ever accepting the colour.
+    expect(customize).not.toContain("applyCustomColors");
+    expect(siteJs).not.toContain("applyCustomColors");
+    expect(customize).toContain('id="colorsReset"');
+    expect(siteJs).toContain('$("c_a")?.addEventListener("change", (event) => {');
+    expect(siteJs).toContain('applyTheme($("c_a")?.value, "Custom color")');
+    // `input` fires continuously while the native picker is open; it is
+    // swallowed so it can neither mark dirty nor duplicate the update.
+    expect(siteJs).toContain('$("c_a")?.addEventListener("input", (event) => event.stopPropagation())');
+  });
+
+  it("keeps the logo picker off the dashboard's global dirty owner", () => {
+    expect(siteJs).toContain('$("logoFile")?.addEventListener("input", (event) => event.stopPropagation())');
+    expect(siteJs).toMatch(/\$\("logoFile"\)\?\.addEventListener\("change", \(event\) => \{\s*event\.stopPropagation\(\);/);
+  });
+
   it("offers single-color presets that claim no gradient", () => {
     expect(siteJs).toContain('{ name: "Indigo", accent: "#5b5bf5" }');
     const presetBlock = siteJs.slice(siteJs.indexOf("const COLOR_PRESETS"), siteJs.indexOf("];", siteJs.indexOf("const COLOR_PRESETS")));
@@ -185,12 +204,24 @@ describe("markup: accent is one real control, not two fake colors", () => {
     expect(siteJs).not.toContain('data-color="${esc(preset.accentB)}"');
   });
 
-  it("saves the picker value as accentA while legacy accentB rides through untouched", () => {
-    expect(siteJs).toContain('accentA: $("c_a")?.value || state.CURRENT_BRANDING?.accentA || null');
-    expect(siteJs).toContain("accentB: state.CURRENT_BRANDING?.accentB || null");
+  it("saves the canonical accent as accentA while legacy accentB rides through untouched", () => {
+    // collect() reads the branding state, not the raw picker: an in-flight
+    // picker value is never persisted as an accent the page disagrees with.
+    expect(siteJs).toContain("out.branding.accentA = state.CURRENT_BRANDING.accentA");
+    expect(siteJs).not.toContain('accentA: $("c_a")?.value');
+    expect(siteJs).toContain("out.branding.accentB = state.CURRENT_BRANDING.accentB");
     // The preview posts the same collect() payload, so the preview accent is
     // the accent the public renderer uses.
     expect(siteJs).toContain('local.form.querySelector("input[name=\'draft\']").value = JSON.stringify(draft)');
+  });
+
+  it("omits an accent the site does not have instead of sending null", () => {
+    // The branding schema takes optional strings; `null` is rejected with
+    // "Expected string, received null", which failed the whole save.
+    expect(siteJs).toContain("if (state.CURRENT_BRANDING?.accentA) out.branding.accentA = state.CURRENT_BRANDING.accentA;");
+    expect(siteJs).toContain("if (state.CURRENT_BRANDING?.accentB) out.branding.accentB = state.CURRENT_BRANDING.accentB;");
+    expect(siteJs).not.toContain("accentA: state.CURRENT_BRANDING?.accentA || null");
+    expect(siteJs).not.toContain("accentB: state.CURRENT_BRANDING?.accentB || null");
   });
 
   it("keeps helper, counter and status text on separate compact lines", () => {
@@ -238,6 +269,11 @@ class FakeElement {
   querySelector() { return null; }
   querySelectorAll() { return []; }
   contains(node) { return node === this; }
+  appendChild(child) { (this.children ||= []).push(child); return child; }
+  // The logo resize path draws through a canvas; a fake one keeps the test in
+  // process while still exercising the real srcset loop.
+  getContext() { return { drawImage() {} }; }
+  toDataURL(type) { return `data:${type === "image/webp" ? "image/webp" : "image/jpeg"};base64,AAAA`; }
 }
 
 const elements = new Map();
@@ -264,6 +300,19 @@ globalThis.location = { href: "http://localhost/dashboard/site", origin: "http:/
 globalThis.history = { pushState() {} };
 globalThis.requestAnimationFrame = (callback) => callback();
 globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } });
+
+// The logo path decodes through FileReader → Image → canvas. These fakes let a
+// test resolve each stage explicitly, so the dirty state after an accepted and
+// a rejected image is observable without a real browser.
+let lastReader = null;
+let lastImage = null;
+globalThis.FileReader = class {
+  constructor() { this.result = "data:image/png;base64,AAA"; lastReader = this; }
+  readAsDataURL() {}
+};
+globalThis.Image = class {
+  constructor() { this.width = 512; this.height = 256; lastImage = this; }
+};
 
 const site = await import("../assets/dashboard/site.js");
 const { setState, state } = await import("../assets/dashboard/state.js");
@@ -446,6 +495,217 @@ describe("behavior: the chosen accent is the only accent", () => {
     site.applyTheme(null, "Font");
     expect(state.CURRENT_BRANDING.accentA).toBe("#06b6d4");
     expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+  });
+});
+
+/* --- the one blocker: custom accent had two competing state paths --- */
+
+// collect() reads the whole editor form, so a payload assertion needs the
+// fields it reads to exist. Values are irrelevant to the accent question.
+const COLLECT_FIELDS = [
+  "f_name", "f_tagline", "f_casino", "f_code", "f_cta", "f_pool", "f_period",
+  "f_starts", "f_ends", "f_rank_by", "f_blurb", "f_font",
+  "f_prizePoolLabel", "f_payoutsLabel", "f_countdownLabel", "f_currency", "f_hidePrizeAmounts",
+  "f_legal_privacy", "f_legal_terms", "f_legal_responsible", "f_legal_cookies", "f_legal_refund", "f_legal_contact",
+];
+
+function registerCollectForm({ font = "Inter" } = {}) {
+  for (const id of COLLECT_FIELDS) register(id);
+  $id("f_name").value = "Kick Cup";
+  $id("f_font").value = font;
+  state.EXTRA = { chips: [], whyStats: [], rules: [], socials: [], sections: {}, playerFields: [], prizes: {}, navigation: {} };
+  state.SAVED_PLAYERS = [];
+}
+
+function $id(id) { return elements.get(id); }
+
+describe("behavior: the custom accent has one state truth", () => {
+  // The picker's committed `change` is what the browser fires when a creator
+  // closes the native colour picker.
+  function commitPickerColor(picker, value) {
+    picker.value = value;
+    let propagationStopped = false;
+    for (const listener of picker.listeners.change || []) {
+      listener({ stopPropagation: () => { propagationStopped = true; } });
+    }
+    return propagationStopped;
+  }
+
+  beforeEach(() => {
+    elements.clear();
+    state.ACTIVE_SITE_ID = "site-1";
+    state.SLUG = "kick-cup";
+    state.BOARDS = [];
+    state.ME = { plan: "pro" };
+    state.LOGO = undefined;
+    state.CURRENT_BRANDING = { template: "cyber_arcade", accentA: "#5b5bf5", accentB: "#7b7bf8", font: "Inter" };
+    setState({ _dirty: false });
+  });
+
+  it("keeps accent, picker and saved payload coherent across save and a later font change", async () => {
+    const picker = register("c_a");
+    picker.value = "#5b5bf5";
+    registerCollectForm();
+    register("status");
+    register("colorPresets");
+    register("save");
+    register("settingsSave");
+    register("publishAction");
+    // The picker is wired at module load, so drive the real handler.
+    site.wireAccentPicker();
+
+    // Pick a custom accent: the canonical state accepts it immediately, with
+    // no separate Apply step, and the event never reaches the global dirty
+    // owner because applyTheme() already owns markDirty().
+    const stopped = commitPickerColor(picker, "#abc123");
+    expect(stopped).toBe(true);
+    expect(state.CURRENT_BRANDING.accentA).toBe("#abc123");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+    expect(picker.value).toBe("#abc123");
+    expect(state._dirty).toBe(true);
+
+    // The draft that the preview posts and the save sends carry the new accent.
+    expect(site.collect({ reportPlayerErrors: false }).payload.branding.accentA).toBe("#abc123");
+
+    await site.saveEditorDraft({
+      collectImpl: () => ({ payload: site.collect({ reportPlayerErrors: false }).payload, invalid: [] }),
+      fetchImpl: async () => new Response(JSON.stringify({ ok: true, updatedAt: "after" }), { status: 200, headers: { "content-type": "application/json" } }),
+    });
+    expect(state._dirty).toBe(false);
+    expect(state.CURRENT_BRANDING.accentA).toBe("#abc123");
+
+    // A later font change re-runs updateThemeSelection(), which restores the
+    // picker from canonical state. Before the fix that state was stale and the
+    // accent silently reverted — with no reload in between.
+    $id("f_font").value = "Oswald";
+    site.applyTheme(null, "Font");
+    expect(picker.value).toBe("#abc123");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#abc123");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+    expect(state.CURRENT_BRANDING.font).toBe("Oswald");
+
+    // Saving again persists the same accent and the same legacy accentB.
+    const second = site.collect({ reportPlayerErrors: false }).payload.branding;
+    expect(second.accentA).toBe("#abc123");
+    expect(second.accentB).toBe("#7b7bf8");
+    expect(second.font).toBe("Oswald");
+  });
+
+  it("swallows the picker's in-flight input so a dragged colour cannot fake a save", () => {
+    const picker = register("c_a");
+    register("colorPresets");
+    register("status");
+    site.wireAccentPicker();
+
+    let stopped = false;
+    picker.value = "#111111";
+    for (const listener of picker.listeners.input || []) {
+      listener({ stopPropagation: () => { stopped = true; } });
+    }
+    expect(stopped).toBe(true);
+    // Nothing was committed: the canonical accent is untouched and clean.
+    expect(state.CURRENT_BRANDING.accentA).toBe("#5b5bf5");
+    expect(state._dirty).toBe(false);
+  });
+
+  it("still applies Reset and a curated preset through the same one path", () => {
+    const picker = register("c_a");
+    register("colorPresets");
+    register("status");
+
+    site.applyTheme("#abc123", "Custom color");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#abc123");
+
+    site.applyTheme("#ff7a59", "Sunset");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#ff7a59");
+    expect(picker.value).toBe("#ff7a59");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+
+    // Reset re-applies the first curated preset, Indigo.
+    for (const listener of (register("colorsReset").listeners.click || [])) listener({});
+    site.applyTheme("#5b5bf5", "Indigo");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#5b5bf5");
+    expect(state.CURRENT_BRANDING.accentB).toBe("#7b7bf8");
+  });
+});
+
+describe("behavior: a rejected logo never fakes unsaved changes", () => {
+  beforeEach(() => {
+    elements.clear();
+    state.ACTIVE_SITE_ID = "site-1";
+    state.BOARDS = [];
+    state.ME = { plan: "pro" };
+    state.LOGO = undefined;
+    setState({ _dirty: false });
+  });
+
+  function logoElements() {
+    const file = register("logoFile");
+    file.files = [];
+    const parts = { file, status: register("logoStatus"), preview: register("logoPreview"), clear: register("logoClear"), pageStatus: register("status") };
+    register("logoPick");
+    site.wireLogoControls();
+    return parts;
+  }
+
+  it("reports an unsupported type without touching the draft", () => {
+    const { status, file } = logoElements();
+    site.handleLogoSelection({ type: "image/gif", size: 1000 });
+    expect(status.textContent).toContain("isn't supported");
+    expect(state._dirty).toBe(false);
+    expect(state.LOGO).toBeUndefined();
+    expect(file.value).toBe("");
+  });
+
+  it("reports an oversized file without touching the draft", () => {
+    const { status } = logoElements();
+    site.handleLogoSelection({ type: "image/png", size: 7.3 * 1024 * 1024 });
+    expect(status.textContent).toContain("7.3 MB");
+    expect(state._dirty).toBe(false);
+    expect(state.LOGO).toBeUndefined();
+  });
+
+  it("leaves an already-dirty draft dirty when a logo is rejected", () => {
+    logoElements();
+    // A legitimate edit made the draft dirty first; a rejected logo must not
+    // clear that.
+    setState({ _dirty: true });
+    site.handleLogoSelection({ type: "image/png", size: 5 * 1024 * 1024 });
+    expect(state._dirty).toBe(true);
+    expect(state.LOGO).toBeUndefined();
+  });
+
+  it("accepts a valid image, assigns the logo and previews it before save", () => {
+    const { status, preview, clear } = logoElements();
+    site.handleLogoSelection({ type: "image/webp", size: 1024 });
+    // The decode is async through FileReader/Image; the fakes below resolve it.
+    expect(state._dirty).toBe(false);
+    lastReader.onload();
+    lastImage.onload();
+    expect(state.LOGO).toBeTruthy();
+    expect(Object.keys(state.LOGO)).toEqual(["64", "128", "256", "512"]);
+    expect(preview.hidden).toBe(false);
+    expect(clear.hidden).toBe(false);
+    expect(status.textContent).toContain("Logo ready");
+    expect(state._dirty).toBe(true);
+  });
+
+  it("reports a decode failure without touching the draft", () => {
+    const { status } = logoElements();
+    site.handleLogoSelection({ type: "image/png", size: 1024 });
+    lastReader.onload();
+    lastImage.onerror();
+    expect(status.textContent).toContain("Couldn't read that image.");
+    expect(state.LOGO).toBeUndefined();
+    expect(state._dirty).toBe(false);
+  });
+
+  it("removing the logo still marks the draft dirty", () => {
+    const { clear, preview } = logoElements();
+    for (const listener of clear.listeners.click || []) listener({});
+    expect(state.LOGO).toBe(null);
+    expect(preview.hidden).toBe(true);
+    expect(state._dirty).toBe(true);
   });
 });
 
