@@ -437,8 +437,17 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
 .yr-site .yr-lb,
 .yr-site .yr-item,
 .yr-site .yr-modal-card { border-color: var(--devin-line-soft); border-radius: var(--devin-radius-card); background: var(--devin-surface); box-shadow: none; }
+/* The viewer modules are the same material as every other surface here: one
+   white card per module, hairline border, no shadow. */
+.yr-site .yr-sec,
+.yr-site .yr-vsec,
+.yr-site .yr-intro,
+.yr-site .yr-vnote,
+.yr-site .yr-vhead-aside,
+.yr-site .yr-panel { border-color: var(--devin-line-soft); border-radius: var(--devin-radius-card); box-shadow: none; }
 .yr-site .yr-btn,
 .yr-site .yr-act { border-radius: var(--devin-radius-control); box-shadow: none; }
+.yr-site .yr-mark { border-radius: var(--devin-radius-card); }
 .yr-site .yr-nav-a,
 .yr-site .yr-tab,
 .yr-site .yr-flag { border-radius: var(--devin-radius-pill); }

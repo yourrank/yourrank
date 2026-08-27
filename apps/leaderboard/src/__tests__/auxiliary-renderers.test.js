@@ -243,7 +243,11 @@ describe("new-shell auxiliary renderers", () => {
       viewerData: null,
       opts,
     });
-    expect(html).toContain("hasn't added players or rewards yet");
+    // Each preview owns its own empty state, so the page does not repeat a
+    // "nothing here yet" line underneath them.
+    expect(html).toContain('<p class="yr-empty-t">No players on the board yet</p>');
+    expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
+    expect(html).not.toContain("hasn't added players or rewards yet");
     expect(html).not.toContain("How credits work");
     expect(html).not.toContain("Top of the leaderboard");
     expect(html).not.toContain("Prize pool");

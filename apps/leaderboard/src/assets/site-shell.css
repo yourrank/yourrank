@@ -28,8 +28,11 @@
   --yr-accent-readable: color-mix(in srgb, var(--yr-accent), white 50%);
   --yr-accent-ink: #ffffff;
   --yr-drawer-w: min(86vw, 320px);
-  --yr-bar-h: 64px;
-  --yr-page-w: 1120px;
+  --yr-bar-h: 72px;
+  --yr-page-w: 1180px;
+  /* One radius family for the whole public product: modules, controls, marks. */
+  --yr-r-card: 14px;
+  --yr-r-ctl: 8px;
   --yr-sans: var(--yr-font, "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
   --yr-mono: "Fira Code", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
@@ -71,7 +74,7 @@
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-.yr-lb { position: relative; border: 1px solid var(--yr-edge); border-radius: 8px; }
+.yr-lb { position: relative; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); }
 
 /* ── Mobile drawer ───────────────────────────────────────────────────── */
 
@@ -167,7 +170,10 @@
   font-weight: 700;
 }
 
-.yr-drawer-foot { padding: 16px; border-top: 1px solid var(--yr-edge); }
+.yr-drawer-foot { padding: 16px; border-top: 1px solid var(--yr-edge); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+/* The bar's account shortcut is desktop-only, so the drawer keeps the viewer's
+   global account destination reachable at the widths the drawer exists for. */
+.yr-drawer-acct { min-height: 44px; }
 
 .yr-user {
   display: flex;
@@ -195,6 +201,9 @@
   font-family: var(--yr-mono); font-size: 11px; color: var(--yr-mute);
 }
 .yr-ava img { width: 100%; height: 100%; object-fit: cover; }
+/* A viewer without a connected picture gets the initial of the name they signed
+   in with: their own data, and no per-instance svg ids to collide over. */
+.yr-ava-mono { font-family: var(--yr-sans); font-size: 13px; font-weight: 700; color: var(--yr-fog); }
 .yr-user-go { width: 16px; color: var(--yr-faint); flex: 0 0 16px; }
 .yr-user-go svg { width: 16px; height: 16px; }
 
@@ -212,47 +221,61 @@
   max-width: var(--yr-page-w);
   margin: 0 auto;
   min-height: var(--yr-bar-h);
-  padding: 8px 24px;
+  padding: 10px 32px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
-.yr-id { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; }
-.yr-id-logo { width: 36px; height: 36px; flex-shrink: 0; object-fit: cover; border-radius: 8px; }
+/* The creator owns the left of their own bar: the mark and the name lead, the
+   sections sit in the middle, the viewer's own controls close it. */
+.yr-id { min-height: 44px; display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; max-width: 42%; }
+.yr-id-logo, .yr-mark { width: 40px; height: 40px; flex-shrink: 0; object-fit: cover; border-radius: 10px; }
+/* A monogram, not an invented avatar: the first letter of the name the creator
+   chose, on their own accent, so identity is never an empty slot. */
+.yr-mark {
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--yr-accent) 14%, var(--yr-surface));
+  border: 1px solid color-mix(in srgb, var(--yr-accent) 34%, var(--yr-edge));
+  color: var(--yr-accent-readable);
+  font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+}
+.yr-mark--sm { width: 32px; height: 32px; font-size: 14px; border-radius: 8px; }
 .yr-id-txt { min-width: 0; display: flex; flex-direction: column; }
 /* The full name always stays in the DOM for assistive technology; the bar only
    ever shows two lines of it so one long name cannot grow the sticky header. */
 .yr-id-name {
-  font-size: 17px; line-height: 22px; font-weight: 700; letter-spacing: -0.02em;
+  font-size: 18px; line-height: 23px; font-weight: 700; letter-spacing: -0.02em;
   color: var(--yr-fog); overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical;
   -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
 .yr-id-sub {
-  font-size: 12px; line-height: 16px; color: var(--yr-faint);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch;
+  margin-top: 1px; font-size: 12px; line-height: 16px; color: var(--yr-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 26ch;
 }
 
-.yr-top-r { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.yr-top-r { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
 
 .yr-account-link, .yr-bal {
   min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid transparent; border-radius: 8px;
+  border: 1px solid transparent; border-radius: var(--yr-r-ctl);
 }
-.yr-account-link { gap: 8px; padding: 0 8px; color: var(--yr-mute); font-size: 12px; font-weight: 700; }
-.yr-account-link:hover { color: var(--yr-fog); border-color: var(--yr-edge); background: var(--yr-surface); }
+/* Not every control needs a box: the account link is a link with the viewer's
+   mark, and only the balance carries a hairline, because it carries a figure. */
+.yr-account-link { gap: 8px; padding: 0 6px; color: var(--yr-mute); font-size: 13px; font-weight: 600; }
+.yr-account-link:hover { color: var(--yr-fog); background: var(--yr-surface); }
 .yr-account-txt { white-space: nowrap; }
 
-.yr-bal { gap: 6px; padding: 0 12px; border-color: var(--yr-edge); background: var(--yr-surface); }
-.yr-bal:hover { border-color: var(--yr-accent-readable); }
-.yr-bal-num { font-family: var(--yr-mono); font-size: 13px; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
-.yr-bal-unit { font-size: 10px; color: var(--yr-mute); text-transform: uppercase; letter-spacing: 0.08em; }
+.yr-bal { gap: 8px; padding: 0 12px; border-color: var(--yr-edge); background: var(--yr-panel); }
+.yr-bal:hover { border-color: var(--yr-accent-readable); background: var(--yr-surface); }
+.yr-bal-num { font-family: var(--yr-mono); font-size: 14px; font-weight: 600; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
+.yr-bal-unit { font-size: 10px; color: var(--yr-faint); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
 
 .yr-menu {
   display: none; width: 44px; height: 44px; flex: 0 0 44px;
   align-items: center; justify-content: center; color: var(--yr-mute);
-  border: 1px solid var(--yr-edge); border-radius: 8px;
+  border: 1px solid var(--yr-edge); border-radius: var(--yr-r-ctl);
 }
 .yr-menu:hover { color: var(--yr-fog); background: var(--yr-surface); }
 .yr-menu svg { width: 18px; height: 18px; }
@@ -266,6 +289,8 @@
 .yr-search:hover { border-color: var(--yr-faint); }
 .yr-search:focus { border-color: var(--yr-primary); }
 .yr-search::placeholder { color: var(--yr-faint); }
+/* Search belongs to the standings module, so it takes the module's width
+   instead of stopping short of it and leaving the panel top unfinished. */
 .yr-search-row { padding: 16px 24px 0; }
 
 .yr-main {
@@ -274,11 +299,11 @@
   max-width: var(--yr-page-w);
   margin: 0 auto;
   overflow: visible;
-  padding: 32px 24px 48px;
+  padding: 40px 32px 56px;
   position: relative;
   z-index: 0;
 }
-.yr-main > * + * { margin-top: 40px; }
+.yr-main > * + * { margin-top: 32px; }
 
 /* ── Hero banner ─────────────────────────────────────────────────────── */
 
@@ -298,7 +323,10 @@
 .yr-hero-l { flex: 1; position: relative; z-index: 1; }
 .yr-hero-r { display: flex; flex-direction: column; align-items: flex-start; gap: 32px; position: relative; z-index: 1; }
 
-.yr-h1 { font-size: 38px; line-height: 42px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 8px; text-wrap: balance; }
+/* Type roles for the public product, in one place. A page title, a section
+   heading, a module title, body, metadata and fine print each read as a
+   different thing without falling back on tracked-out micro capitals. */
+.yr-h1 { font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 8px; text-wrap: balance; }
 .yr-cue {
   display: inline-flex; min-height: 28px; align-items: center;
   margin-bottom: 16px; padding: 4px 8px;
@@ -317,9 +345,9 @@
 
 /* Public viewer controls intentionally retain the dark branded geometry; focus, disabled, and loading states follow the shared action contract. */
 .yr-btn {
-  min-height: 48px; height: 48px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center;
-  background: var(--yr-primary); color: #fff; border: 1px solid var(--yr-primary); border-radius: 8px;
-  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+  min-height: 48px; height: 48px; padding: 0 22px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--yr-primary); color: #fff; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl);
+  font-size: 15px; font-weight: 600; letter-spacing: -0.005em;
   transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
 }
 .yr-btn:hover { background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); color: #fff; }
@@ -328,7 +356,7 @@
 
 /* ── Cards, panels, grids ────────────────────────────────────────────── */
 
-.yr-card { border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); padding: 24px; }
+.yr-card { border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel); padding: 24px; }
 .yr-card--on { border-color: var(--yr-accent-readable); }
 .yr-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 32px; }
 .yr-card-top svg { width: 12px; height: 12px; color: var(--yr-faint); }
@@ -340,15 +368,17 @@
 .yr-sub.is-accent { color: var(--yr-accent-readable); }
 .yr-card-name { font-size: 14px; line-height: 20px; font-weight: 700; margin-bottom: 4px; }
 
-.yr-panel { border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.yr-panel { border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .yr-panel-head {
-  padding: 20px 24px; border-bottom: 1px solid var(--yr-edge);
-  background: var(--yr-surface);
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 18px 24px; border-bottom: 1px solid var(--yr-edge-soft);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
 }
-.yr-panel-title { font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-faint); font-weight: 700; }
-.yr-panel-meta { font-size: 11px; line-height: 1.2; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); }
-.yr-panel-foot { padding: 16px 24px; border-top: 1px solid var(--yr-edge); }
+/* The page heading already named this panel, so its head carries only the
+   count and sits tight to the list it belongs to. */
+.yr-panel-head--quiet { padding: 14px 24px 0; border-bottom: 0; justify-content: flex-end; }
+.yr-panel-title { font-size: 17px; line-height: 24px; letter-spacing: -0.015em; color: var(--yr-fog); font-weight: 700; }
+.yr-panel-meta { font-size: 13px; line-height: 20px; font-weight: 500; color: var(--yr-faint); font-variant-numeric: tabular-nums; }
+.yr-panel-foot { padding: 16px 24px; border-top: 1px solid var(--yr-edge-soft); }
 .yr-panel-pad { padding: 24px; }
 
 .yr-pos { color: var(--yr-success-readable); }
@@ -356,62 +386,105 @@
 
 /* ── Home: creator introduction and section previews ─────────────────── */
 
-.yr-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
-.yr-intro-id { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.yr-intro-logo { width: 64px; height: 64px; flex-shrink: 0; object-fit: cover; border-radius: 12px; border: 1px solid var(--yr-edge); }
+/* Home: the creator's introduction and their viewer's balance share the first
+   band, the two previews share the second. One stack on a phone. */
+.yr-home-top { display: grid; gap: 20px; align-items: start; }
+.yr-home-cols { display: grid; gap: 20px; align-items: start; }
+/* Grid children default to min-width:auto, which lets one unbreakable name
+   push the whole column past the viewport. Every band child stays shrinkable. */
+.yr-home-top > *, .yr-home-cols > *, .yr-vcols > *, .yr-vhead--split > * { min-width: 0; }
+
+/* The bar owns creator identity, so Home's opening is a sentence and the one
+   action that belongs to it — no second mark, no hero, no filler height. */
+.yr-intro {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
+  padding: 28px; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--yr-accent) 7%, var(--yr-panel)), var(--yr-panel));
+}
 .yr-intro-txt { min-width: 0; }
-.yr-intro-name { font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -0.03em; overflow-wrap: anywhere; text-wrap: balance; }
-.yr-intro-sub { margin-top: 4px; font-size: 15px; line-height: 22px; color: var(--yr-mute); max-width: 52ch; overflow-wrap: anywhere; }
+/* A pathological creator name breaks inside the word and then stops: the whole
+   name stays in the document and in the accessible name, but it cannot push the
+   board and the rewards below the fold. */
+.yr-intro-name {
+  font-size: 30px; line-height: 36px; font-weight: 700; letter-spacing: -0.025em;
+  overflow-wrap: anywhere; text-wrap: balance;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+.yr-intro-sub {
+  margin-top: 6px; font-size: 15px; line-height: 23px; color: var(--yr-mute); max-width: 46ch; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
 .yr-intro-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 .yr-vnote {
-  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel);
-  border-top-color: var(--yr-accent-readable);
-  padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel);
+  padding: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
 }
 .yr-vnote-bal { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.yr-vnote-num { font-family: var(--yr-mono); font-size: 28px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
-.yr-vnote-unit { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); font-weight: 700; }
-.yr-vnote-p { flex: 1 1 22ch; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
-.yr-vnote-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.yr-vnote-num { font-family: var(--yr-mono); font-size: 34px; line-height: 38px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.yr-vnote-unit { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); font-weight: 700; }
+.yr-vnote-p { font-size: 13px; line-height: 1.5; color: var(--yr-faint); max-width: 34ch; overflow-wrap: anywhere; }
+.yr-vnote-acts { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin-top: 2px; }
 
-.yr-sec-meta { margin-top: -12px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-mute); }
+.yr-sec-meta { margin-top: -8px; margin-bottom: 14px; font-size: 13px; line-height: 1.5; color: var(--yr-mute); }
 .yr-sec-note { font-size: 14px; line-height: 1.6; color: var(--yr-faint); }
 
-.yr-leads { list-style: none; margin: 0; padding: 0; border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); }
-.yr-lead { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--yr-edge-soft); }
+/* A preview is one module: the list inside it never draws a second box. */
+.yr-leads, .yr-preview { list-style: none; margin: 0; padding: 0; }
+.yr-lead { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--yr-edge-soft); }
 .yr-lead:first-child { border-top: 0; }
 .yr-lead-rank { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-faint); flex: 0 0 auto; }
-.yr-lead-name { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: var(--yr-edge); text-underline-offset: 4px; }
-.yr-lead-name:hover { text-decoration-color: var(--yr-accent-readable); }
-.yr-lead-val { font-size: 13px; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A preview row is a glance, not the board: one line per name so five rows
+   stay five rows even when a username is pathological. */
+.yr-lead-name { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.yr-lead-name:hover { text-decoration: underline; text-decoration-color: var(--yr-accent-readable); text-underline-offset: 4px; }
+.yr-lead-val { font-size: 13px; color: var(--yr-mute); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.yr-preview { list-style: none; margin: 0; padding: 0; border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); }
-.yr-preview-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--yr-edge-soft); }
+.yr-preview-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--yr-edge-soft); }
 .yr-preview-row:first-child { border-top: 0; }
-.yr-preview-n { min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
-.yr-preview-c { font-family: var(--yr-mono); font-size: 13px; color: var(--yr-accent-readable); white-space: nowrap; }
+.yr-preview-n { min-width: 0; font-size: 14px; line-height: 20px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yr-preview-c { font-family: var(--yr-mono); font-size: 13px; color: var(--yr-mute); white-space: nowrap; }
 
 .yr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .yr-chip {
   min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center;
-  border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel);
+  border: 1px solid var(--yr-edge); border-radius: 200px; background: var(--yr-panel);
   font-size: 13px; font-weight: 600; color: var(--yr-mute);
   transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 .yr-chip:hover { color: var(--yr-fog); border-color: var(--yr-faint); background: var(--yr-surface); }
 
-.yr-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
-.yr-sec-title { font-size: 12px; line-height: 1; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-faint); font-weight: 700; }
-.yr-sec-link { min-height: 44px; padding: 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; transition: color 0.15s, background-color 0.15s; }
-.yr-sec-link:hover { color: var(--yr-fog); background: var(--yr-surface); }
-.yr-sec-link svg { width: 10px; height: 10px; }
+/* Home and viewer sections are modules with a real heading, not a strip of
+   tracked-out capitals over a bare list. */
+.yr-sec, .yr-vsec {
+  padding: 24px; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel);
+}
+.yr-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.yr-sec-title {
+  min-width: 0; font-size: 20px; line-height: 26px; letter-spacing: -0.02em; color: var(--yr-fog); font-weight: 700;
+  overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.yr-sec-link { min-height: 44px; padding: 0 2px; font-size: 14px; font-weight: 600; color: var(--yr-accent-readable); display: inline-flex; align-items: center; gap: 6px; border-radius: var(--yr-r-ctl); transition: color 0.15s; }
+.yr-sec-link:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
+.yr-sec-link svg { width: 14px; height: 14px; }
 
 /* ── Viewer surfaces: page head, reward / activity / order rows ──────── */
 
 /* Rewards and My credits open with the page, what it is for, the balance and
    the fine print — no hero slab, no KPI wall. */
 .yr-vhead { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+/* When the head carries the viewer's balance and their way onward, those travel
+   beside the explanation as one module instead of stacking down the page. */
+.yr-vhead--split { display: grid; gap: 20px; }
+.yr-vhead-txt { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.yr-vhead-aside {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0;
+  padding: 20px 22px; border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel);
+}
 /* A page head carries names the creator chose, not copy we wrote: a 100-character
    player or creator name has to break inside the word rather than push the
    document sideways. */
@@ -431,22 +504,23 @@
 .yr-vhead-fine { font-family: var(--yr-sans); font-size: 12px; line-height: 1.5; color: var(--yr-faint); max-width: 70ch; }
 .yr-vhead-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .yr-vbal { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.yr-vbal-num { font-family: var(--yr-mono); font-size: 28px; line-height: 32px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.yr-vbal-unit { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); font-weight: 700; }
-.yr-vsec { display: block; }
+.yr-vbal-num { font-family: var(--yr-mono); font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.yr-vbal-unit { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); font-weight: 700; }
+/* My credits: the viewer's history and their orders are peers, side by side on
+   a wide viewport and stacked on a phone. */
+.yr-vcols { display: grid; gap: 20px; align-items: start; }
 
 /* One row shape for rewards, credit activity and orders.
    `flex: 1 1 <n>ch` on the main column is what keeps the title readable at
    every width: the moment the row can no longer give the title that much
    space, the side column wraps to its own line instead of squeezing the title
    down to a few characters. No width breakpoints are involved. */
-.yr-rwds, .yr-hists, .yr-ords {
-  list-style: none; margin: 0; padding: 0;
-  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel);
-}
+/* The list lives inside its section, so it draws rows, not a second box: one
+   card per module, never a card per line. */
+.yr-rwds, .yr-hists, .yr-ords { list-style: none; margin: 0; padding: 0; }
 .yr-rwd, .yr-hist, .yr-ord {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
-  padding: 16px; border-top: 1px solid var(--yr-edge-soft);
+  padding: 16px 0; border-top: 1px solid var(--yr-edge-soft);
 }
 .yr-rwd:first-child, .yr-hist:first-child, .yr-ord:first-child { border-top: 0; }
 .yr-rwd-main, .yr-hist-main, .yr-ord-main { flex: 1 1 24ch; min-width: 0; }
@@ -455,7 +529,7 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
 }
 .yr-rwd-img { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; border: 1px solid var(--yr-edge); }
-.yr-rwd-n { font-size: 15px; line-height: 21px; font-weight: 700; overflow-wrap: anywhere; }
+.yr-rwd-n { font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .yr-rwd-p, .yr-hist-p, .yr-ord-p {
   margin-top: 2px; font-family: var(--yr-sans); font-size: 13px; line-height: 1.5;
   color: var(--yr-faint); overflow-wrap: anywhere;
@@ -472,7 +546,7 @@
 .yr-hist-d { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute); white-space: nowrap; }
 .yr-ord { justify-content: space-between; }
 
-.yr-act { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--yr-primary); border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; background: var(--yr-primary); transition: color 0.15s, border-color 0.15s, background-color 0.15s, opacity 0.15s; }
+.yr-act { min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); font-size: 14px; font-weight: 600; color: #fff; background: var(--yr-primary); transition: color 0.15s, border-color 0.15s, background-color 0.15s, opacity 0.15s; }
 .yr-act:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 .yr-btn:focus-visible, .yr-act:focus-visible { outline: 2px solid var(--yr-primary-hover); outline-offset: 2px; }
 .yr-btn:disabled, .yr-btn[aria-disabled="true"], .yr-btn[aria-busy="true"], .yr-act:disabled, .yr-act[aria-disabled="true"], .yr-act[aria-busy="true"] { opacity: 0.45; cursor: not-allowed; }
@@ -489,17 +563,19 @@
    one is marked with aria-current and carries a visible accent underline. */
 /* The section links keep their intrinsic width so a long creator name clamps in
    the identity block instead of squeezing the destinations out of the bar. */
-.yr-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; flex-shrink: 0; }
+.yr-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; flex-wrap: nowrap; flex-shrink: 0; margin: 0 auto; }
 .yr-tab {
-  min-height: 44px; padding: 0 12px; border-radius: 8px;
+  min-height: 44px; padding: 0 12px; border-radius: var(--yr-r-ctl);
   display: inline-flex; align-items: center; white-space: nowrap;
-  font-size: 14px; font-weight: 600; color: var(--yr-mute);
+  font-size: 15px; font-weight: 500; color: var(--yr-mute);
   border: 1px solid transparent;
-  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background-color 0.15s;
 }
 .yr-site .yr-tab:hover { color: var(--yr-fog); background: var(--yr-surface); }
-.yr-site .yr-tab.is-on { color: var(--yr-fog); background: var(--yr-surface); border-color: var(--yr-accent-readable); }
-.yr-tab.is-on > span { box-shadow: inset 0 -2px 0 var(--yr-accent-readable); }
+/* The current section is stated by the creator's accent and an underline under
+   the word itself — not by an outlined pill floating in the bar. */
+.yr-site .yr-tab.is-on { color: var(--yr-accent-readable); font-weight: 600; background: transparent; }
+.yr-tab.is-on > span { box-shadow: inset 0 -2px 0 var(--yr-accent-readable); padding-bottom: 3px; }
 
 .yr-table-wrap { position: relative; max-width: 100%; overflow-x: auto; }
 .yr-table-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 2px; pointer-events: none; background: var(--yr-accent-readable); opacity: 0; transition: opacity 0.15s; }
@@ -548,7 +624,7 @@
   display: grid; align-items: center;
   grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto;
   grid-template-areas: "rank name val" "rank name prize";
-  gap: 0 12px; padding: 6px 16px;
+  gap: 0 12px; padding: 6px 20px;
 }
 .yr-stand-head { display: none; }
 .yr-stand { list-style: none; margin: 0; padding: 0; }
@@ -621,32 +697,54 @@
 .yr-prose a:hover { color: var(--yr-accent-readable); }
 .yr-fine { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-mute); max-width: 70ch; }
 .yr-note { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
-.yr-empty { padding: 40px 24px; text-align: center; font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-faint); font-weight: 600; }
+/* An empty list is a designed state, not a hole: a quiet mark, what is empty,
+   one sentence about when it fills, and a modest height. */
+.yr-empty {
+  padding: 28px 20px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  text-align: center; font-family: var(--yr-sans);
+}
+.yr-empty-ico {
+  width: 40px; height: 40px; margin-bottom: 2px; display: grid; place-items: center;
+  border-radius: 200px; background: var(--yr-surface); color: var(--yr-faint);
+}
+.yr-empty-ico svg { width: 18px; height: 18px; }
+.yr-empty-t { font-size: 15px; line-height: 22px; font-weight: 600; color: var(--yr-fog); }
+.yr-empty-p { font-size: 13px; line-height: 20px; color: var(--yr-faint); max-width: 40ch; overflow-wrap: anywhere; }
+.yr-empty .yr-sec-link { min-height: 36px; }
 
-.yr-gate { border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel); padding: 40px; text-align: center; }
+.yr-gate { border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel); padding: 40px; text-align: center; }
 .yr-gate h2 { font-size: 20px; line-height: 28px; font-weight: 700; margin-bottom: 8px; }
 .yr-gate p { font-size: 14px; line-height: 1.625; color: var(--yr-mute); margin: 0 auto 24px; max-width: 26rem; }
 
-.yr-foot { border-top: 1px solid var(--yr-edge); padding-top: 24px; display: flex; flex-direction: column; gap: 12px; }
-.yr-foot-links { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.yr-foot-links--more { border-top: 1px solid var(--yr-edge-soft); padding-top: 4px; }
-.yr-foot-links a, .yr-foot-links button { min-height: 44px; padding: 0 4px; display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-mute); }
-.yr-foot-links a:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
+/* The footer is the creator's sign-off. Their line and the legal pages read
+   first; the section links stay for a viewer without JavaScript, quieter. */
+.yr-foot { border-top: 1px solid var(--yr-edge); padding-top: 24px; display: flex; flex-direction: column; gap: 8px; }
+.yr-foot-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 16px; }
+.yr-foot-c { min-width: 0; font-size: 13px; line-height: 20px; color: var(--yr-mute); overflow-wrap: anywhere; }
+.yr-foot-c a { text-decoration: underline; text-underline-offset: 3px; }
+.yr-foot-links { display: flex; flex-wrap: wrap; gap: 0 16px; }
+/* The section map is the fallback for a browser that never ran the shell
+   script. Once the script reports ready the bar and the drawer own navigation,
+   so the footer drops it and keeps only the creator's sign-off and legal. */
+.yr-foot-nav { opacity: 0.75; }
+[data-yr-shell="ready"] .yr-foot-nav { display: none; }
+.yr-foot-links a, .yr-foot-links button { min-height: 44px; padding: 0 2px; display: inline-flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--yr-faint); }
+.yr-foot-links a:hover, .yr-foot-links button:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
 .yr-search-status, .yr-redeem-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
 .yr-search-status:empty, .yr-redeem-status:empty { display: none; }
 .yr-search-status.is-error, .yr-redeem-status.is-error { color: var(--yr-warning-readable); }
-.yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: 8px; color: #fff; background: var(--yr-primary); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
+.yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); color: #fff; background: var(--yr-primary); font-size: 14px; font-weight: 600; }
 .yr-search-retry:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 
 .yr-modal {
-  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-panel); color: var(--yr-fog);
+  border: 1px solid var(--yr-edge); border-radius: var(--yr-r-card); background: var(--yr-panel); color: var(--yr-fog);
   padding: 0; width: min(420px, calc(100% - 32px)); font-family: var(--yr-sans);
 }
 .yr-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
 .yr-modal-in { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-.yr-modal-in h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--yr-faint); font-weight: 700; }
+.yr-modal-in h2 { font-size: 18px; line-height: 24px; letter-spacing: -0.015em; color: var(--yr-fog); font-weight: 700; }
 .yr-modal-in textarea {
   width: 100%; resize: vertical; background: var(--yr-ink); border: 1px solid var(--yr-edge);
   min-height: 120px; color: var(--yr-fog); padding: 12px; border-radius: 8px; caret-color: var(--yr-primary); font: 400 14px/1.5 var(--yr-sans);
@@ -712,6 +810,17 @@
   .yr-hero-r--stack .yr-label, .yr-hero-r--stack .yr-big { text-align: right; }
 }
 
+@media (min-width: 900px) {
+  /* Wide enough for two real modules side by side: the creator's introduction
+     next to the viewer's balance, the board preview next to the rewards
+     preview, credit history next to orders. */
+  /* The introduction and the balance share the band at their own heights: a
+     sparse intro is not stretched to the balance card and left half empty. */
+  .yr-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
+  .yr-home-cols, .yr-vcols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yr-vhead--split { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; }
+}
+
 @media (min-width: 1024px) {
   .yr-hero { flex-direction: row; align-items: center; }
 }
@@ -730,18 +839,23 @@
   .yr-tabs { display: none; }
   .yr-top-in { padding: 8px 12px; gap: 8px; }
   .yr-top-r { gap: 6px; }
-  .yr-id-logo { width: 32px; height: 32px; }
-  .yr-id-name { font-size: 16px; line-height: 20px; }
+  .yr-id-logo, .yr-mark { width: 36px; height: 36px; font-size: 15px; }
+  .yr-id-name { font-size: 17px; line-height: 21px; }
   .yr-id-sub { max-width: 16ch; }
-  .yr-account-link { width: 44px; padding: 0; justify-content: center; }
-  .yr-account-txt { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  /* The viewer's own avatar beside the creator's mark reads as a duplicated
+     identity here and has no room for its label, so the bar keeps creator,
+     balance and menu, and the drawer carries the account destination. */
+  .yr-account-link { display: none; }
   .yr-main { padding: 20px 12px 32px; }
   .yr-main > * + * { margin-top: 28px; }
-  .yr-intro { align-items: flex-start; gap: 16px; }
-  .yr-intro-logo { width: 52px; height: 52px; }
-  .yr-intro-name { font-size: 26px; line-height: 31px; }
+  .yr-intro { gap: 16px; padding: 20px; }
+  .yr-intro-name { font-size: 25px; line-height: 30px; }
   .yr-intro-sub { font-size: 14px; }
-  .yr-vnote { padding: 16px; }
+  .yr-vnote { padding: 18px; }
+  .yr-vnote-num { font-size: 30px; line-height: 34px; }
+  .yr-sec, .yr-vsec { padding: 18px 16px; }
+  .yr-sec-title { font-size: 18px; line-height: 24px; }
+  .yr-vhead-aside { padding: 16px; }
   .yr-search-row { padding: 12px 16px 0; }
   .yr-hero { padding: 24px 20px; gap: 24px; }
   .yr-h1 { font-size: 28px; line-height: 34px; }
@@ -756,8 +870,9 @@
   .yr-id-sub { display: none; }
   .yr-bal { padding: 0 8px; }
   .yr-bal-unit { display: none; }
-  .yr-top-r .yr-btn { padding: 0 12px; font-size: 10px; letter-spacing: 0.05em; }
+  .yr-top-r .yr-btn { padding: 0 12px; font-size: 14px; }
   .yr-intro-acts, .yr-vnote-acts { width: 100%; }
+  .yr-intro-acts .yr-btn { flex: 1 1 auto; }
   .yr-list-item { align-items: flex-start; flex-direction: column; gap: 12px; }
 }
 

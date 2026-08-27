@@ -68,7 +68,7 @@ describe("demo credibility invariants", () => {
     for (const [section, label] of Object.entries(expected)) {
       const html = await render(section);
       expect(html).toContain(`data-section="${section}"`);
-      if (section === "home") expect(html).toContain('<h1 class="yr-intro-name">Demo Challenge</h1>');
+      if (section === "home") expect(html).toContain('<h1 class="yr-intro-name">Welcome to Demo Challenge\'s channel</h1>');
       else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
     }
 
