@@ -411,6 +411,11 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
   --yr-primary: var(--devin-primary);
   --yr-primary-hover: var(--devin-primary-hover);
   --yr-accent-readable: color-mix(in srgb, var(--yr-accent), #191919 28%);
+  /* The dark shell's mint and amber are 2:1 text on this white surface, so the
+     light material layer supplies its own readable pair for state text and
+     hairlines. Fill roles keep the bright tokens. */
+  --yr-warning-readable: #a33c00;
+  --yr-success-readable: #0d6b4b;
   --yr-sans: var(--devin-font);
   --yr-mono: var(--devin-mono);
   background: var(--devin-bg);

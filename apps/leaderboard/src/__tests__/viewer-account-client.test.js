@@ -37,6 +37,7 @@ function parseButtons(html, doc) {
 }
 
 function matches(el, selector) {
+  if (/^[a-zA-Z]+$/.test(selector)) return el.tagName === selector.toUpperCase();
   const attr = /^\[([a-zA-Z-]+)(?:="([^"]*)")?\]$/.exec(selector);
   if (!attr) return false;
   const key = attr[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase()).replace(/^data/, "");
@@ -73,6 +74,13 @@ function makeEl(doc, tagName = "DIV", id = "") {
     querySelectorAll(selector) { return kids.filter((k) => matches(k, selector)); },
     querySelector(selector) { return el.querySelectorAll(selector)[0] || null; },
     addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    append(...parts) {
+      for (const part of parts) {
+        if (typeof part === "string") el.textContent += part;
+        else { kids.push(part); el.textContent += part.textContent; }
+      }
+    },
+    hasAttribute(name) { return name in el.attributes; },
     click() { return Promise.all((listeners.click || []).map((fn) => fn())); },
   };
   return el;
@@ -81,6 +89,7 @@ function makeEl(doc, tagName = "DIV", id = "") {
 function makeEnv({ url = "https://yourrank.site/me", routes = {}, confirm = true } = {}) {
   const doc = { activeElement: null, cookie: "__csrf=tok" };
   const nodes = new Map();
+  doc.createElement = (tag) => makeEl(doc, String(tag).toUpperCase());
   doc.getElementById = (id) => {
     if (!nodes.has(id)) nodes.set(id, makeEl(doc, "DIV", id));
     return nodes.get(id);
@@ -329,9 +338,66 @@ describe("placing an order from the viewer account page", () => {
     await env.ready();
     await env.$("vd-boards").querySelector('[data-view-site="alpha"]').click();
     await settle();
-    expect(env.$("vd-boards-status").textContent).toBe("We couldn't open that site. Try again.");
+    expect(env.$("vd-boards-status").textContent).toContain("We couldn't open that creator.");
     expect(env.$("vd-login-status").textContent).toBe("");
     expect(env.$("vd-boards-card").hidden).toBe(false);
+  });
+});
+
+/* ── failure recovery ────────────────────────────────────────────── */
+
+describe("recovering from a viewer account failure", () => {
+  it("offers a real retry control when the account itself fails to load", async () => {
+    let fail = true;
+    const env = makeEnv({
+      routes: baseRoutes({
+        "GET /api/viewer/me": () => (fail ? { status: 500, body: { error: "boom" } } : { body: VIEWER }),
+      }),
+    });
+    await env.ready();
+    const status = env.$("vd-login-status");
+    expect(status.textContent).toContain("We couldn't load your account.");
+    expect(status.textContent).not.toContain("boom");
+    expect(status.textContent).not.toContain("500");
+    const retry = status.querySelector("button");
+    expect(retry).not.toBeNull();
+    expect(retry.textContent).toBe("Try again");
+    fail = false;
+    await retry.click();
+    await settle();
+    expect(env.$("vd-login-status").textContent).toBe("");
+    expect(env.$("vd-profile").hidden).toBe(false);
+  });
+
+  it("offers no retry for a creator that is gone", async () => {
+    const env = makeEnv({
+      url: "https://yourrank.site/me?site=ghost",
+      routes: baseRoutes({ "GET /api/viewer/site": { status: 404, body: { error: "site not found" } } }),
+    });
+    await env.ready();
+    const status = env.$("vd-boards-status");
+    expect(status.textContent).toBe("That site isn't available any more.");
+    expect(status.querySelector("button")).toBeNull();
+  });
+
+  it("retries the creator that failed, not the whole page", async () => {
+    let fail = true;
+    const env = makeEnv({
+      routes: baseRoutes({
+        "GET /api/viewer/site": () => (fail ? { status: 500, body: { error: "boom" } } : { body: SITE }),
+      }),
+    });
+    await env.ready();
+    await env.$("vd-boards").querySelector('[data-view-site="alpha"]').click();
+    await settle();
+    const retry = env.$("vd-boards-status").querySelector("button");
+    expect(retry).not.toBeNull();
+    fail = false;
+    await retry.click();
+    await settle();
+    expect(env.$("vd-site-card").hidden).toBe(false);
+    expect(env.$("vd-boards-status").textContent).toBe("");
+    expect(env.url()).toBe("/me?site=alpha");
   });
 });
 
@@ -374,10 +440,10 @@ describe("the private board password gate", () => {
   it("styles the field with tokens the public shell actually defines", () => {
     const html = renderPasswordGate({ name: "Private Board", slug: "private-board" }, { nonce: "n" }, "");
     expect(html).not.toContain("--yr-panel-2");
-    expect(html).toContain(".yr-gate-card input{font:inherit;min-height:44px;width:100%;border:1px solid var(--yr-edge);background:var(--yr-surface);color:var(--yr-fog)");
-    expect(html).toContain(".yr-gate-card input::placeholder{color:var(--yr-faint)}");
+    expect(html).toContain("background:var(--yr-surface);color:var(--yr-fog)");
+    expect(html).toContain(".yr-gate-form input::placeholder{color:var(--yr-faint)}");
     // --yr-ink is the page background: it can never be the field's text colour.
-    expect(html).not.toMatch(/\.yr-gate-card input\{[^}]*color:var\(--yr-ink\)/);
+    expect(html).not.toMatch(/\.yr-gate-form input\{[^}]*color:var\(--yr-ink\)/);
   });
 
   it("lets a password manager fill it and flags errors beyond colour", () => {
@@ -385,5 +451,28 @@ describe("the private board password gate", () => {
     expect(html).toContain('autocomplete="current-password"');
     expect(html).not.toContain('autocomplete="off"');
     expect(html).toContain('<p class="yr-gate-error" role="alert"><span aria-hidden="true">⚠</span> Incorrect password.</p>');
+  });
+
+  it("keeps a private board out of search results and out of its own metadata", () => {
+    const html = renderPasswordGate(
+      { name: "Private Board", slug: "private-board", players: [{ name: "Alice", wagered: 5000 }] },
+      { nonce: "n" },
+      "",
+    );
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow" />');
+    expect(html).toContain("<title>Private Board · Password required</title>");
+    expect(html).not.toContain("og:");
+    expect(html).not.toContain('name="description"');
+    expect(html).not.toContain("Alice");
+    expect(html).not.toContain("5000");
+    // The gate is one page with one heading, one main and a real POST target.
+    expect((html.match(/<h1\b/g) || []).length).toBe(1);
+    expect((html.match(/<main\b/g) || []).length).toBe(1);
+    expect(html).toContain('method="POST" action="/private-board/password"');
+  });
+
+  it("keeps the custom-domain gate posting to its own host", () => {
+    const html = renderPasswordGate({ name: "Private Board", slug: "private-board" }, { nonce: "n", isCustomDomain: true }, "");
+    expect(html).toContain('action="/password"');
   });
 });

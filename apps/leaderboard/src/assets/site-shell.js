@@ -9,6 +9,11 @@
   var scrim = document.getElementById("yr-scrim");
   var menu = document.getElementById("yr-menu");
   var sideClose = document.getElementById("yr-side-close");
+  // The drawer trigger is the one control on the page that cannot work without
+  // this file, so the server ships it hidden and it is disclosed here. With the
+  // script blocked the top bar has no dead control and the footer keeps every
+  // section link; with the script running the drawer behaves exactly as before.
+  if (menu && side) menu.hidden = false;
   var sideOpener = null;
   var bodyOverflow = "";
   var inertBackground = [];
@@ -312,6 +317,27 @@
     redeemStatus.classList.toggle("is-error", !!isError);
   };
 
+  // Backend order failures arrive as terse codes. The viewer reads a sentence
+  // about their own order instead; anything unrecognised that is not already a
+  // member-facing sentence falls back rather than leaking wording from the API.
+  var ORDER_ERRORS = {
+    "insufficient balance": "You don’t have enough credits for that yet.",
+    "item not found": "That reward is no longer available.",
+    "out of stock": "That reward just went out of stock.",
+    "viewer blocked": "You can’t order on this site right now. Ask the streamer.",
+    "rate limited": "Too many attempts. Wait a moment and try again.",
+    "invalid csrf": "Your session expired. Reload the page and try again.",
+    unauthorized: "Sign in again to place this order.",
+  };
+  var orderErrorText = function (message) {
+    var fallback = "Couldn’t place that order. Please try again.";
+    if (!message) return fallback;
+    var known = ORDER_ERRORS[String(message).toLowerCase()];
+    if (known) return known;
+    var sentence = /^[A-Z].*[.!?]$/.test(message) && !/^HTTP /.test(message);
+    return sentence ? message : fallback;
+  };
+
   // The confirmation is the viewer's own dialog, not the browser's: it can name
   // the reward, its cost in free credits and what is left afterwards. A native
   // <dialog> owns the focus trap, Escape and background inertness; cancelling
@@ -405,7 +431,7 @@
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);
         } else {
-          recover(r.data.error || "Couldn’t place that order. Please try again.");
+          recover(orderErrorText(r.data.error));
         }
       })
       .catch(function () {

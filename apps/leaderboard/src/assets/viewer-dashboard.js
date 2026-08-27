@@ -54,13 +54,28 @@ function errorText(message, fallback) {
   return sentence ? message : fallback;
 }
 
+// Some failures are terminal: a site that is gone or a reward that sold out will
+// not come back on a second request, so those states get no retry control.
+const TERMINAL_ERRORS = new Set(["unauthorized", "site not found", "item not found", "out of stock", "viewer blocked", "invalid csrf"]);
+const retryable = (message) => !TERMINAL_ERRORS.has(String(message || ""));
+
 const STATUS_IDS = ["vd-login-status", "vd-account-status", "vd-boards-status", "vd-site-status", "vd-drop-status"];
 
-function setStatus(id, msg, err) {
+function setStatus(id, msg, err, retry) {
   const el = $(id);
   if (!el) return;
   el.textContent = msg || "";
   el.className = msg && err ? "status error" : "status";
+  // A failure that says "try again" has to offer the retry itself: a real
+  // keyboard-reachable button that re-runs the request, not just the sentence.
+  if (msg && typeof retry === "function") {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn--sm vd-retry";
+    btn.textContent = "Try again";
+    btn.addEventListener("click", () => { setStatus(id, ""); retry(); });
+    el.append(" ", btn);
+  }
 }
 
 function clearStatuses(ids) {
@@ -190,7 +205,7 @@ async function load() {
     else showList();
   } catch (err) {
     if (err.message === "unauthorized") renderLoggedOut();
-    else setStatus("vd-login-status", errorText(err.message, "We couldn't load your account. Try again."), true);
+    else setStatus("vd-login-status", errorText(err.message, "We couldn't load your account."), true, () => { load().catch(() => {}); });
   } finally {
     setGlobalLoading(false);
   }
@@ -254,7 +269,12 @@ async function openSite(slug, { btn = null, history = "push", focus = false } = 
     selectedSlug = null;
     setUrl(null, true);
     showList({ focus });
-    setStatus("vd-boards-status", errorText(err.message, "We couldn't open that site. Try again."), true);
+    setStatus(
+      "vd-boards-status",
+      errorText(err.message, "We couldn't open that creator."),
+      true,
+      retryable(err.message) ? () => { openSite(slug, { focus }).catch(() => {}); } : null,
+    );
   } finally {
     if (btn) setLoading(btn, false);
   }

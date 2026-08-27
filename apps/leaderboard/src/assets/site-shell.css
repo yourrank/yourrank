@@ -18,6 +18,11 @@
   --yr-primary-hover: #477dff;
   --yr-warning: #ff8a3d;
   --yr-success: #63e6be;
+  /* Fill roles use the two tokens above; anything that paints *text* or a
+     hairline uses the readable pair, which the light material layer darkens so
+     "Pending", "Live" and every error line keep their contrast on white. */
+  --yr-warning-readable: var(--yr-warning);
+  --yr-success-readable: var(--yr-success);
   --yr-color-board-accent: #2f6bff;
   --yr-accent: var(--yr-color-board-accent);
   --yr-accent-readable: color-mix(in srgb, var(--yr-accent), white 50%);
@@ -84,9 +89,16 @@
   z-index: 30;
   transform: translateX(-102%);
   visibility: hidden;
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.2s;
+  /* Visibility flips at once on opening so the script can move focus into the
+     drawer immediately, and only after the slide-out on closing. A transitioned
+     visibility would still be hidden when focus is requested. */
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.2s;
 }
-.yr-drawer[data-open] { transform: none; visibility: visible; }
+.yr-drawer[data-open] {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s;
+}
 
 .yr-drawer-head {
   min-height: var(--yr-bar-h);
@@ -316,9 +328,6 @@
 
 /* ── Cards, panels, grids ────────────────────────────────────────────── */
 
-.yr-g3, .yr-g12 { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
-.yr-g12 { gap: 32px; }
-
 .yr-card { border: 1px solid var(--yr-edge); border-radius: 8px; background: var(--yr-panel); padding: 24px; }
 .yr-card--on { border-color: var(--yr-accent-readable); }
 .yr-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 32px; }
@@ -342,7 +351,7 @@
 .yr-panel-foot { padding: 16px 24px; border-top: 1px solid var(--yr-edge); }
 .yr-panel-pad { padding: 24px; }
 
-.yr-pos { color: var(--yr-success); }
+.yr-pos { color: var(--yr-success-readable); }
 .yr-neg { color: var(--yr-fog); }
 
 /* ── Home: creator introduction and section previews ─────────────────── */
@@ -403,8 +412,22 @@
 /* Rewards and My credits open with the page, what it is for, the balance and
    the fine print — no hero slab, no KPI wall. */
 .yr-vhead { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.yr-vhead .yr-h1 { margin-bottom: 0; }
-.yr-vhead-lede { font-size: 15px; line-height: 22px; color: var(--yr-mute); max-width: 60ch; overflow-wrap: anywhere; }
+/* A page head carries names the creator chose, not copy we wrote: a 100-character
+   player or creator name has to break inside the word rather than push the
+   document sideways. */
+.yr-vhead .yr-h1 {
+  margin-bottom: 0; max-width: 100%; overflow-wrap: anywhere;
+  /* An extreme name breaks inside the word and then stops after three lines, so
+     the page stays scannable while the whole name stays in the document and in
+     the accessible name. */
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+.yr-vhead-lede {
+  font-size: 15px; line-height: 22px; color: var(--yr-mute); max-width: 60ch; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
+}
 .yr-vhead-fine { font-family: var(--yr-sans); font-size: 12px; line-height: 1.5; color: var(--yr-faint); max-width: 70ch; }
 .yr-vhead-acts { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .yr-vbal { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -443,6 +466,9 @@
 .yr-hist-n, .yr-ord-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
 .yr-hist-side { flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .yr-hist-amt { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A value in a row has no column heading to lean on, so it names its own field
+   on the line above it: the label reads as a caption, not as a second figure. */
+.yr-hist-lbl { display: block; font-family: var(--yr-sans); font-size: 11px; line-height: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yr-faint); }
 .yr-hist-d { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-mute); white-space: nowrap; }
 .yr-ord { justify-content: space-between; }
 
@@ -461,7 +487,9 @@
 
 /* Section links in the top bar. Ordinary links, never ARIA tabs: the current
    one is marked with aria-current and carries a visible accent underline. */
-.yr-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+/* The section links keep their intrinsic width so a long creator name clamps in
+   the identity block instead of squeezing the destinations out of the bar. */
+.yr-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; flex-shrink: 0; }
 .yr-tab {
   min-height: 44px; padding: 0 12px; border-radius: 8px;
   display: inline-flex; align-items: center; white-space: nowrap;
@@ -509,8 +537,8 @@
   border: 1px solid var(--yr-edge); border-radius: 999px;
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint);
 }
-.yr-lbh-state.is-live { color: var(--yr-success); border-color: var(--yr-success); }
-.yr-lbh-state.is-soon { color: var(--yr-warning); border-color: var(--yr-warning); }
+.yr-lbh-state.is-live { color: var(--yr-success-readable); border-color: var(--yr-success-readable); }
+.yr-lbh-state.is-soon { color: var(--yr-warning-readable); border-color: var(--yr-warning-readable); }
 .yr-lbh-meta > .yr-lbh-state + *::before { content: none; margin-right: 0; }
 .yr-lbh-note { margin-top: 10px; font-size: 13px; line-height: 1.55; color: var(--yr-faint); max-width: 62ch; }
 
@@ -567,7 +595,7 @@
 .yr-nomatch, .yr-page-status { padding: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
 .yr-page-status { padding: 0; }
 .yr-page-status:empty { display: none; }
-.yr-page-status.is-error { color: var(--yr-warning); }
+.yr-page-status.is-error { color: var(--yr-warning-readable); }
 .yr-pagination { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px; border-top: 1px solid var(--yr-edge-soft); }
 
 .yr-list > * + * { border-top: 1px solid var(--yr-edge-soft); }
@@ -578,9 +606,19 @@
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
   padding: 4px 8px; border: 1px solid var(--yr-edge); border-radius: 6px; color: var(--yr-faint); white-space: nowrap;
 }
-.yr-tag--pending { color: var(--yr-warning); border-color: var(--yr-warning); }
-.yr-tag--done { color: var(--yr-success); border-color: var(--yr-success); }
+.yr-tag--pending { color: var(--yr-warning-readable); border-color: var(--yr-warning-readable); }
+.yr-tag--done { color: var(--yr-success-readable); border-color: var(--yr-success-readable); }
 
+/* Legal and information copy. The shell resets paragraph margins for its own
+   compact rows, so prose has to restore its own rhythm, and the reading measure
+   is what makes a policy readable on a phone as well as on a desktop. */
+.yr-prose { max-width: 68ch; font-size: 15px; line-height: 1.7; color: var(--yr-mute); overflow-wrap: anywhere; }
+.yr-prose > * + * { margin-top: 16px; }
+.yr-prose ul, .yr-prose ol { margin: 16px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.yr-prose li { overflow-wrap: anywhere; }
+.yr-prose strong, .yr-prose b { color: var(--yr-fog); }
+.yr-prose a { color: var(--yr-fog); text-decoration: underline; text-decoration-color: var(--yr-accent-readable); text-underline-offset: 4px; }
+.yr-prose a:hover { color: var(--yr-accent-readable); }
 .yr-fine { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-mute); max-width: 70ch; }
 .yr-note { font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
 .yr-empty { padding: 40px 24px; text-align: center; font-family: var(--yr-sans); font-size: 13px; line-height: 1.5; color: var(--yr-faint); font-weight: 600; }
@@ -598,7 +636,7 @@
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
 .yr-search-status, .yr-redeem-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
 .yr-search-status:empty, .yr-redeem-status:empty { display: none; }
-.yr-search-status.is-error, .yr-redeem-status.is-error { color: var(--yr-warning); }
+.yr-search-status.is-error, .yr-redeem-status.is-error { color: var(--yr-warning-readable); }
 .yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: 8px; color: #fff; background: var(--yr-primary); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .yr-search-retry:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 
@@ -675,11 +713,6 @@
 }
 
 @media (min-width: 1024px) {
-  .yr-g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .yr-g3--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .yr-g12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
-  .yr-c8 { grid-column: span 8 / span 8; }
-  .yr-c4 { grid-column: span 4 / span 4; }
   .yr-hero { flex-direction: row; align-items: center; }
 }
 
@@ -691,6 +724,9 @@
 
 @media (max-width: 899px) {
   .yr-menu { display: inline-flex; }
+  /* The trigger ships hidden and is disclosed by site-shell.js; without the
+     script there is no dead control in the top bar. */
+  .yr-menu[hidden] { display: none; }
   .yr-tabs { display: none; }
   .yr-top-in { padding: 8px 12px; gap: 8px; }
   .yr-top-r { gap: 6px; }

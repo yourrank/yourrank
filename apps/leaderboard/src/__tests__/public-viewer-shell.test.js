@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderSite } from "@yourrank/shared/site-render";
 import { renderNewHallOfFame, renderNewLegalPage, renderNewPlayerProfile } from "../auxiliary-renderers.js";
+import { error500Page, notFoundPage, pendingVerificationPage, suspendedPage } from "../middleware/headers.js";
 
 const root = join(import.meta.dir, "../../../../");
 const assets = join(root, "apps/leaderboard/src/assets");
@@ -303,6 +304,12 @@ describe("public viewer shell", () => {
       "design-system.css",
       "components.css",
       "theme.css",
+      "viewer-final.css",
+      "viewer-v5.css",
+      "public-final.css",
+      "status-pages.css",
+      "cookie-v2.css",
+      "profile-v2.css",
     ]) {
       expect(names).not.toContain(forbidden);
     }
@@ -312,6 +319,68 @@ describe("public viewer shell", () => {
     expect(html).toContain("family=Fira+Code");
     expect(html).not.toContain("family=Inter");
     expect(html).not.toContain("IBM+Plex+Mono");
+  });
+
+  it("does not present a dead hamburger when the shell script never runs", async () => {
+    const html = await render("home");
+    const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
+    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+    // Server-rendered hidden; only the script that implements the drawer reveals it.
+    expect(html).toMatch(/<button class="yr-menu" id="yr-menu" type="button" hidden\b/);
+    expect(html).toContain('aria-label="Open sections"');
+    expect(shell).toContain("if (menu && side) menu.hidden = false;");
+    expect(css).toMatch(/\.yr-menu\[hidden\] \{ display: none; \}/);
+    // The footer still carries navigation without JS.
+    expect(html).toContain("<footer");
+    expect(html.split("<footer")[1]).toContain('href="https://example.test/creator/leaderboard"');
+  });
+
+  it("keeps the public status pages part of the viewer product and free of internals", async () => {
+    const pages = [notFoundPage("creator", "n"), suspendedPage("n"), pendingVerificationPage("n"), error500Page("n")];
+    for (const html of pages) {
+      expect((html.match(/<h1\b/g) || []).length).toBe(1);
+      expect((html.match(/<main\b/g) || []).length).toBe(1);
+      expect(html).toContain('name="robots" content="noindex, nofollow"');
+      expect(html).toContain('name="viewport"');
+      // No external font or stack detail on a failure document.
+      expect(html).not.toContain("fonts.googleapis.com");
+      expect(html).not.toContain("fonts.gstatic.com");
+      expect(html).not.toMatch(/stack trace|Exception|Worker|wrangler|Supabase|SQL/i);
+      expect(html).not.toMatch(/error code|ERR_[A-Z]/);
+      // One useful way onward.
+      expect(html).toMatch(/<a [^>]*href="\//);
+    }
+    expect(notFoundPage("creator", "n")).toContain("creator");
+  });
+
+  it("keeps genuine cookie choice with a keyboard-reachable decline", () => {
+    const js = readFileSync(join(assets, "cookie-consent.js"), "utf8");
+    const css = readFileSync(join(assets, "cookie-consent.css"), "utf8");
+    expect(js).toContain('id="cookieReject" type="button">Essential only');
+    expect(js).toContain('id="cookieAccept"');
+    expect(js).toContain('href="/cookies"');
+    expect(js).toContain('dismiss("essential")');
+    expect(js).toContain('dismiss("all")');
+    // Nothing consents on the member's behalf, and analytics never defaults on.
+    expect(js).not.toMatch(/setConsent\("all"\);?\s*\n?\s*}\s*\)?;?\s*$/m);
+    expect(js).not.toContain("setTimeout");
+    // Dismissal hands focus to the page instead of dropping it on <body>.
+    expect(js).toContain('document.getElementById("main-content")');
+    expect(js).toContain("focus({ preventScroll: true })");
+    expect(css).toMatch(/\.yr-consent \{[^}]*position: fixed/);
+    expect(css).toMatch(/min-height: 44px/);
+    expect(css).toContain("env(safe-area-inset-bottom)");
+    expect(css).toMatch(/\.yr-consent__text \{[^}]*overflow-wrap: anywhere/);
+    expect(css).toContain(":focus-visible");
+  });
+
+  it("tells a viewer about their own failed order without server vocabulary", () => {
+    const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
+    expect(shell).toContain("recover(orderErrorText(r.data.error));");
+    expect(shell).toContain("You don’t have enough credits for that yet.");
+    expect(shell).toContain("That reward just went out of stock.");
+    // Unrecognised codes and HTTP wording fall back instead of leaking.
+    expect(shell).toMatch(/!\/\^HTTP \/\.test\(message\)/);
   });
 
   it("preserves canonical, social and section metadata", async () => {

@@ -9,6 +9,10 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 100vw;
+  /* A consent bar is a bar, never a takeover: translated copy that runs long
+     scrolls inside it instead of swallowing the page it is asking about. */
+  max-height: 60vh;
+  overflow-y: auto;
   padding: 14px max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   border-top: 1px solid var(--line, rgba(0, 0, 0, 0.12));
   background: var(--panel, #fcfcfc);
@@ -20,6 +24,7 @@
 .yr-consent__text {
   min-width: 0;
   color: var(--ink-soft, var(--dim, #5c5c5c));
+  overflow-wrap: anywhere;
 }
 
 .yr-consent__text a {
@@ -41,7 +46,7 @@
   padding: 10px 14px;
   border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
   /* Buttons take the control radius, never the card radius that --radius maps to. */
-  border-radius: var(--devin-radius-control, 2px);
+  border-radius: var(--devin-radius-control, 8px);
   background: var(--panel, #fcfcfc);
   color: var(--ink, #191919);
   font: inherit;
