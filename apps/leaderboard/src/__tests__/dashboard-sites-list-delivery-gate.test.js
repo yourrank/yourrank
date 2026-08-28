@@ -255,6 +255,16 @@ describe("presentation: the Sites list stays a list", () => {
     expect(html).not.toContain("New leaderboard");
   });
 
+  it("keeps site creation essential-first and marks the selected site", () => {
+    const html = sitesHtml();
+    expect(html).toContain("Manage the public sites in your account and choose which one you are working on.");
+    expect(html).toContain('<details class="editor-more lb-board-form-more"><summary>Optional sponsor details</summary>');
+    expect(boardsJs).toContain('classList.toggle("is-current", isActive)');
+    expect(boardsJs).toContain('aria-current="true"');
+    expect(boardsJs).toContain("Current site");
+    expect(boardsJs).not.toContain("site-sponsor");
+  });
+
   it("gives each row one primary action and hides the rest behind a menu", () => {
     // Rows carry Manage; Duplicate and Delete live in the details menu so a
     // long list is not a wall of buttons.

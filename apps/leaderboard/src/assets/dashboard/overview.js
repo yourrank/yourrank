@@ -2,7 +2,7 @@
 import { $, esc, currentPlayers } from "./utils.js";
 import { state, setState, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricUnknown, setMetricValue } from "./states.js";
-import { activityEmptyAction, giveawayAction, nextStepAction, visitsMetricState } from "./overview-state.js";
+import { nextStepAction, visitsMetricState } from "./overview-state.js";
 
 // Home already owns some state in dedicated surfaces: the setup checklist
 // renders brand/players/publish/verification, and the pending-orders banner
@@ -15,7 +15,6 @@ const ACTIVITY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const SETUP_STEPS = [
   { key: "brand", required: true, label: "Name your site", description: "Give your public page a clear name.", href: "/dashboard/leaderboard/setup", action: "Name your site" },
   { key: "players", required: true, label: "Add players", description: "Add the names and scores you want to rank.", href: "/dashboard/leaderboard/players", action: "Add players" },
-  { key: "configure", required: false, label: "Change the look (optional)", description: "The default design works; change it whenever you want.", href: "/dashboard/leaderboard/design", action: "Change the look" },
   { key: "publish", required: true, label: "Publish your site", description: "Open the standings to visitors and get your live link.", href: "#publish", action: "Publish site" },
 ];
 
@@ -86,13 +85,16 @@ export function renderOverviewSummary() {
   const players = currentPlayers();
   const status = boardStatus();
   const steps = computeSetupSteps();
+  const activeBoard = state.BOARDS.find((board) => board.id === state.ACTIVE_SITE_ID);
+  const siteName = $("f_name")?.value.trim() || activeBoard?.name || state.SLUG || "Selected site";
+  if ($("ovSiteName")) $("ovSiteName").textContent = siteName;
   const done = isBoardSetup();
   const readyToPublish = steps.brand && steps.players;
   const firstIncomplete = SETUP_STEPS.find((step) => step.required && !steps[step.key]);
   const pendingVerification = status.published && !status.emailVerified;
   const needsVerification = !status.emailVerified;
   const headSub = $("ovHeadSub");
-  if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open your site." : readyToPublish && needsVerification ? "Confirm your email, then publish your site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open your site.";
+  if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open this site." : readyToPublish && needsVerification ? "Confirm your email, then publish this site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open this site.";
   const showSetup = !done || pendingVerification;
   const setupSection = $("ovSetup");
   if (setupSection) setupSection.hidden = !showSetup;
@@ -154,11 +156,9 @@ export function renderOverviewSummary() {
   } else {
     setMetricValue($("ovViews14"), typeof visits.value === "number" ? number(visits.value) : visits.value);
   }
-  const giveawayActionEl = $("ovGiveawayAction");
   let activeGiveawayCount = null;
   if (state.GIVEAWAYS_STATUS === "loading") {
     setMetricLoading($("ovActiveGiveaway"));
-    if (giveawayActionEl) giveawayActionEl.hidden = true;
   } else if (state.GIVEAWAYS_STATUS === "ready") {
     const activeGiveaways = [
       ...(state.GIVEAWAYS?.raffles || []).filter((item) => item.status === "active"),
@@ -167,23 +167,11 @@ export function renderOverviewSummary() {
     ];
     activeGiveawayCount = activeGiveaways.length;
     setMetricValue($("ovActiveGiveaway"), number(activeGiveaways.length));
-    const action = giveawayAction(activeGiveaways.length);
-    if (giveawayActionEl) {
-      giveawayActionEl.hidden = false;
-      giveawayActionEl.href = action.href;
-      giveawayActionEl.textContent = action.label;
-    }
   } else {
     setMetricUnknown($("ovActiveGiveaway"));
-    if (giveawayActionEl) giveawayActionEl.hidden = true;
   }
   const creditsEnabled = state.CREDITS_PRODUCT_ENABLED === true;
   const pendingOrders = Number(state.CREDITS?.usage?.pendingRedemptions || 0);
-  const publicAction = $("ovPublicSiteAction");
-  if (publicAction) {
-    publicAction.href = state.SLUG ? `${location.origin}/${encodeURIComponent(state.SLUG)}` : "#";
-    publicAction.hidden = !state.SLUG || showSetup;
-  }
   const pendingAlert = $("ovPendingOrdersAlert");
   if (pendingAlert) pendingAlert.hidden = pendingOrders <= 0;
   const pendingAlertCount = $("ovPendingOrdersAlertCount");
@@ -204,7 +192,7 @@ export function renderOverviewSummary() {
   ].filter((item) => item.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 5);
   $("ovActivityList").innerHTML = activity.map((item) => `<div class="ov-activity-row"><span class="ov-activity-icon">${ACTIVITY_ICON}</span><span class="ov-activity-copy"><b>${esc(item.title)}</b><span>${esc(item.sub)}</span></span><time>${relative(item.at)}</time></div>`).join("");
   if (activity.length) $("ovActivityEmpty").hidden = true;
-  else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and orders will appear here.", compactHeading: true, actions: [activityEmptyAction(status.published)] });
+  else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and orders will appear here.", compactHeading: true });
   const sampleNotice = state.SAMPLE_PLAYERS
     ? `<div class="v3-alert v3-alert--warning ov-sample-players" role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/players">Manage players</a></div>`
     : "";
@@ -220,7 +208,7 @@ export function renderOverviewSummary() {
   `).join("");
 
   if (top.length) $("ov_topEmpty").hidden = true;
-  else renderEmpty($("ov_topEmpty"), { kind: "empty", title: "No players yet", body: "Add the first player to start your leaderboard.", compactHeading: true, actions: [{ label: "Add players", href: "/dashboard/leaderboard/players" }] });
+  else renderEmpty($("ov_topEmpty"), { kind: "empty", title: "No players yet", body: "Add players from the setup checklist above.", compactHeading: true });
   $("ovPublishedStatus").textContent = status.live ? "Live" : status.published ? "Verification needed" : "Not live";
 
   // Contextual next step. Rendered last so it can read the activity and
@@ -241,7 +229,10 @@ export function renderOverviewSummary() {
       hasActivity: activity.length > 0,
       visits: typeof visits.value === "number" ? visits.value : null,
     });
-    const show = Boolean(next) && !NEXT_STEP_OWNED_ELSEWHERE.has(next.key);
+    // A healthy live site already has one clear action in the page head. Keep
+    // optional product suggestions off Home so "Nothing needs attention" is
+    // not immediately contradicted by another prominent instruction.
+    const show = Boolean(next) && !status.live && !NEXT_STEP_OWNED_ELSEWHERE.has(next.key);
     nextStepEl.hidden = !show;
     if (show) {
       $("ovNextStepTitle").textContent = next.title;

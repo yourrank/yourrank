@@ -1,10 +1,12 @@
 import { describe, expect, it, beforeAll } from "bun:test";
 
-let timeZoneOffsetLabel, timeZoneLabel, toLocalInput, fromLocalInput;
+let timeZoneOffsetLabel, timeZoneLabel, toLocalInput, fromLocalInput, validateScheduleValues;
 
 beforeAll(async () => {
   globalThis.document = { querySelector: () => null };
-  ({ timeZoneOffsetLabel, timeZoneLabel, toLocalInput, fromLocalInput } = await import("../assets/dashboard/utils.js"));
+  ({ timeZoneOffsetLabel, timeZoneLabel, toLocalInput, fromLocalInput, validateScheduleValues } = await import(
+    "../assets/dashboard/utils.js"
+  ));
 });
 
 describe("timezone labels and datetime-local conversion", () => {
@@ -42,5 +44,38 @@ describe("timezone labels and datetime-local conversion", () => {
     const iso = new Date(value).toISOString();
     expect(fromLocalInput(value, "")).toBe(iso);
     expect(toLocalInput(iso, "")).toBe(value);
+  });
+
+  it("rejects schedules whose end does not follow the start", () => {
+    const result = validateScheduleValues({
+      startsValue: "2026-08-28T20:00",
+      endsValue: "2026-08-28T19:00",
+      timeZone: "Europe/Paris",
+      now: "2026-08-28T12:00:00.000Z",
+    });
+
+    expect(result.startsAt).toBe("2026-08-28T18:00:00.000Z");
+    expect(result.endsAt).toBe("2026-08-28T17:00:00.000Z");
+    expect(result.invalid).toContainEqual({
+      field: "ends",
+      label: "Period end",
+      message: "Choose an end time after the start time.",
+    });
+  });
+
+  it("rejects implausibly distant schedule dates", () => {
+    const result = validateScheduleValues({
+      startsValue: "2040-08-28T20:00",
+      endsValue: "",
+      timeZone: "Europe/Paris",
+      now: "2026-08-28T12:00:00.000Z",
+    });
+
+    expect(result.invalid).toContainEqual({
+      field: "starts",
+      label: "Period start",
+      message: "Choose a date within 10 years of today.",
+    });
+    expect(result.invalid.some(({ field }) => field === "ends")).toBe(false);
   });
 });

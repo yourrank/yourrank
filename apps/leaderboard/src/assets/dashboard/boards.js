@@ -32,12 +32,27 @@ export function renderBoardSwitcher() {
     $("newBoard").hidden = false;
     $("newBoard").setAttribute("aria-expanded", "false");
     $("nb_err").textContent = "";
+    $("nb_name")?.removeAttribute("aria-invalid");
+    $("nb_slug")?.removeAttribute("aria-invalid");
   };
   const createBtn = $("nb_create");
   if (createBtn) createBtn.onclick = async () => {
     const name = $("nb_name").value.trim();
+    $("nb_name").removeAttribute("aria-invalid");
+    $("nb_slug").removeAttribute("aria-invalid");
+    if (!name) {
+      $("nb_err").textContent = "Enter a site name.";
+      $("nb_name").setAttribute("aria-invalid", "true");
+      $("nb_name").focus();
+      return;
+    }
     let slug = $("nb_slug").value.trim() || slugify(name);
-    if (!slug) { $("nb_err").textContent = "Enter a site name or public link."; return; }
+    if (!slug) {
+      $("nb_err").textContent = "Enter a public link.";
+      $("nb_slug").setAttribute("aria-invalid", "true");
+      $("nb_slug").focus();
+      return;
+    }
     const casino = $("nb_casino").value.trim();
     $("nb_err").textContent = "Creating…";
     createBtn.disabled = true;
@@ -257,7 +272,8 @@ export function renderBoardsPage() {
       // Sponsor and promo code stay searchable even though the row keeps them
       // out of the way.
       tr.dataset.search = [b.name, b.slug, b.casino, b.code].filter(Boolean).join(" ").toLowerCase();
-      tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}">${esc(b.name)}</a>${isActive ? '<span class="site-current">Editing now</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a>${b.casino ? ` · ${esc(b.casino)}` : ""}</span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button">Manage</button><details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}">⋯</summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details></div></td>`;
+      tr.classList.toggle("is-current", isActive);
+      tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}"${isActive ? ' aria-current="true"' : ""}>${esc(b.name)}</a>${isActive ? '<span class="site-current">Current site</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a></span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r" data-label="Actions"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button" aria-label="Manage ${esc(b.name)}">Manage</button><details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details></div></td>`;
       tr.querySelector(".site-name")?.addEventListener("click", (e) => {
         e.preventDefault();
         requestDashboardRoute("home", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true });

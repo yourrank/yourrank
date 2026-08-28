@@ -26,33 +26,35 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('id="ovSetupMessage"');
     expect(html).toContain('id="ovSetupAction"');
     expect(html).toContain('<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>');
-    expect(html).toContain('id="ovActiveGiveaway"');
+    expect(html).not.toContain('id="ovActiveGiveaway"');
     expect(html).not.toContain("Times shared");
     expect(html).toContain('id="ovActivityList"');
     expect(html).toContain('id="ovTopPlayers"');
     expect(html).not.toContain('class="ov-summary"');
     expect(html).toContain('id="ovPublishedStatus"');
-    expect(html).toContain('id="ovPublicSiteAction"');
-    expect(html).toContain("View site ↗");
+    expect(html).not.toContain('id="ovPublicSiteAction"');
+    expect(html).toContain('id="liveLink"');
+    expect((html.match(/>View site ↗</g) || []).length).toBe(1);
     expect(html).toContain('href="/dashboard/leaderboard/setup"');
     expect(html).toContain('class="ov-card-empty" id="ovActivityEmpty"');
     expect(html).toContain('href="/dashboard/rewards/redemptions"');
-    // Home states the site's condition once, beside its title, and groups the
-    // remaining figures into one quiet summary instead of a KPI wall.
+    // Home states both scope and condition beside its title, and groups only
+    // the two useful site figures into one quiet summary instead of a KPI wall.
+    expect(html).toContain('class="ov-scope">Selected site: <strong id="ovSiteName"');
     expect(html).toContain('class="ov-status" id="ovStatus"');
-    expect(html).toContain('class="ov-figures" id="ovFigures"');
+    expect(html).toContain('class="ov-figures" id="ovFigures" aria-label="Selected site summary"');
     expect(html).not.toContain('id="ovKpiRow"');
     expect(html).not.toContain('id="ovCommandGrid"');
     expect((html.match(/id="ovPublishedStatus"/g) || []).length).toBe(1);
   });
 
-  it("models Home setup as an accessible four-step launch checklist", () => {
+  it("models Home setup as an accessible essentials-only launch checklist", () => {
     const html = dashboardHtml();
     const setupDefinition = overviewJs.slice(overviewJs.indexOf("const SETUP_STEPS"), overviewJs.indexOf("function isBoardSetup"));
     const setupKeys = [...setupDefinition.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
-    expect(setupKeys).toEqual(["brand", "players", "configure", "publish"]);
+    expect(setupKeys).toEqual(["brand", "players", "publish"]);
     expect(setupDefinition).not.toContain('key: "kick"');
-    expect(html).toContain('id="ovLblGiveaway">Active giveaways</span>');
+    expect(html).not.toContain("Active giveaways");
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
     expect(overviewJs).toContain('pendingOrders === 1 ? "pending order needs review." : "pending orders need review."');
     expect(overviewJs).toContain('pendingOrders === 1 ? "Review order" : "Review orders"');
@@ -127,6 +129,7 @@ describe("dashboard overview quick actions", () => {
       expect(overviewJs).toContain(`"${key}"`);
     }
     expect(overviewJs).toContain("nextStepAction(");
+    expect(overviewJs).toContain("!status.live");
     expect(dashboardCss).toContain(".ov-next-step");
   });
 
@@ -236,6 +239,9 @@ describe("dashboard overview quick actions", () => {
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>');
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Appearance</h2></div>');
     expect(html).not.toContain("<h2>Theme &amp; branding</h2>");
+    expect(html).toContain("Site-wide branding");
+    expect(html).toContain("Name, tagline, logo, colors and social links apply across your public site.");
+    expect(html).toContain("The same renderer visitors see on your public site.");
   });
 
   it("keeps Games terminology and status copy singular", () => {

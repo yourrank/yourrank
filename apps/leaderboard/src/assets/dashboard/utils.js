@@ -268,6 +268,35 @@ export function fromLocalInput(value, timeZone = getViewerTimeZone()) {
   return later[0]?.date.toISOString() || "";
 }
 
+/**
+ * Presentation-only guardrails for the leaderboard schedule. The API shape and
+ * period mechanics stay unchanged; this only catches dates a creator is very
+ * unlikely to intend before the draft is previewed or saved.
+ */
+export function validateScheduleValues({ startsValue = "", endsValue = "", now = Date.now(), timeZone = getViewerTimeZone() } = {}) {
+  const invalid = [];
+  const startsAt = startsValue ? fromLocalInput(startsValue, timeZone) : "";
+  const endsAt = endsValue ? fromLocalInput(endsValue, timeZone) : "";
+  if (startsValue && !startsAt) invalid.push({ field: "starts", label: "Period start", message: "Choose a valid start date and time." });
+  if (endsValue && !endsAt) invalid.push({ field: "ends", label: "Period end", message: "Choose a valid end date and time." });
+
+  const nowMs = dateFromInput(now)?.getTime();
+  const plausibleWindowMs = Math.round(10 * 365.25 * 24 * 60 * 60 * 1000);
+  for (const [field, label, iso] of [
+    ["starts", "Period start", startsAt],
+    ["ends", "Period end", endsAt],
+  ]) {
+    const instant = iso ? new Date(iso).getTime() : null;
+    if (Number.isFinite(nowMs) && Number.isFinite(instant) && Math.abs(instant - nowMs) > plausibleWindowMs) {
+      invalid.push({ field, label, message: "Choose a date within 10 years of today." });
+    }
+  }
+  if (startsAt && endsAt && new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+    invalid.push({ field: "ends", label: "Period end", message: "Choose an end time after the start time." });
+  }
+  return { startsAt, endsAt, invalid };
+}
+
 export function slugify(s) {
   return String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 }

@@ -67,11 +67,11 @@ const ROUTE_SECTIONS = Object.fromEntries(
 function OverviewSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="home">
-<header class="v3-head ov-head v3-head--row"><div><h1>Home</h1><p class="v3-head-sub" id="ovHeadSub">Checking your site…</p><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span></div><a class="btn btn--sm btn--accent" id="ovSetupAction" href="/dashboard/leaderboard/setup" hidden>Continue setup</a><a class="btn btn--sm btn--accent" id="ovPublicSiteAction" href="#" target="_blank" rel="noopener noreferrer" hidden>View site ↗</a></header>
+<header class="v3-head ov-head v3-head--row"><div><h1>Home</h1><p class="ov-scope">Selected site: <strong id="ovSiteName">Checking…</strong></p><p class="v3-head-sub" id="ovHeadSub">Checking your site…</p><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span></div><a class="btn btn--sm btn--accent" id="ovSetupAction" href="/dashboard/leaderboard/setup" hidden>Continue setup</a></header>
 <div class="v3-alert v3-alert--warning" id="ovPendingOrdersAlert" role="alert" hidden><span><b id="ovPendingOrdersAlertCount">0</b> <span id="ovPendingOrdersAlertLabel">pending orders need review.</span></span><a class="btn btn--sm btn--ghost" id="ovPendingOrdersAlertAction" href="/dashboard/rewards/redemptions">Review orders →</a></div>
 <section class="ov-next-step" id="ovNextStep" aria-labelledby="ovNextStepTitle" hidden><div class="ov-next-step-copy"><h2 id="ovNextStepTitle">—</h2><p id="ovNextStepBody">—</p></div><a class="btn btn--sm btn--accent" id="ovNextStepAction" href="#">—</a></section>
-<section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Finish setup</h2><p id="ovSetupMessage">Add players and publish to open your site.</p></div><span class="ov-setup-count" id="ovSetupCount">0 of 4 done</span></div><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></section>
-<section class="ov-figures" id="ovFigures" aria-label="Site summary">
+<section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Finish setup</h2><p id="ovSetupMessage">Add players and publish to open your site.</p></div><span class="ov-setup-count" id="ovSetupCount">0 of 3 done</span></div><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></section>
+<section class="ov-figures" id="ovFigures" aria-label="Selected site summary">
   <div class="ov-figure">
     <span class="ov-figure-lbl" id="ovLblViews">Visits this week</span>
     <span class="ov-figure-val" id="ovViews14" aria-labelledby="ovLblViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
@@ -79,12 +79,6 @@ function OverviewSection({ active } = {}) {
   <div class="ov-figure">
     <span class="ov-figure-lbl" id="ovLblPlayers">Players</span>
     <span class="ov-figure-val" id="ovPlayersCount" aria-labelledby="ovLblPlayers"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-    <a class="ov-figure-link" href="/dashboard/leaderboard/players">Manage players</a>
-  </div>
-  <div class="ov-figure">
-    <span class="ov-figure-lbl" id="ovLblGiveaway">Active giveaways</span>
-    <span class="ov-figure-val" id="ovActiveGiveaway" aria-labelledby="ovLblGiveaway"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-    <a class="ov-figure-link" id="ovGiveawayAction" href="/dashboard/giveaways">Create giveaway</a>
   </div>
 </section>
 <div class="ov-lists"><section class="ov-list" aria-labelledby="ovActivityTitle"><div class="ov-list-head"><h2 id="ovActivityTitle">Recent activity</h2><button class="ov-list-link" id="ovAnalyticsLink" type="button" data-jump="performance">See analytics</button></div><div class="ov-activity-list" id="ovActivityList"></div><div class="ov-card-empty" id="ovActivityEmpty" hidden></div></section><section class="ov-list" aria-labelledby="ovTopTitle"><div class="ov-list-head"><h2 id="ovTopTitle">Top players</h2><a class="ov-list-link" href="/dashboard/leaderboard/players">All players</a></div><div class="ov-players-list" id="ovTopPlayers"></div><div class="ov-card-empty" id="ov_topEmpty" hidden></div></section></div>
@@ -99,23 +93,22 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-grid">
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
-<h1 class="v3-section-title" data-egroup="setup">Setup</h1>
-<div class="card" data-egroup="setup"><h2>Your site</h2><p class="card-sub">This is what visitors see when they open your page.</p>
-<p class="card-sub"><a href="/dashboard/site" id="setupBrandLink">Name, tagline, logo, colors and links live in Site settings →</a></p>
-<details class="editor-more" data-editor-more="setup-sponsor"><summary>Sponsor and promo code</summary><div class="grid2">
+<header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Setup</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
+<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity settings"><div><strong>Site identity is shared across every public page.</strong><span>Name, tagline, logo, colors and links are managed in Site settings.</span></div><a href="/dashboard/site" id="setupBrandLink">Open Site settings</a></aside>
+<div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
+<div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="wagered">Amount</option><option value="score">Points / score</option></select><span class="hint">Players with the same value share a rank.</span></div>
+<div class="field"><label for="f_pool">Prize pool</label><input id="f_pool" placeholder="$500" /></div>
+<div class="field"><label for="f_period">Leaderboard period</label><select id="f_period"><option>Weekly</option><option selected>Monthly</option><option>Season</option></select></div>
+<div class="field"><label for="f_ends">Period ends</label><input id="f_ends" type="datetime-local" aria-describedby="f_ends_hint f_ends_error" /><span class="hint" id="f_ends_hint">Shown in your timezone. After this time, final standings stay visible and automated score updates stop.</span><span class="field-err" id="f_ends_error" data-field-error="f_ends" hidden role="alert" aria-live="polite"></span></div>
+</div>
+<details class="editor-more" data-editor-more="setup-schedule"><summary>Start date and automatic restart</summary><div class="grid2">
+<div class="field"><label for="f_starts">Period starts <span class="hint">Optional</span></label><input id="f_starts" type="datetime-local" aria-describedby="f_starts_hint f_starts_error" /><span class="hint" id="f_starts_hint">Shown in your timezone.</span><span class="field-err" id="f_starts_error" data-field-error="f_starts" hidden role="alert" aria-live="polite"></span></div>
+<div class="field field--full"><label class="chk"><input type="checkbox" id="f_auto_reset" /> Automatically start a new race when this one ends</label><label class="sr-only" for="f_auto_reset_clear">What to reset when the race ends</label><select id="f_auto_reset_clear" disabled class="mt-8"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players and start fresh</option><option value="none">Keep everything as-is</option></select><span class="hint">Your current standings will be saved automatically before the reset.</span></div></div></details></div>
+<details class="editor-more editor-more--standalone" data-egroup="setup" data-editor-more="setup-sponsor"><summary>Sponsor and promo code</summary><div class="grid2">
 <div class="field"><label for="f_casino">Sponsor name</label><input id="f_casino" placeholder="Your brand or sponsor" /></div>
 <div class="field"><label for="f_code">Promo code</label><input id="f_code" placeholder="Optional" /></div>
 <div class="field"><label for="f_cta">Sponsor website</label><input id="f_cta" placeholder="https://example.com" /></div>
-<div class="field field--full"><label for="f_blurb">About your sponsor</label><textarea id="f_blurb" rows="2" placeholder="Short pitch about the sponsor and your code (optional)."></textarea></div></div></details></div>
-<div class="card" data-egroup="setup"><h2>Ranking</h2><p class="card-sub">What decides rank, and when this round ends.</p><div class="grid2">
-<div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="wagered">Amount</option><option value="score">Points / score</option></select><span class="hint">Players with the same value share a rank.</span></div>
-<div class="field"><label for="f_pool">Prize pool</label><input id="f_pool" placeholder="$500" /></div>
-<div class="field"><label for="f_period">Race runs</label><select id="f_period"><option>Weekly</option><option selected>Monthly</option><option>Season</option></select></div>
-<div class="field"><label for="f_ends">Round ends on</label><input id="f_ends" type="datetime-local" /><span class="hint" id="f_ends_hint">Shown in your timezone. After this time, final standings stay visible and automated score updates stop.</span></div>
-</div>
-<details class="editor-more" data-editor-more="setup-schedule"><summary>Start date and automatic restart</summary><div class="grid2">
-<div class="field"><label for="f_starts">Round starts on <span class="hint">Optional</span></label><input id="f_starts" type="datetime-local" /><span class="hint" id="f_starts_hint">Shown in your timezone.</span></div>
-<div class="field field--full"><label class="chk"><input type="checkbox" id="f_auto_reset" /> Automatically start a new race when this one ends</label><label class="sr-only" for="f_auto_reset_clear">What to reset when the race ends</label><select id="f_auto_reset_clear" disabled class="mt-8"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players and start fresh</option><option value="none">Keep everything as-is</option></select><span class="hint">Your current standings will be saved automatically before the reset.</span></div></div></details></div>
+<div class="field field--full"><label for="f_blurb">About your sponsor</label><textarea id="f_blurb" rows="2" placeholder="Short pitch about the sponsor and your code (optional)."></textarea></div></div></details>
 <div class="card" data-egroup="setup"><h2>Who can see this site</h2><p class="card-sub">Your site is open to anyone with the link once you publish it.</p>
 <div class="field field--full m-0"><label class="chk"><input type="checkbox" id="f_password_enabled" /> Require a password to view this site</label><label class="sr-only" for="f_password">Site password</label><input id="f_password" type="password" placeholder="Leave blank to keep current password" disabled class="mt-8" /><span class="hint">Visitors must enter this password before seeing the leaderboard.</span></div></div>
 <h1 class="v3-section-title" data-egroup="design">Appearance</h1>
@@ -130,9 +123,10 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <label class="v3-search" for="playerSearch"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="search" id="playerSearch" placeholder="Search players..." aria-label="Search players" autocomplete="off" /></label>
 <select class="v3-select" id="playerSort" aria-label="Sort players"><option value="wagered">Sort by: Amount</option><option value="score">Sort by: Points</option><option value="prize">Sort by: Prize</option><option value="name">Sort by: Name</option></select>
 <div class="v3-players-bar-end">
+<button class="v3-btn v3-btn--accent" id="addRow" type="button">Add player</button>
 <div class="v3-menu-wrap"><button class="v3-btn" id="colDropdownBtn" type="button" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/></svg>Columns</button>
 <div class="v3-menu" id="colMenu" hidden><label class="v3-menu-item"><input type="checkbox" data-col="score" /> Score</label><label class="v3-menu-item"><input type="checkbox" data-col="hands" /> Hands played</label><label class="v3-menu-item"><input type="checkbox" data-col="netProfit" /> Net profit</label><label class="v3-menu-item"><input type="checkbox" data-col="winRate" /> Win rate</label><label class="v3-menu-item"><input type="checkbox" data-col="change" /> Change</label></div></div>
-<div class="v3-menu-wrap"><button class="v3-btn v3-btn--accent" id="importMenuBtn" type="button" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/></svg>Import</button>
+<div class="v3-menu-wrap"><button class="v3-btn" id="importMenuBtn" type="button" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/></svg>Import</button>
 <div class="v3-menu v3-menu--dark v3-menu--end" id="importMenu" hidden><button class="v3-menu-item" id="importPasteBtn" type="button">Paste from Excel or Google Sheets</button><button class="v3-menu-item" id="csvImportBtn" type="button">Upload a file (.csv)</button><button class="v3-menu-item" id="gsheetBtn" type="button">Link a Google Sheet</button><div class="v3-menu-sep"></div><button class="v3-menu-item" id="csvExportBtn" type="button">Download as spreadsheet</button><button class="v3-menu-item v3-menu-item--accent" id="csvTemplateBtn" type="button">Download blank template</button></div></div>
 </div>
 </div>
@@ -142,11 +136,11 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div id="playersEmpty" class="v3-empty" hidden>
 <span class="v3-empty-ic" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
 <h2>No players yet</h2>
-<p>Start by adding players manually, or import them all at once from a spreadsheet.</p>
-<div class="v3-empty-actions"><button class="v3-btn v3-btn--accent" id="emptyImportBtn" type="button">Import players</button><button class="v3-btn" id="emptyPasteBtn" type="button">Paste from clipboard</button></div>
+<p>Add the first player and their current value. You can import a spreadsheet later.</p>
+<div class="v3-empty-actions"><button class="v3-btn v3-btn--accent" id="emptyAddBtn" type="button">Add first player</button><button class="v3-btn" id="emptyImportBtn" type="button">Import players</button></div>
 </div>
 </div>
-<div class="v3-players-foot"><button class="v3-btn v3-btn--sm" id="addRow" type="button">+ Add player</button><input type="file" id="csvFileInput" accept=".csv,.tsv,.txt" hidden /><span id="limitMsg" class="hint ml-auto c-muted" role="status" aria-live="polite"></span></div>
+<div class="v3-players-foot"><input type="file" id="csvFileInput" accept=".csv,.tsv,.txt" hidden /><span id="limitMsg" class="hint ml-auto c-muted" role="status" aria-live="polite"></span></div>
 <div class="import" id="importPanel" hidden>
 <p class="hint mb-8">Paste directly from Excel or Google Sheets. Each row is one player. Your spreadsheet needs at least three columns: <strong>Name</strong>, <strong>Amount</strong>, and <strong>Prize</strong>. Column order doesn't matter — we'll figure it out.</p>
 <textarea id="importText" rows="6" spellcheck="false" placeholder="*****ess&#9;152000&#9;1500&#10;*****y&#9;98000&#9;700&#10;*****k&#9;61250"></textarea>
@@ -163,7 +157,8 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 <div class="v3-bulkbar" id="bulkActions" role="toolbar" aria-label="Bulk actions" hidden><span class="v3-bulkbar-mark" aria-hidden="true"></span><span id="bulkCount" role="status" aria-live="polite" aria-atomic="true">0 players selected</span><span class="v3-bulkbar-sep" aria-hidden="true"></span><button class="v3-btn v3-btn--dark" id="bulkClearWager" type="button">Reset scores to zero</button><button class="v3-btn v3-btn--danger" id="bulkDelete" type="button">Remove selected players</button></div>
 </div>
-<div class="card" data-egroup="design" id="playerFieldsCard"><h2>Player table columns</h2><p class="card-sub">Choose which extra columns show on the player table.</p><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage columns in Players →</a></div>
+<aside class="v3-owner-note" data-egroup="design" aria-label="Site-wide branding settings"><div><strong>Site-wide branding</strong><span>Name, tagline, logo, colors and social links apply across your public site.</span></div><a href="/dashboard/site">Open Site settings</a></aside>
+<div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Players</a></div>
 <div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
 <div id="sectionsBody"><div class="sections-editor" id="sectionsList"></div></div>
@@ -194,28 +189,29 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="share-cards" id="shareCards"><button class="share-card share-card--x" id="shareX" type="button"><span>Share on X</span></button><button class="share-card share-card--discord" id="shareDiscord" type="button"><span>Share on Discord</span></button><button class="share-card share-card--twitch" id="shareTwitch" type="button"><span>Share on Twitch</span></button><button class="share-card share-card--copy" id="shareCopy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>Copy link</span></button></div>
 <details class="api-access-details" id="apiAccessDetails"><summary class="font-14 fw-600">Developer tools</summary><div class="api-access locked" id="apiAccess"><div><b class="font-14">REST API</b><p class="hint mt-4">Use the API to update scores automatically from your own system.</p></div><span class="api-lock-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Pro</span></div></details>
 </div>
-<h1 class="v3-section-title" data-egroup="history">History</h1>
-<div class="card" data-egroup="history"><p class="card-sub">End the current round and keep its final standings. Nothing is deleted — the standings are saved first.</p>
+<header class="v3-section-head" data-egroup="history"><h1 class="v3-section-title">History</h1><p>Close the current period and keep a dated copy of its final standings.</p></header>
+<section class="history-workspace" data-egroup="history" aria-label="Leaderboard history">
 <div class="arch-form">
 <div class="field field-flex"><label for="a_label">Name this period</label><input id="a_label" placeholder="July 2026" /></div>
 <div class="field m-0"><label for="a_clear">After archiving</label><select id="a_clear"><option value="wagers">Reset everyone's scores to zero</option><option value="players">Remove all players</option><option value="none">Keep the board as-is</option></select></div>
-<button class="btn btn--accent self-end" id="a_go" type="button">Save &amp; archive this period</button>
+<button class="btn btn--accent self-end" id="a_go" type="button">Close period</button>
 </div>
+<div class="history-list-head"><h2>Closed periods</h2><p>Restore a period to the editor or remove it permanently.</p></div>
 <div class="arch-list" id="archList"></div>
 <div class="v3-empty" id="archEmpty" hidden></div>
-</div>
+</section>
 <div class="editor-savebar savebar" id="savebar" hidden><span class="savebar-hint">Unsaved changes</span><span class="savebar-ts" id="editorTimestamp"></span><button class="btn btn--ghost" id="discard" type="button">Discard changes</button><button class="btn btn--accent" id="save" type="button">Save changes</button></div>
 </div>
 <div class="design-preview">
-<div class="card preview-mount" data-preview-mount="board" data-preview-target="designPreview">
+<div class="card preview-mount" data-preview-mount="board" data-preview-target="designPreview" data-preview-label-syncing="Updating" data-preview-label-synced="Up to date">
 <div class="preview-header">
-<div class="preview-header-text"><h2>Live Preview</h2><p class="preview-sub">Click elements on the board to edit them directly.</p></div>
+<div class="preview-header-text"><h2>Viewer preview</h2><p class="preview-sub">The same renderer visitors see on your public site.</p></div>
 <div class="preview-actions">
 <div class="preview-tabs" role="tablist" aria-label="Preview device"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
-<span class="v3-chip v3-chip--pro preview-sync" id="previewSyncStatus" data-preview-status>SYNCED</span>
+<span class="v3-chip v3-chip--pro preview-sync" id="previewSyncStatus" data-preview-status>Up to date</span>
 </div>
 </div>
-<div class="preview-sync-strip"><span><i aria-hidden="true"></i> PREVIEW MODE</span><small id="previewSyncTime" data-preview-time>Last synced —</small></div>
+<div class="preview-sync-strip"><span><i aria-hidden="true"></i> Draft preview</span><small id="previewSyncTime" data-preview-time>Last updated —</small></div>
 <div class="preview-frame" id="previewFrame" data-preview-frame><div class="preview-stage" id="previewStage" data-preview-stage><iframe id="designPreview" name="designPreview" src="" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" data-preview-error hidden><p>Preview could not load. <button class="btn btn--sm" id="previewRetry" type="button" data-preview-retry>Retry</button></p></div></div>
 <a class="preview-live-link" id="previewLiveLink" href="#" target="_blank" rel="noopener noreferrer">Open live page ↗</a>
 </div>
@@ -503,9 +499,9 @@ function BoardSettingsSection({ active } = {}) {
 function BoardsSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="boards">
- <header class="v3-head v3-head--row"><div><h1>Sites</h1><p class="v3-head-sub">Every site is a public leaderboard page your viewers can open.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create a site">Create site</button></header>
+ <header class="v3-head v3-head--row"><div><h1>Sites</h1><p class="v3-head-sub">Manage the public sites in your account and choose which one you are working on.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create a site">Create site</button></header>
  <div class="board-upsell" id="boardLimitUpsell" role="status" hidden><div><b id="boardLimitTitle">Need another site?</b><p class="hint" id="boardLimitText"></p></div><a class="btn btn--sm btn--accent" id="boardLimitCta" href="/dashboard/settings">Upgrade plan</a></div>
- <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Site name</label><input id="nb_name" placeholder="Summer Race 2026" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><div class="field field-flex"><label for="nb_casino">Partner or sponsor <span class="hint">Optional</span></label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code <span class="hint">Optional</span></label><input id="nb_code" placeholder="Optional" /></div><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create site</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
+ <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Site name</label><input id="nb_name" placeholder="Summer Race 2026" aria-describedby="nb_err" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" aria-describedby="nb_err" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><details class="editor-more lb-board-form-more"><summary>Optional sponsor details</summary><div class="grid2"><div class="field field-flex"><label for="nb_casino">Partner or sponsor</label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code</label><input id="nb_code" placeholder="Optional" /></div></div></details><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create site</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
  <div class="sites-list">
 <div class="list-controls"><input type="search" id="boardsSearch" class="list-search" placeholder="Find a site…" aria-label="Find a site" /></div>
 <table class="v3-table sites-table">
