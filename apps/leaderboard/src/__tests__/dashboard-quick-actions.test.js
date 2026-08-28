@@ -285,17 +285,15 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('data-nav="board"');
     expect(html).toContain('data-nav="settings"');
     expect(html).toContain('lb-side-group');
-    // The rail has exactly one scope group: "Current site". Everything outside
-    // it (Home, Sites, Telegram, Account) is account-global or manages the
-    // whole site collection. Group labels are hierarchy, not links.
+    // Community groups only the existing public-identity surfaces. Account-
+    // scoped and transitional destinations remain explicit top-level links.
     expect(html).toContain("lb-nav-group");
-    expect(html).toContain(">Current site</div>");
-    expect(html).not.toContain(">Your site</div>");
-    expect(html).not.toContain(">Settings</div>");
+    expect(html).toContain(">Community</div>");
+    expect(html).not.toContain(">Current site</div>");
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
     expect(html).toContain('>Home</a>');
     for (const label of [
-      "Leaderboard", "Engagement", "Games", "Rewards", "Audience", "Telegram", "Analytics", "Site settings", "Account",
+      "Site", "Leaderboard", "People", "Rewards", "Insights", "Engagement", "Games", "Telegram", "Settings",
     ]) expect(html).toContain(`>${label}</a>`);
     for (const label of ["Giveaways", "Raffles", "Predictions", "Drops"]) {
       expect(html).not.toContain(`>${label}</a>`);

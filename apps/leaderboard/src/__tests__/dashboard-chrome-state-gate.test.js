@@ -103,18 +103,18 @@ describe("chrome-state one-owner gate (runtime)", () => {
     expect(chromeStateFor("nope")).toBeNull();
   });
 
-  it("pins the exact titles the previous hand-written helpers produced", () => {
+  it("pins the exact canonical creator-facing titles", () => {
     expect(dashboardTitle({ page: "home", tab: "" })).toBe("Home · YourRank");
     expect(dashboardTitle({ page: "board", tab: "players" })).toBe("Players · Leaderboard · YourRank");
     expect(dashboardTitle({ page: "board", tab: "" })).toBe("Leaderboard · YourRank");
-    expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Site visitors · Analytics · YourRank");
-    expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Referrals · Analytics · YourRank");
+    expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Site visitors · Insights · YourRank");
+    expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Referrals · Insights · YourRank");
     expect(dashboardTitle(null)).toBe("Dashboard · YourRank");
     expect(dynamicTitle("rewards", "history")).toBe("Activity · Rewards · YourRank");
     expect(dynamicTitle("rewards")).toBe("Overview · Rewards · YourRank");
     expect(dynamicTitle("siteConnections", "channel")).toBe("Kick connection · Site settings · YourRank");
-    expect(dynamicTitle("audience", "viewers")).toBe("Members · Audience · YourRank");
-    expect(dynamicTitle("settings", "team")).toBe("Account · YourRank");
+    expect(dynamicTitle("audience", "viewers")).toBe("Members · People · YourRank");
+    expect(dynamicTitle("settings", "team")).toBe("Settings · YourRank");
     expect(dynamicTitle("giveaways", "raffles")).toBe("Engagement · YourRank");
     expect(dynamicTitle("nope")).toBe("Dashboard · YourRank");
   });

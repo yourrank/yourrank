@@ -34,7 +34,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
         <h1 data-chrome-h1>{activeLabel}</h1>
         <p class="v3-head-sub" data-settings-page-description>{activeDescription}</p>
       </div>
-      <nav class="v3-tabs" role="tablist" aria-label="Account settings sections">
+      <nav class="v3-tabs" role="tablist" aria-label="Settings sections">
         {SETTINGS_TABS.map(([key, label]) => (
           <a class={"v3-tab" + (key === active ? " is-on" : "")} href={`/dashboard/settings/${key === "plan" ? "billing" : key}`} data-settings-tab={key} data-settings-description={SETTINGS_DESCRIPTIONS[key]} role="tab" aria-selected={key === active ? "true" : "false"} aria-current={key === active ? "page" : undefined} tabindex={key === active ? "0" : "-1"}>
             {label}
@@ -59,7 +59,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
     </div>;
   const chrome = chromeStateFor("settings", active);
   if (fragment) return content;
-  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="none" crumbs={chrome.crumbs} footer="account" topbarContext="Account" user={user}>
+  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="none" crumbs={chrome.crumbs} footer="account" topbarContext="Settings" user={user}>
     {content}
   </DashboardShell>;
 }

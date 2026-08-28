@@ -37,46 +37,45 @@ function flattenNav(items) {
 }
 
 describe("dashboard navigation ownership", () => {
-  it("groups the rail by data scope, not feature category", () => {
-    // Scope evidence (see packages/shared/src/dashboard-nav.ts header):
-    // CURRENT-SITE rows are keyed by site_id in the database and follow the
-    // topbar selector; GLOBAL/ACCOUNT-OWNED rows are keyed by the user.
+  it("groups existing public-identity surfaces under Community without changing scope", () => {
     const items = dashboardNavItems();
     const groups = items.filter((item) => "kind" in item && item.kind === "group");
     const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
 
-    // One meaningful scope label only — no decorative grouping.
+    // Community is a presentation group, not a route or persisted entity.
     expect(groups.length).toBe(1);
-    expect(groups[0].label).toBe("Current site");
+    expect(groups[0].key).toBe("community");
+    expect(groups[0].label).toBe("Community");
 
-    const currentSiteKeys = groups[0].children.map((child) => child.key);
+    const communityKeys = groups[0].children.map((child) => child.key);
     const topLevelKeys = topLevel.map((item) => item.key);
+    expect(communityKeys).toEqual(["site", "board"]);
 
-    // Sites manages the creator's whole collection of sites
-    // (handlers/sites.js lists every site for the user), so it must NOT sit
-    // under the selected site.
-    expect(currentSiteKeys).not.toContain("sites");
+    // Sites manages the creator's whole collection, so it stays account-level
+    // and discoverable while the selector is absent from account-only pages.
+    expect(communityKeys).not.toContain("sites");
     expect(topLevelKeys).toContain("sites");
 
-    // Telegram bots/offers/broadcasts/commands are keyed by owner_id with no
-    // site_id column, so switching the current site cannot own them.
-    expect(currentSiteKeys).not.toContain("telegram");
+    // Telegram operations remain owner-scoped and directly discoverable.
+    expect(communityKeys).not.toContain("telegram");
     expect(topLevelKeys).toContain("telegram");
 
-    // Account is creator-global; it must not read as selected-site data.
-    expect(currentSiteKeys).not.toContain("settings");
+    // Settings remains creator-global.
+    expect(communityKeys).not.toContain("settings");
     expect(topLevelKeys).toContain("settings");
 
-    // Only confirmed site_id-scoped destinations live in the group, and Site
-    // settings (selected-site by definition) belongs with them — not in a
-    // generic Settings group next to Account.
-    expect([...currentSiteKeys].sort()).toEqual(
-      ["audience", "board", "engage", "games", "performance", "redemptions", "site"].sort()
-    );
+    // Mixed Engagement and restricted Games are not falsely absorbed into the
+    // future Activities architecture.
+    expect(communityKeys).not.toContain("engage");
+    expect(communityKeys).not.toContain("games");
+    expect(topLevelKeys).toContain("engage");
+    expect(topLevelKeys).toContain("games");
 
-    // Home stays the global dashboard entry, never inside Current site.
-    expect(currentSiteKeys).not.toContain("home");
+    // Home stays the dashboard entry, followed by the account-scoped Sites
+    // collection, before the selected-site Community group.
+    expect(communityKeys).not.toContain("home");
     expect(topLevelKeys[0]).toBe("home");
+    expect(topLevelKeys[1]).toBe("sites");
   });
 
   it("keeps the route owner map consistent with the scope grouping", () => {
