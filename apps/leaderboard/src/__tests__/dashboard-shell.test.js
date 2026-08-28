@@ -308,7 +308,7 @@ describe("signed-in shell navigation", () => {
     expect(html).toContain('class="ov-figures" id="ovFigures"');
     expect(html).not.toMatch(/id="ovFigures"[^>]*hidden/);
     expect(html).not.toMatch(/class="ov-lists"[^>]*hidden/);
-    expect(html).toContain("0 of 4 done");
+    expect(html).toContain("0 of 3 done");
     expect(html).not.toContain('id="ovStepKickStatus"');
   });
 
