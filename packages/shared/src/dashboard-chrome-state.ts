@@ -67,13 +67,13 @@ export const DASHBOARD_SECTION_TITLES = {
   board: "Leaderboard",
   boards: "Sites",
   games: "Games",
-  performance: "Analytics",
+  performance: "Insights",
   site: "Site settings",
   rewards: "Rewards",
   siteConnections: "Site settings",
   giveaways: "Engagement",
-  audience: "Audience",
-  settings: "Account",
+  audience: "People",
+  settings: "Settings",
   telegram: "Telegram",
 } as const satisfies Readonly<Record<string, string>>;
 
@@ -113,8 +113,8 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "telegram.broadcasts": "Broadcasts",
 };
 
-// Document-title wording where it differs from the crumb label. The Analytics
-// sources tab has always been titled "Referrals · Analytics · YourRank" while
+// Document-title wording where it differs from the crumb label. The Insights
+// sources tab is titled "Referrals · Insights · YourRank" while
 // its breadcrumb/subnav say "Sources"; both spellings are pinned here so the
 // divergence is data, not two competing computations.
 const TITLE_TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {

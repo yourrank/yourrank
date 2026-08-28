@@ -69,14 +69,14 @@ const COMMANDS = [
   { id: "nav-drops", title: "Drops", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage giveaways", action: () => requestDashboardRoute("giveaways", "drops", { query: "" }) },
   { id: "nav-predictions", title: "Predictions", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage betting", action: () => requestDashboardRoute("giveaways", "preds", { query: "" }) },
   { id: "nav-tournaments", title: "Tournaments", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage competitions", action: () => requestDashboardRoute("giveaways", "tournaments", { query: "" }) },
-  { id: "nav-analytics", title: "Analytics", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
+  { id: "nav-analytics", title: "Insights", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
   { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop orders ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
-  { id: "nav-members", title: "Members", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
+  { id: "nav-members", title: "People", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
   // Telegram lives on the bot Worker: the entry point resolves it through the
   // manifest and decides the required full document navigation.
   { id: "nav-telegram", title: "Telegram", group: "Navigation", icon: PALETTE_ICONS.bot, keywords: "bot console", action: () => requestDashboardRoute("telegram", "", { query: "" }) },
   { id: "nav-boards", title: "Sites", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "sites boards", action: () => requestDashboardRoute("boards", "", { query: "" }) },
-  { id: "nav-settings", title: "Account", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "account team billing connections data", action: () => requestDashboardRoute("settings", "account", { query: "" }) },
+  { id: "nav-settings", title: "Settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "settings account team billing connections data", action: () => requestDashboardRoute("settings", "account", { query: "" }) },
   { id: "nav-site-settings", title: "Site settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
   { id: "nav-kick-connection", title: "Kick connection", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "kick channel connection site settings connect", action: () => requestDashboardRoute("siteConnections", "channel", { query: "" }) },
   { id: "nav-plan", title: "Billing", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "plans billing", action: () => requestDashboardRoute("settings", "plan", { query: "" }) },

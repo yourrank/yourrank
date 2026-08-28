@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `e71faab725f322c8aa965398aab941f9fb7a6f5d` (PR #663 merged)
+**Evidence baseline:** `main` at `e46beebc6b6b51c12f1e8045e35a1b635487c224` (PR #665 merged)
 
 **Last reconciled:** 2026-08-28
 
@@ -43,6 +43,8 @@ Maintained to prevent architecture drift.
 ### Navigation ownership — RESOLVED
 
 - The sidebar owns section roots, page subnavigation owns tabs, and the topbar owns context/search/actions.
+- The visible rail presents Home, Sites, Community (Site and Leaderboard), People, Rewards, Insights, transitional Engagement and Games, Telegram, and Settings.
+- Community is presentation-only; People and Insights are labels over the existing audience and analytics route families. No route ID, URL, scope, owner, or schema changed with those labels.
 - `requestDashboardRoute` in `apps/leaderboard/src/assets/dashboard/shell.js` is the one authenticated client-navigation entry point.
 - The public viewer account history runtime is separate and does not own dashboard navigation.
 
@@ -100,13 +102,13 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Leaderboard editor | Site-scoped SPA route family under `/dashboard/leaderboard` |
 | Site Settings | Site-scoped `/dashboard/site` plus separate Connections fragment |
 | Rewards | Site-scoped fragment route family under `/dashboard/rewards` |
-| Audience/Members | Site-scoped `/dashboard/audience/members` |
-| Analytics | Site-scoped SPA route family under `/dashboard/analytics` |
+| People (Members) | Site-scoped `/dashboard/audience/members` |
+| Insights | Site-scoped SPA route family under `/dashboard/analytics` |
 | Telegram | Account-scoped Bot Worker documents under `/dashboard/telegram*` |
-| Account settings | Account-scoped fragment routes under `/dashboard/settings` |
+| Settings | Account-scoped fragment routes under `/dashboard/settings` |
 | Public creator destination | `renderSite()` via apex slug routes and custom-domain routes |
 
-Target Community, Activities, People, Insights, Recognition, Communication, My Community, and My Communities are not current route/surface claims merely because the target architecture names them.
+Community, People, and Insights are current navigation presentation labels only; they do not imply new route, entity, or persistence boundaries. Target Activities, Recognition, Communication, My Community, and My Communities remain target-only claims.
 
 ## Worker and Runtime Topology
 
@@ -128,7 +130,7 @@ Target Community, Activities, People, Insights, Recognition, Communication, My C
 
 | Finding | Current status |
 |---|---|
-| Current rail labels/grouping predate the target IA | Migration work, not Wave 0 |
+| Activities boundary is not yet available; mixed Engagement and restricted Games remain explicit transitional destinations | Deferred migration outside Wave B |
 | Three delivery transports remain | Intentional current state; ownership is already singular |
 | `board` and `siteId` both carry selected-site context | Separate parity-tested migration if changed |
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |

@@ -29,20 +29,16 @@ const NAV_ICONS = {
 
 const GEAR_ICON = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>';
 
-// The rail is the one primary product navigation. Grouping expresses DATA
-// SCOPE, not feature category: ungrouped entries belong to the creator
-// account (or manage the whole collection of sites), while the single
-// "Current site" group holds only destinations whose data and actions are
-// keyed by the site chosen in the topbar selector. Scope evidence:
-//   - players/archives, giveaway events, games, credit mappings/shop/
-//     redemptions, site_viewers and site_stats are all keyed by site_id.
-//   - Sites manages the collection itself (handlers/sites.js lists every
-//     site for the user), so it cannot live under the selected site.
-//   - Telegram bots, offers, broadcasts and commands are keyed by owner_id
-//     (the creator), plan limits are per-owner, and no bot/offer row carries
-//     a site_id — so Telegram is an account-owned product, not site data.
-//   - Account is creator-global; Site settings is selected-site by
-//     definition, so they do not share a group.
+// The rail is the one primary product navigation. Its visible hierarchy uses
+// the creator-facing product model while route scope remains canonical data in
+// dashboard-routes.ts and selected-site context stays owned by the topbar.
+// "Community" groups the two existing surfaces that shape a site's public
+// identity; it does not create a Community entity, route prefix or schema.
+// Sites remains account-scoped and top-level until the context selector is a
+// complete replacement from every account-scoped surface. Telegram also stays
+// top-level because its operational workflows are owner-scoped. Mixed legacy
+// Engagement and restricted Games remain explicit transitional destinations:
+// neither is relabeled as the future Activities product.
 // Group labels are visual hierarchy only — they are not links and collapse
 // nothing.
 // Hrefs come from the manifest: canonical paths via routeById, plus the two
@@ -53,21 +49,21 @@ const DASHBOARD_NAV: NavItem[] = [
   { key: "home", label: "Home", href: href("home"), icon: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>', productKey: "sites" },
   { key: "sites", label: "Sites", href: href("boards"), icon: NAV_ICONS.boards, productKey: "sites" },
   {
-    key: "site-scope",
-    label: "Current site",
+    key: "community",
+    label: "Community",
     kind: "group",
     children: [
+      { key: "site", label: "Site", href: href("site"), icon: NAV_ICONS.siteSettings },
       { key: "board", label: "Leaderboard", href: href("board"), icon: NAV_ICONS.players },
-      { key: "engage", label: "Engagement", href: dashboardAliasPath("/dashboard/giveaways", "giveaways.chat"), icon: NAV_ICONS.giveaways },
-      { key: "games", label: "Games", href: href("games"), icon: NAV_ICONS.games },
-      { key: "redemptions", label: "Rewards", href: href("rewards.overview"), icon: NAV_ICONS.shop, productKey: "credits" },
-      { key: "audience", label: "Audience", href: href("audience.viewers"), icon: NAV_ICONS.audience },
-      { key: "performance", label: "Analytics", href: href("performance"), icon: NAV_ICONS.analytics },
-      { key: "site", label: "Site settings", href: href("site"), icon: NAV_ICONS.siteSettings },
     ],
   },
+  { key: "audience", label: "People", href: href("audience.viewers"), icon: NAV_ICONS.audience },
+  { key: "redemptions", label: "Rewards", href: href("rewards.overview"), icon: NAV_ICONS.shop, productKey: "credits" },
+  { key: "performance", label: "Insights", href: href("performance"), icon: NAV_ICONS.analytics },
+  { key: "engage", label: "Engagement", href: dashboardAliasPath("/dashboard/giveaways", "giveaways.chat"), icon: NAV_ICONS.giveaways },
+  { key: "games", label: "Games", href: href("games"), icon: NAV_ICONS.games },
   { key: "telegram", label: "Telegram", href: href("telegram"), icon: NAV_ICONS.share, productKey: "telegram" },
-  { key: "settings", label: "Account", href: dashboardAliasPath("/dashboard/settings", "settings.account"), icon: GEAR_ICON },
+  { key: "settings", label: "Settings", href: dashboardAliasPath("/dashboard/settings", "settings.account"), icon: GEAR_ICON },
 ];
 
 // Rail ownership: each accepted spelling (section names, tab names, legacy

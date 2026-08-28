@@ -94,12 +94,12 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(root.documentTitle).toBe("Leaderboard · YourRank");
   });
 
-  it("pins the analytics Sources/Referrals divergence as data", () => {
+  it("pins the Insights Sources/Referrals divergence as data", () => {
     const referrals = dashboardChromeState("performance.referrals");
     expect(referrals.tabLabel).toBe("Sources");
-    expect(referrals.documentTitle).toBe("Referrals · Analytics · YourRank");
+    expect(referrals.documentTitle).toBe("Referrals · Insights · YourRank");
     expect(referrals.crumbs).toEqual([
-      { label: "Analytics", href: "/dashboard/analytics" },
+      { label: "Insights", href: "/dashboard/analytics" },
       { label: "Sources" },
     ]);
     expect(dashboardChromeState("performance.activity").tabLabel).toBe("Site visitors");
@@ -134,10 +134,10 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
 
     const viewers = dashboardChromeState("audience.viewers");
     expect(viewers.crumbs).toEqual([
-      { label: "Audience", href: "/dashboard/audience/members" },
+      { label: "People", href: "/dashboard/audience/members" },
       { label: "Members" },
     ]);
-    expect(viewers.documentTitle).toBe("Members · Audience · YourRank");
+    expect(viewers.documentTitle).toBe("Members · People · YourRank");
   });
 
   it("pins the account settings chrome", () => {
@@ -145,12 +145,12 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(plan.navKey).toBe("settings");
     expect(plan.canonicalPath).toBe("/dashboard/settings/billing");
     expect(plan.crumbs).toEqual([
-      { label: "Account", href: "/dashboard/settings" },
+      { label: "Settings", href: "/dashboard/settings" },
       { label: "Billing" },
     ]);
-    expect(plan.documentTitle).toBe("Account · YourRank");
+    expect(plan.documentTitle).toBe("Settings · YourRank");
     expect(dashboardChromeState("settings.account").crumbs).toEqual([
-      { label: "Account", href: "/dashboard/settings" },
+      { label: "Settings", href: "/dashboard/settings" },
       { label: "Account" },
     ]);
   });
@@ -177,7 +177,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("games").documentTitle).toBe("Games · YourRank");
     expect(dashboardChromeState("boards").documentTitle).toBe("Sites · YourRank");
     expect(dashboardChromeState("site").documentTitle).toBe("Site settings · YourRank");
-    expect(dashboardChromeState("settings.team").documentTitle).toBe("Account · YourRank");
+    expect(dashboardChromeState("settings.team").documentTitle).toBe("Settings · YourRank");
     expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engagement · YourRank");
     expect(dashboardChromeState("telegram.broadcasts").documentTitle).toBe("Telegram · YourRank");
     expect(DEFAULT_DASHBOARD_TITLE).toBe("Dashboard · YourRank");

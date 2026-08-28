@@ -191,6 +191,9 @@ describe("dynamic section shell integration", () => {
       expect(action, `${id} must route through the shell`).toContain("requestDashboardRoute");
       expect(action, `${id} must not navigate directly`).not.toContain("location.href");
     }
+    expect(paletteJs).toContain('{ id: "nav-analytics", title: "Insights"');
+    expect(paletteJs).toContain('{ id: "nav-members", title: "People"');
+    expect(paletteJs).toContain('{ id: "nav-settings", title: "Settings"');
   });
 
   it("re-routes the reward edit flow through the entry point with force", () => {

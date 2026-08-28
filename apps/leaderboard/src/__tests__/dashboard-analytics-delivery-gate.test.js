@@ -141,17 +141,17 @@ describe("client: Analytics is a core SPA section, not a second delivery path", 
       activity: {
         path: "/dashboard/analytics/activity",
         tabLabel: "Site visitors",
-        documentTitle: "Site visitors · Analytics · YourRank",
+        documentTitle: "Site visitors · Insights · YourRank",
       },
       referrals: {
         path: "/dashboard/analytics/referrals",
         tabLabel: "Sources",
-        documentTitle: "Referrals · Analytics · YourRank",
+        documentTitle: "Referrals · Insights · YourRank",
       },
       events: {
         path: "/dashboard/analytics/events",
         tabLabel: "Events",
-        documentTitle: "Events · Analytics · YourRank",
+        documentTitle: "Events · Insights · YourRank",
       },
     };
     for (const tab of ANALYTICS_TABS) {

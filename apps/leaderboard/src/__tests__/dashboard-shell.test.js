@@ -232,9 +232,11 @@ describe("signed-in shell navigation", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design", user }).toString();
     expect(html).toContain(">Appearance</a>");
     expect(html).toContain(">Leaderboard</a>");
+    expect(html).toContain(">People</a>");
     expect(html).toContain(">Rewards</a>");
     expect(html).toContain(">Telegram</a>");
-    expect(html).toContain(">Analytics</a>");
+    expect(html).toContain(">Insights</a>");
+    expect(html).toContain(">Settings</a>");
     expect(html).toContain("Help &amp; feedback</a>");
     expect(html).toContain('data-nav="settings"');
   });
@@ -262,7 +264,7 @@ describe("signed-in shell navigation", () => {
   it("puts a breadcrumb trail on every leaf page", () => {
     const members = renderPage(AudienceMembersPage);
     expect(members).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
-    expect(members).toContain('>Audience</span>');
+    expect(members).toContain('>People</span>');
     expect(members).toContain('<span aria-current="page">Members</span>');
 
     const orders = renderPage(RewardsRedemptionsPage);
@@ -270,6 +272,7 @@ describe("signed-in shell navigation", () => {
     expect(orders).toContain('<span aria-current="page">Orders</span>');
 
     const settings = renderPage(UnifiedSettingsPage);
+    expect(settings).toContain('<a href="/dashboard/settings">Settings</a>');
     expect(settings).toContain('<span aria-current="page">Account</span>');
   });
 

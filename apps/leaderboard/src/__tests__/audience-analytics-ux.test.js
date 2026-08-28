@@ -16,6 +16,8 @@ describe("Audience members body", () => {
     expect(html).toContain("<th>Member</th><th>Recent activity</th><th>Credits</th>");
     expect(html).not.toContain("<th class=\"num\">Total earned</th>");
     expect(html).toContain("Looking for visitor trends?");
+    expect(html).toContain("Anonymous visits and traffic sources live in Insights.");
+    expect(html).toContain(">Open Insights</a>");
   });
 
   it("does not use internal platform IDs as the visible member name", () => {
