@@ -57,8 +57,10 @@ const DEFAULT_SANS_PARAMS = "family=Fira+Sans:wght@300;400;500;600;700";
 const MONO_PARAMS = "family=Fira+Code:wght@400;500;600;700";
 
 function buildFontsHref(font) {
-  const sans = (font && FONT_GF_PARAMS[font]) || DEFAULT_SANS_PARAMS;
-  return `https://fonts.googleapis.com/css2?${sans}&${MONO_PARAMS}&display=swap`;
+  const families = [DEFAULT_SANS_PARAMS];
+  if (font && FONT_GF_PARAMS[font] && FONT_GF_PARAMS[font] !== DEFAULT_SANS_PARAMS) families.push(FONT_GF_PARAMS[font]);
+  families.push(MONO_PARAMS);
+  return `https://fonts.googleapis.com/css2?${families.join("&")}&display=swap`;
 }
 
 /**
@@ -154,14 +156,42 @@ export function prizeCurrency(data) {
   return String(data?.prizes?.currency || data?.brand?.currency || "$").trim().slice(0, 6) || "$";
 }
 
-function countdownText(endsAt) {
-  const end = endsAt ? new Date(endsAt).getTime() : NaN;
-  if (Number.isNaN(end)) return null;
-  const left = Math.max(0, end - Date.now());
+const MAX_RELATIVE_COUNTDOWN_MS = 366 * 86400000;
+
+/**
+ * Public leaderboard timing is deliberately bounded. Ordinary nearby dates use
+ * a relative countdown; stale dates become an ended state, and implausibly far
+ * dates become a calm UTC calendar date instead of a four-digit day counter.
+ */
+export function formatLeaderboardTiming(value, { now = Date.now() } = {}) {
+  const end = value ? new Date(value).getTime() : NaN;
+  if (!Number.isFinite(end)) return { kind: "invalid", text: "", iso: "" };
+  const iso = new Date(end).toISOString();
+  const left = end - Number(now);
+  if (left <= 0) return { kind: "expired", text: "Ended", iso };
+  if (left > MAX_RELATIVE_COUNTDOWN_MS) {
+    const text = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(end));
+    return { kind: "calendar", text, iso };
+  }
   const d = Math.floor(left / 86400000);
   const h = Math.floor((left % 86400000) / 3600000);
   const m = Math.floor((left % 3600000) / 60000);
-  return { ms: end, text: d > 0 ? `${d}d ${h}h` : `${h}h ${m}m` };
+  const text = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m` : "Less than 1m";
+  return { kind: "relative", text, iso };
+}
+
+function timingHtml(timing, { scheduled = false } = {}) {
+  if (!timing || timing.kind === "invalid" || timing.kind === "expired") return "";
+  const label = scheduled ? "Starts" : "Ends";
+  if (timing.kind === "calendar") {
+    return `<span data-countdown-mode="calendar">${label} <time datetime="${esc(timing.iso)}">${esc(timing.text)}</time></span>`;
+  }
+  return `<span data-countdown-mode="relative" data-countdown-complete="${scheduled ? "Started" : "Ended"}">${label} in <b data-ends-at="${esc(timing.iso)}">${esc(timing.text)}</b></span>`;
 }
 
 /* ── shell pieces ─────────────────────────────────────────────────────── */
@@ -339,7 +369,7 @@ function sectionHead(title, right = "") {
  * event worth half a viewport.
  */
 function emptyState(icon, title, note = "", extra = "") {
-  return `<div class="yr-empty">${icon ? `<span class="yr-empty-ico" aria-hidden="true">${icon}</span>` : ""}<p class="yr-empty-t">${esc(title)}</p>${note ? `<p class="yr-empty-p">${note}</p>` : ""}${extra}</div>`;
+  return `<div class="yr-empty yr-empty--compact">${icon ? `<span class="yr-empty-ico" aria-hidden="true">${icon}</span>` : ""}<div class="yr-empty-copy"><p class="yr-empty-t">${esc(title)}</p>${note ? `<p class="yr-empty-p">${note}</p>` : ""}${extra}</div></div>`;
 }
 
 const LEDGER_KIND = {
@@ -369,7 +399,7 @@ function viewerHead({ title, lede, balance = null, actions = "", disclaimer = tr
   // instead of spreading down the page, so the head reads as one module.
   const aside = balance === null && !actions
     ? ""
-    : `<div class="yr-vhead-aside">${balance === null ? "" : `<p class="yr-vbal" data-credit-balance="${Number(balance) || 0}"><span class="yr-vbal-num" data-credit-balance-num>${formatNumber(balance)}</span> <span class="yr-vbal-unit">free credits</span></p>`}${actions ? `<div class="yr-vhead-acts">${actions}</div>` : ""}</div>`;
+    : `<div class="yr-vhead-aside">${balance === null ? "" : `<p class="yr-vbal${Number(balance) === 0 ? " is-zero" : ""}" data-credit-balance="${Number(balance) || 0}"><span class="yr-vbal-num" data-credit-balance-num>${formatNumber(balance)}</span> <span class="yr-vbal-unit">free credits</span></p>`}${actions ? `<div class="yr-vhead-acts">${actions}</div>` : ""}</div>`;
   return `<section class="yr-vhead${aside ? " yr-vhead--split" : ""}">
 <div class="yr-vhead-txt">
 <h1 class="yr-h1">${esc(title)}</h1>
@@ -525,7 +555,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/devin-system.css" />
 ${section === "games" ? gamesIslandHead() : ""}
-<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>
+<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-display-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>
 ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />` : ""}
 </head>`;
 
@@ -615,7 +645,9 @@ function homeMain(ctx) {
   const meHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
   const name = esc(b.name || slug);
   const currency = prizeCurrency(data);
-  const cd = countdownText(data.scheduled ? data.startsAt : data.endsAt);
+  const cd = formatLeaderboardTiming(data.scheduled ? data.startsAt : data.endsAt);
+  const scheduled = !!data.scheduled && cd.kind !== "expired";
+  const ended = !!data.ended || (!data.scheduled && cd.kind === "expired");
   const players = Array.isArray(data.players) ? data.players : [];
   const playerCount = Number(data.playerCount) || players.length;
   const rankBy = data.rankBy === "score" ? "score" : "wagered";
@@ -639,7 +671,7 @@ function homeMain(ctx) {
   // Signing in belongs to the bar on every page, so these are the creator's own
   // actions only: a visitor never reads the same sign-in twice in one viewport.
   const introActs = [
-    !viewer && shopEnabled ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
+    !viewer && shopEnabled && items.length ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
     kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
   ].filter(Boolean).join("");
 
@@ -648,11 +680,9 @@ function homeMain(ctx) {
 ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 </section>`;
 
-  const timing = data.ended
+  const timing = ended
     ? "Round ended"
-    : cd
-      ? `${data.scheduled ? "Starts in" : "Ends in"} ${cd.text}`
-      : data.scheduled ? "Not started yet" : "";
+    : timingHtml(cd, { scheduled }) || (scheduled ? "Not started yet" : "");
   const boardMeta = [
     `${esc(period)} leaderboard`,
     timing,
@@ -675,10 +705,10 @@ ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "N
     : "";
 
   const viewerNote = viewer
-    ? `<section class="yr-vnote">
+    ? `<section class="yr-vnote${balance === 0 ? " is-zero" : ""}">
 <p class="yr-vnote-bal"><span class="yr-vnote-num">${formatNumber(balance)}</span> <span class="yr-vnote-unit">credits on this site</span></p>
 <p class="yr-vnote-p">Free credits from ${name}'s channel-point rewards. No purchase, no cash value.</p>
-<div class="yr-vnote-acts">${shopEnabled ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">Spend credits</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My credits ${ICONS.arrow}</a>` : ""}</div>
+<div class="yr-vnote-acts">${shopEnabled && items.length ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">${balance > 0 ? "Spend credits" : "View rewards"}</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My credits ${ICONS.arrow}</a>` : ""}</div>
 </section>`
     : "";
 
@@ -707,7 +737,7 @@ ${sectionHead(`Find ${b.name || slug}`)}
 
   // Two balanced previews on a wide viewport, one stack on a phone: the creator
   // and their balance first, then the board, then the rewards.
-  return `<div class="yr-home-top">${intro}${viewerNote}</div>
+  return `<div class="yr-home-top${viewerNote ? "" : " yr-home-top--solo"}">${intro}${viewerNote}</div>
 ${boardSection || rewardsSection ? `<div class="yr-home-cols">${boardSection}${rewardsSection}</div>` : ""}
 ${nothingYet}
 ${linksSection}`;
@@ -719,7 +749,9 @@ function boardMain(ctx) {
   const { data, b, slug, isCustomDomain, period, pool } = ctx;
   const currency = prizeCurrency(data);
   const hidePrizes = !!data.brand?.hidePrizeAmounts;
-  const cd = countdownText(data.scheduled ? data.startsAt : data.endsAt);
+  const cd = formatLeaderboardTiming(data.scheduled ? data.startsAt : data.endsAt);
+  const scheduled = !!data.scheduled && cd.kind !== "expired";
+  const ended = !!data.ended || (!data.scheduled && cd.kind === "expired");
   const players = (Array.isArray(data.players) ? data.players : []).slice().sort((x, z) => (x.rank || 0) - (z.rank || 0) || String(x.name || "").localeCompare(String(z.name || "")));
   const playerCount = Number(data.playerCount) || players.length;
   const rankBy = data.rankBy === "score" ? "score" : "wagered";
@@ -731,20 +763,20 @@ function boardMain(ctx) {
 
   // Compact intro: the title, one state line built only from board data that is
   // already public, then the ranking rule. No KPI strip, no promoted amounts.
-  const stateLabel = data.ended ? "Ended" : data.scheduled ? "Not started" : "Live";
-  const stateClass = data.ended ? "is-ended" : data.scheduled ? "is-soon" : "is-live";
+  const stateLabel = ended ? "Ended" : scheduled ? "Not started" : "Live";
+  const stateClass = ended ? "is-ended" : scheduled ? "is-soon" : "is-live";
   const metaItems = [
     `<span class="yr-lbh-state ${stateClass}">${stateLabel}</span>`,
     `<span>${esc(period)} leaderboard</span>`,
 
-    cd && !data.ended ? `<span>${data.scheduled ? "Starts in" : "Ends in"} <b data-ends-at="${cd.ms}">${esc(cd.text)}</b></span>` : "",
+    !ended ? timingHtml(cd, { scheduled }) : "",
     pool && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
   ].filter(Boolean).join("");
 
   const introHtml = `<section class="yr-lbh">
-<h1 class="yr-h1 yr-lbh-title">${data.ended ? "Final standings" : data.scheduled ? "Standings open soon" : "Standings"}</h1>
+<h1 class="yr-h1 yr-lbh-title">${ended ? "Final standings" : scheduled ? "Standings open soon" : "Standings"}</h1>
 <p class="yr-lbh-meta">${metaItems}</p>
-<p class="yr-lbh-note">${data.scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
+<p class="yr-lbh-note">${scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
 </section>`;
 
   // One row per player: the top of the board is expressed through rank
@@ -770,7 +802,7 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
-    : emptyState(ICONS.trophy, "No players yet", data.scheduled ? "Standings fill in once the round starts." : `The board fills in when ${esc(b.name || slug)} publishes the first scores.`);
+    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts." : `The board fills in when ${esc(b.name || slug)} publishes the first scores.`);
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
@@ -804,11 +836,13 @@ function shopMain(ctx) {
 
   const head = viewerHead({
     title: "Rewards",
-    lede: `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`,
+    lede: viewer
+      ? `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`
+      : `Browse rewards from ${esc(b.name || slug)}. Sign in from the header to use your credits.`,
     balance: viewer ? balance : null,
     actions: viewer
       ? (siteSections.me !== false ? `<a class="yr-sec-link" href="${creditsHref}">My credits ${ICONS.arrow}</a>` : "")
-      : signInButton(r, returnTo),
+      : "",
   });
 
   const blockedNote = viewer && blocked
@@ -818,10 +852,10 @@ function shopMain(ctx) {
   const list = items.length
     ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
 <ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, balance, blocked, signIn })).join("")}</ul></section>`
-    : `<section class="yr-vsec">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
+    : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer
-    ? `<section class="yr-vsec">${sectionHead("Recent orders")}
+    ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent orders")}
 ${redemptions.length
       ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
       : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.")}</section>`
@@ -890,11 +924,19 @@ function meMain(ctx) {
   const { r, b, slug, viewer, viewerData, balance, returnTo, homeUrl, isCustomDomain, siteSections } = ctx;
   const creator = esc(b.name || slug);
   if (!viewer) {
+    const guide = `<section class="yr-vsec yr-vsec--narrow yr-credit-guide">
+${sectionHead("After you sign in")}
+<dl class="yr-credit-guide-list">
+<div class="yr-credit-guide-row"><dt>Free credit balance</dt><dd>See the credits earned from ${creator}'s channel-point rewards.</dd></div>
+<div class="yr-credit-guide-row"><dt>Credit activity</dt><dd>Review when credits were earned, used or returned.</dd></div>
+<div class="yr-credit-guide-row"><dt>Reward orders</dt><dd>Follow rewards you order and their current status.</dd></div>
+</dl>
+</section>`;
     return `${viewerHead({
       title: "My credits",
-      lede: `Sign in to see your free credit balance, activity and orders on ${creator}.`,
-      actions: signInButton(r, returnTo),
-    })}`;
+      lede: `Sign in from the header to see your balance, activity and orders on ${creator}.`,
+    })}
+${guide}`;
   }
 
   const ledger = viewerData?.ledger || [];
@@ -925,10 +967,10 @@ ${row.description ? `<p class="yr-hist-p">${esc(row.description)}</p>` : ""}
 </li>`;
   }).join("");
 
-  const history = `<section class="yr-vsec">${sectionHead("Credit history", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
+  const history = `<section class="yr-vsec${ledger.length ? "" : " yr-vsec--empty"}">${sectionHead("Credit history", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
 ${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : emptyState(ICONS.me, "No credit activity yet", `Use ${creator}'s channel-point rewards to earn credits.`)}</section>`;
 
-  const orders = `<section class="yr-vsec">${sectionHead("Orders")}
+  const orders = `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Orders")}
 ${redemptions.length
     ? `<ul class="yr-ords" role="list">${redemptions.map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
     : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.", siteSections.shop !== false ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}</section>`;
@@ -936,5 +978,5 @@ ${redemptions.length
   // Two columns of the viewer's own record on a wide viewport, one stack on a
   // phone: history and orders are peers, not a page each.
   return `${head}
-<div class="yr-vcols">${history}${orders}</div>`;
+<div class="yr-vcols${!ledger.length && !redemptions.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
 }

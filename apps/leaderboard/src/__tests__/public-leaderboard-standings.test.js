@@ -51,6 +51,12 @@ describe("public leaderboard standings", () => {
     expect(html.indexOf('id="yr-search"')).toBeLessThan(html.indexOf("</main>"));
   });
 
+  it("avoids leading separators when mobile metadata wraps", () => {
+    expect(css).toMatch(/\.yr-lbh-meta > \* \{[^}]*display: inline-flex;/);
+    expect(css).toMatch(/\.yr-lbh-meta > \* \+ \*::before \{ content: none; \}/);
+    expect(css.slice(css.indexOf(".yr-lbh-meta"), css.indexOf(".yr-lbh-note"))).not.toContain('content: "·"');
+  });
+
   it("labels an upcoming and an ended board without inventing data", async () => {
     const soon = await render("leaderboard", { data: { ...baseData, scheduled: true, startsAt: new Date(Date.now() + 864e5).toISOString() } });
     expect(soon).toContain("Standings open soon");
@@ -61,6 +67,25 @@ describe("public leaderboard standings", () => {
     expect(ended).toContain("Final standings");
     expect(ended).toContain('<span class="yr-lbh-state is-ended">Ended</span>');
     expect(ended).not.toContain("Ends in");
+  });
+
+  it("never exposes an absurd, expired or invalid relative countdown", async () => {
+    const extreme = await render("leaderboard", {
+      data: { ...baseData, endsAt: new Date(Date.now() + (550 * 864e5)).toISOString() },
+    });
+    expect(extreme).toContain('data-countdown-mode="calendar"');
+    expect(extreme).not.toContain("550d");
+    expect(extreme).not.toContain("data-ends-at=");
+
+    const expired = await render("leaderboard", {
+      data: { ...baseData, endsAt: new Date(Date.now() - 864e5).toISOString() },
+    });
+    expect(expired).toContain('<span class="yr-lbh-state is-ended">Ended</span>');
+    expect(expired).not.toContain("Ends in");
+
+    const invalid = await render("leaderboard", { data: { ...baseData, endsAt: "not-a-date" } });
+    expect(invalid).not.toContain("Invalid Date");
+    expect(invalid).not.toContain("Ends in");
   });
 
   it("says so plainly when the board has no players", async () => {
@@ -263,6 +288,15 @@ describe("public leaderboard standings", () => {
     }
     expect(shell).toContain('document.getElementById("yr-search")');
     expect(shell).toContain('document.querySelector("[data-load-more]")');
+  });
+
+  it("keeps creator fonts on brand and display roles while utility copy stays sans", () => {
+    expect(css).toContain("--yr-display: var(--yr-display-font, var(--yr-sans))");
+    expect(css).toMatch(/\.yr-id-name[^}]*font-family: var\(--yr-display\)/);
+    expect(css).toMatch(/\.yr-h1[^}]*font-family: var\(--yr-display\)/);
+    expect(css).toMatch(/\.yr-site \{[^}]*font-family: var\(--yr-sans\)/);
+    expect(css).toMatch(/\.yr-btn[^}]*font-family: var\(--yr-sans\)/);
+    expect(css).toMatch(/\.yr-search[^}]*font-family: var\(--yr-sans\)/);
   });
 
   it("leaves the wave 2 shell and the home preview untouched", async () => {

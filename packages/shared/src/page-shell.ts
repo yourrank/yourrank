@@ -47,6 +47,7 @@ export interface LeaderboardPageOpts {
   /** Defaults to "noindex, nofollow" — public pages must opt in to indexing. */
   robots?: string;
   reqId?: string;
+  bodyClass?: string;
   mainClass?: string;
   styles?: string[];
   scripts?: string[];
@@ -66,7 +67,8 @@ export const DASHBOARD_BOOT_WATCHDOG =
 /** Full HTML document for leaderboard dashboard pages. */
 export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
   const mainClass = esc(opts.mainClass || "wrap");
-  const bodyAttr = opts.wide ? ' data-wide="true"' : "";
+  const bodyClass = opts.bodyClass ? ` class="${esc(opts.bodyClass)}"` : "";
+  const bodyAttr = `${bodyClass}${opts.wide ? ' data-wide="true"' : ""}`;
   const reqIdMeta = opts.reqId ? `<meta name="request-id" content="${esc(opts.reqId)}" />` : "";
   const description = opts.description ? `<meta name="description" content="${esc(opts.description)}" />` : "";
   const styles = (opts.styles || ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css"])

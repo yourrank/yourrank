@@ -114,15 +114,18 @@ describe("public viewer shell", () => {
     expect(bar[1]).toContain("overflow-wrap: anywhere");
     expect(bar[1]).toContain("-webkit-line-clamp: 2");
     expect(bar[1]).toContain("overflow: hidden");
-    // No JS truncation. The home heading breaks inside the word and stops after
-    // three lines, the same bound the Rewards and My credits heading uses, so an
-    // extreme name cannot push the board and the rewards off the phone.
+    // No JS truncation. The home heading breaks inside the word; desktop stops
+    // after three lines and phones get a fourth so the final word remains
+    // readable without letting an extreme name take over the page.
     expect(readFileSync(join(assets, "site-shell.js"), "utf8")).not.toContain("yr-id-name");
     const intro = css.match(/\.yr-intro-name \{([^}]*)\}/);
     expect(intro).not.toBeNull();
     expect(intro[1]).toContain("overflow-wrap: anywhere");
     expect(intro[1]).toContain("line-clamp: 3");
     expect(intro[1]).toContain("overflow: hidden");
+    expect(css).toMatch(
+      /@media \(max-width: 899px\)[\s\S]*?\.yr-intro-name \{[^}]*-webkit-line-clamp: 4; line-clamp: 4;/,
+    );
     // Copy that quotes the creator's name must break inside the word too, or a
     // single unbreakable name widens the whole document on a phone.
     expect(css).toMatch(/\.yr-vnote-p \{[^}]*overflow-wrap: anywhere/);
@@ -497,7 +500,7 @@ describe("public viewer shell", () => {
     const shop = await render("shop", { data: bare, viewer, viewerData });
     const me = await render("me", { data: bare, viewer, viewerData });
     for (const html of [home, shop, me]) {
-      const block = html.slice(html.indexOf('class="yr-empty"'));
+      const block = html.slice(html.indexOf('class="yr-empty yr-empty--compact"'));
       expect(block).toContain('class="yr-empty-ico"');
       expect(block).toContain('class="yr-empty-t"');
       expect(block).toContain('class="yr-empty-p"');

@@ -465,17 +465,25 @@
   });
 
   // ── Countdown ───────────────────────────────────────────────────────
-  var cd = document.querySelector("[data-ends-at]");
+  var cd = document.querySelector("[data-countdown-mode=\"relative\"] [data-ends-at]");
   if (cd) {
-    var end = Number(cd.dataset.endsAt);
+    var end = Date.parse(cd.dataset.endsAt || "");
+    var countdown = cd.closest("[data-countdown-mode]");
     var tick = function () {
-      var left = Math.max(0, end - Date.now());
+      var left = end - Date.now();
+      if (left <= 0) {
+        if (countdown) countdown.textContent = countdown.dataset.countdownComplete || "Ended";
+        return false;
+      }
       var d = Math.floor(left / 86400000);
       var h = Math.floor((left % 86400000) / 3600000);
       var m = Math.floor((left % 3600000) / 60000);
-      cd.textContent = d > 0 ? d + "d " + h + "h" : h + "h " + m + "m";
+      cd.textContent = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "Less than 1m";
+      return true;
     };
-    if (end) { tick(); setInterval(tick, 30000); }
+    if (Number.isFinite(end) && tick()) {
+      var countdownTimer = setInterval(function () { if (!tick()) clearInterval(countdownTimer); }, 30000);
+    }
   }
 
   // ── Feedback dialog ─────────────────────────────────────────────────

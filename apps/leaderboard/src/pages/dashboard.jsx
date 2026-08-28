@@ -387,7 +387,7 @@ function BoardSettingsSection({ active } = {}) {
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="f_font">Text style</label>
               <select id="f_font" aria-describedby="siteFontHint"><option value="Inter">Inter — Default</option><option value="Oswald">Oswald — Bold &amp; Sporty</option><option value="Playfair Display">Playfair Display — Premium &amp; Elegant</option><option value="Rajdhani">Rajdhani — Techy &amp; Esports</option><option value="Bebas Neue">Bebas Neue — Impact &amp; Hype</option></select>
-              <span class="v3-settings-muted" id="siteFontHint">Only fonts your public site can serve are listed.</span>
+              <span class="v3-settings-muted" id="siteFontHint">Text style applies to creator names and display headings. Body text stays easy to read.</span>
             </div>
           </div>
           <div class="v3-settings-inline" id="brandLock" hidden>Branding is a Pro feature. <a href="/dashboard/settings/billing?from=branding" id="brandUpgrade">Upgrade to Pro to unlock branding</a>.</div>
