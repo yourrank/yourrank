@@ -671,7 +671,7 @@ function homeMain(ctx) {
   // Signing in belongs to the bar on every page, so these are the creator's own
   // actions only: a visitor never reads the same sign-in twice in one viewport.
   const introActs = [
-    !viewer && shopEnabled ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
+    !viewer && shopEnabled && items.length ? `<a class="yr-btn" href="${shopHref}">View rewards</a>` : "",
     kickLink ? `<a class="yr-btn yr-btn--ghost" href="${kickLink.href}" target="_blank" rel="noopener noreferrer">Watch on ${esc(kickLink.label)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
   ].filter(Boolean).join("");
 
@@ -708,7 +708,7 @@ ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "N
     ? `<section class="yr-vnote${balance === 0 ? " is-zero" : ""}">
 <p class="yr-vnote-bal"><span class="yr-vnote-num">${formatNumber(balance)}</span> <span class="yr-vnote-unit">credits on this site</span></p>
 <p class="yr-vnote-p">Free credits from ${name}'s channel-point rewards. No purchase, no cash value.</p>
-<div class="yr-vnote-acts">${shopEnabled ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">${balance > 0 ? "Spend credits" : "View rewards"}</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My credits ${ICONS.arrow}</a>` : ""}</div>
+<div class="yr-vnote-acts">${shopEnabled && items.length ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">${balance > 0 ? "Spend credits" : "View rewards"}</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My credits ${ICONS.arrow}</a>` : ""}</div>
 </section>`
     : "";
 
@@ -852,7 +852,7 @@ function shopMain(ctx) {
   const list = items.length
     ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
 <ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, balance, blocked, signIn })).join("")}</ul></section>`
-    : `<section class="yr-vsec yr-vsec--empty">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
+    : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer
     ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent orders")}
@@ -924,10 +924,19 @@ function meMain(ctx) {
   const { r, b, slug, viewer, viewerData, balance, returnTo, homeUrl, isCustomDomain, siteSections } = ctx;
   const creator = esc(b.name || slug);
   if (!viewer) {
+    const guide = `<section class="yr-vsec yr-vsec--narrow yr-credit-guide">
+${sectionHead("After you sign in")}
+<dl class="yr-credit-guide-list">
+<div class="yr-credit-guide-row"><dt>Free credit balance</dt><dd>See the credits earned from ${creator}'s channel-point rewards.</dd></div>
+<div class="yr-credit-guide-row"><dt>Credit activity</dt><dd>Review when credits were earned, used or returned.</dd></div>
+<div class="yr-credit-guide-row"><dt>Reward orders</dt><dd>Follow rewards you order and their current status.</dd></div>
+</dl>
+</section>`;
     return `${viewerHead({
       title: "My credits",
       lede: `Sign in from the header to see your balance, activity and orders on ${creator}.`,
-    })}`;
+    })}
+${guide}`;
   }
 
   const ledger = viewerData?.ledger || [];

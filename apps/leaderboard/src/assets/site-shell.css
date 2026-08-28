@@ -516,6 +516,18 @@
 /* My credits: the viewer's history and their orders are peers, side by side on
    a wide viewport and stacked on a phone. */
 .yr-vcols { display: grid; gap: 20px; align-items: start; }
+/* Signed-out viewer pages use one complete reading surface without turning a
+   small amount of truthful guidance into a page-wide empty card. */
+.yr-vsec--narrow { width: min(100%, 720px); }
+.yr-credit-guide .yr-sec-head { margin-bottom: 4px; }
+.yr-credit-guide-list { margin: 0; }
+.yr-credit-guide-row {
+  display: grid; grid-template-columns: minmax(150px, 0.55fr) minmax(0, 1fr); gap: 12px 24px;
+  padding: 14px 0; border-top: 1px solid var(--yr-edge-soft);
+}
+.yr-credit-guide-row:first-child { border-top: 0; }
+.yr-credit-guide-row dt { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); }
+.yr-credit-guide-row dd { margin: 0; font-size: 13px; line-height: 20px; color: var(--yr-faint); overflow-wrap: anywhere; }
 
 /* One row shape for rewards, credit activity and orders.
    `flex: 1 1 <n>ch` on the main column is what keeps the title readable at
@@ -612,8 +624,11 @@
 /* ── Public leaderboard: intro and standings ─────────────────────────── */
 
 .yr-lbh-title { margin-bottom: 12px; }
-.yr-lbh-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; line-height: 20px; color: var(--yr-mute); }
-.yr-lbh-meta > * + *::before { content: "·"; margin-right: 10px; color: var(--yr-faint); }
+.yr-lbh-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; line-height: 20px; color: var(--yr-mute); }
+/* Flexible spacing separates these items at every width. A generated dot would
+   become the first character of a newly wrapped line on narrow phones. */
+.yr-lbh-meta > * { max-width: 100%; display: inline-flex; align-items: center; }
+.yr-lbh-meta > * + *::before { content: none; }
 .yr-lbh-meta b { font-family: var(--yr-mono); font-weight: 600; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
 .yr-lbh-state {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
@@ -622,7 +637,6 @@
 }
 .yr-lbh-state.is-live { color: var(--yr-success-readable); border-color: var(--yr-success-readable); }
 .yr-lbh-state.is-soon { color: var(--yr-warning-readable); border-color: var(--yr-warning-readable); }
-.yr-lbh-meta > .yr-lbh-state + *::before { content: none; margin-right: 0; }
 .yr-lbh-note { margin-top: 10px; font-size: 13px; line-height: 1.55; color: var(--yr-faint); max-width: 62ch; }
 
 /* Standings are one list of players at every width: the phone stacks the
@@ -887,6 +901,7 @@
   .yr-top-r .yr-btn { padding: 0 12px; font-size: 14px; }
   .yr-intro-acts, .yr-vnote-acts { width: 100%; }
   .yr-intro-acts .yr-btn { flex: 1 1 auto; }
+  .yr-credit-guide-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .yr-empty { justify-content: flex-start; padding-inline: 0; }
   .yr-list-item { align-items: flex-start; flex-direction: column; gap: 12px; }
 }

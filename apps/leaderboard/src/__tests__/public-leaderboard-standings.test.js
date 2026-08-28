@@ -51,6 +51,12 @@ describe("public leaderboard standings", () => {
     expect(html.indexOf('id="yr-search"')).toBeLessThan(html.indexOf("</main>"));
   });
 
+  it("avoids leading separators when mobile metadata wraps", () => {
+    expect(css).toMatch(/\.yr-lbh-meta > \* \{[^}]*display: inline-flex;/);
+    expect(css).toMatch(/\.yr-lbh-meta > \* \+ \*::before \{ content: none; \}/);
+    expect(css.slice(css.indexOf(".yr-lbh-meta"), css.indexOf(".yr-lbh-note"))).not.toContain('content: "·"');
+  });
+
   it("labels an upcoming and an ended board without inventing data", async () => {
     const soon = await render("leaderboard", { data: { ...baseData, scheduled: true, startsAt: new Date(Date.now() + 864e5).toISOString() } });
     expect(soon).toContain("Standings open soon");

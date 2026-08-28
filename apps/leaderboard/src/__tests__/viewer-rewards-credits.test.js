@@ -195,14 +195,16 @@ describe("a creator's Rewards page", () => {
 });
 
 describe("the creator home credit state", () => {
-  it("keeps the signed-out introduction whole and leaves sign-in to the header", async () => {
+  it("keeps a zero-reward signed-out introduction whole without promoting the empty destination", async () => {
     const html = await signedOut("home");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).toContain('class="yr-home-top yr-home-top--solo"');
     expect(html).not.toContain("yr-vnote");
+    expect(html).toContain("No rewards yet");
+    expect(html).not.toContain(">View rewards</a>");
   });
 
-  it("treats a signed-in zero as quiet status rather than spending power", async () => {
+  it("keeps signed-in zero credits quiet when there are no rewards to browse", async () => {
     const html = await renderSite({
       r: record,
       section: "home",
@@ -211,8 +213,24 @@ describe("the creator home credit state", () => {
       opts,
     });
     expect(html).toContain('class="yr-vnote is-zero"');
-    expect(html).toContain(">View rewards</a>");
+    expect(html).toContain("No rewards yet");
+    expect(html).not.toContain(">View rewards</a>");
     expect(html).not.toContain(">Spend credits</a>");
+  });
+
+  it("exposes the Rewards action when active rewards actually exist", async () => {
+    const populated = { ...record, data: { ...record.data, shopItems: items } };
+    const signedOutHtml = await renderSite({ r: populated, section: "home", viewer: null, viewerData: null, opts });
+    const signedInHtml = await renderSite({
+      r: populated,
+      section: "home",
+      viewer: { kick_username: "member" },
+      viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: items },
+      opts,
+    });
+    expect(signedOutHtml).toContain(">View rewards</a>");
+    expect(signedInHtml).toContain(">View rewards</a>");
+    expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
 
@@ -224,6 +242,12 @@ describe("a creator's My credits page", () => {
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
     expect(html).toContain("Sign in from the header to see your balance, activity and orders");
+    expect(html).toContain('<section class="yr-vsec yr-vsec--narrow yr-credit-guide">');
+    expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
+    expect(html).toContain("Free credit balance");
+    expect(html).toContain("Credit activity");
+    expect(html).toContain("Reward orders");
+    expect(html).not.toContain("yr-kpi");
   });
 
   it("keeps a signed-in zero balance and empty activity compact", async () => {
