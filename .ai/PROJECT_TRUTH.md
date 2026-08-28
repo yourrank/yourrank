@@ -1,125 +1,134 @@
 # PROJECT TRUTH
 
-Status: OWNER-REVIEW-REQUIRED
-Last owner review: UNSET
+**Status:** ACTIVE — owner-approved target architecture installed by Wave 0
 
-This file defines what the product is supposed to be. The current codebase is evidence of the
-present implementation, not automatic proof of intended product behavior.
+**Owner-approved target:** [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md)
 
-Every line below is marked `[V]` (verified from repository or runtime evidence) or
-`[OWNER]` (a product decision the owner must confirm — the agent must not invent it).
+**Current implementation baseline:** `main` at `e71faab725f322c8aa965398aab941f9fb7a6f5d`
 
-## Product
+**Last reconciled:** 2026-08-28
 
-```text
-What the product does [V from PRODUCT.md + code]:
-  YourRank is a creator/streamer engagement suite: hosted leaderboard sites, a Telegram bot
-  product, and a credits/rewards shop, operated from one authenticated workspace.
-Primary user [V]: a non-technical streamer/creator operating one or more sites.
-Primary jobs-to-be-done [V]:
-  - publish and maintain a leaderboard site
-  - run engagement events (raffles, drops, predictions, tournaments, chat giveaways)
-  - reward viewers with credits/shop redemptions
-  - grow and message an audience (Telegram bot, broadcasts, offers)
-  - read performance (visitors, referrals, events)
-Critical user journeys [V, route-traced]:
-  1. signup/login -> create site -> leaderboard setup -> publish -> share
-  2. select site -> engagement event lifecycle (create -> run -> draw/settle -> history)
-  3. credits -> shop item -> viewer redemption -> fulfilment
-  4. audience members -> analytics (activity/referrals/events)
-  5. account settings (account/team/billing/connections/data)
-  6. Telegram: connect bot -> commands -> offers -> broadcasts
-```
+This file is the repository authority map. It separates owner-approved target product direction from verified current implementation. Existing code is evidence of the present implementation, not automatic proof of intended product behavior.
 
-## Canonical UI
+## Authority Split
 
-```text
-Canonical application shell/layout [V]:
-  apps/leaderboard/src/pages/dashboard-shell.jsx -> DashboardShell (Hono JSX)
-  Second, non-canonical shell exists: apps/bot/src/dashboard-views/app.ts (template strings)
-Canonical navigation [V]:
-  packages/shared/src/dashboard-nav.ts (DASHBOARD_NAV, NAV_OWNER_MAP)
-  + packages/shared/src/dashboard-chrome.ts (rail/crumbs rendering)
-Canonical design-system/token source [OWNER DECISION REQUIRED]:
-  Today three layers declare the same tokens; devin-system.css wins by load order.
-  Candidates: apps/leaderboard/src/assets/dashboard-v4.css (literals),
-  apps/leaderboard/src/assets/devin-system.css (--devin-* aliases),
-  apps/web/src/app/globals.css @theme (separate palette).
-Canonical shared component source [V]: packages/shared/src (page-shell, shell-nav,
-  dashboard-chrome, dashboard-nav, brand-assets)
-Canonical product surfaces/routes [V]: the 11 rail destinations in DASHBOARD_NAV
-Accepted visual references/baselines [V]: DESIGN.md (prose only; no token names, no CI gate)
-```
+| Question | Canonical source |
+|---|---|
+| Where is the product going? | `docs/YOURRANK_PRODUCT_ARCHITECTURE.md` |
+| What is the concise product context? | `PRODUCT.md` |
+| What are current dashboard routes, scopes, aliases, owners, and delivery modes? | `packages/shared/src/dashboard-routes.ts` |
+| How are current navigation labels/icons/groups presented? | `packages/shared/src/dashboard-nav.ts` |
+| How does the system currently run and deploy? | `ARCHITECTURE.md` plus Worker configuration, code, and tests |
+| What has actually converged or remains debt? | `.ai/PROJECT_STATE.md` |
+| What visual language applies? | `DESIGN.md` plus canonical token/component owners |
+| What are current data/API contracts? | Shared types/validators, `supabase/migrations`, and tests |
+| What happens at runtime? | Executed tests, browser evidence, Worker behavior, logs, and production telemetry |
 
-## Canonical Architecture
+When these sources disagree, record and resolve the disagreement. Do not silently choose the source that makes a task easier.
 
-```text
-Frontend [V]: Hono JSX server-rendered markup + vanilla ES modules in
-  apps/leaderboard/src/assets (persistent shell + fragment navigation via /dashboard/_content).
-  apps/web is Next.js 15/OpenNext + Tailwind 4 for marketing only.
-Backend [V]: Cloudflare Workers — apps/leaderboard (public site + dashboard),
-  apps/bot (Telegram + /dashboard/telegram*), apps/monitor (uptime), apps/consumer (queue).
-Database [V]: Supabase/Postgres via `postgres` driver + Hyperdrive; 120 migrations in
-  supabase/migrations; 85 tables created by migrations.
-Authentication/authorization [V]: server sessions (session rotation + grace),
-  currentUser() in the leaderboard Worker; separate dashboard-auth in apps/bot.
-Deployment/runtime [V]: Wrangler; zone routes split by path prefix on yourrank.site
-  (bot Worker owns /dashboard/telegram*, /bot*, /hook/*, /r/*, /pb*; leaderboard owns the root).
-Package manager/toolchain [V]: Bun >= 1.3.0 workspaces (CI pins 1.3.0), Node >= 20,
-  TypeScript 5.5.4. `bun run lint | typecheck | test` from the repo root.
-```
+## TARGET — Owner-Approved Product Direction
 
-## Allowed Sources of Truth
+> **YourRank is the community operating system for streamers.**
 
-```text
-Product behavior: PROJECT_TRUTH.md + the repository test suite
-Product context: PRODUCT.md (repo root)
-UI/visual language: DESIGN.md (repo root) + canonical tokens/components + approved baselines
-API/data contracts: packages/shared types + zod validators + supabase/migrations
-Dependencies: package.json manifests + bun.lock
-Runtime behavior: executed tests, Worker logs, browser evidence
-```
+Target creator navigation:
 
-## Deprecated / Forbidden
+**Home → Community → Activities → People → Rewards → Insights → Settings**
 
-Only identifiers proven obsolete by route/import/build-path or cascade evidence.
+This is a product and information-architecture model, not an instruction to rename current URLs, schemas, APIs, persisted values, or route IDs.
 
-```text
-Old layouts: none proven yet (DashboardShell is canonical; apps/bot shell is a duplicate,
-  not yet retired — retiring it requires re-homing /dashboard/telegram*)
-Old dashboards/pages: /docs and /faq Worker pages (removed in PR #617)
-Old routes [V, still served as 301s]: /dashboard/billing, /dashboard/attribution,
-  /dashboard/security, /dashboard/integrations, /dashboard/manage,
-  /dashboard/settings/board, /dashboard/settings/plan, /dashboard/settings/integrations,
-  /dashboard/audience/viewers, /dashboard/giveaways/preds, /bot/*, /dashboard/bot/setup
-Old components: none proven yet
-Old CSS/themes/tokens [V]: the --v3-* namespace (341 refs) is an alias layer with no
-  independent meaning; duplicate token declarations exist in dashboard-v4.css and
-  devin-system.css under the identical selector
-Old services/APIs: none proven yet
-Old feature flags: none proven yet
-```
+Target boundaries:
 
-Default rule after a completed replacement: DELETE the obsolete path rather than preserving
-compatibility layering without a requirement.
+- The dashboard is a creator workspace; the public site is a creator destination.
+- `Community` is primarily a navigation/product grouping around the selected site. It is not automatically a new database entity.
+- Account-scoped and selected-site-scoped state remain explicit.
+- `Site` remains the current persisted/domain term until a deliberate migration proves a rename is worthwhile.
+- Home remains account-scoped and may show clearly labeled selected-site operational context.
+- People is the target site-scoped home for members, reviews, and moderation.
+- Rewards remains site-scoped and uses free loyalty-credit/reward semantics.
+- Insights begins selected-site scoped; no unsupported global aggregation is implied.
+- Settings → Connections owns connection administration. Frequent Telegram operations remain operational until a real generic Community → Communication surface can replace them safely.
+- Free / Pro / Team is customer-facing target direction only; billing storage, providers, prices, and recurring/lifetime behavior require separate reconciliation.
+- Shared Activity, Review, and Claims persistence is deferred until concrete workflows prove the abstraction and migration safety.
 
-## Product Invariants
+## CURRENT — Verified Implementation Reality
 
-```text
-- Exactly one implementation owns the authenticated dashboard shell.
-- Exactly one file declares design tokens for the authenticated workspace.
-- Every rail destination is reachable without leaving the persistent shell.
-- A visible control either works or does not exist (no decorative controls).
-- Money paths (credits debit, redemption, wagering) stay idempotent and non-negative;
-  they are only proven by the Postgres-backed CI job, never by a local run.
-- Public leaderboard pages stay iframe-embeddable; authenticated pages keep the hardened CSP.
-```
+Current route and navigation model:
 
-## Unknowns
+- `packages/shared/src/dashboard-routes.ts` is the single editable dashboard route-semantics owner.
+- `packages/shared/src/dashboard-nav.ts` owns current navigation presentation and derives route paths/ownership from the route manifest.
+- Current visible navigation still reflects the implemented pre-target IA. Target labels do not exist merely because this document names them.
+- Current routes retain explicit `account` or `site` scope and the existing `board` / `siteId` navigation-state spellings.
+- Legacy dashboard aliases and redirects remain manifest-owned current behavior.
 
-```text
-- Which token layer the owner wants as canonical (devin identity vs v4 literals).
-- Whether /dashboard/telegram should move into the leaderboard Worker or keep its own Worker
-  while rendering the shared shell.
-- Whether the workspace should support dark mode at all (a live toggle exists today).
-```
+Current shell and rendering ownership:
+
+- `packages/shared/src/dashboard-chrome.ts` is the single authenticated shell/chrome structure emitter.
+- `packages/shared/src/dashboard-chrome-state.ts` is the single dashboard chrome-state owner.
+- `apps/leaderboard/src/pages/dashboard-shell.jsx` is the leaderboard/Hono JSX adapter.
+- Telegram remains served by the Bot Worker at `/dashboard/telegram*`, but it renders the shared dashboard chrome instead of a second shell implementation.
+- `apps/leaderboard/src/assets/dashboard/shell.js` owns authenticated client navigation.
+- The manifest intentionally records three current delivery modes: `spa-section`, `fragment`, and `worker-document`. They share route/chrome ownership but are not the same transport.
+
+Current public/site ownership:
+
+- `packages/shared/src/site-render.ts` is the one public viewer renderer.
+- `apps/leaderboard/src/assets/site-shell.css` is the public viewer stylesheet owner.
+- The current public viewer exposes Home, Leaderboard, Rewards, Games, site-scoped My Credits, and a separate global `/me` account/sites surface. Future Activities/My Community labels must follow real capability.
+- Current Site Settings is owned by the canonical dashboard Site surface and previews through the real public renderer. Do not build a second creator-site editor.
+
+Current identity boundaries:
+
+- Creator/operator accounts, viewer accounts, site membership records, leaderboard player rows, and Telegram subscriber relationships are distinct.
+- Never merge those identities from matching usernames, display names, network data, or behavioral similarity.
+- Any future linkage requires authenticated ownership or equally strong platform-supported proof.
+
+Current runtime foundation:
+
+- Cloudflare Workers: leaderboard/public/dashboard, Telegram bot dashboard/webhooks, monitor, and queue consumer.
+- Supabase/Postgres via Hyperdrive, shared Postgres-backed sessions, Bun workspaces, and Wrangler deployment.
+- Anonymous public HTML may be cached; viewer-specific/authenticated data must never leak into anonymous cached responses.
+
+## Canonical Design and UI Rules
+
+- Root `DESIGN.md` defines the visual language.
+- Authenticated `--ws-*` tokens are defined once in the `ws-token-contract` block of `apps/leaderboard/src/assets/dashboard-v4.css` and enforced by `apps/leaderboard/src/__tests__/tokens.test.js`.
+- Existing class-generation names and remaining `devin-system.css` page-body material rules are current debt, not permission to add another token/theme layer.
+- Sidebar owns section roots; local subnavigation owns tabs; topbar owns context, search, and actions.
+- Every visible control works or does not exist.
+- State is truthful, responsive layouts adapt, and public streamer branding remains separate from YourRank product-action styling.
+
+## Restricted Legacy Boundary
+
+The target architecture must not redesign, optimize, debug, extend, consolidate, or use as architectural examples:
+
+- Games;
+- wagering or stake mechanics;
+- race/wager mechanics;
+- predictions;
+- paid-chance mechanics;
+- raffle mechanics involving credit-ticket purchases and random-value outcomes;
+- odds, payout, or settlement behavior;
+- gambling-specific Telegram behavior.
+
+Restricted routes may remain operational current implementation. Generic shared shell/documentation work may acknowledge their existence, but they are not target product strategy.
+
+## Migration Invariants
+
+- One canonical dashboard route model.
+- One authenticated dashboard shell/chrome structure.
+- One navigation presentation owner derived from route semantics.
+- One authenticated client-navigation entry point.
+- One public viewer renderer and one public creator-branding source.
+- Product labels do not automatically require URL changes.
+- Account and site scope remain explicit.
+- Viewer Account, Membership, Leaderboard Player, and Telegram Subscriber are never silently collapsed.
+- Universal Activity, Review, or Claims persistence is not created before evidence proves shared lifecycle, permissions, queries, and migration safety.
+- No `*-v2`, `*-new`, `*-final`, parallel theme, parallel route registry, or compatibility fork without an explicit migration requirement.
+
+## Deferred / Unresolved
+
+- Exact billing prices, provider behavior, recurring/lifetime semantics, stored plan values, and entitlement migration.
+- Physical schema for shared Activity, Review, Claims, and viewer/site membership expansion.
+- Timing and route details for target Community, Activities, People, Insights, and viewer My Community surfaces.
+- Migration of eligible Telegram operations into a future channel-neutral Communication surface.
+- Removal timing for legacy aliases, which requires operational evidence.

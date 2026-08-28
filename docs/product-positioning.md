@@ -1,59 +1,33 @@
-# YourRank — Product positioning decision
+# YourRank — Superseded product-positioning decision
 
-**Date:** 2026-08-09  
-**Decision maker:** Product owner  
-**Chosen positioning:** Option B — Suite pour streamers  
-**Status:** Approved, ready for implementation
+**Original decision date:** 2026-08-09
 
-## Decision
+**Superseded:** 2026-08-28
 
-YourRank is a **suite of three independent products for streamers and communities**:
+**Status:** Historical record only — not approved for implementation
 
-1. **Leaderboards** — create and publish ranked boards, edit players/prizes, share a public page.
-2. **Telegram** — connect a bot, broadcast messages, manage offers and commands.
-3. **Credits & Shop** — connect a Kick channel, map rewards to credits, run a viewer shop with redemptions.
+**Current authority:** [`YOURRANK_PRODUCT_ARCHITECTURE.md`](YOURRANK_PRODUCT_ARCHITECTURE.md)
 
-These products live under one account and share authentication, plan/billing, a unified shell, and one account Settings home. Each product retains its own overview, navigation, analytics, and local configuration.
+## Historical decision
 
-## Why Option B
+This document previously approved positioning YourRank as a suite of three independent peer products: Leaderboards/Sites, Telegram, and Credits & Shop. It also required separate per-product analytics and explicitly rejected a global Insights destination.
 
-- The dashboard already exposes Leaderboard, Bot, and Credits as top-level sections with near-equal weight.
-- Each product has distinct concepts, workflows, and analytics.
-- Treating them as a suite makes the navigation honest, scales with future products, and avoids forcing Leaderboard to carry unrelated functionality.
+That framing is superseded. It remains recorded here only to explain older repository language and existing navigation/runtime structures. It must not be used as target product truth.
 
-## Product roles
+## Current target positioning
 
-### Leaderboards
-- Primary product for ranking players, editing boards, and sharing public pages.
-- Contains: Overview, Editor, Boards, Analytics, Settings.
-- Analytics covers only leaderboard metrics (views, clicks, copies, referrers).
+> **YourRank is the community operating system for streamers.**
 
-### Telegram
-- Communication/automation product connected to the streamer's channel.
-- Contains: Overview, Bots, Offers, Commands, Broadcasts, (optional) Analytics, Settings.
+The target creator workspace is organized around:
 
-### Credits & Shop
-- Engagement product tied to the streamer's Kick channel.
-- Contains: Overview, Kick connection, Credit rules, Shop, Viewers, Redemptions, Credit activity, Analytics, Settings.
-- The unit is `credits`; the relation to Kick is a `credit rule`; a purchase request is a `redemption`.
+**Home → Community → Activities → People → Rewards → Insights → Settings**
 
-## Analytics scope
+The target model reorganizes the product around a creator community operating loop while preserving current technical truth until migration waves deliberately change it. In particular:
 
-- Analytics is **per product**.
-- Leaderboards → Leaderboards → Analytics.
-- Credits & Shop → Credits & Shop → Analytics.
-- Telegram → Telegram → Analytics, only if Telegram-specific reports exist.
-- There is **no global Insights** hub at this stage.
+- `Community` is a product/navigation grouping around the selected site, not automatically a new database entity.
+- Current route semantics and account/site scopes remain authoritative.
+- Telegram connection administration and Telegram operational workflows remain different concerns; current operations stay functional until a safe generic communication surface exists.
+- Insights begins selected-site scoped and must not claim unsupported global aggregation.
+- Product-label changes do not automatically require URL, schema, API, or persisted-domain changes.
 
-## Account and settings
-
-- **Account** is global and contains: Profile, Security, Connected accounts, Plan & billing, Integrations, Data & privacy.
-- **Settings** inside each product contains only local configuration for that product.
-- Sensible actions (key reveal/rotation, postback management, billing, sessions, export, account deletion) have exactly one canonical UI, located in Account or the relevant product Settings.
-
-## Consequences
-
-- Marketing, pricing, FAQ, and onboarding must present the three products as part of the same suite.
-- The global navigation must expose Leaderboards, Telegram, Credits & Shop, and Account.
-- Each product has its own sidebar sub-navigation.
-- No functionality is removed; only its location and hierarchy change.
+The complete owner-approved decisions, migration sequence, deferred gates, and restricted legacy boundary live only in [`YOURRANK_PRODUCT_ARCHITECTURE.md`](YOURRANK_PRODUCT_ARCHITECTURE.md).

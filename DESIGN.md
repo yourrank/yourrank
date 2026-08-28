@@ -1,6 +1,6 @@
 ---
-name: YourRank Connected Suite
-description: A quiet, high-contrast operating language for Sites, Telegram, and Credits & Shop.
+name: YourRank Community Workspace
+description: A quiet, high-contrast operating language for the creator workspace and public community destination.
 colors:
   primary: "#2200FF"
   primary-hover: "#1B00CC"
@@ -104,17 +104,17 @@ components:
     padding: "4px 8px"
 ---
 
-# Design System: YourRank Connected Suite
+# Design System: YourRank Community Workspace
 
 ## Overview
 
 **Creative North Star: "The Quiet Control Field"**
 
-YourRank uses one calm, high-contrast language to make a connected three-product suite immediately legible. The devin.ai reference supplies material discipline and hierarchy—near-white fields, black type, electric-violet actions, precise dividers, compact controls—while YourRank keeps its own identity, direct language, and product truth.
+YourRank uses one calm, high-contrast language to make a connected creator-community workspace immediately legible. The devin.ai reference supplies material discipline and hierarchy—near-white fields, black type, electric-violet actions, precise dividers, compact controls—while YourRank keeps its own identity, direct language, and product truth.
 
-The system spans three distinct contexts without becoming three visual brands. Marketing explains and demonstrates Sites, Telegram, and Credits & Shop; the operator workspace places a black production rail around a light working field; public streamer sites keep a streamer-selected accent inside the same light material system. Transparent OBS overlays and isolated games remain intentional context-specific exceptions.
+The system spans three distinct contexts without becoming separate visual brands. Marketing explains the community operating model; the operator workspace places a black production rail around a light working field; public streamer sites keep a streamer-selected accent inside the same light material system. Transparent OBS overlays and isolated legacy surfaces remain intentional context-specific exceptions.
 
-The product demonstration and the user's state carry each screen. Decoration stays quiet so the current state, the next action, and the relationship among the three peer products remain obvious.
+The product demonstration and the user's state carry each screen. Decoration stays quiet so the current state, the next action, and the selected account/site context remain obvious.
 
 **Key Characteristics:**
 
@@ -122,7 +122,7 @@ The product demonstration and the user's state carry each screen. Decoration sta
 - A black production rail around light operator workspaces.
 - Hairline dividers and shared outer boundaries instead of nested card stacks.
 - Compact identity, clear purpose, visible action, and readable state in the first viewport.
-- Sites, Telegram, and Credits & Shop presented as peer products under one account.
+- One coherent creator workspace with explicit account and selected-site context.
 
 ## Colors
 
@@ -185,13 +185,13 @@ The palette is deliberately narrow: violet carries product action, black and nea
 
 Marketing and product education use a centered reading frame of approximately 1152–1200px with 24px side padding, spacious 64–96px section intervals, and an editorial sequence: compact header, decisive heading, short explanation and action, then a large readable product surface. The first viewport visibly demonstrates the product instead of delaying it behind decorative copy.
 
-The authenticated workspace uses a fixed 272px production rail, a compact top bar, and a 12-column light working field. Sites, Telegram, and Credits & Shop remain reachable from the same product switcher; site or bot context stays visibly local. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
+The authenticated workspace uses a fixed 272px production rail, a compact top bar, and a 12-column light working field. The target creator IA is Home → Community → Activities → People → Rewards → Insights → Settings, while current labels and URLs remain implementation truth until migrated deliberately. Account and selected-site context stay visibly distinct. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
 
 At narrow widths, marketing navigation becomes a disclosed menu while the primary Start free action remains visible. Operator and public rails become drawers, page padding contracts to 12–24px, multi-column layouts stack, and wide tables scroll inside their own container. Touch targets reach 44px on coarse pointers and mobile layouts remain usable at 320px.
 
 **The First Viewport Rule.** Every primary route starts with compact identity, one decisive purpose, a visible next action, and enough real or explicitly illustrative product state to understand the surface.
 
-**The One Suite Rule.** Global product switching, account, and help remain consistent; local site and bot context never disappears in the name of simplification.
+**The One Workspace Rule.** Shell, account, help, and selected-site context remain consistent; simplification must not hide whether work is account-scoped or site-scoped.
 
 ## Elevation & Depth
 
@@ -256,7 +256,7 @@ Geometry is restrained and role-based. Primary actions and compact controls are 
 
 ### Navigation
 
-Marketing navigation is compact and quiet, with muted default text, ink hover, explicit current-page state, a persistent primary action, and a disclosed mobile menu. Operator navigation lives in Production Black, uses text plus line icons, and marks the active destination with Raised Production Black and a narrow violet inset cue. The cross-product switcher always exposes Sites, Telegram, and Credits & Shop.
+Marketing navigation is compact and quiet, with muted default text, ink hover, explicit current-page state, a persistent primary action, and a disclosed mobile menu. Operator navigation lives in Production Black, uses text plus line icons, and marks the active destination with Raised Production Black and a narrow violet inset cue. The sidebar owns section roots, local subnavigation owns tabs, and the topbar owns context and actions. Product-label changes must not silently redefine current route identity.
 
 ### Divided Data Surface
 
@@ -268,7 +268,7 @@ Leaderboard rows, reward catalogs, KPI bands, workflow steps, and operational ta
 
 ## Authenticated Workspace Contract
 
-Everything above is the suite language. This section is the enforced contract for the authenticated
+Everything above is the platform language. This section is the enforced contract for the authenticated
 workspace — every surface inside `.v3-dash[data-auth-workspace]`, which is both the leaderboard dashboard
 and the bot Worker's Telegram dashboard documents. It is executable: the tokens named here are defined once,
 in the `ws-token-contract` block of `apps/leaderboard/src/assets/dashboard-v4.css`, and
@@ -377,7 +377,7 @@ company's app. Linear for precision, hierarchy, spacing restraint, navigation cl
 Stripe for form and settings clarity; Notion for approachable simplicity; Raycast for interaction polish;
 Resend for restrained data presentation; Vercel for clean status and settings surfaces.
 
-### Where the workspace differs from the suite frontmatter
+### Where the workspace differs from the platform frontmatter
 
 The frontmatter above describes the marketing and public language. The workspace intentionally diverges:
 its canvas is the warm `#f3f3ef` rather than a white field (long sessions, less glare), its control radius is
@@ -387,19 +387,20 @@ debt for whichever PR owns the marketing surfaces, not something the workspace s
 
 ### Accepted debt (not fixed by the foundation PR)
 
-Honest state of the implementation, so nobody reads this contract as a description of the current CSS:
-class names still carry `v3`/`v4` generation labels; roughly 670 spacing declarations and 250 font sizes in the
-workspace sheet are still raw px, including 11.5/12.5/13.5px one-offs; `app.css`'s legacy dark base palette is
-still the fallback layer beneath the workspace; `--ws-chrome-card` is a bluish `#12151B` that does not belong to
-the rest of the chrome family, and Analytics and Account still carry their own tab treatments; `devin-system.css`
-still paints workspace navigation, cards and the rail with its own `--devin-*` values on top of this contract. The gate ratchets those counts downward — later Wave 3 PRs
-lower them as they touch each surface.
+Honest state of the implementation, so nobody reads this contract as a claim that all legacy CSS is gone:
+class names still carry `v3`/`v4` generation labels; the workspace sheet retains raw pixel and color literals
+under test ratchets (currently at most 241 raw-pixel font-size declarations and 149 hex literals outside the
+token contract); `app.css` remains a fallback layer; `--ws-chrome-card` is a bluish `#12151B` outside the rest of
+the chrome family; and some surfaces retain local tab treatments. `dashboard-v4.css` now owns workspace canvas,
+rail, topbar, navigation, and every `--ws-*` token. `devin-system.css` still supplies broader marketing/public
+material values and some authenticated page-body card material, but it is not a second workspace-token owner.
+Later migrations lower the ratchets as they touch each surface.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** keep Sites, Telegram, and Credits & Shop visible as peer products under one account.
+- **Do** organize new target-facing work around Home, Community, Activities, People, Rewards, Insights, and Settings while preserving current route identity until migration is explicit.
 - **Do** let real user data or clearly labeled synthetic product demonstrations carry the visual hierarchy.
 - **Do** use shared outer boundaries, internal dividers, and readable state before introducing another container.
 - **Do** preserve visible focus, semantic status announcements, reduced-motion behavior, and 44px touch targets where practical.
@@ -409,6 +410,6 @@ lower them as they touch each surface.
 
 - **Don't** introduce decorative gradients, glass effects, glow fields, or floating metric-card walls into normal product surfaces.
 - **Don't** use semantic colors as decoration or communicate state by color alone.
-- **Don't** hide the primary action or product switcher when the layout collapses.
+- **Don't** hide the primary action or selected account/site context when the layout collapses.
 - **Don't** turn mono labels, uppercase captions, or numbered markers into decoration; each must encode actual state, scope, sequence, or data.
 - **Don't** invent testimonials, customer logos, metrics, billing promises, or performance claims that the product evidence does not support.

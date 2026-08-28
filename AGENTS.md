@@ -20,6 +20,37 @@ Guidance for automated agents and new contributors working in this repo.
 - Bun `>= 1.3.0` (CI pins `1.3.0`), Node `>= 20`.
 - Cloudflare Workers (Wrangler), Supabase/Postgres, Cloudflare Queues.
 
+## Product and architecture authority
+
+- **TARGET product architecture:** `docs/YOURRANK_PRODUCT_ARCHITECTURE.md`.
+  It defines owner-approved product direction, information architecture, domain
+  boundaries, migration rules, deferred gates, and restricted legacy scope.
+- **CURRENT dashboard route semantics:** `packages/shared/src/dashboard-routes.ts`.
+  Stable IDs, canonical paths, Worker owners, delivery modes, account/site scope,
+  navigation-state parameters, and aliases remain implementation truth until a
+  deliberate migration changes them.
+- **CURRENT navigation presentation:** `packages/shared/src/dashboard-nav.ts`,
+  derived from the route model rather than competing with it.
+- **CURRENT runtime/deployment truth:** `ARCHITECTURE.md` plus Worker configuration,
+  code, tests, and runtime evidence.
+- **CURRENT implementation/convergence state:** `.ai/PROJECT_STATE.md`.
+- `PRODUCT.md` summarizes the target architecture; `DESIGN.md` defines the visual
+  language. Neither file may silently rewrite current route, schema, API, billing,
+  or deployment facts.
+- Product labels do not automatically require URL changes. `Community` is a
+  product/navigation grouping, not automatically a new database entity, and
+  account-scoped versus site-scoped state must remain explicit.
+- Do not silently merge Viewer Account, Membership, Leaderboard Player, or
+  Telegram Subscriber identities. Shared Activity, Review, or Claims persistence
+  remains deferred until implementation evidence proves the abstraction.
+
+Architecture/product migration work must not redesign, optimize, debug, extend,
+or consolidate Games, wagering/stakes, race/wager mechanics, predictions,
+paid-chance mechanics, credit-ticket/random-value raffle mechanics,
+odds/payout/settlement behavior, or gambling-specific Telegram behavior.
+Generic shell/documentation work may acknowledge that legacy routes exist, but
+those systems are not target product strategy.
+
 ## Product and frontend design
 
 - For UI/UX, frontend, redesign, navigation, layout, user-flow, or information-
