@@ -1,6 +1,10 @@
-# YourRank — Unified Architecture
+# YourRank — Current Runtime and Deployment Architecture
 
-One platform for casino streamers. Two products, one account, one dashboard.
+This document describes **CURRENT** Worker, database, session, routing, and deployment reality.
+The owner-approved **TARGET** product model is [the community operating system architecture](docs/YOURRANK_PRODUCT_ARCHITECTURE.md):
+Home → Community → Activities → People → Rewards → Insights → Settings.
+
+Target product grouping does not change Worker ownership, URLs, schema, billing behavior, or deployment topology by itself. Those remain governed by current code, configuration, route manifests, migrations, and tests until a deliberate migration changes them.
 
 ## Frontend boundary
 

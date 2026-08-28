@@ -1,11 +1,18 @@
 # YourRank
 
-One platform for casino streamers, merged from two products:
+> **YourRank is the community operating system for streamers.**
+
+The owner-approved target product architecture is documented in
+[`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](docs/YOURRANK_PRODUCT_ARCHITECTURE.md).
+The repository's current runtime still includes two principal HTTP Worker
+boundaries:
 
 - **Leaderboards** — hosted, editable public leaderboard page per streamer at `yourrank.site/<slug>`.
 - **Telegram bots** — multi-tenant bot engine, promo-code delivery, tracked referral links, click/conversion analytics.
 
-**One account. One dashboard. Two products.** A streamer signs up once and manages both their leaderboard and their Telegram bot from a single dashboard, backed by one Supabase Postgres database.
+A streamer signs up once and uses one dashboard backed by one Supabase Postgres
+database. These current Worker capabilities are implementation reality, not the
+target top-level product information architecture.
 
 ## Frontend boundary
 
@@ -23,14 +30,18 @@ the proxied request can render without being redirected back to the apex.
 
 ```text
 yourrank/
-├── ARCHITECTURE.md          how the two halves fit together + why
+├── ARCHITECTURE.md          current runtime/deployment architecture
+├── PRODUCT.md               concise target product summary
+├── docs/YOURRANK_PRODUCT_ARCHITECTURE.md
+│                            canonical target product architecture
 ├── DEPLOY.md                one-time setup, then two `wrangler deploy`s
 ├── supabase/
 │   └── migrations/          SQL migrations (applied via `supabase db push`)
-├── shared/                  code + specs shared by both Workers
-│   ├── session.js / .ts     ONE cross-Worker session (yr_session + Postgres sessions)
-│   ├── shell-nav.js / .ts   shared dashboard nav (Leaderboard | Bot | ...)
-│   ├── session.md, routing.md, telegram-login.md, dashboard-shell.md
+├── packages/shared/         code + specs shared by both Workers
+│   ├── src/session.ts       cross-Worker session (yr_session + Postgres sessions)
+│   ├── src/dashboard-routes.ts / dashboard-nav.ts
+│   │                        current route semantics + navigation presentation
+│   └── docs/                session, routing, Telegram login, dashboard shell
 └── apps/
     ├── leaderboard/         Cloudflare Worker (JS) — root of yourrank.site
     │   ├── src/             SSR pages, dashboard, password auth, NOWPayments
@@ -61,7 +72,8 @@ yourrank/
                         one users table = one account
 ```
 
-Start with **ARCHITECTURE.md**, then **DEPLOY.md**.
+For product direction, start with **docs/YOURRANK_PRODUCT_ARCHITECTURE.md**.
+For current runtime/deployment work, start with **ARCHITECTURE.md**, then **DEPLOY.md**.
 
 ## Quick Start
 
