@@ -18,6 +18,8 @@ const appCss = read("assets/app.css");
 const boardShellJs = read("assets/dashboard/board-shell.js");
 const dynamicSectionJs = read("assets/dashboard/dynamic-section.js");
 const siteJs = read("assets/dashboard/site.js");
+const utilsJs = read("assets/dashboard/utils.js");
+const playersJs = read("assets/dashboard/players.js");
 
 const EDITOR_PATHS = [
   "/dashboard/leaderboard/setup",
@@ -105,7 +107,7 @@ describe("authenticated editor body", () => {
   it("stacks the archive row instead of widening the document on phones", () => {
     // A three-track grid with a single-line button cannot fit a phone
     // viewport; History overflowed the document at 320-500px because of it.
-    const base = /\.arch-form \{([^}]*)\}/.exec(dashboardCss)?.[1] || "";
+    const base = /\.v3-dash\[data-auth-workspace\] \.arch-form \{([^}]*)\}/.exec(dashboardCss)?.[1] || "";
     expect(base).not.toMatch(/minmax\(220px/);
     expect(base).toContain("minmax(min(100%, 220px), 1fr)");
     const narrow = dashboardCss.slice(dashboardCss.indexOf("@media (max-width: 560px)"));
@@ -156,15 +158,61 @@ describe("authenticated editor body", () => {
 
   it("progressively discloses the rarely-changed editor settings", () => {
     const html = editorHtml("/dashboard/leaderboard/setup");
-    // The essentials stay visible; optional sponsor and scheduling detail sits
-    // behind a disclosure so Setup reads as site identity first.
-    expect(html).toContain('for="f_name">Site name');
-    expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-sponsor">/);
+    // Ranking essentials stay visible. Site-wide identity points to its proven
+    // owner; optional sponsor and scheduling detail sit behind disclosures.
+    expect(html).toContain('id="setupBrandLink">Open Site settings');
+    expect(html).toContain("Leaderboard basics");
+    expect(html).toMatch(/<details class="editor-more editor-more--standalone"[^>]*data-editor-more="setup-sponsor">/);
     expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-schedule">/);
     for (const id of ["f_casino", "f_code", "f_cta", "f_blurb", "f_starts", "f_auto_reset", "f_password_enabled"]) {
       expect(html).toContain(`id="${id}"`);
     }
     expect(dashboardCss).toContain("details.editor-more summary");
+  });
+
+  it("associates human-readable schedule errors with the date controls", () => {
+    const html = editorHtml("/dashboard/leaderboard/setup");
+    expect(html).toContain('id="f_starts" type="datetime-local" aria-describedby="f_starts_hint f_starts_error"');
+    expect(html).toContain('id="f_ends" type="datetime-local" aria-describedby="f_ends_hint f_ends_error"');
+    expect(html).toContain('id="f_starts_error" data-field-error="f_starts" hidden');
+    expect(html).toContain('id="f_ends_error" data-field-error="f_ends" hidden');
+    expect(siteJs).toContain("validateScheduleValues");
+    expect(utilsJs).toContain("Choose an end time after the start time.");
+  });
+
+  it("keeps Players focused on adding and editing the essential fields", () => {
+    const html = editorHtml("/dashboard/leaderboard/players");
+    const toolbar = html.slice(html.indexOf('class="v3-players-bar"'), html.indexOf('id="playersTableWrap"'));
+    expect(toolbar.indexOf('id="addRow"')).toBeLessThan(toolbar.indexOf('id="importMenuBtn"'));
+    expect(toolbar).toContain('class="v3-btn v3-btn--accent" id="addRow"');
+    expect(html).toContain('id="emptyAddBtn" type="button">Add first player');
+    expect(html).not.toContain('id="emptyPasteBtn"');
+    expect(playersJs).toContain("const DEFAULT_EDITOR_PLAYER_FIELDS = Object.freeze({");
+    for (const field of ["score", "hands", "netProfit", "winRate", "change"]) {
+      expect(playersJs).toContain(`${field}: false`);
+    }
+    expect(playersJs).toContain('data-label="Player"');
+    expect(playersJs).toContain('data-label="Actions"');
+    const mobileCards = dashboardCss.slice(dashboardCss.indexOf("Wave A creator workflow simplification"));
+    expect(mobileCards).toContain("#playersTableWrap");
+    expect(mobileCards).toContain("overflow: visible");
+    expect(mobileCards).toContain("tbody tr:not([hidden])");
+    expect(mobileCards).toContain("grid-template-columns");
+    expect(dashboardCss).toContain(".v3-players-table {\n  width: 100%;");
+    expect(mobileCards).toContain("td.num input");
+    expect(mobileCards).toContain("flex: 1 1 auto");
+    expect(mobileCards).toContain("td.act .row-x");
+  });
+
+  it("presents History as a close-and-restore workflow", () => {
+    const html = editorHtml("/dashboard/leaderboard/history");
+    expect(html).toContain("Close the current period and keep a dated copy of its final standings.");
+    expect(html).toContain('id="a_go" type="button">Close period');
+    expect(html).toContain("<h2>Closed periods</h2>");
+    expect(siteJs).toContain("Restore to editor");
+    expect(siteJs).toContain("toLocaleDateString");
+    expect(siteJs).toContain("<time${datetime}");
+    expect(siteJs).toContain("arch-del");
   });
 
   // A placeholder is not a name: it disappears the moment the field has a value

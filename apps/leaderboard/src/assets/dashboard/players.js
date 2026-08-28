@@ -354,17 +354,17 @@ subscribe((keys) => {
 export function playerRow(p = { name: "", wagered: "", prize: "", score: "", hands: "", netProfit: "", winRate: "", change: "" }) {
   const tr = document.createElement("tr");
   const rowId = `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  tr.innerHTML = `<td class="sel"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" /></td>
-    <td class="rank"></td>
-    <td class="player-name"><input class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}" maxlength="160" value="${esc(p.name)}" aria-describedby="${rowId}-name-counter ${rowId}-name-warning"><span class="player-name-counter" id="${rowId}-name-counter" hidden aria-live="polite"></span><span class="field-err" data-field-error="p-name" hidden role="alert" aria-live="polite"></span><span class="field-warn" data-field-warning="p-name" id="${rowId}-name-warning" hidden role="status" aria-live="polite"></span></td>
-    <td class="num"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? p.wagered ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-hands" hidden><input class="p-hands" data-field="p-hands" aria-label="Hands played for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-net" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net profit for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-win" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Win rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-change" hidden><input class="p-change" data-field="p-change" aria-label="Rank change for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.change)}" aria-describedby="${rowId}-change-error"><span class="field-err" data-field-error="p-change" id="${rowId}-change-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="act"><button class="row-edit" title="Edit player" aria-label="Edit player" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="row-x" title="Remove" aria-label="Remove ${esc(p.name || "player")}" type="button">×</button></td>`;
+  tr.innerHTML = `<td class="sel" data-label="Select"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" /></td>
+    <td class="rank" data-label="Rank"></td>
+    <td class="player-name" data-label="Player"><input class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}" maxlength="160" value="${esc(p.name)}" aria-describedby="${rowId}-name-counter ${rowId}-name-warning"><span class="player-name-counter" id="${rowId}-name-counter" hidden aria-live="polite"></span><span class="field-err" data-field-error="p-name" hidden role="alert" aria-live="polite"></span><span class="field-warn" data-field-warning="p-name" id="${rowId}-name-warning" hidden role="status" aria-live="polite"></span></td>
+    <td class="num" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-score" data-label="Score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? p.wagered ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-hands" data-label="Hands played" hidden><input class="p-hands" data-field="p-hands" aria-label="Hands played for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-net" data-label="Net profit" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net profit for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-win" data-label="Win rate" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Win rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-change" data-label="Change" hidden><input class="p-change" data-field="p-change" aria-label="Rank change for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.change)}" aria-describedby="${rowId}-change-error"><span class="field-err" data-field-error="p-change" id="${rowId}-change-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="act" data-label="Actions"><button class="row-edit" title="Edit player" aria-label="Edit player" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="row-x" title="Remove" aria-label="Remove ${esc(p.name || "player")}" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></svg></button></td>`;
   tr.querySelector(".row-edit").addEventListener("click", () => {
     const name = tr.querySelector(".p-name");
     name?.focus();
@@ -433,10 +433,17 @@ const FIELD_COLS = {
   winRate: "col-win",
   change: "col-change",
 };
+const DEFAULT_EDITOR_PLAYER_FIELDS = Object.freeze({
+  score: false,
+  hands: false,
+  netProfit: false,
+  winRate: false,
+  change: false,
+});
 const PLAYER_TABLE_BASE_WIDTH = 44 + 56 + 200 + 112 + 112 + 96;
 const PLAYER_OPTIONAL_COLUMN_WIDTH = 112;
 function syncColumnDropdown(fields) {
-  const merged = { ...state.EXTRA?.playerFields, ...(fields || {}) };
+  const merged = { ...DEFAULT_EDITOR_PLAYER_FIELDS, ...state.EXTRA?.playerFields, ...(fields || {}) };
   $("colMenu")?.querySelectorAll("[data-col]").forEach((cb) => {
     cb.checked = merged[cb.dataset.col] !== false;
   });
@@ -444,7 +451,7 @@ function syncColumnDropdown(fields) {
 
 export function applyPlayerFieldVisibility(fields) {
   const table = $("rows")?.closest("table");
-  const merged = { ...state.EXTRA?.playerFields, ...(fields || {}) };
+  const merged = { ...DEFAULT_EDITOR_PLAYER_FIELDS, ...state.EXTRA?.playerFields, ...(fields || {}) };
   const visibleOptionalCount = Object.keys(FIELD_COLS).reduce((count, key) => count + (merged[key] !== false ? 1 : 0), 0);
   table?.style.setProperty(
     "--players-table-min-width",
@@ -673,12 +680,15 @@ $("rows")?.addEventListener("input", (e) => {
 
 $("addRow")?.addEventListener("click", () => {
   if ($("addRow").disabled) return;
-  commitDraftMutation(() => {
-    $("rows").appendChild(playerRow());
+  const row = commitDraftMutation(() => {
+    const next = playerRow();
+    $("rows").appendChild(next);
     renumber();
     toggleEmpty();
     applyPlayerFieldVisibility();
+    return next;
   }, "Player added. Save to publish.");
+  row?.querySelector(".p-name")?.focus();
 });
 
 function addQuickRow() {
@@ -1223,20 +1233,7 @@ $("emptyImportBtn")?.addEventListener("click", () => {
   $("importText").focus();
 });
 
-$("emptyPasteBtn")?.addEventListener("click", async () => {
-  $("importPanel").hidden = false;
-  $("gsheetPanel").hidden = true;
-  const input = $("importText");
-  try {
-    if (!navigator.clipboard?.readText) throw new Error("Clipboard API unavailable");
-    input.value = await navigator.clipboard.readText();
-    input.dispatchEvent(new Event("input"));
-  } catch (err) {
-    logError("clipboardRead", err);
-    $("status").textContent = "Couldn't read your clipboard — paste the players in below.";
-  }
-  input.focus();
-});
+$("emptyAddBtn")?.addEventListener("click", () => $("addRow")?.click());
 
 wireMenuA11y("importMenuBtn", "importMenu");
 

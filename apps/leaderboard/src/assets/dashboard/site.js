@@ -1,5 +1,5 @@
 // Site editing: plan, branding/theme, save, archive, domain, overlay, notifications.
-import { $, esc, fromLocalInput, getCsrf, guardAuth, logError, timeZoneOffsetLabel, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError } from "./utils.js";
+import { $, esc, getCsrf, guardAuth, logError, timeZoneOffsetLabel, validateScheduleValues, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError } from "./utils.js";
 import { serializeWebhookUrl } from "./notifications.js";
 import { state, boardStatus, markDirty, setState, subscribe } from "./state.js";
 import { renderEmpty, setMetricUnknown } from "./states.js";
@@ -373,6 +373,7 @@ export function wireCancelSubscription() {
 
 export function collect({ reportPlayerErrors = true } = {}) {
   const playerResult = collectPlayers({ reportErrors: reportPlayerErrors });
+  const scheduleResult = scheduleInvalid({ reportErrors: reportPlayerErrors });
   const players = playerResult.players;
   const brandName = $("f_name").value.trim();
   const out = {
@@ -386,8 +387,8 @@ export function collect({ reportPlayerErrors = true } = {}) {
       prizePool: $("f_pool").value.trim(),
       period: $("f_period").value.trim() || "Monthly",
     },
-    startsAt: fromLocalInput($("f_starts")?.value || ""),
-    endsAt: fromLocalInput($("f_ends").value),
+    startsAt: scheduleResult.startsAt,
+    endsAt: scheduleResult.endsAt,
     rankBy: $("f_rank_by")?.value === "score" ? "score" : "wagered",
     partner: { blurb: $("f_blurb").value.trim(), chips: state.EXTRA.chips },
     whyStats: state.EXTRA.whyStats,
@@ -465,7 +466,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     enabled: !!(arToggle && arToggle.checked),
     clear: arClear && !arClear.disabled ? arClear.value : "wagers",
   };
-  return { payload: out, invalid: [...brandInvalid(), ...playerResult.invalid] };
+  return { payload: out, invalid: [...brandInvalid(), ...scheduleResult.invalid, ...playerResult.invalid] };
 }
 
 /**
@@ -489,12 +490,39 @@ function isTouched(input) {
   return input?.dataset.touched === "1";
 }
 
+function scheduleInvalid({ reportErrors = true } = {}) {
+  const startsInput = $("f_starts");
+  const endsInput = $("f_ends");
+  const result = validateScheduleValues({
+    startsValue: startsInput?.value || "",
+    endsValue: endsInput?.value || "",
+  });
+  const byField = { starts: startsInput, ends: endsInput };
+  const invalid = result.invalid.map((entry) => ({ ...entry, input: byField[entry.field] })).filter((entry) => entry.input);
+  if (reportErrors) {
+    for (const [field, input] of Object.entries(byField)) {
+      if (!input) continue;
+      const message = invalid.find((entry) => entry.field === field)?.message || "";
+      setFieldError(input, message && isTouched(input) ? message : "");
+    }
+  }
+  return { ...result, invalid };
+}
+
 document.addEventListener("blur", (event) => {
   const input = event.target;
-  if (!input || typeof input.matches !== "function" || !input.matches("#f_name, .social-url")) return;
+  if (!input || typeof input.matches !== "function" || !input.matches("#f_name, .social-url, #f_starts, #f_ends")) return;
   input.dataset.touched = "1";
-  brandInvalid();
+  if (input.matches("#f_starts, #f_ends")) scheduleInvalid();
+  else brandInvalid();
 }, true);
+
+document.addEventListener("change", (event) => {
+  const input = event.target;
+  if (!input || typeof input.matches !== "function" || !input.matches("#f_starts, #f_ends")) return;
+  input.dataset.touched = "1";
+  scheduleInvalid();
+});
 
 /** Show or clear the error message a field's `aria-describedby` already points at. */
 function setFieldError(input, message) {
@@ -1743,12 +1771,17 @@ export async function loadCreditsStatus() {
 export function renderArchives(list) {
   const box = $("archList"); box.innerHTML = "";
   if (list.length) clearLoadError($("archEmpty"), false);
-  else renderEmpty($("archEmpty"), { icon: "archive", title: "No closed-out periods yet", body: "Your first one will show up here and on your page." });
+  else renderEmpty($("archEmpty"), { icon: "archive", title: "No closed periods yet", body: "Close the current period when you want to preserve its final standings." });
   list.forEach((a) => {
     const row = document.createElement("div"); row.className = "arch-row";
-    const when = new Date(a.at).toLocaleDateString();
-    row.innerHTML = `<span class="arch-label"></span><span class="hint">${a.players} players · closed ${when}</span><button class="btn btn--xs btn--ghost arch-restore" type="button">Restore</button><button class="btn btn--xs btn--ghost arch-del" type="button">Delete</button>`;
+    const at = new Date(a.at);
+    const validAt = !Number.isNaN(at.getTime());
+    const when = validAt ? at.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "Date unavailable";
+    const datetime = validAt ? ` datetime="${esc(at.toISOString())}"` : "";
+    row.innerHTML = `<div class="arch-copy"><span class="arch-label"></span><span class="hint">${a.players} player${Number(a.players) === 1 ? "" : "s"} · Closed <time${datetime}>${esc(when)}</time></span></div><div class="arch-actions"><button class="btn btn--xs btn--ghost arch-restore" type="button">Restore to editor</button><button class="btn btn--xs btn--ghost arch-del" type="button">Delete</button></div>`;
     row.querySelector(".arch-label").textContent = a.label;
+    row.querySelector(".arch-restore").setAttribute("aria-label", `Restore ${a.label} to the editor`);
+    row.querySelector(".arch-del").setAttribute("aria-label", `Delete ${a.label}`);
     row.querySelector(".arch-restore").addEventListener("click", async (e) => {
       if (!await showConfirmModal("Restore archive", `Restore players from "${a.label}"? This will replace the current player list. Save changes to publish.`, "Restore", false)) return;
       const btn = e.target;
@@ -1789,7 +1822,7 @@ export function renderArchives(list) {
         const d = await res.json();
         if (res.ok && d.ok) {
           row.remove();
-          if (!$("archList").children.length) renderEmpty($("archEmpty"), { icon: "archive", title: "No closed-out periods yet", body: "Your first one will show up here and on your page." });
+          if (!$("archList").children.length) renderEmpty($("archEmpty"), { icon: "archive", title: "No closed periods yet", body: "Close the current period when you want to preserve its final standings." });
           $("status").textContent = "Archive deleted.";
         }
         else $("status").textContent = d.error || "Couldn't delete that.";

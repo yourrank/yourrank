@@ -588,6 +588,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
     min-height: var(--ws-control-h-touch);
   }
 }
+
 .v3-dash[data-auth-workspace] .lb-nav-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 0; background: transparent; color: currentColor; }
 .v3-dash[data-auth-workspace] .lb-nav-ic svg { width: 17px; height: 17px; }
 
@@ -5668,7 +5669,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] .v3-players-table {
-  width: max-content;
+  width: 100%;
   table-layout: fixed;
   min-width: var(--players-table-min-width, 620px);
 }
@@ -7999,5 +8000,453 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .v3-table th.sel input[type="checkbox"] {
     width: 24px;
     height: 24px;
+  }
+}
+/* ==========================================================================
+   Wave A creator workflow simplification
+   These rules stay inside the canonical dashboard stylesheet and refine the
+   existing Home, Sites and Leaderboard surfaces without introducing a theme.
+   ========================================================================== */
+.v3-dash[data-auth-workspace] .ov-scope {
+  margin: 6px 0 0;
+  color: var(--ws-text-soft);
+  font-size: 13px;
+}
+
+.v3-dash[data-auth-workspace] .ov-scope strong {
+  color: var(--ws-text);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.v3-dash[data-auth-workspace] .ov-figures {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] > .design-grid > .design-controls > .v3-section-head {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] > .design-grid > .design-controls > .v3-section-head p {
+  max-width: 62ch;
+  margin: 6px 0 0;
+  color: var(--ws-text-soft);
+  font-size: 13px;
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 0;
+  border-block: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note strong {
+  color: var(--ws-text);
+  font-size: 13px;
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note span {
+  max-width: 62ch;
+  color: var(--ws-text-soft);
+  font-size: 12px;
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note a {
+  flex: 0 0 auto;
+  color: var(--ws-accent);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.v3-dash[data-auth-workspace] .v3-owner-note a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.v3-dash[data-auth-workspace] details.editor-more--standalone {
+  margin-top: 0;
+  background: transparent;
+}
+
+.v3-dash[data-auth-workspace] .appearance-owner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 0 20px;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .appearance-owner-row h2,
+.v3-dash[data-auth-workspace] .appearance-owner-row p {
+  margin: 0;
+}
+
+.v3-dash[data-auth-workspace] .appearance-owner-row h2 {
+  font-size: var(--ws-type-card-size);
+}
+
+.v3-dash[data-auth-workspace] .appearance-owner-row p {
+  margin-top: 3px;
+  color: var(--ws-text-soft);
+  font-size: 12px;
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-header-text {
+  white-space: normal;
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-sub {
+  display: block;
+  max-width: 36ch;
+  margin: 3px 0 0;
+  color: var(--ws-chrome-text-soft);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-sync-strip {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.v3-dash[data-auth-workspace] .history-workspace {
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .history-workspace .arch-form {
+  margin-top: 0;
+}
+
+.v3-dash[data-auth-workspace] .history-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ws-line-strong);
+}
+
+.v3-dash[data-auth-workspace] .history-list-head h2,
+.v3-dash[data-auth-workspace] .history-list-head p {
+  margin: 0;
+}
+
+.v3-dash[data-auth-workspace] .history-list-head h2 {
+  font-size: var(--ws-type-card-size);
+}
+
+.v3-dash[data-auth-workspace] .history-list-head p {
+  color: var(--ws-text-soft);
+  font-size: 12px;
+}
+
+.v3-dash[data-auth-workspace] .arch-list {
+  gap: 0;
+  margin-top: 0;
+}
+
+.v3-dash[data-auth-workspace] .arch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 16px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--ws-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.v3-dash[data-auth-workspace] .arch-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.v3-dash[data-auth-workspace] .arch-row .hint {
+  margin: 0;
+}
+
+.v3-dash[data-auth-workspace] .arch-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.v3-dash[data-auth-workspace] .arch-del {
+  color: var(--ws-danger-text);
+}
+
+.v3-dash[data-auth-workspace] .lb-board-form {
+  max-width: 720px;
+  padding: 20px;
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+}
+
+.v3-dash[data-auth-workspace] .lb-board-form .field-flex label {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.v3-dash[data-auth-workspace] .lb-board-form .field-flex input {
+  min-height: 40px;
+  padding-inline: 12px;
+  font-size: 13px;
+}
+
+.v3-dash[data-auth-workspace] .lb-board-form-more {
+  margin: 14px 0;
+}
+
+.v3-dash[data-auth-workspace] .lb-board-form-more .grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.v3-dash[data-auth-workspace] .sites-table tr.is-current td {
+  background: color-mix(in srgb, var(--ws-accent) 4%, var(--ws-surface));
+}
+
+.v3-dash[data-auth-workspace] .site-name,
+.v3-dash[data-auth-workspace] .site-meta {
+  overflow-wrap: anywhere;
+}
+
+.v3-dash[data-auth-workspace] .v3-players-table .row-x {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  font-size: inherit;
+}
+
+@media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .ov-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-owner-note,
+  .v3-dash[data-auth-workspace] .appearance-owner-row,
+  .v3-dash[data-auth-workspace] .history-list-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-owner-note a,
+  .v3-dash[data-auth-workspace] .appearance-owner-row .btn {
+    min-height: 40px;
+  }
+
+  .v3-dash[data-auth-workspace] .lb-board-form-more .grid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-bar-end {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-bar-end > .v3-btn,
+  .v3-dash[data-auth-workspace] .v3-players-bar-end > .v3-menu-wrap > .v3-btn {
+    min-height: 44px;
+  }
+
+  .v3-dash[data-auth-workspace] #playersTableWrap {
+    overflow: visible;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table thead,
+  .v3-dash[data-auth-workspace] .v3-players-table tfoot {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody tr:not([hidden]) {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "select player actions"
+      "rank rank rank"
+      "amount amount amount"
+      "prize prize prize";
+    gap: 8px 10px;
+    padding: 14px;
+    border-bottom: 1px solid var(--ws-line);
+    background: var(--ws-surface);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td:not([hidden]) {
+    display: flex;
+    align-items: center;
+    width: auto;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td::before {
+    flex: 0 0 88px;
+    color: var(--ws-text-soft);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.sel {
+    grid-area: select;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.sel::before,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.act::before {
+    display: none;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.rank {
+    grid-area: rank;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.player-name {
+    display: block;
+    grid-area: player;
+    width: auto;
+    min-width: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.player-name::before {
+    display: block;
+    margin: 0 8px 2px;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td:nth-child(4) {
+    grid-area: amount;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td:nth-child(5) {
+    grid-area: prize;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.rank,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td:nth-child(n + 4):nth-child(-n + 10) {
+    width: 100%;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.num input {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.col-score,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.col-hands,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.col-net,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.col-win,
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.col-change {
+    grid-column: 1 / -1;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.act {
+    align-self: start;
+    grid-area: actions;
+    gap: 2px;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.act button {
+    display: inline-grid;
+    place-items: center;
+    min-width: 40px;
+    min-height: 40px;
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius-sm);
+    background: var(--ws-surface);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody td.act .row-x {
+    border-color: var(--ws-danger-line);
+    background: var(--ws-danger-soft);
+    color: var(--ws-danger-text);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-table tbody input:not([type="checkbox"]) {
+    min-width: 0;
+    min-height: 40px;
+    border-color: var(--ws-line);
+    background: var(--ws-surface-soft);
+  }
+
+  .v3-dash[data-auth-workspace] .arch-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v3-dash[data-auth-workspace] .arch-actions {
+    flex-wrap: wrap;
+  }
+
+  .v3-dash[data-auth-workspace] .arch-actions .btn {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 430px) {
+  .v3-dash[data-auth-workspace] .v3-players-bar-end {
+    grid-template-columns: minmax(0, 1fr) repeat(2, auto);
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-bar-end > .v3-menu-wrap > .v3-btn {
+    width: 44px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .v3-players-bar-end > .v3-menu-wrap > .v3-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .v3-dash[data-auth-workspace] .lb-board-form-actions,
+  .v3-dash[data-auth-workspace] .arch-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v3-dash[data-auth-workspace] .lb-board-form-actions .btn,
+  .v3-dash[data-auth-workspace] .arch-actions .btn {
+    width: 100%;
   }
 }
