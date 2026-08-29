@@ -85,6 +85,7 @@ export function chromeStateFor(page, tab = "", { exact = false } = {}) {
 // navigation between them and the core SPA sections never reloads the page.
 //
 // `boot` names the client module that owns the section's lifecycle:
+//   "activities"→ assets/activities.js  (Safe Activities)
 //   "credits"   → assets/credits.js     (Rewards + Audience)
 //   "giveaways" → assets/giveaways.js   (Engagement)
 //   "account"   → assets/account.js     (Account settings)
@@ -108,6 +109,7 @@ const dynamicSection = (section, meta) => {
 };
 
 export const DYNAMIC_SECTIONS = {
+  activities: dynamicSection("activities", { boot: "activities", boardContext: "selector", rootId: "act-dash" }),
   rewards: dynamicSection("rewards", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),
   // The Kick connection is stored on the site row (sites.kick_channel_*), so
   // its canonical home is Site settings → Connections. It still boots the
@@ -126,6 +128,7 @@ export const DYNAMIC_SECTIONS = {
 // parseDashboardPath first, so siteConnections mounts on the full
 // connections path and only ever claims its sub-paths.
 const DYNAMIC_PATH_PREFIXES = [
+  ["activities", routeById("activities.overview").canonicalPath],
   ["rewards", routeById("rewards.overview").canonicalPath],
   ["giveaways", dashboardAliasPath("/dashboard/giveaways", "giveaways.chat")],
   ["audience", dashboardAliasPath("/dashboard/audience", "audience.viewers")],

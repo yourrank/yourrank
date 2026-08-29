@@ -27,6 +27,7 @@ import { settingsUnifiedPage } from "./pages/account.jsx";
 import { reviewsPage } from "./pages/reviews.js";
 import { invitePage } from "./pages/invite.jsx";
 import { giveawaysPage } from "./pages/giveaways.jsx";
+import { activitiesPage } from "./pages/activities.jsx";
 
 export const PAGES = {
   login: loginPage,
@@ -36,6 +37,7 @@ export const PAGES = {
   dashboard: dashboardPage,
   dashboardNotFound: dashboardNotFoundPage,
   giveaways: giveawaysPage,
+  activities: activitiesPage,
   admin: adminPage,
   admin2fa: admin2faPage,
   overlay: overlayPage,

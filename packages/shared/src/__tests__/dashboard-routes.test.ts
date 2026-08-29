@@ -111,6 +111,7 @@ describe("dashboard route manifest invariants", () => {
     expect(buildDashboardPath("home")).toBe("/dashboard");
     expect(buildDashboardPath("board.design", { board: "s1" })).toBe("/dashboard/leaderboard/design?board=s1");
     expect(buildDashboardPath("rewards.shop", { siteId: "s1" })).toBe("/dashboard/rewards/shop?siteId=s1");
+    expect(buildDashboardPath("activities.overview", { siteId: "s1" })).toBe("/dashboard/activities?siteId=s1");
     // Undeclared parameters never leak into built URLs.
     expect(buildDashboardPath("rewards.shop", { board: "s1" })).toBe("/dashboard/rewards/shop");
     expect(buildDashboardPath("settings.plan", { siteId: "s1", board: "s1" })).toBe("/dashboard/settings/billing");

@@ -20,6 +20,7 @@ const NAV_ICONS = {
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/>',
   boards: '<rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/>',
   giveaways: '<path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+  activities: '<path d="M13 2 4 14h7l-1 8 10-14h-7z"/>',
   shop: '<path d="M3 9l2-5h14l2 5"/><path d="M5 13v7h14v-7M9 20v-5h6v5"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
   viewers: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/>',
   audience: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -36,9 +37,9 @@ const GEAR_ICON = '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 
 // identity; it does not create a Community entity, route prefix or schema.
 // Sites remains account-scoped and top-level until the context selector is a
 // complete replacement from every account-scoped surface. Telegram also stays
-// top-level because its operational workflows are owner-scoped. Mixed legacy
-// Engagement and restricted Games remain explicit transitional destinations:
-// neither is relabeled as the future Activities product.
+// top-level because its operational workflows are owner-scoped. Activities is
+// a separate safe product boundary; mixed legacy Engagement and restricted
+// Games remain explicit transitional destinations rather than being relabeled.
 // Group labels are visual hierarchy only — they are not links and collapse
 // nothing.
 // Hrefs come from the manifest: canonical paths via routeById, plus the two
@@ -57,6 +58,7 @@ const DASHBOARD_NAV: NavItem[] = [
       { key: "board", label: "Leaderboard", href: href("board"), icon: NAV_ICONS.players },
     ],
   },
+  { key: "activities", label: "Activities", href: href("activities.overview"), icon: NAV_ICONS.activities },
   { key: "audience", label: "People", href: href("audience.viewers"), icon: NAV_ICONS.audience },
   { key: "redemptions", label: "Rewards", href: href("rewards.overview"), icon: NAV_ICONS.shop, productKey: "credits" },
   { key: "performance", label: "Insights", href: href("performance"), icon: NAV_ICONS.analytics },
@@ -73,6 +75,7 @@ const DASHBOARD_NAV: NavItem[] = [
 const NAV_OWNER_ROUTES = {
   board: "board",
   leaderboard: "board",
+  activities: "activities.overview",
   engage: "giveaways.chat",
   giveaways: "giveaways.chat",
   raffles: "giveaways.raffles",

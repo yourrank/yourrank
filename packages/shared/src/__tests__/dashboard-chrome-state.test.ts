@@ -73,6 +73,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("games").crumbs).toEqual([{ label: "Games" }]);
     expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "Sites" }]);
     expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site" }]);
+    expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Activities" }]);
     expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Rewards" }]);
   });
 
@@ -177,6 +178,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("games").documentTitle).toBe("Games · YourRank");
     expect(dashboardChromeState("boards").documentTitle).toBe("Sites · YourRank");
     expect(dashboardChromeState("site").documentTitle).toBe("Site · YourRank");
+    expect(dashboardChromeState("activities.overview").documentTitle).toBe("Activities · YourRank");
     expect(dashboardChromeState("settings.team").documentTitle).toBe("Settings · YourRank");
     expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engagement · YourRank");
     expect(dashboardChromeState("telegram.broadcasts").documentTitle).toBe("Telegram · YourRank");

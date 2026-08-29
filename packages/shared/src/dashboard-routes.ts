@@ -170,6 +170,7 @@ const ROUTE_DEFS = [
   { id: "site", canonicalPath: "/dashboard/site", section: "site", navKey: "site", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
 
   // ── Fragment-booted sections (leaderboard Worker) ──
+  { id: "activities.overview", canonicalPath: "/dashboard/activities", section: "activities", tab: "overview", navKey: "activities", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.overview", canonicalPath: "/dashboard/rewards", section: "rewards", tab: "overview", navKey: "redemptions", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.shop", canonicalPath: "/dashboard/rewards/shop", section: "rewards", tab: "shop", navKey: "redemptions", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.rules", canonicalPath: "/dashboard/rewards/rules", section: "rewards", tab: "rules", navKey: "redemptions", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },

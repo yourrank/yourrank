@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `6d20b0bea204a56ccd0559c462e8ab01b3ccd32d` (PR #667 merged)
+**Evidence baseline:** `main` at `cba77904522cdf64f90a55a20b4eb042dc9d517f` (PR #668 merged)
 
 **Last reconciled:** 2026-08-29
 
@@ -43,7 +43,7 @@ Maintained to prevent architecture drift.
 ### Navigation ownership — RESOLVED
 
 - The sidebar owns section roots, page subnavigation owns tabs, and the topbar owns context/search/actions.
-- The visible rail presents Home, Sites, Community (Site and Leaderboard), People, Rewards, Insights, transitional Engagement and Games, Telegram, and Settings.
+- The visible rail presents Home, Sites, Community (Site and Leaderboard), Activities, People, Rewards, Insights, transitional Engagement and Games, Telegram, and Settings.
 - Community is presentation-only; People and Insights are labels over the existing audience and analytics route families. No route ID, URL, scope, owner, or schema changed with those labels.
 - `requestDashboardRoute` in `apps/leaderboard/src/assets/dashboard/shell.js` is the one authenticated client-navigation entry point.
 - The public viewer account history runtime is separate and does not own dashboard navigation.
@@ -97,6 +97,14 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Sites remains a top-level account-scoped destination. The selected-site control switches sites and links to Manage Sites, but it is absent from account-scoped pages and does not own the current create-site workflow, so it is not yet a complete replacement.
 - Recognition is deferred: the only trustworthy historical result content is the archive data already owned by Leaderboard History and the public Hall of Fame. There is no distinct, moderated cross-capability recognition model to justify another creator destination.
 
+### Safe Activities foundation — AVAILABLE; ADAPTER-BASED
+
+- `/dashboard/activities` is a site-scoped fragment destination for safe community workflows.
+- The current shared presentation and `/api/activities` adapt only existing free code drops. No universal Activity table, new participant model, or schema migration was introduced.
+- Code-drop claims continue to resolve through authenticated Viewer Account and the existing `site_viewers` Site Membership record.
+- Mixed Engagement remains a separate transitional destination. Restricted legacy Games, paid-chance raffles, predictions, wagering, payout, and settlement mechanics are not imported into Activities.
+- Challenges are deferred because a shared foundation is not yet sufficiently proven. Tournaments remain outside Activities because current settings include entry-cost and eligibility fields that are not cleanly isolated from the zero-cost subset.
+
 ## Current Major Surfaces
 
 | Surface | Current route/implementation reality |
@@ -105,6 +113,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Sites collection | Account-scoped `/dashboard/leaderboards` |
 | Leaderboard editor | Site-scoped SPA route family under `/dashboard/leaderboard` |
 | Site | Site-scoped `/dashboard/site` plus separate Connections fragment |
+| Activities | Site-scoped `/dashboard/activities`; adapter over free code drops only |
 | Rewards | Site-scoped fragment route family under `/dashboard/rewards` |
 | People (Members) | Site-scoped `/dashboard/audience/members` |
 | Insights | Site-scoped SPA route family under `/dashboard/analytics` |
@@ -112,7 +121,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Settings | Account-scoped fragment routes under `/dashboard/settings` |
 | Public creator destination | `renderSite()` via apex slug routes and custom-domain routes |
 
-Community, People, and Insights are current navigation presentation labels only; they do not imply new route, entity, or persistence boundaries. Target Activities, Recognition, Communication, My Community, and My Communities remain target-only claims.
+Community, People, and Insights are current navigation presentation labels only; they do not imply new entity or persistence boundaries. Activities has a narrow current route and adapter boundary for free code drops; broader Activity families remain target-only. Recognition, Communication, My Community, and My Communities remain target-only claims.
 
 ## Worker and Runtime Topology
 
@@ -139,7 +148,7 @@ Community, People, and Insights are current navigation presentation labels only;
 
 | Finding | Current status |
 |---|---|
-| Activities boundary is not yet available; mixed Engagement and restricted Games remain explicit transitional destinations | Deferred migration outside Wave B |
+| Broader Activities consolidation beyond the free-drop adapter | Deferred; mixed Engagement and restricted Games remain explicit transitional destinations |
 | Three delivery transports remain | Intentional current state; ownership is already singular |
 | `board` and `siteId` both carry selected-site context | Separate parity-tested migration if changed |
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |

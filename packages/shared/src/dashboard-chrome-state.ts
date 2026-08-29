@@ -69,6 +69,7 @@ export const DASHBOARD_SECTION_TITLES = {
   games: "Games",
   performance: "Insights",
   site: "Site",
+  activities: "Activities",
   rewards: "Rewards",
   siteConnections: "Site",
   giveaways: "Engagement",
@@ -89,6 +90,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "performance.activity": "Site visitors",
   "performance.referrals": "Sources",
   "performance.events": "Events",
+  "activities.overview": "Overview",
   "rewards.overview": "Overview",
   "rewards.shop": "Shop",
   "rewards.rules": "Ways to earn",
@@ -123,7 +125,7 @@ const TITLE_TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
 
 // Sections whose document titles never carry the tab (their documents have
 // always been titled at the section level).
-const SECTION_TITLED_SECTIONS = new Set(["giveaways", "settings", "telegram"]);
+const SECTION_TITLED_SECTIONS = new Set(["activities", "giveaways", "settings", "telegram"]);
 
 // Fragment sections titled "<tab> · <section> · YourRank".
 const TAB_TITLED_SECTIONS = new Set(["rewards", "siteConnections", "audience"]);
@@ -135,6 +137,8 @@ function sectionCrumbHead(section: string): DashboardCrumb | undefined {
       return { label: DASHBOARD_SECTION_TITLES.board, href: routeById("board").canonicalPath };
     case "performance":
       return { label: DASHBOARD_SECTION_TITLES.performance, href: routeById("performance").canonicalPath };
+    case "activities":
+      return { label: DASHBOARD_SECTION_TITLES.activities, href: routeById("activities.overview").canonicalPath };
     case "rewards":
       return { label: DASHBOARD_SECTION_TITLES.rewards, href: routeById("rewards.overview").canonicalPath };
     case "giveaways":
@@ -184,6 +188,8 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
         return [{ label: sectionTitle }];
       }
       break;
+    case "activities":
+      return [{ label: sectionTitle }];
     default:
       break;
   }

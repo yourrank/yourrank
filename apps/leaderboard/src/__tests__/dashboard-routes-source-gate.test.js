@@ -65,6 +65,7 @@ describe("routes.js source gate", () => {
       expect(section.navKey).toBe(routes[0].navKey);
     }
     // Exact-value behavior pins (previous hand-written tables).
+    expect(DYNAMIC_SECTIONS.activities.tabPaths).toEqual({ overview: "/dashboard/activities" });
     expect(DYNAMIC_SECTIONS.rewards.tabPaths).toEqual({
       overview: "/dashboard/rewards",
       shop: "/dashboard/rewards/shop",
@@ -122,6 +123,7 @@ describe("routes.js source gate", () => {
     expect(resolveSection("manage")).toBe("");
 
     expect(parseDynamicPath("/dashboard/rewards")).toEqual({ page: "rewards", tab: "overview", dynamic: true });
+    expect(parseDynamicPath("/dashboard/activities")).toEqual({ page: "activities", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards/activity")).toEqual({ page: "rewards", tab: "history", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards/history")).toEqual({ page: "rewards", tab: "history", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards/maps")).toBeNull();
@@ -134,6 +136,7 @@ describe("routes.js source gate", () => {
     expect(parseDynamicPath("/dashboard/site")).toBeNull();
 
     expect(dynamicPath("rewards", "history")).toBe("/dashboard/rewards/activity");
+    expect(dynamicPath("activities", "overview")).toBe("/dashboard/activities");
     expect(dynamicPath("settings", "plan")).toBe("/dashboard/settings/billing");
 
     expect(legacyDashboardPath("/dashboard/editor")).toBe("/dashboard/leaderboard");

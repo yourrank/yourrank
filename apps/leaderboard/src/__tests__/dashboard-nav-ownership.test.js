@@ -15,7 +15,7 @@ const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", 
 const siteSelectorJs = readFileSync(new URL("../assets/dashboard/site-selector.js", import.meta.url), "utf8");
 const playersJs = readFileSync(new URL("../assets/dashboard/players.js", import.meta.url), "utf8");
 const shellNavJs = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
-const dashboardV4Css = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
+const dashboardV4Css = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const siteSource = readFileSync(new URL("../site.js", import.meta.url), "utf8");
 
 function dashboardHtml(activePath) {
@@ -63,6 +63,11 @@ describe("dashboard navigation ownership", () => {
     // Settings remains creator-global.
     expect(communityKeys).not.toContain("settings");
     expect(topLevelKeys).toContain("settings");
+
+    // Safe Activities is a real site-scoped destination, separate from the
+    // mixed legacy Engagement surface.
+    expect(communityKeys).not.toContain("activities");
+    expect(topLevelKeys).toContain("activities");
 
     // Mixed Engagement and restricted Games are not falsely absorbed into the
     // future Activities architecture.
@@ -157,6 +162,7 @@ describe("dashboard navigation ownership", () => {
       const parsed = parseDashboardPath(path);
       const routeHandled = parsed || resolveAliasRedirect(path, "", "leaderboard") ||
         (path === "/dashboard/settings" && worker.includes('path === "/dashboard/settings"')) ||
+        (path === "/dashboard/activities" && worker.includes('path === "/dashboard/activities"')) ||
         (path === "/dashboard/giveaways" && worker.includes('path === "/dashboard/giveaways"')) ||
         (path === "/dashboard/rewards" && worker.includes('path === "/dashboard/rewards"')) ||
         (path === "/dashboard/audience/members" && worker.includes('path === "/dashboard/audience/members"')) ||
@@ -174,6 +180,7 @@ describe("dashboard navigation ownership", () => {
     for (const [route, owner] of [
       ["home", "home"],
       ["board", "board"],
+      ["activities", "activities"],
       ["games", "games"],
       ["performance", "performance"],
       ["telegram", "telegram"],
@@ -202,7 +209,7 @@ describe("dashboard navigation ownership", () => {
       expect(mapActiveNav(route)).toBe(navOwner(route));
       expect(keys.has(NAV_OWNER_MAP[route] || route)).toBe(true);
     }
-    for (const path of ["/dashboard", "/dashboard/leaderboard/setup", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing", "/dashboard/giveaways/predictions"]) {
+    for (const path of ["/dashboard", "/dashboard/activities", "/dashboard/leaderboard/setup", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing", "/dashboard/giveaways/predictions"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
     }
     expect(dashboardHtml("/dashboard/leaderboards")).toContain('data-nav="sites"');

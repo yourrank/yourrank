@@ -8,10 +8,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { PAGES } from "../pages.jsx";
 import { giveawaysConfig } from "../pages/giveaways.jsx";
+import { activitiesConfig } from "../pages/activities.jsx";
 import { renderFragmentPayload, resolveFragment } from "../index.js";
 
 const user = { display_name: "Test operator", plan: "pro" };
 const ENGAGEMENT_CSS = "/assets/giveaways.css";
+const ACTIVITIES_CSS = "/assets/activities.css";
 
 /**
  * Minimal DOM the loader needs: a head that collects stylesheet links, plus
@@ -159,6 +161,15 @@ function stylesheetHrefs(links) {
 }
 
 describe("Engagement style requirements are declared by one owner", () => {
+  it("declares activities.css on the Activities document and fragment", async () => {
+    expect(activitiesConfig.styles).toContain(ACTIVITIES_CSS);
+    expect(PAGES.activities.config.styles).toContain(ACTIVITIES_CSS);
+    const fragment = resolveFragment("/dashboard/activities");
+    const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
+    expect(payload.styles).toEqual(activitiesConfig.styles);
+    expect(payload.html).toContain("Safe foundation");
+  });
+
   it("declares giveaways.css on the full document", () => {
     expect(giveawaysConfig.styles).toContain(ENGAGEMENT_CSS);
     expect(PAGES.giveaways.config.styles).toContain(ENGAGEMENT_CSS);
