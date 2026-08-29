@@ -63,6 +63,7 @@ const COMMANDS = [
   { id: "nav-design", title: "Appearance", group: "Navigation", icon: PALETTE_ICONS.design, keywords: "theme styling live preview", action: () => requestDashboardRoute("board", "design") },
   { id: "nav-share", title: "Share", group: "Navigation", icon: PALETTE_ICONS.share, action: () => requestDashboardRoute("board", "share") },
   { id: "nav-history", title: "History", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "history", action: () => requestDashboardRoute("board", "history") },
+  { id: "nav-activities", title: "Activities", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "activities free drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
   { id: "nav-games", title: "Games", group: "Navigation", icon: PALETTE_ICONS.games, keywords: "interactive simulator games", action: () => requestDashboardRoute("games", "", { query: "" }) },
   { id: "nav-giveaways", title: "Giveaways", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage chat", action: () => requestDashboardRoute("giveaways", "chat", { query: "" }) },
   { id: "nav-raffles", title: "Raffles", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage giveaways", action: () => requestDashboardRoute("giveaways", "raffles", { query: "" }) },

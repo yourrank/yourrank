@@ -9,11 +9,16 @@ on:
     - cron: '0 6 * * 1'
 
 permissions:
+  actions: read
   security-events: write
   contents: read
 
 jobs:
   analyze:
+    # Code scanning is free for public repositories. Private repositories must
+    # explicitly confirm GitHub Code Security entitlement through this Actions
+    # variable; otherwise GitHub rejects the SARIF upload after analysis.
+    if: ${{ !github.event.repository.private || vars.CODEQL_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

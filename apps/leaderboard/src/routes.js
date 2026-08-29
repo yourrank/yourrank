@@ -52,6 +52,7 @@ import { handleScores } from "./handlers/scores.js";
 import { handleQuickAdd } from "./handlers/quick-add.js";
 import { handleKickWebhook } from "./handlers/kick-webhook.js";
 import { handleGiveawayChatroom } from "./handlers/giveaway.js";
+import { handleGetActivities } from "./handlers/activities.js";
 import {
   handleDomainSearch,
   handleDomainPurchase,
@@ -274,6 +275,9 @@ export const ROUTES = [
   { path: "/auth/kick/callback", method: "GET", handler: withHandler(handleKickAuthCallback) },
   { path: "/api/kick/disconnect", method: "POST", handler: withHandler(handleKickAuthDisconnect) },
   { path: "/api/giveaways/chatroom", method: "GET", handler: withHandler(handleGiveawayChatroom) },
+
+  // Safe Activities foundation (existing free-workflow adapters only)
+  { path: "/api/activities", method: "GET", handler: withHandler(handleGetActivities) },
   
   // Community Events: Raffles & Flash Code Drops
   { path: "/api/events/raffles", method: "GET", handler: withHandler(handleGetRaffles) },

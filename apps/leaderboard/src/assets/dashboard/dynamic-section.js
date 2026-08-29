@@ -1,6 +1,6 @@
 // Dynamic section loader: fetches content fragments for the dashboard areas
-// that were formerly separate documents (Engagement, Rewards, Audience,
-// Account) and manages their boot lifecycle within the persistent shell.
+// that were formerly separate documents (Activities, Engagement, Rewards,
+// Audience, Account) and manages their boot lifecycle within the persistent shell.
 //
 // Flow:
 //   click → requestDashboardRoute (shell.js)
@@ -26,6 +26,7 @@ import { loginRedirectPath } from "./request.js";
 
 // Statically-referenced lazy importers so the bundler can resolve them.
 const BOOT_IMPORTERS = {
+  activities: () => import("../activities.js"),
   credits: () => import("../credits.js"),
   giveaways: () => import("../giveaways.js"),
   account: () => import("../account.js"),

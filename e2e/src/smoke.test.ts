@@ -76,6 +76,7 @@ const AUTHENTICATED_DASHBOARD_ROUTES = [
   ["/dashboard/leaderboards", "board"],
   ["/dashboard/analytics/activity", "board"],
   ["/dashboard/site", "board"],
+  ["/dashboard/activities", "siteId"],
   ["/dashboard/rewards/viewers", "siteId"],
   ["/dashboard/rewards/redemptions", "siteId"],
   ["/dashboard/rewards/shop", "siteId"],

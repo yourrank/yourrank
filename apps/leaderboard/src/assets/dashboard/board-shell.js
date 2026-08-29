@@ -16,6 +16,7 @@ export function preserveSiteContextLinks(activeSiteId = "") {
   const siteId = siteQuery() || activeSiteId;
   if (!siteId) return;
   const creditsDestinations = new Set([
+    "/dashboard/activities",
     "/dashboard/rewards",
     "/dashboard/rewards/redemptions",
     "/dashboard/rewards/shop",

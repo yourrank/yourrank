@@ -1,6 +1,6 @@
 // Dynamic sections must route identically on both sides of the wire.
 //
-// Rewards, Engagement, Audience, Account and Site settings → Connections load
+// Activities, Rewards, Engagement, Audience, Account and Site settings → Connections load
 // as content fragments inside the persistent dashboard shell: the client asks
 // for /dashboard/_content?path=<url> and the Worker renders the same page
 // component the full document route would serve. Two routing tables make that
@@ -18,6 +18,10 @@ const user = { display_name: "Test operator", plan: "pro" };
 // Every dynamic section, its server page key per tab, and its boot module.
 // `boot` is what dynamic-section.js imports when the section is entered.
 const EXPECTED = {
+  activities: {
+    boot: "activities",
+    tabs: { overview: "activities" },
+  },
   rewards: {
     boot: "credits",
     tabs: {
@@ -64,8 +68,8 @@ const EXPECTED = {
 };
 
 describe("dynamic section routing parity", () => {
-  it("knows exactly the five dynamic sections", () => {
-    expect(Object.keys(DYNAMIC_SECTIONS).sort()).toEqual(["audience", "giveaways", "rewards", "settings", "siteConnections"]);
+  it("knows exactly the six dynamic sections", () => {
+    expect(Object.keys(DYNAMIC_SECTIONS).sort()).toEqual(["activities", "audience", "giveaways", "rewards", "settings", "siteConnections"]);
     for (const page of Object.keys(DYNAMIC_SECTIONS)) expect(isDynamicSection(page)).toBe(true);
     expect(isDynamicSection("home")).toBe(false);
     expect(isDynamicSection("telegram")).toBe(false);
@@ -107,9 +111,11 @@ describe("dynamic section routing parity", () => {
   });
 
   it("accepts the bare section prefix as its first tab", () => {
+    expect(parseDynamicPath("/dashboard/activities")).toEqual({ page: "activities", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards")).toEqual({ page: "rewards", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/giveaways")).toEqual({ page: "giveaways", tab: "chat", dynamic: true });
     expect(parseDynamicPath("/dashboard/settings")).toEqual({ page: "settings", tab: "account", dynamic: true });
+    expect(resolveFragment("/dashboard/activities")).toEqual({ pageKey: "activities", tab: "overview" });
     expect(resolveFragment("/dashboard/rewards")).toEqual({ pageKey: "rewardsOverview", tab: "overview" });
     expect(resolveFragment("/dashboard/settings")).toEqual({ pageKey: "settingsUnified", tab: "account" });
   });
@@ -191,6 +197,7 @@ describe("dynamic section shell integration", () => {
       expect(action, `${id} must route through the shell`).toContain("requestDashboardRoute");
       expect(action, `${id} must not navigate directly`).not.toContain("location.href");
     }
+    expect(paletteJs).toContain('{ id: "nav-activities", title: "Activities"');
     expect(paletteJs).toContain('{ id: "nav-analytics", title: "Insights"');
     expect(paletteJs).toContain('{ id: "nav-members", title: "People"');
     expect(paletteJs).toContain('{ id: "nav-settings", title: "Settings"');

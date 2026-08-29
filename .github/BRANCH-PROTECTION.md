@@ -1,16 +1,47 @@
 # Branch Protection & Environment Setup
 
-## Required GitHub Settings
+## Merge Gate Policy
 
-### 1. Branch Protection Rules (Settings → Branches → main)
+### Current private GitHub Free repository
 
-- ✅ Require pull request reviews before merging (1 approval)
-- ✅ Require status checks to pass before merging
-  - Required checks: `pr-check`
-- ✅ Require branches to be up to date before merging
-- ✅ Do not allow bypassing the above settings (even for admins recommended)
+GitHub does not provide branch protection or repository rulesets for this private
+organization repository on GitHub Free. Until the repository becomes public or
+the organization upgrades to a plan that provides those controls, every merge
+must be held until these checks report **success**:
 
-### 2. Environment Protection (Settings → Environments)
+- `Build`
+- `Dependency Audit`
+- `E2E`
+- `Lint`
+- `Migration Dry-Run`
+- `Test`
+- `Typecheck`
+- `sbom`
+- `trufflehog`
+
+CodeQL `analyze` is not a merge gate while the repository is private on GitHub
+Free. The job is explicitly **skipped**, not treated as passed, because GitHub
+rejects code-scanning SARIF uploads without GitHub Code Security.
+
+### Re-enable CodeQL
+
+CodeQL must be restored as a required merge gate when either condition becomes
+true:
+
+1. The repository becomes public. The workflow detects public visibility and
+   runs `analyze` automatically.
+2. GitHub Code Security is purchased and enabled for this private repository.
+   Set the repository or organization Actions variable `CODEQL_ENABLED=true` so
+   `analyze` runs.
+
+After the repository plan supports branch protection or rulesets, configure
+`main` to require the checks above plus `analyze`, require branches to be up to
+date, require one approval, and disallow administrator bypass.
+
+Do not set `CODEQL_ENABLED=true` before private-repository Code Security is
+enabled: the analysis completes locally in Actions but its SARIF upload fails.
+
+## Environment Protection (Settings → Environments)
 
 #### `production` Environment
 
@@ -31,7 +62,7 @@ Used by: `deploy.yml` — both `deploy-leaderboard` and `deploy-bot` jobs.
 
 Used by: `staging.yml` — both `deploy-leaderboard-staging` and `deploy-bot-staging` jobs.
 
-### 3. Workflow Environment References
+## Workflow Environment References
 
 All deploy jobs have the `environment:` field set:
 

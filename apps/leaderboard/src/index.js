@@ -147,6 +147,8 @@ function redirectFromManifest(url, legacy, source) {
 // assets/dashboard/routes.js must agree with this mapping.
 export function resolveFragment(targetPath) {
   const clean = trimTrailingSlashes(String(targetPath || "").split("?")[0]) || "/dashboard";
+  // Safe Activities foundation
+  if (clean === "/dashboard/activities") return { pageKey: "activities", tab: "overview" };
   // Engagement
   if (clean.startsWith("/dashboard/giveaways/")) {
     const tab = clean.slice("/dashboard/giveaways/".length);
@@ -846,6 +848,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/dashboard/audience/members") {
         return renderDashboardPage("audienceMembers", "audience_render_failed");
+      }
+      if (path === "/dashboard/activities") {
+        return renderDashboardPage("activities", "activities_render_failed", "overview");
       }
       // Site settings → Connections: the Kick connection's canonical home.
       // Served as its own document (like the other fragment-booted sections)

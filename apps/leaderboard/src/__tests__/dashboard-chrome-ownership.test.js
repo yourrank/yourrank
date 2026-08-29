@@ -176,6 +176,7 @@ function deriveRenderableRoutes() {
       routes.push({ ...route, hasSubnav: true, hasBreadcrumbs: true });
     }
   }
+  routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: false, hasBreadcrumbs: false });
   routes.push({ path: "/dashboard/audience/members", render: "rewards", tab: "members", hasSubnav: false, hasBreadcrumbs: true });
   // The Kick connection lives under Site settings → Connections: it renders the
   // channel content without the Rewards subnav, owned by the Site settings rail.
@@ -199,6 +200,9 @@ function renderRoute(route) {
   }
   if (route.render === "settings") {
     return PAGES.settingsUnified.Component({ activePath: route.path, tab: route.tab, user }).toString();
+  }
+  if (route.render === "activities") {
+    return PAGES.activities.Component({ activePath: route.path, user }).toString();
   }
   if (route.render === "rewards") {
     const page = {

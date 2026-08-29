@@ -46,6 +46,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       home: routeById("home").canonicalPath,
       sites: routeById("boards").canonicalPath,
       board: routeById("board").canonicalPath,
+      activities: routeById("activities.overview").canonicalPath,
       engage: "/dashboard/giveaways",
       games: routeById("games").canonicalPath,
       redemptions: routeById("rewards.overview").canonicalPath,
@@ -66,6 +67,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     // derivation — same keys, same rendered rail keys.
     expect(NAV_OWNER_MAP).toEqual({
       board: "board", leaderboard: "board",
+      activities: "activities",
       engage: "engage", giveaways: "engage", raffles: "engage",
       predictions: "engage", drops: "engage", tournaments: "engage",
       games: "games",
