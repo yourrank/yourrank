@@ -1023,7 +1023,6 @@ export async function handleCreditsAdjustBalance(request, env) {
   const body = await readJson(request);
   const delta = Number(body?.delta);
   const reason = String(body?.reason || "").trim();
-  const kickUsername = String(body?.username || body?.kickUsername || "").trim().replace(/^@/, "");
 
   if (!Number.isFinite(delta) || delta === 0) return bad("delta must be a non-zero integer");
   if (!reason) return bad("reason is required");
@@ -1037,30 +1036,6 @@ export async function handleCreditsAdjustBalance(request, env) {
           WHERE sv.id = $1 AND sv.site_id = $2
           FOR UPDATE`,
         [siteViewerId, site.id]
-      );
-    }
-
-    if (!siteViewer && kickUsername) {
-      // Find or insert cross-platform viewer record
-      let vRecord = await tx.one(
-        `SELECT id FROM viewers WHERE lower(kick_username) = lower($1) OR lower(kick_user_id) = lower($1)`,
-        [kickUsername]
-      );
-      if (!vRecord) {
-        vRecord = await tx.one(
-          `INSERT INTO viewers (kick_username, kick_user_id)
-           VALUES ($1, $1)
-           ON CONFLICT (kick_user_id) DO UPDATE SET kick_username = EXCLUDED.kick_username
-           RETURNING id`,
-          [kickUsername]
-        );
-      }
-      siteViewer = await tx.one(
-        `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned)
-         VALUES ($1, $2, 0, 0)
-         ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at = now()
-         RETURNING id, balance, total_earned`,
-        [site.id, vRecord.id]
       );
     }
 
