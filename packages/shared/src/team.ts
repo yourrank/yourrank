@@ -8,7 +8,9 @@
 // ============================================================================
 
 import { one as defaultOne, query as defaultQuery, exec as defaultExec, withTransaction as defaultWithTransaction } from "./db.js";
+import type { Tx } from "./db.js";
 import { hashToken } from "./crypto.js";
+import { effectivePlan, OPERATOR_SEAT_LIMITS } from "./plans.js";
 
 export type SiteRole = "owner" | "manager" | "moderator";
 
@@ -43,6 +45,18 @@ export interface DbOps {
   query?: typeof defaultQuery;
   exec?: typeof defaultExec;
   withTransaction?: typeof defaultWithTransaction;
+}
+
+function transactionRunner(ops: DbOps) {
+  if (ops.withTransaction) return ops.withTransaction;
+  if (ops.one || ops.exec || ops.query) {
+    return async <R>(fn: (tx: Tx) => Promise<R>): Promise<R> => fn({
+      one: ops.one ?? defaultOne,
+      query: ops.query ?? defaultQuery,
+      unsafe: ops.exec ?? defaultExec,
+    });
+  }
+  return defaultWithTransaction;
 }
 
 /** Check if role has permission to edit leaderboards, players, wagers, and scores */
@@ -88,6 +102,12 @@ export async function getSiteRole(
   );
   if (!site) return null;
   if (site.user_id === userId) return "owner";
+
+  const owner = await one<{ plan: string; plan_expires_at: string | null; status: string }>(
+    "SELECT plan, plan_expires_at, status FROM users WHERE id=$1",
+    [site.user_id],
+  );
+  if (effectivePlan(owner) !== "team") return null;
 
   // 2. Check if user is an active member
   const member = await one<{ role: SiteRole }>(
@@ -231,8 +251,9 @@ export async function createSiteInvite(
   inviterId: string,
   email: string,
   role: SiteRole,
-  { one = defaultOne, exec = defaultExec }: DbOps = {}
+  ops: DbOps = {}
 ): Promise<{ ok: boolean; token?: string; inviteId?: string; error?: string; code?: string }> {
+  const one = ops.one ?? defaultOne;
   const cleanEmail = String(email || "").trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) {
     return { ok: false, error: "Please provide a valid email address.", code: "invalid_email" };
@@ -247,51 +268,82 @@ export async function createSiteInvite(
     return { ok: false, error: "Only the site owner can invite team members.", code: "forbidden" };
   }
 
-  // Check if invited user is already the owner
-  const site = await one<{ user_id: string }>("SELECT user_id FROM sites WHERE id=$1", [siteId]);
-  if (!site) return { ok: false, error: "Site not found.", code: "not_found" };
-
-  const targetUser = await one<{ id: string }>("SELECT id FROM users WHERE lower(email)=$1", [cleanEmail]);
-  if (targetUser && targetUser.id === site.user_id) {
-    return { ok: false, error: "The site owner is already on the team.", code: "already_owner" };
-  }
-
-  if (targetUser) {
-    const existingMember = await one<{ id: string }>(
-      "SELECT id FROM site_members WHERE site_id=$1 AND user_id=$2",
-      [siteId, targetUser.id]
-    );
-    if (existingMember) {
-      return { ok: false, error: "This user is already a member of this site.", code: "already_member" };
-    }
-  }
-
   // Generate a cryptographically random token
   const rawBytes = new Uint8Array(24);
   crypto.getRandomValues(rawBytes);
   const token = Buffer.from(rawBytes).toString("base64url");
   const tokenHash = await hashToken(token);
 
-  // Rotate an active pending invite so the owner can resend a lost link.
-  const existingInvite = await one<{ id: string }>(
-    "SELECT id FROM site_invites WHERE site_id=$1 AND lower(email)=$2 AND status='pending' AND expires_at > now()",
-    [siteId, cleanEmail]
-  );
-  if (existingInvite) {
-    await exec(
-      "UPDATE site_invites SET token_hash=$1, expires_at=now() + interval '7 days', role=$2 WHERE id=$3",
-      [tokenHash, role, existingInvite.id]
+  return transactionRunner(ops)(async (tx) => {
+    const site = await tx.one(
+      `SELECT s.user_id, u.plan, u.plan_expires_at, u.status
+         FROM sites s JOIN users u ON u.id=s.user_id
+        WHERE s.id=$1 FOR UPDATE OF u`,
+      [siteId],
     );
-    return { ok: true, token, inviteId: existingInvite.id };
-  }
+    if (!site) return { ok: false, error: "Site not found.", code: "not_found" };
+    if (site.user_id !== inviterId) {
+      return { ok: false, error: "Only the site owner can invite team members.", code: "forbidden" };
+    }
+    if (effectivePlan(site) !== "team") {
+      return { ok: false, error: "Additional operators require the Team plan.", code: "requires_team" };
+    }
 
-  const insertSql = `INSERT INTO site_invites (site_id, email, role, token_hash, invited_by, status, expires_at)
-     VALUES ($1, $2, $3, $4, $5, 'pending', now() + interval '7 days')
-     RETURNING id`;
-  const insertParams = [siteId, cleanEmail, role, tokenHash, inviterId];
-  const created = (await exec(insertSql, insertParams))[0] as { id: string } | undefined;
+    const targetUser = await tx.one("SELECT id FROM users WHERE lower(email)=$1", [cleanEmail]);
+    if (targetUser?.id === site.user_id) {
+      return { ok: false, error: "The site owner is already on the team.", code: "already_owner" };
+    }
+    if (targetUser) {
+      const existingMember = await tx.one(
+        "SELECT id FROM site_members WHERE site_id=$1 AND user_id=$2",
+        [siteId, targetUser.id],
+      );
+      if (existingMember) {
+        return { ok: false, error: "This user is already a member of this site.", code: "already_member" };
+      }
+    }
 
-  return { ok: true, token, inviteId: created?.id };
+    const existingInvite = await tx.one(
+      "SELECT id FROM site_invites WHERE site_id=$1 AND lower(email)=$2 AND status='pending' AND expires_at > now()",
+      [siteId, cleanEmail],
+    );
+    if (existingInvite) {
+      await tx.unsafe(
+        "UPDATE site_invites SET token_hash=$1, expires_at=now() + interval '7 days', role=$2 WHERE id=$3",
+        [tokenHash, role, existingInvite.id],
+      );
+      return { ok: true, token, inviteId: existingInvite.id };
+    }
+
+    const seats = await tx.one(
+      `WITH account_sites AS (
+         SELECT id FROM sites WHERE user_id=$1
+       ), identities AS (
+         SELECT 'user:' || $1::text AS identity
+         UNION
+         SELECT 'user:' || sm.user_id::text
+           FROM site_members sm JOIN account_sites a ON a.id=sm.site_id
+         UNION
+         SELECT COALESCE('user:' || invited.id::text, 'email:' || lower(si.email))
+           FROM site_invites si
+           JOIN account_sites a ON a.id=si.site_id
+           LEFT JOIN users invited ON lower(invited.email)=lower(si.email)
+          WHERE si.status='pending' AND si.expires_at > now()
+       ) SELECT count(DISTINCT identity)::int AS count FROM identities`,
+      [site.user_id],
+    );
+    if ((Number(seats?.count) || 0) >= OPERATOR_SEAT_LIMITS.team) {
+      return { ok: false, error: "The Team plan includes 5 operator seats.", code: "seat_limit" };
+    }
+
+    const created = (await tx.unsafe(
+      `INSERT INTO site_invites (site_id, email, role, token_hash, invited_by, status, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'pending', now() + interval '7 days')
+       RETURNING id`,
+      [siteId, cleanEmail, role, tokenHash, inviterId],
+    ))[0];
+    return { ok: true, token, inviteId: created?.id };
+  });
 }
 
 /**
@@ -420,13 +472,15 @@ export async function getInviteByToken(
 export async function acceptSiteInvite(
   token: string,
   userId: string,
-  { one = defaultOne, exec = defaultExec }: DbOps = {}
+  ops: DbOps = {}
 ): Promise<{ ok: boolean; siteId?: string; role?: SiteRole; error?: string; code?: string }> {
   if (!token || !userId) {
     return { ok: false, error: "Invalid invite token or user.", code: "invalid_request" };
   }
 
-  const invite = await one<{
+  const tokenHash = await hashToken(token);
+  return transactionRunner(ops)(async (tx) => {
+  const invite = await tx.one<{
     id: string;
     site_id: string;
     email: string;
@@ -434,9 +488,19 @@ export async function acceptSiteInvite(
     status: string;
     expires_at: string;
     invited_by: string;
+    owner_id: string;
+    plan: string;
+    plan_expires_at: string | null;
+    owner_status: string;
   }>(
-    "SELECT id, site_id, email, role, status, expires_at, invited_by FROM site_invites WHERE token_hash=$1",
-    [await hashToken(token)]
+    `SELECT si.id, si.site_id, si.email, si.role, si.status, si.expires_at, si.invited_by,
+            s.user_id AS owner_id, u.plan, u.plan_expires_at, u.status AS owner_status
+       FROM site_invites si
+       JOIN sites s ON s.id=si.site_id
+       JOIN users u ON u.id=s.user_id
+      WHERE si.token_hash=$1
+      FOR UPDATE OF si, u`,
+    [tokenHash]
   );
 
   if (!invite) {
@@ -447,7 +511,7 @@ export async function acceptSiteInvite(
     return { ok: false, error: "This invitation has been revoked by the site owner.", code: "revoked" };
   }
 
-  const user = await one<{ email: string }>("SELECT email FROM users WHERE id=$1", [userId]);
+  const user = await tx.one<{ email: string }>("SELECT email FROM users WHERE id=$1", [userId]);
   if (!user || user.email.trim().toLowerCase() !== invite.email.trim().toLowerCase()) {
     return { ok: false, error: "This invitation was issued for a different email address.", code: "email_mismatch" };
   }
@@ -460,8 +524,33 @@ export async function acceptSiteInvite(
     return { ok: false, error: "This invitation has expired.", code: "expired" };
   }
 
+  if (effectivePlan({ plan: invite.plan, plan_expires_at: invite.plan_expires_at, status: invite.owner_status }) !== "team") {
+    return { ok: false, error: "The site owner needs the Team plan before this invitation can be accepted.", code: "requires_team" };
+  }
+
+  const existingAccountSeat = await tx.one(
+    `SELECT sm.id
+       FROM site_members sm
+       JOIN sites s ON s.id=sm.site_id
+      WHERE s.user_id=$1 AND sm.user_id=$2
+      LIMIT 1`,
+    [invite.owner_id, userId],
+  );
+  if (!existingAccountSeat) {
+    const seats = await tx.one(
+      `SELECT (1 + COUNT(DISTINCT sm.user_id))::int AS count
+         FROM sites s
+         LEFT JOIN site_members sm ON sm.site_id=s.id
+        WHERE s.user_id=$1`,
+      [invite.owner_id],
+    );
+    if ((Number(seats?.count) || 0) >= OPERATOR_SEAT_LIMITS.team) {
+      return { ok: false, error: "The Team plan includes 5 operator seats.", code: "seat_limit" };
+    }
+  }
+
   // Insert membership record
-  await exec(
+  await tx.unsafe(
     `INSERT INTO site_members (site_id, user_id, role, invited_by)
      VALUES ($1, $2, $3, $4)
      ON CONFLICT (site_id, user_id)
@@ -470,10 +559,11 @@ export async function acceptSiteInvite(
   );
 
   // Mark invite as accepted
-  await exec(
+  await tx.unsafe(
     "UPDATE site_invites SET status='accepted' WHERE id=$1",
     [invite.id]
   );
 
   return { ok: true, siteId: invite.site_id, role: invite.role };
+  });
 }

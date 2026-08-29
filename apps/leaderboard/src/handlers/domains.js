@@ -106,7 +106,7 @@ export async function handleDomainPurchase(request, env, {
     if (authorization.res) return authorization.res;
 
     const plan = effectivePlan(user);
-    if (plan !== "pro" && plan !== "agency") return bad("Custom domains are a Pro feature.", 403);
+    if (plan !== "pro" && plan !== "team") return bad("Custom domains require Pro or Team.", 403);
     const activeOrderFilter = "status NOT IN ('cancelled', 'expired') AND expires_at > now()";
     const siteOrder = await oneImpl(
       `SELECT id FROM domain_orders WHERE site_id=$1 AND ${activeOrderFilter} LIMIT 1`,

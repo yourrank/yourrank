@@ -51,13 +51,12 @@ async function applyReferralReward(referrerId, referredId) {
     [referrerId]
   );
   if (!referrer) return;
-  if (effectivePlan(referrer) === "lifetime") return;
   const now = Date.now();
   const currentExpiry = Number(referrer.plan_expires_at) || now;
   const base = currentExpiry > now ? currentExpiry : now;
   const maxMs = now + REFERRAL_MAX_EXTENSION_DAYS * 86400000;
   const newExpiry = Math.min(base + REFERRAL_REWARD_DAYS * 86400000, maxMs);
-  const newPlan = referrer.plan === "agency" ? "agency" : "pro";
+  const newPlan = effectivePlan(referrer) === "team" ? "team" : "pro";
   await withTransaction(async (tx) => {
     await tx.unsafe(
       "INSERT INTO referral_rewards (referrer_id, referred_id, reward_days) VALUES ($1, $2, $3) ON CONFLICT (referred_id) DO NOTHING",

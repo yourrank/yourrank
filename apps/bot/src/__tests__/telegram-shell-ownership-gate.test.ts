@@ -148,7 +148,7 @@ describe("Telegram body ownership and navigation", () => {
 describe("Telegram source ownership", () => {
   it("keeps shell structural markup out of bot-owned sources", () => {
     const emitters = sourceFiles().filter((file) => {
-      const isPanel = path.relative(SRC_ROOT, file).startsWith("dashboard-views/pages/");
+      const isPanel = path.relative(SRC_ROOT, file).split(path.sep).join("/").startsWith("dashboard-views/pages/");
       const source = stripComments(readFileSync(file, "utf8"));
       return SHELL_MARKERS.some((marker) =>
         (!isPanel || marker.source !== PANEL_ALLOWED_MARKER.source) && marker.test(source),

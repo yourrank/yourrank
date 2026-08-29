@@ -29,6 +29,7 @@ function deps({ rows = [], execError = null } = {}) {
       calls.exec.push({ sql, params });
       if (execError) throw execError;
     },
+    markActiveImpl: async () => null,
   };
 }
 
@@ -39,7 +40,7 @@ describe("viewer board membership tracking", () => {
 
     expect(injected.calls.exec).toHaveLength(1);
     expect(injected.calls.exec[0].sql).toContain(
-      "INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)",
+      "INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at, last_active_at)",
     );
     expect(injected.calls.exec[0].sql).toContain("ON CONFLICT (site_id, viewer_id) DO NOTHING");
     expect(injected.calls.exec[0].params).toEqual(["site-1", "viewer-1"]);

@@ -11,7 +11,7 @@ import path from "node:path";
 import { DashboardContent } from "../pages/dashboard.jsx";
 
 const SRC_ROOT = path.resolve(import.meta.dir, "..");
-const read = (rel) => readFileSync(path.join(SRC_ROOT, rel), "utf8");
+const read = (rel) => readFileSync(path.join(SRC_ROOT, rel), "utf8").replace(/\r\n/g, "\n");
 
 const dashboardCss = read("assets/dashboard-v4.css");
 const appCss = read("assets/app.css");

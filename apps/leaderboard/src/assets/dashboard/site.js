@@ -10,6 +10,7 @@ import { clearPlayersDraft, collectPlayers, commitDraftMutation, renderPlayers, 
 import { requestPublicationChange } from "./publication.js";
 import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from "./request.js";
 import { currentRoute, requestDashboardRoute } from "./shell.js";
+import { activeViewerUsageMarkup } from "./plan-usage.js";
 
 export const DEFAULT_SECTIONS = {
   hero: true,
@@ -27,7 +28,7 @@ export const DEFAULT_SECTIONS = {
   poweredBy: false,
 };
 
-const PLAN_ORDER = ["free", "starter", "pro", "agency"];
+const PLAN_ORDER = ["free", "pro", "team"];
 let obsSlug = "";
 
 async function wireObsTools() {
@@ -84,31 +85,21 @@ async function wireObsTools() {
     });
   });
 }
-const LIFETIME_KEY = "lifetime";
 const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false };
 
-export function isLifetime() {
-  const exp = state.ME?.planExpiresAt;
-  return Number(exp) > new Date("2099-01-01T00:00:00Z").getTime();
-}
 export function isPro() {
   const plan = state.ME?.plan;
-  return plan === "pro" || plan === "agency" || plan === "lifetime" || isLifetime();
+  return plan === "pro" || plan === "team";
 }
 
 function planDefs() {
-  const proPrice = state.ME?.proPrice;
-  const proPriceStr = proPrice == null ? "—" : `$${proPrice}`;
   return [
-    { key: "free", name: "Free", price: 0, priceStr: "$0", period: "", note: "forever", features: ["1 leaderboard", "Up to 10 players", "YourRank badge", "Basic analytics (7 days)", "Live countdown"] },
-    { key: "starter", name: "Starter", price: 12, priceStr: "$12", period: "/30 days", note: "", features: ["1 leaderboard", "Up to 25 players", "CSV import", "Full analytics (30 days)", "Font choice", "Custom accent colors", "Logo"] },
-    { key: "pro", name: "Pro", price: proPrice, priceStr: proPriceStr, period: "/30 days", note: "Most popular", features: ["Up to 3 leaderboards", "Up to 9,999 players", "Custom domain", "OBS overlay", "Discord + Telegram alerts", "Section controls", "Prize & countdown customization", "Remove YourRank badge"] },
-    { key: "agency", name: "Agency", price: 79, priceStr: "$79", period: "/30 days", note: "", features: ["Up to 99 leaderboards", "White-label branding", "Automatic score updates", "Dedicated support", "Custom CSS", "Remove YourRank badge"] },
-    { key: "lifetime", name: "Lifetime Pro", price: 149, priceStr: "$149", period: "", note: "one-time", features: ["All Pro + Agency features", "Pay once, use forever", "No monthly bills"] },
+    { key: "free", name: "Free", price: 0, priceStr: "$0", period: "", note: "forever", features: ["100 active viewers", "1 site", "50 players", "3 reward mappings", "5 shop items", "30 days of history"] },
+    { key: "pro", name: "Pro", price: 24, priceStr: "$24", period: "/month", note: "Recommended", features: ["2,500 active viewers", "3 sites", "1,000 players per site", "Custom domain", "Stronger branding", "12 months of history"] },
+    { key: "team", name: "Team", price: 69, priceStr: "$69", period: "/month", note: "", features: ["10,000 active viewers", "10 sites", "5 operator seats", "Roles and permissions", "5,000 players per site", "24 months of history"] },
   ];
 }
 
-let checkingOut = false;
 let startingTrial = false;
 
 async function startTrial(btn) {
@@ -130,25 +121,10 @@ async function startTrial(btn) {
 }
 
 export async function checkout(planOrBtn, btnRef) {
-  const planKey = typeof planOrBtn === "string" ? planOrBtn : (planOrBtn?.dataset?.plan || "pro");
   const btn = typeof planOrBtn === "object" ? planOrBtn : btnRef;
-  if (checkingOut) return;
-  checkingOut = true;
-  let orig = "";
-  if (btn) { orig = btn.textContent; btn.disabled = true; btn.textContent = "Opening checkout…"; }
-  try {
-    const isLifetime = planKey === LIFETIME_KEY;
-    const endpoint = isLifetime ? "/api/billing/checkout-lifetime" : "/api/billing/checkout";
-    const headers = { "x-csrf-token": getCsrf() };
-    const body = isLifetime ? undefined : JSON.stringify({ plan: planKey });
-    if (!isLifetime) headers["content-type"] = "application/json";
-    const res = await fetch(endpoint, { method: "POST", credentials: "include", headers, body }).then(guardAuth);
-    const d = await res.json();
-    if (res.ok && d.ok && d.url) { location.href = d.url; return; }
-    $("status").textContent = d.error || "Couldn't start checkout.";
-  } catch (err) { logError("checkout", err); $("status").textContent = "Network error."; }
-  if (btn) { btn.disabled = false; btn.textContent = orig; }
-  checkingOut = false;
+  if (btn) btn.disabled = true;
+  const status = $("status");
+  if (status) status.textContent = "Recurring card billing is not available yet. Paid access will only start after verified provider confirmation.";
 }
 
 async function loadPendingPayment() {
@@ -156,40 +132,27 @@ async function loadPendingPayment() {
   const link = $("pendingPaymentLink");
   const status = wrap?.querySelector("p[role='status']");
   if (!wrap || !link || !status) return;
-  try {
-    const res = await fetch("/api/billing/pending", { credentials: "include" }).then(guardAuth);
-    const d = await res.json();
-    if (res.ok && d.ok && d.pending && d.url) {
-      status.textContent = `You have a pending ${d.plan?.toUpperCase()} payment of $${Number(d.amount).toFixed(2)}.`;
-      link.href = d.url;
-      wrap.hidden = false;
-      return;
-    }
-  } catch (err) { logError("loadPendingPayment", err); }
   wrap.hidden = true;
 }
 
-function renderPlanCard(p, isCurrent, isLower, cta, accent, isContact) {
+function renderPlanCard(p, isCurrent, isLower, cta, accent) {
   const classes = ["plan-card"];
   if (isCurrent) classes.push("plan-card--current");
   if (p.note === "Most popular") classes.push("plan-card--popular");
   const disabled = isCurrent || isLower ? "disabled" : "";
   const note = p.note ? `<span class="plan-card-note">${esc(p.note)}</span>` : "";
   const list = p.features.map((f) => `<li>${esc(f)}</li>`).join("");
-  const ctaEl = isContact
-    ? `<a class="btn btn--sm plan-card-cta" href="/help/support?area=billing">${esc(cta)}</a>`
-    : `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" ${disabled}>${esc(cta)}</button>`;
+  const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" ${disabled}>${esc(cta)}</button>`;
   return `<div class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div></div><ul class="plan-card-features">${list}</ul>${ctaEl}</div>`;
 }
 
 export function renderPlan() {
   const plan = state.ME.plan || "free";
   const isTrial = state.ME.isTrial;
-  const lifetime = isLifetime();
-  const planNames = { free: "Free", starter: "Starter", pro: "Pro", agency: "Agency" };
-  const currentName = lifetime ? "Lifetime Pro" : (planNames[plan] || plan);
+  const planNames = { free: "Free", pro: "Pro", team: "Team" };
+  const currentName = planNames[plan] || plan;
   const expiry = state.ME.planExpiresAt;
-  const until = expiry && Number(expiry) > 0 && !lifetime ? `Active until ${new Date(Number(expiry)).toLocaleDateString()}` : (lifetime ? "No expiry" : "");
+  const until = expiry && Number(expiry) > 0 ? `Active until ${new Date(Number(expiry)).toLocaleDateString()}` : "";
 
   const summary = $("planSummary");
   if (summary) {
@@ -198,7 +161,7 @@ export function renderPlan() {
 
   const banner = $("planBanner");
   if (banner) {
-    if (!lifetime && plan !== "free" && expiry && Number(expiry) > 0) {
+    if (plan !== "free" && expiry && Number(expiry) > 0) {
       const days = Math.floor((Number(expiry) - Date.now()) / 86_400_000);
       if (days < 0) {
         banner.hidden = false;
@@ -216,29 +179,12 @@ export function renderPlan() {
     }
   }
 
-  const cancelWrap = $("cancelWrap");
-  if (cancelWrap) {
-    const paid = plan !== "free" && !lifetime && !isTrial;
-    cancelWrap.hidden = !paid;
-    if (paid) {
-      const cancelStatus = $("cancelStatus");
-      if (cancelStatus) cancelStatus.textContent = "";
-      const cancelBtn = $("cancelBtn");
-      if (cancelBtn) { cancelBtn.hidden = false; cancelBtn.disabled = false; }
-    }
-  }
-
   const grid = $("planGrid");
   if (grid) {
     const currentIdx = PLAN_ORDER.indexOf(plan);
     grid.innerHTML = planDefs().map((p) => {
-      if (p.key === LIFETIME_KEY) {
-        const isCurrent = lifetime;
-        const cta = isCurrent ? "Current plan" : "Get Lifetime Pro";
-        return renderPlanCard(p, isCurrent, false, cta, !isCurrent, false);
-      }
       const pIdx = PLAN_ORDER.indexOf(p.key);
-      const isCurrent = p.key === plan && !lifetime;
+      const isCurrent = p.key === plan;
       const isLower = pIdx < currentIdx;
       let cta, accent = false;
       if (isCurrent) {
@@ -246,10 +192,10 @@ export function renderPlan() {
       } else if (isLower) {
         cta = "Included";
       } else {
-        cta = p.key === "free" ? "Current" : (p.key === "agency" ? "Contact us" : `Upgrade to ${p.name}`);
-        accent = p.key !== "agency";
+        cta = p.key === "free" ? "Current" : `Start ${p.name}`;
+        accent = p.key === "pro";
       }
-      return renderPlanCard(p, isCurrent, isLower, cta, accent && !isCurrent, p.key === "agency");
+      return renderPlanCard(p, isCurrent, isLower, cta, accent && !isCurrent);
     }).join("");
     if (!grid._wired) {
       grid.addEventListener("click", (e) => {
@@ -275,7 +221,7 @@ export function renderPlan() {
   }
 
   // Backfill legacy single-plan elements if they still exist
-  if ($("planBadge")) $("planBadge").textContent = (lifetime ? "Lifetime" : plan).toUpperCase() + " PLAN";
+  if ($("planBadge")) $("planBadge").textContent = plan.toUpperCase() + " PLAN";
   loadPendingPayment();
 }
 
@@ -321,54 +267,23 @@ export async function loadPlanUsage() {
     if (!res.ok || !d.ok) { setState({ USAGE_STATUS: "error" }); wrap.innerHTML = `<p class="hint hint--error">Could not load usage.</p>`; return; }
     setState({ USAGE_STATUS: "ready" });
     const rows = [];
-    rows.push({ label: "Leaderboards", product: "Leaderboard", used: d.leaderboard.boards.used, limit: d.leaderboard.boards.limit });
+    rows.push({ label: "Sites", product: "Leaderboard", used: d.leaderboard.sites.used, limit: d.leaderboard.sites.limit });
     rows.push({ label: "Players", product: "Leaderboard", used: d.leaderboard.players.used, limit: d.leaderboard.players.limit });
     if (d.credits) {
       rows.push({ label: "Ways to earn", product: "Credits", used: d.credits.rewardMappings.used, limit: d.credits.rewardMappings.limit });
       rows.push({ label: "Shop items", product: "Credits", used: d.credits.shopItems.used, limit: d.credits.shopItems.limit });
       rows.push({ label: "Pending orders", product: "Credits", used: d.credits.pendingRedemptions.used, limit: d.credits.pendingRedemptions.limit });
       rows.push({ label: "Orders / 30 days", product: "Credits", used: d.credits.redemptionsPer30Days.used, limit: d.credits.redemptionsPer30Days.limit });
-      rows.push({ label: "New members / 30 days", product: "Credits", used: d.credits.newViewersPer30Days.used, limit: d.credits.newViewersPer30Days.limit });
     }
-    wrap.innerHTML = rows.map((r) => {
-      const atLimit = r.limit > 0 && r.used >= r.limit;
-      const near = r.limit > 0 && !atLimit && r.used >= Math.floor(r.limit * 0.8);
-      const color = atLimit ? "color:#ff6b6b" : near ? "color:#ffcc00" : "";
-      return `<div class="plan-usage-row"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product)}</span></div><span class="plan-usage-value" style="${esc(color)}">${Number(r.used).toLocaleString()} / ${Number(r.limit).toLocaleString()}</span></div>`;
-    }).join("");
+    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} / ${Number(r.limit).toLocaleString()}</span></div>`).join("")}</div>`;
+    if (d.billing && !d.billing.recurringCheckoutAvailable) {
+      wrap.insertAdjacentHTML("beforeend", `<p class="hint">${esc(d.billing.message)}</p>`);
+    }
   } catch (err) {
     setState({ USAGE_STATUS: "error" });
     logError("loadPlanUsage", err);
     if (wrap) wrap.innerHTML = `<p class="hint hint--error">Could not load usage.</p>`;
   }
-}
-
-export function wireCancelSubscription() {
-  const btn = $("cancelBtn");
-  if (!btn || btn._wired) return;
-  btn._wired = true;
-  btn.addEventListener("click", async () => {
-    const plan = state.ME?.plan || "free";
-    const expiry = state.ME?.planExpiresAt;
-    const until = expiry && Number(expiry) > 0 ? new Date(Number(expiry)).toUTCString().slice(5, 16) : "";
-    const body = until
-      ? `You'll keep ${plan} features until ${until}, then revert to Free.`
-      : "Your plan will revert to Free immediately.";
-    if (!await showConfirmModal("Cancel subscription?", body, "Yes, cancel", true)) return;
-    const status = $("cancelStatus");
-    if (status) status.textContent = "Cancelling...";
-    try {
-      const res = await fetch("/api/billing/cancel", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
-      const d = await res.json();
-      if (res.ok && d.ok) {
-        if (status) status.textContent = d.message || "Subscription cancelled.";
-        btn.hidden = true;
-        setTimeout(() => location.reload(), 1200);
-      } else {
-        if (status) status.textContent = d.error || "Could not cancel.";
-      }
-    } catch (err) { logError("cancel-subscription", err); if (status) status.textContent = "Network error."; }
-  });
 }
 
 export function collect({ reportPlayerErrors = true } = {}) {
@@ -1444,7 +1359,7 @@ export function renderSitePublicAddress() {
 }
 
 export async function renderDomain() {
-  const pro = state.ME.plan === "pro" || state.ME.plan === "agency";
+  const pro = isPro();
   const domainBody = $("domainBody");
   const domainLock = $("domainLock");
   const overview = $("domainOverviewCard");

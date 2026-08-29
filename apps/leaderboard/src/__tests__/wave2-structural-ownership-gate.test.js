@@ -98,9 +98,9 @@ function assertShellStructureOwnership() {
     .filter((path) => {
       const src = executableSource(path);
       return /class=["'`](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-side-brandrow)["'`]|<aside[^>]+class=["'`]lb-side/.test(src);
-    });
+  });
   const telegramShellSources = sourceFiles(botSrc)
-    .filter((path) => !path.includes("/dashboard-views/pages/"))
+    .filter((path) => !path.replaceAll("\\", "/").includes("/dashboard-views/pages/"))
     .filter((path) => /class=["'`](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-bento|lb-side-brandrow|v3-crumbs|gm-shell-nav|gm-profile)(?:["'` ])/.test(executableSource(path)));
   expect((sharedShell.match(/function dashboardChromeHtml/g) || []).length).toBe(1);
   expect(adapter).not.toMatch(/class=["'](?:v3-dash|lb-shell|lb-side|lb-topbar|lb-main)["']/);

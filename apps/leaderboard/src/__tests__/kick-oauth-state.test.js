@@ -183,10 +183,11 @@ describe("Kick OAuth state integration seams", () => {
     });
 
     expect(response.status).toBe(302);
-    expect(queries.at(-1)).toContain("SELECT id FROM sites WHERE slug=$1");
+    expect(queries.some((sql) => sql.includes("SELECT id FROM sites WHERE slug=$1"))).toBe(true);
     expect(memberships).toHaveLength(1);
     expect(memberships[0].params).toEqual(["site-1", "viewer-1"]);
-    expect(memberships[0].sql).toContain("ON CONFLICT (site_id, viewer_id) DO NOTHING");
+    expect(memberships[0].sql).toContain("ON CONFLICT (site_id, viewer_id)");
+    expect(memberships[0].sql).toContain("last_active_at=now()");
   });
 
   test("platform paths do not create a viewer site membership", async () => {

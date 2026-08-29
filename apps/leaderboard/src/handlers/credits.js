@@ -21,6 +21,7 @@ import {
 } from "@yourrank/shared/plans";
 import { requireSiteCapability } from "../site-authorization.js";
 import { routeContext } from "../middleware/handler.js";
+import { creatorExpansionRestriction } from "@yourrank/shared/plan-usage";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
 const creditsCreateRewardDefaults = {
@@ -35,6 +36,18 @@ const creditsCreateRewardDefaults = {
   getValidKickAccessToken,
   createKickChannelReward,
   fetchKickCurrentChannel,
+  creatorExpansionRestriction,
+};
+
+const creditsGrowthDefaults = {
+  requireUser,
+  getByUser,
+  getBoardById,
+  requireSiteCapability,
+  rateLimit,
+  one,
+  withTransaction,
+  creatorExpansionRestriction,
 };
 
 function getSite(env, user, url) {
@@ -86,7 +99,7 @@ function decodeActivityCursor(value) {
 }
 
 async function getSiteCreditsUsage(siteId) {
-  const [rewardMappings, shopItems, pendingRedemptions, redemptions30d, newViewers30d] = await Promise.all([
+  const [rewardMappings, shopItems, pendingRedemptions, redemptions30d] = await Promise.all([
     one("SELECT count(*)::int AS count FROM credit_reward_mappings WHERE site_id=$1 AND active=true", [siteId]),
     one("SELECT count(*)::int AS count FROM shop_items WHERE site_id=$1 AND active=true", [siteId]),
     one(
@@ -101,18 +114,12 @@ async function getSiteCreditsUsage(siteId) {
         WHERE sv.site_id=$1 AND r.status='fulfilled' AND r.created_at > now() - interval '30 days'`,
       [siteId]
     ),
-    one(
-      `SELECT count(*)::int AS count FROM site_viewers
-        WHERE site_id=$1 AND created_at > now() - interval '30 days'`,
-      [siteId]
-    ),
   ]);
   return {
     rewardMappings: rewardMappings?.count || 0,
     shopItems: shopItems?.count || 0,
     pendingRedemptions: pendingRedemptions?.count || 0,
     redemptionsPer30Days: redemptions30d?.count || 0,
-    newViewersPer30Days: newViewers30d?.count || 0,
   };
 }
 
@@ -142,7 +149,7 @@ export async function handleCreditsStatus(request, env) {
       [site.id]
     ),
     query(
-      // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
+      // Defensive ceiling above the highest current plan's active-item limit.
       `SELECT id, name, description, cost, stock, active
          FROM shop_items
         WHERE site_id=$1 ORDER BY created_at DESC LIMIT 1024`,
@@ -200,7 +207,7 @@ export async function handleCreditsStatus(request, env) {
       shopItems: CREDITS_SHOP_LIMITS[plan],
       pendingRedemptions: CREDITS_PENDING_REDEMPTIONS_LIMITS[plan],
       redemptionsPer30Days: CREDITS_REDEMPTIONS_PER_30D_LIMITS[plan],
-      newViewersPer30Days: CREDITS_VIEWERS_PER_30D_LIMITS[plan],
+      activeViewersPer30Days: CREDITS_VIEWERS_PER_30D_LIMITS[plan],
     },
   });
 }
@@ -229,15 +236,16 @@ export async function handleCreditsConnect(request, env) {
   return ok({ channel: { externalId, name, linkedAt: row?.kick_channel_linked_at || null } });
 }
 
-export async function handleCreditsSaveReward(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleCreditsSaveReward(request, env, deps = creditsGrowthDefaults) {
+  const { user, res } = await deps.requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
-  const site = await getSite(env, user, url);
+  const siteId = url.searchParams.get("siteId");
+  const site = siteId ? await deps.getBoardById(env, user.id, siteId) : await deps.getByUser(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
-  if (!(await rateLimit(env, `credits:reward:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await deps.rateLimit(env, `credits:reward:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
 
   const body = await readJson(request);
   const id = body?.id ? String(body.id).trim() : null;
@@ -250,10 +258,20 @@ export async function handleCreditsSaveReward(request, env) {
   if (!Number.isFinite(kickRewardCost) || kickRewardCost < 0) return bad("Reward cost must be a non-negative number");
   if (!Number.isFinite(credits) || credits <= 0) return bad("Credits must be a positive number");
 
+  const existingGrowthRow = id
+    ? await deps.one("SELECT active FROM credit_reward_mappings WHERE id=$1 AND site_id=$2", [id, site.id])
+    : await deps.one("SELECT active FROM credit_reward_mappings WHERE kick_reward_id=$1 AND site_id=$2", [kickRewardId, site.id]);
+  if (!existingGrowthRow?.active) {
+    const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
+    if (expansion.restricted) {
+      return bad("New reward mappings are paused while this Free account remains above its active-viewer allowance after grace. Existing rewards still work.", 403);
+    }
+  }
+
   const plan = effectivePlan(user);
   const limit = CREDITS_REWARD_LIMITS[plan];
 
-  const txResult = await withTransaction(async (tx) => {
+  const txResult = await deps.withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
 
     const countRow = await tx.one(
@@ -318,6 +336,11 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   if (!title) return bad("Reward title is required");
   if (!Number.isFinite(cost) || cost < 1) return bad("Reward cost must be a positive number");
   if (!Number.isFinite(credits) || credits <= 0) return bad("Credits must be a positive number");
+
+  const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
+  if (expansion.restricted) {
+    return bad("New reward mappings are paused while this Free account remains above its active-viewer allowance after grace. Existing rewards still work.", 403);
+  }
 
   // Enforce plan limit before calling Kick (re-checked under a lock below).
   const plan = effectivePlan(user);
@@ -479,15 +502,16 @@ export async function handleCreditsDeleteReward(request, env) {
   return ok({ id: rows[0].id });
 }
 
-export async function handleCreditsSaveShopItem(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleCreditsSaveShopItem(request, env, deps = creditsGrowthDefaults) {
+  const { user, res } = await deps.requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
-  const site = await getSite(env, user, url);
+  const siteId = url.searchParams.get("siteId");
+  const site = siteId ? await deps.getBoardById(env, user.id, siteId) : await deps.getByUser(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
-  if (!(await rateLimit(env, `credits:shop:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await deps.rateLimit(env, `credits:shop:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
 
   const body = await readJson(request);
   const id = body?.id ? String(body.id).trim() : null;
@@ -501,10 +525,22 @@ export async function handleCreditsSaveShopItem(request, env) {
   if (!Number.isFinite(cost) || cost <= 0) return bad("Cost must be a positive number");
   if (stock !== null && (!Number.isFinite(stock) || stock < 0)) return bad("Stock must be a non-negative number or null");
 
+  if (active) {
+    const existingItem = id
+      ? await deps.one("SELECT active FROM shop_items WHERE id=$1 AND site_id=$2", [id, site.id])
+      : null;
+    if (!existingItem?.active) {
+      const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
+      if (expansion.restricted) {
+        return bad("New shop items are paused while this Free account remains above its active-viewer allowance after grace. Existing orders and items remain available.", 403);
+      }
+    }
+  }
+
   const plan = effectivePlan(user);
   const limit = CREDITS_SHOP_LIMITS[plan];
 
-  const txResult = await withTransaction(async (tx) => {
+  const txResult = await deps.withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
 
     const countRow = await tx.one(
@@ -798,7 +834,7 @@ export async function handlePublicCredits(request, env) {
   }
 
   const shopItems = await query(
-    // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
+    // Defensive ceiling above the highest current plan's active-item limit.
     `SELECT id, name, description, cost, stock, active
        FROM shop_items
       WHERE site_id=$1 AND active=true

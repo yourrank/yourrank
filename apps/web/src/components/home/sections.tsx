@@ -1,4 +1,4 @@
-import { PLAN_META } from "@yourrank/shared/plans";
+import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 
 const PROOF_ITEMS = [
   "Branded community sites",
@@ -168,7 +168,7 @@ export function ComparisonSection() {
   );
 }
 
-const PLAN_ORDER = ["free", "starter", "pro", "agency"] as const;
+const PLAN_ORDER = ["free", "pro", "team"] as const;
 
 export function PricingSnapshot() {
   return (
@@ -188,10 +188,10 @@ export function PricingSnapshot() {
           </a>
         </div>
 
-        <div className="mt-14 grid gap-px overflow-hidden rounded-[16px] border border-devin-line bg-devin-line sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-14 grid gap-px overflow-hidden rounded-[16px] border border-devin-line bg-devin-line lg:grid-cols-3">
           {PLAN_ORDER.map((tier) => {
             const plan = PLAN_META[tier];
-            const href = tier === "agency" ? "/contact" : `/signup?plan=${tier}`;
+            const href = `/signup?plan=${tier}`;
             return (
               <article key={tier} className={`flex min-h-[430px] flex-col bg-white p-7 ${plan.highlight ? "relative outline outline-1 -outline-offset-1 outline-devin-primary" : ""}`}>
                 {plan.highlight && (
@@ -199,8 +199,8 @@ export function PricingSnapshot() {
                 )}
                 <h3 className="text-lg font-medium text-devin-ink">{plan.name}</h3>
                 <p className="mt-5 flex items-end gap-1 text-devin-ink">
-                  <span className="text-4xl font-medium tracking-[-0.04em]">{plan.price}</span>
-                  <span className="pb-1 text-xs text-devin-ink-soft">{plan.period}</span>
+                  <span className="text-4xl font-medium tracking-[-0.04em]">${PLAN_PRICING[tier].monthlyUsd}</span>
+                  <span className="pb-1 text-xs text-devin-ink-soft">{tier === "free" ? "forever" : "/month"}</span>
                 </p>
                 <ul className="mt-7 flex-1 space-y-3">
                   {plan.features.slice(0, 5).map((feature) => (
@@ -211,14 +211,14 @@ export function PricingSnapshot() {
                   ))}
                 </ul>
                 <a href={href} data-magnetic className={`mt-7 inline-flex min-h-11 items-center justify-center rounded-[2px] px-4 text-sm font-medium transition-colors ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
-                  {tier === "agency" ? plan.cta : "Get started"}
+                  {plan.cta}
                 </a>
               </article>
             );
           })}
         </div>
         <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.1em] text-devin-ink-soft">
-          Paid tiers are 30-day access periods. Full product limits and terms are shown on the pricing page.
+          Free is available now. Recurring paid checkout will open only after a verified billing provider is configured.
         </p>
       </div>
     </section>

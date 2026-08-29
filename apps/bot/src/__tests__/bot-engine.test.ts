@@ -100,31 +100,26 @@ describe("esc (botEngine)", () => {
 
 // ── PLAN_LIMITS: real plan hierarchy from shared/plans ─────────────────
 describe("Plan limits (shared/plans)", () => {
-  it("free tier allows 10 players", () => {
-    expect(PLAN_LIMITS.free).toBe(10);
+  it("free tier allows 50 players", () => {
+    expect(PLAN_LIMITS.free).toBe(50);
   });
 
-  it("starter allows more players than free", () => {
-    expect(PLAN_LIMITS.starter).toBeGreaterThan(PLAN_LIMITS.free);
+  it("pro allows more players than free", () => {
+    expect(PLAN_LIMITS.pro).toBeGreaterThan(PLAN_LIMITS.free);
   });
 
-  it("pro allows more players than starter", () => {
-    expect(PLAN_LIMITS.pro).toBeGreaterThan(PLAN_LIMITS.starter);
+  it("team allows more boards than pro", () => {
+    expect(BOARD_LIMITS.team).toBeGreaterThan(BOARD_LIMITS.pro);
   });
 
-  it("agency allows at least as many boards as pro", () => {
-    expect(BOARD_LIMITS.agency).toBeGreaterThanOrEqual(BOARD_LIMITS.pro);
-  });
-
-  it("pro allows more boards than starter", () => {
-    expect(BOARD_LIMITS.pro).toBeGreaterThan(BOARD_LIMITS.starter);
+  it("pro allows more boards than free", () => {
+    expect(BOARD_LIMITS.pro).toBeGreaterThan(BOARD_LIMITS.free);
   });
 
   it("all plan tiers exist", () => {
     expect(PLAN_LIMITS).toHaveProperty("free");
-    expect(PLAN_LIMITS).toHaveProperty("starter");
     expect(PLAN_LIMITS).toHaveProperty("pro");
-    expect(PLAN_LIMITS).toHaveProperty("agency");
+    expect(PLAN_LIMITS).toHaveProperty("team");
   });
 });
 

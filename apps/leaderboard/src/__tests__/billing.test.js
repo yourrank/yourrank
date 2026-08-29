@@ -1,180 +1,149 @@
-// Billing unit tests — effectivePlan, PLAN_LIMITS, PLAN_PRICES, priceUsd
-// All pure functions live in shared/plans.js (no DB dependency, no mocks needed).
-// billing.js re-exports them for production code, but tests import from source directly
-// to avoid process-global test state in aggregate CI.
-
-import { test, expect, describe, beforeAll, afterAll, jest } from "bun:test";
-
-const {
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  ACTIVE_VIEWER_LIMITS,
+  BOARD_LIMITS,
+  OPERATOR_SEAT_LIMITS,
+  PLAN_LIMITS,
+  PLAN_META,
+  PLAN_PRICES,
+  PLAN_PRICING,
+  PLAN_TIERS,
+  activeViewerUsageState,
   effectivePlan,
   priceUsd,
-  PLAN_LIMITS,
-  BOARD_LIMITS,
-  PLAN_PRICES,
-  PLAN_META,
-} = await import("@yourrank/shared/plans");
+} from "@yourrank/shared/plans";
+import { activeViewerUsageMarkup } from "../assets/dashboard/plan-usage.js";
 
-// QA-006: Freeze the clock so Date.now()-based tests are deterministic
-const FROZEN_TIME = new Date("2025-06-15T12:00:00Z").getTime();
-beforeAll(() => { jest.setSystemTime(FROZEN_TIME); });
-afterAll(() => { jest.useRealTimers(); });
+const NOW = Date.parse("2026-08-29T12:00:00Z");
+const REPO_ROOT = path.resolve(import.meta.dir, "../../../..");
+const dashboardPlanSource = readFileSync(
+  path.join(REPO_ROOT, "apps/leaderboard/src/assets/dashboard/site.js"),
+  "utf8",
+);
+const billingMigration = readFileSync(
+  path.join(REPO_ROOT, "supabase/migrations/20260904000000_billing_free_pro_team.sql"),
+  "utf8",
+);
 
-// ─── effectivePlan ────────────────────────────────────────────────────────
-
-describe("effectivePlan", () => {
-  test("returns 'free' for null user", () => {
-    expect(effectivePlan(null)).toBe("free");
+describe("canonical Free / Pro / Team model", () => {
+  test("has exactly three customer-facing tiers", () => {
+    expect(PLAN_TIERS).toEqual(["free", "pro", "team"]);
+    expect(Object.keys(PLAN_META)).toEqual(["free", "pro", "team"]);
   });
 
-  test("returns 'free' for undefined user", () => {
-    expect(effectivePlan(undefined)).toBe("free");
+  test("implements approved scale and operator limits", () => {
+    expect(PLAN_LIMITS).toEqual({ free: 50, pro: 1000, team: 5000 });
+    expect(BOARD_LIMITS).toEqual({ free: 1, pro: 3, team: 10 });
+    expect(ACTIVE_VIEWER_LIMITS).toEqual({ free: 100, pro: 2500, team: 10000 });
+    expect(OPERATOR_SEAT_LIMITS).toEqual({ free: 1, pro: 1, team: 5 });
   });
 
-  test("returns 'free' for suspended user regardless of plan", () => {
-    expect(effectivePlan({ plan: "pro", status: "suspended", plan_expires_at: Date.now() + 86400000 })).toBe("free");
+  test("implements approved monthly and annual prices", () => {
+    expect(PLAN_PRICES).toEqual({ free: 0, pro: 24, team: 69 });
+    expect(PLAN_PRICING.pro).toEqual({ monthlyUsd: 24, annualUsd: 240, effectiveAnnualMonthlyUsd: 20 });
+    expect(PLAN_PRICING.team).toEqual({ monthlyUsd: 69, annualUsd: 690, effectiveAnnualMonthlyUsd: 57.5 });
+    expect(priceUsd({}, "pro", "annual")).toBe(240);
+    expect(priceUsd({}, "team", "annual")).toBe(690);
   });
 
-  test("returns 'free' for user with plan='free'", () => {
-    expect(effectivePlan({ plan: "free", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("free");
+  test("deployment variables cannot silently override prices", () => {
+    expect(priceUsd({ PRO_PRICE_USD: "39" }, "pro")).toBe(24);
   });
 
-  test("returns 'starter' for user with plan='starter'", () => {
-    expect(effectivePlan({ plan: "starter", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("starter");
-  });
-
-  test("returns 'pro' for user with plan='pro'", () => {
-    expect(effectivePlan({ plan: "pro", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("pro");
-  });
-
-  test("returns 'agency' for user with plan='agency'", () => {
-    expect(effectivePlan({ plan: "agency", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("agency");
-  });
-
-  test("returns 'free' when plan_expires_at is in the past (expired)", () => {
-    expect(effectivePlan({ plan: "pro", status: "active", plan_expires_at: Date.now() - 86400000 })).toBe("free");
-  });
-
-  test("returns 'pro' when plan_expires_at is in the future (not expired)", () => {
-    expect(effectivePlan({ plan: "pro", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("pro");
-  });
-
-  test("returns 'free' when plan_expires_at is 0 (expired)", () => {
-    expect(effectivePlan({ plan: "pro", status: "active", plan_expires_at: 0 })).toBe("free");
-  });
-
-  test("returns 'free' for unknown plan value", () => {
-    expect(effectivePlan({ plan: "vip", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("free");
-  });
-
-  test("is case insensitive: 'PRO' returns 'pro'", () => {
-    expect(effectivePlan({ plan: "PRO", status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("pro");
-  });
-
-  test("returns 'free' for user with no plan property", () => {
-    expect(effectivePlan({ status: "active", plan_expires_at: Date.now() + 86400000 })).toBe("free");
+  test("dashboard plan cards stay contract-tested against canonical prices", () => {
+    for (const tier of PLAN_TIERS) {
+      const pricing = PLAN_PRICING[tier];
+      expect(dashboardPlanSource).toContain(
+        `key: "${tier}", name: "${PLAN_META[tier].name}", price: ${pricing.monthlyUsd}, priceStr: "$${pricing.monthlyUsd}"`,
+      );
+    }
   });
 });
 
-// ─── PLAN_LIMITS ──────────────────────────────────────────────────────────
-
-describe("PLAN_LIMITS", () => {
-  test("free: 10 players", () => { expect(PLAN_LIMITS.free).toBe(10); });
-  test("starter: 25 players", () => { expect(PLAN_LIMITS.starter).toBe(25); });
-  test("pro: 9999 players", () => { expect(PLAN_LIMITS.pro).toBe(9999); });
-  test("agency: 9999 players", () => { expect(PLAN_LIMITS.agency).toBe(9999); });
-});
-
-// ─── BOARD_LIMITS ─────────────────────────────────────────────────────────
-
-describe("BOARD_LIMITS", () => {
-  test("free: 1 board", () => { expect(BOARD_LIMITS.free).toBe(1); });
-  test("starter: 1 board", () => { expect(BOARD_LIMITS.starter).toBe(1); });
-  test("pro: 3 boards", () => { expect(BOARD_LIMITS.pro).toBe(3); });
-  test("agency: 99 boards", () => { expect(BOARD_LIMITS.agency).toBe(99); });
-});
-
-// ─── PLAN_PRICES ──────────────────────────────────────────────────────────
-
-describe("PLAN_PRICES", () => {
-  test("free: $0", () => { expect(PLAN_PRICES.free).toBe(0); });
-  test("starter: $12", () => { expect(PLAN_PRICES.starter).toBe(12); });
-  test("pro: $29", () => { expect(PLAN_PRICES.pro).toBe(29); });
-  test("agency: $79", () => { expect(PLAN_PRICES.agency).toBe(79); });
-});
-
-// ─── tier progression ─────────────────────────────────────────────────────
-
-describe("tier progression", () => {
-  test("tiers array order is [free, starter, pro, agency]", () => {
-    const tiers = ["free", "starter", "pro", "agency"];
-    expect(tiers).toEqual(["free", "starter", "pro", "agency"]);
+describe("empty-database commercial migration", () => {
+  test("migrates to exactly Free, Pro, and Team with deterministic legacy mappings", () => {
+    expect(billingMigration).toContain("CREATE TYPE public.plan_tier_next AS ENUM ('free', 'pro', 'team')");
+    expect(billingMigration).toContain("WHEN 'starter' THEN 'free'");
+    expect(billingMigration).toContain("WHEN 'agency' THEN 'team'");
   });
 
-  test("tier comparison: each tier index increases", () => {
-    const tiers = ["free", "starter", "pro", "agency"];
-    expect(tiers.indexOf("free")).toBeLessThan(tiers.indexOf("starter"));
-    expect(tiers.indexOf("starter")).toBeLessThan(tiers.indexOf("pro"));
-    expect(tiers.indexOf("pro")).toBeLessThan(tiers.indexOf("agency"));
+  test("aborts on unexpected Lifetime rows before removing the provider value", () => {
+    expect(billingMigration).toContain("provider::text = 'nowpayments_lifetime'");
+    expect(billingMigration).toContain("RAISE EXCEPTION 'Lifetime billing rows exist; stop Billing Phase 2A and investigate before cleanup'");
+    expect(billingMigration).not.toMatch(/pay_provider_next[\s\S]*?'nowpayments_lifetime'/);
   });
 
-  test("tier comparison: free < starter < pro < agency by PLAN_PRICES", () => {
-    expect(PLAN_PRICES.free).toBeLessThan(PLAN_PRICES.starter);
-    expect(PLAN_PRICES.starter).toBeLessThan(PLAN_PRICES.pro);
-    expect(PLAN_PRICES.pro).toBeLessThan(PLAN_PRICES.agency);
-  });
-
-  test("tier comparison: PLAN_LIMITS increase (players)", () => {
-    expect(PLAN_LIMITS.free).toBeLessThanOrEqual(PLAN_LIMITS.starter);
-    expect(PLAN_LIMITS.starter).toBeLessThan(PLAN_LIMITS.pro);
-  });
-
-  test("tier comparison: BOARD_LIMITS increase", () => {
-    expect(BOARD_LIMITS.free).toBeLessThanOrEqual(BOARD_LIMITS.starter);
-    expect(BOARD_LIMITS.starter).toBeLessThan(BOARD_LIMITS.pro);
-    expect(BOARD_LIMITS.pro).toBeLessThan(BOARD_LIMITS.agency);
+  test("adds account-pooled rolling activity and grace storage with query indexes", () => {
+    expect(billingMigration).toContain("ADD COLUMN last_active_at timestamptz");
+    expect(billingMigration).toContain("ADD COLUMN is_system boolean NOT NULL DEFAULT FALSE");
+    expect(billingMigration).toContain("ADD COLUMN active_viewer_grace_started_at timestamptz");
+    expect(billingMigration).toContain("CREATE INDEX idx_site_viewers_billing_active");
+    expect(billingMigration).toContain("CREATE INDEX idx_sites_owner_billing_usage");
   });
 });
 
-// ─── priceUsd ─────────────────────────────────────────────────────────────
-
-describe("priceUsd", () => {
-  test("returns PLAN_PRICES.pro (29) for pro when PRO_PRICE_USD env not set", () => {
-    expect(priceUsd({})).toBe(29);
+describe("canonical entitlement resolver", () => {
+  test("requires a future expiry for paid grants", () => {
+    expect(effectivePlan({ plan: "pro", plan_expires_at: null }, NOW)).toBe("free");
+    expect(effectivePlan({ plan: "team", plan_expires_at: NOW }, NOW)).toBe("free");
+    expect(effectivePlan({ plan: "team", plan_expires_at: NOW + 1 }, NOW)).toBe("team");
   });
 
-  test("returns PRO_PRICE_USD env var for pro when set", () => {
-    expect(priceUsd({ PRO_PRICE_USD: "39" })).toBe(39);
+  test("rejects removed and unknown tiers", () => {
+    for (const plan of ["starter", "agency", "lifetime", "vip"]) {
+      expect(effectivePlan({ plan, plan_expires_at: NOW + 86_400_000 }, NOW)).toBe("free");
+    }
   });
 
-  test("returns 12 for starter", () => {
-    expect(priceUsd({}, "starter")).toBe(12);
-  });
-
-  test("returns 79 for agency", () => {
-    expect(priceUsd({}, "agency")).toBe(79);
-  });
-
-  test("returns 0 for free", () => {
-    expect(priceUsd({}, "free")).toBe(0);
-  });
-
-  test("defaults to pro price for unknown plan", () => {
-    expect(priceUsd({}, "unknown")).toBe(29);
-  });
-
-  test("defaults to pro when no plan argument given", () => {
-    expect(priceUsd({})).toBe(29);
+  test("suspension always resolves to Free", () => {
+    expect(effectivePlan({ plan: "team", status: "suspended", plan_expires_at: NOW + 1 }, NOW)).toBe("free");
   });
 });
 
-// ─── PLAN_META ────────────────────────────────────────────────────────────
-
-describe("PLAN_META", () => {
-  test("has entries for all four tiers", () => {
-    expect(Object.keys(PLAN_META).sort()).toEqual(["agency", "free", "pro", "starter"]);
+describe("Free active-viewer grace", () => {
+  test("99 remains under the allowance and 100 explains the limit without restricting", () => {
+    const under = activeViewerUsageState({ plan: "free", activeViewers: 99, nowMs: NOW });
+    const state = activeViewerUsageState({ plan: "free", activeViewers: 100, nowMs: NOW });
+    expect(under.overLimit).toBe(false);
+    expect(under.expansionRestricted).toBe(false);
+    expect(state.level).toBe("at_limit");
+    expect(state.overLimit).toBe(false);
+    expect(state.expansionRestricted).toBe(false);
   });
 
-  test("pro is the highlighted tier", () => {
-    expect(PLAN_META.pro.highlight).toBe(true);
+  test("101 starts in grace and restricts only after 14 days", () => {
+    const graceStartedAt = NOW - 13 * 86_400_000;
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt, nowMs: NOW }).level).toBe("grace");
+    const expired = activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt: NOW - 14 * 86_400_000, nowMs: NOW });
+    expect(expired.level).toBe("restricted");
+    expect(expired.expansionRestricted).toBe(true);
+  });
+
+  test("usage recovery and paid plans are never expansion-restricted", () => {
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 100, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
+    expect(activeViewerUsageState({ plan: "pro", activeViewers: 3000, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
+  });
+
+  test("renders low, threshold, grace, and restricted usage without a KPI wall", () => {
+    const render = (activeViewers, graceStartedAt = null) => {
+      const state = activeViewerUsageState({ plan: "free", activeViewers, graceStartedAt, nowMs: NOW });
+      return activeViewerUsageMarkup({
+        ...state,
+        activeViewers,
+        upgradeAllowance: ACTIVE_VIEWER_LIMITS.pro,
+      });
+    };
+
+    expect(render(69)).toContain('data-level="normal"');
+    expect(render(70)).toContain('data-level="informational"');
+    expect(render(85)).toContain('data-level="notice"');
+    expect(render(95)).toContain('data-level="warning"');
+    expect(render(100)).toContain('data-level="at_limit"');
+    expect(render(101, NOW - 13 * 86_400_000)).toContain('data-level="grace"');
+    expect(render(101, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
+    expect(render(101, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
+    expect(render(85)).toContain('href="/pricing"');
   });
 });

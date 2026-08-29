@@ -1,8 +1,8 @@
 // ------------------------------------------------------------------
 // Immutable provider event ledger.
 //
-// Every provider callback (NOWPayments IPN, Telegram Stars successful_payment,
-// etc.) is recorded once. The unique key prevents duplicate/reordered
+// Every provider callback (for example Telegram Stars successful_payment) is
+// recorded once. The unique key prevents duplicate/reordered
 // callbacks from being reprocessed, and the row is never updated or deleted.
 // ------------------------------------------------------------------
 

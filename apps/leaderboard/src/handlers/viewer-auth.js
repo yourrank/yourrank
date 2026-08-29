@@ -22,6 +22,7 @@ import { bad, json, rateLimit, clientIp } from "../auth.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
 import { resolveCustomDomain } from "../middleware/custom-domain.js";
 import { NON_SITE_PATHS, PLATFORM_HOST } from "../constants.js";
+import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
 
 const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
@@ -155,6 +156,7 @@ async function registerViewerMembership({
   targetOriginInfo,
   oneImpl,
   execImpl,
+  markActiveImpl = markSiteViewerActive,
 }) {
   try {
     const slug = targetOriginInfo.siteSlug ||
@@ -165,11 +167,13 @@ async function registerViewerMembership({
     const site = await oneImpl("SELECT id FROM sites WHERE slug=$1", [slug]);
     if (!site?.id) return;
     await execImpl(
-      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)
-       VALUES ($1, $2, 0, 0, now())
-       ON CONFLICT (site_id, viewer_id) DO NOTHING`,
+      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at, last_active_at)
+       VALUES ($1, $2, 0, 0, now(), now())
+       ON CONFLICT (site_id, viewer_id)
+       DO UPDATE SET last_seen_at=now(), last_active_at=now(), updated_at=now()`,
       [site.id, viewerId],
     );
+    await markActiveImpl(site.id, viewerId, { one: oneImpl, exec: execImpl });
   } catch (err) {
     console.error("[viewer-auth] membership registration failed:", err?.message || err);
   }

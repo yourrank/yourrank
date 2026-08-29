@@ -40,7 +40,6 @@ const EXCEPTIONS = {
   "dashboard.js": [
     { match: "location.href = loginRedirectPath(location); }", reason: "cross-tab logout: session gone, leave the dashboard" },
     { match: "location.href = loginRedirectPath(location);", reason: "boot without a session: redirect to login" },
-    { match: "location.href = planParam.toLowerCase()", reason: "legacy checkout deep link handled once at boot, before the shell exists" },
     { match: 'location.href = "/admin"; return;', reason: "admin accounts without a dashboard: off-dashboard destination" },
   ],
   "account.js": [
@@ -74,7 +73,6 @@ const EXCEPTIONS = {
     { match: "location.href = loginRedirectPath(location);", reason: "fragment fetch hit an expired session: redirect to login" },
   ],
   "dashboard/site.js": [
-    { match: "location.href = d.url; return;", reason: "checkout: external payment provider URL" },
     { match: 'location.href = "/verify-email")', reason: "publish blocked on unverified email: off-dashboard verification flow" },
   ],
   "dashboard/games.js": [

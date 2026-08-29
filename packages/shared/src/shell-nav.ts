@@ -78,7 +78,7 @@ function esc(s: unknown): string {
 
 function planBadge(plan?: string | null): string {
   const p = String(plan || "free").toLowerCase();
-  const label = p === "agency" ? "Agency" : p === "pro" ? "Pro" : p === "starter" ? "Starter" : "Free";
+  const label = p === "team" ? "Team" : p === "pro" ? "Pro" : "Free";
   const mod = p === "free" ? "gm-badge--free" : "gm-badge--paid";
   return `<span class="gm-badge ${mod}">${label}</span>`;
 }

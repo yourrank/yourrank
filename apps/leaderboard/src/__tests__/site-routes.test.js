@@ -96,7 +96,7 @@ const routeSite = {
   },
   getBySlug: () => Promise.resolve(null),
   getArchives: () => Promise.resolve([]),
-  ARCHIVE_LIMITS: { free: 6, starter: 6, pro: 12, agency: 24 },
+  ARCHIVE_LIMITS: { free: 6, pro: 12, team: 24 },
   detectImageMime,
   validateLogoData,
 };

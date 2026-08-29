@@ -1121,12 +1121,6 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
     right: auto;
     left: calc(100% + 8px);
   }
-  .v3-dash[data-auth-workspace] .lb-side {
-    transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1), padding-inline 200ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .v3-dash[data-auth-workspace] .lb-main {
-    transition: margin-left 200ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
 
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-ws-switcher {
     display: flex;
@@ -6574,6 +6568,102 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   border-radius: var(--ws-radius-sm);
   background: var(--ws-surface);
   color: var(--ws-text);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers-head,
+.v3-dash[data-auth-workspace] .plan-active-viewers-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers h3,
+.v3-dash[data-auth-workspace] .plan-active-viewers p {
+  margin: 0;
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers h3 {
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers-head p,
+.v3-dash[data-auth-workspace] .plan-active-viewers-foot p {
+  max-width: 64ch;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers-head strong {
+  flex: 0 0 auto;
+  font: 700 15px var(--ws-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ws-surface-strong);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ws-accent);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers--notice .plan-active-viewers-bar > i,
+.v3-dash[data-auth-workspace] .plan-active-viewers--warning .plan-active-viewers-bar > i,
+.v3-dash[data-auth-workspace] .plan-active-viewers--at_limit .plan-active-viewers-bar > i,
+.v3-dash[data-auth-workspace] .plan-active-viewers--grace .plan-active-viewers-bar > i {
+  background: var(--ws-warning);
+}
+
+.v3-dash[data-auth-workspace] .plan-active-viewers--restricted .plan-active-viewers-bar > i {
+  background: var(--ws-danger);
+}
+
+.v3-dash[data-auth-workspace] .plan-usage-action {
+  flex: 0 0 auto;
+  color: var(--ws-accent);
+  font-size: var(--ws-type-meta-size);
+  font-weight: 650;
+}
+
+.v3-dash[data-auth-workspace] .plan-usage-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+@media (max-width: 700px) {
+  .v3-dash[data-auth-workspace] .plan-active-viewers-head,
+  .v3-dash[data-auth-workspace] .plan-active-viewers-foot {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .v3-dash[data-auth-workspace] .plan-usage-action {
+    min-height: 40px;
+  }
+
+  .v3-dash[data-auth-workspace] .plan-usage-secondary {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .v3-dash[data-auth-workspace] .plan-pending,

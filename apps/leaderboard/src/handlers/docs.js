@@ -7,7 +7,7 @@ const spec = {
   info: {
     title: "YourRank Public API",
     version: "1.0.0",
-    description: "Read-only leaderboard endpoints are public on every plan. The signed score API requires an active Pro or Agency plan.",
+    description: "Read-only leaderboard endpoints are public on every plan. The signed score API requires an active Pro or Team plan.",
     contact: { url: "https://yourrank.site" },
   },
   servers: [{ url: "https://yourrank.site", description: "Production" }],
@@ -79,7 +79,7 @@ const spec = {
     "/api/scores": {
       post: {
         summary: "Score postback",
-        description: "Replace the player list for a board. Requires a Pro/Agency plan, `X-Postback-Key` and an HMAC-SHA256 `X-Postback-Signature` of the raw request body.",
+        description: "Replace the player list for a board. Requires a Pro/Team plan, `X-Postback-Key` and an HMAC-SHA256 `X-Postback-Signature` of the raw request body.",
         security: [{ PostbackKey: [] }],
         requestBody: {
           required: true,
@@ -94,7 +94,7 @@ const spec = {
                   players: {
                     type: "array",
                     items: { $ref: "#/components/schemas/Player" },
-                    description: "Up to the plan limit (Pro/Agency: 9999).",
+                    description: "Up to the plan limit (Pro: 1,000; Team: 5,000).",
                   },
                 },
               },
@@ -105,7 +105,7 @@ const spec = {
           200: { description: "Players accepted", content: { "application/json": { schema: { type: "object", properties: { ok: { type: "boolean" }, players: { type: "integer" } } } } } },
           400: { description: "Validation error." },
           401: { description: "Missing or invalid postback key/signature." },
-          403: { description: "Not on a Pro/Agency plan." },
+          403: { description: "Not on a Pro/Team plan." },
           429: { $ref: "#/components/responses/RateLimit" },
         },
       },

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 const PAYMENT_METHODS_ANSWER =
-  "Paid plans are billed in crypto (BTC, ETH, USDT and 100+ more) through NOWPayments. Card checkout is not available yet.";
+  "Recurring card checkout is not available yet. Paid access will only be activated after confirmation from a verified billing provider; YourRank does not silently fall back to crypto checkout.";
 
 const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string }> }> = [
   {
@@ -30,14 +30,14 @@ const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string 
   {
     category: "Pricing & billing",
     items: [
-      { q: "Is YourRank free?", a: "Yes. The Free plan includes one leaderboard with up to 10 players, one Telegram bot, three tracked offers, three credit rules, and five shop items. Paid plans add more of each product, plus custom domains, OBS overlays, and developer tools (API)." },
+      { q: "Is YourRank free?", a: "Yes. Free includes one site, up to 50 leaderboard players, 100 distinct active viewers in the rolling 30-day account window, three reward mappings, and five shop items. Pro and Team add truthful operational capacity and existing paid capabilities." },
       { q: "What payment methods do you accept?", a: PAYMENT_METHODS_ANSWER },
     ],
   },
   {
     category: "Support",
     items: [
-      { q: "How do I get support?", a: "Email support@yourrank.site or use the contact form at /help/support. Pro and Agency plans include priority support." },
+      { q: "How do I get support?", a: "Email support@yourrank.site or use the contact form at /help/support." },
     ],
   },
 ];

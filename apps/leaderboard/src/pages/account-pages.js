@@ -65,14 +65,9 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
 const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         <section class="account-settings-section" aria-labelledby="currentPlanTitle">
           <h2 id="currentPlanTitle">Current plan</h2>
-          <p class="card-sub">Your plan, renewal state, and any payment that needs attention.</p>
+          <p class="card-sub">Your current entitlement and the limits available to this account.</p>
         <div class="plan-summary" id="planSummary"></div>
         <div class="plan-banner" id="planBanner" role="status" aria-live="polite" hidden></div>
-        <div id="pendingPayment" hidden class="plan-pending">
-          <h3 class="m-0 mb-8">Pending payment</h3>
-          <p class="status" role="status" aria-live="polite"></p>
-          <a class="btn btn--sm" id="pendingPaymentLink" href="#">Complete payment</a>
-        </div>
         </section>
 
         <section class="account-settings-section" aria-labelledby="planUsageTitle">
@@ -86,7 +81,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         <div class="account-settings-disclosure-body">
         <div class="plan-grid" id="planGrid"></div>
         <div class="plan-trial" id="planTrial" hidden><p class="hint">Not ready to pay? Try every Pro feature free for 7 days.</p><button class="btn btn--accent" id="trialBtn" type="button">Start free Pro trial</button><p class="status" id="trialStatus" role="status" aria-live="polite"></p></div>
-        <p class="hint" id="planHint">Payment options and activation timing are shown when you choose a plan.</p>
+        <p class="hint" id="planHint">Recurring checkout is not available yet. Choosing a paid plan will not charge your account or activate paid access.</p>
         </div>
         </details>
 
@@ -100,25 +95,11 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
           </div>
         </details>
 
-        <section id="cancelWrap" hidden class="account-settings-section plan-cancel" aria-labelledby="cancelPlanTitle">
-          <h2 id="cancelPlanTitle">Cancel plan</h2>
-          <p class="card-sub">What happens before you cancel or downgrade.</p>
-          <ul class="hint plan-cancel-list">
-            <li>You keep your current plan features until the expiry date shown above.</li>
-            <li>After expiry, your account reverts to Free and paid features stop working.</li>
-            <li>If you are over Free limits (sites, players, ways to earn, items), you won't be able to add more until you upgrade again.</li>
-            <li>Existing site data, members, and orders are never deleted by a downgrade.</li>
-          </ul>
-          <p class="hint" id="cancelStatus" role="status" aria-live="polite"></p>
-          <button class="btn btn--sm btn--danger" id="cancelBtn" type="button">Cancel subscription</button>
-        </section>
-
         <section class="account-settings-section" id="historyCard" hidden aria-labelledby="paymentHistoryTitle">
           <h2 id="paymentHistoryTitle">Payment history</h2>
           <p class="card-sub">Your past payments and receipts.</p>
           <div class="admin-table-wrap"><table class="admin-table" id="historyTable"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
           <div class="empty" id="historyEmpty" hidden>No payments yet. Completed payments and receipts will appear here after you upgrade.</div>
-          <p class="hint">Receipts are also emailed to your account address after each successful payment.</p>
         </section>
       </div>`;
 

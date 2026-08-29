@@ -194,7 +194,7 @@ function setPlayerMessage(id, message, { error = false } = {}) {
 export function playerLimitMessage() {
   const limit = state.ME?.limits?.players ?? 25;
   const plan = state.ME?.plan;
-  const planLabel = plan === "pro" || plan === "agency" ? "Your plan" : (plan ? `${plan[0].toUpperCase()}${plan.slice(1)}` : "Your plan");
+  const planLabel = plan === "pro" || plan === "team" ? "Your plan" : (plan ? `${plan[0].toUpperCase()}${plan.slice(1)}` : "Your plan");
   return `${planLabel} allows up to ${limit} players. Upgrade to add more.`;
 }
 

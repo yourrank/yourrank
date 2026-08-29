@@ -50,6 +50,8 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       rateLimit: mockRateLimit,
       withTransaction: mockWithTransaction,
       requireViewer: mock().mockResolvedValue({ viewer: { id: "viewer-123" }, res: null }),
+      expansionRestriction: mock().mockResolvedValue({ restricted: false, usage: null }),
+      markActive: mock().mockResolvedValue(null),
     };
   });
 
@@ -202,6 +204,18 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.drop.points_reward).toBe(30);
   });
 
+  it("pauses new creator-authored code drops after Free grace", async () => {
+    deps.expansionRestriction.mockResolvedValueOnce({ restricted: true, usage: { activeViewers: 101 } });
+    const res = await handleCreateCodeDrop(new Request("http://localhost/api/events/drops", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "PAUSED", pointsReward: 10, maxClaims: 5 }),
+    }), mockEnv(), deps);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/New Activities are paused/);
+    expect(mockOne).not.toHaveBeenCalled();
+  });
+
   it("handleClaimCodeDrop rejects already claimed code for same viewer", async () => {
     mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
@@ -299,6 +313,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.ok).toBe(true);
     expect(body.pointsAwarded).toBe(30);
     expect(body.newBalance).toBe(130);
+    expect(deps.expansionRestriction).not.toHaveBeenCalled();
   });
 
   it("handleClaimCodeDrop creates a site_viewer row on first claim", async () => {
