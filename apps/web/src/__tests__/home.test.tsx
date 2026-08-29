@@ -6,6 +6,7 @@ import { Hero } from "../components/home/hero";
 import { WorkspacePreview } from "../components/home/workspace-preview";
 import { ProofMarquee, HowItWorks, ComparisonSection, PricingSnapshot } from "../components/home/sections";
 import { ProductPage } from "../components/product-page";
+import { PricingPlans } from "../app/pricing/pricing-plans";
 
 describe("Home & Product components", () => {
   it("renders the rotating hero words with one accessible headline", () => {
@@ -52,6 +53,16 @@ describe("Home & Product components", () => {
     expect(html).toContain("Start with the community you have");
     expect(html).toContain("Free");
     expect(html).toContain("Pro");
+    expect(html).toContain("100 active viewers");
+    expect(html).toContain("1 site and 50 leaderboard players");
+    expect(html).not.toContain("200 active viewers");
+  });
+
+  it("renders the full pricing comparison with the corrected Free limits", () => {
+    const html = renderToString(<PricingPlans />);
+    expect(html).toContain("100 active viewers");
+    expect(html).toContain("1 site · 50 leaderboard players");
+    expect(html).not.toContain("200 active viewers");
   });
 
   it("renders ProductPage with content and steps", () => {

@@ -56,14 +56,14 @@ describe("account-pooled active-viewer usage", () => {
     expect(countCall?.sql).toContain("v.is_system=FALSE");
   });
 
-  test("starts grace at 201 and clears it when rolling usage returns to 200", async () => {
-    const over = usageDependencies({ activeViewers: 201 });
+  test("starts grace at 101 and clears it when rolling usage returns to 100", async () => {
+    const over = usageDependencies({ activeViewers: 101 });
     const started = await reconcileAccountActiveViewerUsage("owner-1", over);
     expect(started?.level).toBe("grace");
     expect(over.calls.some((call) => call.kind === "exec" && call.sql.includes("COALESCE(active_viewer_grace_started_at, now())"))).toBe(true);
 
     const recovered = usageDependencies({
-      activeViewers: 200,
+      activeViewers: 100,
       graceStartedAt: "2026-07-01T00:00:00.000Z",
     });
     const current = await reconcileAccountActiveViewerUsage("owner-1", recovered);
@@ -97,11 +97,11 @@ describe("account-pooled active-viewer usage", () => {
 
   test("reports creator expansion restriction without blocking viewer-side membership activity", async () => {
     const deps = usageDependencies({
-      activeViewers: 201,
+      activeViewers: 101,
       graceStartedAt: "2026-01-01T00:00:00.000Z",
     });
     const result = await creatorExpansionRestriction("owner-1", deps);
     expect(result.restricted).toBe(true);
-    expect(result.usage?.activeViewers).toBe(201);
+    expect(result.usage?.activeViewers).toBe(101);
   });
 });

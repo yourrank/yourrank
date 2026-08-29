@@ -94,7 +94,7 @@ export function isPro() {
 
 function planDefs() {
   return [
-    { key: "free", name: "Free", price: 0, priceStr: "$0", period: "", note: "forever", features: ["200 active viewers", "1 site", "100 players", "3 reward mappings", "5 shop items", "30 days of history"] },
+    { key: "free", name: "Free", price: 0, priceStr: "$0", period: "", note: "forever", features: ["100 active viewers", "1 site", "50 players", "3 reward mappings", "5 shop items", "30 days of history"] },
     { key: "pro", name: "Pro", price: 24, priceStr: "$24", period: "/month", note: "Recommended", features: ["2,500 active viewers", "3 sites", "1,000 players per site", "Custom domain", "Stronger branding", "12 months of history"] },
     { key: "team", name: "Team", price: 69, priceStr: "$69", period: "/month", note: "", features: ["10,000 active viewers", "10 sites", "5 operator seats", "Roles and permissions", "5,000 players per site", "24 months of history"] },
   ];

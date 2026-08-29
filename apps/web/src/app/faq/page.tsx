@@ -30,7 +30,7 @@ const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string 
   {
     category: "Pricing & billing",
     items: [
-      { q: "Is YourRank free?", a: "Yes. Free includes one site, up to 100 leaderboard players, 200 distinct active viewers in the rolling 30-day account window, three reward mappings, and five shop items. Pro and Team add truthful operational capacity and existing paid capabilities." },
+      { q: "Is YourRank free?", a: "Yes. Free includes one site, up to 50 leaderboard players, 100 distinct active viewers in the rolling 30-day account window, three reward mappings, and five shop items. Pro and Team add truthful operational capacity and existing paid capabilities." },
       { q: "What payment methods do you accept?", a: PAYMENT_METHODS_ANSWER },
     ],
   },

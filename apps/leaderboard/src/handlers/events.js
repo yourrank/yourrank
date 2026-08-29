@@ -252,7 +252,7 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
   if (authorization.res) return authorization.res;
   const expansion = await expansionRestriction(site.user_id || user.id);
   if (expansion.restricted) {
-    return bad("New Activities are paused because this Free account remains above 200 active viewers after its grace period. Existing viewer access continues.", 403);
+    return bad("New Activities are paused because this Free account remains above its active-viewer allowance after grace. Existing viewer access continues.", 403);
   }
 
   try {

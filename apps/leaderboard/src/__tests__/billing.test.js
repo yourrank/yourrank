@@ -34,9 +34,9 @@ describe("canonical Free / Pro / Team model", () => {
   });
 
   test("implements approved scale and operator limits", () => {
-    expect(PLAN_LIMITS).toEqual({ free: 100, pro: 1000, team: 5000 });
+    expect(PLAN_LIMITS).toEqual({ free: 50, pro: 1000, team: 5000 });
     expect(BOARD_LIMITS).toEqual({ free: 1, pro: 3, team: 10 });
-    expect(ACTIVE_VIEWER_LIMITS).toEqual({ free: 200, pro: 2500, team: 10000 });
+    expect(ACTIVE_VIEWER_LIMITS).toEqual({ free: 100, pro: 2500, team: 10000 });
     expect(OPERATOR_SEAT_LIMITS).toEqual({ free: 1, pro: 1, team: 5 });
   });
 
@@ -103,22 +103,26 @@ describe("canonical entitlement resolver", () => {
 });
 
 describe("Free active-viewer grace", () => {
-  test("200 explains the limit without restricting", () => {
-    const state = activeViewerUsageState({ plan: "free", activeViewers: 200, nowMs: NOW });
+  test("99 remains under the allowance and 100 explains the limit without restricting", () => {
+    const under = activeViewerUsageState({ plan: "free", activeViewers: 99, nowMs: NOW });
+    const state = activeViewerUsageState({ plan: "free", activeViewers: 100, nowMs: NOW });
+    expect(under.overLimit).toBe(false);
+    expect(under.expansionRestricted).toBe(false);
     expect(state.level).toBe("at_limit");
+    expect(state.overLimit).toBe(false);
     expect(state.expansionRestricted).toBe(false);
   });
 
-  test("201 starts in grace and restricts only after 14 days", () => {
+  test("101 starts in grace and restricts only after 14 days", () => {
     const graceStartedAt = NOW - 13 * 86_400_000;
-    expect(activeViewerUsageState({ plan: "free", activeViewers: 201, graceStartedAt, nowMs: NOW }).level).toBe("grace");
-    const expired = activeViewerUsageState({ plan: "free", activeViewers: 201, graceStartedAt: NOW - 14 * 86_400_000, nowMs: NOW });
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt, nowMs: NOW }).level).toBe("grace");
+    const expired = activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt: NOW - 14 * 86_400_000, nowMs: NOW });
     expect(expired.level).toBe("restricted");
     expect(expired.expansionRestricted).toBe(true);
   });
 
   test("usage recovery and paid plans are never expansion-restricted", () => {
-    expect(activeViewerUsageState({ plan: "free", activeViewers: 200, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 100, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
     expect(activeViewerUsageState({ plan: "pro", activeViewers: 3000, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
   });
 
@@ -132,13 +136,14 @@ describe("Free active-viewer grace", () => {
       });
     };
 
-    expect(render(40)).toContain('data-level="normal"');
-    expect(render(170)).toContain('data-level="notice"');
-    expect(render(190)).toContain('data-level="warning"');
-    expect(render(200)).toContain('data-level="at_limit"');
-    expect(render(201, NOW - 13 * 86_400_000)).toContain('data-level="grace"');
-    expect(render(201, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
-    expect(render(201, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
-    expect(render(170)).toContain('href="/pricing"');
+    expect(render(69)).toContain('data-level="normal"');
+    expect(render(70)).toContain('data-level="informational"');
+    expect(render(85)).toContain('data-level="notice"');
+    expect(render(95)).toContain('data-level="warning"');
+    expect(render(100)).toContain('data-level="at_limit"');
+    expect(render(101, NOW - 13 * 86_400_000)).toContain('data-level="grace"');
+    expect(render(101, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
+    expect(render(101, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
+    expect(render(85)).toContain('href="/pricing"');
   });
 });

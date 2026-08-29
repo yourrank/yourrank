@@ -14,7 +14,7 @@ export function isPlanTier(value: unknown): value is PlanTier {
 
 /** Max leaderboard players per site. */
 export const PLAN_LIMITS: Record<PlanTier, number> = {
-  free: 100,
+  free: 50,
   pro: 1_000,
   team: 5_000,
 };
@@ -28,7 +28,7 @@ export const BOARD_LIMITS: Record<PlanTier, number> = {
 
 /** Distinct authenticated active viewers across all account-owned sites, rolling 30 days. */
 export const ACTIVE_VIEWER_LIMITS: Record<PlanTier, number> = {
-  free: 200,
+  free: 100,
   pro: 2_500,
   team: 10_000,
 };
@@ -107,8 +107,8 @@ export const PLAN_META: Record<PlanTier, {
     positioning: "Launch your community",
     highlight: false,
     features: [
-      "200 active viewers",
-      "1 site and 100 leaderboard players",
+      "100 active viewers",
+      "1 site and 50 leaderboard players",
       "Basic Rewards and Insights",
       "Standard customization",
       "30 days of accessible history",

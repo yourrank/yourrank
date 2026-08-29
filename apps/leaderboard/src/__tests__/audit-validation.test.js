@@ -220,3 +220,30 @@ describe("saveSite customDomain / slug handling", () => {
     expect(r.slug).toBe("newhandle");
   });
 });
+
+describe("saveSite Free player limit", () => {
+  const SITE = { id: "site-1", slug: "x", user_id: "user-1", cta_url: "", published: true, updated_at: null };
+  const players = (count) => Array.from({ length: count }, (_, index) => ({
+    name: `Player ${index + 1}`,
+    wagered: count - index,
+    prize: 0,
+  }));
+
+  beforeEach(() => { mockOne.mockReset(); mockQuery.mockReset(); mockExec.mockReset(); });
+
+  it("allows exactly 50 players on Free", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const result = await saveSite(mockEnv(), USER_ROW, { players: players(50) }, "site-1");
+    expect(result.code).not.toBe("player_limit");
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects the 51st player on Free", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const result = await saveSite(mockEnv(), USER_ROW, { players: players(51) }, "site-1");
+    expect(result).toEqual({
+      error: "Your plan allows up to 50 players. Upgrade for more.",
+      code: "player_limit",
+    });
+  });
+});

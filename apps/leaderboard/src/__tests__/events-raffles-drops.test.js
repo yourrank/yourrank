@@ -205,7 +205,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("pauses new creator-authored code drops after Free grace", async () => {
-    deps.expansionRestriction.mockResolvedValueOnce({ restricted: true, usage: { activeViewers: 201 } });
+    deps.expansionRestriction.mockResolvedValueOnce({ restricted: true, usage: { activeViewers: 101 } });
     const res = await handleCreateCodeDrop(new Request("http://localhost/api/events/drops", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

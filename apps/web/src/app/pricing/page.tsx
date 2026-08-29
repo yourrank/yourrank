@@ -15,8 +15,8 @@ const BILLING_FAQ = [
     a: "A signed-in Viewer Account that takes a verified community action during the preceding rolling 30 days. The same viewer counts once across every site you own.",
   },
   {
-    q: "What happens if Free goes over 200 active viewers?",
-    a: "You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over 200 after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.",
+    q: "What happens if Free goes over 100 active viewers?",
+    a: "You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over 100 after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.",
   },
   {
     q: "Can I pay for Pro or Team today?",
