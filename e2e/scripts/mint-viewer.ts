@@ -16,8 +16,8 @@ const hashed = Array.from(new Uint8Array(digest))
 const kickId = `e2e-kick-${Date.now()}`;
 const username = `e2eviewer${Date.now()}`;
 const [viewer] = await sql`
-  insert into viewers (kick_user_id, kick_username, avatar_url)
-  values (${kickId}, ${username}, null)
+  insert into viewers (kick_user_id, kick_username, kick_linked_at, avatar_url)
+  values (${kickId}, ${username}, now(), null)
   returning id`;
 
 await sql`
