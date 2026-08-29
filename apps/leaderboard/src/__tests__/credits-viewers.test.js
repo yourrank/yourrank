@@ -26,7 +26,9 @@ describe("viewer membership display", () => {
     expect(creditsPagesJs).not.toContain('id="cr-tip-open-btn"');
     expect(creditsPagesJs).toContain('id="cr-tip-username" name="username" type="text" readonly');
     expect(creditsJs).not.toContain('sitePath("/api/credits/tip")');
-    expect(routesJs).not.toContain('{ path: "/api/credits/tip"');
+    expect(routesJs).toContain('{ path: "/api/credits/tip"');
+    expect(creditsHandlerJs).toContain("v.kick_linked_at IS NOT NULL");
+    expect(creditsHandlerJs).toContain("JOIN viewers v ON v.id = sv.viewer_id");
     expect(creditsHandlerJs).not.toContain("INSERT INTO viewers (kick_username, kick_user_id)");
     expect(creditsHandlerJs).not.toContain("ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at = now()");
   });

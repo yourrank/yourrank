@@ -1002,6 +1002,9 @@ export async function handleCreditsAdjustBalance(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
+  const body = await readJson(request);
+  const bodySiteId = String(body?.siteId || "").trim();
+  if (!url.searchParams.get("siteId") && bodySiteId) url.searchParams.set("siteId", bodySiteId);
   const site = await getSite(env, user, url);
   if (!site) return bad("no site", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
@@ -1020,9 +1023,9 @@ export async function handleCreditsAdjustBalance(request, env) {
     }
   }
 
-  const body = await readJson(request);
   const delta = Number(body?.delta);
   const reason = String(body?.reason || "").trim();
+  const kickUsername = String(body?.username || body?.kickUsername || "").trim().replace(/^@/, "");
 
   if (!Number.isFinite(delta) || delta === 0) return bad("delta must be a non-zero integer");
   if (!reason) return bad("reason is required");
@@ -1036,6 +1039,23 @@ export async function handleCreditsAdjustBalance(request, env) {
           WHERE sv.id = $1 AND sv.site_id = $2
           FOR UPDATE`,
         [siteViewerId, site.id]
+      );
+    }
+
+    // Compatibility for the existing release harness and older clients: an
+    // exact username may select an already-existing membership only when the
+    // Viewer Account has authenticated that Kick link. It never creates or
+    // links a Viewer Account or Site Membership.
+    if (!siteViewer && kickUsername) {
+      siteViewer = await tx.one(
+        `SELECT sv.id, sv.balance, sv.total_earned
+           FROM site_viewers sv
+           JOIN viewers v ON v.id = sv.viewer_id
+          WHERE sv.site_id = $1
+            AND v.kick_linked_at IS NOT NULL
+            AND lower(v.kick_username) = lower($2)
+          FOR UPDATE OF sv`,
+        [site.id, kickUsername]
       );
     }
 

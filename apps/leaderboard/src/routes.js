@@ -350,6 +350,7 @@ export const ROUTES = [
   { path: "/api/credits/viewer/history", method: "GET", handler: withHandler(handleCreditsViewerHistory) },
   { path: "/api/credits/activity", method: "GET", handler: withHandler(handleCreditsActivity) },
   { path: "/api/credits/viewers/:id/balance", method: "POST", handler: withHandler(handleCreditsAdjustBalance) },
+  { path: "/api/credits/tip", method: "POST", handler: withHandler(handleCreditsAdjustBalance) },
   { path: "/api/credits/reconcile", method: "GET", handler: withHandler(handleCreditsReconcile) },
   { path: "/api/credits/viewers/:id/block", method: "POST", handler: withHandler(handleCreditsBlockViewer) },
 
