@@ -94,7 +94,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
 <header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Setup</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
-<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity settings"><div><strong>Site identity is shared across every public page.</strong><span>Name, tagline, logo, colors and links are managed in Site settings.</span></div><a href="/dashboard/site" id="setupBrandLink">Open Site settings</a></aside>
+<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><a href="/dashboard/site" id="setupBrandLink">Edit site identity</a></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="wagered">Amount</option><option value="score">Points / score</option></select><span class="hint">Players with the same value share a rank.</span></div>
 <div class="field"><label for="f_pool">Prize pool</label><input id="f_pool" placeholder="$500" /></div>
@@ -157,7 +157,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 <div class="v3-bulkbar" id="bulkActions" role="toolbar" aria-label="Bulk actions" hidden><span class="v3-bulkbar-mark" aria-hidden="true"></span><span id="bulkCount" role="status" aria-live="polite" aria-atomic="true">0 players selected</span><span class="v3-bulkbar-sep" aria-hidden="true"></span><button class="v3-btn v3-btn--dark" id="bulkClearWager" type="button">Reset scores to zero</button><button class="v3-btn v3-btn--danger" id="bulkDelete" type="button">Remove selected players</button></div>
 </div>
-<aside class="v3-owner-note" data-egroup="design" aria-label="Site-wide branding settings"><div><strong>Site-wide branding</strong><span>Name, tagline, logo, colors and social links apply across your public site.</span></div><a href="/dashboard/site">Open Site settings</a></aside>
+<aside class="v3-owner-note" data-egroup="design" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and social links apply across every public page.</span></div><a href="/dashboard/site">Edit site identity</a></aside>
 <div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Players</a></div>
 <div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
@@ -316,13 +316,13 @@ function BoardSettingsSection({ active } = {}) {
 <div class="v3-settings">
   <header class="v3-head v3-head--row">
     <div>
-      <h1>Site settings</h1>
-      <p class="v3-head-sub" id="settingsSubline">Customize what viewers see on your public site. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
+      <h1>Site</h1>
+      <p class="v3-head-sub" id="settingsSubline">Manage the public identity and pages viewers see for the selected site. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
     </div>
-    <a class="btn btn--sm btn--accent" id="sitePublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public site ↗</a>
+    <a class="btn btn--sm" id="sitePublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public site ↗</a>
   </header>
-  <div class="v3-tabs" role="tablist" aria-label="Site settings sections">
-    <button class="v3-tab is-on" id="settingsTabCustomize" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelCustomize" data-settings-tab="customize">Customize</button>
+  <div class="v3-tabs" role="tablist" aria-label="Site sections">
+    <button class="v3-tab is-on" id="settingsTabCustomize" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelCustomize" data-settings-tab="customize">Public site</button>
     <button class="v3-tab" id="settingsTabNotifications" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelNotifications" data-settings-tab="notifications">Notifications</button>
     <button class="v3-tab" id="settingsTabDomain" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDomain" data-settings-tab="domain">Domain</button>
     <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Advanced</button>
@@ -391,6 +391,7 @@ function BoardSettingsSection({ active } = {}) {
         <div class="v3-settings-card" id="siteNavigationCard">
           <div class="v3-settings-card-head"><div><h2>Navigation</h2><p>Choose which destinations appear on your public site. Turning one off also disables its public address.</p></div></div>
           <div id="siteSectionRows"></div>
+          <div class="v3-settings-row"><div><b>Leaderboard appearance</b><p>Layout, page blocks and prize labels are managed with the leaderboard.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/leaderboard/design">Open Appearance</a></div>
         </div>
         <div class="v3-settings-card" id="siteLinksCard">
           <div class="v3-settings-card-head"><div><h2>Links</h2><p>Add the channels viewers should follow. Only the ones you switch on appear publicly.</p></div></div>
@@ -401,14 +402,13 @@ function BoardSettingsSection({ active } = {}) {
           <div class="v3-settings-address">
             <code id="sitePublicUrl">Loading your address…</code>
             <div class="v3-settings-actions">
-              <button class="btn btn--sm btn--accent" id="sitePublicCopy" type="button">Copy link</button>
+              <button class="btn btn--sm" id="sitePublicCopy" type="button">Copy link</button>
               <a class="btn btn--sm" id="sitePublicOpen" href="#" target="_blank" rel="noopener noreferrer">Open site ↗</a>
             </div>
           </div>
           <p class="v3-settings-status" id="sitePublicCopyStatus" role="status" aria-live="polite"></p>
           <div class="v3-settings-row"><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
         </div>
-        <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Leaderboard page blocks</h2><p>Current block visibility on your leaderboard page. Edit the layout itself in Appearance.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div><div class="v3-block-grid" id="leaderboardBlockRows"></div><div class="v3-note" id="leaderboardBlockNote">Block visibility follows your site settings.</div><a class="btn btn--sm btn--accent mt-12" href="/dashboard/leaderboard/design">Edit layout &amp; blocks in Appearance →</a></div>
         <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Viewer access</h2><p>Publication and the optional site password stay with the leaderboard editor.</p></div></div><div class="v3-settings-row"><div><b>Visibility and password</b><p>Choose whether anyone with the link can view this site or a password is required.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div></div>
         <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
       </div>

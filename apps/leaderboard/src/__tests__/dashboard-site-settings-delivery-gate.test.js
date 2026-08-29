@@ -110,7 +110,7 @@ describe("client: site settings is a core SPA section, not a second delivery pat
     const chrome = chromeStateFor("site");
     expect(chrome.canonicalPath).toBe("/dashboard/site");
     expect(chrome.navKey).toBe("site");
-    expect(chrome.documentTitle).toContain("Site settings");
+    expect(chrome.documentTitle).toContain("Site");
   });
 });
 
@@ -120,7 +120,7 @@ describe("markup: one Site settings body", () => {
     const html = DashboardContent({ user, activePath: "/dashboard/site" }).toString();
     expect(html.match(/data-page="site"/g)).toHaveLength(1);
     expect(html).toContain('<section class="lb-page is-on" data-page="site">');
-    expect(html.match(/<h1>Site settings<\/h1>/g)).toHaveLength(1);
+    expect(html.match(/<h1>Site<\/h1>/g)).toHaveLength(1);
     expect(html.match(/id="settingsSubline"/g)).toHaveLength(1);
 
     const homeHtml = DashboardContent({ user, activePath: "/dashboard" }).toString();

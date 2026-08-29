@@ -6,23 +6,12 @@
 // here. The API (/api/site/sections, keyed by siteId) is unchanged.
 import { $, getCsrf, guardAuth, logError, showToast } from "./utils.js";
 import { state } from "./state.js";
-import { DEFAULT_SECTIONS, isPro, refreshDesignPreview } from "./site.js";
+import { refreshDesignPreview } from "./site.js";
 
 const SECTION_ROWS = [
   ["shop", "Shop", "Let members browse and redeem your shop items.", "Turning off removes Shop from navigation and disables the /shop URL."],
   ["credits", "Rewards", "Let members see their balance and order history.", "Turning off removes Rewards from navigation and disables the /credits URL."],
   ["games", "Games", "Let members play credit-based games on your site.", "Turning off removes Games from navigation and disables the /games URL."],
-];
-
-const BLOCK_ROWS = [
-  ["hero", "Hero banner"],
-  ["top3", "Top 3 podium"],
-  ["search", "Search & Filter"],
-  ["rules", "Rules marquee"],
-  ["socials", "Social widgets"],
-  ["share", "Share button"],
-  ["countdown", "Countdown timer"],
-  ["cta", "Button"],
 ];
 
 /** Current public-section flags for the active site (shop/credits/games). */
@@ -33,17 +22,6 @@ export function siteSections() {
     credits: incoming.me !== false,
     games: incoming.games === true,
   };
-}
-
-function renderPageBlocks() {
-  const list = $("leaderboardBlockRows");
-  const note = $("leaderboardBlockNote");
-  if (!list) return;
-  const current = { ...DEFAULT_SECTIONS, ...(state.EXTRA?.sections || {}) };
-  list.innerHTML = BLOCK_ROWS.map(([key, label]) => `<div class="v3-block-status"><span>${label}</span><strong>${current[key] !== false ? "Shown" : "Hidden"}</strong></div>`).join("");
-  if (note) note.textContent = isPro()
-    ? "Page block visibility is included with Pro plans."
-    : "Page block visibility is available on Pro plans.";
 }
 
 function renderSections() {
@@ -114,5 +92,4 @@ async function saveSection(input) {
  */
 export function initSiteSections() {
   renderSections();
-  renderPageBlocks();
 }

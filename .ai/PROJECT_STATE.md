@@ -2,9 +2,9 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `e46beebc6b6b51c12f1e8045e35a1b635487c224` (PR #665 merged)
+**Evidence baseline:** `main` at `0f6fc71f61810415613180b3f29688b9d9423e4a` (PR #666 merged)
 
-**Last reconciled:** 2026-08-28
+**Last reconciled:** 2026-08-29
 
 **Scope:** current implementation reality only. Target product direction lives in [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md).
 
@@ -86,12 +86,16 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Current public labels and routes remain implementation truth until target viewer capabilities exist.
 - Recent viewer waves established shared chrome, truthful auth/empty states, responsive behavior, and creator branding without a parallel renderer.
 
-### Site Settings — ONE OWNER
+### Community ownership — CONSOLIDATED
 
-- The canonical Site Settings body is the Site surface rendered from `apps/leaderboard/src/pages/dashboard.jsx`.
-- Its creator customizer owns name, tagline, logo, accent, typography, social links, public-section visibility, URL/domain controls, and real-viewer preview.
+- Community remains a presentation grouping over the existing site-scoped Site and Leaderboard routes; it has no parallel router, shell, entity, or persistence model.
+- The canonical Site body is rendered from `apps/leaderboard/src/pages/dashboard.jsx` and is the only creator-wide public-identity editor.
+- Site owns name, tagline, logo, accent, typography, social links, public-section visibility, URL/domain controls, and real-viewer preview.
+- Leaderboard retains Setup, Players, Appearance, Share, and History. Appearance owns only leaderboard-specific columns, layout/blocks, and prize labels; its site-wide identity note links to Site.
 - Preview uses `renderSite()` through an ownership-checked endpoint.
-- Site Settings → Connections is a separate fragment route, not a second Site Settings implementation.
+- Site → Connections is a separate fragment route, not a second Site implementation.
+- Sites remains a top-level account-scoped destination. The selected-site control switches sites and links to Manage Sites, but it is absent from account-scoped pages and does not own the current create-site workflow, so it is not yet a complete replacement.
+- Recognition is deferred: the only trustworthy historical result content is the archive data already owned by Leaderboard History and the public Hall of Fame. There is no distinct, moderated cross-capability recognition model to justify another creator destination.
 
 ## Current Major Surfaces
 
@@ -100,7 +104,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Home | Account-scoped dashboard route with selected-site context carried by current navigation state |
 | Sites collection | Account-scoped `/dashboard/leaderboards` |
 | Leaderboard editor | Site-scoped SPA route family under `/dashboard/leaderboard` |
-| Site Settings | Site-scoped `/dashboard/site` plus separate Connections fragment |
+| Site | Site-scoped `/dashboard/site` plus separate Connections fragment |
 | Rewards | Site-scoped fragment route family under `/dashboard/rewards` |
 | People (Members) | Site-scoped `/dashboard/audience/members` |
 | Insights | Site-scoped SPA route family under `/dashboard/analytics` |
@@ -137,6 +141,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | Legacy `v3-*`/`v4-*` names and raw-value ratchets | Existing debt; do not extend |
 | Legacy route aliases | Retained pending telemetry evidence |
 | Viewer/site membership expansion | Target only; schema and migration deferred |
+| Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
 | Shared Activity / Review / Claims persistence | Deferred until real reuse and migration safety are proven |
 | Billing terms/providers/enums | Separate reconciliation required |
 | Restricted legacy route families | Operational current implementation; excluded from target architecture work |
