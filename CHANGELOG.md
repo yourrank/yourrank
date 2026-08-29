@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+- **Site settings customizer (#658)**: refonte de Site settings en "customizer" avec un onglet Customize, aperçu public read-only et suppression des doublons de configuration.
 - **Dashboard consolidation, Wave 2 (#627–#635)**: converged the authenticated dashboard onto single-owner implementations — one canonical chrome-state owner (`packages/shared/src/dashboard-chrome-state.ts`, #627), one client navigation entry point (`requestDashboardRoute` in `assets/dashboard/shell.js`, #628), one-delivery-owner regression gates for Site Settings (#629), Analytics (#630), Sites-list (#631) and the Leaderboard editor (#632), deletion of the duplicate Telegram dashboard shell runtime (#633), manifest-owned legacy dashboard redirects with instrumentation (#634), and a single authenticated dashboard shell structure with a runtime ownership gate (#635).
 - **Dashboard redesign, Wave 3 (#636–#641)**: dashboard design foundation with workspace design tokens and consolidated design primitives (#636), shared shell and navigation visual polish (#638), standardized authenticated page chrome (text-led tab strips, page heads, truncating breadcrumbs; sticky offsets derived from `--ws-topbar-h`) (#639), simplified authenticated Home and Sites bodies with narrow-width row stacking (#640), and a simplified Leaderboard editor body with progressive disclosure, a single topbar publish action, a sticky in-column save bar, and multiple mobile overflow fixes (320px checkbox wrapping, History archive row stacking, step selection and sticky-layer collision fixes) (#641).
 - **Phase 7 (Site Settings & Account Team)**: Scoped Site Settings archive deletion, Discord/Telegram notification test buttons, and Account Team mutations (role assignment, member removal, invite issuance, revocation) to selected `siteId`.
@@ -14,12 +16,13 @@
 - **Handler calling convention & server-authoritative transitions (#620)**: One calling convention for route handlers (`(request, env, deps?)`), fixing nine production routes that threw on injected dependencies; server-authoritative product state transitions (raffle draws with zero tickets refused, Kick channel persisted for tournaments, truthful analytics/export/logout states); one client/server contract for games with no demo balance anywhere (mock API and `?demo=1` mode deleted); native jsonb binding instead of pre-serialization across Worker, bot and packages/shared, with a shared `fromJsonb()` reader and a column-driven static test guarding against regressions; DLQ event body bound natively with the consumer gate gap closed; e2e release gate reports real per-scenario verdicts with explicit SKIPPED states for gated dependencies.
 - **Legacy jsonb data repair (#621)**: Allowlisted, reversible repair migration for legacy double-encoded rows (20 columns), with per-row pre-images stored by primary key and a rollback that restores only rows the application has not since edited.
 - **CI repair gate (#622)**: Preflight baseline moved to 0 with the production repair result recorded, and the gate step stays alive when the report has zero structural-evidence lines.
-- Canonicalized frontend ownership: the apex Leaderboard Worker owns the full application, while `apps/web` now serves only the privileged marketing homepage.
+- **Canonicalized frontend ownership**: the apex Leaderboard Worker owns the full application, while `apps/web` now serves only the privileged marketing homepage.
 - Hardcheck v5: 7 P0/P1 fixes (setup wizard, WCAG contrast, archive limit, notification settings)
 - Hardcheck v5: Security hardening (admin TOTP rate limit, Sentry context tags)
 - Hardcheck v5: Dashboard fixes (notification save, test buttons, overlay upgrade link)
 
 ## [0.2.0] - 2026-07-04
+
 - Multi-board support (multiple leaderboards per user)
 - Custom domains with CNAME verification
 - Telegram Stars billing integration
@@ -34,6 +37,7 @@
 - WCAG 2.2 AA accessibility baseline
 
 ## [0.1.0] - 2026-06-25
+
 - Initial release
 - Leaderboard SPA with live polling
 - Telegram bot integration (!rank, !board commands)
