@@ -7,6 +7,7 @@ import { BOARD_TABS, ANALYTICS_TABS } from "../pages/dashboard.jsx";
 import { GIVEAWAY_TABS } from "../pages/giveaway-pages.js";
 import { REWARDS_TABS } from "../pages/rewards.jsx";
 import { SETTINGS_TABS } from "../pages/account.jsx";
+import { PEOPLE_TABS } from "../pages/audience.jsx";
 import { ACCOUNT_SECTION_PATHS, SECTIONS } from "../assets/dashboard/routes.js";
 
 const user = { display_name: "Test operator", email: "operator@example.com", plan: "pro" };
@@ -14,6 +15,7 @@ const workerSource = readFileSync(new URL("../index.js", import.meta.url), "utf8
 const PERMITTED_DEFAULT_TAB_ROOTS = new Map([
   ["/dashboard/telegram", "Telegram Overview is the section-root back-link owned by the sidebar."],
   ["/dashboard/rewards", "Rewards Overview is the section root and the default tab."],
+  ["/dashboard/audience/members", "People Members is the section root and the default tab."],
 ]);
 
 function linksIn(markup, { excludeContextualActions = false } = {}) {
@@ -177,7 +179,9 @@ function deriveRenderableRoutes() {
     }
   }
   routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: false, hasBreadcrumbs: false });
-  routes.push({ path: "/dashboard/audience/members", render: "rewards", tab: "members", hasSubnav: false, hasBreadcrumbs: true });
+  for (const tab of PEOPLE_TABS) {
+    routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: true });
+  }
   // The Kick connection lives under Site settings → Connections: it renders the
   // channel content without the Rewards subnav, owned by the Site settings rail.
   routes.push({ path: "/dashboard/site/connections", render: "rewards", tab: "channel", hasSubnav: false, hasBreadcrumbs: true });
@@ -215,6 +219,10 @@ function renderRoute(route) {
       history: PAGES.rewardsHistory,
     }[route.tab];
     if (!page) throw new Error(`No Rewards renderer for ${route.tab}`);
+    return page.Component({ activePath: route.path, user }).toString();
+  }
+  if (route.render === "people") {
+    const page = route.tab === "reviews" ? PAGES.audienceReviews : PAGES.audienceMembers;
     return page.Component({ activePath: route.path, user }).toString();
   }
   if (route.render === "telegram") {
@@ -301,10 +309,14 @@ describe("dashboard chrome ownership", () => {
     }
   });
 
-  it("marks the members page as the Audience area and links visitor analytics", () => {
-    const markup = renderRoute({ path: "/dashboard/audience/members", render: "rewards", tab: "members", hasSubnav: false, hasBreadcrumbs: true });
+  it("marks the People pages as the Audience area and keeps their local navigation", () => {
+    const markup = renderRoute({ path: "/dashboard/audience/members", render: "people", tab: "viewers", hasSubnav: true, hasBreadcrumbs: true });
     expect(markup).toMatch(/data-nav="audience"[^>]*aria-current="page"/);
     expect(markup).toContain('href="/dashboard/analytics"');
+    expect(markup).toContain('href="/dashboard/audience/members" aria-current="page"');
+    const reviews = renderRoute({ path: "/dashboard/audience/reviews", render: "people", tab: "reviews", hasSubnav: true, hasBreadcrumbs: true });
+    expect(reviews).toMatch(/data-nav="audience"[^>]*aria-current="page"/);
+    expect(reviews).toContain('href="/dashboard/audience/reviews" aria-current="page"');
   });
 
   it("covers every renderable Worker route with one rendered chrome invariant", () => {

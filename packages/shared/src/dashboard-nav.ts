@@ -97,6 +97,7 @@ const NAV_OWNER_ROUTES = {
   channel: "siteConnections.channel",
   siteConnections: "siteConnections.channel",
   members: "audience.viewers",
+  reviews: "audience.reviews",
   audience: "audience.viewers",
   viewers: "audience.viewers",
   boards: "boards",

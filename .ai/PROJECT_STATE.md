@@ -105,6 +105,15 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Mixed Engagement remains a separate transitional destination. Restricted legacy Games, paid-chance raffles, predictions, wagering, payout, and settlement mechanics are not imported into Activities.
 - Challenges are deferred because a shared foundation is not yet sufficiently proven. Tournaments remain outside Activities because current settings include entry-cost and eligibility fields that are not cleanly isolated from the zero-cost subset.
 
+### Safe Reviews foundation — AVAILABLE; ADAPTER-BASED
+
+- People now owns site-scoped Members and Reviews at `/dashboard/audience/members` and `/dashboard/audience/reviews` through the canonical fragment route model.
+- The current Reviews queue adapts one proven human-decision source only: flagged participant eligibility exceptions on persisted zero-entry-fee tournament signups. This narrow Reviews adapter does not move tournaments into Activities or import paid/mixed tournament behavior.
+- Reviews use the existing `tournament_entries` source state and append decision events to the existing `audit_log`; no universal Review table or migration was introduced because a second reusable safe review lifecycle is not yet proven.
+- Review state is derived from `people_review_allow` / `people_review_exclude` audit events rather than neighboring tournament states. Reviews support only Allow or Exclude for that signup; an allowed waitlisted signup remains waitlisted, and unresolved flagged signups cannot enter zero-cost random selection. Decisions lock the site-bound tournament then source row and write any source update plus attributable audit event atomically. Identical retries are idempotent; contradictory stale decisions fail.
+- Context uses an explicit Viewer Account → selected-site `site_viewers` membership link where one exists, and shows only authenticated provider links. It does not expose the existing source score, raw reason, IP, device, or network data and does not infer identity from names.
+- Home review attention is deferred; Home remains account-scoped and no trustworthy, inexpensive selected-site integration has been established.
+
 ## Current Major Surfaces
 
 | Surface | Current route/implementation reality |
@@ -115,7 +124,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Site | Site-scoped `/dashboard/site` plus separate Connections fragment |
 | Activities | Site-scoped `/dashboard/activities`; adapter over free code drops only |
 | Rewards | Site-scoped fragment route family under `/dashboard/rewards` |
-| People (Members) | Site-scoped `/dashboard/audience/members` |
+| People (Members + Reviews) | Site-scoped `/dashboard/audience/members` and `/dashboard/audience/reviews` |
 | Insights | Site-scoped SPA route family under `/dashboard/analytics` |
 | Telegram | Account-scoped Bot Worker documents under `/dashboard/telegram*` |
 | Settings | Account-scoped fragment routes under `/dashboard/settings` |
@@ -138,7 +147,7 @@ Community, People, and Insights are current navigation presentation labels only;
 - `viewers` is the current global viewer-account anchor. A provider connection is treated as authenticated only when its OAuth link timestamp is present; names and raw external identifiers are not linkage proof.
 - `site_viewers` is the current physical Site Membership record. Its foreign keys and unique `(site_id, viewer_id)` constraint already provide the required scope and uniqueness, so no additive membership table or inferred backfill is justified.
 - A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records.
-- People reuses `/dashboard/audience/members` and exposes only selected-site memberships. Detail lookup binds both membership ID and selected site; creator authorization uses the existing site capability boundary.
+- People reuses `/dashboard/audience/members` and `/dashboard/audience/reviews`. Member detail binds membership ID and selected site; review list/detail/decisions bind the source entry and any membership join to the selected site. Creator authorization uses the existing site capability boundary.
 - Leaderboard Player and Telegram Subscriber records remain unlinked to Viewer Account and Site Membership. No username, display-name, IP, device, or fuzzy matching is used to infer identity.
 - Dashboard route scope is explicitly `account` or `site`.
 - Current site navigation uses both `board` and `siteId` query spellings by delivery family.
@@ -156,6 +165,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | Legacy route aliases | Retained pending telemetry evidence |
 | Viewer/site membership expansion beyond the existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence |
 | Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
-| Shared Activity / Review / Claims persistence | Deferred until real reuse and migration safety are proven |
+| Shared Activity / Review persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
+| Claims architecture | Deferred to Wave G; no canonical Claim model exists |
 | Billing terms/providers/enums | Separate reconciliation required |
 | Restricted legacy route families | Operational current implementation; excluded from target architecture work |

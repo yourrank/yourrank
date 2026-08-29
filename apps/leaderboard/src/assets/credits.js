@@ -52,6 +52,7 @@ let memberDetail = null;
 let memberHistoryRelease;
 let memberHistoryTrigger;
 let memberHistoryRequest = 0;
+let memberQueryOpened = false;
 let shopItemsView = [];
 let shopSearch = "";
 let shopSort = "cost";
@@ -753,6 +754,18 @@ async function openMemberHistory(viewer, trigger) {
   memberHistoryRelease = dialog.trap(drawer, closeMemberHistory);
   await loadMemberHistory();
 }
+
+async function openMemberFromQuery() {
+  if (memberQueryOpened || tab() !== "viewers") return;
+  const memberId = new URLSearchParams(location.search).get("member");
+  if (!memberId) return;
+  const viewer = (state.members || []).find((item) => String(item.id) === String(memberId));
+  if (!viewer) return;
+  memberQueryOpened = true;
+  const trigger = document.querySelector(`[data-member-detail="${CSS.escape(String(memberId))}"]`)
+    || document.querySelector('.v3-tabs [aria-current="page"]');
+  if (trigger) await openMemberHistory(viewer, trigger);
+}
 let activePopover;
 function closePopover(result = false) {
   if (!activePopover) return;
@@ -826,6 +839,7 @@ async function load() {
     if (tab() === "overview" && $("cr-analytics")) await loadAnalytics();
     preserveSiteContextLinks();
     $("cr-app").hidden = false; $("cr-empty").hidden = true;
+    await openMemberFromQuery();
   } catch (err) {
     showOAuthMessage({ finalize: true });
     setState({ CREDITS_STATUS: "error" });
@@ -1054,6 +1068,7 @@ export function enter() {
   memberHistoryRelease = undefined;
   memberHistoryTrigger = undefined;
   memberHistoryRequest = 0;
+  memberQueryOpened = false;
   shopItemsView = [];
   shopSearch = "";
   shopSort = "cost";

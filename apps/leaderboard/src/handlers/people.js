@@ -67,7 +67,7 @@ async function resolvePeopleSite(request, env, user, deps) {
     : deps.getByUser(env, user.id);
 }
 
-async function requirePeopleAccess(request, env, deps) {
+export async function requirePeopleAccess(request, env, deps) {
   const { user, res } = await deps.requireUser(request, env);
   if (res) return { res };
   const site = await resolvePeopleSite(request, env, user, deps);

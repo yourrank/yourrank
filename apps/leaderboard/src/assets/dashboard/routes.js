@@ -80,13 +80,14 @@ export function chromeStateFor(page, tab = "", { exact = false } = {}) {
 // ---- Dynamic sections ----
 //
 // These dashboard areas were separate server-rendered documents, each with its
-// own boot script (credits.js / giveaways.js / account.js). The persistent
+// own boot script (activities.js / credits.js / people.js / giveaways.js / account.js). The persistent
 // shell now fetches their content as fragments and boots them lazily so
 // navigation between them and the core SPA sections never reloads the page.
 //
 // `boot` names the client module that owns the section's lifecycle:
 //   "activities"→ assets/activities.js  (Safe Activities)
-//   "credits"   → assets/credits.js     (Rewards + Audience)
+//   "credits"   → assets/credits.js     (Rewards)
+//   "people"    → assets/people.js      (People; delegates Members to credits.js)
 //   "giveaways" → assets/giveaways.js   (Engagement)
 //   "account"   → assets/account.js     (Account settings)
 //
@@ -117,7 +118,7 @@ export const DYNAMIC_SECTIONS = {
   // only the address and the rail owner moved.
   siteConnections: dynamicSection("siteConnections", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),
   giveaways: dynamicSection("giveaways", { boot: "giveaways", boardContext: "selector", rootId: "gw-dash" }),
-  audience: dynamicSection("audience", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),
+  audience: dynamicSection("audience", { boot: "people", boardContext: "selector", rootId: "cr-dash" }),
   settings: dynamicSection("settings", { boot: "account", boardContext: "none", rootId: "acc-app" }),
 };
 
