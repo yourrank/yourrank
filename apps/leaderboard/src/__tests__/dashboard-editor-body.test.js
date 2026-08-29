@@ -160,7 +160,7 @@ describe("authenticated editor body", () => {
     const html = editorHtml("/dashboard/leaderboard/setup");
     // Ranking essentials stay visible. Site-wide identity points to its proven
     // owner; optional sponsor and scheduling detail sit behind disclosures.
-    expect(html).toContain('id="setupBrandLink">Open Site settings');
+    expect(html).toContain('id="setupBrandLink">Edit site identity');
     expect(html).toContain("Leaderboard basics");
     expect(html).toMatch(/<details class="editor-more editor-more--standalone"[^>]*data-editor-more="setup-sponsor">/);
     expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-schedule">/);

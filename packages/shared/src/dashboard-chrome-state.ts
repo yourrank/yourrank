@@ -68,9 +68,9 @@ export const DASHBOARD_SECTION_TITLES = {
   boards: "Sites",
   games: "Games",
   performance: "Insights",
-  site: "Site settings",
+  site: "Site",
   rewards: "Rewards",
-  siteConnections: "Site settings",
+  siteConnections: "Site",
   giveaways: "Engagement",
   audience: "People",
   settings: "Settings",
@@ -172,7 +172,7 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
       // Top-level pages: a single-entry trail renders no breadcrumb.
       return [{ label: sectionTitle }];
     case "siteConnections":
-      // Nested under Site settings → Connections.
+      // Nested under Site → Connections.
       return [
         { label: DASHBOARD_SECTION_TITLES.site, href: routeById("site").canonicalPath },
         { label: "Connections", href: routeById("siteConnections.channel").canonicalPath },

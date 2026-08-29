@@ -1,4 +1,4 @@
-// Site settings is the creator's customizer: the public-site branding,
+// Site is the creator's customizer: the public-site branding,
 // navigation, links and address a viewer sees, next to a preview of the real
 // public site. These tests pin the parts a creator depends on — labelled
 // controls, a viewer-accurate preview mount, an honest save state — so the
@@ -19,10 +19,11 @@ const customize = html.slice(
   html.indexOf('data-settings-panel="notifications"'),
 );
 
-describe("markup: Site settings answers what viewers see", () => {
+describe("markup: Site answers what viewers see", () => {
   it("titles the section for the public site and offers the real thing", () => {
-    expect(html).toContain("<h1>Site settings</h1>");
-    expect(html).toContain("Customize what viewers see on your public site.");
+    expect(html).toContain("<h1>Site</h1>");
+    expect(html).toContain("Manage the public identity and pages viewers see for the selected site.");
+    expect(html).toContain('data-settings-tab="customize">Public site</button>');
     expect(html).toMatch(/id="sitePublicSiteAction"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
     expect(html).toContain("View public site ↗");
     // One heading level 1 in the rendered section body.
@@ -100,6 +101,19 @@ describe("markup: Site settings answers what viewers see", () => {
     expect(customize).toContain('id="sitePublicDomainSummary"');
     // Domain infrastructure keeps its own tab; this is a pointer to it.
     expect(customize).toMatch(/id="sitePublicDomainManage"[^>]*data-settings-tab-link="domain"/);
+  });
+
+  it("keeps public identity in Site and redirects leaderboard-specific presentation to Appearance", () => {
+    for (const id of ["f_name", "f_tagline", "logoFile", "c_a", "f_font", "socialsList"]) {
+      expect(html.match(new RegExp(`id="${id}"`, "g"))).toHaveLength(1);
+    }
+    expect(customize).toContain("<b>Leaderboard appearance</b>");
+    expect(customize).toContain("Layout, page blocks and prize labels are managed with the leaderboard.");
+    expect(customize).toContain('href="/dashboard/leaderboard/design">Open Appearance</a>');
+    expect(customize).not.toContain("leaderboardBlockRows");
+    expect(customize).not.toContain("Leaderboard page blocks");
+    expect(html).toContain('id="sectionsList"');
+    expect(html).toContain('id="f_prizePoolLabel"');
   });
 
   it("puts the save bar directly under the tabs, ahead of every panel", () => {

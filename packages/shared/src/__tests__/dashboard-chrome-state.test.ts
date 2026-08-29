@@ -72,7 +72,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     // Single-entry trails render nothing (crumbsHtml contract).
     expect(dashboardChromeState("games").crumbs).toEqual([{ label: "Games" }]);
     expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "Sites" }]);
-    expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site settings" }]);
+    expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site" }]);
     expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Rewards" }]);
   });
 
@@ -118,11 +118,11 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     const channel = dashboardChromeState("siteConnections.channel");
     expect(channel.navKey).toBe("site");
     expect(channel.crumbs).toEqual([
-      { label: "Site settings", href: "/dashboard/site" },
+      { label: "Site", href: "/dashboard/site" },
       { label: "Connections", href: "/dashboard/site/connections" },
       { label: "Kick connection" },
     ]);
-    expect(channel.documentTitle).toBe("Kick connection · Site settings · YourRank");
+    expect(channel.documentTitle).toBe("Kick connection · Site · YourRank");
 
     const preds = dashboardChromeState("giveaways.preds");
     expect(preds.navKey).toBe("engage");
@@ -176,7 +176,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("home").documentTitle).toBe("Home · YourRank");
     expect(dashboardChromeState("games").documentTitle).toBe("Games · YourRank");
     expect(dashboardChromeState("boards").documentTitle).toBe("Sites · YourRank");
-    expect(dashboardChromeState("site").documentTitle).toBe("Site settings · YourRank");
+    expect(dashboardChromeState("site").documentTitle).toBe("Site · YourRank");
     expect(dashboardChromeState("settings.team").documentTitle).toBe("Settings · YourRank");
     expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engagement · YourRank");
     expect(dashboardChromeState("telegram.broadcasts").documentTitle).toBe("Telegram · YourRank");

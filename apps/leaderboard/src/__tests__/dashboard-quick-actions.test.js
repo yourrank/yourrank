@@ -199,10 +199,10 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.plan-pending,[\s\S]*?\.v3-dash\[data-auth-workspace\] \.plan-cancel \{[\s\S]*?background: var\(--ws-surface-soft\);/);
   });
 
-  it("styles the Home alert and block status rows in the v4 workspace", () => {
+  it("keeps public-section ownership in Site and leaderboard presentation in Appearance", () => {
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-alert");
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-alert--warning");
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-block-status");
+    expect(dashboardCss).not.toContain(".v3-dash[data-auth-workspace] .v3-block-status");
     expect(dashboardHtml()).toContain('class="v3-alert v3-alert--warning"');
     // Public-section visibility is a site setting: Games defers to Site
     // settings → Sections instead of owning the toggles itself.
@@ -217,9 +217,10 @@ describe("dashboard overview quick actions", () => {
     // preview that shows them, rather than as a separate "sections" concept.
     expect(site).toContain("<h2>Navigation</h2>");
     expect(site).toContain('id="siteSectionRows"');
-    expect(site).toContain("Leaderboard page blocks");
-    expect(site).toContain("Current block visibility on your leaderboard page");
-    expect(site).toContain("Edit layout &amp; blocks in Appearance →");
+    expect(site).toContain("Leaderboard appearance");
+    expect(site).toContain("Layout, page blocks and prize labels are managed with the leaderboard.");
+    expect(site).toContain('href="/dashboard/leaderboard/design">Open Appearance</a>');
+    expect(site).not.toContain("leaderboardBlockRows");
   });
 
   it("keeps authenticated cards on the v4 geometry without changing public cards", () => {
@@ -234,13 +235,14 @@ describe("dashboard overview quick actions", () => {
     const html = dashboardHtml("/dashboard/leaderboard/design");
     expect(html).toContain('<h1 class="v3-section-title" data-egroup="design">Appearance</h1>');
     expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>');
-    // Brand text and links moved to Site settings, so Appearance no longer
+    // Brand text and links are owned by Site, so Appearance no longer
     // carries a "Content" group; it owns layout, blocks and prize labels.
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>');
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Appearance</h2></div>');
     expect(html).not.toContain("<h2>Theme &amp; branding</h2>");
-    expect(html).toContain("Site-wide branding");
-    expect(html).toContain("Name, tagline, logo, colors and social links apply across your public site.");
+    expect(html).toContain("Public identity is managed in Site.");
+    expect(html).toContain("Name, tagline, logo, colors and social links apply across every public page.");
+    expect(html).toContain('href="/dashboard/site">Edit site identity</a>');
     expect(html).toContain("The same renderer visitors see on your public site.");
   });
 
