@@ -71,6 +71,9 @@ describe("getSiteRole", () => {
       if (sql.includes("FROM site_members WHERE site_id=$1 AND user_id=$2")) {
         return { role: "moderator" };
       }
+      if (sql.includes("SELECT plan, plan_expires_at, status FROM users")) {
+        return { plan: "team", plan_expires_at: new Date(Date.now() + 86400000).toISOString(), status: "active" };
+      }
       return null;
     };
 
@@ -117,8 +120,10 @@ describe("createSiteInvite & lifecycle", () => {
   it("allows owner to create invite and returns a token", async () => {
     const fakeOne = async (sql: string, params?: any[]) => {
       if (sql.includes("FROM sites WHERE id=$1")) return { user_id: "owner-1" };
+      if (sql.includes("FROM sites s JOIN users")) return { user_id: "owner-1", plan: "team", plan_expires_at: new Date(Date.now() + 86400000).toISOString(), status: "active" };
       if (sql.includes("FROM users WHERE lower(email)=$1")) return null;
       if (sql.includes("FROM site_invites WHERE site_id=$1")) return null;
+      if (sql.includes("SELECT count(DISTINCT identity)")) return { count: 1 };
       return null;
     };
     const fakeExec = async (sql: string, params?: any[]) => {
@@ -141,6 +146,7 @@ describe("createSiteInvite & lifecycle", () => {
     let updateParams: any[] | undefined;
     const fakeOne = async (sql: string) => {
       if (sql.includes("FROM sites WHERE id=$1")) return { user_id: "owner-1" };
+      if (sql.includes("FROM sites s JOIN users")) return { user_id: "owner-1", plan: "team", plan_expires_at: new Date(Date.now() + 86400000).toISOString(), status: "active" };
       if (sql.includes("FROM users WHERE lower(email)=$1")) return null;
       if (sql.includes("FROM site_invites WHERE site_id=$1")) return { id: "inv-existing" };
       return null;
@@ -167,7 +173,7 @@ describe("createSiteInvite & lifecycle", () => {
     let updatedInvite: any = null;
 
     const fakeOne = async (sql: string) => {
-      if (sql.includes("FROM site_invites WHERE token_hash=$1")) {
+      if (sql.includes("FROM site_invites si")) {
         return {
           id: "inv-123",
           site_id: "site-1",
@@ -176,6 +182,10 @@ describe("createSiteInvite & lifecycle", () => {
           status: "pending",
           expires_at: new Date(Date.now() + 86400000).toISOString(),
           invited_by: "owner-1",
+          owner_id: "owner-1",
+          plan: "team",
+          plan_expires_at: new Date(Date.now() + 86400000).toISOString(),
+          owner_status: "active",
         };
       }
       if (sql.includes("FROM users WHERE id=$1")) return { email: " NEWMOD@EXAMPLE.COM " };
@@ -189,7 +199,8 @@ describe("createSiteInvite & lifecycle", () => {
       if (sql.includes("UPDATE site_invites SET status='accepted'")) {
         updatedInvite = params;
       }
-      return { count: 1 };
+      if (sql.includes("COUNT(DISTINCT sm.user_id)")) return { count: 1 };
+      return null;
     };
 
     const res = await acceptSiteInvite("tok-abc", "user-mod-1", { one: fakeOne as any, exec: fakeExec as any });
@@ -204,7 +215,7 @@ describe("createSiteInvite & lifecycle", () => {
 
   it("rejects an invite when the accepting account email does not match", async () => {
     const fakeOne = async (sql: string) => {
-      if (sql.includes("FROM site_invites WHERE token_hash=$1")) {
+      if (sql.includes("FROM site_invites si")) {
         return {
           id: "inv-123",
           site_id: "site-1",
@@ -213,6 +224,10 @@ describe("createSiteInvite & lifecycle", () => {
           status: "pending",
           expires_at: new Date(Date.now() + 86400000).toISOString(),
           invited_by: "owner-1",
+          owner_id: "owner-1",
+          plan: "team",
+          plan_expires_at: new Date(Date.now() + 86400000).toISOString(),
+          owner_status: "active",
         };
       }
       if (sql.includes("FROM users WHERE id=$1")) return { email: "different@example.com" };
@@ -225,7 +240,7 @@ describe("createSiteInvite & lifecycle", () => {
   });
 
   it("rejects revoked or expired invites", async () => {
-    const fakeOne = async () => ({
+    const fakeOne = async (sql: string) => sql.includes("FROM site_invites si") ? ({
       id: "inv-expired",
       site_id: "site-1",
       email: "mod@example.com",
@@ -233,7 +248,11 @@ describe("createSiteInvite & lifecycle", () => {
       status: "pending",
       expires_at: new Date(Date.now() - 10000).toISOString(), // expired
       invited_by: "owner-1",
-    });
+      owner_id: "owner-1",
+      plan: "team",
+      plan_expires_at: new Date(Date.now() + 86400000).toISOString(),
+      owner_status: "active",
+    }) : ({ email: "mod@example.com" });
 
     const res = await acceptSiteInvite("tok-expired", "user-mod-1", { one: fakeOne as any });
     expect(res.ok).toBe(false);

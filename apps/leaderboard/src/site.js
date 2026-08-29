@@ -1,5 +1,5 @@
 // Site + players data helpers for the Worker.
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { detectTop3Changes, dispatchNotifyEvent, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
@@ -229,7 +229,7 @@ const getByUser = async (env, uid) => {
 
 // Multi-board: returns ALL boards for a user.
 export async function getAllBoards(env, uid) {
-  // Defensive ceiling above the Agency plan's 99-board contractual limit.
+  // Defensive ceiling above the highest current plan's board limit.
   const rows = await query(`SELECT ${SITE_COLUMNS} FROM sites WHERE user_id=$1 ORDER BY id ASC LIMIT 128`, [uid]);
   return rows || [];
 }
@@ -253,7 +253,7 @@ export async function getSiteById(env, siteId) {
 // can tab across to the streamer's other sponsor leaderboards.
 async function getPublicBoards(env, uid) {
   const rows = await query(
-    // Defensive ceiling above the Agency plan's 99-board contractual limit.
+    // Defensive ceiling above the highest current plan's board limit.
     "SELECT slug, name FROM sites WHERE user_id=$1 AND published=true AND is_draft=false ORDER BY board_order ASC, id ASC LIMIT 128",
     [uid]
   );
@@ -374,39 +374,49 @@ export function playerStreak(player, currentRank, archives) {
   return streak;
 }
 
-// Plan-aware archive limits
-export const ARCHIVE_LIMITS = { free: 6, starter: 6, pro: 24, agency: 999 };
+// Archive creation count is a separate operational safeguard from the
+// time-based accessible-history entitlement below. Downgrades never delete rows.
+export const ARCHIVE_LIMITS = { free: 6, pro: 12, team: 24 };
 export const PUBLIC_ARCHIVE_LIMIT = 24;
 
-export async function getArchives(env, siteId, limit = 6) {
-    const rows = await query(
+export async function getArchives(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free, queryImpl = query) {
+    const rows = await queryImpl(
       `SELECT id, label, top3_json, winner_name,
               (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at
-         FROM archives WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2`,
-      [siteId, limit]
+         FROM archives
+        WHERE site_id=$1
+          AND created_at >= now() - ($2::int * interval '1 day')
+        ORDER BY created_at DESC LIMIT $3`,
+      [siteId, historyDays, limit]
     );
     return rows || [];
   }
 
 // Expensive detail-only read. Never use this on the board render path: it
 // transfers the full archived player snapshots instead of derived summaries.
-export async function getArchiveSnapshots(env, siteId, limit = 6) {
-  const rows = await query(
+export async function getArchiveSnapshots(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free, queryImpl = query) {
+  const rows = await queryImpl(
     `SELECT id, label, snapshot_json,
             (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at
-       FROM archives WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2`,
-    [siteId, Math.min(limit, PUBLIC_ARCHIVE_LIMIT)]
+       FROM archives
+      WHERE site_id=$1
+        AND created_at >= now() - ($2::int * interval '1 day')
+      ORDER BY created_at DESC LIMIT $3`,
+    [siteId, historyDays, Math.min(limit, PUBLIC_ARCHIVE_LIMIT)]
   );
   return rows || [];
 }
 
-async function getArchivePlayerCounts(env, siteId, limit = 6) {
+async function getArchivePlayerCounts(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free) {
   const rows = await query(
     `SELECT id, label, top3_json, winner_name,
             jsonb_array_length(public.archive_snapshot_array(snapshot_json)) AS player_count,
             (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at
-       FROM archives WHERE site_id=$1 ORDER BY created_at DESC LIMIT $2`,
-    [siteId, limit]
+       FROM archives
+      WHERE site_id=$1
+        AND created_at >= now() - ($2::int * interval '1 day')
+      ORDER BY created_at DESC LIMIT $3`,
+    [siteId, historyDays, limit]
   );
   return rows || [];
 }
@@ -497,7 +507,7 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       getPlayers(env, site.id, { ...(boundedPlayers ? playerOptions : {}), rankBy: site.rank_by }),
       totalCountPromise,
       matchCountPromise,
-      getArchives(env, site.id, archiveLimit), // DB-003-v8: fetch only what the public page renders
+      getArchives(env, site.id, archiveLimit, HISTORY_DAYS[plan]), // DB-003-v8: fetch only entitled history
       getPublicBoards(env, site.user_id),
       one("SELECT username FROM bots WHERE owner_id=$1 LIMIT 1", [site.user_id]),
     ]);
@@ -523,7 +533,7 @@ export async function getUserSite(env, uid, plan) {
       if (!site) return null;
       const archiveLimit = ARCHIVE_LIMITS[plan || "free"] || 6;
       // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit);
+      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[plan || "free"]);
     return {
         id: site.id, slug: site.slug, published: !!site.published,
         isDraft: !!site.is_draft,
@@ -595,7 +605,7 @@ export async function getUserSiteById(env, uid, siteId, plan) {
     if (!site) return null;
     const archiveLimit = ARCHIVE_LIMITS[plan || "free"] || 6;
     // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit);
+    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[plan || "free"]);
   return {
     id: site.id, slug: site.slug, published: !!site.published,
     isDraft: !!site.is_draft,
@@ -876,7 +886,7 @@ export function normalizeEndsAt(incoming, existing) {
 }
 
 function isProPlan(plan) {
-  return plan === "pro" || plan === "agency" || plan === "lifetime";
+  return plan === "pro" || plan === "team";
 }
 
 export async function saveSite(env, user, payload, siteId, request = null) {
@@ -947,7 +957,7 @@ export async function saveSite(env, user, payload, siteId, request = null) {
     }
     if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
       return {
-        error: effectiveSitePlan === "pro" || effectiveSitePlan === "agency"
+        error: effectiveSitePlan === "pro" || effectiveSitePlan === "team"
           ? `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players.`
           : `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players. Upgrade for more.`,
         code: "player_limit",

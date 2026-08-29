@@ -92,7 +92,7 @@ export default function DocsPage() {
             </Section>
 
             <Section id="obs-setup" title="OBS overlay setup">
-              <p className={P}>The overlay is a browser source (Pro and Agency plans). In OBS Studio or Streamlabs:</p>
+              <p className={P}>The overlay is a browser source (Pro and Team plans). In OBS Studio or Streamlabs:</p>
               <ol className="mt-4 max-w-2xl list-decimal space-y-2 pl-5 leading-relaxed text-devin-ink-soft">
                 <li>Add a source &rarr; <b className="font-medium text-devin-ink">Browser</b>.</li>
                 <li>Set the URL to your overlay address: <span className={IC}>https://yourrank.site/&#123;your-handle&#125;/overlay</span>.</li>
@@ -109,7 +109,7 @@ export default function DocsPage() {
             </Section>
 
             <Section id="custom-domain" title="Custom domain">
-              <p className={P}>Pro and Agency plans can serve the site from your own domain (for example <span className={IC}>leaderboard.yourstream.com</span>):</p>
+              <p className={P}>Pro and Team plans can serve the site from your own domain (for example <span className={IC}>leaderboard.yourstream.com</span>):</p>
               <ol className="mt-4 max-w-2xl list-decimal space-y-2 pl-5 leading-relaxed text-devin-ink-soft">
                 <li>Add your domain in the dashboard&apos;s site settings.</li>
                 <li>At your DNS provider (Cloudflare, Namecheap, etc.), create a <span className={IC}>CNAME</span> record pointing your subdomain at the target shown in the dashboard.</li>
@@ -172,7 +172,7 @@ console.log(data.players[0].name);`}</Code>
               <Code>{`!rank $(readapi https://yourrank.site/api/public/demo/rank?user=Alex)`}</Code>
             </Section>
 
-            <Section id="postbacks" title="Score postback (Pro/Agency only)">
+            <Section id="postbacks" title="Score postback (Pro/Team only)">
               <p className={P}>Push updated player lists from your own backend. Requires <span className={IC}>X-Postback-Key</span> and an HMAC-SHA256 signature of the raw request body in <span className={IC}>X-Postback-Signature</span>.</p>
               <Code>{`POST /api/scores
 Content-Type: application/json

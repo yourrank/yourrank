@@ -36,7 +36,7 @@ function walk(dir, files = []) {
 
 const sourceFiles = scanRoots.flatMap((root) => walk(path.join(repoRoot, root)));
 const sources = sourceFiles.map((file) => ({
-  rel: path.relative(repoRoot, file),
+  rel: path.relative(repoRoot, file).split(path.sep).join("/"),
   text: fs.readFileSync(file, "utf8"),
 }));
 

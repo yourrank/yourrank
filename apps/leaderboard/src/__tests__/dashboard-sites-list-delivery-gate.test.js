@@ -53,8 +53,12 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
  * Source paths relative to src, sorted by code point so assertions never
  * depend on the filesystem's readdir order (which differs between machines).
  */
+function sourcePath(file) {
+  return path.relative(SRC_ROOT, file).split(path.sep).join("/");
+}
+
 function relativeFiles(files) {
-  return files.map((file) => path.relative(SRC_ROOT, file)).sort();
+  return files.map(sourcePath).sort();
 }
 
 /** [file, count] tuples sorted by code point, for the same reason. */
@@ -203,7 +207,7 @@ describe("boot/render/data: one Sites-list path", () => {
       const source = readFileSync(file, "utf8");
       const calls = (source.match(/renderBoardsPage\(/g) || []).length
         - (source.match(/export function renderBoardsPage\(/g) || []).length;
-      if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) callers.push([sourcePath(file), calls]);
     }
     expect(sortByFile(callers)).toEqual([
       ["assets/dashboard.js", 1],
@@ -217,7 +221,7 @@ describe("boot/render/data: one Sites-list path", () => {
     for (const file of sourceFiles()) {
       const source = readFileSync(file, "utf8");
       const count = (source.match(/\bstate\.BOARDS\s*=/g) || []).length;
-      if (count > 0) assignments.push([path.relative(SRC_ROOT, file), count]);
+      if (count > 0) assignments.push([sourcePath(file), count]);
     }
     expect(sortByFile(assignments)).toEqual([["assets/dashboard.js", 1]]);
   });

@@ -51,7 +51,6 @@ const AUDIT_SAFE_KEYS = new Set([
   "expires_at",
   "from_plan",
   "label",
-  "lifetime",
   "message",
   "messageId",
   "method",

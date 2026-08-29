@@ -1,5 +1,5 @@
 // Audit follow-up validation tests:
-//  - POST /api/billing/checkout rejects an explicitly-provided unknown plan (C4)
+//  - POST /api/billing/checkout stays explicitly unavailable until a verified provider exists
 //  - saveSite() rejects a non-http(s) referral/CTA URL server-side (audit §9 "Improve")
 // Uses bun:test with mocked DB and session store (same scaffold as sites-handlers).
 
@@ -58,7 +58,7 @@ mock.module(dbUrlTs, () => ({ ...realDb, ...dbMock() }));
 mock.module(sessUrl, sessMock);
 mock.module(sessUrlTs, sessMock);
 
-const { handleCheckout } = await import("../billing.js");
+const { handleBillingUnavailable } = await import("../billing.js");
 // NOTE: this file relies on mock isolation — it must be run in its own
 // process (scripts/test.mjs runs each leaderboard test file individually for
 // exactly this reason). Running `bun test` over the whole directory lets
@@ -85,22 +85,24 @@ function checkoutReq(plan) {
   });
 }
 
-describe("handleCheckout plan validation (C4)", () => {
+describe("retired checkout endpoint", () => {
   beforeEach(() => { mockOne.mockReset(); mockQuery.mockReset(); mockExec.mockReset(); });
 
-  it("rejects an explicitly-provided unknown plan with 400", async () => {
+  it("does not process a browser-selected plan while the provider is unavailable", async () => {
     mockOne.mockResolvedValue(USER_ROW); // currentUser → loadUser
-    const res = await handleCheckout(checkoutReq("bad"), mockEnv({ NOWPAYMENTS_API_KEY: "test" }));
-    expect(res.status).toBe(400);
+    const res = await handleBillingUnavailable(checkoutReq("team"), mockEnv());
+    expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/unknown plan/i);
+    expect(body.error).toMatch(/not available yet/i);
+    expect(mockExec.mock.calls.some(([sql]) => String(sql).includes("UPDATE users") || String(sql).includes("INSERT INTO payments"))).toBe(false);
   });
 
-  it("rejects a non-paid-tier plan name ('free') with 400", async () => {
+  it("does not grant a removed or unknown tier", async () => {
     mockOne.mockResolvedValue(USER_ROW);
-    const res = await handleCheckout(checkoutReq("free"), mockEnv({ NOWPAYMENTS_API_KEY: "test" }));
-    expect(res.status).toBe(400);
+    const res = await handleBillingUnavailable(checkoutReq("lifetime"), mockEnv());
+    expect(res.status).toBe(503);
+    expect(mockExec.mock.calls.some(([sql]) => String(sql).includes("UPDATE users") || String(sql).includes("INSERT INTO payments"))).toBe(false);
   });
 });
 

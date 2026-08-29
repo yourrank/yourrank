@@ -26,6 +26,7 @@ const kickBehavior = {
   refreshError: null,
   createError: null,
 };
+let expansionRestricted = false;
 
 const deps = {
   requireUser: async () => ({ user: userFixture, res: null }),
@@ -51,6 +52,7 @@ const deps = {
     return { id: "reward-1", title: "t", cost: 1 };
   },
   fetchKickCurrentChannel: async () => ({ broadcaster_user_id: "chan-1", slug: "testchannel" }),
+  creatorExpansionRestriction: async () => ({ restricted: expansionRestricted, usage: null }),
 };
 
 function req(body) {
@@ -72,9 +74,18 @@ beforeEach(() => {
   deps.oneResponses.length = 0;
   kickBehavior.refreshError = null;
   kickBehavior.createError = null;
+  expansionRestricted = false;
 });
 
 describe("handleCreditsCreateReward Kick connection failures", () => {
+  it("pauses creator-side reward expansion after Free grace without calling Kick", async () => {
+    expansionRestricted = true;
+    const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/active-viewer allowance/i);
+    expect(deps.oneResponses).toHaveLength(0);
+  });
+
   it("returns 409 kick_reconnect_required when the token refresh hits invalid_grant", async () => {
     seedTokenRows();
     kickBehavior.refreshError = new Error("Kick token refresh failed 400: {\"error\":\"invalid_grant\"}");

@@ -12,6 +12,7 @@ import {
   CREDITS_REDEMPTIONS_PER_30D_LIMITS,
   effectivePlan,
 } from "@yourrank/shared/plans";
+import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
 
 function isUniqueViolation(error) {
   return error?.code === "23505" || /unique constraint|unique violation|duplicate key/i.test(error?.message || "");
@@ -125,7 +126,7 @@ export async function handleViewerSite(request, env) {
   );
 
   const shopItems = await query(
-    // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
+    // Defensive ceiling above the highest current plan's active-item limit.
     `SELECT id, name, description, cost, stock, active
        FROM shop_items
       WHERE site_id=$1 AND active=true
@@ -342,6 +343,8 @@ export async function handleViewerRedeem(request, env, deps = {}) {
   }
 
   if (txResult.error) return bad(txResult.error, txResult.status);
+
+  await markSiteViewerActive(r.id, viewer.id);
 
   // Asynchronously notify streamer via Discord webhook if configured
   (async () => {

@@ -107,7 +107,20 @@ mock.module(authUrl, () => ({
 }));
 
 import { handleViewerRedeem } from "../handlers/viewer-dashboard.js";
-import { handleCreditsSaveShopItem, handleCreditsUpdateRedemption } from "../handlers/credits.js";
+import { handleCreditsSaveShopItem as handleCreditsSaveShopItemRaw, handleCreditsUpdateRedemption } from "../handlers/credits.js";
+
+function handleCreditsSaveShopItem(request, env) {
+  return handleCreditsSaveShopItemRaw(request, env, {
+    requireUser: async () => ({ user: userFixture, res: null }),
+    getByUser: async () => siteFixture,
+    getBoardById: async () => siteFixture,
+    requireSiteCapability: async () => ({ role: "owner", res: null }),
+    rateLimit: async () => ({ ok: true }),
+    one: async (...args) => db.one(...args),
+    withTransaction: db.withTransaction,
+    creatorExpansionRestriction: async () => ({ restricted: false, usage: null }),
+  });
+}
 
 function resetDb() {
   db.calls.length = 0;
@@ -367,7 +380,7 @@ describe("handleViewerRedeem inventory edge cases", () => {
     const body = await res.json();
     expect(body.error).toBe("out of stock");
     // Balance must not be touched when the item is unavailable.
-    expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE site_viewers\s+SET balance/.test(c.sql))).toBe(false);
   });
 
   it("rejects redeeming an inactive or deleted item", async () => {
@@ -487,7 +500,7 @@ describe("handleViewerRedeem double-spend protection", () => {
     expect(body.balance).toBe(450);
     expect(db.calls.some((c) => /INSERT INTO redemptions/.test(c.sql))).toBe(false);
     expect(db.calls.some((c) => /INSERT INTO credit_ledger/.test(c.sql))).toBe(false);
-    expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /UPDATE site_viewers\s+SET balance/i.test(c.sql))).toBe(false);
     expect(db.calls.some((c) => /UPDATE shop_items/.test(c.sql))).toBe(false);
   });
 });

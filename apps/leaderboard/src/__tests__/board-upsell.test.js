@@ -29,9 +29,9 @@ describe("board-limit upsell", () => {
     expect(boardsJs).toContain('else newBtn.setAttribute("aria-expanded", $("boardLimitUpsell")?.hidden ? "false" : "true")');
   });
 
-  it("offers Pro, Agency, or support according to the current plan", () => {
+  it("offers Pro, Team, or support according to the current plan", () => {
     expect(boardsJs).toContain("Pro unlocks up to 3 independent sites.");
-    expect(boardsJs).toContain("Agency supports up to 99 independent sites.");
+    expect(boardsJs).toContain("Team supports up to 10 independent sites and 5 operator seats.");
     expect(boardsJs).toContain('cta: "Contact support"');
   });
 });

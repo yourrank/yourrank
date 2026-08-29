@@ -69,9 +69,13 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
   });
 }
 
+function relativePath(file) {
+  return path.relative(SRC_ROOT, file).split(path.sep).join("/");
+}
+
 function relativeFiles(files) {
   return files
-    .map((file) => path.relative(SRC_ROOT, file))
+    .map(relativePath)
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
@@ -284,7 +288,7 @@ describe("boot: one editor initialization ownership path", () => {
       const source = executableSource(readFileSync(file, "utf8"));
       const calls = (source.match(/\bsetupEditorTabs\(\s*\)/g) || []).length
         - (source.match(/export function setupEditorTabs\(/g) || []).length;
-      if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) callers.push([relativePath(file), calls]);
     }
     expect(sortTuples(callers)).toEqual([["assets/dashboard/shell.js", 1]]);
   });
@@ -295,7 +299,7 @@ describe("boot: one editor initialization ownership path", () => {
       const source = executableSource(readFileSync(file, "utf8"));
       const calls = (source.match(/\bsetupShell\(\s*\)/g) || []).length
         - (source.match(/export function setupShell\(/g) || []).length;
-      if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) callers.push([relativePath(file), calls]);
     }
     expect(sortTuples(callers)).toEqual([["assets/dashboard.js", 1]]);
   });
@@ -305,7 +309,7 @@ describe("boot: one editor initialization ownership path", () => {
     for (const file of sourceFiles()) {
       const source = readFileSync(file, "utf8");
       const count = (source.match(/hasSection\(\s*["']board["']\s*\)/g) || []).length;
-      if (count > 0) owners.push([path.relative(SRC_ROOT, file), count]);
+      if (count > 0) owners.push([relativePath(file), count]);
     }
     expect(sortTuples(owners)).toEqual([["assets/dashboard.js", 1]]);
   });

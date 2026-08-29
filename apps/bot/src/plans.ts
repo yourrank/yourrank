@@ -1,5 +1,5 @@
 import { one } from "@yourrank/shared/db";
-import { BOT_PLANS } from "@yourrank/shared/plans";
+import { BOT_PLANS, effectivePlan } from "@yourrank/shared/plans";
 import type { BotPlanDef, PlanTier } from "@yourrank/shared/plans";
 
 // Re-export for consumers that import from this module.
@@ -8,8 +8,7 @@ export const PLANS = BOT_PLANS;
 
 /**
  * Look up a bot plan def by tier string. Returns undefined for tiers that
- * are not valid bot plans (e.g. the removed "starter"), so callers can fall
- * back to free. DB rows may still contain legacy plan values, so every
+ * are not valid bot plans, so callers can fall back to free. Every
  * DB-sourced tier MUST go through this lookup instead of indexing PLANS
  * directly.
  */
@@ -21,16 +20,7 @@ export async function getUserPlan(userId: string): Promise<BotPlanDef> {
   const row = await one<{ plan: PlanTier; plan_expires_at: string | null }>(
     `SELECT plan, plan_expires_at FROM users WHERE id = $1`, [userId]
   );
-  // BIZ-001: If the plan has expired, downgrade to free immediately instead of
-  // waiting for the nightly cron. This closes the ~24h window where expired
-  // users could still access premium features.
-  if (row?.plan && row.plan !== "free" && row.plan_expires_at) {
-    const expiresAt = new Date(row.plan_expires_at).getTime();
-    if (expiresAt <= Date.now()) {
-      return PLANS.free;
-    }
-  }
-  return getBotPlanDef(row?.plan) ?? PLANS.free;
+  return getBotPlanDef(effectivePlan(row)) ?? PLANS.free;
 }
 
 /** Returns an error string if the user is at their plan limit, else null. */
@@ -97,14 +87,7 @@ export async function withPlanLimit<R>(
     const planRow = await tx.one<{ plan: PlanTier; plan_expires_at: string | null }>(
       `SELECT plan, plan_expires_at FROM users WHERE id = $1`, [userId]
     );
-    // BIZ-001: Check plan expiry inside the transaction too.
-    let planTier: PlanTier | string = planRow?.plan ?? "free";
-    if (planTier !== "free" && planRow?.plan_expires_at) {
-      if (new Date(planRow.plan_expires_at).getTime() <= Date.now()) {
-        planTier = "free";
-      }
-    }
-    const plan = getBotPlanDef(planTier) ?? PLANS.free;
+    const plan = getBotPlanDef(effectivePlan(planRow)) ?? PLANS.free;
     const table = kind === "bots" ? "bots" : "offers";
     const max = kind === "bots" ? plan.maxBots : plan.maxOffers;
     const row = await tx.one<{ n: number }>(

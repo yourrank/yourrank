@@ -132,7 +132,9 @@ function dashReq(pathname: string, method = "GET", body?: unknown): Request {
 function mockAuthedUser(plan = "pro") {
   mockOne.mockImplementation((sql: string) => {
     if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
-    if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan, plan_expires_at: null });
+    if (sql.includes("SELECT plan, plan_expires_at")) {
+      return Promise.resolve({ plan, plan_expires_at: plan === "free" ? null : "2099-01-01T00:00:00.000Z" });
+    }
     return Promise.resolve(null);
   });
 }
@@ -360,7 +362,7 @@ describe("broadcasts", () => {
     mockAuthedUser("pro");
     mockOne.mockImplementation((sql: string) => {
       if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
-      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: null });
+      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: "2099-01-01T00:00:00.000Z" });
       if (sql.includes("SELECT id FROM bots")) return Promise.resolve({ id: "b-1" });
       return Promise.resolve(null);
     });
@@ -381,7 +383,7 @@ describe("broadcasts", () => {
     mockAuthedUser("pro");
     mockOne.mockImplementation((sql: string) => {
       if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
-      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: null });
+      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: "2099-01-01T00:00:00.000Z" });
       if (sql.includes("SELECT id FROM bots")) return Promise.resolve({ id: "b-1" });
       return Promise.resolve(null);
     });

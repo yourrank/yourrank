@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dir, "../../../..");
-const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
+const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8").replaceAll("\r\n", "\n");
 
 const MARKETING_ACCENT = "#315cff";
 const V4_ACCENT = "#2200ff";
@@ -44,7 +44,7 @@ function sourceFiles() {
   const files = [];
   const visit = (directory) => {
     for (const entry of fs.readdirSync(path.join(root, directory), { withFileTypes: true })) {
-      const relative = path.join(directory, entry.name);
+      const relative = path.posix.join(directory, entry.name);
       if (entry.isDirectory()) visit(relative);
       else if (!relative.endsWith("assets_bundled.js")) files.push(relative);
     }

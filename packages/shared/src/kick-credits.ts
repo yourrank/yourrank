@@ -4,11 +4,7 @@
 
 import { one, query, exec, withTransaction } from "./db.js";
 import { rateLimit } from "./ratelimit.js";
-import {
-  effectivePlan,
-  type PlanTier,
-  CREDITS_VIEWERS_PER_30D_LIMITS,
-} from "./plans.js";
+import { reconcileAccountActiveViewerUsage } from "./plan-usage.js";
 
 export interface KickRewardPayload {
   id?: string;
@@ -41,9 +37,10 @@ export type KickRewardOutcome =
   | { skipped: true; reason?: string }
   | { blocked: true }
   | { rateLimited: true }
-  | { planLimit: true; plan: PlanTier }
   | { suspended: true }
   | { unverified: true };
+
+type KickRewardOutcomeInternal = KickRewardOutcome | (KickRewardResult & { usageAccountId: string });
 
 // ---------------------------------------------------------------------------
 // RSA-SHA256 / PKCS#1 v1.5 signature verification.
@@ -171,7 +168,7 @@ export async function processKickRewardRedemption(
     return { skipped: true, reason: `Status '${status}' is not handled` };
   }
 
-  return await withTransaction(async (tx) => {
+  const outcome = await withTransaction<KickRewardOutcomeInternal>(async (tx) => {
     // Idempotency: if we've already processed this message, skip it.
     const eventRows = (await tx.unsafe(
       `INSERT INTO kick_reward_events
@@ -196,15 +193,13 @@ export async function processKickRewardRedemption(
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
 
     // Resolve effective plan for the streamer and reject suspended/unverified accounts.
-    const owner = await tx.one<{ plan: string; plan_expires_at: number | null; status: string; email_verified: boolean }>(
-      `SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at,
-              status, email_verified
+    const owner = await tx.one<{ status: string; email_verified: boolean }>(
+      `SELECT status, email_verified
          FROM users WHERE id = $1`,
       [site.user_id]
     );
     if (owner && owner.status === "suspended") return { suspended: true };
     if (owner && !owner.email_verified) return { unverified: true };
-    const plan = effectivePlan(owner);
 
     // Resolve or create the viewer, preserving the previous username in history
     // before overwriting it. This keeps old usernames reachable for audit and
@@ -367,26 +362,13 @@ export async function processKickRewardRedemption(
       return { skipped: true, reason: `Reward cost mismatch for ${rewardId}: expected ${expectedCost}, got ${rewardCost}` };
     }
 
-    // Enforce new-viewer plan limit (rolling 30 days) for new site viewers.
-    if (!existingSiteViewer) {
-      const newViewerCount = await tx.one<{ count: string }>(
-        `SELECT count(*)::text AS count FROM site_viewers
-          WHERE site_id = $1 AND created_at > now() - interval '30 days'`,
-        [site.id]
-      );
-      const limit = CREDITS_VIEWERS_PER_30D_LIMITS[plan] || 0;
-      if (Number(newViewerCount?.count || 0) >= limit) {
-        return { planLimit: true, plan };
-      }
-    }
-
-    // Upsert site viewer (without credits yet).
+    // Never block a viewer or membership at the creator's active-viewer allowance.
     const creditAmount = Number(mapping.credits || 0);
     const svRows = (await tx.unsafe(
-      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
-       VALUES ($1, $2, 0, 0, 0)
+      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent, last_active_at)
+       VALUES ($1, $2, 0, 0, 0, now())
        ON CONFLICT (site_id, viewer_id)
-       DO UPDATE SET updated_at = now()
+       DO UPDATE SET last_active_at=now(), updated_at=now()
        RETURNING id, balance, blocked, fraud_score`,
       [site.id, viewerId]
     )) as { id: string; balance: number; blocked: boolean; fraud_score: number }[];
@@ -492,6 +474,7 @@ export async function processKickRewardRedemption(
           SET balance = balance + $1,
               total_earned = total_earned + $1,
               last_earned_at = now(),
+              last_active_at = now(),
               updated_at = now()
         WHERE id = $2
         RETURNING id, balance`,
@@ -521,8 +504,16 @@ export async function processKickRewardRedemption(
       credited: creditAmount,
       balance: creditedRows[0].balance,
       newViewer: !existingSiteViewer,
+      usageAccountId: site.user_id,
     };
   });
+
+  if ("usageAccountId" in outcome && outcome.usageAccountId) {
+    await reconcileAccountActiveViewerUsage(outcome.usageAccountId);
+    const { usageAccountId: _usageAccountId, ...publicOutcome } = outcome;
+    return publicOutcome as KickRewardOutcome;
+  }
+  return outcome;
 }
 
 // ---------------------------------------------------------------------------

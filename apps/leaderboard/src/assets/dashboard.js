@@ -1,7 +1,7 @@
 // Dashboard entry point. Coordinates data loading and initial render across modules.
 import { $, esc, fromLocalInput, getViewerTimeZone, logError, timeZoneLabel, toLocalInput } from "./dashboard/utils.js";
 import { markDirty, setState, state, subscribe } from "./dashboard/state.js";
-import { currentRoute, navTo, registerSectionMounter, setupShell } from "./dashboard/shell.js";
+import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, setupShell } from "./dashboard/shell.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
 import { clearSession } from "./dashboard/session.js";
 import { renderPlayers } from "./dashboard/players.js";
@@ -118,9 +118,7 @@ async function init() {
   // dashboard is an old checkout link.
   const planParam = urlParams.get("plan");
   if (planParam) {
-    location.href = planParam.toLowerCase() === "agency"
-      ? "/help/support?area=billing"
-      : `/dashboard/settings/billing?plan=${encodeURIComponent(planParam)}`;
+    await requestDashboardRoute("settings", "plan", { query: `plan=${encodeURIComponent(planParam)}`, reload: true });
     return;
   }
   const requestedSiteId = urlParams.get("board") || null;
@@ -369,7 +367,7 @@ async function init() {
   });
 
   if (urlParams.get("upgraded")) {
-    $("status").textContent = "Payment received — Pro activates once the network confirms (usually minutes).";
+    $("status").textContent = "Paid access changes only after confirmation from a verified billing provider.";
   }
 }
 

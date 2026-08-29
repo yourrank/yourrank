@@ -134,7 +134,7 @@
               </div>
             </div>
 
-            <div class="yr-guide-card" data-keywords="billing subscription plan pro starter crypto payment">
+            <div class="yr-guide-card" data-keywords="billing subscription plan pro team payment">
               <div class="yr-guide-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
               </div>

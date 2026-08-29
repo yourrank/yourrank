@@ -55,8 +55,12 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
   return out;
 }
 
+function relativePath(file) {
+  return path.relative(SRC_ROOT, file).split(path.sep).join("/");
+}
+
 function relativeFiles(files) {
-  return files.map((file) => path.relative(SRC_ROOT, file));
+  return files.map(relativePath);
 }
 
 function perfTabAnchors(html) {
@@ -225,7 +229,7 @@ describe("boot/renderer: one guarded Analytics path", () => {
       const source = readFileSync(file, "utf8");
       const calls = (source.match(/initPerformance\(/g) || []).length
         - (source.match(/function initPerformance\(/g) || []).length;
-      if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) callers.push([relativePath(file), calls]);
     }
     expect(callers).toEqual([["assets/dashboard.js", 1]]);
   });
@@ -235,7 +239,7 @@ describe("boot/renderer: one guarded Analytics path", () => {
     for (const file of sourceFiles()) {
       const source = readFileSync(file, "utf8");
       const calls = (source.match(/registerRouteRenderer\("performance"/g) || []).length;
-      if (calls > 0) registrations.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) registrations.push([relativePath(file), calls]);
     }
     expect(registrations).toEqual([["assets/dashboard/performance.js", 1]]);
   });
@@ -255,7 +259,7 @@ describe("boot/renderer: one guarded Analytics path", () => {
         const source = readFileSync(file, "utf8");
         const calls = (source.match(callPattern) || []).length
           - (source.match(definitionPattern) || []).length;
-        if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+        if (calls > 0) callers.push([relativePath(file), calls]);
       }
       expect(callers, name).toEqual(expected[name]);
     }

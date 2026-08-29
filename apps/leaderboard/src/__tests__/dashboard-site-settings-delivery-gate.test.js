@@ -30,6 +30,10 @@ import {
 
 const SRC_ROOT = path.resolve(import.meta.dir, "..");
 
+function sourcePath(file) {
+  return path.relative(SRC_ROOT, file).split(path.sep).join("/");
+}
+
 /** Every .js/.jsx source file under src, excluding tests and the generated bundle. */
 function sourceFiles(dir = SRC_ROOT, out = []) {
   for (const name of readdirSync(dir)) {
@@ -135,7 +139,7 @@ describe("markup: one Site settings body", () => {
       const source = readFileSync(file, "utf8");
       return /[^[]data-page="site"/.test(source) || /[^[]data-page=\\"site\\"/.test(source);
     });
-    expect(emitters.map((f) => path.relative(SRC_ROOT, f))).toEqual(["pages/dashboard.jsx"]);
+    expect(emitters.map(sourcePath)).toEqual(["pages/dashboard.jsx"]);
   });
 });
 
@@ -152,7 +156,7 @@ describe("boot: one guarded Site settings initializer", () => {
       const source = readFileSync(file, "utf8");
       const calls = (source.match(/setupSettingsScreen\(/g) || []).length
         - (source.match(/function setupSettingsScreen\(/g) || []).length;
-      if (calls > 0) callers.push([path.relative(SRC_ROOT, file), calls]);
+      if (calls > 0) callers.push([sourcePath(file), calls]);
     }
     expect(callers).toEqual([["assets/dashboard.js", 1]]);
   });
@@ -163,7 +167,7 @@ describe("boot: one guarded Site settings initializer", () => {
       const source = readFileSync(file, "utf8");
       const calls = (source.match(/initSiteSections\(\)/g) || []).length
         - (source.match(/function initSiteSections\(\)/g) || []).length;
-      if (calls > 0) callers.push(path.relative(SRC_ROOT, file));
+      if (calls > 0) callers.push(sourcePath(file));
     }
     expect(callers).toEqual(["assets/dashboard/account.js"]);
   });

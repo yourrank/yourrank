@@ -100,18 +100,18 @@ export function onboardingEmail(day: 0 | 3 | 7, user: OnboardingOptions) {
 
   // day === 7
   const subject = "YourRank Pro: custom domain, OBS overlay + free trial";
-  const text = `Hi ${name},\n\nYou've been using YourRank for a week. Upgrade to Pro to unlock:\n\n- Custom domain\n- Up to 3 leaderboards\n- OBS overlay\n- Unlimited players\n\nStart with a free 7-day Pro trial or grab a lifetime license.\n\n${billing}\n\nYourRank team`;
+  const text = `Hi ${name},\n\nYou've been using YourRank for a week. Pro adds:\n\n- Custom domain\n- Up to 3 sites\n- OBS overlay\n- Up to 1,000 players per site\n\nYou can start a one-time 7-day Pro trial. Recurring checkout is not available yet.\n\n${billing}\n\nYourRank team`;
   const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
 <h2 style="margin:0 0 12px">Ready to upgrade, ${name}?</h2>
 <p style="color:#555;line-height:1.5">You've been using YourRank for a week. Pro unlocks:</p>
 <ul style="color:#555;line-height:1.6;padding-left:20px">
   <li>Custom domain</li>
-  <li>Up to 3 leaderboards</li>
+  <li>Up to 3 sites</li>
   <li>OBS overlay</li>
-  <li>Unlimited players</li>
+  <li>Up to 1,000 players per site</li>
 </ul>
 <p style="margin:24px 0"><a href="${billing}" style="background:#5b5bf5;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600">Start free Pro trial</a></p>
-<p style="color:#999;font-size:13px">Prefer to own it forever? There's also a one-time lifetime option on the billing page.</p></div>`;
+<p style="color:#999;font-size:13px">Recurring checkout is not available yet. Paid access only starts after verified provider confirmation.</p></div>`;
   return { subject, html, text };
 }
 
@@ -270,58 +270,4 @@ If you didn't create this account, you can ignore this email.`;
 
 export async function sendVerificationEmail(env: EmailEnv, email: string, link: string): Promise<SendResult> {
   return sendEmail(env, { to: email, ...verifyEmailEmail(link) });
-}
-
-export interface ReceiptInput {
-  email: string;
-  orderId: string;
-  plan: string;
-  amount: number;
-  currency?: string;
-  provider: "nowpayments" | "telegram_stars" | "manual";
-  isLifetime?: boolean;
-  expiresAt?: string; // ISO date string
-  origin?: string;
-}
-
-export function receiptEmail({ orderId, plan, amount, currency, provider, isLifetime, expiresAt, origin }: Omit<ReceiptInput, "email">) {
-  const ccy = currency ? ` ${currency.toUpperCase()}` : "";
-  const amountText = Number.isFinite(amount) ? `$${amount.toFixed(2)}${ccy}` : `${provider === "telegram_stars" ? "Telegram Stars" : "Crypto"}`;
-  const period = isLifetime ? "Lifetime" : expiresAt ? `until ${new Date(expiresAt).toLocaleDateString()}` : "30-day";
-  const dashboard = `${origin || "https://yourrank.site"}/dashboard/settings/billing`;
-  const subject = `YourRank receipt — ${plan}${isLifetime ? " Lifetime" : ""}`;
-  const text = `Thanks for your payment.
-
-Plan: ${plan}${isLifetime ? " Lifetime" : ""}
-Amount: ${amountText}
-Order: ${orderId}
-Provider: ${provider}
-Access: ${period}
-
-View your billing history: ${dashboard}
-
-YourRank`;
-  const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 12px">Payment receipt</h2>
-<p style="color:#555;line-height:1.5">Thanks for your payment. Here are the details:</p>
-<table style="width:100%;border-collapse:collapse;margin:16px 0">
-  <tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>Plan</b></td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">${plan}${isLifetime ? " Lifetime" : ""}</td></tr>
-  <tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>Amount</b></td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">${amountText}</td></tr>
-  <tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>Order</b></td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-family:monospace;font-size:12px">${orderId}</td></tr>
-  <tr><td style="padding:8px 0;border-bottom:1px solid #eee"><b>Provider</b></td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right">${provider}</td></tr>
-  <tr><td style="padding:8px 0"><b>Access</b></td><td style="padding:8px 0;text-align:right">${period}</td></tr>
-</table>
-<p style="margin:24px 0"><a href="${dashboard}" style="background:#111;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">View billing history</a></p>
-<p style="color:#999;font-size:13px">Questions? Reply to this email or use the support form.</p></div>`;
-  return { subject, html, text };
-}
-
-export async function sendReceiptEmail(env: EmailEnv, input: ReceiptInput, waitUntil?: (p: Promise<SendResult>) => void): Promise<SendResult> {
-  const { email, ...rest } = input;
-  const task = sendEmail(env, { to: email, ...receiptEmail(rest) });
-  if (waitUntil) {
-    waitUntil(task);
-    return { sent: true, reason: "deferred" };
-  }
-  return task;
 }

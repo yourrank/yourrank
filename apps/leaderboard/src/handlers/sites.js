@@ -2,7 +2,7 @@
 import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { bumpStat, getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
 import { one, exec, query } from "@yourrank/shared/db";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { logAudit } from "@yourrank/shared/audit";
@@ -327,7 +327,13 @@ export async function handleRestoreArchive(request, env) {
   if (!site) return bad("no site");
   const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
-  const archive = await one("SELECT snapshot_json FROM archives WHERE id=$1 AND site_id=$2", [body.archiveId, site.id]);
+  const plan = effectivePlan(user);
+  const archive = await one(
+    `SELECT snapshot_json FROM archives
+      WHERE id=$1 AND site_id=$2
+        AND created_at >= now() - ($3::int * interval '1 day')`,
+    [body.archiveId, site.id, HISTORY_DAYS[plan]],
+  );
   if (!archive) return bad("Archive not found.");
   const snap = fromJsonb(archive.snapshot_json) || [];
   if (!snap.length) return bad("Archive is empty.");
@@ -550,14 +556,14 @@ async function verifyCnameToYourrank(domain) {
 }
 
 // POST /api/site/domain/verify — verify custom domain CNAME and provision TLS
-// via Cloudflare for SaaS custom hostnames. Pro/Agency only.
+// via Cloudflare for SaaS custom hostnames. Pro/Team only.
 export async function handleDomainVerify(request, env) {
   try {
     const { user, res } = await requireUser(request, env);
     if (res) return res;
     if (user.status === "suspended") return bad("This account is suspended.", 403);
     const plan = effectivePlan(user);
-    if (plan !== "pro" && plan !== "agency") return bad("Custom domains are a Pro feature.", 403);
+    if (plan !== "pro" && plan !== "team") return bad("Custom domains require Pro or Team.", 403);
 
     const body = await readJson(request);
     if (!body) return bad("Domain required");

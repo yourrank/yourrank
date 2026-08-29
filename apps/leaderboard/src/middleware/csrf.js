@@ -29,7 +29,6 @@ export function verifyCsrf(req) {
 
 // CSRF-exempt paths (public endpoints or webhooks without an active session)
 export const CSRF_EXEMPT = new Set([
-  "/api/billing/ipn",
   "/api/lead",
   "/api/track/copy",
   "/api/scores",

@@ -11,6 +11,7 @@ import {
 } from "@yourrank/shared/db";
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
+import { creatorExpansionRestriction, markSiteViewerActive } from "@yourrank/shared/plan-usage";
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -80,7 +81,6 @@ export async function handleCreateRaffle(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
-
   const endsAt = body?.endsAt ? new Date(body.endsAt).toISOString() : null;
 
   const result = await one(
@@ -229,6 +229,7 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
     getBoardById = defaultGetBoardById,
     one = defaultOne,
     logAudit = defaultLogAudit,
+    expansionRestriction = creatorExpansionRestriction,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -249,6 +250,10 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
+  const expansion = await expansionRestriction(site.user_id || user.id);
+  if (expansion.restricted) {
+    return bad("New Activities are paused because this Free account remains above 200 active viewers after its grace period. Existing viewer access continues.", 403);
+  }
 
   try {
     const result = await one(
@@ -286,6 +291,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     withTransaction = defaultWithTransaction,
     rateLimit = defaultRateLimit,
     requireViewer = defaultRequireViewer,
+    markActive = markSiteViewerActive,
   } = deps;
 
   const { viewer, res } = await requireViewer(request, env);
@@ -334,9 +340,9 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   // Resolve viewer. Create a site membership row on first interaction
   // so a viewer can claim a drop without having earned credits first.
   const siteViewer = await one(
-    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
-     VALUES ($1, $2, 0, 0, 0)
-     ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at=now()
+    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent, last_active_at)
+     VALUES ($1, $2, 0, 0, 0, now())
+     ON CONFLICT (site_id, viewer_id) DO UPDATE SET last_active_at=now(), updated_at=now()
      RETURNING id, balance`,
     [site.id, viewerId]
   );
@@ -379,7 +385,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     );
 
     const updatedViewer = await tx.one(
-      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $1, updated_at=now() WHERE id=$2 RETURNING id, balance",
+      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $1, last_active_at=now(), updated_at=now() WHERE id=$2 RETURNING id, balance",
       [drop.points_reward, siteViewer.id]
     );
 
@@ -398,6 +404,8 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   if (outcome?.alreadyClaimed) {
     return bad("You have already claimed this drop code!", 400);
   }
+
+  await markActive(site.id, viewerId, { one, exec });
 
   return ok({
     code: drop.code,

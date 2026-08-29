@@ -59,10 +59,10 @@ import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans
 
 // ── PLANS constant (bot-specific) ──────────────────────────────────────
 describe("PLANS constant", () => {
-  it("defines the 3 bot tiers (starter was removed: it offered nothing over free)", () => {
+  it("defines the Free, Pro, and Team bot tiers", () => {
     expect(PLANS).toHaveProperty("free");
     expect(PLANS).toHaveProperty("pro");
-    expect(PLANS).toHaveProperty("agency");
+    expect(PLANS).toHaveProperty("team");
     expect(PLANS).not.toHaveProperty("starter");
   });
 
@@ -93,24 +93,20 @@ describe("effectivePlan", () => {
   });
 
   it("returns 'free' when expiry is null (anti-exploit: null = expired)", () => {
-    const user = { plan: "agency", plan_expires_at: null };
+    const user = { plan: "team", plan_expires_at: null };
     expect(effectivePlan(user)).toBe("free");
   });
 
   it("returns plan name for far-future expiry", () => {
-    const user = { plan: "agency", plan_expires_at: Date.now() + 365 * 86400000 };
-    expect(effectivePlan(user)).toBe("agency");
+    const user = { plan: "team", plan_expires_at: Date.now() + 365 * 86400000 };
+    expect(effectivePlan(user)).toBe("team");
   });
 });
 
 // ── PLAN_LIMITS hierarchy ──────────────────────────────────────────────
 describe("PLAN_LIMITS", () => {
-  it("free has fewer players than starter", () => {
-    expect(PLAN_LIMITS.free).toBeLessThan(PLAN_LIMITS.starter);
-  });
-
-  it("starter has fewer players than pro", () => {
-    expect(PLAN_LIMITS.starter).toBeLessThan(PLAN_LIMITS.pro);
+  it("free has fewer players than pro", () => {
+    expect(PLAN_LIMITS.free).toBeLessThan(PLAN_LIMITS.pro);
   });
 
   it("BOARD_LIMITS: free has fewer boards than pro", () => {

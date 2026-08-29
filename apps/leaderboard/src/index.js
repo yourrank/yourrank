@@ -6,6 +6,7 @@ import { LiveBoard } from "./live-board.js";
 import { populateEnv } from "@yourrank/shared/env";
 import { getPublicSite, getBySlug, getClickRedirectSite, getArchiveSnapshots, ARCHIVE_LIMITS, PUBLIC_ARCHIVE_LIMIT } from "./site.js";
 import { fromJsonb } from "@yourrank/shared/jsonb";
+import { HISTORY_DAYS } from "@yourrank/shared/plans";
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
@@ -217,7 +218,12 @@ function findProfilePlayer(data, rawName) {
 
 async function buildPlayerHistory(env, siteId, rawName, plan) {
   const name = decodeURIComponent(rawName).trim().toLowerCase();
-  const archives = await getArchiveSnapshots(env, siteId, Math.min(ARCHIVE_LIMITS[plan] || 6, PUBLIC_ARCHIVE_LIMIT));
+  const archives = await getArchiveSnapshots(
+    env,
+    siteId,
+    Math.min(ARCHIVE_LIMITS[plan] || 6, PUBLIC_ARCHIVE_LIMIT),
+    HISTORY_DAYS[plan] || HISTORY_DAYS.free,
+  );
   const out = [];
   for (const a of archives) {
     const parsed = fromJsonb(a.snapshot_json);
@@ -492,7 +498,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               return new Response(renderPasswordGate(r, { nonce, isCustomDomain: true }), { headers: { ...HTML_N, "cache-control": "no-store" } });
             }
             if (!r || r.suspended) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
-            const paid = r.plan === "pro" || r.plan === "agency";
+            const paid = r.plan === "pro" || r.plan === "team";
             return new Response(
               await renderNewHallOfFame(r.data, {
                 nonce, slug: customSlug, plan: r.plan, homeUrl: `https://${host}`, isCustomDomain: true,
@@ -507,7 +513,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               return new Response(renderPasswordGate(r, { nonce, isCustomDomain: true }), { headers: { ...HTML_N, "cache-control": "no-store" } });
             }
             if (!r || r.suspended) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
-            const paid = r.plan === "pro" || r.plan === "agency";
+            const paid = r.plan === "pro" || r.plan === "team";
             const page = path.slice(1);
             return new Response(
               await renderNewLegalPage(r.data, page, {
@@ -527,7 +533,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
             const profile = findProfilePlayer(r.data, playerName);
             if (!profile) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
             const history = await buildPlayerHistory(env, r.id, playerName, r.plan);
-            const paid = r.plan === "pro" || r.plan === "agency";
+            const paid = r.plan === "pro" || r.plan === "team";
             return new Response(
               await renderNewPlayerProfile(r.data, { ...profile.player, rank: profile.rank }, history, {
                 nonce, slug: customSlug, plan: r.plan, homeUrl: `https://${host}`, isCustomDomain: true,
@@ -542,7 +548,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               return new Response(renderPasswordGate(r, { nonce, isCustomDomain: true }), { headers: { ...HTML_N, "cache-control": "no-store" } });
             }
             if (!r || r.suspended) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
-            const paid = r.plan === "pro" || r.plan === "agency";
+            const paid = r.plan === "pro" || r.plan === "team";
             return new Response(
               await renderNewStreamerProfile(r.data, {
                 nonce, slug: customSlug, plan: r.plan, homeUrl: `https://${host}`, isCustomDomain: true,

@@ -1,9 +1,10 @@
 // Per-site viewer data helpers for the public site shell.
 import { one, query, exec } from "@yourrank/shared/db";
+import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
 
 export async function getShopItems(siteId, queryImpl = query) {
   return queryImpl(
-    // Defensive ceiling above the Agency plan's 999 active-item contractual limit.
+    // Defensive ceiling above the highest current plan's active-item limit.
     "SELECT id, name, description, cost, stock, active FROM shop_items WHERE site_id=$1 AND active=true ORDER BY name ASC LIMIT 1024",
     [siteId]
   ) || [];
@@ -16,7 +17,7 @@ export async function getViewerSiteData(
   siteId,
   viewerId,
   { shop = false, redemptions = false, ledger = false } = {},
-  { oneImpl = one, queryImpl = query, execImpl = exec } = {},
+  { oneImpl = one, queryImpl = query, execImpl = exec, markActiveImpl = markSiteViewerActive } = {},
 ) {
   if (!viewerId) {
     if (shop) return { viewerOnSite: null, shopItems: await getShopItems(siteId, queryImpl), redemptions: [], ledger: [] };
@@ -25,7 +26,7 @@ export async function getViewerSiteData(
 
   let [viewerOnSite, shopItems] = await Promise.all([
     oneImpl(
-      "SELECT id, balance, blocked, block_reason, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+      "SELECT id, balance, blocked, block_reason, total_earned, total_spent, last_seen_at, last_active_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
       [siteId, viewerId]
     ),
     shop ? getShopItems(siteId, queryImpl) : Promise.resolve([]),
@@ -34,13 +35,13 @@ export async function getViewerSiteData(
   if (!viewerOnSite) {
     try {
       await execImpl(
-        `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)
-         VALUES ($1, $2, 0, 0, now())
+        `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at, last_active_at)
+         VALUES ($1, $2, 0, 0, now(), now())
          ON CONFLICT (site_id, viewer_id) DO NOTHING`,
         [siteId, viewerId],
       );
       viewerOnSite = await oneImpl(
-        "SELECT id, balance, blocked, block_reason, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+        "SELECT id, balance, blocked, block_reason, total_earned, total_spent, last_seen_at, last_active_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
         [siteId, viewerId],
       );
     } catch (err) {
@@ -65,6 +66,15 @@ export async function getViewerSiteData(
       } catch (err) {
         console.error("[site-data] viewer last-seen update failed:", err?.message || err);
       }
+    }
+  }
+
+  const lastActive = viewerOnSite.last_active_at ? Date.parse(viewerOnSite.last_active_at) : NaN;
+  if (!Number.isFinite(lastActive) || Date.now() - lastActive >= 5 * 60 * 1000) {
+    try {
+      await markActiveImpl(siteId, viewerId, { one: oneImpl, exec: execImpl });
+    } catch (err) {
+      console.error("[site-data] billing activity update failed:", err?.message || err);
     }
   }
 

@@ -78,10 +78,10 @@ export function renderBoardSwitcher() {
 function boardLimitOffer() {
   const plan = state.ME?.plan || "free";
   const limit = state.ME?.limits?.boards || 1;
-  if (plan === "agency") {
+  if (plan === "team") {
     return {
       title: `You've reached ${limit} sites`,
-      text: "Need a higher limit? Contact support and tell us how many sites your team manages.",
+      text: "Team includes up to 10 sites. Contact support if you need help consolidating your communities.",
       cta: "Contact support",
       href: "/help/support?area=billing&return=/dashboard",
     };
@@ -89,12 +89,12 @@ function boardLimitOffer() {
   if (plan === "pro") {
     return {
       title: `You've reached ${limit} sites`,
-      text: "Agency supports up to 99 independent sites.",
-      cta: "View Agency plan",
+      text: "Team supports up to 10 independent sites and 5 operator seats.",
+      cta: "View Team plan",
       href: "/dashboard/settings",
     };
   }
-  const planName = plan === "starter" ? "Starter" : "Free";
+  const planName = "Free";
   return {
     title: "Need another site?",
     text: `${planName} includes ${limit} site. Pro unlocks up to 3 independent sites.`,

@@ -224,7 +224,6 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
 }
 
 .marketing-page[data-identity="devin-reference"] .price-card,
-.marketing-page[data-identity="devin-reference"] .lifetime-banner,
 .marketing-page[data-identity="devin-reference"] .pct-container,
 .marketing-page[data-identity="devin-reference"] .faq-item {
   border: 1px solid var(--devin-line-soft);
@@ -265,7 +264,6 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
 }
 
 .marketing-page[data-identity="devin-reference"] .price-features li::before { color: var(--devin-primary); }
-.marketing-page[data-identity="devin-reference"] .lifetime-banner { padding: 24px 28px; }
 .marketing-page[data-identity="devin-reference"] .pct-col--popular { background: color-mix(in srgb, var(--devin-primary) 5%, var(--devin-bg)); }
 
 .marketing-page[data-identity="devin-reference"] .faq-list { max-width: 840px; }
@@ -491,7 +489,6 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
   .marketing-page[data-identity="devin-reference"] .pg-title { font-size: clamp(44px, 14vw, 64px); }
   .marketing-page[data-identity="devin-reference"] .pricing-grid { grid-template-columns: 1fr; }
   .marketing-page[data-identity="devin-reference"] .price-card { min-height: 0; }
-  .marketing-page[data-identity="devin-reference"] .lifetime-banner { align-items: stretch; flex-direction: column; }
   .auth-card { padding: 24px; }
   .legal,
   .docs-wrap,

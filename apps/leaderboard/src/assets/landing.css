@@ -2792,7 +2792,6 @@ a { color: inherit; }
 .marketing-page:not(.landing-page) nav.top .links a:hover { color: var(--ink); }
 .marketing-page:not(.landing-page) nav.top .links a.btn--accent { color: #fff; }
 .marketing-page:not(.landing-page) .price-card,
-.marketing-page:not(.landing-page) .lifetime-banner,
 .marketing-page:not(.landing-page) .pct-container { background: var(--panel); border-color: var(--line); box-shadow: inset 0 1px rgba(255, 255, 255, 0.06); }
 .marketing-page:not(.landing-page) .price-card h3,
 .marketing-page:not(.landing-page) .price-card .price-amount,
@@ -2812,7 +2811,6 @@ a { color: inherit; }
 .marketing-page:not(.landing-page) .price-cta { margin-top: auto; width: 100%; }
 .marketing-page:not(.landing-page) .price-card--popular { outline: 1px solid var(--accent); outline-offset: -1px; }
 .marketing-page:not(.landing-page) .price-badge { position: absolute; top: 0; right: 0; padding: 8px 12px; background: var(--accent); color: #fff; font: 700 10px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
-.marketing-page:not(.landing-page) .lifetime-banner { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 24px 0; padding: 22px 26px; border: 1px solid var(--line); }
 .marketing-page:not(.landing-page) .pay-note { font-size: 12px; margin: 16px 0 0; }
 .marketing-page:not(.landing-page) .table-scroll { overflow-x: auto; }
 .marketing-page:not(.landing-page) .pct-table { min-width: 760px; width: 100%; border-collapse: collapse; color: var(--ink-soft); }
@@ -3577,7 +3575,6 @@ a { color: inherit; }
 }
 
 .marketing-page[data-identity="scoreboard-editorial"] .price-card,
-.marketing-page[data-identity="scoreboard-editorial"] .lifetime-banner,
 .marketing-page[data-identity="scoreboard-editorial"] .pct-container {
   border-color: var(--mkt-line-strong);
   background: var(--mkt-deck);

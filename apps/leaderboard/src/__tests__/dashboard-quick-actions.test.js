@@ -269,14 +269,14 @@ describe("dashboard overview quick actions", () => {
     expect(siteJs).toContain('obsLink.textContent = overlayAccess ? obsUrl : ""');
     expect(siteJs).toContain("obsBox.hidden = !overlayAccess");
     expect(siteJs).toContain("obsLock.hidden = overlayAccess");
-    expect(dashboardHtml("/dashboard/leaderboard/share")).toContain("Stream overlays are available on Starter and higher plans.");
+    expect(dashboardHtml("/dashboard/leaderboard/share")).toContain("Stream overlays are available on Pro and Team.");
     expect(dashboardHtml("/dashboard/leaderboard/share")).toContain('href="/dashboard/settings/billing?from=overlay"');
     expect(dashboardHtml("/dashboard/leaderboard/share")).toContain('>Upgrade your plan</a> to add this leaderboard to OBS, Streamlabs, or another streaming app.');
     expect(siteJs).toContain("if (overlayAccess && obsCopy && !obsCopy._wired)");
     expect(siteJs).not.toContain("obsLock.innerHTML");
     expect(workerIndex).toContain('const paid = r.plan !== "free"');
     const future = Date.now() + 86_400_000;
-    for (const [plan, expected] of [["free", false], ["starter", true], ["pro", true], ["agency", true], ["lifetime", false]]) {
+    for (const [plan, expected] of [["free", false], ["pro", true], ["team", true], ["starter", false], ["agency", false], ["lifetime", false]]) {
       expect(effectivePlan({ plan, status: "active", plan_expires_at: future }) !== "free").toBe(expected);
     }
   });

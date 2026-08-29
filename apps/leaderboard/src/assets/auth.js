@@ -148,13 +148,13 @@ if (nameInput && slugInput) {
 if (slugInput) {
   slugInput.addEventListener("input", () => { userEditedSlug = true; updateSlugPreview(); clearFieldError("slug"); });
 }
-const PLAN_NAMES = { free: "Free", starter: "Starter", pro: "Pro", agency: "Agency", lifetime: "Lifetime Pro" };
+const PLAN_NAMES = { free: "Free", pro: "Pro", team: "Team" };
 if (mode === "signup" && PLAN_NAMES[planParam]) {
   const banner = document.getElementById("planBanner");
   if (banner) {
     banner.hidden = false;
     const isPaid = planParam !== "free";
-    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? " After creating your account you'll go straight to checkout." : " You can upgrade anytime from the dashboard."}`;
+    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? " Recurring checkout is not available yet; creating an account does not activate or charge for this plan." : " You can review plan limits anytime from the dashboard."}`;
   }
 }
 if (mode === "login" || mode === "signup") {
@@ -222,9 +222,7 @@ form.addEventListener("submit", async (e) => {
     }
     if (mode === "signup") {
       const p = (planParam || "").toLowerCase();
-      if (["starter", "pro"].includes(p)) location.href = `/dashboard/settings?plan=${encodeURIComponent(p)}`;
-      else if (p === "lifetime") location.href = "/dashboard/settings?plan=lifetime";
-      else if (p === "agency") location.href = "/help/support?area=billing";
+      if (["pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
       else location.href = nextPath || "/dashboard";
     } else {
       location.href = nextPath || "/dashboard";

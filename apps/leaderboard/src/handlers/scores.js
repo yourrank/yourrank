@@ -112,7 +112,7 @@ export async function handleScores(request, env, {
     // Gate behind Pro plan
     const owner = await one("SELECT id, plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
     const plan = effectivePlan(owner);
-    if (plan !== "pro" && plan !== "agency") return bad("The signed score API requires a Pro or Agency plan.", 403);
+    if (plan !== "pro" && plan !== "team") return bad("The signed score API requires Pro or Team.", 403);
     if (site.starts_at && new Date(site.starts_at).getTime() > Date.now()) {
       return bad("This leaderboard has not started yet. Change the start date before posting scores.", 409);
     }

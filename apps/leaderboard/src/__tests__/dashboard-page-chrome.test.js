@@ -11,7 +11,7 @@ import { SETTINGS_TABS } from "../pages/account.jsx";
 import { renderGiveawaysContentHtml } from "../pages/giveaway-pages.js";
 
 const assetsDir = path.resolve(import.meta.dir, "../assets");
-const readAsset = (name) => fs.readFileSync(path.join(assetsDir, name), "utf8");
+const readAsset = (name) => fs.readFileSync(path.join(assetsDir, name), "utf8").replace(/\r\n/g, "\n");
 const sheets = fs.readdirSync(assetsDir).filter((file) => file.endsWith(".css"));
 const dashboardV4Css = readAsset("dashboard-v4.css");
 const giveawaysCss = readAsset("giveaways.css");

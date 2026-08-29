@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   DASHBOARD_ROUTE_ALIASES,
   NAV_QUERY_ALIASES,
@@ -111,7 +112,7 @@ describe("manifest-owned dashboard redirects", () => {
   });
 
   it("does not retain a second dashboard alias registry or raw telemetry query", () => {
-    const sources = runtimeSources(new URL("../", import.meta.url).pathname)
+    const sources = runtimeSources(fileURLToPath(new URL("../", import.meta.url)))
       .map((path) => [path, stripComments(readFileSync(path, "utf8"))]);
     const joined = sources.map(([, source]) => source).join("\n");
     expect(joined).not.toContain("LEGACY_TELEGRAM_REDIRECTS");

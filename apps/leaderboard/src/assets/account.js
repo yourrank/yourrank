@@ -6,7 +6,7 @@ import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
 import { registerRouteRenderer, requestDashboardRoute, syncRouteChrome } from "./dashboard/shell.js";
 import { renderReferrals } from "./dashboard/referrals.js";
-import { checkout, renderPlan, loadHistory, loadPlanUsage, wireCancelSubscription } from "./dashboard/site.js";
+import { renderPlan, loadHistory, loadPlanUsage } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
 import { parseDynamicPath } from "./dashboard/routes.js";
 
@@ -585,12 +585,9 @@ async function init() {
   wireTeam();
   await loadTeam();
   renderPlan();
-  const plan = new URLSearchParams(location.search).get("plan")?.toLowerCase();
-  if (["starter", "pro", "lifetime"].includes(plan)) checkout(plan);
   loadPlanUsage();
   renderReferrals();
   loadHistory();
-  wireCancelSubscription();
   await loadPostbacks();
   wirePostbacks();
   await loadConnectedAccounts();
