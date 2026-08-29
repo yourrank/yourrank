@@ -145,6 +145,10 @@ import {
 } from "./handlers/credits.js";
 import { handleCreditsBlockViewer } from "./handlers/credits-block.js";
 import {
+  handlePeopleMemberDetail,
+  handlePeopleMembers,
+} from "./handlers/people.js";
+import {
   handleKickViewerAuthStart,
   handleKickViewerAuthCallback,
   handleKickViewerAuthHandoff,
@@ -349,6 +353,11 @@ export const ROUTES = [
   { path: "/api/credits/tip", method: "POST", handler: withHandler(handleCreditsAdjustBalance) },
   { path: "/api/credits/reconcile", method: "GET", handler: withHandler(handleCreditsReconcile) },
   { path: "/api/credits/viewers/:id/block", method: "POST", handler: withHandler(handleCreditsBlockViewer) },
+
+  // People uses the current site_viewers relationship without exposing the
+  // broader Credits configuration or raw external identity identifiers.
+  { path: "/api/people/members", method: "GET", handler: withHandler(handlePeopleMembers) },
+  { path: "/api/people/members/:id", method: "GET", handler: withHandler(handlePeopleMemberDetail) },
 
   // Public credits / shop API (CSRF-exempt, read-only balance lookup)
   { path: "/api/public/credits", method: "GET", handler: withHandler(handlePublicCredits) },

@@ -46,9 +46,9 @@ let activityEvents = [];
 let activityCursor = null;
 let activityLoading = false;
 let memberHistoryEvents = [];
-let memberHistoryCursor = null;
 let memberHistoryLoading = false;
-let memberHistoryUsername = "";
+let memberDetailId = "";
+let memberDetail = null;
 let memberHistoryRelease;
 let memberHistoryTrigger;
 let memberHistoryRequest = 0;
@@ -218,39 +218,27 @@ function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
 }
 function memberIdentity(v) {
-  return v.kick_username || v.discord_username || "Member";
+  return v.displayName || "Unnamed member";
 }
 function memberPlatforms(v) {
-  return [
-    v.kick_username || v.kick_user_id ? "Kick" : "",
-    v.discord_username || v.discord_user_id ? "Discord" : "",
-  ].filter(Boolean);
+  return (v.linkedIdentities || []).map((identity) => identity.provider).filter(Boolean);
 }
 function renderViewerRow(v) {
   const identity = memberIdentity(v);
   const uname = identity;
   const platforms = memberPlatforms(v);
-  const avatar = v.avatar_url
-    ? `<img class="cr-viewer-avatar" src="${esc(v.avatar_url)}" alt="" loading="lazy" />`
+  const avatar = v.avatarUrl
+    ? `<img class="cr-viewer-avatar" src="${esc(v.avatarUrl)}" alt="" loading="lazy" />`
     : `<span class="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">${esc(uname.slice(0, 1).toUpperCase())}</span>`;
-  const joined = fmtDate(v.created_at);
-  const earned = v.last_earned_at ? fmtDate(v.last_earned_at) : "Not yet";
-  const seen = v.last_seen_at ? fmtDate(v.last_seen_at) : "Not yet";
-  const lastActiveAt = v.last_seen_at || v.last_earned_at;
-  const history = identity !== "Member"
-    ? `<a class="btn btn--sm" href="/dashboard/rewards/activity?viewer=${encodeURIComponent(identity)}" data-member-history="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">History</a> `
-    : "";
+  const joined = fmtDate(v.joinedAt);
+  const lastActiveAt = v.lastSeenAt || v.lastCreditAt;
   const platformHtml = platforms.length
-    ? platforms.map((platform) => `<span>${platform}</span>`).join("")
-    : "<span>Account connected</span>";
+    ? platforms.map((platform) => `<span>${esc(platform)} sign-in</span>`).join("")
+    : "<span>No signed-in account</span>";
   const activity = lastActiveAt
-    ? `<b title="Last seen: ${esc(seen)} · Last earned: ${esc(earned)}">Active ${esc(relative(lastActiveAt))}</b>`
+    ? `<b title="Last active: ${esc(fmtDate(lastActiveAt))}">Active ${esc(relative(lastActiveAt))}</b>`
     : "<b>No activity yet</b>";
-  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b><span class="cr-member-platforms">${platformHtml}</span>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked</span>' : ""}</span></div></td><td data-label="Recent activity"><div class="cr-member-activity">${activity}<span title="${esc(joined)}">Joined ${esc(relative(v.created_at))}</span></div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.total_earned) || 0} · Spent ${Number(v.total_spent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row">${history}<button class="btn btn--sm btn--accent" data-tip-viewer="${esc(v.id)}" data-viewer-name="${esc(uname)}" data-viewer-balance="${Number(v.balance) || 0}" title="Tip credits to ${esc(uname)}">Tip</button> <button class="btn btn--sm ${v.blocked ? "" : "btn--danger"}" data-block="${esc(v.id)}" data-blocked="${v.blocked ? "1" : ""}">${v.blocked ? "Unblock" : "Block"}</button></div></td>`;
-}
-function openFullMemberHistory(href) {
-  const destination = new URL(href, location.origin);
-  requestDashboardRoute("rewards", "history", { query: destination.search });
+  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked on this site</span>' : ""}</span></div></td><td data-label="Membership"><div class="cr-member-activity">${activity}<span title="${esc(joined)}">Joined ${esc(relative(v.joinedAt))}</span></div></td><td data-label="Account connection"><div class="cr-member-platforms">${platformHtml}</div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.totalEarned) || 0} · Spent ${Number(v.totalSpent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row"><button class="btn btn--sm" type="button" data-member-detail="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">View member</button></div></td>`;
 }
 async function loadMemberHistoryDialog() {
   if (!window.YRDialog) await import("./dialog.js");
@@ -352,8 +340,35 @@ function render() {
     shopItemsView = state.shopItems || []; renderShopCards(shopItemsView);
   }
   if (current === "viewers") {
-    const viewers = state.viewers || [];
-    if (!viewerCtrl) { viewerCtrl = new ListController({ root: $("cr-viewers"), tbody: "cr-viewer-list", emptyEl: $("cr-viewer-empty"), emptySpec: { kind: "empty", title: "No members yet", body: "Members who sign in will appear here after they use your YourRank site. Share your site to invite your first member.", compact: true, actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }] }, items: viewers, perPage: 15, searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.block_reason || ""} ${v.blocked ? "blocked" : "active"}`, sortOptions: [{ key: "activity", label: "Recently active", fn: (a, b) => new Date(b.last_seen_at || b.last_earned_at || b.created_at || 0) - new Date(a.last_seen_at || a.last_earned_at || a.created_at || 0) }, { key: "joined", label: "Newest members", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) }, { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) }], emptyAllText: "No members yet.", emptyText: "No matching members.", renderItem: (v) => renderViewerRow(v), onRender: () => wireDynamicActions() }); mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot")); }
+    const viewers = state.members || [];
+    if (!viewerCtrl) {
+      viewerCtrl = new ListController({
+        root: $("cr-viewers"),
+        tbody: "cr-viewer-list",
+        emptyEl: $("cr-viewer-empty"),
+        emptySpec: {
+          kind: "empty",
+          title: "No members yet",
+          body: "People become members after they sign in on this site or interact through a connected channel reward.",
+          compact: true,
+          actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }],
+        },
+        items: viewers,
+        perPage: 15,
+        searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.blocked ? "blocked" : "active"}`,
+        sortOptions: [
+          { key: "activity", label: "Recently active", fn: (a, b) => new Date(b.lastSeenAt || b.lastCreditAt || b.joinedAt || 0) - new Date(a.lastSeenAt || a.lastCreditAt || a.joinedAt || 0) },
+          { key: "joined", label: "Newest members", fn: (a, b) => new Date(b.joinedAt || 0) - new Date(a.joinedAt || 0) },
+          { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) },
+          { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) },
+        ],
+        emptyAllText: "No members yet.",
+        emptyText: "No matching members.",
+        renderItem: (v) => renderViewerRow(v),
+        onRender: () => wireDynamicActions(),
+      });
+      mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot"));
+    }
     else viewerCtrl.setItems(viewers);
   }
   if (current === "overview") {
@@ -504,7 +519,15 @@ async function toggleBlock(id, blocked, trigger) {
   let reason = "";
   if (next) { reason = await showPromptModal("Block member", "Why are you blocking this member?", { confirmText: "Block", placeholder: "e.g. chargeback / abuse" }) || ""; if (!reason) return; }
   setLoading(trigger, true, next ? "Blocking…" : "Unblocking…");
-  try { await api("POST", sitePath(`/api/credits/viewers/${encodeURIComponent(id)}/block`), { blocked: next, reason }); await load(); }
+  try {
+    await api("POST", sitePath(`/api/credits/viewers/${encodeURIComponent(id)}/block`), { blocked: next, reason });
+    await load();
+    if (memberDetailId === id) {
+      memberHistoryRequest++;
+      memberHistoryLoading = false;
+      await loadMemberHistory();
+    }
+  }
   catch (err) { setStatus("cr-viewer-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 function wireDynamicActions() {
@@ -516,20 +539,16 @@ function wireDynamicActions() {
   document.querySelectorAll("[data-cancel]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => updateRedemption(b.dataset.cancel, "cancelled", b)); });
   document.querySelectorAll("[data-block]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => toggleBlock(b.dataset.block, b.dataset.blocked === "1", b)); });
   document.querySelectorAll("[data-tip-viewer]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => openTip(b.dataset.tipViewer, b.dataset.viewerName)); });
-  document.querySelectorAll("[data-member-history]:not([data-wired])").forEach((link) => {
-    link.dataset.wired = "1";
-    link.addEventListener("click", async (event) => {
-      event.preventDefault();
-      const viewer = (state.viewers || []).find((item) => String(item.id) === String(link.dataset.memberHistory));
-      if (!viewer) {
-        openFullMemberHistory(link.href);
-        return;
-      }
+  document.querySelectorAll("[data-member-detail]:not([data-wired])").forEach((button) => {
+    button.dataset.wired = "1";
+    button.addEventListener("click", async () => {
+      const viewer = (state.members || []).find((item) => String(item.id) === String(button.dataset.memberDetail));
+      if (!viewer) return;
       try {
-        await openMemberHistory(viewer, link);
+        await openMemberHistory(viewer, button);
       } catch (error) {
-        logError("open-member-history", error);
-        openFullMemberHistory(link.href);
+        logError("open-member-detail", error);
+        setStatus("cr-viewer-status", "Couldn't load this member. Try again.", true);
       }
     });
   });
@@ -595,11 +614,12 @@ function closeMemberHistory() {
   memberHistoryRelease?.();
   memberHistoryRelease = undefined;
   memberHistoryTrigger = undefined;
+  memberDetailId = "";
+  memberDetail = null;
 }
 function renderMemberHistory() {
   const list = $("cr-member-history-list");
   const empty = $("cr-member-history-empty");
-  const more = $("cr-member-history-more");
   if (!list) return;
   list.removeAttribute("aria-busy");
   if (!memberHistoryEvents.length) {
@@ -622,105 +642,116 @@ function renderMemberHistory() {
       return `<li><div><strong>${esc(LEDGER_EVENT_LABELS[event.type] || event.type)}</strong><span>${esc(event.description || "No details")}</span></div><div class="cr-member-history-event-meta"><b class="${debit ? "cr-negative" : "cr-positive"}">${amount}</b><time datetime="${esc(event.createdAt)}" title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</time></div></li>`;
     }).join("");
   }
-  if (more) more.hidden = !memberHistoryCursor;
 }
-function renderMemberHistorySummary(data) {
-  const board = (data.boards || []).find((item) => String(item.siteId) === String(activeSiteId));
-  if (!board) return;
-  $("cr-member-history-balance").textContent = `${Number(board.balance) || 0} Credits`;
-  $("cr-member-history-earned").textContent = Number(board.totalEarned) || 0;
-  $("cr-member-history-spent").textContent = Number(board.totalSpent) || 0;
+function renderMemberDetail(data) {
+  const member = data.member;
+  memberDetail = member;
+  const name = memberIdentity(member);
+  $("cr-member-history-title").textContent = name;
+  $("cr-member-history-site").textContent = `Member in ${data.site?.name || "the selected site"}`;
+  $("cr-member-identity-heading").textContent = name;
+  $("cr-member-history-identity-summary").textContent = member.linkedIdentities?.length
+    ? "Signed-in viewer account"
+    : "Site activity membership";
+  const avatar = $("cr-member-history-avatar");
+  if (avatar) {
+    avatar.innerHTML = member.avatarUrl
+      ? `<img class="cr-member-detail-avatar-image" src="${esc(member.avatarUrl)}" alt="" />`
+      : esc(name.slice(0, 1).toUpperCase());
+  }
+  $("cr-member-history-joined").textContent = fmtDate(member.joinedAt);
+  const lastActiveAt = member.lastSeenAt || member.lastCreditAt;
+  $("cr-member-history-active").textContent = lastActiveAt ? fmtDate(lastActiveAt) : "No activity yet";
+  $("cr-member-history-balance").textContent = `${Number(member.balance) || 0} Credits`;
+  $("cr-member-history-earned").textContent = Number(member.totalEarned) || 0;
+  $("cr-member-history-spent").textContent = Number(member.totalSpent) || 0;
+
+  const connections = member.linkedIdentities || [];
+  $("cr-member-history-connections").innerHTML = connections.length
+    ? connections.map((identity) => `<span class="v3-chip v3-chip--fulfilled">${esc(identity.provider)} sign-in verified</span>`).join("")
+    : '<span class="v3-chip">No signed-in account connection</span>';
+  $("cr-member-history-connection-note").textContent = connections.length
+    ? "These connections come from completed provider sign-in. Other records are not matched by name."
+    : "This membership comes from site activity. No leaderboard player or subscriber record is assumed to be this person.";
+
+  const blocked = member.moderation?.status === "blocked";
+  $("cr-member-history-moderation").textContent = blocked ? "Blocked on this site" : "Active on this site";
+  $("cr-member-history-moderation-reason").textContent = blocked
+    ? member.moderation?.reason || "No reason recorded."
+    : "No restrictions on this site.";
+  const blockButton = $("cr-member-history-block");
+  blockButton.textContent = blocked ? "Unblock member" : "Block member";
+  blockButton.className = `btn btn--sm ${blocked ? "" : "btn--danger"}`;
+  blockButton.dataset.block = member.id;
+  blockButton.dataset.blocked = blocked ? "1" : "";
+  delete blockButton.dataset.wired;
+  memberHistoryEvents = member.recentCreditActivity || [];
+  renderMemberHistory();
+  wireDynamicActions();
 }
-async function loadMemberHistory({ reset }) {
-  if (memberHistoryLoading || !memberHistoryUsername) return;
+async function loadMemberHistory() {
+  if (memberHistoryLoading || !memberDetailId) return;
   const request = memberHistoryRequest;
   const list = $("cr-member-history-list");
   const empty = $("cr-member-history-empty");
-  const more = $("cr-member-history-more");
   memberHistoryLoading = true;
-  if (reset) {
-    memberHistoryEvents = [];
-    memberHistoryCursor = null;
-    if (empty) {
-      empty.hidden = true;
-      empty.removeAttribute("role");
-    }
-    if (more) more.hidden = true;
-    if (list) {
-      list.hidden = false;
-      list.setAttribute("aria-busy", "true");
-      list.innerHTML = Array.from({ length: 4 }, () => '<li><span class="skeleton v3-skel-line" aria-hidden="true"></span></li>').join("");
-    }
-  } else {
-    setLoading(more, true, "Loading…");
+  memberHistoryEvents = [];
+  if (empty) {
+    empty.hidden = true;
+    empty.removeAttribute("role");
+  }
+  if (list) {
+    list.hidden = false;
+    list.setAttribute("aria-busy", "true");
+    list.innerHTML = Array.from({ length: 4 }, () => '<li><span class="skeleton v3-skel-line" aria-hidden="true"></span></li>').join("");
   }
   try {
-    const params = new URLSearchParams({
-      siteId: activeSiteId,
-      kickUsername: memberHistoryUsername,
-      limit: "25",
-    });
-    if (memberHistoryCursor) params.set("cursor", memberHistoryCursor);
-    const [data, summary] = await Promise.all([
-      api("GET", `/api/credits/activity?${params}`),
-      reset
-        ? api("GET", `/api/credits/viewer/history?kickUsername=${encodeURIComponent(memberHistoryUsername)}`)
-        : Promise.resolve(null),
-    ]);
+    const data = await api("GET", sitePath(`/api/people/members/${encodeURIComponent(memberDetailId)}`));
     if (request !== memberHistoryRequest) return;
-    if (summary) renderMemberHistorySummary(summary);
-    memberHistoryEvents = reset ? data.events || [] : memberHistoryEvents.concat(data.events || []);
-    memberHistoryCursor = data.nextCursor || null;
-    renderMemberHistory();
-    setStatus("cr-member-history-status", `${memberHistoryEvents.length} entries loaded.`);
+    renderMemberDetail(data);
+    setStatus("cr-member-history-status", "Member details loaded.");
   } catch (error) {
     if (request !== memberHistoryRequest) return;
-    if (reset && empty) {
+    if (empty) {
       if (list) {
         list.innerHTML = "";
         list.hidden = true;
         list.removeAttribute("aria-busy");
       }
       renderError(empty, {
-        title: "Couldn't load this member's history",
-        body: "Their Credits activity could not be loaded.",
-        retry: () => loadMemberHistory({ reset: true }),
+        title: "Couldn't load this member",
+        body: "Their site-specific details could not be loaded.",
+        retry: () => loadMemberHistory(),
       });
-    } else {
-      setStatus("cr-member-history-status", error.message, true);
     }
   } finally {
     if (request === memberHistoryRequest) {
       memberHistoryLoading = false;
-      setLoading(more, false);
     }
   }
 }
 async function openMemberHistory(viewer, trigger) {
   const drawer = $("cr-member-history-drawer");
   const backdrop = $("cr-member-history-backdrop");
-  if (!drawer || !backdrop) {
-    openFullMemberHistory(trigger.href);
-    return;
-  }
+  if (!drawer || !backdrop) return;
   const dialog = await loadMemberHistoryDialog();
   closeTip();
   closeMemberHistory();
   memberHistoryRequest++;
-  memberHistoryUsername = memberIdentity(viewer);
+  memberDetailId = viewer.id;
   memberHistoryTrigger = trigger;
   memberHistoryTrigger.setAttribute("aria-expanded", "true");
-  $("cr-member-history-title").textContent = `${memberHistoryUsername}'s history`;
+  $("cr-member-history-title").textContent = memberIdentity(viewer);
+  $("cr-member-history-site").textContent = `Member in ${state.site?.name || "the selected site"}`;
   $("cr-member-history-balance").textContent = `${Number(viewer.balance) || 0} Credits`;
-  $("cr-member-history-earned").textContent = Number(viewer.total_earned) || 0;
-  $("cr-member-history-spent").textContent = Number(viewer.total_spent) || 0;
-  $("cr-member-history-full").href = trigger.href;
+  $("cr-member-history-earned").textContent = Number(viewer.totalEarned) || 0;
+  $("cr-member-history-spent").textContent = Number(viewer.totalSpent) || 0;
   setStatus("cr-member-history-status", "");
   drawer.hidden = false;
   backdrop.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   memberHistoryRelease = dialog.trap(drawer, closeMemberHistory);
-  await loadMemberHistory({ reset: true });
+  await loadMemberHistory();
 }
 let activePopover;
 function closePopover(result = false) {
@@ -780,7 +811,9 @@ async function load() {
     const shell = await loadBoardShell();
     activeSiteId = shell.activeSiteId;
     updateKickAuthLinks();
-    state = await api("GET", sitePath("/api/credits/status"));
+    state = tab() === "viewers"
+      ? await api("GET", sitePath("/api/people/members"))
+      : await api("GET", sitePath("/api/credits/status"));
     setState({ CREDITS_STATUS: "ready" });
     render();
     showOAuthMessage({ finalize: true });
@@ -797,7 +830,9 @@ async function load() {
     showOAuthMessage({ finalize: true });
     setState({ CREDITS_STATUS: "error" });
     logError("load-credits-dashboard", err);
-    renderError($("cr-empty"), { title: "Couldn't load your credits dashboard", body: "Your rewards data could not be loaded.", retry: () => load().catch(() => {}) });
+    renderError($("cr-empty"), tab() === "viewers"
+      ? { title: "Couldn't load members", body: "People for the selected site could not be loaded.", retry: () => load().catch(() => {}) }
+      : { title: "Couldn't load your credits dashboard", body: "Your rewards data could not be loaded.", retry: () => load().catch(() => {}) });
     $("cr-app").hidden = false;
     window.__yrBoot?.signal();
     throw err;
@@ -834,12 +869,17 @@ function wireActions() {
     try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
     catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
   });
-  $("cr-tip-open-btn")?.addEventListener("click", () => openTip("", ""));
   $("cr-tip-close")?.addEventListener("click", closeTip);
   $("cr-tip-cancel")?.addEventListener("click", closeTip);
   $("cr-member-history-close")?.addEventListener("click", closeMemberHistory);
   $("cr-member-history-backdrop")?.addEventListener("click", closeMemberHistory);
-  $("cr-member-history-more")?.addEventListener("click", () => loadMemberHistory({ reset: false }));
+  $("cr-member-history-tip")?.addEventListener("click", () => {
+    if (!memberDetail) return;
+    const { id } = memberDetail;
+    const name = memberIdentity(memberDetail);
+    closeMemberHistory();
+    openTip(id, name);
+  });
   document.querySelectorAll(".cr-tip-preset").forEach((b) => b.addEventListener("click", () => {
     const amt = b.dataset.amount;
     const input = $("cr-tip-amount");
@@ -861,12 +901,16 @@ function wireActions() {
       setStatus("cr-tip-status", "Please provide a reason for the tip.", true);
       return;
     }
+    if (!viewerId) {
+      setStatus("cr-tip-status", "Choose an existing member before sending credits.", true);
+      return;
+    }
 
     setLoading(btn, true, "Sending…");
     try {
-      const endpoint = viewerId ? sitePath(`/api/credits/viewers/${encodeURIComponent(viewerId)}/balance`) : sitePath("/api/credits/tip");
-      await api("POST", endpoint, { delta: amount, reason, kickUsername: username });
-      setStatus("cr-tip-status", `Successfully sent +${amount} credits to @${username || "member"}!`);
+      const endpoint = sitePath(`/api/credits/viewers/${encodeURIComponent(viewerId)}/balance`);
+      await api("POST", endpoint, { delta: amount, reason });
+      setStatus("cr-tip-status", `Sent +${amount} credits to ${username || "this member"}.`);
       setTimeout(() => {
         closeTip();
         load();
@@ -1004,9 +1048,9 @@ export function enter() {
   activityCursor = null;
   activityLoading = false;
   memberHistoryEvents = [];
-  memberHistoryCursor = null;
   memberHistoryLoading = false;
-  memberHistoryUsername = "";
+  memberDetailId = "";
+  memberDetail = null;
   memberHistoryRelease = undefined;
   memberHistoryTrigger = undefined;
   memberHistoryRequest = 0;

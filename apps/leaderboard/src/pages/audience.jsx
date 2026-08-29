@@ -10,7 +10,53 @@ import { chromeStateFor } from "../assets/dashboard/routes.js";
 // under Insights, so the page links there as an action instead of duplicating
 // the view or adding a tab that teleports to another product area.
 const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Insights.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Insights</a></aside>`;
-const MEMBER_HISTORY_DRAWER = `<div class="cr-member-history-backdrop" id="cr-member-history-backdrop" hidden></div><aside class="cr-member-history-drawer" id="cr-member-history-drawer" role="dialog" aria-modal="true" aria-labelledby="cr-member-history-title" hidden><header class="cr-member-history-head"><div><h2 id="cr-member-history-title">Member history</h2><p>Credits activity on this site.</p></div><button class="cr-drawer-close" id="cr-member-history-close" type="button" aria-label="Close member history">×</button></header><div class="cr-member-history-body"><dl class="cr-member-history-facts" aria-label="Member credits summary"><div><dt>Balance</dt><dd id="cr-member-history-balance">—</dd></div><div><dt>Earned</dt><dd id="cr-member-history-earned">—</dd></div><div><dt>Spent</dt><dd id="cr-member-history-spent">—</dd></div></dl><div class="cr-member-history-section-head"><h3>Recent activity</h3><a class="btn btn--sm" id="cr-member-history-full" href="/dashboard/rewards/activity">Open full activity</a></div><p class="status" id="cr-member-history-status" role="status" aria-live="polite"></p><ol class="cr-member-history-list" id="cr-member-history-list" aria-live="polite"></ol><div class="v3-empty" id="cr-member-history-empty" hidden></div><button class="btn btn--sm" id="cr-member-history-more" type="button" hidden>Show more</button></div></aside>`;
+const MEMBER_HISTORY_DRAWER = `
+  <div class="cr-member-history-backdrop" id="cr-member-history-backdrop" hidden></div>
+  <aside class="cr-member-history-drawer" id="cr-member-history-drawer" role="dialog" aria-modal="true" aria-labelledby="cr-member-history-title" aria-describedby="cr-member-history-site" hidden>
+    <header class="cr-member-history-head">
+      <div>
+        <h2 id="cr-member-history-title">Member details</h2>
+        <p id="cr-member-history-site">Membership in the selected site.</p>
+      </div>
+      <button class="cr-drawer-close" id="cr-member-history-close" type="button" aria-label="Close member details">×</button>
+    </header>
+    <div class="cr-member-history-body">
+      <section class="cr-member-detail-section" aria-labelledby="cr-member-identity-heading">
+        <div class="cr-member-detail-identity">
+          <span class="cr-viewer-avatar cr-viewer-avatar--fallback" id="cr-member-history-avatar" aria-hidden="true">M</span>
+          <div><h3 id="cr-member-identity-heading">Member</h3><p id="cr-member-history-identity-summary">Site membership</p></div>
+        </div>
+        <dl class="cr-member-context-facts">
+          <div><dt>Member since</dt><dd id="cr-member-history-joined">—</dd></div>
+          <div><dt>Last active</dt><dd id="cr-member-history-active">—</dd></div>
+        </dl>
+      </section>
+      <section class="cr-member-detail-section" aria-labelledby="cr-member-connections-heading">
+        <div class="cr-member-history-section-head"><h3 id="cr-member-connections-heading">Account connection</h3></div>
+        <div class="cr-member-connections" id="cr-member-history-connections"></div>
+        <p class="cr-member-detail-note" id="cr-member-history-connection-note"></p>
+      </section>
+      <section class="cr-member-detail-section" aria-labelledby="cr-member-credits-heading">
+        <div class="cr-member-history-section-head"><h3 id="cr-member-credits-heading">Credits</h3></div>
+        <dl class="cr-member-history-facts" aria-label="Member credits summary">
+          <div><dt>Balance</dt><dd id="cr-member-history-balance">—</dd></div>
+          <div><dt>Earned</dt><dd id="cr-member-history-earned">—</dd></div>
+          <div><dt>Spent</dt><dd id="cr-member-history-spent">—</dd></div>
+        </dl>
+      </section>
+      <section class="cr-member-detail-section" aria-labelledby="cr-member-activity-heading">
+        <div class="cr-member-history-section-head"><h3 id="cr-member-activity-heading">Recent credit activity</h3></div>
+        <p class="status" id="cr-member-history-status" role="status" aria-live="polite"></p>
+        <ol class="cr-member-history-list" id="cr-member-history-list" aria-live="polite"></ol>
+        <div class="v3-empty" id="cr-member-history-empty" hidden></div>
+      </section>
+      <section class="cr-member-detail-section" aria-labelledby="cr-member-moderation-heading">
+        <div class="cr-member-history-section-head"><h3 id="cr-member-moderation-heading">Site status</h3></div>
+        <div class="cr-member-moderation-row"><div><strong id="cr-member-history-moderation">Active</strong><p id="cr-member-history-moderation-reason">No restrictions on this site.</p></div><button class="btn btn--sm btn--danger" id="cr-member-history-block" type="button">Block member</button></div>
+      </section>
+      <div class="cr-member-detail-actions"><button class="btn btn--accent" id="cr-member-history-tip" type="button">Tip credits</button></div>
+    </div>
+  </aside>`;
 
 export function AudienceMembersPage({ activePath, user, fragment } = {}) {
   const content = <div class="cr-workspace-content">

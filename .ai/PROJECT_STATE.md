@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `0f6fc71f61810415613180b3f29688b9d9423e4a` (PR #666 merged)
+**Evidence baseline:** `main` at `6d20b0bea204a56ccd0559c462e8ab01b3ccd32d` (PR #667 merged)
 
 **Last reconciled:** 2026-08-29
 
@@ -125,10 +125,15 @@ Community, People, and Insights are current navigation presentation labels only;
 
 ## Current Identity and Scope Facts
 
-- Creator/operator accounts, viewer accounts, `site_members`, leaderboard player rows, and Telegram subscriber relationships are distinct current records.
+- Creator/operator accounts (`users`), viewer accounts (`viewers`), creator-team access (`site_members`), site memberships (`site_viewers`), leaderboard player rows (`players`), and Telegram subscriber relationships (`bot_subscribers`) are distinct current records.
+- `viewers` is the current global viewer-account anchor. A provider connection is treated as authenticated only when its OAuth link timestamp is present; names and raw external identifiers are not linkage proof.
+- `site_viewers` is the current physical Site Membership record. Its foreign keys and unique `(site_id, viewer_id)` constraint already provide the required scope and uniqueness, so no additive membership table or inferred backfill is justified.
+- A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records.
+- People reuses `/dashboard/audience/members` and exposes only selected-site memberships. Detail lookup binds both membership ID and selected site; creator authorization uses the existing site capability boundary.
+- Leaderboard Player and Telegram Subscriber records remain unlinked to Viewer Account and Site Membership. No username, display-name, IP, device, or fuzzy matching is used to infer identity.
 - Dashboard route scope is explicitly `account` or `site`.
 - Current site navigation uses both `board` and `siteId` query spellings by delivery family.
-- No target identity/membership consolidation or parameter normalization has been implemented.
+- No player/subscriber identity consolidation or parameter normalization has been implemented.
 
 ## Known Technical Debt / Deferred Work
 
@@ -140,7 +145,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |
 | Legacy `v3-*`/`v4-*` names and raw-value ratchets | Existing debt; do not extend |
 | Legacy route aliases | Retained pending telemetry evidence |
-| Viewer/site membership expansion | Target only; schema and migration deferred |
+| Viewer/site membership expansion beyond the existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence |
 | Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
 | Shared Activity / Review / Claims persistence | Deferred until real reuse and migration safety are proven |
 | Billing terms/providers/enums | Separate reconciliation required |

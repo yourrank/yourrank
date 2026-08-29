@@ -318,6 +318,25 @@ describe("handleCreditsAdjustBalance validation", () => {
     expect(ledger.params[1]).toBe(50); // same amount as the balance change
     expect(ledger.params[2]).toMatch(/giveaway/); // reason preserved in history
   });
+
+  it("lets the compatibility tip route select only an existing authenticated membership", async () => {
+    db.oneResponses.push(
+      { id: "sv-1", balance: 100, total_earned: 100 }, // exact existing membership
+      { id: "sv-1", balance: 150 } // +50 credit
+    );
+    db.unsafeResponses.push([]);
+    const res = await handleCreditsAdjustBalance(
+      req("https://test.com/api/credits/tip", "POST", { siteId: "site-1", username: "@alice", delta: 50, reason: "release gate funding" }),
+      makeEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const lookup = db.calls.find((c) => /JOIN viewers v/.test(c.sql));
+    expect(lookup.params).toEqual(["site-1", "alice"]);
+    expect(lookup.sql).toContain("v.kick_linked_at IS NOT NULL");
+    expect(lookup.sql).toContain("sv.site_id = $1");
+    expect(db.calls.some((c) => /INSERT INTO (viewers|site_viewers)/.test(c.sql))).toBe(false);
+  });
 });
 
 // --- The invariant ------------------------------------------------------------

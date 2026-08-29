@@ -11,39 +11,48 @@ const SRC_ROOT = path.resolve(TEST_DIR, "..");
 describe("Audience members body", () => {
   it("keeps member identity first and lifetime totals secondary", () => {
     const html = AudienceMembersPage({ fragment: true }).toString();
-    expect(html).toContain("Your members");
+    expect(html).toContain("Members in this site");
     expect(html).toContain('id="cr-viewer-toolbar"');
-    expect(html).toContain("<th>Member</th><th>Recent activity</th><th>Credits</th>");
+    expect(html).toContain("<th>Member</th><th>Membership</th><th>Account connection</th><th>Credits</th>");
     expect(html).not.toContain("<th class=\"num\">Total earned</th>");
     expect(html).toContain("Looking for visitor trends?");
     expect(html).toContain("Anonymous visits and traffic sources live in Insights.");
     expect(html).toContain(">Open Insights</a>");
   });
 
+  it("presents the empty member state without an orphaned table", () => {
+    const styles = readFileSync(path.join(SRC_ROOT, "assets", "dashboard-v4.css"), "utf8");
+    expect(styles).toContain(".cr-member-list:has(#cr-viewer-empty:not([hidden])) .cr-table-scroll");
+    expect(styles).toContain("display: none;");
+  });
+
   it("does not use internal platform IDs as the visible member name", () => {
     const source = readFileSync(path.join(SRC_ROOT, "assets/credits.js"), "utf8");
     const identity = source.match(/function memberIdentity\(v\) \{[\s\S]*?\n\}/)?.[0] || "";
-    expect(identity).toContain('v.kick_username || v.discord_username || "Member"');
+    expect(identity).toContain('v.displayName || "Unnamed member"');
     expect(identity).not.toContain("kick_user_id");
     expect(identity).not.toContain("discord_user_id");
     expect(source).toContain('label: "Recently active"');
     expect(source).toContain('mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot"))');
   });
 
-  it("opens member history in an accessible drawer with a full-page fallback", () => {
+  it("opens site-scoped member detail in an accessible drawer", () => {
     const html = AudienceMembersPage({ fragment: true }).toString();
     const source = readFileSync(path.join(SRC_ROOT, "assets/credits.js"), "utf8");
     expect(html).toContain('id="cr-member-history-drawer"');
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
     expect(html).toContain('aria-labelledby="cr-member-history-title"');
-    expect(html).toContain('aria-label="Close member history"');
-    expect(html).toContain('id="cr-member-history-full" href="/dashboard/rewards/activity"');
-    expect(source).toContain('data-member-history="${esc(v.id)}"');
+    expect(html).toContain('aria-label="Close member details"');
+    expect(html).toContain("Account connection");
+    expect(html).toContain("Site status");
+    expect(html).not.toContain("Recognition");
+    expect(html).not.toContain("Claims");
+    expect(source).toContain('data-member-detail="${esc(v.id)}"');
     expect(source).toContain('aria-controls="cr-member-history-drawer"');
     expect(source).toContain('aria-expanded="false"');
-    expect(source).toContain('/api/credits/viewer/history?kickUsername=${encodeURIComponent(memberHistoryUsername)}');
-    expect(source).toContain('api("GET", `/api/credits/activity?${params}`)');
+    expect(source).toContain('sitePath(`/api/people/members/${encodeURIComponent(memberDetailId)}`)');
+    expect(source).not.toContain("memberHistoryUsername");
     expect(source).toContain('if (!window.YRDialog) await import("./dialog.js")');
     expect(source).toContain("dialog.trap(drawer, closeMemberHistory)");
     expect(source).toContain("renderError(empty, {");

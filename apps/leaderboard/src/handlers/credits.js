@@ -1002,6 +1002,9 @@ export async function handleCreditsAdjustBalance(request, env) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
+  const body = await readJson(request);
+  const bodySiteId = String(body?.siteId || "").trim();
+  if (!url.searchParams.get("siteId") && bodySiteId) url.searchParams.set("siteId", bodySiteId);
   const site = await getSite(env, user, url);
   if (!site) return bad("no site", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
@@ -1020,7 +1023,6 @@ export async function handleCreditsAdjustBalance(request, env) {
     }
   }
 
-  const body = await readJson(request);
   const delta = Number(body?.delta);
   const reason = String(body?.reason || "").trim();
   const kickUsername = String(body?.username || body?.kickUsername || "").trim().replace(/^@/, "");
@@ -1040,27 +1042,20 @@ export async function handleCreditsAdjustBalance(request, env) {
       );
     }
 
+    // Compatibility for the existing release harness and older clients: an
+    // exact username may select an already-existing membership only when the
+    // Viewer Account has authenticated that Kick link. It never creates or
+    // links a Viewer Account or Site Membership.
     if (!siteViewer && kickUsername) {
-      // Find or insert cross-platform viewer record
-      let vRecord = await tx.one(
-        `SELECT id FROM viewers WHERE lower(kick_username) = lower($1) OR lower(kick_user_id) = lower($1)`,
-        [kickUsername]
-      );
-      if (!vRecord) {
-        vRecord = await tx.one(
-          `INSERT INTO viewers (kick_username, kick_user_id)
-           VALUES ($1, $1)
-           ON CONFLICT (kick_user_id) DO UPDATE SET kick_username = EXCLUDED.kick_username
-           RETURNING id`,
-          [kickUsername]
-        );
-      }
       siteViewer = await tx.one(
-        `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned)
-         VALUES ($1, $2, 0, 0)
-         ON CONFLICT (site_id, viewer_id) DO UPDATE SET updated_at = now()
-         RETURNING id, balance, total_earned`,
-        [site.id, vRecord.id]
+        `SELECT sv.id, sv.balance, sv.total_earned
+           FROM site_viewers sv
+           JOIN viewers v ON v.id = sv.viewer_id
+          WHERE sv.site_id = $1
+            AND v.kick_linked_at IS NOT NULL
+            AND lower(v.kick_username) = lower($2)
+          FOR UPDATE OF sv`,
+        [site.id, kickUsername]
       );
     }
 

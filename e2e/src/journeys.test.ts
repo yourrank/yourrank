@@ -456,6 +456,11 @@ describeViewer("viewer wagering journeys", () => {
       if (!saved.json?.ok) throw new Error(`${game} settings failed: ${saved.status} ${saved.body}`);
     }
 
+    viewer = new Client(BASE_URL);
+    viewer.setViewerSession(VIEWER_SESSION);
+    const viewerLanding = await viewer.get(`/${slug}`);
+    if (viewerLanding.status !== 200) throw new Error(`viewer membership registration failed: ${viewerLanding.status} ${viewerLanding.body}`);
+
     // Owner funds the viewer on this board through the dashboard's own API.
     const grant = await ownerClient.post("/api/credits/tip", {
       siteId: vSiteId,
@@ -464,10 +469,6 @@ describeViewer("viewer wagering journeys", () => {
       reason: "release gate funding",
     });
     if (!grant.json?.ok) throw new Error(`viewer funding failed: ${grant.status} ${grant.body}`);
-
-    viewer = new Client(BASE_URL);
-    await viewer.get(`/${slug}`);
-    viewer.setViewerSession(VIEWER_SESSION);
   });
 
   afterAll(async () => {
