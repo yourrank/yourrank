@@ -73,6 +73,18 @@ export const SCENARIOS: Scenario[] = [
     tier: "required",
   },
   {
+    key: "wave-i-owner-insights-connections",
+    title: "Wave I owner sees selected-site Insights and a credential-minimized connection inventory",
+    tier: "required",
+  },
+  {
+    key: "wave-i-moderator-insights-readonly",
+    title: "Wave I Moderator can view selected-site Insights but cannot manage provider authorization",
+    tier: "conditional",
+    requires: ["E2E_DB_URL"],
+    reason: "Creating an isolated Team membership requires the E2E database fixture connection.",
+  },
+  {
     key: "games-bet-placement",
     title: "A viewer bet debits balance and returns a settled round",
     tier: "conditional",
