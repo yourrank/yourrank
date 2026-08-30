@@ -39,6 +39,7 @@ describe("credits channel card DOM contract", () => {
 
   it("channel status is not hardcoded: the script writes cr-channel-live", () => {
     expect(scriptSource).toMatch(/cr-channel-live"\)/);
+    expect(scriptSource).toContain('chip.classList.toggle("v3-chip--cancelled", !connected)');
   });
 
   it("every OAuth error code the handler emits has a friendly message", () => {

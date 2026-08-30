@@ -59,9 +59,11 @@ describe("Account settings creator UX", () => {
     expect(html).not.toMatch(/data-settings-panel="connections"[^>]*hidden/);
   });
 
-  it("uses list rows without exposing provider IDs or expiry timestamps", () => {
+  it("uses scoped connection rows without exposing provider IDs or expiry timestamps", () => {
     expect(accountJs).toContain('class="account-connection-row"');
-    expect(accountJs).toContain("Reconnect needed");
+    expect(accountJs).toContain("connection.statusLabel");
+    expect(accountJs).toContain("connection.scope");
+    expect(accountJs).toContain("data-kick-disconnect");
     expect(accountJs).not.toContain("kick.userId");
     expect(accountJs).not.toContain("telegram.userId");
     expect(accountJs).not.toContain("telegramChat.chatId");

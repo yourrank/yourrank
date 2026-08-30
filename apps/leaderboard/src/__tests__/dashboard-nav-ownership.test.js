@@ -287,7 +287,7 @@ describe("dashboard navigation ownership", () => {
   });
 
   it("keeps delegated site lookup unambiguous", () => {
-    expect(siteSource).toContain("FROM sites\n      WHERE id IN (");
+    expect(siteSource).toMatch(/FROM sites\r?\n\s+WHERE id IN \(/);
     expect(siteSource).toContain("JOIN users owner ON owner.id=delegated.user_id");
     expect(siteSource).toContain("AND sm.role='moderator'");
     expect(siteSource).toContain("AND lower(owner.plan)='team'");

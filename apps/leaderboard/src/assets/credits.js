@@ -126,37 +126,35 @@ function updateKickAuthLinks() {
 // helpers make the card honest: an expired/missing token flips the card to
 // "Needs attention" and reveals the Reconnect link, which the template ships
 // hidden and nothing used to unhide.
-function renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt }) {
+function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt }) {
+  const needsAttention = connected && status === "needs_attention";
   const live = $("cr-channel-live");
   if (live) {
-    live.textContent = !connected ? "—" : tokenExpired ? "Needs attention" : "Connected";
-    live.classList.toggle("cr-attention", Boolean(connected && tokenExpired));
+    live.textContent = !connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Connected");
+    live.classList.toggle("cr-attention", needsAttention);
   }
   const token = $("cr-channel-token");
   if (token) {
-    token.textContent = tokenExpired
-      ? "Needs attention · reconnect"
-      : connected
-        ? "Renews automatically"
-        : "Not connected yet";
-    token.classList.toggle("cr-attention", Boolean(connected && tokenExpired));
+    token.textContent = detail || (connected ? "Authorization can renew automatically" : "Not connected yet");
+    token.classList.toggle("cr-attention", needsAttention);
   }
   const linked = $("cr-channel-linked");
   if (linked) linked.textContent = linkedAt ? fmtDate(linkedAt) : "—";
   const chip = $("cr-channel-chip");
   if (chip) {
-    const attention = Boolean(connected && tokenExpired);
-    chip.textContent = attention ? "● Needs attention" : "● Connected";
-    chip.classList.toggle("v3-chip--fulfilled", !attention);
-    chip.classList.toggle("v3-chip--pending", attention);
+    chip.textContent = !connected ? "● Not connected" : needsAttention ? "● Needs attention" : "● Authorized";
+    chip.classList.toggle("v3-chip--fulfilled", connected && !needsAttention);
+    chip.classList.toggle("v3-chip--pending", needsAttention);
+    chip.classList.toggle("v3-chip--cancelled", !connected);
   }
   const reconnect = $("cr-channel-reconnect");
-  if (reconnect) reconnect.hidden = !(connected && tokenExpired);
+  if (reconnect) reconnect.hidden = !needsAttention;
 }
 // Called when the API reports kick_reconnect_required: the streamer just
 // learned the connection is broken mid-action, so surface the fix inline.
 function markKickNeedsAttention() {
-  renderChannelHealth({ connected: true, tokenExpired: true, expiryDate: null, linkedAt: state.channel?.linkedAt });
+  state.channel = { ...state.channel, status: "needs_attention", statusLabel: "Needs attention", detail: "Reconnect Kick to keep active reward grants working.", needsAttention: true, homeAttention: true };
+  renderChannelHealth({ connected: true, ...state.channel });
 }
 export function applyOAuthContext() {
   if (!activeSiteId) activeSiteId = siteQuery() || dashboardState.ACTIVE_SITE_ID || "";
@@ -344,11 +342,9 @@ function render() {
       accessNote.hidden = capabilities.manageConnections;
       accessNote.textContent = "Connection credentials and authentication settings are managed by the site owner.";
     }
-    const expiry = state.channel?.tokenExpiresAt;
-    const expiryDate = expiry ? new Date(expiry) : null;
-    const tokenExpired = capabilities.manageConnections && connected && (!expiryDate || expiryDate <= new Date());
-    renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt: state.channel?.linkedAt });
-    $("cr-channel-reconnect")?.toggleAttribute("hidden", !capabilities.manageConnections || !tokenExpired);
+    const connectionStatus = state.channel?.status || (connected ? "authorized" : "not_connected");
+    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt });
+    $("cr-channel-reconnect")?.toggleAttribute("hidden", !capabilities.manageConnections || connectionStatus !== "needs_attention");
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending claims"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "claims / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
     $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; const publicToggle = $("cr-viewer-auth-public"); if (publicToggle) publicToggle.checked = auth.public !== false;

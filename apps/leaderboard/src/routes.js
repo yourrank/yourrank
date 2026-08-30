@@ -43,6 +43,7 @@ import {
   handleAccountConversions,
   handleAccountConnectedAccounts,
 } from "./handlers/account.js";
+import { handleInsights } from "./handlers/insights.js";
 import { handleContact } from "./handlers/contact.js";
 import { handleFeedback } from "./handlers/feedback.js";
 import { handleCspReport } from "./handlers/csp-report.js";
@@ -443,6 +444,7 @@ export const ROUTES = [
   { path: "/api/account/postbacks/test", method: "POST", handler: withHandler(handleAccountPostbacksTest) },
   { path: "/api/account/conversions", method: "GET", handler: withHandler(handleAccountConversions) },
   { path: "/api/account/connected-accounts", method: "GET", handler: withHandler(handleAccountConnectedAccounts) },
+  { path: "/api/insights", method: "GET", handler: withHandler(handleInsights) },
 
   // Attribution
   { path: "/api/attribution", method: "GET", handler: withHandler(handleAttribution) },

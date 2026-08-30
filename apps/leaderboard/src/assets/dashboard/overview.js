@@ -28,7 +28,7 @@ function computeSetupSteps() {
   const name = $("f_name")?.value.trim();
   const brand = Boolean(o.brand || name);
   const players = !state.SAMPLE_PLAYERS && (currentPlayers().length > 0 || o.players);
-  const kick = Boolean(state.CREDITS?.channel?.externalId);
+  const kick = Boolean(state.CREDITS?.channel?.connected);
   const configure = true;
   const status = boardStatus();
   const publish = status.published;
@@ -94,7 +94,8 @@ export function renderOverviewSummary() {
   const pendingVerification = status.published && !status.emailVerified;
   const needsVerification = !status.emailVerified;
   const headSub = $("ovHeadSub");
-  if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open this site." : readyToPublish && needsVerification ? "Confirm your email, then publish this site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open this site.";
+  const hasOperationalAttention = Number(state.CREDITS?.usage?.pendingRedemptions || 0) > 0 || state.CREDITS?.channel?.homeAttention === true;
+  if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open this site." : readyToPublish && needsVerification ? "Confirm your email, then publish this site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live && hasOperationalAttention ? "Review the items that need attention below." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open this site.";
   const showSetup = !done || pendingVerification;
   const setupSection = $("ovSetup");
   if (setupSection) setupSection.hidden = !showSetup;
@@ -180,6 +181,18 @@ export function renderOverviewSummary() {
   if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending claim needs review." : "pending claims need review.";
   const pendingOrdersAction = $("ovPendingOrdersAlertAction");
   if (pendingOrdersAction) pendingOrdersAction.textContent = pendingOrders === 1 ? "Review claim" : "Review claims";
+  const connectionAttention = state.CREDITS?.channel?.homeAttention === true;
+  const connectionAlert = $("ovConnectionAlert");
+  if (connectionAlert) connectionAlert.hidden = !connectionAttention;
+  const connectionDetail = $("ovConnectionAlertDetail");
+  if (connectionDetail) connectionDetail.textContent = `${siteName}: ${state.CREDITS?.channel?.detail || "Reconnect Kick to keep active reward grants working."}`;
+  const connectionAction = $("ovConnectionAlertAction");
+  if (connectionAction) {
+    const canManageConnection = state.CREDITS?.channel?.canManage !== false;
+    const siteParam = state.ACTIVE_SITE_ID ? `?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "";
+    connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection";
+    connectionAction.href = canManageConnection ? "/dashboard/settings/connections" : `/dashboard/site/connections${siteParam}`;
+  }
   const relative = (iso) => {
     const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
     return minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.floor(minutes / 60)}h ago` : `${Math.floor(minutes / 1440)}d ago`;
@@ -221,7 +234,7 @@ export function renderOverviewSummary() {
       pendingOrders,
       creditsEnabled,
       creditsStatus: state.CREDITS_STATUS,
-      creditsConnected: Boolean(state.CREDITS?.channel?.externalId),
+      creditsConnected: Boolean(state.CREDITS?.channel?.connected),
       rewardMappings: state.CREDITS?.usage?.rewardMappings ?? null,
       shopItems: state.CREDITS?.usage?.shopItems ?? null,
       giveawayStatus: state.GIVEAWAYS_STATUS,

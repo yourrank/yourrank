@@ -61,16 +61,24 @@ describe("Audience members body", () => {
 });
 
 describe("Analytics bodies", () => {
-  it("uses a restrained summary and progressive secondary detail", () => {
+  it("answers the four Insights questions before secondary traffic detail", () => {
     const html = DashboardContent({
       user: { display_name: "Test operator", plan: "pro" },
       activePath: "/dashboard/analytics/activity",
     }).toString();
-    expect(html).toContain('class="v3-insight-band"');
+    expect(html).toContain("Is the community returning?");
+    expect(html).toContain("How are members participating?");
+    expect(html).toContain("How are rewards being used?");
+    expect(html).toContain("What needs attention?");
+    expect(html).toMatch(/class="v3-insight-band"[^>]*hidden/);
     expect(html).not.toContain('class="v3-kpi-grid"');
-    expect(html).toContain("<dt>Link click rate</dt>");
+    expect(html).toContain("Safe code-drop activity only");
+    expect(html).toContain("Public site visits");
     expect(html).toContain('<details class="v3-table-card v3-secondary-insight" id="perf-heatmap">');
     expect(html).toContain("Actions people took");
+    expect(html).toContain('data-range="7"');
+    expect(html).toContain('data-range="30"');
+    expect(html).not.toContain('data-range="14"');
   });
 
   it("states the fixed Sources window without showing the selectable range", () => {
@@ -100,9 +108,17 @@ describe("Analytics bodies", () => {
     expect(site).toContain("renderStatsError()");
   });
 
-  it("keeps Analytics exports scoped to the active site", () => {
+  it("keeps the restricted legacy analytics export out of Insights", () => {
     const source = readFileSync(path.join(SRC_ROOT, "assets/dashboard/performance.js"), "utf8");
-    expect(source).toContain('exportLink.href = `/api/site/stats/export${query}`');
-    expect(source).toContain("encodeURIComponent(state.ACTIVE_SITE_ID)");
+    const html = DashboardContent({ activePath: "/dashboard/analytics/activity" }).toString();
+    expect(html).not.toContain("/api/site/stats/export");
+    expect(source).not.toContain("/api/site/stats/export");
+    expect(source).toContain("/api/insights?");
+  });
+
+  it("keeps the Insights date controls available when public traffic is zero", () => {
+    const performanceClient = readFileSync(path.join(SRC_ROOT, "assets/dashboard/performance.js"), "utf8");
+    expect(performanceClient).toContain('rangeFilter.hidden = active === "referrals"');
+    expect(performanceClient).not.toContain('rangeFilter.hidden = !hasAnyData');
   });
 });

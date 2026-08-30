@@ -3,6 +3,7 @@ import { json, bad, requireUser, rateLimit } from "../auth.js";
 import { one, query } from "@yourrank/shared/db";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { handlePostback } from "./attribution.js";
+import { deriveKickConnectionHealth } from "../connection-health.js";
 import {
   POSTBACK_SUNSET,
   createPostbackKey,
@@ -167,17 +168,19 @@ export async function handleAccountConversions(request, env) {
 }
 
 // GET /api/account/connected-accounts
-export async function handleAccountConnectedAccounts(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleAccountConnectedAccounts(request, env, injected = {}) {
+  const deps = { requireUser, rateLimit, query, one, ...injected };
+  const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
-  if (!(await rateLimit(env, `account-connections:${user.id}`, 120, 60)).ok) {
+  if (!(await deps.rateLimit(env, `account-connections:${user.id}`, 120, 60)).ok) {
     return bad("Too many requests. Try again later.", 429);
   }
 
-  const sites = await query(
-    `SELECT id, name, slug, kick_channel_external_id, kick_channel_name,
-            discord_webhook_url_enc, telegram_chat_id
-       FROM sites
+  const sites = await deps.query(
+    `SELECT s.id, s.name, s.slug, s.credits_enabled, s.kick_channel_external_id, s.kick_channel_name,
+            s.discord_webhook_url_enc, s.telegram_chat_id, s.telegram_notify,
+            (SELECT count(*)::integer FROM credit_reward_mappings m WHERE m.site_id=s.id AND m.active=true) AS active_reward_mappings
+       FROM sites s
       WHERE user_id = $1
       ORDER BY board_order ASC, id ASC`,
     [user.id]
@@ -186,33 +189,98 @@ export async function handleAccountConnectedAccounts(request, env) {
   // loadUser() selects telegram_user_id (not telegram_id) and neither
   // kick_token_expires_at nor telegram_linked_at — the old code read
   // user.telegram_id, so the Telegram card never rendered at all.
-  const identity = await one(
-    `SELECT kick_token_expires_at, telegram_linked_at FROM users WHERE id = $1`,
+  const identity = await deps.one(
+    `SELECT kick_token_expires_at, telegram_linked_at,
+            kick_access_token_enc IS NOT NULL AS has_kick_access_token,
+            kick_refresh_token_enc IS NOT NULL AS has_kick_refresh_token
+       FROM users WHERE id = $1`,
     [user.id]
   );
 
-  const kick = user.kick_user_id
-    ? {
-        userId: user.kick_user_id,
-        username: user.kick_username,
-        linkedAt: user.kick_linked_at,
-        tokenExpiresAt: identity?.kick_token_expires_at || null,
-      }
-    : null;
-  const telegram = user.telegram_user_id
-    ? { userId: String(user.telegram_user_id), username: user.telegram_username, linkedAt: identity?.telegram_linked_at || null }
-    : null;
+  const accountKickIdentity = Boolean(user.kick_user_id && user.kick_linked_at);
+  const kickExpiresAt = identity?.kick_token_expires_at ? new Date(identity.kick_token_expires_at).getTime() : null;
+  const kickCannotRefresh = Number.isFinite(kickExpiresAt) && kickExpiresAt <= Date.now() && !identity?.has_kick_refresh_token;
+  const accountKickNeedsAttention = accountKickIdentity && (!identity?.has_kick_access_token || kickCannotRefresh);
+  const accountKickLinked = accountKickIdentity && !accountKickNeedsAttention;
+  const accountTelegramLinked = Boolean(user.telegram_user_id && identity?.telegram_linked_at);
+  const connections = [
+    {
+      id: "kick-account",
+      provider: "Kick",
+      scope: "Creator account",
+      status: accountKickNeedsAttention ? "needs_attention" : accountKickLinked ? "authorized" : "not_connected",
+      statusLabel: accountKickNeedsAttention ? "Needs attention" : accountKickLinked ? "Authorized" : "Not connected",
+      detail: accountKickNeedsAttention
+        ? "Reconnect Kick to restore creator account authorization."
+        : accountKickLinked
+        ? user.kick_username ? `Signed in as @${user.kick_username}.` : "Creator identity linked."
+        : "Connect your creator identity before linking site rewards.",
+      action: { label: accountKickNeedsAttention ? "Reconnect" : accountKickLinked ? "Manage" : "Connect", href: "/dashboard/site/connections" },
+    },
+    {
+      id: "telegram-account",
+      provider: "Telegram",
+      scope: "Creator account",
+      status: accountTelegramLinked ? "linked" : "not_connected",
+      statusLabel: accountTelegramLinked ? "Linked" : "Not connected",
+      detail: accountTelegramLinked
+        ? user.telegram_username ? `Signed in as @${user.telegram_username}.` : "Telegram identity linked."
+        : "Connect Telegram to use Telegram operations.",
+      action: accountTelegramLinked
+        ? { label: "Disconnect", kind: "disconnect_telegram" }
+        : { label: "Connect", href: "/dashboard/telegram" },
+    },
+  ];
 
-  const perSite = (sites || []).map((s) => ({
-    siteId: s.id,
-    slug: s.slug,
-    name: s.name,
-    kickChannel: s.kick_channel_external_id
-      ? { id: s.kick_channel_external_id, name: s.kick_channel_name }
-      : null,
-    discordWebhook: Boolean(s.discord_webhook_url_enc),
-    telegramChat: s.telegram_chat_id ? { chatId: s.telegram_chat_id } : null,
-  }));
+  for (const site of sites || []) {
+    const scope = site.name || site.slug || "Site";
+    const kick = deriveKickConnectionHealth({
+      channelLinked: Boolean(site.kick_channel_external_id),
+      accountLinked: Boolean(user.kick_user_id && user.kick_linked_at),
+      hasAccessToken: Boolean(identity?.has_kick_access_token),
+      hasRefreshToken: Boolean(identity?.has_kick_refresh_token),
+      tokenExpiresAt: identity?.kick_token_expires_at || null,
+      activeRewardMappings: Number(site.active_reward_mappings) || 0,
+      operationEnabled: Boolean(site.credits_enabled),
+    });
+    connections.push({
+      id: `kick-site:${site.id}`,
+      provider: "Kick rewards",
+      scope,
+      status: kick.status,
+      statusLabel: kick.label,
+      detail: site.kick_channel_name && site.kick_channel_external_id
+        ? `${kick.detail} Channel: @${site.kick_channel_name}.`
+        : kick.detail,
+      action: kick.status === "authorized"
+        ? { label: "Disconnect", kind: "disconnect_kick", siteId: site.id }
+        : { label: kick.needsAttention ? "Reconnect" : "Connect", href: `/auth/kick?siteId=${encodeURIComponent(site.id)}` },
+    });
+    connections.push({
+      id: `discord-site:${site.id}`,
+      provider: "Discord delivery",
+      scope,
+      status: site.discord_webhook_url_enc ? "configured" : "not_configured",
+      statusLabel: site.discord_webhook_url_enc ? "Configured" : "Not configured",
+      detail: site.discord_webhook_url_enc
+        ? "A webhook is saved. Use Send test in Site notifications to verify delivery."
+        : "Optional. Add a webhook when you want Discord notifications.",
+      action: { label: site.discord_webhook_url_enc ? "Manage" : "Set up", href: `/dashboard/site?tab=notifications&siteId=${encodeURIComponent(site.id)}` },
+    });
+    const telegramConfigured = Boolean(site.telegram_chat_id);
+    const telegramEnabled = telegramConfigured && site.telegram_notify !== false;
+    connections.push({
+      id: `telegram-site:${site.id}`,
+      provider: "Telegram delivery",
+      scope,
+      status: telegramEnabled ? "enabled" : telegramConfigured ? "paused" : "not_configured",
+      statusLabel: telegramEnabled ? "Enabled" : telegramConfigured ? "Paused" : "Not configured",
+      detail: telegramEnabled
+        ? "Delivery is enabled. Use Send test in Site notifications to verify it."
+        : telegramConfigured ? "A chat is saved, but delivery is turned off." : "Optional. Add a chat when you want site notifications in Telegram.",
+      action: { label: telegramConfigured ? "Manage" : "Set up", href: `/dashboard/site?tab=notifications&siteId=${encodeURIComponent(site.id)}` },
+    });
+  }
 
-  return json({ ok: true, kick, telegram, sites: perSite });
+  return json({ ok: true, connections }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }

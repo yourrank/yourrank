@@ -87,9 +87,9 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "board.design": "Appearance",
   "board.share": "Share",
   "board.history": "History",
-  "performance.activity": "Site visitors",
-  "performance.referrals": "Sources",
-  "performance.events": "Events",
+  "performance.activity": "Overview",
+  "performance.referrals": "Traffic sources",
+  "performance.events": "Public site activity",
   "activities.overview": "Overview",
   "rewards.overview": "Overview",
   "rewards.shop": "Shop",
@@ -116,13 +116,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "telegram.broadcasts": "Broadcasts",
 };
 
-// Document-title wording where it differs from the crumb label. The Insights
-// sources tab is titled "Referrals · Insights · YourRank" while
-// its breadcrumb/subnav say "Sources"; both spellings are pinned here so the
-// divergence is data, not two competing computations.
-const TITLE_TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
-  "performance.referrals": "Referrals",
-};
+const TITLE_TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {};
 
 // Sections whose document titles never carry the tab (their documents have
 // always been titled at the section level).

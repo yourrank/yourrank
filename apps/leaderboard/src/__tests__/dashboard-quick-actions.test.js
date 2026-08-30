@@ -60,6 +60,11 @@ describe("dashboard overview quick actions", () => {
     expect(overviewJs).toContain('pendingOrders === 1 ? "Review claim" : "Review claims"');
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending claims need review.</span>');
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertAction"');
+    expect(dashboardHtml()).toContain('id="ovConnectionAlert"');
+    expect(dashboardHtml()).toContain('id="ovConnectionAlertAction"');
+    expect(overviewJs).toContain("state.CREDITS?.channel?.homeAttention === true");
+    expect(overviewJs).toContain('connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection"');
+    expect(overviewJs).toContain("/dashboard/settings/connections");
     expect(html).toContain('id="ovSetupCount"');
   });
 
