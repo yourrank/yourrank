@@ -2,7 +2,7 @@
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
-import { requireSiteCapability } from "../site-authorization.js";
+import { requireSiteCapability, requireSiteOwner as defaultRequireSiteOwner } from "../site-authorization.js";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -27,6 +27,7 @@ export async function handleGetRaffles(request, env, deps = {}) {
     getByUser = defaultGetByUser,
     getBoardById = defaultGetBoardById,
     query = defaultQuery,
+    requireSiteOwner = defaultRequireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -36,7 +37,7 @@ export async function handleGetRaffles(request, env, deps = {}) {
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteOwner(user, site);
   if (authorization.res) return authorization.res;
 
   const raffles = await query(
@@ -62,6 +63,7 @@ export async function handleCreateRaffle(request, env, deps = {}) {
     getBoardById = defaultGetBoardById,
     one = defaultOne,
     logAudit = defaultLogAudit,
+    requireSiteOwner = defaultRequireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -79,7 +81,7 @@ export async function handleCreateRaffle(request, env, deps = {}) {
   const siteId = body?.siteId || url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteOwner(user, site);
   if (authorization.res) return authorization.res;
   const endsAt = body?.endsAt ? new Date(body.endsAt).toISOString() : null;
 
@@ -196,6 +198,7 @@ export async function handleGetCodeDrops(request, env, deps = {}) {
     getByUser = defaultGetByUser,
     getBoardById = defaultGetBoardById,
     query = defaultQuery,
+    requireSiteCapabilityImpl = requireSiteCapability,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -205,7 +208,7 @@ export async function handleGetCodeDrops(request, env, deps = {}) {
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageActivities");
   if (authorization.res) return authorization.res;
 
   const drops = await query(
@@ -230,6 +233,7 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
     one = defaultOne,
     logAudit = defaultLogAudit,
     expansionRestriction = creatorExpansionRestriction,
+    requireSiteCapabilityImpl = requireSiteCapability,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -248,7 +252,7 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
   const siteId = body?.siteId || url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageActivities");
   if (authorization.res) return authorization.res;
   const expansion = await expansionRestriction(site.user_id || user.id);
   if (expansion.restricted) {
@@ -340,9 +344,9 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   // Resolve viewer. Create a site membership row on first interaction
   // so a viewer can claim a drop without having earned credits first.
   const siteViewer = await one(
-    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent, last_active_at)
-     VALUES ($1, $2, 0, 0, 0, now())
-     ON CONFLICT (site_id, viewer_id) DO UPDATE SET last_active_at=now(), updated_at=now()
+    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+     VALUES ($1, $2, 0, 0, 0)
+     ON CONFLICT (site_id, viewer_id) DO UPDATE SET viewer_id=EXCLUDED.viewer_id
      RETURNING id, balance`,
     [site.id, viewerId]
   );
@@ -385,7 +389,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     );
 
     const updatedViewer = await tx.one(
-      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $1, last_active_at=now(), updated_at=now() WHERE id=$2 RETURNING id, balance",
+      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $1, updated_at=now() WHERE id=$2 RETURNING id, balance",
       [drop.points_reward, siteViewer.id]
     );
 

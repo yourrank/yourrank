@@ -176,6 +176,7 @@ describe("handleViewerRedeem", () => {
   });
 
   it("redeems atomically with conditional balance and stock updates", async () => {
+    const markActive = mock(async () => null);
     db.oneResponses.push(
       null, // no existing redemption for token
       { count: 0 }, // pending
@@ -190,7 +191,7 @@ describe("handleViewerRedeem", () => {
       [{ id: "red-1" }], // redemption insert RETURNING
       [] // ledger insert
     );
-    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "key-atomic" }), makeEnv());
+    const res = await handleViewerRedeem(req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "key-atomic" }), makeEnv(), { markActive });
     expect(res.status).toBe(200);
     const balanceUpdate = db.calls.find((c) => c.method === "one" && /UPDATE site_viewers[\s\S]*balance = balance - \$1/s.test(c.sql));
     expect(balanceUpdate).toBeDefined();
@@ -200,6 +201,8 @@ describe("handleViewerRedeem", () => {
     expect(stockUpdate).toBeDefined();
     expect(stockUpdate.sql).toMatch(/AND stock >= 1/);
     expect(stockUpdate.sql).toMatch(/RETURNING/);
+    expect(markActive).toHaveBeenCalledTimes(1);
+    expect(markActive).toHaveBeenCalledWith("site-1", "viewer-1");
   });
 
   it("fails with insufficient balance when the conditional update returns no row", async () => {
@@ -251,13 +254,15 @@ describe("handleViewerRedeem", () => {
   });
 
   it("returns the existing order when retried with the same idempotency key", async () => {
+    const markActive = mock(async () => null);
     db.unsafeResponses.push([{ id: "site-1" }]);
     db.oneResponses.push(
       { id: "red-1", shop_item_id: "item-1", cost: 50, status: "pending", balance: 100, item_name: "Sticker" } // existing redemption
     );
     const res = await handleViewerRedeem(
       req("https://test.com/api/viewer/redeem", "POST", { slug: "test", shopItemId: "item-1", idempotencyKey: "retry-key" }),
-      makeEnv()
+      makeEnv(),
+      { markActive }
     );
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -265,6 +270,7 @@ describe("handleViewerRedeem", () => {
     expect(body.balance).toBe(100);
     const insertCalls = db.calls.filter((c) => c.method === "unsafe" && /INSERT INTO redemptions/.test(c.sql));
     expect(insertCalls.length).toBe(0);
+    expect(markActive).not.toHaveBeenCalled();
   });
 
   it("rejects the same idempotency key for a different shop item", async () => {

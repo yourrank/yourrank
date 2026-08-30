@@ -36,7 +36,7 @@ describe("viewer export artifacts", () => {
       if (sql.includes("SELECT id FROM site_viewers")) return database.siteViewers.filter((row) => row.viewer_id === params[0]).map((row) => ({ id: row.id }));
       if (sql.includes("site_id AS id")) return [{ id: "site-1" }];
       if (sql.includes("COUNT(*)")) return [{ count: "1" }];
-      if (sql.includes("FROM site_viewers sv")) return [{ id: "sv-1", site_id: "site-1", balance: 10, total_earned: 20, total_spent: 10, blocked: false, block_reason: null, fraud_score: 0, created_at: "2026-01-01", updated_at: "2026-01-02" }];
+      if (sql.includes("FROM site_viewers sv")) return [{ id: "sv-1", site_id: "site-1", balance: 10, total_earned: 20, total_spent: 10, blocked: true, block_reason: "fraud: private investigation", fraud_score: 87, created_at: "2026-01-01", updated_at: "2026-01-02" }];
       if (sql.includes("FROM sites s")) return [{ id: "site-1", slug: "board", name: "Board", channel_name: "Channel" }];
       if (sql.includes("FROM credit_ledger")) return [{ id: "ledger-1", site_viewer_id: "sv-1", type: "earn", amount: 20, description: "Reward", metadata: { item_name: "Badge", secret: "DROP-ME" }, created_at: "2026-01-01" }];
       if (sql.includes("FROM redemptions")) return [{ id: "redemption-1", site_viewer_id: "sv-1", shop_item_id: "item-1", cost: 5, status: "fulfilled", created_at: "2026-01-01", updated_at: "2026-01-01", item_name: "Badge", item_description: "A reward" }];
@@ -65,6 +65,9 @@ describe("viewer export artifacts", () => {
     expect(JSON.stringify(parsed)).not.toContain("RAW-PAYLOAD");
     expect(JSON.stringify(parsed)).not.toContain("IP-HASH");
     expect(JSON.stringify(parsed)).not.toContain("DROP-ME");
+    expect(JSON.stringify(parsed)).not.toContain("private investigation");
+    expect(parsed.find((line) => line.table === "siteViewers").row).not.toHaveProperty("block_reason");
+    expect(parsed.find((line) => line.table === "siteViewers").row).not.toHaveProperty("fraud_score");
     expect(JSON.stringify(parsed)).toContain("REVEALED-SEED");
     expect(parsed.find((line) => line.table === "creditLedger").row.metadata).toEqual({ item_name: "Badge" });
     expect(parsed.find((line) => line.table === "gameRounds").row.params).toEqual({ target: 50 });

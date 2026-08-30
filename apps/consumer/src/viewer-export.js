@@ -245,10 +245,16 @@ export async function processViewerExport(event, env, {
       writer,
       "siteViewers",
       `SELECT sv.id, sv.site_id, sv.balance, sv.total_earned, sv.total_spent,
-              sv.blocked, sv.block_reason, sv.fraud_score, sv.last_earned_at,
+              sv.blocked, sv.last_earned_at,
               sv.last_redeemed_at, sv.created_at, sv.updated_at
          FROM site_viewers sv WHERE sv.id = ANY($1)`,
-      [siteViewerIds], "id", read
+      [siteViewerIds], "id", read,
+      (row) => {
+        const safe = { ...row };
+        delete safe.block_reason;
+        delete safe.fraud_score;
+        return safe;
+      }
     );
     actualCounts.creditLedger = await emitPages(
       writer,

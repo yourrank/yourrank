@@ -8,7 +8,6 @@ const PALETTE_ICONS = {
   leaderboard: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   details: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="9" x2="15" y1="8" y2="8"/><line x1="1" x2="7" y1="14" y2="14"/><line x1="17" x2="23" y1="16" y2="16"/></svg>`,
   design: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`,
-  games: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><path d="M6 12h4"/><path d="M8 10v4"/><path d="M15 13h.01"/><path d="M17 11h.01"/></svg>`,
   analytics: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 12 4-4 4 4 5-5"/></svg>`,
   rewards: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"/><rect width="20" height="5" x="2" y="7"/><line x1="12" x2="12" y1="22" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>`,
   bot: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l-4 4l6 6l4-16l-18 7l4 2l2 6l3-4"/></svg>`,
@@ -18,17 +17,11 @@ const PALETTE_ICONS = {
   copy: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`,
   external: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>`,
   help: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>`,
-  refresh: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>`
 };
 
 const COMMANDS = [
   { id: "act-save", title: "Save & publish standings", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("save")?.click() },
   { id: "act-publish", title: "Toggle public site live / offline", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("publishAction")?.click() },
-  { id: "act-obs-pred", title: "Copy OBS live prediction HUD overlay URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
-    const url = location.origin + "/overlay/prediction?site=" + (state.SLUG || "");
-    await copyToClipboard(url);
-    showToast("OBS live prediction HUD URL copied!", "info");
-  }},
   { id: "act-obs-alerts", title: "Copy OBS stream alerts & sound chime URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
     const url = location.origin + "/overlay/alerts?site=" + (state.SLUG || "");
     await copyToClipboard(url);
@@ -44,17 +37,11 @@ const COMMANDS = [
     await copyToClipboard(url);
     showToast("OBS ticker URL copied!", "info");
   }},
-  { id: "act-export-winners", title: "Download raffle winners CSV report", group: "Reports", icon: PALETTE_ICONS.share, action: () => {
-    window.open("/api/export/raffle-winners.csv?siteId=" + (state.SITE_ID || ""), "_blank");
-  }},
   { id: "act-export-drops", title: "Download drop claims CSV report", group: "Reports", icon: PALETTE_ICONS.share, action: () => {
     window.open("/api/export/drop-claims.csv?siteId=" + (state.SITE_ID || ""), "_blank");
   }},
   { id: "act-public", title: "Open live public site", group: "Actions", icon: PALETTE_ICONS.external, action: () => {
     window.open("/" + (state.SLUG || ""), "_blank");
-  }},
-  { id: "act-reload-games-preview", title: "Reload mini-games preview", group: "Actions", icon: PALETTE_ICONS.refresh, action: () => {
-    $("gamesReloadPreview")?.click();
   }},
   { id: "nav-home", title: "Home", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "overview run-sheet", action: () => requestDashboardRoute("home") },
   { id: "nav-board", title: "Leaderboard", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings", action: () => requestDashboardRoute("board", "players") },
@@ -64,12 +51,6 @@ const COMMANDS = [
   { id: "nav-share", title: "Share", group: "Navigation", icon: PALETTE_ICONS.share, action: () => requestDashboardRoute("board", "share") },
   { id: "nav-history", title: "History", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "history", action: () => requestDashboardRoute("board", "history") },
   { id: "nav-activities", title: "Activities", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "activities free drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
-  { id: "nav-games", title: "Games", group: "Navigation", icon: PALETTE_ICONS.games, keywords: "interactive simulator games", action: () => requestDashboardRoute("games", "", { query: "" }) },
-  { id: "nav-giveaways", title: "Giveaways", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage chat", action: () => requestDashboardRoute("giveaways", "chat", { query: "" }) },
-  { id: "nav-raffles", title: "Raffles", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage giveaways", action: () => requestDashboardRoute("giveaways", "raffles", { query: "" }) },
-  { id: "nav-drops", title: "Drops", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage giveaways", action: () => requestDashboardRoute("giveaways", "drops", { query: "" }) },
-  { id: "nav-predictions", title: "Predictions", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage betting", action: () => requestDashboardRoute("giveaways", "preds", { query: "" }) },
-  { id: "nav-tournaments", title: "Tournaments", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage competitions", action: () => requestDashboardRoute("giveaways", "tournaments", { query: "" }) },
   { id: "nav-analytics", title: "Insights", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
   { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop claims ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
   { id: "nav-members", title: "People", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },

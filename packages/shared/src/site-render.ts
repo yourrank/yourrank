@@ -124,7 +124,7 @@ function formatDate(d) {
 }
 
 function sectionList(sections) {
-  return ["home", "leaderboard", "shop", "games", "me"].filter((s) => sections[s] !== false);
+  return ["home", "leaderboard", "shop", "me"].filter((s) => sections[s] !== false);
 }
 
 /** Streamer accent, falling back to the public viewer's cobalt board cue. */
@@ -846,7 +846,7 @@ function shopMain(ctx) {
   });
 
   const blockedNote = viewer && blocked
-    ? `<p class="yr-note yr-note--w">Claiming is disabled on this site. ${esc(viewerOnSite.block_reason || "The streamer has paused reward claims for your account.")}</p>`
+    ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
     : "";
 
   const list = items.length

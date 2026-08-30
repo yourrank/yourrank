@@ -16,7 +16,7 @@ const siteSelectorJs = readFileSync(new URL("../assets/dashboard/site-selector.j
 const playersJs = readFileSync(new URL("../assets/dashboard/players.js", import.meta.url), "utf8");
 const shellNavJs = readFileSync(new URL("../assets/shell-nav.js", import.meta.url), "utf8");
 const dashboardV4Css = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const siteSource = readFileSync(new URL("../site.js", import.meta.url), "utf8");
+const siteSource = readFileSync(new URL("../site.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 function dashboardHtml(activePath) {
   return PAGES.dashboard.Component({ activePath, user }).toString();
@@ -69,12 +69,12 @@ describe("dashboard navigation ownership", () => {
     expect(communityKeys).not.toContain("activities");
     expect(topLevelKeys).toContain("activities");
 
-    // Mixed Engagement and restricted Games are not falsely absorbed into the
-    // future Activities architecture.
+    // Restricted legacy destinations remain routable for owners but are not
+    // promoted as target product navigation.
     expect(communityKeys).not.toContain("engage");
     expect(communityKeys).not.toContain("games");
-    expect(topLevelKeys).toContain("engage");
-    expect(topLevelKeys).toContain("games");
+    expect(topLevelKeys).not.toContain("engage");
+    expect(topLevelKeys).not.toContain("games");
 
     // Home stays the dashboard entry, followed by the account-scoped Sites
     // collection, before the selected-site Community group.
@@ -87,8 +87,10 @@ describe("dashboard navigation ownership", () => {
     // Route ownership is independent of visual grouping: every route still
     // resolves to exactly one rendered rail key.
     const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
+    const containedLegacyOwners = new Set(["engage", "games"]);
     for (const route of Object.keys(NAV_OWNER_MAP)) {
-      expect(keys.has(navOwner(route))).toBe(true);
+      const owner = navOwner(route);
+      expect(keys.has(owner) || containedLegacyOwners.has(owner)).toBe(true);
     }
     for (const item of flattenNav(dashboardNavItems())) {
       expect(keys.has(item.key)).toBe(true);
@@ -173,7 +175,7 @@ describe("dashboard navigation ownership", () => {
     }
   });
 
-  it("maps each route to exactly one visible navigation key", () => {
+  it("maps target routes to one visible key and keeps restricted legacy owners unrendered", () => {
     const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
     const items = Object.fromEntries(flattenNav(dashboardNavItems()).map((item) => [item.key, item]));
     expect(items.sites.icon).not.toBe(items.site.icon);
@@ -181,7 +183,6 @@ describe("dashboard navigation ownership", () => {
       ["home", "home"],
       ["board", "board"],
       ["activities", "activities"],
-      ["games", "games"],
       ["performance", "performance"],
       ["telegram", "telegram"],
       ["boards", "sites"],
@@ -199,17 +200,17 @@ describe("dashboard navigation ownership", () => {
       ["members", "audience"],
       ["audience", "audience"],
       ["viewers", "audience"],
-      ["engage", "engage"],
-      ["giveaways", "engage"],
-      ["raffles", "engage"],
-      ["predictions", "engage"],
-      ["drops", "engage"],
     ]) {
       expect(navOwner(route)).toBe(owner);
       expect(mapActiveNav(route)).toBe(navOwner(route));
       expect(keys.has(NAV_OWNER_MAP[route] || route)).toBe(true);
     }
-    for (const path of ["/dashboard", "/dashboard/activities", "/dashboard/leaderboard/setup", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing", "/dashboard/giveaways/predictions"]) {
+    for (const [route, owner] of [["games", "games"], ["engage", "engage"], ["giveaways", "engage"], ["raffles", "engage"], ["predictions", "engage"], ["drops", "engage"], ["tournaments", "engage"]]) {
+      expect(navOwner(route)).toBe(owner);
+      expect(mapActiveNav(route)).toBe(owner);
+      expect(keys.has(owner)).toBe(false);
+    }
+    for (const path of ["/dashboard", "/dashboard/activities", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
     }
     expect(dashboardHtml("/dashboard/leaderboards")).toContain('data-nav="sites"');

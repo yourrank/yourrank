@@ -1,7 +1,7 @@
 // Overview page summary tiles / top players / setup checklist.
 import { $, esc, currentPlayers } from "./utils.js";
-import { state, setState, boardStatus } from "./state.js";
-import { renderEmpty, setMetricLoading, setMetricUnknown, setMetricValue } from "./states.js";
+import { state, boardStatus } from "./state.js";
+import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
 import { nextStepAction, visitsMetricState } from "./overview-state.js";
 
 // Home already owns some state in dedicated surfaces: the setup checklist
@@ -45,38 +45,7 @@ function wirePublicationLink(link) {
   });
 }
 
-function siteScopedPath(path) {
-  if (!state.ACTIVE_SITE_ID) return path;
-  const url = new URL(path, location.origin);
-  url.searchParams.set("siteId", state.ACTIVE_SITE_ID);
-  return `${url.pathname}${url.search}${url.hash}`;
-}
-
-async function fetchOverviewJson(path) {
-  const response = await fetch(siteScopedPath(path), { credentials: "same-origin" });
-  const data = await response.json();
-  if (!response.ok || !data?.ok) throw new Error(data?.error || `overview request failed (${response.status})`);
-  return data;
-}
-
 export async function loadOverviewLiveData() {
-  try {
-    const [raffles, drops, predictions] = await Promise.all([
-      fetchOverviewJson("/api/events/raffles"),
-      fetchOverviewJson("/api/events/drops"),
-      fetchOverviewJson("/api/predictions"),
-    ]);
-    setState({
-      GIVEAWAYS: {
-        raffles: raffles.raffles || [],
-        drops: drops.drops || [],
-        predictions: predictions.predictions || [],
-      },
-      GIVEAWAYS_STATUS: "ready",
-    });
-  } catch {
-    setState({ GIVEAWAYS_STATUS: "error" });
-  }
   renderOverviewSummary();
 }
 
@@ -157,20 +126,6 @@ export function renderOverviewSummary() {
   } else {
     setMetricValue($("ovViews14"), typeof visits.value === "number" ? number(visits.value) : visits.value);
   }
-  let activeGiveawayCount = null;
-  if (state.GIVEAWAYS_STATUS === "loading") {
-    setMetricLoading($("ovActiveGiveaway"));
-  } else if (state.GIVEAWAYS_STATUS === "ready") {
-    const activeGiveaways = [
-      ...(state.GIVEAWAYS?.raffles || []).filter((item) => item.status === "active"),
-      ...(state.GIVEAWAYS?.drops || []).filter((item) => item.status === "active"),
-      ...(state.GIVEAWAYS?.predictions || []).filter((item) => item.status === "open" || item.status === "locked"),
-    ];
-    activeGiveawayCount = activeGiveaways.length;
-    setMetricValue($("ovActiveGiveaway"), number(activeGiveaways.length));
-  } else {
-    setMetricUnknown($("ovActiveGiveaway"));
-  }
   const creditsEnabled = state.CREDITS_PRODUCT_ENABLED === true;
   const pendingOrders = Number(state.CREDITS?.usage?.pendingRedemptions || 0);
   const pendingAlert = $("ovPendingOrdersAlert");
@@ -224,8 +179,7 @@ export function renderOverviewSummary() {
   else renderEmpty($("ov_topEmpty"), { kind: "empty", title: "No players yet", body: "Add players from the setup checklist above.", compactHeading: true });
   $("ovPublishedStatus").textContent = status.live ? "Live" : status.published ? "Verification needed" : "Not live";
 
-  // Contextual next step. Rendered last so it can read the activity and
-  // giveaway state computed above rather than re-deriving it.
+  // Contextual next step. Rendered last so it can read the activity state.
   const nextStepEl = $("ovNextStep");
   if (nextStepEl) {
     const next = nextStepAction({
@@ -237,8 +191,6 @@ export function renderOverviewSummary() {
       creditsConnected: Boolean(state.CREDITS?.channel?.connected),
       rewardMappings: state.CREDITS?.usage?.rewardMappings ?? null,
       shopItems: state.CREDITS?.usage?.shopItems ?? null,
-      giveawayStatus: state.GIVEAWAYS_STATUS,
-      activeGiveaways: activeGiveawayCount,
       hasActivity: activity.length > 0,
       visits: typeof visits.value === "number" ? visits.value : null,
     });

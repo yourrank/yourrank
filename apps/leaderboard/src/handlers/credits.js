@@ -904,24 +904,29 @@ export async function handleCreditsActivity(request, env) {
 }
 
 // Public viewer endpoints: shop is public, viewer data is session-only.
-export async function handlePublicCredits(request, env) {
+export async function handlePublicCredits(request, env, deps = {}) {
+  const getPublicSiteImpl = deps.getPublicSite || getPublicSite;
+  const resolveViewerImpl = deps.resolveViewer || resolveViewer;
+  const rateLimitImpl = deps.rateLimit || rateLimit;
+  const oneImpl = deps.one || one;
+  const queryImpl = deps.query || query;
   const url = new URL(request.url);
   const slug = String(url.searchParams.get("slug") || "").trim().toLowerCase();
   if (!slug) return bad("slug required");
 
-  const r = await getPublicSite(env, slug, request);
+  const r = await getPublicSiteImpl(env, slug, request);
   if (r && r.requiresPassword) return bad("Password required.", 401);
   if (!r || r.suspended) return bad("site not found", 404);
 
-  const { viewer } = await resolveViewer(request, env);
+  const { viewer } = await resolveViewerImpl(request, env);
 
-  const rl = await rateLimit(env, `public-credits:${r.id}:${viewer?.id || "anon"}`, 30, 60);
+  const rl = await rateLimitImpl(env, `public-credits:${r.id}:${viewer?.id || "anon"}`, 30, 60);
   if (!rl.ok) return bad("rate limited", 429);
 
   let viewerData = null;
   if (viewer) {
-    viewerData = await one(
-      `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked, sv.block_reason, v.kick_username
+    viewerData = await oneImpl(
+      `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked, v.kick_username
          FROM site_viewers sv
          JOIN viewers v ON v.id = sv.viewer_id
         WHERE sv.site_id=$1 AND sv.viewer_id=$2`,
@@ -932,7 +937,7 @@ export async function handlePublicCredits(request, env) {
     }
   }
 
-  const shopItems = await query(
+  const shopItems = await queryImpl(
     // Defensive ceiling above the highest current plan's active-item limit.
     `SELECT id, name, description, cost, stock, active
        FROM shop_items
@@ -942,7 +947,8 @@ export async function handlePublicCredits(request, env) {
     [r.id]
   );
 
-  return ok({
+  return json({
+    ok: true,
     viewer: viewerData
       ? {
           id: viewerData.id,
@@ -950,7 +956,6 @@ export async function handlePublicCredits(request, env) {
           total_earned: viewerData.total_earned,
           total_spent: viewerData.total_spent,
           blocked: viewerData.blocked,
-          block_reason: viewerData.block_reason,
           kick_username: viewerData.kick_username,
         }
       : null,
@@ -960,7 +965,7 @@ export async function handlePublicCredits(request, env) {
       discordEnabled: r.viewerDiscordAuthEnabled,
       publicRedeemEnabled: r.viewerPublicRedeemEnabled,
     },
-  });
+  }, 200, { "cache-control": "private, no-store", vary: "Cookie" });
 }
 
 export async function handleCreditsViewerAuth(request, env) {

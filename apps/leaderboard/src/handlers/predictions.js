@@ -2,7 +2,7 @@
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
-import { requireSiteCapability } from "../site-authorization.js";
+import { requireSiteOwner as defaultRequireSiteOwner } from "../site-authorization.js";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -20,6 +20,7 @@ export async function handleGetPredictions(request, env, deps = {}) {
     getBoardById = defaultGetBoardById,
     query = defaultQuery,
     exec = defaultExec,
+    requireSiteOwner = defaultRequireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -29,7 +30,7 @@ export async function handleGetPredictions(request, env, deps = {}) {
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteOwner(user, site);
   if (authorization.res) return authorization.res;
 
   // Lazily close predictions whose betting window has elapsed so the dashboard
@@ -67,6 +68,7 @@ export async function handleCreatePrediction(request, env, deps = {}) {
     getBoardById = defaultGetBoardById,
     one = defaultOne,
     logAudit = defaultLogAudit,
+    requireSiteOwner = defaultRequireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -117,7 +119,7 @@ export async function handleCreatePrediction(request, env, deps = {}) {
   const siteId = body?.siteId || url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteOwner(user, site);
   if (authorization.res) return authorization.res;
 
   const result = await one(

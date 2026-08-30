@@ -8,13 +8,12 @@ import { $, getCsrf, guardAuth, logError, showToast } from "./utils.js";
 import { state } from "./state.js";
 import { refreshDesignPreview } from "./site.js";
 
-const SECTION_ROWS = [
+export const SITE_SECTION_ROWS = [
   ["shop", "Shop", "Let members browse and redeem your shop items.", "Turning off removes Shop from navigation and disables the /shop URL."],
   ["credits", "Rewards", "Let members see their balance and order history.", "Turning off removes Rewards from navigation and disables the /credits URL."],
-  ["games", "Games", "Let members play credit-based games on your site.", "Turning off removes Games from navigation and disables the /games URL."],
 ];
 
-/** Current public-section flags for the active site (shop/credits/games). */
+/** Current persisted public-section flags; legacy Games remains preserved but is not promoted here. */
 export function siteSections() {
   const incoming = state.EXTRA?.siteSections || {};
   return {
@@ -33,7 +32,7 @@ function renderSections() {
       <div><strong>Home &amp; Leaderboard</strong><span>Core experience. Always visible.</span></div>
       <span class="v3-chip v3-chip--always">ALWAYS ON</span>
     </div>
-    ${SECTION_ROWS.map(([key, title, description, note]) => `
+    ${SITE_SECTION_ROWS.map(([key, title, description, note]) => `
       <label class="v3-setting-row" data-site-section-row="${key}">
         <span><strong>${title}</strong><span>${description} ${note}</span><small class="v3-inline-save" data-section-status="${key}" role="status" aria-live="polite"></small></span>
         <input class="v3-toggle" type="checkbox" data-site-section="${key}" ${current[key] ? "checked" : ""} aria-label="Enable ${title}">

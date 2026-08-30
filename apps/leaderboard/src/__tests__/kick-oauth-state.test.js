@@ -190,7 +190,8 @@ describe("Kick OAuth state integration seams", () => {
     expect(memberships).toHaveLength(1);
     expect(memberships[0].params).toEqual(["site-1", "viewer-1"]);
     expect(memberships[0].sql).toContain("ON CONFLICT (site_id, viewer_id)");
-    expect(memberships[0].sql).toContain("last_active_at=now()");
+    expect(memberships[0].sql).toContain("last_seen_at=now()");
+    expect(memberships[0].sql).not.toContain("last_active_at");
   });
 
   test("platform paths do not create a viewer site membership", async () => {

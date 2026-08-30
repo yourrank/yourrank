@@ -8,7 +8,7 @@ import {
   clientIp as defaultClientIp,
 } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
-import { requireSiteCapability } from "../site-authorization.js";
+import { requireSiteOwner } from "../site-authorization.js";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -82,8 +82,7 @@ async function getTournamentForMutation(request, user, one, requireSiteCapabilit
 
   const authorization = await requireSiteCapabilityImpl(
     user,
-    { id: tournament.site_id, user_id: tournament.site_user_id },
-    "canRoleManageBoard"
+    { id: tournament.site_id, user_id: tournament.site_user_id }
   );
   if (authorization.res) return { error: authorization.res };
   return { tournament };
@@ -108,20 +107,25 @@ function entryStateFor(tournament, eligibleCount) {
  */
 export async function handleGetTournaments(request, env, deps = {}) {
   const {
-    one = defaultOne,
+    requireUser = defaultRequireUser,
+    getByUser = defaultGetByUser,
+    getBoardById = defaultGetBoardById,
     query = defaultQuery,
     rateLimit = defaultRateLimit,
     clientIp = defaultClientIp,
+    requireSiteOwner: requireSiteOwnerImpl = requireSiteOwner,
   } = deps;
+  const { user, res } = await requireUser(request, env);
+  if (res) return res;
   const rl = await rateLimit(env, `tournaments:${clientIp(request)}`, TOURNAMENT_READ_RATE_LIMIT, 60);
   if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429);
 
   const url = new URL(request.url);
-  const siteSlugOrId = url.searchParams.get("site") || url.searchParams.get("siteId");
-  if (!siteSlugOrId) return bad("Site identifier is required.");
-
-  const site = await one("SELECT id, name FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
+  const siteId = url.searchParams.get("siteId");
+  const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found.", 404);
+  const authorization = await requireSiteOwnerImpl(user, site);
+  if (authorization.res) return authorization.res;
 
   const tournaments = await query(
     `SELECT id, title, game_name, bracket_size, status, winner_name, created_at,
@@ -146,7 +150,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
     getBoardById = defaultGetBoardById,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -183,7 +187,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const siteId = body?.siteId || url.searchParams.get("siteId");
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (!site) return bad("Site not found", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site);
   if (authorization.res) return authorization.res;
 
   const result = await withTransaction(async (tx) => {
@@ -239,7 +243,7 @@ async function updateSignupState(request, env, state, deps = {}) {
     requireUser = defaultRequireUser,
     one = defaultOne,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -285,7 +289,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     requireUser = defaultRequireUser,
     one = defaultOne,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -369,7 +373,7 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
     query = defaultQuery,
     rateLimit = defaultRateLimit,
     clientIp = defaultClientIp,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -411,7 +415,7 @@ export async function handleAddTournamentEntry(request, env, deps = {}) {
     one = defaultOne,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -517,7 +521,7 @@ async function updateTournamentEntryStatus(request, env, nextStatus, deps = {}) 
     one = defaultOne,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -574,7 +578,7 @@ export async function handleRestoreTournamentEntry(request, env, deps = {}) {
     one = defaultOne,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -624,7 +628,7 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
     one = defaultOne,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -727,7 +731,7 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
     requireUser = defaultRequireUser,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
-    requireSiteCapabilityImpl = requireSiteCapability,
+    requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -764,8 +768,7 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
 
       const authorization = await requireSiteCapabilityImpl(
         user,
-        { id: match.site_id, user_id: match.site_user_id },
-        "canRoleManageBoard"
+        { id: match.site_id, user_id: match.site_user_id }
       );
       if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
 

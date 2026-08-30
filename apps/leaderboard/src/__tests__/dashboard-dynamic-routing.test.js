@@ -201,6 +201,9 @@ describe("dynamic section shell integration", () => {
     expect(paletteJs).toContain('{ id: "nav-analytics", title: "Insights"');
     expect(paletteJs).toContain('{ id: "nav-members", title: "People"');
     expect(paletteJs).toContain('{ id: "nav-settings", title: "Settings"');
+    for (const id of ["nav-games", "nav-giveaways", "nav-raffles", "nav-predictions", "nav-tournaments", "act-obs-pred", "act-export-winners", "act-reload-games-preview"]) {
+      expect(paletteJs).not.toContain(`id: "${id}"`);
+    }
   });
 
   it("re-routes the reward edit flow through the entry point with force", () => {

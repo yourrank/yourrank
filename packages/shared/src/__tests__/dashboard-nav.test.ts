@@ -47,8 +47,6 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       sites: routeById("boards").canonicalPath,
       board: routeById("board").canonicalPath,
       activities: routeById("activities.overview").canonicalPath,
-      engage: "/dashboard/giveaways",
-      games: routeById("games").canonicalPath,
       redemptions: routeById("rewards.overview").canonicalPath,
       audience: routeById("audience.viewers").canonicalPath,
       performance: routeById("performance").canonicalPath,
@@ -63,8 +61,8 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     for (const [key, owner] of Object.entries(NAV_OWNER_MAP)) {
       expect(navKeys.has(owner), `${key} → ${owner}`).toBe(true);
     }
-    // Behavior pin: exactly the ownership vocabulary shipped before the
-    // derivation — same keys, same rendered rail keys.
+    // Route ownership remains available for direct legacy URLs even though
+    // those owners are intentionally absent from the rendered primary rail.
     expect(NAV_OWNER_MAP).toEqual({
       board: "board", leaderboard: "board",
       activities: "activities",

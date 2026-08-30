@@ -4,7 +4,7 @@ import { one, query, withTransaction } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { getPublicSite } from "../site.js";
 import { requireViewer } from "./viewer-auth.js";
-import { bad, ok } from "../auth.js";
+import { bad, json, ok } from "../auth.js";
 import { decryptCredential } from "@yourrank/shared/crypto";
 import { buildRedemptionEmbed, sendDiscordWebhook } from "@yourrank/shared/notifications";
 import {
@@ -14,18 +14,27 @@ import {
 } from "@yourrank/shared/plans";
 import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
 
+const privateViewerJson = (data) => json(
+  { ok: true, ...data },
+  200,
+  { "cache-control": "private, no-store", vary: "Cookie" },
+);
+
 function isUniqueViolation(error) {
   return error?.code === "23505" || /unique constraint|unique violation|duplicate key/i.test(error?.message || "");
 }
 
-export async function handleViewerMe(request, env) {
-  const { viewer, res } = await requireViewer(request, env);
+export async function handleViewerMe(request, env, deps = {}) {
+  const requireViewerImpl = deps.requireViewer || requireViewer;
+  const rateLimitImpl = deps.rateLimit || rateLimit;
+  const queryImpl = deps.query || query;
+  const { viewer, res } = await requireViewerImpl(request, env);
   if (res) return res;
-  if (!(await rateLimit(env, `viewer:me:${viewer.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await rateLimitImpl(env, `viewer:me:${viewer.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
 
-  const boards = await query(
+  const boards = await queryImpl(
     `SELECT s.id, s.slug, s.name, sv.balance, sv.total_earned, sv.total_spent,
-            sv.blocked, sv.block_reason,
+            sv.blocked,
             u.plan, u.plan_expires_at, u.status, u.email_verified
        FROM site_viewers sv
        JOIN sites s ON s.id = sv.site_id
@@ -47,11 +56,10 @@ export async function handleViewerMe(request, env) {
     totalEarned: b.total_earned,
     totalSpent: b.total_spent,
     blocked: b.blocked,
-    blockReason: b.block_reason,
     plan: effectivePlan({ plan: b.plan, plan_expires_at: b.plan_expires_at }),
   }));
 
-  const redemptions = await query(
+  const redemptions = await queryImpl(
     `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at,
             s.slug AS site_slug, s.name AS site_name, i.name AS item_name
        FROM redemptions r
@@ -73,7 +81,7 @@ export async function handleViewerMe(request, env) {
   if (viewer.kick_user_id) provider = "kick";
   else if (viewer.discord_user_id) provider = "discord";
 
-  return ok({
+  return privateViewerJson({
     viewer: {
       id: viewer.id,
       provider,
@@ -97,20 +105,25 @@ export async function handleViewerMe(request, env) {
   });
 }
 
-export async function handleViewerSite(request, env) {
-  const { viewer, res } = await requireViewer(request, env);
+export async function handleViewerSite(request, env, deps = {}) {
+  const requireViewerImpl = deps.requireViewer || requireViewer;
+  const rateLimitImpl = deps.rateLimit || rateLimit;
+  const getPublicSiteImpl = deps.getPublicSite || getPublicSite;
+  const oneImpl = deps.one || one;
+  const queryImpl = deps.query || query;
+  const { viewer, res } = await requireViewerImpl(request, env);
   if (res) return res;
 
   const url = new URL(request.url);
   const slug = String(url.searchParams.get("slug") || "").trim().toLowerCase();
   if (!slug) return bad("slug required");
-  if (!(await rateLimit(env, `viewer:site:${viewer.id}:${slug}`, 60, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await rateLimitImpl(env, `viewer:site:${viewer.id}:${slug}`, 60, 60)).ok) return bad("Too many requests.", 429);
 
-  const r = await getPublicSite(env, slug, request);
+  const r = await getPublicSiteImpl(env, slug, request);
   if (r && r.requiresPassword) return bad("Password required.", 401);
   if (!r || r.suspended) return bad("site not found", 404);
 
-  const site = await one(
+  const site = await oneImpl(
     `SELECT id, name, slug, kick_channel_external_id, kick_channel_name,
             viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled
        FROM sites WHERE slug = $1`,
@@ -118,14 +131,14 @@ export async function handleViewerSite(request, env) {
   );
   if (!site) return bad("site not found", 404);
 
-  const viewerRow = await one(
-    `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked, sv.block_reason
+  const viewerRow = await oneImpl(
+    `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked
        FROM site_viewers sv
       WHERE sv.site_id = $1 AND sv.viewer_id = $2`,
     [site.id, viewer.id]
   );
 
-  const shopItems = await query(
+  const shopItems = await queryImpl(
     // Defensive ceiling above the highest current plan's active-item limit.
     `SELECT id, name, description, cost, stock, active
        FROM shop_items
@@ -136,7 +149,7 @@ export async function handleViewerSite(request, env) {
   );
 
   const redemptions = viewerRow
-    ? await query(
+    ? await queryImpl(
         `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at, i.name AS item_name
            FROM redemptions r
            JOIN shop_items i ON i.id = r.shop_item_id
@@ -147,12 +160,12 @@ export async function handleViewerSite(request, env) {
       )
     : [];
 
-  const activeDropCount = await one(
+  const activeDropCount = await oneImpl(
     "SELECT count(*)::int AS count FROM code_drops WHERE site_id=$1 AND status='active'",
     [site.id]
   );
 
-  return ok({
+  return privateViewerJson({
     site: {
       id: site.id,
       slug: site.slug,
@@ -170,7 +183,6 @@ export async function handleViewerSite(request, env) {
           totalEarned: viewerRow.total_earned,
           totalSpent: viewerRow.total_spent,
           blocked: viewerRow.blocked,
-          blockReason: viewerRow.block_reason,
         }
       : null,
     shopItems: shopItems || [],
@@ -188,6 +200,7 @@ export async function handleViewerSite(request, env) {
 
 export async function handleViewerRedeem(request, env, deps = {}) {
   const requireViewerFn = deps.requireViewer || requireViewer;
+  const markActive = deps.markActive || markSiteViewerActive;
   const { viewer, res } = await requireViewerFn(request, env);
   if (res) return res;
 
@@ -230,7 +243,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
         if (existing.shop_item_id !== shopItemId) {
           return { error: "idempotency key already used for a different item", status: 409 };
         }
-        return { redemptionId: existing.id, balance: Number(existing.balance), itemName: existing.item_name || shopItemId, itemCost: existing.cost, status: existing.status };
+        return { redemptionId: existing.id, balance: Number(existing.balance), itemName: existing.item_name || shopItemId, itemCost: existing.cost, status: existing.status, activityCommitted: false };
       }
 
       const plan = r.plan;
@@ -315,7 +328,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
         ]
       );
 
-      return { redemptionId: redemptionRows[0].id, balance: updatedViewer.balance, itemName: item.name, itemCost: item.cost };
+      return { redemptionId: redemptionRows[0].id, balance: updatedViewer.balance, itemName: item.name, itemCost: item.cost, activityCommitted: true };
     });
   } catch (e) {
     // If two retries race on the same idempotency key, the durable unique index
@@ -344,7 +357,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
 
   if (txResult.error) return bad(txResult.error, txResult.status);
 
-  await markSiteViewerActive(r.id, viewer.id);
+  if (txResult.activityCommitted) await markActive(r.id, viewer.id);
 
   // Asynchronously notify streamer via Discord webhook if configured
   (async () => {
