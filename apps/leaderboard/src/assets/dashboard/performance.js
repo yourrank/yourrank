@@ -1,6 +1,6 @@
 import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
-import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricValue, setRowsLoading } from "./states.js";
+import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricUnknown, setMetricValue, setRowsLoading } from "./states.js";
 import { chromeStateFor, defaultTab, parseDashboardPath, SECTIONS } from "./routes.js";
 import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
 
@@ -112,9 +112,18 @@ export function renderPerformance(stats) {
   if (activePerformanceTab() === "activity") loadInsights();
 }
 
-function setInsightValue(id, value) {
+function setInsightValue(id, value, available = true) {
   const node = $(id);
-  if (node) node.textContent = Number(value || 0).toLocaleString("en-US");
+  if (!node) return;
+  if (!available) return setMetricUnknown(node);
+  setMetricValue(node, Number(value || 0).toLocaleString("en-US"));
+}
+
+function setInsightSectionStatus(id, available) {
+  const node = $(id);
+  if (!node) return;
+  node.hidden = available;
+  node.textContent = available ? "" : "This section could not be loaded. Other Insights remain available.";
 }
 
 function renderInsights(data) {
@@ -122,17 +131,26 @@ function renderInsights(data) {
   if (!host) return;
   host.removeAttribute("aria-busy");
   clearLoadError($("insightsStatus"), false);
-  setInsightValue("insightsNewMembers", data.community?.newMembers);
-  setInsightValue("insightsReturningMembers", data.community?.returningMembers);
-  setInsightValue("insightsParticipants", data.participation?.participants);
-  setInsightValue("insightsRepeatParticipants", data.participation?.repeatParticipants);
-  setInsightValue("insightsActiveDrops", data.participation?.activeCodeDrops);
-  setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted);
-  setInsightValue("insightsClaimsFulfilled", data.rewards?.claimsFulfilled);
-  setInsightValue("insightsPendingReviews", data.operations?.pendingReviews);
-  setInsightValue("insightsPendingClaims", data.operations?.pendingClaims);
+  const availability = data.availability || {};
+  setInsightSectionStatus("insightsCommunityStatus", availability.community !== false);
+  setInsightSectionStatus("insightsParticipationStatus", availability.participation !== false);
+  setInsightSectionStatus("insightsRewardsStatus", availability.rewards !== false);
+  setInsightValue("insightsNewMembers", data.community?.newMembers, availability.community !== false);
+  setInsightValue("insightsReturningMembers", data.community?.returningMembers, availability.community !== false);
+  setInsightValue("insightsParticipants", data.participation?.participants, availability.participation !== false);
+  setInsightValue("insightsRepeatParticipants", data.participation?.repeatParticipants, availability.participation !== false);
+  setInsightValue("insightsActiveDrops", data.participation?.activeCodeDrops, availability.participation !== false);
+  setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted, availability.rewards !== false);
+  setInsightValue("insightsClaimsCompleted", data.rewards?.claimsCompleted, availability.rewards !== false);
+  setInsightValue("insightsPendingReviews", data.operations?.pendingReviews, availability.pendingReviews !== false);
+  setInsightValue("insightsPendingClaims", data.operations?.pendingClaims, availability.pendingClaims !== false);
+  const board = $("perfBoardName");
+  if (board && data.site?.name) board.textContent = data.site.name;
   const topReward = $("insightsTopReward");
-  if (topReward) topReward.textContent = data.rewards?.topReward?.name || "No claims yet";
+  if (topReward) {
+    if (availability.rewards === false) setMetricUnknown(topReward);
+    else setMetricValue(topReward, data.rewards?.topReward?.name || "No claims yet");
+  }
   const topRewardDetail = $("insightsTopRewardDetail");
   if (topRewardDetail) topRewardDetail.textContent = data.rewards?.topReward
     ? `${Number(data.rewards.topReward.claims) || 0} non-cancelled ${Number(data.rewards.topReward.claims) === 1 ? "claim" : "claims"}`
@@ -142,7 +160,8 @@ function renderInsights(data) {
 function renderInsightsLoading() {
   const host = $("insightsQuestions");
   if (host) host.setAttribute("aria-busy", "true");
-  ["insightsNewMembers", "insightsReturningMembers", "insightsParticipants", "insightsRepeatParticipants", "insightsActiveDrops", "insightsClaimsSubmitted", "insightsClaimsFulfilled", "insightsPendingReviews", "insightsPendingClaims"].forEach((id) => setMetricLoading($(id)));
+  ["insightsNewMembers", "insightsReturningMembers", "insightsParticipants", "insightsRepeatParticipants", "insightsActiveDrops", "insightsClaimsSubmitted", "insightsClaimsCompleted", "insightsPendingReviews", "insightsPendingClaims"].forEach((id) => setMetricLoading($(id)));
+  ["insightsCommunityStatus", "insightsParticipationStatus", "insightsRewardsStatus"].forEach((id) => { const node = $(id); if (node) node.hidden = true; });
   const topReward = $("insightsTopReward");
   if (topReward) topReward.innerHTML = '<span class="skeleton v3-skel-line" aria-hidden="true"></span>';
 }

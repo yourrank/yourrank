@@ -187,7 +187,7 @@ const ROUTE_DEFS = [
   { id: "settings.account", canonicalPath: "/dashboard/settings/account", section: "settings", tab: "account", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.team", canonicalPath: "/dashboard/settings/team", section: "settings", tab: "team", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.plan", canonicalPath: "/dashboard/settings/billing", section: "settings", tab: "plan", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
-  { id: "settings.connections", canonicalPath: "/dashboard/settings/connections", section: "settings", tab: "connections", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
+  { id: "settings.connections", canonicalPath: "/dashboard/settings/connections", section: "settings", tab: "connections", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: ["board"] },
   { id: "settings.data", canonicalPath: "/dashboard/settings/data", section: "settings", tab: "data", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
 
   // ── Telegram dashboard (bot Worker) ──
@@ -399,7 +399,10 @@ export interface QueryParamUse {
  * literal query parameter that has no audit entry.
  */
 export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]>> = {
-  board: [{ classification: "navigation", context: "core SPA destinations", where: "Site context; stamped by preserveSiteContextLinks (board-shell.js siteDestinations + /dashboard/leaderboard/*)." }],
+  board: [
+    { classification: "navigation", context: "core SPA destinations", where: "Site context; stamped by preserveSiteContextLinks (board-shell.js siteDestinations + /dashboard/leaderboard/*)." },
+    { classification: "navigation", context: "Settings Connections mixed-scope inventory", where: "Optional selected-site context for a Home attention deep link; site actions return through buildDashboardPath to the core SPA board context." },
+  ],
   siteId: [{ classification: "navigation", context: "fragment-booted destinations", where: "Site context; stamped by preserveSiteContextLinks (creditsDestinations), read by credits/giveaways/audience clients and sitePath()." }],
   nav: [{ classification: "navigation", context: "core SPA paths (parseDashboardPath matches)", where: "Legacy section addressing; 302-canonicalized by index.js (NAV_QUERY_ALIASES)." }],
   tab: [{ classification: "navigation", context: "/dashboard/settings root document", where: "Legacy tab selection resolved server-side (index.js); ignored on /dashboard/settings/<tab> paths." }],

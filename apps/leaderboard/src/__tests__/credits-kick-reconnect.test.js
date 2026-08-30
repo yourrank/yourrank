@@ -25,8 +25,10 @@ const userFixture = { id: "user-1", plan: "pro", status: "active", email_verifie
 const kickBehavior = {
   refreshError: null,
   createError: null,
+  channelError: null,
 };
 let expansionRestricted = false;
+let executed = [];
 
 const deps = {
   requireUser: async () => ({ user: userFixture, res: null }),
@@ -36,7 +38,7 @@ const deps = {
   rateLimit: async () => ({ ok: true }),
   oneResponses: [],
   one: async () => deps.oneResponses.shift(),
-  exec: async () => [],
+  exec: async (sql, params) => { executed.push({ sql, params }); return []; },
   withTransaction: async (fn) => fn({
     one: async () => deps.oneResponses.shift(),
     unsafe: async () => [],
@@ -51,7 +53,10 @@ const deps = {
     if (kickBehavior.createError) throw kickBehavior.createError;
     return { id: "reward-1", title: "t", cost: 1 };
   },
-  fetchKickCurrentChannel: async () => ({ broadcaster_user_id: "chan-1", slug: "testchannel" }),
+  fetchKickCurrentChannel: async () => {
+    if (kickBehavior.channelError) throw kickBehavior.channelError;
+    return { broadcaster_user_id: "chan-1", slug: "testchannel" };
+  },
   creatorExpansionRestriction: async () => ({ restricted: expansionRestricted, usage: null }),
 };
 
@@ -74,7 +79,9 @@ beforeEach(() => {
   deps.oneResponses.length = 0;
   kickBehavior.refreshError = null;
   kickBehavior.createError = null;
+  kickBehavior.channelError = null;
   expansionRestricted = false;
+  executed = [];
 });
 
 describe("handleCreditsCreateReward Kick connection failures", () => {
@@ -95,6 +102,9 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     expect(body.code).toBe("kick_reconnect_required");
     expect(body.error).toMatch(/needs attention/i);
     expect(body.error).not.toMatch(/invalid_grant|401|OAuth/);
+    expect(executed).toHaveLength(1);
+    expect(executed[0].sql).toContain("kick_access_token_enc = NULL");
+    expect(executed[0].params).toEqual([userFixture.id]);
   });
 
   it("returns 409 kick_reconnect_required when no refresh token is stored", async () => {
@@ -103,6 +113,7 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe("kick_reconnect_required");
+    expect(executed[0].sql).toContain("kick_refresh_token_enc = NULL");
   });
 
   it("returns 409 kick_reconnect_required when Kick rejects the access token with 401", async () => {
@@ -111,6 +122,24 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe("kick_reconnect_required");
+    expect(executed[0].sql).toContain("kick_access_token_enc = NULL");
+  });
+
+  it("keeps a refresh credential after a transient refresh failure", async () => {
+    seedTokenRows();
+    kickBehavior.refreshError = new Error("Kick token refresh failed 503: upstream unavailable");
+    const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
+    expect(res.status).toBe(502);
+    expect(executed).toHaveLength(0);
+  });
+
+  it("clears invalid credentials when Kick rejects the current-channel lookup", async () => {
+    seedTokenRows();
+    kickBehavior.channelError = new Error("Kick current channel failed 401: unauthorized");
+    const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe("kick_reconnect_required");
+    expect(executed[0].sql).toContain("kick_access_token_enc = NULL");
   });
 
   it("returns a friendly 502 when Kick fails for a non-auth reason", async () => {
@@ -122,5 +151,6 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     expect(body.code).toBeUndefined();
     expect(body.error).toMatch(/try again/i);
     expect(body.error).not.toMatch(/503|upstream/);
+    expect(executed).toHaveLength(0);
   });
 });

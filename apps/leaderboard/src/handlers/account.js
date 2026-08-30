@@ -4,6 +4,7 @@ import { one, query } from "@yourrank/shared/db";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { handlePostback } from "./attribution.js";
 import { deriveKickConnectionHealth } from "../connection-health.js";
+import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 import {
   POSTBACK_SUNSET,
   createPostbackKey,
@@ -185,6 +186,11 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       ORDER BY board_order ASC, id ASC`,
     [user.id]
   );
+  const requestedSiteId = String(new URL(request.url).searchParams.get("board") || "").trim();
+  const selectedSiteId = (sites || []).some((site) => site.id === requestedSiteId) ? requestedSiteId : "";
+  const orderedSites = selectedSiteId
+    ? [...sites].sort((left, right) => Number(right.id === selectedSiteId) - Number(left.id === selectedSiteId))
+    : sites;
 
   // loadUser() selects telegram_user_id (not telegram_id) and neither
   // kick_token_expires_at nor telegram_linked_at — the old code read
@@ -198,24 +204,30 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   );
 
   const accountKickIdentity = Boolean(user.kick_user_id && user.kick_linked_at);
-  const kickExpiresAt = identity?.kick_token_expires_at ? new Date(identity.kick_token_expires_at).getTime() : null;
-  const kickCannotRefresh = Number.isFinite(kickExpiresAt) && kickExpiresAt <= Date.now() && !identity?.has_kick_refresh_token;
-  const accountKickNeedsAttention = accountKickIdentity && (!identity?.has_kick_access_token || kickCannotRefresh);
-  const accountKickLinked = accountKickIdentity && !accountKickNeedsAttention;
+  const accountKick = deriveKickConnectionHealth({
+    requireChannel: false,
+    accountLinked: accountKickIdentity,
+    hasAccessToken: Boolean(identity?.has_kick_access_token),
+    hasRefreshToken: Boolean(identity?.has_kick_refresh_token),
+    tokenExpiresAt: identity?.kick_token_expires_at || null,
+  });
   const accountTelegramLinked = Boolean(user.telegram_user_id && identity?.telegram_linked_at);
   const connections = [
     {
       id: "kick-account",
       provider: "Kick",
       scope: "Creator account",
-      status: accountKickNeedsAttention ? "needs_attention" : accountKickLinked ? "authorized" : "not_connected",
-      statusLabel: accountKickNeedsAttention ? "Needs attention" : accountKickLinked ? "Authorized" : "Not connected",
-      detail: accountKickNeedsAttention
-        ? "Reconnect Kick to restore creator account authorization."
-        : accountKickLinked
-        ? user.kick_username ? `Signed in as @${user.kick_username}.` : "Creator identity linked."
-        : "Connect your creator identity before linking site rewards.",
-      action: { label: accountKickNeedsAttention ? "Reconnect" : accountKickLinked ? "Manage" : "Connect", href: "/dashboard/site/connections" },
+      status: accountKickIdentity ? accountKick.status : "not_connected",
+      statusLabel: accountKickIdentity ? accountKick.label : "Not connected",
+      detail: !accountKickIdentity
+        ? "Connect your creator identity before linking site rewards."
+        : accountKick.status === "authorized"
+          ? user.kick_username ? `Signed in as @${user.kick_username}.` : "Creator identity linked."
+          : accountKick.detail,
+      action: {
+        label: accountKickIdentity && accountKick.status === "authorized" ? "Manage" : accountKickIdentity ? "Reconnect" : "Connect",
+        href: buildDashboardPath("siteConnections.channel", { siteId: selectedSiteId }),
+      },
     },
     {
       id: "telegram-account",
@@ -232,8 +244,9 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
     },
   ];
 
-  for (const site of sites || []) {
+  for (const site of orderedSites || []) {
     const scope = site.name || site.slug || "Site";
+    const selectedSite = site.id === selectedSiteId;
     const kick = deriveKickConnectionHealth({
       channelLinked: Boolean(site.kick_channel_external_id),
       accountLinked: Boolean(user.kick_user_id && user.kick_linked_at),
@@ -247,6 +260,7 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       id: `kick-site:${site.id}`,
       provider: "Kick rewards",
       scope,
+      selectedSite,
       status: kick.status,
       statusLabel: kick.label,
       detail: site.kick_channel_name && site.kick_channel_external_id
@@ -260,12 +274,13 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       id: `discord-site:${site.id}`,
       provider: "Discord delivery",
       scope,
+      selectedSite,
       status: site.discord_webhook_url_enc ? "configured" : "not_configured",
       statusLabel: site.discord_webhook_url_enc ? "Configured" : "Not configured",
       detail: site.discord_webhook_url_enc
         ? "A webhook is saved. Use Send test in Site notifications to verify delivery."
         : "Optional. Add a webhook when you want Discord notifications.",
-      action: { label: site.discord_webhook_url_enc ? "Manage" : "Set up", href: `/dashboard/site?tab=notifications&siteId=${encodeURIComponent(site.id)}` },
+      action: { label: site.discord_webhook_url_enc ? "Manage" : "Set up", href: `${buildDashboardPath("site", { board: site.id })}&tab=notifications` },
     });
     const telegramConfigured = Boolean(site.telegram_chat_id);
     const telegramEnabled = telegramConfigured && site.telegram_notify !== false;
@@ -273,14 +288,15 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       id: `telegram-site:${site.id}`,
       provider: "Telegram delivery",
       scope,
+      selectedSite,
       status: telegramEnabled ? "enabled" : telegramConfigured ? "paused" : "not_configured",
       statusLabel: telegramEnabled ? "Enabled" : telegramConfigured ? "Paused" : "Not configured",
       detail: telegramEnabled
         ? "Delivery is enabled. Use Send test in Site notifications to verify it."
         : telegramConfigured ? "A chat is saved, but delivery is turned off." : "Optional. Add a chat when you want site notifications in Telegram.",
-      action: { label: telegramConfigured ? "Manage" : "Set up", href: `/dashboard/site?tab=notifications&siteId=${encodeURIComponent(site.id)}` },
+      action: { label: telegramConfigured ? "Manage" : "Set up", href: `${buildDashboardPath("site", { board: site.id })}&tab=notifications` },
     });
   }
 
-  return json({ ok: true, connections }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
+  return json({ ok: true, connections, selectedSiteId: selectedSiteId || null }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }

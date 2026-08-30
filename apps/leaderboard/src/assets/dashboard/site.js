@@ -1382,6 +1382,17 @@ export async function renderDomain() {
       headers: { "x-csrf-token": getCsrf() },
     });
     const data = await res.json();
+    if (res.status === 403) {
+      if (domainBody) domainBody.hidden = true;
+      if (domainLock) domainLock.hidden = true;
+      $("domainManageCard")?.setAttribute("hidden", "true");
+      setActivePublicDomain(null);
+      setPublicDomainSummary("Custom domain settings are managed by the site owner.");
+      if (overviewTitle) overviewTitle.textContent = "Managed by the site owner";
+      if (overviewText) overviewText.textContent = "Only the site owner can view or change custom-domain settings.";
+      if (overviewStatus) overviewStatus.textContent = "Owner access required";
+      return;
+    }
     if (!res.ok || !data.ok) throw new Error(data.error || "Could not load domain status.");
     if (data.ok && data.customDomain) {
       if (overview) overview.hidden = true;

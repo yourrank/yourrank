@@ -3,6 +3,7 @@ import { $, esc, currentPlayers } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
 import { nextStepAction, visitsMetricState } from "./overview-state.js";
+import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 
 // Home already owns some state in dedicated surfaces: the setup checklist
 // renders brand/players/publish/verification, and the pending-orders banner
@@ -144,9 +145,10 @@ export function renderOverviewSummary() {
   const connectionAction = $("ovConnectionAlertAction");
   if (connectionAction) {
     const canManageConnection = state.CREDITS?.channel?.canManage !== false;
-    const siteParam = state.ACTIVE_SITE_ID ? `?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "";
-    connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection";
-    connectionAction.href = canManageConnection ? "/dashboard/settings/connections" : `/dashboard/site/connections${siteParam}`;
+      connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection";
+      connectionAction.href = canManageConnection
+        ? buildDashboardPath("settings.connections", { board: state.ACTIVE_SITE_ID })
+        : buildDashboardPath("siteConnections.channel", { siteId: state.ACTIVE_SITE_ID });
   }
   const relative = (iso) => {
     const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));

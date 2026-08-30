@@ -4,6 +4,7 @@
 
 export function deriveKickConnectionHealth({
   channelLinked = false,
+  requireChannel = true,
   accountLinked = false,
   hasAccessToken = false,
   hasRefreshToken = false,
@@ -12,7 +13,7 @@ export function deriveKickConnectionHealth({
   operationEnabled = true,
   now = Date.now(),
 } = {}) {
-  const linked = Boolean(channelLinked);
+  const linked = !requireChannel || Boolean(channelLinked);
   const activeDependency = Boolean(operationEnabled) && Number(activeRewardMappings) > 0;
   if (!linked) {
     return {
@@ -28,20 +29,56 @@ export function deriveKickConnectionHealth({
   }
 
   const expiresAt = tokenExpiresAt ? new Date(tokenExpiresAt).getTime() : null;
-  const expired = Number.isFinite(expiresAt) && expiresAt <= now;
   const missingAuthorization = !accountLinked || !hasAccessToken;
-  const cannotRefresh = expired && !hasRefreshToken;
-  const needsAttention = missingAuthorization || cannotRefresh;
-  const reason = missingAuthorization ? "authorization_missing" : cannotRefresh ? "authorization_expired" : null;
+  if (missingAuthorization) {
+    return {
+      status: "needs_attention",
+      label: "Needs attention",
+      detail: "Reconnect Kick to keep active reward grants working.",
+      needsAttention: true,
+      homeAttention: activeDependency,
+      reason: "authorization_missing",
+    };
+  }
+
+  if (!Number.isFinite(expiresAt)) {
+    return {
+      status: "needs_verification",
+      label: "Needs verification",
+      detail: "Authorization is saved, but its current validity has not been verified.",
+      needsAttention: false,
+      homeAttention: false,
+      reason: "authorization_unverified",
+    };
+  }
+
+  if (expiresAt <= now) {
+    if (hasRefreshToken) {
+      return {
+        status: "refresh_required",
+        label: "Refresh required",
+        detail: "The saved access token has expired. YourRank will try the saved refresh authorization when the next Kick operation runs.",
+        needsAttention: false,
+        homeAttention: false,
+        reason: "refresh_required",
+      };
+    }
+    return {
+      status: "needs_attention",
+      label: "Needs attention",
+      detail: "Reconnect Kick to keep active reward grants working.",
+      needsAttention: true,
+      homeAttention: activeDependency,
+      reason: "authorization_expired",
+    };
+  }
 
   return {
-    status: needsAttention ? "needs_attention" : "authorized",
-    label: needsAttention ? "Needs attention" : "Authorized",
-    detail: needsAttention
-      ? "Reconnect Kick to keep active reward grants working."
-      : "OAuth authorization and the selected-site channel are saved. Provider delivery is not independently verified.",
-    needsAttention,
-    homeAttention: needsAttention && activeDependency,
-    reason,
+    status: "authorized",
+    label: "Authorized",
+    detail: "OAuth authorization and the selected-site channel are saved. Provider delivery is not independently verified.",
+    needsAttention: false,
+    homeAttention: false,
+    reason: null,
   };
 }

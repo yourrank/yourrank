@@ -169,6 +169,26 @@ const kickReconnectRequired = () => json({
   code: "kick_reconnect_required",
 }, 409);
 
+function isDefinitiveKickAuthorizationFailure(error) {
+  return /\b401\b|invalid_grant|unauthorized|refresh token not available/i.test(String(error?.message || error));
+}
+
+async function clearInvalidKickAuthorization(deps, userId, reason) {
+  try {
+    await deps.exec(
+      `UPDATE users
+          SET kick_access_token_enc = NULL,
+              kick_refresh_token_enc = NULL,
+              kick_token_expires_at = NULL,
+              updated_at = now()
+        WHERE id = $1`,
+      [userId],
+    );
+  } catch {
+    console.warn(JSON.stringify({ event: "kick_authorization_clear_failed", reason, userId }));
+  }
+}
+
 export function ledgerDirection(type) {
   return LEDGER_DIRECTIONS[type] || null;
 }
@@ -505,9 +525,14 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
       tokenRow.kick_token_expires_at
     );
   } catch (err) {
-    // Refresh token revoked/expired (Kick's invalid_grant) or missing.
-    console.warn("[credits] Kick token refresh failed:", err?.message || err);
-    return kickReconnectRequired();
+    // Persist only a proven invalid grant. Transient provider failures keep the
+    // refresh credential so the next operation can retry safely.
+    if (isDefinitiveKickAuthorizationFailure(err)) {
+      await clearInvalidKickAuthorization(deps, user.id, "refresh_rejected");
+      return kickReconnectRequired();
+    }
+    console.warn(JSON.stringify({ event: "kick_token_refresh_unavailable", userId: user.id }));
+    return bad("Kick authorization could not be refreshed. Try again in a moment.", 502);
   }
 
   let reward;
@@ -522,7 +547,8 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   } catch (err) {
     // A 401 here means the access token was revoked despite a fresh-looking
     // expiry; anything else is a Kick-API problem the streamer cannot fix.
-    if (/\b401\b|invalid_grant|unauthorized/i.test(String(err?.message || err))) {
+    if (isDefinitiveKickAuthorizationFailure(err)) {
+      await clearInvalidKickAuthorization(deps, user.id, "provider_rejected_access");
       return kickReconnectRequired();
     }
     console.warn("[credits] Kick reward creation failed:", err?.message || err);
@@ -531,7 +557,17 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
 
   // The reward was created on the streamer's Kick channel. Capture that channel
   // so webhook redemptions can find this site even if the manual connect form was skipped.
-  const kickChannel = await deps.fetchKickCurrentChannel(tokenSet.accessToken);
+  let kickChannel;
+  try {
+    kickChannel = await deps.fetchKickCurrentChannel(tokenSet.accessToken);
+  } catch (err) {
+    if (isDefinitiveKickAuthorizationFailure(err)) {
+      await clearInvalidKickAuthorization(deps, user.id, "provider_rejected_channel_lookup");
+      return kickReconnectRequired();
+    }
+    console.warn(JSON.stringify({ event: "kick_channel_lookup_unavailable", userId: user.id }));
+    return bad("Kick channel details could not be loaded. Try again in a moment.", 502);
+  }
   if (!kickChannel) {
     return bad("Could not determine your Kick channel from the OAuth token", 500);
   }
