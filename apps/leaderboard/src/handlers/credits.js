@@ -23,6 +23,7 @@ import { requireSiteCapability } from "../site-authorization.js";
 import { hasSiteCapability } from "@yourrank/shared/team";
 import { routeContext } from "../middleware/handler.js";
 import { creatorExpansionRestriction } from "@yourrank/shared/plan-usage";
+import { deriveKickConnectionHealth } from "../connection-health.js";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
 const creditsCreateRewardDefaults = {
@@ -230,6 +231,9 @@ export async function handleCreditsStatus(request, env) {
   const [channel, mappings, items, viewers, redemptions, usage] = await Promise.all([
     one(
       `SELECT s.kick_channel_external_id, s.kick_channel_name, s.kick_channel_linked_at,
+              u.kick_user_id IS NOT NULL AND u.kick_linked_at IS NOT NULL AS account_linked,
+              u.kick_access_token_enc IS NOT NULL AS has_access_token,
+              u.kick_refresh_token_enc IS NOT NULL AS has_refresh_token,
               u.kick_token_expires_at
          FROM sites s
          JOIN users u ON u.id = s.user_id
@@ -278,6 +282,15 @@ export async function handleCreditsStatus(request, env) {
 
   const plan = await effectiveSitePlan(site, user);
   const canManageConnections = hasSiteCapability(authorization.role, "canRoleManageConnections");
+  const channelHealth = deriveKickConnectionHealth({
+    channelLinked: Boolean(channel?.kick_channel_external_id),
+    accountLinked: Boolean(channel?.account_linked),
+    hasAccessToken: Boolean(channel?.has_access_token),
+    hasRefreshToken: Boolean(channel?.has_refresh_token),
+    tokenExpiresAt: channel?.kick_token_expires_at || null,
+    activeRewardMappings: Number(usage?.rewardMappings) || 0,
+    operationEnabled: Boolean(site.credits_enabled),
+  });
 
   const safeViewers = (viewers || []).map(({
     viewer_id: _viewerId,
@@ -292,13 +305,19 @@ export async function handleCreditsStatus(request, env) {
     ...redemption
   }) => redemption);
 
-  return ok({
+  return json({
+    ok: true,
     enabled: Boolean(site.credits_enabled),
     channel: {
       connected: Boolean(channel?.kick_channel_external_id),
       name: channel?.kick_channel_name || null,
       linkedAt: channel?.kick_channel_linked_at || null,
-      tokenExpiresAt: canManageConnections ? channel?.kick_token_expires_at || null : null,
+      status: channelHealth.status,
+      statusLabel: channelHealth.label,
+      detail: channelHealth.detail,
+      needsAttention: channelHealth.needsAttention,
+      homeAttention: channelHealth.homeAttention,
+      canManage: canManageConnections,
     },
     mappings: mappings || [],
     shopItems: items || [],
@@ -323,7 +342,7 @@ export async function handleCreditsStatus(request, env) {
       adjustCredits: hasSiteCapability(authorization.role, "canRoleAdjustCredits"),
       manageConnections: canManageConnections,
     },
-  });
+  }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }
 
 export async function handleCreditsConnect(request, env) {

@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `affef6e0a6104461974d3d972f421a328c1f8bf4` (PR #673 merged)
+**Evidence baseline:** `main` at `483fd3c584536ce5163e53991de14fa00a1fa069` (Wave H merged)
 
 **Last reconciled:** 2026-08-30
 
@@ -135,7 +135,25 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Team lifecycle writes append-only `team_invitation_created`, `team_invitation_revoked`, `team_invitation_accepted`, and `team_operator_removed` records to the existing `audit_log` in the same transaction as source changes. Review and Claim events retain their source-specific actor audit behavior; no duplicate Team activity UI or audit mutation endpoint was added.
 - Settings → Team is the one Team surface. Owners see pooled seat usage, invite/remove/revoke controls, and the Team upgrade path; Moderators receive minimal read-only context without pending invite data or mutation controls. There is no role-edit route because Moderator is the only delegated V1 role.
 - Reviews and Claims semantics are unchanged; only their capability ownership converged. Claims still contain no private fulfillment PII. If a future Claim workflow introduces sensitive fulfillment data, it requires a new evidence-led access review rather than inheriting current ordinary-Claim access automatically.
-- Wave I Insights/Connection Health and Wave J work have not started. Existing Insights reads are permissioned only; existing provider connection management was narrowed to Owner without adding new connection-health product behavior.
+- Wave I Insights/Connection Health is implemented as described below. Wave J and Wave K have not started.
+
+### Insights and connection health — AVAILABLE; AGGREGATE + EVIDENCE-BASED
+
+- The customer-facing product label is Insights. Stable route IDs and the existing selected-site `/dashboard/analytics` route family remain unchanged; the canonical tabs are Overview, Traffic sources, and Public site activity. No parallel analytics route family, service, persistence model, or AI interpretation layer exists.
+- Overview answers four questions before traffic detail: whether the community is returning, how members participate in safe workflows, how free-credit reward Claims are used, and what operational work needs attention. Existing public-site traffic remains a secondary line chart/detail source; the legacy export containing unrelated conversion/revenue fields is not exposed from Insights.
+- Available date windows are rolling 7 or 30 days, compared as `timestamptz` instants and labeled UTC. The endpoint resolves the selected site's owner plan and caps the requested window through canonical `HISTORY_DAYS`; a Moderator inherits the owner's effective history entitlement. Current windows fit inside every existing Free/Pro/Team entitlement, and downgrades do not delete data.
+- New members are non-system `site_viewers` memberships created in the window. Returning members joined before the window and have `last_seen_at` in it. This is authenticated selected-site return behavior, not anonymous traffic, frequency, or account-pooled active-viewer billing usage.
+- Participants are distinct non-system viewers with a selected-site `code_drop_claims` record in the window. Repeat participants claimed at least two different code drops, and active drops are distinct code drops with a claim. Restricted Games, wagering, paid chance, predictions, odds, payout, and settlement records are excluded.
+- Reward usage counts real selected-site `redemptions`: Claims submitted in the window, those window Claims currently fulfilled, and the most-claimed non-cancelled `shop_items` reward. Current pending Claims are operational and therefore intentionally not date-limited. No recipient/private fulfillment values or member-level rows are returned.
+- Pending Reviews reuse the canonical People Reviews count adapter over flagged zero-entry-fee tournament-signup exceptions and their existing audit decisions. No trust/fraud score or raw signal is selected or returned.
+- `/api/insights` requires `canRoleViewInsights`, enforces selected-site lookup, accepts only 7/30, rate-limits by user and site, runs three aggregate reads plus the canonical Reviews count in parallel with five-second statement timeouts, excludes system viewers, and returns `no-store`. Owner and Moderator may read it; Viewer sessions and wrong/cross-creator sites are denied.
+- `Settings → Connections` is the connection inventory/lifecycle surface. It labels Creator account versus individual site scope and lists only supported current integrations: Kick identity/rewards, Telegram identity/site delivery, and Discord site delivery. Kick connect/reconnect/disconnect is available there for owned sites; notification configuration actions deep-link to the existing single Site notifications editor instead of duplicating its form.
+- Connection states name persisted evidence rather than claiming generic provider health. Kick is Not connected, Authorized, or Needs attention. Authorized means the account OAuth record and selected-site channel are saved; the UI explicitly says provider delivery is not independently verified. Missing authorization, or an expired access token without a refresh credential, is Needs attention. Discord is Configured/Not configured because no delivery-success record exists. Telegram identity is Linked/Not connected; site delivery is Enabled/Paused/Not configured. Optional never-configured integrations are never warnings.
+- Home reuses the selected-site Rewards status response and adds no connection KPI or OAuth execution. It shows a compact Needs attention alert only when Kick authorization is provably broken, free credits are enabled, and at least one active Kick reward mapping depends on it. The copy names the selected site and affected reward operation. Owner opens Settings → Connections; Moderator may view the existing site connection context but receives no lifecycle control.
+- `deriveKickConnectionHealth()` is the single connection-state adapter reused by Settings and Rewards/Home. Creator connection responses contain status, public display names, scope, explanatory copy, and actions only; raw provider user/channel/chat IDs, OAuth access/refresh tokens, webhook values, and credential timestamps are absent. Responses are `no-store`.
+- Owner retains `canRoleManageConnections`. Moderator receives only the minimal selected-site Kick status already needed to understand Rewards, cannot connect/reconnect/disconnect or change OAuth/configuration, and never receives tokens, expiry, or provider identifiers.
+- Telegram Bot Worker commands, bots, broadcasts, subscribers, and day-to-day operations remain at `/dashboard/telegram*`; Wave I does not create Community → Communication. Communication remains deferred.
+- No schema migration was required. Billing definitions, account-pooled active-viewer measurement, Team caps, restricted legacy systems, and the Wave H capability model are unchanged.
 
 Current fulfillment audit:
 

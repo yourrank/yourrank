@@ -295,34 +295,21 @@ function renderConnectedAccounts(data) {
   if (!wrap) return;
   if (!data || data.error) { wrap.innerHTML = `<p class="error">Could not load connected accounts.</p>`; return; }
 
-  const kick = data.kick;
-  const telegram = data.telegram;
-
-  let html = "";
-  if (kick || telegram) {
-    html += `<div class="account-connection-list">`;
-    if (kick) {
-      const expiry = kick.tokenExpiresAt ? new Date(kick.tokenExpiresAt) : null;
-      const needsAttention = !expiry || expiry <= new Date();
-      html += `<div class="account-connection-row">
-        <div><strong>Kick</strong><p>${kick.username ? `@${esc(kick.username)}` : "Creator account"}</p></div>
-        <span class="account-connection-status${needsAttention ? " is-warning" : ""}">${needsAttention ? "Reconnect needed" : "Connected"}</span>
-        <a class="btn btn--sm ${needsAttention ? "btn--accent" : "btn--ghost"}" href="/dashboard/site/connections">${needsAttention ? "Reconnect" : "Manage"}</a>
-      </div>`;
-    }
-    if (telegram) {
-      html += `<div class="account-connection-row">
-        <div><strong>Telegram</strong><p>${telegram.username ? `@${esc(telegram.username)}` : "Creator account"}</p></div>
-        <span class="account-connection-status">Connected</span>
-        <button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">Disconnect</button>
-      </div>`;
-    }
-    html += `</div>`;
-  } else {
-    html += `<div class="empty account-connection-empty"><strong>No accounts connected</strong><p>Connect a creator account when you are ready to use its YourRank features.</p><div class="d-flex gap-8 flex-wrap"><a class="btn btn--accent" href="/dashboard/site/connections">Connect Kick</a><a class="btn btn--ghost" href="/dashboard/telegram">Connect Telegram</a></div></div>`;
-  }
-
-  wrap.innerHTML = html;
+  const connections = Array.isArray(data.connections) ? data.connections : [];
+  wrap.innerHTML = `<div class="account-connection-list">${connections.map((connection) => {
+    const warning = connection.status === "needs_attention";
+    const muted = ["not_connected", "not_configured", "paused"].includes(connection.status);
+    const action = connection.action?.kind === "disconnect_telegram"
+      ? `<button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">${esc(connection.action.label)}</button>`
+      : connection.action?.kind === "disconnect_kick"
+        ? `<button class="btn btn--sm btn--ghost" type="button" data-kick-disconnect="${esc(connection.action.siteId)}">${esc(connection.action.label)}</button>`
+      : `<a class="btn btn--sm ${warning ? "btn--accent" : "btn--ghost"}" href="${esc(connection.action?.href || "#")}">${esc(connection.action?.label || "Manage")}</a>`;
+    return `<div class="account-connection-row">
+      <div><strong>${esc(connection.provider)}</strong><span class="account-connection-scope">${esc(connection.scope)}</span><p>${esc(connection.detail)}</p></div>
+      <span class="account-connection-status${warning ? " is-warning" : muted ? " is-muted" : ""}">${esc(connection.statusLabel)}</span>
+      ${action}
+    </div>`;
+  }).join("")}</div>`;
 
   $("tgDisconnect")?.addEventListener("click", async (e) => {
     if (!await showConfirmModal("Disconnect Telegram", "Telegram login and bot management for this account stop until you connect again.", "Disconnect", true)) return;
@@ -333,6 +320,15 @@ function renderConnectedAccounts(data) {
     btn.disabled = false;
     setStatus(r.data?.error || "Could not disconnect Telegram. Try again.", true);
   });
+  wrap.querySelectorAll("[data-kick-disconnect]").forEach((button) => button.addEventListener("click", async () => {
+    if (!await showConfirmModal("Disconnect Kick", "Kick rewards for this site stop working until you connect again.", "Disconnect", true)) return;
+    button.disabled = true;
+    const siteId = button.dataset.kickDisconnect;
+    const r = await jsonReq("POST", `/api/kick/disconnect?siteId=${encodeURIComponent(siteId)}`);
+    if (r.ok && r.data?.ok) { loadConnectedAccounts(); return; }
+    button.disabled = false;
+    setStatus(r.data?.error || "Could not disconnect Kick. Try again.", true);
+  }));
 }
 
 async function loadConnectedAccounts() {

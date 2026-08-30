@@ -95,15 +95,16 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(root.documentTitle).toBe("Leaderboard · YourRank");
   });
 
-  it("pins the Insights Sources/Referrals divergence as data", () => {
+  it("pins the customer-facing Insights detail labels", () => {
     const referrals = dashboardChromeState("performance.referrals");
-    expect(referrals.tabLabel).toBe("Sources");
-    expect(referrals.documentTitle).toBe("Referrals · Insights · YourRank");
+    expect(referrals.tabLabel).toBe("Traffic sources");
+    expect(referrals.documentTitle).toBe("Traffic sources · Insights · YourRank");
     expect(referrals.crumbs).toEqual([
       { label: "Insights", href: "/dashboard/analytics" },
-      { label: "Sources" },
+      { label: "Traffic sources" },
     ]);
-    expect(dashboardChromeState("performance.activity").tabLabel).toBe("Site visitors");
+    expect(dashboardChromeState("performance.activity").tabLabel).toBe("Overview");
+    expect(dashboardChromeState("performance.events").tabLabel).toBe("Public site activity");
   });
 
   it("pins the fragment sections' chrome", () => {

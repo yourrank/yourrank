@@ -5,6 +5,7 @@ import { chromeStateFor, defaultTab, parseDashboardPath, SECTIONS } from "./rout
 import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+let insightsRequestKey = "";
 
 export function initPerformance() {
   if (initPerformance._done) return;
@@ -20,6 +21,7 @@ export function initPerformance() {
     body: "Visits, link clicks, and shares will appear here after people use your site.",
     compact: true,
   });
+  loadInsights();
 }
 
 function wireRangeFilter() {
@@ -32,6 +34,7 @@ function wireRangeFilter() {
     filter.querySelectorAll("button[data-range]").forEach((node) => node.classList.toggle("is-active", node === btn));
     state.PERF_RANGE = Number(btn.dataset.range);
     if (state.STATS) renderPerformance(state.STATS);
+    loadInsights({ force: true });
   });
 }
 
@@ -57,22 +60,21 @@ function showTab(tab) {
   });
   const panels = { activity: ["perf-activity", "perf-heatmap"], referrals: ["perf-referrals", "perf-referrers"], events: ["perf-events"] };
   Object.entries(panels).forEach(([name, ids]) => ids.forEach((id) => { const node = $(id); if (node) node.hidden = name !== active; }));
-  const summary = document.querySelector("[data-perf-summary]");
-  if (summary) summary.hidden = active !== "activity";
   const selectedRange = $("perfSelectedRange");
   const sourcesRange = $("perfSourcesRange");
   if (selectedRange) selectedRange.hidden = active === "referrals";
   if (sourcesRange) sourcesRange.hidden = active !== "referrals";
   const rangeFilter = $("perfRangeFilter");
-  if (rangeFilter) rangeFilter.hidden = active === "referrals" || rangeFilter.dataset.hasData === "0";
+  if (rangeFilter) rangeFilter.hidden = active === "referrals";
   const crumb = document.querySelector('.v3-crumbs span[aria-current="page"]');
   if (crumb) crumb.textContent = chromeStateFor("performance", active).tabLabel;
+  if (active === "activity") loadInsights();
 }
 
 export function renderPerformance(stats) {
   state.STATS = stats;
   if (!document.querySelector('section[data-page="performance"].is-on')) return;
-  const range = state.PERF_RANGE || 14;
+  const range = state.PERF_RANGE || 30;
   const all = Array.isArray(stats.days) ? stats.days : [];
   const days = all.slice(-range);
   const hasData = days.some((day) => Number(day.views));
@@ -80,13 +82,7 @@ export function renderPerformance(stats) {
   const rangeFilter = $("perfRangeFilter");
   if (rangeFilter) {
     rangeFilter.dataset.hasData = hasAnyData ? "1" : "0";
-    rangeFilter.hidden = !hasAnyData || activePerformanceTab() === "referrals";
-  }
-  const exportLink = $("perfExport");
-  if (exportLink) {
-    const query = state.ACTIVE_SITE_ID ? `?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "";
-    exportLink.href = `/api/site/stats/export${query}`;
-    exportLink.hidden = !hasAnyData;
+    rangeFilter.hidden = activePerformanceTab() === "referrals";
   }
   const previous = all.slice(Math.max(0, all.length - range * 2), Math.max(0, all.length - range));
   const currentTotals = totals(days);
@@ -113,6 +109,70 @@ export function renderPerformance(stats) {
   renderActivity(days, hasAnyData);
   renderEvents(days, hasAnyData);
   loadHeatmap();
+  if (activePerformanceTab() === "activity") loadInsights();
+}
+
+function setInsightValue(id, value) {
+  const node = $(id);
+  if (node) node.textContent = Number(value || 0).toLocaleString("en-US");
+}
+
+function renderInsights(data) {
+  const host = $("insightsQuestions");
+  if (!host) return;
+  host.removeAttribute("aria-busy");
+  clearLoadError($("insightsStatus"), false);
+  setInsightValue("insightsNewMembers", data.community?.newMembers);
+  setInsightValue("insightsReturningMembers", data.community?.returningMembers);
+  setInsightValue("insightsParticipants", data.participation?.participants);
+  setInsightValue("insightsRepeatParticipants", data.participation?.repeatParticipants);
+  setInsightValue("insightsActiveDrops", data.participation?.activeCodeDrops);
+  setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted);
+  setInsightValue("insightsClaimsFulfilled", data.rewards?.claimsFulfilled);
+  setInsightValue("insightsPendingReviews", data.operations?.pendingReviews);
+  setInsightValue("insightsPendingClaims", data.operations?.pendingClaims);
+  const topReward = $("insightsTopReward");
+  if (topReward) topReward.textContent = data.rewards?.topReward?.name || "No claims yet";
+  const topRewardDetail = $("insightsTopRewardDetail");
+  if (topRewardDetail) topRewardDetail.textContent = data.rewards?.topReward
+    ? `${Number(data.rewards.topReward.claims) || 0} non-cancelled ${Number(data.rewards.topReward.claims) === 1 ? "claim" : "claims"}`
+    : "Non-cancelled claims will appear here";
+}
+
+function renderInsightsLoading() {
+  const host = $("insightsQuestions");
+  if (host) host.setAttribute("aria-busy", "true");
+  ["insightsNewMembers", "insightsReturningMembers", "insightsParticipants", "insightsRepeatParticipants", "insightsActiveDrops", "insightsClaimsSubmitted", "insightsClaimsFulfilled", "insightsPendingReviews", "insightsPendingClaims"].forEach((id) => setMetricLoading($(id)));
+  const topReward = $("insightsTopReward");
+  if (topReward) topReward.innerHTML = '<span class="skeleton v3-skel-line" aria-hidden="true"></span>';
+}
+
+export async function loadInsights({ force = false } = {}) {
+  const siteId = state.ACTIVE_SITE_ID || "";
+  const days = state.PERF_RANGE || 30;
+  const key = `${siteId}:${days}`;
+  if (!force && insightsRequestKey === key && state.INSIGHTS) {
+    renderInsights(state.INSIGHTS);
+    return state.INSIGHTS;
+  }
+  insightsRequestKey = key;
+  renderInsightsLoading();
+  const params = new URLSearchParams({ days: String(days) });
+  if (siteId) params.set("siteId", siteId);
+  try {
+    const response = await fetch(`/api/insights?${params.toString()}`, { credentials: "same-origin" });
+    const body = await response.json();
+    if (!response.ok || !body.ok) throw new Error(body.error || "Insights failed to load.");
+    if (insightsRequestKey !== key) return null;
+    setState({ INSIGHTS: body });
+    renderInsights(body);
+    return body;
+  } catch (error) {
+    if (insightsRequestKey === key) insightsRequestKey = "";
+    logError("load-insights", error);
+    showLoadError($("insightsStatus"), "Insights", () => loadInsights({ force: true }));
+    return null;
+  }
 }
 
 function totals(days) {

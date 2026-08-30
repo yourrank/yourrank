@@ -157,6 +157,33 @@ const REVIEW_SELECT = `
        LIMIT 1
     ) review_decision ON true`;
 
+export async function loadPeopleReviewCounts(siteId, oneImpl = one) {
+  const countRow = await oneImpl(
+    `SELECT
+       count(*) FILTER (WHERE review_decision.action IS NULL)::integer AS pending,
+       count(*) FILTER (WHERE review_decision.action IS NOT NULL)::integer AS resolved
+       FROM tournament_entries te
+       JOIN tournaments t ON t.id = te.tournament_id
+       LEFT JOIN LATERAL (
+         SELECT a.action
+           FROM audit_log a
+          WHERE a.entity_type='tournament_entry' AND a.entity_id=te.id::text
+            AND a.action IN ('people_review_allow', 'people_review_exclude')
+          ORDER BY a.created_at DESC, a.id DESC
+          LIMIT 1
+       ) review_decision ON true
+      WHERE t.site_id=$1
+        AND COALESCE(t.entry_fee, 0) = 0
+        AND te.alt_flag = true
+        AND te.status IN ('pending', 'confirmed', 'selected', 'waitlist', 'blocked', 'removed')`,
+    [siteId],
+  );
+  return {
+    pending: Number(countRow?.pending) || 0,
+    resolved: Number(countRow?.resolved) || 0,
+  };
+}
+
 async function reviewAccess(request, env, deps) {
   const { user, res } = await deps.requireUser(request, env);
   if (res) return { res: privateResponse(res) };
@@ -220,30 +247,7 @@ export async function handlePeopleReviews(request, env, injected = {}) {
     [site.id, filter, REVIEW_LIMIT],
   );
 
-  const countRow = await deps.one(
-    `SELECT
-       count(*) FILTER (WHERE review_decision.action IS NULL)::integer AS pending,
-       count(*) FILTER (WHERE review_decision.action IS NOT NULL)::integer AS resolved
-       FROM tournament_entries te
-       JOIN tournaments t ON t.id = te.tournament_id
-       LEFT JOIN LATERAL (
-         SELECT a.action
-           FROM audit_log a
-          WHERE a.entity_type='tournament_entry' AND a.entity_id=te.id::text
-            AND a.action IN ('people_review_allow', 'people_review_exclude')
-          ORDER BY a.created_at DESC, a.id DESC
-          LIMIT 1
-       ) review_decision ON true
-      WHERE t.site_id=$1
-        AND COALESCE(t.entry_fee, 0) = 0
-        AND te.alt_flag = true
-        AND te.status IN ('pending', 'confirmed', 'selected', 'waitlist', 'blocked', 'removed')`,
-    [site.id],
-  );
-  const counts = {
-    pending: Number(countRow?.pending) || 0,
-    resolved: Number(countRow?.resolved) || 0,
-  };
+  const counts = await loadPeopleReviewCounts(site.id, deps.one);
   const selectedCount = filter === "pending"
     ? counts.pending
     : filter === "resolved"

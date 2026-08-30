@@ -452,7 +452,7 @@ describe("People Reviews route and UI ownership", () => {
     expect(client).toContain('setAttribute("aria-busy", "true")');
     expect(client).not.toMatch(/trustScore|fraudScore|riskScore|altReason|ipAddress|deviceFingerprint/i);
     expect(css).toContain("@media (max-width: 24rem)");
-    expect(css).toContain(".people-review-table td {\n    display: flex;");
+    expect(css).toMatch(/\.people-review-table td \{\r?\n\s+display: flex;/);
     expect(css).toContain("height: auto;");
     expect(css).not.toContain("column-reverse");
   });

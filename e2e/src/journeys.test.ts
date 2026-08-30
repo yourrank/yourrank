@@ -353,6 +353,109 @@ describe("release-gate journeys", () => {
     expect(missing.json?.ok).not.toBe(true);
   });
 
+  it(`${tag("wave-i-owner-insights-connections")} owner loads selected-site Insights and the scoped connection inventory`, async () => {
+    const page = await client.get("/dashboard/analytics");
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("Insights");
+    expect(page.body).toContain("Is the community returning?");
+
+    const primary = await client.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=30`);
+    expect(primary.status).toBe(200);
+    expect(primary.headers.get("cache-control")).toContain("no-store");
+    expect(primary.json?.ok).toBe(true);
+    expect(primary.json?.site?.id).toBe(siteId);
+    expect(primary.json?.window).toEqual(expect.objectContaining({ requestedDays: 30, effectiveDays: 30, timeZone: "UTC" }));
+    expect(primary.json?.community).toBeDefined();
+    expect(primary.json?.participation).toBeDefined();
+    expect(primary.json?.rewards).toBeDefined();
+    expect(primary.json?.operations).toBeDefined();
+
+    const second = await client.post("/api/site/create", { slug: `${slug}-insights-2`, name: "E2E Insights Second Site" });
+    expect(second.status).toBe(200);
+    expect(second.json?.ok).toBe(true);
+    expect(second.json?.id).not.toBe(siteId);
+    const secondInsights = await client.get(`/api/insights?siteId=${encodeURIComponent(second.json.id)}&days=7`);
+    expect(secondInsights.status).toBe(200);
+    expect(secondInsights.json?.site?.id).toBe(second.json.id);
+    expect(secondInsights.json?.site?.id).not.toBe(primary.json?.site?.id);
+
+    const substituted = await client.get(`/api/insights?siteId=${crypto.randomUUID()}&days=30`);
+    expect(substituted.status).toBe(404);
+    const unsupportedWindow = await client.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=365`);
+    expect(unsupportedWindow.status).toBe(400);
+
+    const connections = await client.get("/api/account/connected-accounts");
+    expect(connections.status).toBe(200);
+    expect(connections.headers.get("cache-control")).toContain("no-store");
+    expect(Array.isArray(connections.json?.connections)).toBe(true);
+    expect(connections.json?.connections.some((row) => row.scope === "Creator account")).toBe(true);
+    expect(connections.json?.connections.some((row) => row.scope === "E2E Insights Second Site")).toBe(true);
+    expect(JSON.stringify(connections.json)).not.toMatch(/access_token|refresh_token|webhook_url|telegram_chat_id|kick_user_id|telegram_user_id/i);
+
+    const home = await client.get(`/dashboard?board=${encodeURIComponent(siteId)}`);
+    expect(home.status).toBe(200);
+    expect(home.body).toContain('id="ovConnectionAlert"');
+    expect(home.body).toContain('id="ovConnectionAlertAction"');
+  });
+
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("wave-i-moderator-insights-readonly")} Moderator views Insights but provider management remains owner-only`, async () => {
+    const moderatorClient = new Client(BASE_URL);
+    const moderatorEmail = `e2e-wave-i-moderator-${id}@yourrank.test`;
+    const moderatorSlug = `e2e-wave-i-mod-${id}`;
+    let moderatorCreated = false;
+    const sql = new SQL(DB_URL);
+    try {
+      await moderatorClient.get("/login");
+      const signup = await moderatorClient.post("/api/auth/signup", {
+        email: moderatorEmail,
+        password,
+        name: "E2E Wave I Moderator",
+        slug: moderatorSlug,
+      });
+      expect(signup.status).toBe(200);
+      expect(signup.json?.ok).toBe(true);
+      moderatorCreated = true;
+      const login = await moderatorClient.post("/api/auth/login", { email: moderatorEmail, password });
+      expect(login.status).toBe(200);
+      expect(login.json?.ok).toBe(true);
+
+      const ownerRows = await sql`select id from users where email = ${email} limit 1`;
+      const moderatorRows = await sql`select id from users where email = ${moderatorEmail} limit 1`;
+      const ownerId = ownerRows[0]?.id;
+      const moderatorId = moderatorRows[0]?.id;
+      expect(ownerId).toBeDefined();
+      expect(moderatorId).toBeDefined();
+      await sql`update users set plan='team', plan_expires_at=now() + interval '30 days', status='active' where id=${ownerId}`;
+      await sql`
+        insert into site_members (site_id, user_id, role, invited_by)
+        values (${siteId}, ${moderatorId}, 'moderator', ${ownerId})
+        on conflict (site_id, user_id) do update set role='moderator', invited_by=${ownerId}, updated_at=now()
+      `;
+
+      const insights = await moderatorClient.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=30`);
+      expect(insights.status).toBe(200);
+      expect(insights.json?.ok).toBe(true);
+      expect(insights.json?.site?.id).toBe(siteId);
+      expect(JSON.stringify(insights.json)).not.toMatch(/access_token|refresh_token|provider|email|telegram_user|kick_user/i);
+
+      const health = await moderatorClient.get(`/api/credits/status?siteId=${encodeURIComponent(siteId)}`);
+      expect(health.status).toBe(200);
+      expect(health.json?.channel?.canManage).toBe(false);
+      expect(health.json?.capabilities?.manageConnections).toBe(false);
+      expect(JSON.stringify(health.json?.channel)).not.toMatch(/access_token|refresh_token|externalId|webhook_url|telegram_chat_id/i);
+
+      const disconnect = await moderatorClient.post(`/api/kick/disconnect?siteId=${encodeURIComponent(siteId)}`, {});
+      expect(disconnect.status).toBe(403);
+      expect(disconnect.json?.ok).not.toBe(true);
+    } finally {
+      await sql.end();
+      if (moderatorCreated) {
+        const cleanup = await moderatorClient.post("/api/account/delete", { password });
+        if (!cleanup.json?.ok) throw new Error(`moderator cleanup failed: ${cleanup.status} ${cleanup.body}`);
+      }
+    }
+  });
+
   it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("publish-draft-navigation")} returning a board to draft removes public access and republishing restores it`, async () => {
     const published = await client.get(`/${slug}`);
     expect(published.status).toBe(200);

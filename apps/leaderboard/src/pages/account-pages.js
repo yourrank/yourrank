@@ -178,8 +178,8 @@ const postbacksWidget = `<details class="lb-widget lb-widget--full account-setti
       </details>`;
 
 const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
-        <h2>Connected accounts</h2>
-        <p class="card-sub">Services linked to your creator account.</p>
+        <h2>Connections</h2>
+        <p class="card-sub">Account identities and per-site delivery settings. Configured means YourRank has saved the setup; use each service's test action to verify delivery.</p>
         <div id="connectedAccounts"><p class="hint">Loading…</p></div>
       </div>`;
 

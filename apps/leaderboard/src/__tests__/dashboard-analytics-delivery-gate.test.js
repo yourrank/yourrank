@@ -144,18 +144,18 @@ describe("client: Analytics is a core SPA section, not a second delivery path", 
     const expectedChrome = {
       activity: {
         path: "/dashboard/analytics/activity",
-        tabLabel: "Site visitors",
-        documentTitle: "Site visitors · Insights · YourRank",
+        tabLabel: "Overview",
+        documentTitle: "Overview · Insights · YourRank",
       },
       referrals: {
         path: "/dashboard/analytics/referrals",
-        tabLabel: "Sources",
-        documentTitle: "Referrals · Insights · YourRank",
+        tabLabel: "Traffic sources",
+        documentTitle: "Traffic sources · Insights · YourRank",
       },
       events: {
         path: "/dashboard/analytics/events",
-        tabLabel: "Events",
-        documentTitle: "Events · Insights · YourRank",
+        tabLabel: "Public site activity",
+        documentTitle: "Public site activity · Insights · YourRank",
       },
     };
     for (const tab of ANALYTICS_TABS) {
