@@ -603,7 +603,7 @@ export async function getUserBoardsList(env, uid, { query: queryImpl = query } =
      SELECT s.id, s.slug, s.name, s.casino, s.code, s.published, s.is_draft, s.board_order, s.theme_json,
             s.kick_channel_external_id, s.kick_channel_name,
             sm.role AS user_role, u.display_name AS owner_name,
-            u.plan AS owner_plan, u.plan_expires_at AS owner_plan_expires_at, u.status AS owner_status,
+            u.plan::text AS owner_plan, u.plan_expires_at AS owner_plan_expires_at, u.status::text AS owner_status,
             (SELECT COUNT(*) FROM players p WHERE p.site_id = s.id) AS player_count
        FROM site_members sm
        JOIN sites s ON s.id = sm.site_id
