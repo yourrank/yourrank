@@ -67,12 +67,14 @@ describe("Analytics bodies", () => {
       activePath: "/dashboard/analytics/activity",
     }).toString();
     expect(html).toContain("Is the community returning?");
-    expect(html).toContain("How are members participating?");
+    expect(html).toContain("How are code drops being used?");
     expect(html).toContain("How are rewards being used?");
     expect(html).toContain("What needs attention?");
     expect(html).toMatch(/class="v3-insight-band"[^>]*hidden/);
     expect(html).not.toContain('class="v3-kpi-grid"');
-    expect(html).toContain("Safe code-drop activity only");
+    expect(html).toContain("Code-drop claims from the selected site in this UTC window");
+    expect(html).toContain("Claims completed");
+    expect(html).not.toContain("Claims fulfilled");
     expect(html).toContain("Public site visits");
     expect(html).toContain('<details class="v3-table-card v3-secondary-insight" id="perf-heatmap">');
     expect(html).toContain("Actions people took");

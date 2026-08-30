@@ -24,7 +24,7 @@ describe("Kick connection health", () => {
     }));
   });
 
-  it("treats an expired access token as authorized when a refresh credential exists", () => {
+  it("does not call an expired access token authorized merely because a refresh credential exists", () => {
     expect(deriveKickConnectionHealth({
       channelLinked: true,
       accountLinked: true,
@@ -34,7 +34,24 @@ describe("Kick connection health", () => {
       activeRewardMappings: 3,
       now: NOW,
     })).toEqual(expect.objectContaining({
-      status: "authorized",
+      status: "refresh_required",
+      label: "Refresh required",
+      needsAttention: false,
+      homeAttention: false,
+    }));
+  });
+
+  it("requires verification when an access token has no trustworthy expiry", () => {
+    expect(deriveKickConnectionHealth({
+      channelLinked: true,
+      accountLinked: true,
+      hasAccessToken: true,
+      hasRefreshToken: true,
+      tokenExpiresAt: null,
+      now: NOW,
+    })).toEqual(expect.objectContaining({
+      status: "needs_verification",
+      label: "Needs verification",
       needsAttention: false,
       homeAttention: false,
     }));
@@ -46,7 +63,7 @@ describe("Kick connection health", () => {
       accountLinked: true,
       hasAccessToken: true,
       hasRefreshToken: true,
-      tokenExpiresAt: null,
+      tokenExpiresAt: "2026-08-31T12:00:00.000Z",
       now: NOW,
     });
     expect(health.status).toBe("authorized");

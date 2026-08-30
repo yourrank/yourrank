@@ -30,9 +30,14 @@ describe("metric state vocabulary", () => {
   });
 
   it("renders zeros for a loaded but traffic-less analytics period", () => {
+    const trafficRenderer = performance.slice(
+      performance.indexOf("export function renderPerformance"),
+      performance.indexOf("function setInsightValue"),
+    );
     expect(performance).toContain("setMetricEmpty");
-    expect(performance).not.toContain("setMetricUnknown");
+    expect(trafficRenderer).not.toContain("setMetricUnknown");
     expect(performance).toContain('setMetricEmpty($("perfKpiCtr"), { value: "0.0%" })');
+    expect(performance).toContain("setMetricUnknown(node)");
   });
 
   it("renders zeros for a credits economy with no activity yet", () => {

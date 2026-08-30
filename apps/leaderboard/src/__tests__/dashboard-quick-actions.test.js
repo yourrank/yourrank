@@ -64,7 +64,8 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardHtml()).toContain('id="ovConnectionAlertAction"');
     expect(overviewJs).toContain("state.CREDITS?.channel?.homeAttention === true");
     expect(overviewJs).toContain('connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection"');
-    expect(overviewJs).toContain("/dashboard/settings/connections");
+    expect(overviewJs).toContain('buildDashboardPath("settings.connections", { board: state.ACTIVE_SITE_ID })');
+    expect(overviewJs).toContain('buildDashboardPath("siteConnections.channel", { siteId: state.ACTIVE_SITE_ID })');
     expect(html).toContain('id="ovSetupCount"');
   });
 

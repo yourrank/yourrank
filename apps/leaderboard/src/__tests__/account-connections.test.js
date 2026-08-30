@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { handleAccountConnectedAccounts } from "../handlers/account.js";
 
-const request = () => new Request("https://yourrank.site/api/account/connected-accounts");
+const request = (query = "") => new Request(`https://yourrank.site/api/account/connected-accounts${query}`);
 
 function dependencies({ identity = {}, sites = [] } = {}) {
   return {
@@ -89,5 +89,63 @@ describe("Settings connection inventory", () => {
     expect(kick.action).toEqual({ label: "Reconnect", href: "/auth/kick?siteId=site-1" });
     expect(discord).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));
     expect(telegram).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));
+  });
+
+  it("labels an expired access token with unverified refreshability truthfully", async () => {
+    const response = await handleAccountConnectedAccounts(request(), {}, dependencies({
+      identity: { kick_token_expires_at: "2026-08-29T00:00:00.000Z", has_kick_refresh_token: true },
+      sites: [{
+        id: "site-1",
+        name: "Site One",
+        slug: "one",
+        kick_channel_external_id: "channel",
+        kick_channel_name: "one",
+        discord_webhook_url_enc: null,
+        telegram_chat_id: null,
+        telegram_notify: false,
+        active_reward_mappings: 1,
+      }],
+    }));
+    const body = await response.json();
+    expect(body.connections.find(({ id }) => id === "kick-account")).toEqual(expect.objectContaining({
+      status: "refresh_required",
+      statusLabel: "Refresh required",
+    }));
+    expect(body.connections.find(({ id }) => id === "kick-site:site-1")).toEqual(expect.objectContaining({
+      status: "refresh_required",
+      statusLabel: "Refresh required",
+    }));
+  });
+
+  it("builds every site-settings action with canonical board context for a two-site owner", async () => {
+    const response = await handleAccountConnectedAccounts(request("?board=site-b"), {}, dependencies({
+      sites: ["A", "B"].map((suffix) => ({
+        id: `site-${suffix.toLowerCase()}`,
+        name: `Site ${suffix}`,
+        slug: suffix.toLowerCase(),
+        kick_channel_external_id: `channel-${suffix}`,
+        kick_channel_name: suffix.toLowerCase(),
+        discord_webhook_url_enc: "encrypted",
+        telegram_chat_id: "chat",
+        telegram_notify: true,
+        active_reward_mappings: 1,
+      })),
+    }));
+    const body = await response.json();
+    expect(body.selectedSiteId).toBe("site-b");
+    expect(body.connections.slice(2, 5).every(({ selectedSite }) => selectedSite)).toBe(true);
+    expect(body.connections.slice(2, 5).map(({ id }) => id)).toEqual([
+      "kick-site:site-b",
+      "discord-site:site-b",
+      "telegram-site:site-b",
+    ]);
+    expect(body.connections.find(({ id }) => id === "kick-account").action.href).toContain("siteId=site-b");
+    for (const provider of ["discord-site:site-b", "telegram-site:site-b"]) {
+      const action = body.connections.find(({ id }) => id === provider).action;
+      expect(action.href).toContain("/dashboard/site?");
+      expect(action.href).toContain("board=site-b");
+      expect(action.href).toContain("tab=notifications");
+      expect(action.href).not.toContain("siteId=");
+    }
   });
 });

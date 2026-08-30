@@ -358,17 +358,33 @@ describe("release-gate journeys", () => {
     expect(page.status).toBe(200);
     expect(page.body).toContain("Insights");
     expect(page.body).toContain("Is the community returning?");
+    expect(page.body).toContain("How are code drops being used?");
+    expect(page.body).toContain("Claims completed");
 
     const primary = await client.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=30`);
     expect(primary.status).toBe(200);
     expect(primary.headers.get("cache-control")).toContain("no-store");
     expect(primary.json?.ok).toBe(true);
     expect(primary.json?.site?.id).toBe(siteId);
-    expect(primary.json?.window).toEqual(expect.objectContaining({ requestedDays: 30, effectiveDays: 30, timeZone: "UTC" }));
+    expect(primary.json?.window).toEqual(expect.objectContaining({
+      requestedDays: 30,
+      effectiveDays: 30,
+      timeZone: "UTC",
+      startsAt: expect.any(String),
+      endsAt: expect.any(String),
+    }));
     expect(primary.json?.community).toBeDefined();
     expect(primary.json?.participation).toBeDefined();
     expect(primary.json?.rewards).toBeDefined();
+    expect(primary.json?.rewards?.claimsCompleted).toBeDefined();
     expect(primary.json?.operations).toBeDefined();
+    expect(primary.json?.availability).toEqual(expect.objectContaining({
+      community: true,
+      participation: true,
+      rewards: true,
+      pendingReviews: true,
+      pendingClaims: true,
+    }));
 
     const second = await client.post("/api/site/create", { slug: `${slug}-insights-2`, name: "E2E Insights Second Site" });
     expect(second.status).toBe(200);
@@ -384,12 +400,25 @@ describe("release-gate journeys", () => {
     const unsupportedWindow = await client.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=365`);
     expect(unsupportedWindow.status).toBe(400);
 
-    const connections = await client.get("/api/account/connected-accounts");
+    const connections = await client.get(`/api/account/connected-accounts?board=${encodeURIComponent(second.json.id)}`);
     expect(connections.status).toBe(200);
     expect(connections.headers.get("cache-control")).toContain("no-store");
     expect(Array.isArray(connections.json?.connections)).toBe(true);
+    expect(connections.json?.selectedSiteId).toBe(second.json.id);
     expect(connections.json?.connections.some((row) => row.scope === "Creator account")).toBe(true);
     expect(connections.json?.connections.some((row) => row.scope === "E2E Insights Second Site")).toBe(true);
+    const selectedSiteRows = connections.json?.connections.filter((row) => row.selectedSite === true) || [];
+    expect(selectedSiteRows.length).toBe(3);
+    expect(selectedSiteRows.every((row) => row.scope === "E2E Insights Second Site")).toBe(true);
+    const selectedAccountAction = connections.json?.connections.find((row) => row.id === "kick-account")?.action?.href;
+    expect(selectedAccountAction).toBe(`/dashboard/site/connections?siteId=${encodeURIComponent(second.json.id)}`);
+    const secondNotificationActions = selectedSiteRows
+      .filter((row) => row.provider === "Discord delivery" || row.provider === "Telegram delivery")
+      .map((row) => row.action?.href);
+    expect(secondNotificationActions).toEqual([
+      `/dashboard/site?board=${encodeURIComponent(second.json.id)}&tab=notifications`,
+      `/dashboard/site?board=${encodeURIComponent(second.json.id)}&tab=notifications`,
+    ]);
     expect(JSON.stringify(connections.json)).not.toMatch(/access_token|refresh_token|webhook_url|telegram_chat_id|kick_user_id|telegram_user_id/i);
 
     const home = await client.get(`/dashboard?board=${encodeURIComponent(siteId)}`);

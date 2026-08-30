@@ -305,7 +305,7 @@ function renderConnectedAccounts(data) {
         ? `<button class="btn btn--sm btn--ghost" type="button" data-kick-disconnect="${esc(connection.action.siteId)}">${esc(connection.action.label)}</button>`
       : `<a class="btn btn--sm ${warning ? "btn--accent" : "btn--ghost"}" href="${esc(connection.action?.href || "#")}">${esc(connection.action?.label || "Manage")}</a>`;
     return `<div class="account-connection-row">
-      <div><strong>${esc(connection.provider)}</strong><span class="account-connection-scope">${esc(connection.scope)}</span><p>${esc(connection.detail)}</p></div>
+      <div><strong>${esc(connection.provider)}</strong><span class="account-connection-scope">${esc(connection.scope)}${connection.selectedSite ? " · Selected site" : ""}</span><p>${esc(connection.detail)}</p></div>
       <span class="account-connection-status${warning ? " is-warning" : muted ? " is-muted" : ""}">${esc(connection.statusLabel)}</span>
       ${action}
     </div>`;
@@ -332,7 +332,9 @@ function renderConnectedAccounts(data) {
 }
 
 async function loadConnectedAccounts() {
-  const r = await jsonReq("GET", "/api/account/connected-accounts");
+  const board = new URLSearchParams(location.search).get("board");
+  const query = board ? `?board=${encodeURIComponent(board)}` : "";
+  const r = await jsonReq("GET", `/api/account/connected-accounts${query}`);
   renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" });
 }
 

@@ -42,9 +42,10 @@ describe("Site settings creator UX", () => {
   });
 
   it("keeps domain states truthful and destructive actions confirmed", () => {
-    for (const state of ["No custom domain", "Not connected", "Verification pending", "Setup required", "Domain status unavailable", "Needs attention"]) {
+    for (const state of ["No custom domain", "Not connected", "Verification pending", "Setup required", "Domain status unavailable", "Needs attention", "Managed by the site owner", "Owner access required"]) {
       expect(siteJs).toContain(state);
     }
+    expect(siteJs).toContain("if (res.status === 403)");
     expect(siteJs).toMatch(/showConfirmModal\(\s*"Disconnect custom domain"/);
     expect(siteJs).toMatch(/showConfirmModal\(\s*"Buy and connect domain"/);
   });
