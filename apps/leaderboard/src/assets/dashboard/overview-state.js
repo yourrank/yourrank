@@ -80,9 +80,9 @@ export function nextStepAction({
   if (Number(pendingOrders) > 0) {
     return {
       key: "pendingOrders",
-      title: "Review pending orders",
-      body: "Members are waiting on orders for this site.",
-      label: Number(pendingOrders) === 1 ? "Review order" : "Review orders",
+      title: "Review pending claims",
+      body: "Members are waiting on reward claims for this site.",
+      label: Number(pendingOrders) === 1 ? "Review claim" : "Review claims",
       href: "/dashboard/rewards/redemptions",
     };
   }
@@ -99,7 +99,7 @@ export function nextStepAction({
     return {
       key: "addReward",
       title: "Create your first way to earn",
-      body: "Create a Kick reward so members can earn credits before they can order shop items.",
+      body: "Create a Kick reward so members can earn credits before they can claim shop items.",
       label: "Create way to earn",
       href: "/dashboard/rewards/rules#cr-reward-create-form",
     };
@@ -108,7 +108,7 @@ export function nextStepAction({
     return {
       key: "addShopItem",
       title: "Add your first shop item",
-      body: "Create the item members can order with the credits they earn.",
+      body: "Create the item members can claim with the credits they earn.",
       label: "Create shop item",
       href: "/dashboard/rewards/shop",
     };

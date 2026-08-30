@@ -25,7 +25,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "—";
 const relative = (iso) => { const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)); return mins < 60 ? `${mins}m ago` : mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`; };
-const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", redeem: "Ordered", revoke: "Refunded spend", refund: "Reversed earn" });
+const LEDGER_EVENT_LABELS = Object.freeze({ earn: "Earned", spend: "Spent", redeem: "Claimed", revoke: "Refunded spend", refund: "Reversed earn" });
 async function api(method, path, body) {
   const opts = { method, credentials: "same-origin", headers: { "x-csrf-token": csrf() } };
   if (body) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
@@ -53,6 +53,11 @@ let memberHistoryRelease;
 let memberHistoryTrigger;
 let memberHistoryRequest = 0;
 let memberQueryOpened = false;
+let claimDetailId = "";
+let claimDetailRelease;
+let claimDetailTrigger;
+let claimDetailRequest = 0;
+let claimDetailLoading = false;
 let shopItemsView = [];
 let shopSearch = "";
 let shopSort = "cost";
@@ -245,7 +250,17 @@ async function loadMemberHistoryDialog() {
   if (!window.YRDialog) await import("./dialog.js");
   return window.YRDialog;
 }
-function renderRedemptionRow(r) { return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Item">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Ordered" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${r.status === "pending" ? `<button class="btn btn--sm" data-cancel="${esc(r.id)}">Cancel</button> <button class="btn btn--sm btn--accent" data-fulfill="${esc(r.id)}">Fulfil</button>` : ""}</td>`; }
+function claimIdForRedemption(id) {
+  return `redemption:${id}`;
+}
+function renderRedemptionRow(r) {
+  const actions = [
+    `<button class="btn btn--sm" type="button" data-claim-detail="${esc(r.id)}" aria-controls="cr-claim-detail-drawer" aria-expanded="false">Details</button>`,
+    r.status === "pending" ? `<button class="btn btn--sm" type="button" data-cancel="${esc(r.id)}">Cancel</button>` : "",
+    r.status === "pending" ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(r.id)}">Complete</button>` : "",
+  ].filter(Boolean).join(" ");
+  return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+}
 function renderShopCards(items) {
   const root = $("cr-shop-list"); if (!root) return;
   ensureShopControls(items.length > 0);
@@ -267,7 +282,7 @@ function renderShopCards(items) {
       : {
           kind: "empty",
           title: "No shop items yet",
-          body: "Create a shop item members can order with Credits.",
+          body: "Create a shop item members can claim with Credits.",
           compact: true,
           actions: [{ label: "Create item", id: "crShopEmptyCreate", accent: true }],
         };
@@ -322,7 +337,7 @@ function render() {
     const expiryDate = expiry ? new Date(expiry) : null;
     const tokenExpired = connected && (!expiryDate || expiryDate <= new Date());
     renderChannelHealth({ connected, tokenExpired, expiryDate, linkedAt: state.channel?.linkedAt });
-    $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending orders"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "orders / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
+    $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending claims"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "claims / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
     $("cr-viewer-auth-kick").checked = auth.kick !== false; $("cr-viewer-auth-discord").checked = auth.discord !== false; const publicToggle = $("cr-viewer-auth-public"); if (publicToggle) publicToggle.checked = auth.public !== false;
   }
@@ -381,7 +396,7 @@ function render() {
   }
   if (current === "redemptions") {
     const redemptions = state.redemptions || [];
-    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No orders yet", body: "Orders will appear after a member orders a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Pending first", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No orders yet.", emptyText: "No matching orders.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
+    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No claims yet", body: "Claims will appear after a member redeems a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
     else redemptionCtrl.setItems(redemptions);
   }
   if (current === "history") {
@@ -445,10 +460,10 @@ function renderAnalytics() {
   }
   const label = $("cr-analytics-days-label"); if (label) label.textContent = String(Number($("cr-analytics-days")?.value) || 30);
   const items = a.topItems || [];
-  $("cr-top-items-list").innerHTML = items.map((i) => `<tr><td data-label="Item">${esc(i.name)}</td><td data-label="Orders" class="num">${i.redemptions}</td><td data-label="Credits spent" class="num">${i.credits_spent}</td></tr>`).join("");
+  $("cr-top-items-list").innerHTML = items.map((i) => `<tr><td data-label="Item">${esc(i.name)}</td><td data-label="Claims" class="num">${i.redemptions}</td><td data-label="Credits spent" class="num">${i.credits_spent}</td></tr>`).join("");
   const topEmpty = $("cr-top-items-empty");
   if (items.length) topEmpty.hidden = true;
-  else renderEmpty(topEmpty, { kind: "empty", title: "No items ordered yet", body: "Orders will appear after members order a shop item.", compact: true });
+  else renderEmpty(topEmpty, { kind: "empty", title: "No items claimed yet", body: "Claims will appear after members claim a shop item.", compact: true });
   renderCreditsByDay(a.creditsByDay || []);
 }
 function renderCreditsByDay(rows) {
@@ -510,7 +525,7 @@ async function delReward(id, trigger) {
   catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function delShop(id, trigger) {
-  if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past orders stay in credit activity.", "Disable", true)) return;
+  if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past claims stay in credit activity.", "Disable", true)) return;
   setLoading(trigger, true, "Disabling…");
   try { await api("DELETE", sitePath(`/api/credits/shop/${encodeURIComponent(id)}`)); await load(); }
   catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
@@ -538,6 +553,7 @@ function wireDynamicActions() {
   document.querySelectorAll("[data-del-shop]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => delShop(b.dataset.delShop, b)); });
   document.querySelectorAll("[data-fulfill]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => updateRedemption(b.dataset.fulfill, "fulfilled", b)); });
   document.querySelectorAll("[data-cancel]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => updateRedemption(b.dataset.cancel, "cancelled", b)); });
+  document.querySelectorAll("[data-claim-detail]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => openClaimDetail(b.dataset.claimDetail, b)); });
   document.querySelectorAll("[data-block]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => toggleBlock(b.dataset.block, b.dataset.blocked === "1", b)); });
   document.querySelectorAll("[data-tip-viewer]:not([data-wired])").forEach((b) => { b.dataset.wired = "1"; b.addEventListener("click", () => openTip(b.dataset.tipViewer, b.dataset.viewerName)); });
   document.querySelectorAll("[data-member-detail]:not([data-wired])").forEach((button) => {
@@ -766,6 +782,95 @@ async function openMemberFromQuery() {
     || document.querySelector('.v3-tabs [aria-current="page"]');
   if (trigger) await openMemberHistory(viewer, trigger);
 }
+function closeClaimDetail() {
+  const drawer = $("cr-claim-detail-drawer");
+  const backdrop = $("cr-claim-detail-backdrop");
+  if (drawer) drawer.hidden = true;
+  if (backdrop) backdrop.hidden = true;
+  claimDetailRelease?.();
+  claimDetailRelease = null;
+  claimDetailLoading = false;
+  claimDetailId = "";
+  document.documentElement.classList.remove("yr-modal-open");
+  if (claimDetailTrigger) {
+    claimDetailTrigger.setAttribute("aria-expanded", "false");
+    claimDetailTrigger.focus();
+    claimDetailTrigger = null;
+  }
+}
+function renderClaimDetail(data) {
+  const claim = data.claim || {};
+  const reward = claim.reward || {};
+  const subject = claim.subject || {};
+  $("cr-claim-detail-title").textContent = reward.name || claim.source?.title || "Reward claim";
+  $("cr-claim-detail-subtitle").textContent = `${claim.statusLabel || "Claim"} · ${Number(reward.cost) || 0} credits`;
+  $("cr-claim-detail-member").textContent = subject.displayName || "Member";
+  $("cr-claim-detail-reward").textContent = reward.name || "Reward";
+  $("cr-claim-detail-submitted").textContent = fmtDate(claim.submittedAt);
+  $("cr-claim-detail-state").innerHTML = claim.statusLabel ? `<span class="v3-chip v3-chip--${esc(claim.status === "completed" ? "fulfilled" : claim.status === "cancelled" ? "cancelled" : "pending")}">${esc(claim.statusLabel)}</span>` : "—";
+  $("cr-claim-detail-private").textContent = claim.fulfillmentDetails?.note || "No private fulfillment details are stored for reward claims yet.";
+  const history = claim.history || [];
+  $("cr-claim-detail-history").innerHTML = history.length
+    ? history.map((event) => `<li><div><strong>${esc(event.label || event.action)}</strong><span>${event.actor?.displayName ? `By ${esc(event.actor.displayName)}` : "System record"}</span></div><time datetime="${esc(event.createdAt)}" title="${esc(fmtDate(event.createdAt))}">${esc(relative(event.createdAt))}</time></li>`).join("")
+    : '<li><div><strong>Claim submitted</strong><span>History is not available yet.</span></div></li>';
+  const actions = $("cr-claim-detail-actions");
+  actions.innerHTML = "";
+  if ((claim.allowedActions || []).includes("cancel")) {
+    const cancel = document.createElement("button");
+    cancel.className = "btn btn--sm";
+    cancel.type = "button";
+    cancel.textContent = "Cancel claim";
+    cancel.addEventListener("click", () => updateRedemption(claim.source?.id || claim.id?.replace(/^redemption:/, ""), "cancelled", cancel));
+    actions.appendChild(cancel);
+  }
+  if ((claim.allowedActions || []).includes("complete")) {
+    const complete = document.createElement("button");
+    complete.className = "btn btn--sm btn--accent";
+    complete.type = "button";
+    complete.textContent = "Complete claim";
+    complete.addEventListener("click", () => updateRedemption(claim.source?.id || claim.id?.replace(/^redemption:/, ""), "fulfilled", complete));
+    actions.appendChild(complete);
+  }
+}
+async function loadClaimDetail() {
+  if (claimDetailLoading || !claimDetailId) return;
+  const request = claimDetailRequest;
+  claimDetailLoading = true;
+  setStatus("cr-claim-detail-status", "Loading claim details…");
+  try {
+    const data = await api("GET", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(claimDetailId))}`));
+    if (request !== claimDetailRequest) return;
+    renderClaimDetail(data);
+    setStatus("cr-claim-detail-status", "Claim details loaded.");
+  } catch (error) {
+    if (request !== claimDetailRequest) return;
+    logError("load-claim-detail", error);
+    setStatus("cr-claim-detail-status", "Couldn't load this claim. Try again.", true);
+  } finally {
+    if (request === claimDetailRequest) claimDetailLoading = false;
+  }
+}
+async function openClaimDetail(redemptionId, trigger) {
+  const drawer = $("cr-claim-detail-drawer");
+  const backdrop = $("cr-claim-detail-backdrop");
+  if (!drawer || !backdrop) return;
+  const dialog = await loadMemberHistoryDialog();
+  closeMemberHistory();
+  closeTip();
+  closeClaimDetail();
+  claimDetailRequest++;
+  claimDetailId = redemptionId;
+  claimDetailTrigger = trigger;
+  claimDetailTrigger.setAttribute("aria-expanded", "true");
+  const local = (state.redemptions || []).find((item) => String(item.id) === String(redemptionId));
+  $("cr-claim-detail-title").textContent = local?.item_name || "Claim details";
+  $("cr-claim-detail-subtitle").textContent = local ? `${viewerIdentity(local)} · ${statusChip(local.status).replace(/<[^>]+>/g, "")}` : "";
+  drawer.hidden = false;
+  backdrop.hidden = false;
+  document.documentElement.classList.add("yr-modal-open");
+  claimDetailRelease = dialog.trap(drawer, closeClaimDetail);
+  await loadClaimDetail();
+}
 let activePopover;
 function closePopover(result = false) {
   if (!activePopover) return;
@@ -787,11 +892,41 @@ function confirmPopover(trigger, title, body) {
   });
 }
 async function updateRedemption(id, status, trigger) {
-  const body = status === "cancelled" ? "This restores the member’s credits and returns one item to stock." : "This marks the item as fulfilled.";
-  if (!await confirmPopover(trigger, status === "cancelled" ? "Cancel order" : "Fulfil order", body)) return;
+  const action = status === "cancelled" ? "cancel" : "complete";
+  const body = status === "cancelled" ? "This restores the member’s credits and returns one item to stock." : "This marks the reward claim as completed.";
+  const drawer = $("cr-claim-detail-drawer");
+  const restoreDrawerTrap = Boolean(drawer && !drawer.hidden && claimDetailRelease);
+  if (restoreDrawerTrap) {
+    claimDetailRelease();
+    claimDetailRelease = null;
+  }
+  const confirmed = await showConfirmModal(
+    status === "cancelled" ? "Cancel claim" : "Complete claim",
+    body,
+    status === "cancelled" ? "Cancel claim" : "Complete claim",
+    status === "cancelled",
+  );
+  if (!confirmed) {
+    if (restoreDrawerTrap && drawer && !drawer.hidden && window.YRDialog) claimDetailRelease = window.YRDialog.trap(drawer, closeClaimDetail);
+    return;
+  }
   setLoading(trigger, true, "Saving…");
-  try { await api("POST", sitePath(`/api/credits/redemptions/${encodeURIComponent(id)}`), { status }); await load(); }
-  catch (err) { setStatus("cr-redemption-status", err.message, true); } finally { setLoading(trigger, false); }
+  try {
+    await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/transition`), { action, expectedStatus: "submitted" });
+    await load();
+    if (claimDetailId === id) {
+      claimDetailRequest++;
+      claimDetailLoading = false;
+      await loadClaimDetail();
+    }
+  }
+  catch (err) {
+    setStatus("cr-redemption-status", err.message, true);
+    if (claimDetailId === id) setStatus("cr-claim-detail-status", err.message, true);
+  } finally {
+    setLoading(trigger, false);
+    if (restoreDrawerTrap && drawer && !drawer.hidden && !claimDetailRelease && window.YRDialog) claimDetailRelease = window.YRDialog.trap(drawer, closeClaimDetail);
+  }
 }
 async function toggleShop(id, trigger) {
   const item = state.shopItems.find((i) => i.id === id); if (!item) return;
@@ -887,6 +1022,8 @@ function wireActions() {
   $("cr-tip-cancel")?.addEventListener("click", closeTip);
   $("cr-member-history-close")?.addEventListener("click", closeMemberHistory);
   $("cr-member-history-backdrop")?.addEventListener("click", closeMemberHistory);
+  $("cr-claim-detail-close")?.addEventListener("click", closeClaimDetail);
+  $("cr-claim-detail-backdrop")?.addEventListener("click", closeClaimDetail);
   $("cr-member-history-tip")?.addEventListener("click", () => {
     if (!memberDetail) return;
     const { id } = memberDetail;
@@ -1033,7 +1170,7 @@ function renderHistory(data) {
   const list = $("cr-history-list");
   const empty = $("cr-history-empty");
   if (!list) return;
-  list.innerHTML = boards.map((b) => `<tr><td data-label="Site"><b>${esc(b.name || b.slug)}</b><br><span class="hint">${esc(b.slug)}</span></td><td data-label="Balance" class="num">${b.balance}</td><td data-label="Earned" class="num">${b.totalEarned}</td><td data-label="Spent" class="num">${b.totalSpent}</td><td data-label="Pending" class="num">${b.redemptionsPending}</td><td data-label="Orders" class="num">${b.redemptionsTotal}</td><td data-label="Actions" class="ta-r"><a class="btn btn--sm" href="/dashboard/site/connections?siteId=${esc(b.siteId)}">Connect Kick</a></td></tr>`).join("");
+  list.innerHTML = boards.map((b) => `<tr><td data-label="Site"><b>${esc(b.name || b.slug)}</b><br><span class="hint">${esc(b.slug)}</span></td><td data-label="Balance" class="num">${b.balance}</td><td data-label="Earned" class="num">${b.totalEarned}</td><td data-label="Spent" class="num">${b.totalSpent}</td><td data-label="Pending" class="num">${b.redemptionsPending}</td><td data-label="Claims" class="num">${b.redemptionsTotal}</td><td data-label="Actions" class="ta-r"><a class="btn btn--sm" href="/dashboard/site/connections?siteId=${esc(b.siteId)}">Connect Kick</a></td></tr>`).join("");
   if (empty) {
     empty.innerHTML = boards.length ? "" : inlineStateHtml({ kind: "empty", title: "No sites found", body: "This member has no activity on your sites." });
     empty.hidden = boards.length > 0;

@@ -6037,6 +6037,15 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .cr-drawer-actions { justify-content: flex-end;
 }
 
+.v3-dash[data-auth-workspace] #cr-claim-detail-drawer .cr-drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.v3-dash[data-auth-workspace] #cr-claim-detail-actions .btn {
+  min-height: 44px;
+}
+
 .v3-dash[data-auth-workspace] .cr-shop-layout > .v3-section-head { padding-left: 0; padding-right: 0;
 }
 
@@ -6949,7 +6958,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
   .v3-dash[data-auth-workspace] #cr-redemptions .v3-table td.ta-r .btn,
   .v3-dash[data-auth-workspace] #cr-rewards .v3-table td.ta-r .btn {
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .v3-dash[data-auth-workspace] #cr-analytics ~ .v3-kpi-grid {

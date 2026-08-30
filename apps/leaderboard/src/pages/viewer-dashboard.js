@@ -75,10 +75,10 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <div id="vd-shop-list"></div>
     <p class="empty" id="vd-shop-empty" hidden>No items available.</p>
 
-    <h3 class="mt-24">Your orders</h3>
+    <h3 class="mt-24">Your claims</h3>
     <div id="vd-redemptions-list"></div>
-    <p class="empty" id="vd-redemptions-empty" hidden>No orders yet. Place an order from Rewards to see it here.</p>
-    <p class="hint">Pending means the creator hasn't handed it over yet. Fulfilled means they have. Cancelled and refunded both mean the credits went back to your balance.</p>
+    <p class="empty" id="vd-redemptions-empty" hidden>No claims yet. Claim a reward to see its status here.</p>
+    <p class="hint">Pending means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled and refunded both mean the credits went back to your balance.</p>
 
     <h3 class="mt-24">Live events</h3>
     <p class="status" id="vd-events-status" role="status" aria-live="polite"></p>

@@ -2,9 +2,9 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `cba77904522cdf64f90a55a20b4eb042dc9d517f` (PR #668 merged)
+**Evidence baseline:** `main` at `88113049b348e42eb668e382d2d7ebd10d5d8c29` (PR #672 merged)
 
-**Last reconciled:** 2026-08-29
+**Last reconciled:** 2026-08-30
 
 **Scope:** current implementation reality only. Target product direction lives in [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md).
 
@@ -114,6 +114,58 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Context uses an explicit Viewer Account → selected-site `site_viewers` membership link where one exists, and shows only authenticated provider links. It does not expose the existing source score, raw reason, IP, device, or network data and does not infer identity from names.
 - Home review attention is deferred; Home remains account-scoped and no trustworthy, inexpensive selected-site integration has been established.
 
+### Safe Claims foundation — AVAILABLE; ADAPTER-BASED
+
+- Rewards owns canonical safe Claims at the existing `/dashboard/rewards/redemptions` route, now presented as Claims. No new top-level route or navigation family was introduced.
+- The only proven safe fulfillment lifecycle is the existing authenticated reward redemption workflow. `/api/claims` and `/api/viewer/claims` adapt `redemptions` joined to `site_viewers`, `viewers`, `shop_items`, and `sites`; no `claims` table or migration was introduced.
+- Canonical Claim states map existing persistence as `pending` → Submitted/Needs fulfillment, `fulfilled` → Completed, and `cancelled` → Cancelled. Creator actions are Complete or Cancel. The compatibility redemption transition endpoint remains available, but both APIs use one atomic transition implementation.
+- Pending transitions are site-scoped and atomic. Exact terminal retries are idempotent, contradictory terminal transitions fail, cancellation refunds the existing balance/stock/ledger effects once, and terminal decisions append attributable `claim_completed` or `claim_cancelled` events to `audit_log` without copying fulfillment values.
+- Claim identity is Viewer Account plus the selected site's `site_viewers` Membership. Viewer APIs return only the authenticated viewer's records; creator APIs require the existing site capability. Username, display-name, IP, device, browser, or raw provider identifiers are not ownership proof.
+- No private fulfillment fields are currently required by the proven workflow. Claim detail explicitly reports that no private data is stored; all creator/viewer Claim responses are `no-store`, and there is no public Claim-detail API.
+- Kick reward earning, free code drops, free chat giveaway/raffle winners, tournament participants/winners, and manual credit adjustments do not yet provide a reusable fulfillment lifecycle and remain outside Claims. Restricted wagering, payout, settlement, withdrawal, and paid-chance mechanics are excluded.
+- Home adds no new Claims card or account-wide queue. Its existing selected-site pending-redemption alert is relabeled as Claims because it already receives the selected site's current Rewards usage count. A broader viewer navigation destination remains deferred; current public site and `/me` surfaces show truthful claim status within their existing ownership.
+
+Current fulfillment audit:
+
+| Workflow | Current owner | Viewer identity | Source and states | Private data | Persistence | Classification | Current action |
+|---|---|---|---|---|---|---|---|
+| Reward shop redemption | Rewards / Credits | Authenticated Viewer Account joined through selected-site `site_viewers` membership | `redemptions`: `pending`, `fulfilled`, `cancelled`; linked `shop_items` reward | None | `redemptions`, `site_viewers`, `viewers`, `shop_items`, `credit_ledger`, `site_credit_aggregates` | SAFE + READY; ALREADY SUFFICIENT / ADAPT ONLY | Canonical Claims presentation/API and audited terminal transitions over existing persistence |
+| Kick channel-reward credit earning | Rewards / Ways to earn | Provider-signed viewer linkage into Viewer Account and Site Membership | `kick_reward_events` and `credit_ledger`; event processed into credits | Provider event payload exists, but no fulfillment fields | `kick_reward_events`, `credit_ledger` | SAFE BUT NOT READY | Remains credit earning, not a Claim |
+| Free code drop | Activities | Authenticated Viewer Account and Site Membership | `code_drops`, `code_drop_claims`; active/expired plus one claim record | No fulfillment data | Existing drop and ledger tables | SAFE BUT NOT READY | Remains an Activity result; no creator fulfillment lifecycle invented |
+| Free chat giveaway / raffle winner | Transitional Engagement / Giveaways | Current records do not consistently prove canonical viewer ownership | Existing winner/export records; no shared fulfillment states | No proven fulfillment model | Existing giveaway records | AMBIGUOUS / SAFE BUT NOT READY | Excluded from Claims pending identity and lifecycle evidence |
+| Tournament participant / winner | Transitional Engagement / Tournaments | Some `tournament_entries.viewer_id` links exist; no reward fulfillment ownership | Entry/result states, not a reward fulfillment lifecycle | Existing tournament review context is separate | Existing tournament tables | SAFE BUT NOT READY | Excluded; Wave F review behavior unchanged |
+| Manual credit adjustment / tip | Rewards / member management | Selected-site membership | Immediate `credit_ledger` event; no pending fulfillment | Existing bounded reason/description, not fulfillment data | `credit_ledger`, `site_viewers` | ALREADY SUFFICIENT | Remains credit activity, not a Claim |
+| Wagering, predictions, paid chance, payout, settlement, withdrawal | Restricted legacy owners | Not considered | Restricted financial/game states | Out of scope | Restricted legacy tables | RESTRICTED LEGACY | Not adapted, renamed, refactored, or tested as Claims |
+
+Existing-to-canonical state mapping:
+
+| Existing redemption state | Canonical Claim state | Meaning |
+|---|---|---|
+| `pending` | Submitted / Needs fulfillment | The authenticated viewer spent free credits on the reward; creator action is required |
+| `fulfilled` | Completed | An authorized creator/team actor confirms the ordinary reward fulfillment is complete |
+| `cancelled` | Cancelled | Terminal; credits and finite stock are restored once |
+
+Waiting for viewer, Needs review, Approved, and Expired are not implemented because the proven reward workflow has no supporting source state or action. They remain target concepts, not aliases.
+
+Server-owned transition matrix:
+
+| Current source / canonical state | Actor | Allowed next state | Enforcement and effects |
+|---|---|---|---|
+| `pending` / Submitted | Existing actor authorized by `canRoleManageCredits` for the selected site | `fulfilled` / Completed | Atomic site-scoped pending-only update plus `claim_completed` audit event |
+| `pending` / Submitted | Existing actor authorized by `canRoleManageCredits` for the selected site | `cancelled` / Cancelled | Atomic site-scoped pending-only update, one balance refund, one finite-stock restore, one revoke ledger row, and `claim_cancelled` audit event |
+| `fulfilled` / Completed | Same authorized actor retrying Complete | No change | Idempotent success; no repeated audit or source effect |
+| `cancelled` / Cancelled | Same authorized actor retrying Cancel | No change | Idempotent success; no repeated refund, stock restore, ledger, or audit effect |
+| Either terminal state | Any actor requesting the other terminal state | None | Safe `409` conflict; reopening is unsupported |
+| Any Claim | Viewer | No Claim transition in Wave G | Viewer creation remains the existing idempotent `/api/viewer/redeem`; Claim APIs are read-only for viewers because no real viewer-required fulfillment action exists |
+
+Privacy, access, retention, and notification decisions:
+
+- No recipient name, address, phone, email, ID, fulfillment note, or arbitrary viewer message is stored. The authenticated detail response exposes a structured empty `fulfillmentDetails` model so clients do not infer fields.
+- Creator list/detail/transition require the current selected-site Rewards-management capability. Viewer list/detail require the authenticated Viewer Account and filter through `site_viewers.viewer_id`. Anonymous/public Claim APIs do not exist. All Claim API responses, including errors, are `no-store`.
+- Because no private fulfillment values exist, Wave G does not broaden team access or add an Owner-only data path. If a real workflow later requires sensitive data, current capability granularity must be reassessed conservatively in Wave H before those values are exposed.
+- There is no private fulfillment-data retention obligation in the current model. Existing redemption, ledger, and redacted audit records retain ordinary fulfillment/account history under their existing behavior; no unsafe speculative deletion job was added.
+- Existing Discord/overlay redemption alerts are relabeled as reward Claims. No notification or automation platform was added, and viewer notification on completion remains deferred.
+
 ## Current Major Surfaces
 
 | Surface | Current route/implementation reality |
@@ -123,7 +175,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 | Leaderboard editor | Site-scoped SPA route family under `/dashboard/leaderboard` |
 | Site | Site-scoped `/dashboard/site` plus separate Connections fragment |
 | Activities | Site-scoped `/dashboard/activities`; adapter over free code drops only |
-| Rewards | Site-scoped fragment route family under `/dashboard/rewards` |
+| Rewards (including Claims) | Site-scoped fragment route family under `/dashboard/rewards`; Claims adapts existing reward redemptions at `/dashboard/rewards/redemptions` |
 | People (Members + Reviews) | Site-scoped `/dashboard/audience/members` and `/dashboard/audience/reviews` |
 | Insights | Site-scoped SPA route family under `/dashboard/analytics` |
 | Telegram | Account-scoped Bot Worker documents under `/dashboard/telegram*` |
@@ -148,6 +200,7 @@ Community, People, and Insights are current navigation presentation labels only;
 - `site_viewers` is the current physical Site Membership record. Its foreign keys and unique `(site_id, viewer_id)` constraint already provide the required scope and uniqueness, so no additive membership table or inferred backfill is justified.
 - A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records.
 - People reuses `/dashboard/audience/members` and `/dashboard/audience/reviews`. Member detail binds membership ID and selected site; review list/detail/decisions bind the source entry and any membership join to the selected site. Creator authorization uses the existing site capability boundary.
+- Rewards Claims bind an existing redemption to its Viewer Account through the selected-site `site_viewers` membership. Creator and viewer Claim APIs independently enforce those site and account boundaries.
 - Leaderboard Player and Telegram Subscriber records remain unlinked to Viewer Account and Site Membership. No username, display-name, IP, device, or fuzzy matching is used to infer identity.
 - Dashboard route scope is explicitly `account` or `site`.
 - Current site navigation uses both `board` and `siteId` query spellings by delivery family.
@@ -165,7 +218,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | Legacy route aliases | Retained pending telemetry evidence |
 | Viewer/site membership expansion beyond the existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence |
 | Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
-| Shared Activity / Review persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
-| Claims architecture | Deferred to Wave G; no canonical Claim model exists |
+| Shared Activity / Review / Claim persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
+| Claims expansion beyond reward redemptions | Deferred; other safe workflows do not yet expose a proven fulfillment lifecycle, and private fulfillment fields must be evidence-led |
 | Billing terms/providers/enums | Separate reconciliation required |
 | Restricted legacy route families | Operational current implementation; excluded from target architecture work |

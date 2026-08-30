@@ -94,7 +94,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "rewards.overview": "Overview",
   "rewards.shop": "Shop",
   "rewards.rules": "Ways to earn",
-  "rewards.redemptions": "Orders",
+  "rewards.redemptions": "Claims",
   "rewards.history": "Activity",
   "siteConnections.channel": "Kick connection",
   "giveaways.chat": "Giveaways",

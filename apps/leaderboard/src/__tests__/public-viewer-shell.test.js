@@ -419,7 +419,7 @@ describe("public viewer shell", () => {
     expect(css).toContain(":focus-visible");
   });
 
-  it("tells a viewer about their own failed order without server vocabulary", () => {
+  it("tells a viewer about their own failed claim without server vocabulary", () => {
     const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
     expect(shell).toContain("recover(orderErrorText(r.data.error));");
     expect(shell).toContain("You don’t have enough credits for that yet.");
@@ -506,7 +506,7 @@ describe("public viewer shell", () => {
       expect(block).toContain('class="yr-empty-p"');
     }
     expect(shop).toContain("Rewards will appear here when Creator Name adds them.");
-    expect(me).toContain('<p class="yr-empty-t">No orders yet</p>');
+    expect(me).toContain('<p class="yr-empty-t">No claims yet</p>');
   });
 
   it("puts the creator's own line first in the footer and keeps section links quiet", async () => {

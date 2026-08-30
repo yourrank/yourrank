@@ -55,6 +55,79 @@ function getSite(env, user, url) {
   return siteId ? getBoardById(env, user.id, siteId) : getByUser(env, user.id);
 }
 
+export const CLAIM_SOURCE_PREFIX = "redemption:";
+
+export async function transitionRedemptionClaimStatus(tx, { siteId, userId, sourceId, nextStatus }) {
+  if (!["fulfilled", "cancelled"].includes(nextStatus)) {
+    return { error: "Claim status must be fulfilled or cancelled.", status: 400 };
+  }
+
+  // Only mutate pending rows. The row lock acquired by UPDATE makes complete
+  // and cancel mutually exclusive, while the fallback read below makes exact
+  // retries safe without replaying refunds, stock restores, or audit entries.
+  const redemption = await tx.one(
+    `UPDATE redemptions r
+        SET status=$1, updated_at=now()
+      FROM site_viewers sv
+      WHERE r.id=$2 AND r.site_viewer_id = sv.id AND sv.site_id=$3 AND r.status = 'pending'
+      RETURNING r.id, r.site_viewer_id, r.shop_item_id, r.cost`,
+    [nextStatus, sourceId, siteId]
+  );
+
+  if (!redemption) {
+    const existing = await tx.one(
+      `SELECT r.id, r.status
+         FROM redemptions r
+         JOIN site_viewers sv ON sv.id = r.site_viewer_id
+        WHERE r.id=$1 AND sv.site_id=$2`,
+      [sourceId, siteId]
+    );
+    if (!existing) return { error: "Claim not found.", status: 404 };
+    if (existing.status === nextStatus) return { id: existing.id, status: nextStatus, replayed: true };
+    return { error: "This claim has already been resolved.", status: 409, currentStatus: existing.status };
+  }
+
+  if (nextStatus === "cancelled") {
+    await tx.unsafe(
+      `UPDATE site_viewers
+          SET balance = balance + $1,
+              total_spent = GREATEST(total_spent - $1, 0),
+              updated_at = now()
+        WHERE id=$2`,
+      [redemption.cost, redemption.site_viewer_id]
+    );
+    await tx.unsafe(
+      `UPDATE shop_items
+          SET stock = stock + 1, updated_at = now()
+        WHERE id=$1 AND stock IS NOT NULL`,
+      [redemption.shop_item_id]
+    );
+    await tx.unsafe(
+      `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
+       VALUES ($1, 'revoke', $2, 'Cancelled redemption refund', $3)`,
+      [redemption.site_viewer_id, redemption.cost, { redemption_id: redemption.id }]
+    );
+  }
+
+  await tx.unsafe(
+    `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+     VALUES ($1, $2, 'claim', $3, $4::jsonb)`,
+    [
+      userId,
+      nextStatus === "fulfilled" ? "claim_completed" : "claim_cancelled",
+      `${CLAIM_SOURCE_PREFIX}${redemption.id}`,
+      {
+        site_id: siteId,
+        source: "redemptions",
+        source_id: redemption.id,
+        status: nextStatus,
+      },
+    ]
+  );
+
+  return { id: redemption.id, status: nextStatus, replayed: false };
+}
+
 const LEDGER_DIRECTIONS = Object.freeze({
   earn: "credit",
   revoke: "credit",
@@ -616,45 +689,14 @@ export async function handleCreditsUpdateRedemption(request, env) {
   const status = String(body?.status || "").trim();
   if (!["fulfilled", "cancelled"].includes(status)) return bad("status must be fulfilled or cancelled");
 
-  const result = await withTransaction(async (tx) => {
-    // Only allow transitions from pending; this makes the refund idempotent
-    // and prevents a redemption being cancelled twice.
-    const redemption = await tx.one(
-      `UPDATE redemptions r
-          SET status=$1, updated_at=now()
-        FROM site_viewers sv
-        WHERE r.id=$2 AND r.site_viewer_id = sv.id AND sv.site_id=$3 AND r.status = 'pending'
-        RETURNING r.id, r.site_viewer_id, r.shop_item_id, r.cost`,
-      [status, id, site.id]
-    );
-    if (!redemption) return null;
+  const result = await withTransaction((tx) => transitionRedemptionClaimStatus(tx, {
+    siteId: site.id,
+    userId: user.id,
+    sourceId: id,
+    nextStatus: status,
+  }));
 
-    if (status === "cancelled") {
-      await tx.unsafe(
-        `UPDATE site_viewers
-            SET balance = balance + $1,
-                total_spent = GREATEST(total_spent - $1, 0),
-                updated_at = now()
-          WHERE id=$2`,
-        [redemption.cost, redemption.site_viewer_id]
-      );
-      await tx.unsafe(
-        `UPDATE shop_items
-            SET stock = stock + 1, updated_at = now()
-          WHERE id=$1 AND stock IS NOT NULL`,
-        [redemption.shop_item_id]
-      );
-      await tx.unsafe(
-        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
-         VALUES ($1, 'revoke', $2, 'Cancelled redemption refund', $3)`,
-        [redemption.site_viewer_id, redemption.cost, { redemption_id: redemption.id }]
-      );
-    }
-
-    return { id: redemption.id, status };
-  });
-
-  if (!result) return bad("redemption not found", 404);
+  if (result.error) return bad(result.status === 404 ? "redemption not found" : result.error, result.status);
   return ok(result);
 }
 

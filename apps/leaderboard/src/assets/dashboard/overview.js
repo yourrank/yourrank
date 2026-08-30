@@ -177,22 +177,22 @@ export function renderOverviewSummary() {
   const pendingAlertCount = $("ovPendingOrdersAlertCount");
   if (pendingAlertCount) pendingAlertCount.textContent = number(pendingOrders);
   const pendingAlertLabel = $("ovPendingOrdersAlertLabel");
-  if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending order needs review." : "pending orders need review.";
+  if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending claim needs review." : "pending claims need review.";
   const pendingOrdersAction = $("ovPendingOrdersAlertAction");
-  if (pendingOrdersAction) pendingOrdersAction.textContent = pendingOrders === 1 ? "Review order" : "Review orders";
+  if (pendingOrdersAction) pendingOrdersAction.textContent = pendingOrders === 1 ? "Review claim" : "Review claims";
   const relative = (iso) => {
     const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
     return minutes < 60 ? `${minutes}m ago` : minutes < 1440 ? `${Math.floor(minutes / 60)}h ago` : `${Math.floor(minutes / 1440)}d ago`;
   };
   const activity = [
-    ...(state.CREDITS?.redemptions || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Member", sub: `${item.item_name || "Shop item"} ordered` })),
+    ...(state.CREDITS?.redemptions || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Member", sub: `${item.item_name || "Shop item"} claimed` })),
     ...(state.CREDITS?.viewers || []).map((item) => ({ at: item.created_at, title: item.kick_username || "Member", sub: "Joined via Kick sign-in" })),
     ...(state.PUBLISHED_AT ? [{ at: state.PUBLISHED_AT, title: "YourRank", sub: "Site published" }] : []),
     ...(state.SITE_UPDATED_AT ? [{ at: state.SITE_UPDATED_AT, title: "YourRank", sub: "Site updated" }] : []),
   ].filter((item) => item.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 5);
   $("ovActivityList").innerHTML = activity.map((item) => `<div class="ov-activity-row"><span class="ov-activity-icon">${ACTIVITY_ICON}</span><span class="ov-activity-copy"><b>${esc(item.title)}</b><span>${esc(item.sub)}</span></span><time>${relative(item.at)}</time></div>`).join("");
   if (activity.length) $("ovActivityEmpty").hidden = true;
-  else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and orders will appear here.", compactHeading: true });
+  else renderEmpty($("ovActivityEmpty"), { kind: "empty", title: "No activity yet", body: "Visits, updates and reward claims will appear here.", compactHeading: true });
   const sampleNotice = state.SAMPLE_PLAYERS
     ? `<div class="v3-alert v3-alert--warning ov-sample-players" role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/players">Manage players</a></div>`
     : "";

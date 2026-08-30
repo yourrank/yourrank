@@ -146,6 +146,13 @@ import {
 } from "./handlers/credits.js";
 import { handleCreditsBlockViewer } from "./handlers/credits-block.js";
 import {
+  handleCreatorClaimDetail,
+  handleCreatorClaimTransition,
+  handleCreatorClaims,
+  handleViewerClaimDetail,
+  handleViewerClaims,
+} from "./handlers/claims.js";
+import {
   handlePeopleMemberDetail,
   handlePeopleMembers,
 } from "./handlers/people.js";
@@ -363,6 +370,12 @@ export const ROUTES = [
   { path: "/api/credits/reconcile", method: "GET", handler: withHandler(handleCreditsReconcile) },
   { path: "/api/credits/viewers/:id/block", method: "POST", handler: withHandler(handleCreditsBlockViewer) },
 
+  // Canonical Claims API adapts safe Rewards redemptions without adding a new
+  // persistence source or public fulfillment data surface.
+  { path: "/api/claims", method: "GET", handler: withHandler(handleCreatorClaims) },
+  { path: "/api/claims/:id", method: "GET", handler: withHandler(handleCreatorClaimDetail) },
+  { path: "/api/claims/:id/transition", method: "POST", handler: withHandler(handleCreatorClaimTransition) },
+
   // People uses the current site_viewers relationship without exposing the
   // broader Credits configuration or raw external identity identifiers.
   { path: "/api/people/members", method: "GET", handler: withHandler(handlePeopleMembers) },
@@ -385,6 +398,8 @@ export const ROUTES = [
   // Viewer dashboard API
   { path: "/api/viewer/me", method: "GET", handler: withHandler(handleViewerMe) },
   { path: "/api/viewer/site", method: "GET", handler: withHandler(handleViewerSite) },
+  { path: "/api/viewer/claims", method: "GET", handler: withHandler(handleViewerClaims) },
+  { path: "/api/viewer/claims/:id", method: "GET", handler: withHandler(handleViewerClaimDetail) },
   { path: "/api/viewer/redeem", method: "POST", handler: withHandler(handleViewerRedeem) },
   { path: "/api/viewer/export", method: "POST", handler: withHandler(handleCreateViewerExportJob) },
   { path: "/api/viewer/export/:id/status", method: "GET", handler: withHandler(handleViewerExportStatus) },

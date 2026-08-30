@@ -119,7 +119,7 @@ describe("a creator's Rewards page", () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain('<ul class="yr-rwds" role="list">');
-    // One action per reward row, and only the affordable in-stock ones order.
+    // One action per reward row, and only the affordable in-stock ones can be claimed.
     expect((html.match(/<li class="yr-rwd">/g) || []).length).toBe(items.length);
     expect((html.match(/class="yr-act/g) || []).length).toBe(items.length);
     expect((html.match(/data-redeem="/g) || []).length).toBe(2);
@@ -131,31 +131,31 @@ describe("a creator's Rewards page", () => {
     expect(html).toContain("Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.");
   });
 
-  it("says in words why a reward cannot be ordered", async () => {
+  it("says in words why a reward cannot be claimed", async () => {
     const html = await shop();
     expect(html).toContain('<span class="yr-act yr-act--off" role="note">Not enough credits</span>');
     expect(html).toContain('<p class="yr-rwd-state">450 more needed</p>');
-    // Each unorderable state is named once, by the control the viewer reaches for.
+    // Each unavailable state is named once, by the control the viewer reaches for.
     expect((html.match(/Out of stock/g) || []).length).toBe(1);
     expect(html).toContain("2 left");
-    expect(html).toContain(">Order</button>");
+    expect(html).toContain(">Claim</button>");
   });
 
-  it("offers sign-in instead of a dead Order button to a signed-out viewer", async () => {
+  it("offers sign-in instead of a dead Claim button to a signed-out viewer", async () => {
     const html = await shop({ viewer: null });
-    expect(html).toContain("Sign in to order");
+    expect(html).toContain("Sign in to claim");
     expect(html).not.toContain("data-redeem=");
     expect(html).not.toContain("yr-order-confirm");
   });
 
-  it("states a site-wide ordering block once and disables ordering", async () => {
+  it("states a site-wide claiming block once and disables claiming", async () => {
     const html = await shop({ blocked: true });
-    expect(html).toContain("Ordering is disabled on this site.");
-    expect(html).toContain("Ordering disabled on this site");
+    expect(html).toContain("Claiming is disabled on this site.");
+    expect(html).toContain("Claiming disabled on this site");
     expect(html).not.toContain("data-redeem=");
   });
 
-  it("confirms an order in the viewer's own dialog, not the browser's", async () => {
+  it("confirms a claim in the viewer's own dialog, not the browser's", async () => {
     const html = await shop();
     expect(html).toContain('<dialog class="yr-modal" id="yr-order-confirm"');
     expect(html).toContain('aria-labelledby="yr-order-confirm-t"');
@@ -177,9 +177,9 @@ describe("a creator's Rewards page", () => {
     expect(shellSource.slice(open, open + 260)).toContain("confirmCancel.focus()");
   });
 
-  it("hands focus to the order status once the button is spent, never to the document", async () => {
+  it("hands focus to the claim status once the button is spent, never to the document", async () => {
     // One helper owns focus-without-scroll for both the standings pager and
-    // ordering, so a placed order cannot drop focus onto a disabled button.
+    // claiming, so a submitted claim cannot drop focus onto a disabled button.
     expect((shellSource.match(/function focusWithoutScroll/g) || []).length).toBe(1);
     expect(shellSource).toContain("focusWithoutScroll(redeemStatus || btn)");
     expect(shellSource).not.toContain("btn.focus({ preventScroll: true })");
@@ -241,12 +241,12 @@ describe("a creator's My credits page", () => {
     const html = await signedOut("me");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Sign in from the header to see your balance, activity and orders");
+    expect(html).toContain("Sign in from the header to see your balance, activity and reward claims");
     expect(html).toContain('<section class="yr-vsec yr-vsec--narrow yr-credit-guide">');
     expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
     expect(html).toContain("Free credit balance");
     expect(html).toContain("Credit activity");
-    expect(html).toContain("Reward orders");
+    expect(html).toContain("Reward claims");
     expect(html).not.toContain("yr-kpi");
   });
 
@@ -257,7 +257,7 @@ describe("a creator's My credits page", () => {
     expect((html.match(/class="yr-empty /g) || []).length).toBe(2);
   });
 
-  it("shows the balance, activity and orders without a stat dashboard", async () => {
+  it("shows the balance, activity and claims without a stat dashboard", async () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
@@ -277,12 +277,12 @@ describe("a creator's My credits page", () => {
     expect(html).toContain(LONG_DETAIL);
   });
 
-  it("names every order state the backend can report, and explains them once", async () => {
+  it("names every claim source state the backend can report, and explains them once", async () => {
     const html = await credits();
-    for (const label of ["Pending", "Fulfilled", "Cancelled", "Refunded"]) {
+    for (const label of ["Pending", "Completed", "Cancelled", "Refunded"]) {
       expect(html).toContain(`>${label}</span>`);
     }
-    expect((html.match(/Pending means the streamer/g) || []).length).toBe(1);
+    expect((html.match(/Pending means the creator/g) || []).length).toBe(1);
     // Backend truth only: no invented delivery date or fulfilment estimate.
     expect(html).not.toContain("Arrives");
     expect(html).not.toContain("Estimated");
@@ -340,11 +340,11 @@ describe("the global account page", () => {
     }
   });
 
-  it("names every order state and explains an unavailable Order in words", () => {
-    for (const label of ["Pending", "Fulfilled", "Cancelled", "Refunded"]) {
+  it("names every claim source state and explains an unavailable Claim in words", () => {
+    for (const label of ["Pending", "Completed", "Cancelled", "Refunded"]) {
       expect(clientSource).toContain(`"${label}"`);
     }
-    expect(clientSource).toContain("Ordering disabled on this site");
+    expect(clientSource).toContain("Claiming disabled on this site");
     expect(clientSource).toContain("Out of stock");
     expect(clientSource).toContain("Not enough credits");
     expect(clientSource).toContain("Credits have no cash value.");
