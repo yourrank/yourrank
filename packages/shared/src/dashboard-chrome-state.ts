@@ -103,6 +103,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "giveaways.preds": "Predictions",
   "giveaways.tournaments": "Tournaments",
   "audience.viewers": "Members",
+  "audience.reviews": "Reviews",
   "settings.account": "Account",
   "settings.team": "Team",
   "settings.plan": "Billing",

@@ -22,6 +22,7 @@ export function preserveSiteContextLinks(activeSiteId = "") {
     "/dashboard/rewards/shop",
     "/dashboard/rewards/rules",
     "/dashboard/audience/members",
+    "/dashboard/audience/reviews",
     "/dashboard/rewards/activity",
     "/dashboard/site/connections",
   ]);

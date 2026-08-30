@@ -171,6 +171,7 @@ export function resolveFragment(targetPath) {
   if (clean === "/dashboard/site/connections") return { pageKey: "rewardsChannel", tab: "channel" };
   // Audience
   if (clean === "/dashboard/audience/members") return { pageKey: "audienceMembers", tab: "viewers" };
+  if (clean === "/dashboard/audience/reviews") return { pageKey: "audienceReviews", tab: "reviews" };
   // Account settings
   if (clean === "/dashboard/settings") return { pageKey: "settingsUnified", tab: "account" };
   if (clean.startsWith("/dashboard/settings/")) {
@@ -854,6 +855,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/dashboard/audience/members") {
         return renderDashboardPage("audienceMembers", "audience_render_failed");
+      }
+      if (path === "/dashboard/audience/reviews") {
+        return renderDashboardPage("audienceReviews", "audience_reviews_render_failed");
       }
       if (path === "/dashboard/activities") {
         return renderDashboardPage("activities", "activities_render_failed", "overview");

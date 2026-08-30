@@ -150,6 +150,11 @@ import {
   handlePeopleMembers,
 } from "./handlers/people.js";
 import {
+  handlePeopleReviewDecision,
+  handlePeopleReviewDetail,
+  handlePeopleReviews,
+} from "./handlers/people-reviews.js";
+import {
   handleKickViewerAuthStart,
   handleKickViewerAuthCallback,
   handleKickViewerAuthHandoff,
@@ -362,6 +367,9 @@ export const ROUTES = [
   // broader Credits configuration or raw external identity identifiers.
   { path: "/api/people/members", method: "GET", handler: withHandler(handlePeopleMembers) },
   { path: "/api/people/members/:id", method: "GET", handler: withHandler(handlePeopleMemberDetail) },
+  { path: "/api/people/reviews", method: "GET", handler: withHandler(handlePeopleReviews) },
+  { path: "/api/people/reviews/:id", method: "GET", handler: withHandler(handlePeopleReviewDetail) },
+  { path: "/api/people/reviews/:id/decision", method: "POST", handler: withHandler(handlePeopleReviewDecision) },
 
   // Public credits / shop API (CSRF-exempt, read-only balance lookup)
   { path: "/api/public/credits", method: "GET", handler: withHandler(handlePublicCredits) },

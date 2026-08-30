@@ -639,7 +639,7 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
 
   const result = await withTransaction(async (tx) => {
     const tournament = await tx.one(
-      "SELECT id, bracket_size, format, status FROM tournaments WHERE id=$1 FOR UPDATE",
+      "SELECT id, bracket_size, format, status, entry_fee FROM tournaments WHERE id=$1 FOR UPDATE",
       [access.tournament.id]
     );
     if (tournament.status === "completed" || tournament.status === "cancelled") {
@@ -653,8 +653,15 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
     }
     const available = await tx.one(
       `SELECT count(*)::integer AS count FROM tournament_entries
-        WHERE tournament_id=$1 AND status IN ('pending', 'confirmed')`,
-      [access.tournament.id]
+        WHERE tournament_id=$1 AND status IN ('pending', 'confirmed')
+          AND (
+            NOT $2::boolean OR alt_flag = false OR EXISTS (
+              SELECT 1 FROM audit_log
+               WHERE entity_type='tournament_entry' AND entity_id=tournament_entries.id::text
+                 AND action='people_review_allow'
+            )
+          )`,
+      [access.tournament.id, Number(tournament.entry_fee) === 0]
     );
     if ((available?.count || 0) < count) {
       return { error: `Only ${available?.count || 0} eligible entries are available.`, status: 400 };
@@ -664,10 +671,17 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
               team_no, created_at, updated_at
          FROM tournament_entries
         WHERE tournament_id=$1 AND status IN ('pending', 'confirmed')
+          AND (
+            NOT $3::boolean OR alt_flag = false OR EXISTS (
+              SELECT 1 FROM audit_log
+               WHERE entity_type='tournament_entry' AND entity_id=tournament_entries.id::text
+                 AND action='people_review_allow'
+            )
+          )
         ORDER BY random()
         LIMIT $2
         FOR UPDATE`,
-      [access.tournament.id, count]
+      [access.tournament.id, count, Number(tournament.entry_fee) === 0]
     );
     const ids = (picked || []).map((entry) => entry.id);
     const selected = await tx.query(

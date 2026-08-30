@@ -183,6 +183,7 @@ const ROUTE_DEFS = [
   { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "audience.reviews", canonicalPath: "/dashboard/audience/reviews", section: "audience", tab: "reviews", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "settings.account", canonicalPath: "/dashboard/settings/account", section: "settings", tab: "account", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.team", canonicalPath: "/dashboard/settings/team", section: "settings", tab: "team", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.plan", canonicalPath: "/dashboard/settings/billing", section: "settings", tab: "plan", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
@@ -408,6 +409,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   ],
   edit: [{ classification: "one-shot-action", context: "Rewards → Ways to earn", where: "credits.js prefillEditFromQuery: opens one mapping editor; consumed on load, not navigation identity." }],
   viewer: [{ classification: "one-shot-action", context: "Rewards → Activity", where: "credits.js history tab: prefills the history username filter once." }],
+  member: [{ classification: "one-shot-action", context: "People → Members", where: "credits.js openMemberFromQuery: opens one existing member drawer from a review; consumed on load, not navigation identity." }],
   kick_connected: [{ classification: "one-shot-action", context: "dashboard documents after Kick OAuth", where: "credits.js OAuth return banner; deleted from the URL after display." }],
   error: [
     { classification: "one-shot-action", context: "dashboard documents after OAuth", where: "credits.js OAuth error banner; deleted from the URL after display." },

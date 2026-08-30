@@ -30,6 +30,7 @@ const BOOT_IMPORTERS = {
   credits: () => import("../credits.js"),
   giveaways: () => import("../giveaways.js"),
   account: () => import("../account.js"),
+  people: () => import("../people.js"),
 };
 
 // Cached boot modules so we don't re-import on every visit.

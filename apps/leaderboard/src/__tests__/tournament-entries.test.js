@@ -18,6 +18,7 @@ const TOURNAMENT = {
   site_user_id: "owner-1",
   signup_state: "open",
   entry_cap: null,
+  entry_fee: 0,
   chat_channel: "streamerchannel",
 };
 
@@ -220,6 +221,9 @@ describe("tournament entry lifecycle", () => {
     expect(entries).toHaveLength(4);
     expect(new Set(entries.map((entry) => entry.id)).size).toBe(4);
     expect(d._mocks.txQuery.mock.calls[0][0]).toContain("ORDER BY random()");
+    expect(d._mocks.txQuery.mock.calls[0][0]).toContain("action='people_review_allow'");
+    expect(d._mocks.txQuery.mock.calls[0][0]).toContain("entity_id=tournament_entries.id::text");
+    expect(d._mocks.txQuery.mock.calls[0][1]).toEqual([TOURNAMENT.id, 4, true]);
   });
 
   it("rejects a non-owner from mutating another site's entries", async () => {
