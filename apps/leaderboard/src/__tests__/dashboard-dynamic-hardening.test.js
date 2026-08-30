@@ -235,14 +235,12 @@ describe("account team scope", () => {
 
   it("uses the rendered team siteId for every mutation and reload", () => {
     expect(accountJs).toContain('if (data?.siteId) teamSiteId = data.siteId;');
-    expect(accountJs).toContain('"/api/site/team/role", { targetUserId, role: newRole, siteId: teamSiteId }');
     expect(accountJs).toContain('"/api/site/team/remove", { targetUserId, siteId: teamSiteId }');
     expect(accountJs).toContain('"/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId }');
-    expect(accountJs).toContain('"/api/site/team/invite", { email, role, siteId: teamSiteId }');
+    expect(accountJs).toContain('"/api/site/team/invite", { email, role: "moderator", siteId: teamSiteId }');
   });
 
-  it("reloads the team list after role, remove, invite, and revoke mutations", () => {
-    expect(accountJs).toMatch(/setStatus\("Role updated successfully"[\s\S]{0,60}loadTeam\(\)/);
+  it("reloads the team list after remove, invite, and revoke mutations", () => {
     expect(accountJs).toMatch(/setStatus\("Member removed"[\s\S]{0,60}loadTeam\(\)/);
     expect(accountJs).toMatch(/setStatus\("Invitation revoked"[\s\S]{0,60}loadTeam\(\)/);
     expect(accountJs).toMatch(/"Invitation ready!"[\s\S]{0,200}loadTeam\(\)/);

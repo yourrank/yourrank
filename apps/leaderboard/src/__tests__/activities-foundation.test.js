@@ -78,7 +78,7 @@ describe("Wave E safe Activities foundation", () => {
       reward: { creditsPerClaim: 100 },
     }]);
 
-    expect(mock.calls.capability).toEqual([{ user: USER, site: SITE, capability: "canRoleManageBoard" }]);
+    expect(mock.calls.capability).toEqual([{ user: USER, site: SITE, capability: "canRoleManageActivities" }]);
     expect(mock.calls.rateLimit).toEqual([{ key: "activities:operator-1:site-1", max: 60, windowSeconds: 60 }]);
     expect(mock.calls.query).toHaveLength(1);
     expect(mock.calls.query[0].params).toEqual(["site-1"]);

@@ -28,7 +28,6 @@ import {
   handleTeamInvite,
   handleTeamRevokeInvite,
   handleTeamRemoveMember,
-  handleTeamUpdateRole,
   handleTeamAcceptInvite,
   handleGetInviteInfo,
 } from "./handlers/team.js";
@@ -267,7 +266,6 @@ export const ROUTES = [
   { path: "/api/site/team/invite", method: "POST", handler: withHandler(handleTeamInvite) },
   { path: "/api/site/team/invite/revoke", method: "POST", handler: withHandler(handleTeamRevokeInvite) },
   { path: "/api/site/team/remove", method: "POST", handler: withHandler(handleTeamRemoveMember) },
-  { path: "/api/site/team/role", method: "POST", handler: withHandler(handleTeamUpdateRole) },
   { path: "/api/site/team/accept-invite", method: "POST", handler: withHandler(handleTeamAcceptInvite) },
   { path: "/api/site/team/invite-info", method: "GET", handler: withHandler(handleGetInviteInfo) },
   

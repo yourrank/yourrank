@@ -81,7 +81,7 @@ export async function handleGetActivities(request, env, injected = {}) {
   const authorization = await deps.requireSiteCapability(
     user,
     site,
-    "canRoleManageBoard",
+    "canRoleManageActivities",
   );
   if (authorization.res) return authorization.res;
   if (!(await deps.rateLimit(env, `activities:${user.id}:${site.id}`, 60, 60)).ok) {

@@ -11,7 +11,10 @@ import {
 const user = { id: "user-1" };
 const site = { id: "site-1", user_id: "owner-1" };
 const noRateLimit = async () => ({ ok: true });
-const managerCapability = async () => ({ role: "manager", res: null });
+const ownerCapability = async (_user, _site, capability) => {
+  expect(capability).toBe("canRoleManageConnections");
+  return { role: "owner", res: null };
+};
 const pkce = async () => ({ codeVerifier: "verifier", codeChallenge: "challenge" });
 
 function request(path) {
@@ -41,7 +44,7 @@ describe("Kick OAuth state integration seams", () => {
       currentUser: async () => user,
       rateLimit: noRateLimit,
       one: async () => site,
-      requireSiteCapability: managerCapability,
+      requireSiteCapability: ownerCapability,
       storeOAuthState,
       generatePKCE: pkce,
       buildKickAuthorizeURL: (_env, state) => `https://kick.test/authorize?state=${state}`,
@@ -360,7 +363,7 @@ describe("Kick OAuth state integration seams", () => {
         calls.push({ sql, params });
         return site;
       },
-      requireSiteCapability: managerCapability,
+      requireSiteCapability: ownerCapability,
       storeOAuthState: async (...args) => calls.push({ state: args }),
       generatePKCE: pkce,
       buildKickAuthorizeURL: (_env, state) => `https://kick.test/authorize?state=${state}`,
@@ -371,12 +374,15 @@ describe("Kick OAuth state integration seams", () => {
     expect(calls.find((call) => call.state)?.state[2]).toMatchObject({ siteId: "site-1" });
   });
 
-  test("rejects a site when the user lacks board-management capability", async () => {
+  test("rejects a Moderator from managing provider credentials", async () => {
     const response = await handleKickAuthStart(request("/auth/kick?siteId=site-1"), {}, {
       currentUser: async () => user,
       rateLimit: noRateLimit,
       one: async () => site,
-      requireSiteCapability: async () => ({ role: "viewer", res: new Response("forbidden", { status: 403 }) }),
+      requireSiteCapability: async (_user, _site, capability) => {
+        expect(capability).toBe("canRoleManageConnections");
+        return { role: "moderator", res: new Response("forbidden", { status: 403 }) };
+      },
     });
 
     expect(response.status).toBe(302);
@@ -397,7 +403,7 @@ describe("Kick OAuth state integration seams", () => {
       currentUser: async () => user,
       consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
       one: async () => site,
-      requireSiteCapability: managerCapability,
+      requireSiteCapability: ownerCapability,
       exchangeKickCode: async () => {
         throw new Error("Kick token endpoint returned 401: response body");
       },
@@ -425,7 +431,7 @@ describe("Kick OAuth state integration seams", () => {
         queries.push({ sql, params });
         return { ...site, id: "site-2" };
       },
-      requireSiteCapability: managerCapability,
+      requireSiteCapability: ownerCapability,
       readJson: async () => ({}),
       withTransaction: async (fn) => fn({
         unsafe: async (sql, params) => queries.push({ sql, params }),
@@ -452,7 +458,7 @@ describe("Kick OAuth state integration seams", () => {
         queries.push({ sql, params });
         return { ...site, id: "site-2" };
       },
-      requireSiteCapability: managerCapability,
+      requireSiteCapability: ownerCapability,
       readJson: async () => ({}),
       withTransaction: async (fn) => fn({
         unsafe: async (sql, params) => queries.push({ sql, params }),

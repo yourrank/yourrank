@@ -76,6 +76,19 @@ describe("Account settings creator UX", () => {
     expect(accountJs).not.toMatch(/\bconfirm\(/);
   });
 
+  it("presents one fixed Moderator role with canonical seats and owner-only controls", () => {
+    const html = UnifiedSettingsPage({ fragment: true, tab: "team" }).toString();
+    expect(html).toContain('id="teamSeatUsage"');
+    expect(html).toContain('id="teamUpgradeLink"');
+    expect(html).toContain("Owner and Moderator permissions");
+    expect(html).not.toContain('id="inviteRole"');
+    expect(html).not.toContain(">Manager<");
+    expect(accountJs).toContain('role: "moderator"');
+    expect(accountJs).toContain('currentRole !== "moderator"');
+    expect(accountJs).not.toContain('"/api/site/team/role"');
+    expect(dashboardCss).toContain("min-height: 44px");
+  });
+
   it("keeps account controls outside the site draft and traps invite-dialog focus", () => {
     expect(accountJs).toContain('accountRoot?.addEventListener("input", (event) => event.stopPropagation())');
     expect(accountJs).toContain('accountRoot?.addEventListener("change", (event) => event.stopPropagation())');

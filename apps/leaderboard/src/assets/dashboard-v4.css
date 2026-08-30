@@ -1498,6 +1498,49 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   margin-top: 24px;
 }
 
+.v3-dash[data-auth-workspace] .account-team-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--ws-line);
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .account-team-summary span,
+.v3-dash[data-auth-workspace] .account-invite-role span {
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.v3-dash[data-auth-workspace] .account-team-notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-soft);
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+
+.v3-dash[data-auth-workspace] .account-invite-role {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface-soft);
+}
+
+.v3-dash[data-auth-workspace] #btnOpenInviteModal,
+.v3-dash[data-auth-workspace] #teamUpgradeLink,
+.v3-dash[data-auth-workspace] #btnSendInvite,
+.v3-dash[data-auth-workspace] #btnCloseInviteModal {
+  min-height: 44px;
+}
+
 .v3-dash[data-auth-workspace] .account-team-list,
 .v3-dash[data-auth-workspace] .account-connection-list,
 .v3-dash[data-auth-workspace] .account-role-list {
@@ -4079,13 +4122,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .account-team-row,
   .v3-dash[data-auth-workspace] .account-connection-row,
   .v3-dash[data-auth-workspace] .account-related-setting { align-items: stretch; flex-direction: column; }
+  .v3-dash[data-auth-workspace] .account-team-summary { align-items: flex-start; flex-direction: column; gap: 4px; }
   .v3-dash[data-auth-workspace] .plan-summary,
   .v3-dash[data-auth-workspace] .plan-usage,
   .v3-dash[data-auth-workspace] .plan-pending,
   .v3-dash[data-auth-workspace] .plan-cancel,
   .v3-dash[data-auth-workspace] .plan-trial { grid-template-columns: minmax(0, 1fr); }
   .v3-dash[data-auth-workspace] .account-team-actions { align-items: stretch; flex-wrap: wrap; width: 100%; }
-  .v3-dash[data-auth-workspace] .account-team-actions .field-select { min-width: 0; flex: 1 1 160px; }
+  .v3-dash[data-auth-workspace] .account-team-actions .btn { min-height: 44px; }
   .v3-dash[data-auth-workspace] .account-connection-row > .btn,
   .v3-dash[data-auth-workspace] .account-related-setting > .btn { width: 100%; }
 }

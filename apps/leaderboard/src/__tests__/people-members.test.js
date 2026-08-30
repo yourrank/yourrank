@@ -105,7 +105,7 @@ describe("People member list", () => {
       getBoardById: async () => ({ id: "site-1", user_id: "creator-1", name: "Site One", slug: "one" }),
       requireSiteCapability: async (user, site, capability) => {
         capabilityCalls.push({ user, site, capability });
-        return { role: "manager", res: null };
+        return { role: "moderator", res: null };
       },
     });
 
@@ -115,7 +115,7 @@ describe("People member list", () => {
     expect(capabilityCalls).toEqual([{
       user: { id: "operator-1" },
       site: { id: "site-1", user_id: "creator-1", name: "Site One", slug: "one" },
-      capability: "canRoleManageCredits",
+      capability: "canRoleViewMembers",
     }]);
     expect(calls.query[0].params).toEqual(["site-1"]);
   });

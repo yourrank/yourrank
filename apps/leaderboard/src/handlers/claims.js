@@ -157,7 +157,7 @@ async function creatorAccess(request, env, deps) {
   if (res) return { res: privateResponse(res) };
   const site = await getSite(env, user, new URL(request.url), deps);
   if (!site) return { res: privateBad("no site", 404) };
-  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageCredits");
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageClaims");
   if (authorization.res) return { res: privateResponse(authorization.res) };
   return { user, site, role: authorization.role, res: null };
 }

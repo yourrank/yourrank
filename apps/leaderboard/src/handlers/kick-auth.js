@@ -81,7 +81,7 @@ export async function handleKickAuthStart(request, env, deps = {}) {
   if (!site) {
     return redirect(channelRedirect({ error: "site_not_found" }, siteId));
   }
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return redirect(channelRedirect({ error: "site_not_authorized" }, siteId));
 
   try {
@@ -152,7 +152,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
 
   const site = await oneImpl("SELECT id, user_id FROM sites WHERE id=$1", [stateData.siteId]);
   if (!site) return redirect(channelRedirect({ error: "site_not_found" }, stateData.siteId));
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return redirect(channelRedirect({ error: "site_not_authorized" }, stateData.siteId));
 
   try {
@@ -237,7 +237,7 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
   if (!siteId) return bad("Select a site before disconnecting Kick.");
   const site = await oneImpl("SELECT id, user_id FROM sites WHERE id=$1", [siteId]);
   if (!site) return bad("Site not found.", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return authorization.res;
 
   const result = await withTransactionImpl(async (tx) => {

@@ -19,13 +19,13 @@ const request = (url, body) => new Request(`https://example.test${url}`, {
 });
 
 function deps(role, extra = {}) {
+  const moderatorCapabilities = new Set(["canRoleManageBoard", "canRoleViewInsights"]);
   return {
     requireUserImpl: async () => ({ user, res: null }),
     getByUserImpl: async () => site,
     getBoardByIdImpl: async () => site,
     requireSiteCapabilityImpl: async (_user, _site, capability) => (
-      ["owner", "manager", "moderator"].includes(role) &&
-      (capability === "canRoleManageBilling" ? role === "owner" : true)
+      role === "owner" || (role === "moderator" && moderatorCapabilities.has(capability))
         ? { role, res: null }
         : { role, res: new Response("forbidden", { status: 403 }) }
     ),
@@ -105,7 +105,7 @@ describe("archive and notification scope", () => {
     expect(body.ok).toBe(true);
     expect(calls).toEqual([
       { type: "getBoardById", siteId: "site-2" },
-      { type: "capability", siteId: "site-2", capability: "canRoleManageBot" },
+      { type: "capability", siteId: "site-2", capability: "canRoleManageConnections" },
       { type: "sendDiscord", url: "https://discord.com/api/webhooks/123/token" },
     ]);
   });
@@ -136,14 +136,14 @@ describe("archive and notification scope", () => {
     expect(response.status).toBe(200);
     expect(calls).toEqual([
       { type: "getByUser" },
-      { type: "capability", siteId: site.id, capability: "canRoleManageBot" },
+      { type: "capability", siteId: site.id, capability: "canRoleManageConnections" },
       { type: "sendDiscord", url: "https://discord.com/api/webhooks/123/token" },
     ]);
   });
 });
 
 describe("site role handler authorization", () => {
-  for (const role of ["manager", "moderator"]) {
+  for (const role of ["moderator"]) {
     it(`${role} can read stats and heatmap`, async () => {
       const stats = await handleStats(request("/api/site/stats"), env, {
         ...deps(role),
@@ -171,6 +171,14 @@ describe("site role handler authorization", () => {
       expect(response.status).toBe(200);
     });
   }
+
+  it("rejects the retired Manager role from delegated handlers", async () => {
+    const response = await handleStats(request("/api/site/stats"), env, {
+      ...deps("manager"),
+      getStatsImpl: async () => ({ today: {} }),
+    });
+    expect(response.status).toBe(403);
+  });
 
   it("denies a moderator from exporting stats or deleting a board", async () => {
     const exportResponse = await handleExportStats(
