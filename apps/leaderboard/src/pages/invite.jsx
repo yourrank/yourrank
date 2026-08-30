@@ -9,10 +9,8 @@ export function InvitePage({ invite, token, user } = {}) {
   const isAccepted = invite ? invite.status === "accepted" : false;
   const isValid = invite && !isExpired && !isRevoked && !isAccepted;
 
-  const roleLabel = invite?.role === "manager" ? "Manager" : "Moderator";
-  const roleDesc = invite?.role === "manager"
-    ? "Full operational access to manage leaderboards, viewer rewards & shop fulfillment, casino offers, and bot commands."
-    : "Access to update live leaderboard scores and review and complete viewer claims.";
+  const roleLabel = "Moderator";
+  const roleDesc = "Site-scoped access to operate members, reviews, claims, safe activities, and rewards. Billing, Team, security, settings, connections, and manual credit adjustments stay with the owner.";
 
   return (
     <html lang="en">
@@ -40,9 +38,9 @@ export function InvitePage({ invite, token, user } = {}) {
           .invite-role-title { font-size: 14px; font-weight: 700; color: #f8fafc; }
           .invite-role-desc { font-size: 13px; color: #94a3b8; margin: 0; line-height: 1.4; }
           .invite-actions { display: flex; flex-direction: column; gap: 10px; }
-          .btn-accept { width: 100%; padding: 12px; background: #eab308; color: #000; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; font-size: 15px; transition: transform 0.1s ease, background 0.15s ease; }
+          .btn-accept { width: 100%; min-height: 44px; padding: 12px; background: #eab308; color: #000; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; font-size: 15px; transition: transform 0.1s ease, background 0.15s ease; }
           .btn-accept:hover { background: #facc15; transform: translateY(-1px); }
-          .btn-secondary { width: 100%; padding: 12px; background: rgba(255, 255, 255, 0.08); color: #fff; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; text-decoration: none; display: block; box-sizing: border-box; text-align: center; }
+          .btn-secondary { width: 100%; min-height: 44px; padding: 12px; background: rgba(255, 255, 255, 0.08); color: #fff; font-weight: 600; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; text-decoration: none; display: block; box-sizing: border-box; text-align: center; }
           .btn-secondary:hover { background: rgba(255, 255, 255, 0.14); }
           .invite-signed-in { font-size: 13px; color: #64748b; margin-top: 16px; }
         ` }} />
@@ -88,7 +86,7 @@ export function InvitePage({ invite, token, user } = {}) {
                 <div class="invite-role-box">
                   <div class="invite-role-header">
                     <span class="invite-role-title">Role: {roleLabel}</span>
-                    <span class="pill pill--good">{invite.role}</span>
+                    <span class="pill pill--good">Site access</span>
                   </div>
                   <p class="invite-role-desc">{roleDesc}</p>
                 </div>

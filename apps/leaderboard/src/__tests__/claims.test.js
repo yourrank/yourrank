@@ -86,7 +86,7 @@ describe("canonical Claims adapter", () => {
     })]);
     expect(body.claims[0]).not.toHaveProperty("fulfillmentDetails");
     expect(JSON.stringify(body)).not.toMatch(/address|phone|email|shipping|kick_user_id|discord_user_id/i);
-    expect(calls.capability[0].capability).toBe("canRoleManageCredits");
+    expect(calls.capability[0].capability).toBe("canRoleManageClaims");
     expect(calls.query[0].params).toEqual([SITE.id, "action_required", 100]);
     expect(calls.query[0].sql).toContain("WHERE sv.site_id=$1");
     expect(calls.query[0].sql).toContain("r.created_at END ASC");
@@ -157,7 +157,7 @@ describe("canonical Claims adapter", () => {
     });
     const response = await handleCreatorClaims(request("/api/claims?siteId=site-1"), {}, deps);
     expect(response.status).toBe(200);
-    expect(calls.capability[0].capability).toBe("canRoleManageCredits");
+    expect(calls.capability[0].capability).toBe("canRoleManageClaims");
   });
 
   it("maps every supported source state without inventing approved, review, or expired states", async () => {

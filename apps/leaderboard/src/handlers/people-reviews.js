@@ -10,7 +10,6 @@ import { rateLimit } from "@yourrank/shared/ratelimit";
 import { requireUser, bad, json, readJson } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
-import { requirePeopleAccess } from "./people.js";
 
 const REVIEW_PREFIX = "tournament_entry:";
 const REVIEW_LIMIT = 100;
@@ -159,9 +158,17 @@ const REVIEW_SELECT = `
     ) review_decision ON true`;
 
 async function reviewAccess(request, env, deps) {
-  const access = await requirePeopleAccess(request, env, deps);
-  if (access.res) return { res: privateResponse(access.res) };
-  return access;
+  const { user, res } = await deps.requireUser(request, env);
+  if (res) return { res: privateResponse(res) };
+  const url = new URL(request.url);
+  const siteId = String(url.searchParams.get("siteId") || "").trim();
+  const site = siteId
+    ? await deps.getBoardById(env, user.id, siteId)
+    : await deps.getByUser(env, user.id);
+  if (!site) return { res: privateBad("Site not found.", 404) };
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageReviews");
+  if (authorization.res) return { res: privateResponse(authorization.res) };
+  return { user, site, role: authorization.role, res: null };
 }
 
 async function loadReview(siteId, sourceId, deps, { lock = false } = {}) {

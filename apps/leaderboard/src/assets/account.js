@@ -353,7 +353,37 @@ function renderTeam(data) {
     return;
   }
 
-  const { members = [], invites = [], canManageTeam } = data;
+  const { members = [], invites = [], canManageTeam, currentRole, seats } = data;
+  const openBtn = $("btnOpenInviteModal");
+  const upgradeLink = $("teamUpgradeLink");
+  const seatUsage = $("teamSeatUsage");
+  const seatContext = $("teamSeatContext");
+  const planNotice = $("teamPlanNotice");
+  const readOnlyNotice = $("teamReadOnlyNotice");
+  const pendingSection = $("teamPendingSection");
+  const plan = seats?.plan || "free";
+  const used = Math.max(1, Number(seats?.used) || 1);
+  const limit = Math.max(1, Number(seats?.limit) || 1);
+  const atLimit = used >= limit;
+
+  if (seatUsage) seatUsage.textContent = `${Math.min(used, limit)} of ${limit} operator seats active`;
+  if (seatContext) {
+    seatContext.textContent = plan === "team"
+      ? "Pending invitations reserve a seat across the owner's sites."
+      : "Free and Pro include the owner only; saved Moderator access is paused.";
+  }
+  if (planNotice) {
+    planNotice.hidden = !(canManageTeam && plan !== "team");
+    planNotice.textContent = plan === "team" ? "" : "Additional operators require Team. Existing Moderator records are preserved and regain access when Team returns.";
+  }
+  if (readOnlyNotice) readOnlyNotice.hidden = currentRole !== "moderator";
+  if (pendingSection) pendingSection.hidden = !canManageTeam;
+  if (upgradeLink) upgradeLink.hidden = !(canManageTeam && plan !== "team");
+  if (openBtn) {
+    openBtn.hidden = !canManageTeam || plan !== "team";
+    openBtn.disabled = atLimit;
+    openBtn.textContent = atLimit ? "Seats full" : "Invite member";
+  }
 
   if (members.length === 0) {
     membersEl.innerHTML = `<div class="empty"><strong>No team members yet</strong><p>Invite someone when you are ready to share site management.</p></div>`;
@@ -370,14 +400,10 @@ function renderTeam(data) {
               </div>
               ${canManageTeam && member.role !== "owner" ? `
                 <div class="account-team-actions">
-                  <label class="sr-only" for="teamRole-${esc(member.userId)}">Role for ${esc(displayName)}</label>
-                  <select class="field-select team-role-select" id="teamRole-${esc(member.userId)}" data-user-id="${esc(member.userId)}">
-                    <option value="moderator" ${member.role === "moderator" ? "selected" : ""}>Moderator</option>
-                    <option value="manager" ${member.role === "manager" ? "selected" : ""}>Manager</option>
-                  </select>
+                  <span class="account-team-role">Moderator · ${member.accessStatus === "paused" ? "Access paused" : "Active"}</span>
                   <button class="btn btn--sm btn--ghost team-remove-btn" data-user-id="${esc(member.userId)}" type="button">Remove</button>
                 </div>
-              ` : `<span class="account-team-role">${member.role === "owner" ? "Owner" : esc(member.role)}</span>`}
+              ` : `<span class="account-team-role">${member.role === "owner" ? "Owner · Active" : `Moderator · ${member.accessStatus === "paused" ? "Access paused" : "Active"}`}</span>`}
             </div>
           `;
         }).join("")}
@@ -394,7 +420,7 @@ function renderTeam(data) {
           <div class="account-team-row">
             <div class="account-team-person">
               <strong>${esc(invite.email)}</strong>
-              <span>${esc(invite.role)} · Expires ${fmtDateTime(invite.expiresAt)}</span>
+              <span>Moderator · Pending · Expires ${fmtDateTime(invite.expiresAt)}</span>
             </div>
             <div class="account-team-actions">
               ${invite.inviteUrl
@@ -409,22 +435,6 @@ function renderTeam(data) {
   }
 
   if (canManageTeam) {
-    document.querySelectorAll(".team-role-select").forEach((sel) => {
-      sel.addEventListener("change", async () => {
-        const targetUserId = sel.getAttribute("data-user-id");
-        const newRole = sel.value;
-        sel.disabled = true;
-        const res = await jsonReq("POST", "/api/site/team/role", { targetUserId, role: newRole, siteId: teamSiteId });
-        if (res.ok) {
-          setStatus("Role updated successfully");
-          loadTeam();
-        } else {
-          setStatus(res.data?.error || "Failed to update role", true);
-          loadTeam();
-        }
-      });
-    });
-
     document.querySelectorAll(".team-remove-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!await showConfirmModal("Remove team member", "They will lose access to this site. You can invite them again later.", "Remove member", true)) return;
@@ -491,7 +501,6 @@ function wireTeam() {
   const closeBtn = $("btnCloseInviteModal");
   const sendBtn = $("btnSendInvite");
   const emailInput = $("inviteEmail");
-  const roleSelect = $("inviteRole");
   const statusEl = $("inviteModalStatus");
   const resultWrap = $("inviteResultWrap");
   const linkInput = $("inviteLinkInput");
@@ -530,7 +539,6 @@ function wireTeam() {
 
   sendBtn?.addEventListener("click", async () => {
     const email = emailInput?.value?.trim();
-    const role = roleSelect?.value || "moderator";
     if (!email || !email.includes("@")) {
       if (statusEl) statusEl.textContent = "Please enter a valid email.";
       emailInput?.focus();
@@ -540,7 +548,7 @@ function wireTeam() {
     sendBtn.disabled = true;
     sendBtn.textContent = "Creating…";
 
-    const res = await jsonReq("POST", "/api/site/team/invite", { email, role, siteId: teamSiteId });
+    const res = await jsonReq("POST", "/api/site/team/invite", { email, role: "moderator", siteId: teamSiteId });
     sendBtn.disabled = false;
     sendBtn.textContent = "Create invite";
 

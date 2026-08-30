@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `88113049b348e42eb668e382d2d7ebd10d5d8c29` (PR #672 merged)
+**Evidence baseline:** `main` at `affef6e0a6104461974d3d972f421a328c1f8bf4` (PR #673 merged)
 
 **Last reconciled:** 2026-08-30
 
@@ -21,7 +21,7 @@ Maintained to prevent architecture drift.
 | Public viewer renderer | `packages/shared/src/site-render.ts` |
 | Public viewer styles | `apps/leaderboard/src/assets/site-shell.css` |
 | Authenticated workspace tokens | `apps/leaderboard/src/assets/dashboard-v4.css`, `ws-token-contract` block |
-| Schema | `supabase/migrations` (121 migration files at this baseline) |
+| Schema | `supabase/migrations` (124 migration files including the Wave H role convergence migration) |
 | Runtime/deployment description | `ARCHITECTURE.md` plus Worker configuration |
 
 ## Convergence Status
@@ -125,6 +125,18 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Kick reward earning, free code drops, free chat giveaway/raffle winners, tournament participants/winners, and manual credit adjustments do not yet provide a reusable fulfillment lifecycle and remain outside Claims. Restricted wagering, payout, settlement, withdrawal, and paid-chance mechanics are excluded.
 - Home adds no new Claims card or account-wide queue. Its existing selected-site pending-redemption alert is relabeled as Claims because it already receives the selected site's current Rewards usage count. A broader viewer navigation destination remains deferred; current public site and `/me` surfaces show truthful claim status within their existing ownership.
 
+### Moderator and Team operations — OWNER + MODERATOR CONVERGED
+
+- V1 exposes only Owner and Moderator. Owner is represented by `sites.user_id`; delegated, site-scoped access remains in the existing `site_members` table. The Wave H migration deterministically maps the dead pre-launch Manager value to Moderator, records recovery audit rows, aborts on unexpected roles, and constrains member/invite rows to Moderator. No second team table or RBAC engine exists.
+- `packages/shared/src/team.ts` is the canonical server-owned role-to-capability owner. Owner retains every legitimate capability. Moderator can operate the existing leaderboard boundary, Members (including block/unblock), safe Activities, Reviews, ordinary Claims, local Rewards catalog/mappings, and read operational Insights. Moderator cannot manage Team, billing, account security, site settings, provider connections/credentials, bot configuration, the legacy broad Credits boundary, or arbitrary manual credit adjustments.
+- Team relationships are site-specific; the same operator's relationship to another owner or site never grants access. Role resolution rechecks the selected site, persisted membership, and owner Team entitlement on every protected request. No role is stored in the session. Removal therefore stops the next protected request; downgrade preserves member rows but suspends delegated access, and a restored Team entitlement makes valid rows effective again.
+- Seats remain account-pooled across all sites owned by one creator: Free 1 total operator, Pro 1, Team 5. Pending invites reserve identities, duplicate identities do not consume another pooled seat, and invite creation/acceptance serialize on the owner account row before enforcing the canonical limit. Billing prices and all other entitlements are unchanged.
+- Invitations are email-bound, site-bound, Moderator-only, seven-day records with inviter, expiry, accepted/revoked state, and a 192-bit random bearer token stored only as SHA-256. Acceptance locks the invite and owner row, validates the authenticated account email, role, entitlement, and seat limit, and treats an exact second acceptance as an idempotent replay.
+- Team lifecycle writes append-only `team_invitation_created`, `team_invitation_revoked`, `team_invitation_accepted`, and `team_operator_removed` records to the existing `audit_log` in the same transaction as source changes. Review and Claim events retain their source-specific actor audit behavior; no duplicate Team activity UI or audit mutation endpoint was added.
+- Settings → Team is the one Team surface. Owners see pooled seat usage, invite/remove/revoke controls, and the Team upgrade path; Moderators receive minimal read-only context without pending invite data or mutation controls. There is no role-edit route because Moderator is the only delegated V1 role.
+- Reviews and Claims semantics are unchanged; only their capability ownership converged. Claims still contain no private fulfillment PII. If a future Claim workflow introduces sensitive fulfillment data, it requires a new evidence-led access review rather than inheriting current ordinary-Claim access automatically.
+- Wave I Insights/Connection Health and Wave J work have not started. Existing Insights reads are permissioned only; existing provider connection management was narrowed to Owner without adding new connection-health product behavior.
+
 Current fulfillment audit:
 
 | Workflow | Current owner | Viewer identity | Source and states | Private data | Persistence | Classification | Current action |
@@ -151,8 +163,8 @@ Server-owned transition matrix:
 
 | Current source / canonical state | Actor | Allowed next state | Enforcement and effects |
 |---|---|---|---|
-| `pending` / Submitted | Existing actor authorized by `canRoleManageCredits` for the selected site | `fulfilled` / Completed | Atomic site-scoped pending-only update plus `claim_completed` audit event |
-| `pending` / Submitted | Existing actor authorized by `canRoleManageCredits` for the selected site | `cancelled` / Cancelled | Atomic site-scoped pending-only update, one balance refund, one finite-stock restore, one revoke ledger row, and `claim_cancelled` audit event |
+| `pending` / Submitted | Owner or Moderator authorized by `canRoleManageClaims` for the selected site | `fulfilled` / Completed | Atomic site-scoped pending-only update plus `claim_completed` audit event |
+| `pending` / Submitted | Owner or Moderator authorized by `canRoleManageClaims` for the selected site | `cancelled` / Cancelled | Atomic site-scoped pending-only update, one balance refund, one finite-stock restore, one revoke ledger row, and `claim_cancelled` audit event |
 | `fulfilled` / Completed | Same authorized actor retrying Complete | No change | Idempotent success; no repeated audit or source effect |
 | `cancelled` / Cancelled | Same authorized actor retrying Cancel | No change | Idempotent success; no repeated refund, stock restore, ledger, or audit effect |
 | Either terminal state | Any actor requesting the other terminal state | None | Safe `409` conflict; reopening is unsupported |
@@ -161,7 +173,7 @@ Server-owned transition matrix:
 Privacy, access, retention, and notification decisions:
 
 - No recipient name, address, phone, email, ID, fulfillment note, or arbitrary viewer message is stored. The authenticated detail response exposes a structured empty `fulfillmentDetails` model so clients do not infer fields.
-- Creator list/detail/transition require the current selected-site Rewards-management capability. Viewer list/detail require the authenticated Viewer Account and filter through `site_viewers.viewer_id`. Anonymous/public Claim APIs do not exist. All Claim API responses, including errors, are `no-store`.
+- Creator list/detail/transition require the selected-site Claims-management capability. Viewer list/detail require the authenticated Viewer Account and filter through `site_viewers.viewer_id`. Anonymous/public Claim APIs do not exist. All Claim API responses, including errors, are `no-store`.
 - Because no private fulfillment values exist, Wave G does not broaden team access or add an Owner-only data path. If a real workflow later requires sensitive data, current capability granularity must be reassessed conservatively in Wave H before those values are exposed.
 - There is no private fulfillment-data retention obligation in the current model. Existing redemption, ledger, and redacted audit records retain ordinary fulfillment/account history under their existing behavior; no unsafe speculative deletion job was added.
 - Existing Discord/overlay redemption alerts are relabeled as reward Claims. No notification or automation platform was added, and viewer notification on completion remains deferred.
@@ -195,7 +207,7 @@ Community, People, and Insights are current navigation presentation labels only;
 
 ## Current Identity and Scope Facts
 
-- Creator/operator accounts (`users`), viewer accounts (`viewers`), creator-team access (`site_members`), site memberships (`site_viewers`), leaderboard player rows (`players`), and Telegram subscriber relationships (`bot_subscribers`) are distinct current records.
+- Creator/operator accounts (`users`), viewer accounts (`viewers`), creator-team access (`site_members`), site memberships (`site_viewers`), leaderboard player rows (`players`), and Telegram subscriber relationships (`bot_subscribers`) are distinct current records. Team Owner is `sites.user_id`; the only persisted delegated V1 role is site-scoped Moderator.
 - `viewers` is the current global viewer-account anchor. A provider connection is treated as authenticated only when its OAuth link timestamp is present; names and raw external identifiers are not linkage proof.
 - `site_viewers` is the current physical Site Membership record. Its foreign keys and unique `(site_id, viewer_id)` constraint already provide the required scope and uniqueness, so no additive membership table or inferred backfill is justified.
 - A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records.

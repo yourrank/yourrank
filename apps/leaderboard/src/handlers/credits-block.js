@@ -16,7 +16,7 @@ export async function handleCreditsBlockViewer(request, env) {
   const url = new URL(request.url);
   const site = await getSite(env, user, url);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
+  const authorization = await requireSiteCapability(user, site, "canRoleManageMembers");
   if (authorization.res) return authorization.res;
 
   const id = routeContext(request).slug || url.pathname.split("/").pop();

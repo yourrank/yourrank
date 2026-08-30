@@ -75,7 +75,7 @@ export async function requirePeopleAccess(request, env, deps) {
   const authorization = await deps.requireSiteCapability(
     user,
     site,
-    "canRoleManageCredits",
+    "canRoleViewMembers",
   );
   if (authorization.res) return { res: authorization.res };
   return { user, site };

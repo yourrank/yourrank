@@ -57,7 +57,7 @@ describe("server-rendered rewards pages", () => {
     expect(html).toContain('class="embed-tip cr-reward-id-tip"');
     expect(rewardsMarkupSource).not.toContain("cr-help-tip");
     expect(rewardsMarkupSource).not.toContain('style="background:#eff6ff');
-    expect(rewardsClientSource).toContain('revealRewardPanel("cr-reward-create-form", true)');
+    expect(rewardsClientSource).toContain('capabilities.manageConnections ? "cr-reward-create-form" : "cr-reward-form"');
     expect(rewardsClientSource).toContain('formId === "cr-reward-form" || formId === "cr-reward-create-form"');
     expect(dashboardV4Source).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(dashboardV4Source).toContain("#cr-rewards details");

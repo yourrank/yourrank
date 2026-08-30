@@ -5,7 +5,6 @@ import {
   handleTeamInvite,
   handleTeamRevokeInvite,
   handleTeamRemoveMember,
-  handleTeamUpdateRole,
   handleTeamAcceptInvite,
   handleGetInviteInfo,
 } from "../handlers/team.js";
@@ -45,12 +44,12 @@ describe("Team API Handlers", () => {
       getSiteRole: async () => "moderator",
       listSiteMembers: async () => [],
       listSiteInvites: async () => [],
+      getOperatorSeatUsage: async () => ({ plan: "team", used: 2, limit: 5 }),
       rateLimit: allowRateLimit,
       rateLimitHeaders: headers,
       createSiteInvite: async () => ({ ok: true }),
       revokeSiteInvite: async () => ({ ok: true }),
       removeSiteMember: async () => ({ ok: true }),
-      updateSiteMemberRole: async () => ({ ok: true }),
     };
 
     const listRes = await handleTeamList(
@@ -59,13 +58,16 @@ describe("Team API Handlers", () => {
       deps,
     );
     expect(listRes.status).toBe(200);
-    expect((await listRes.json()).currentRole).toBe("moderator");
+    expect(listRes.headers.get("cache-control")).toContain("no-store");
+    const listBody = await listRes.json();
+    expect(listBody.currentRole).toBe("moderator");
+    expect(listBody.invites).toEqual([]);
+    expect(listBody.seats).toEqual({ plan: "team", used: 2, limit: 5 });
 
     const requests = [
       [handleTeamInvite, { siteId: "site-1", email: "other@example.com" }],
       [handleTeamRevokeInvite, { siteId: "site-1", inviteId: "invite-1" }],
       [handleTeamRemoveMember, { siteId: "site-1", targetUserId: "other-user" }],
-      [handleTeamUpdateRole, { siteId: "site-1", targetUserId: "other-user", role: "manager" }],
     ];
     for (const [handler, body] of requests) {
       const res = await handler(
@@ -94,6 +96,7 @@ describe("Team API Handlers", () => {
       getSiteRole: async (siteId, userId) => siteId === "site-member-first" && userId === "moderator-1" ? "moderator" : null,
       listSiteMembers: async () => [],
       listSiteInvites: async () => [],
+      getOperatorSeatUsage: async () => ({ plan: "team", used: 2, limit: 5 }),
     };
 
     const res = await handleTeamList(
@@ -170,14 +173,6 @@ describe("Team API Handlers", () => {
     const removeRes = await handleTeamRemoveMember(removeReq, fakeEnv);
     expect(removeRes.status).toBe(401);
 
-    const roleReq = new Request("https://yourrank.site/api/site/team/role", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ siteId: "site-1", targetUserId: "u-1", role: "manager" }),
-    });
-    const roleRes = await handleTeamUpdateRole(roleReq, fakeEnv);
-    expect(roleRes.status).toBe(401);
-
     const acceptReq = new Request("https://yourrank.site/api/site/team/accept-invite", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -185,5 +180,29 @@ describe("Team API Handlers", () => {
     });
     const acceptRes = await handleTeamAcceptInvite(acceptReq, fakeEnv);
     expect(acceptRes.status).toBe(401);
+  });
+
+  it("rejects client-supplied Owner or dead Manager invite roles", async () => {
+    for (const role of ["owner", "manager"]) {
+      const response = await handleTeamInvite(new Request("https://yourrank.site/api/site/team/invite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ siteId: "site-1", email: "operator@example.com", role }),
+      }), {}, {
+        requireUser: async () => ({ user: { id: "owner-1" }, res: null }),
+        getSiteById: async () => ({ id: "site-1", user_id: "owner-1" }),
+        getSiteRole: async () => "owner",
+        rateLimit: allowRateLimit,
+        rateLimitHeaders: headers,
+        createSiteInvite: async () => ({ ok: false, error: "Role must be Moderator.", code: "invalid_role" }),
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json()).code).toBe("invalid_role");
+    }
+  });
+
+  it("does not register a role-change endpoint in V1", async () => {
+    const routes = readFileSync(new URL("../routes.js", import.meta.url), "utf8");
+    expect(routes).not.toContain('path: "/api/site/team/role"');
   });
 });

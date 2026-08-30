@@ -2,7 +2,7 @@
 //  YourRank — SHARED TEAM & MODERATOR MANAGEMENT (TypeScript)
 //
 //  Role-Based Access Control (RBAC) and team delegation for streamer sites:
-//    - Roles: 'owner', 'manager', 'moderator'
+//    - V1 roles: 'owner', 'moderator'
 //    - Least-privilege capability guards
 //    - Secure email & token invitation lifecycle
 // ============================================================================
@@ -12,7 +12,59 @@ import type { Tx } from "./db.js";
 import { hashToken } from "./crypto.js";
 import { effectivePlan, OPERATOR_SEAT_LIMITS } from "./plans.js";
 
-export type SiteRole = "owner" | "manager" | "moderator";
+export type SiteRole = "owner" | "moderator";
+
+export type SiteCapability =
+  | "canRoleManageBoard"
+  | "canRoleManageCredits"
+  | "canRoleManageBot"
+  | "canRoleViewMembers"
+  | "canRoleManageMembers"
+  | "canRoleManageActivities"
+  | "canRoleManageReviews"
+  | "canRoleManageClaims"
+  | "canRoleViewRewards"
+  | "canRoleManageRewards"
+  | "canRoleAdjustCredits"
+  | "canRoleViewInsights"
+  | "canRoleManageSiteSettings"
+  | "canRoleManageConnections"
+  | "canRoleManageTeam"
+  | "canRoleManageBilling"
+  | "canRoleManageAccountSecurity";
+
+const SITE_ROLE_CAPABILITIES: Record<SiteRole, ReadonlySet<SiteCapability>> = {
+  owner: new Set<SiteCapability>([
+    "canRoleManageBoard",
+    "canRoleManageCredits",
+    "canRoleManageBot",
+    "canRoleViewMembers",
+    "canRoleManageMembers",
+    "canRoleManageActivities",
+    "canRoleManageReviews",
+    "canRoleManageClaims",
+    "canRoleViewRewards",
+    "canRoleManageRewards",
+    "canRoleAdjustCredits",
+    "canRoleViewInsights",
+    "canRoleManageSiteSettings",
+    "canRoleManageConnections",
+    "canRoleManageTeam",
+    "canRoleManageBilling",
+    "canRoleManageAccountSecurity",
+  ]),
+  moderator: new Set<SiteCapability>([
+    "canRoleManageBoard",
+    "canRoleViewMembers",
+    "canRoleManageMembers",
+    "canRoleManageActivities",
+    "canRoleManageReviews",
+    "canRoleManageClaims",
+    "canRoleViewRewards",
+    "canRoleManageRewards",
+    "canRoleViewInsights",
+  ]),
+};
 
 export interface SiteMemberInfo {
   id: string;
@@ -47,6 +99,12 @@ export interface DbOps {
   withTransaction?: typeof defaultWithTransaction;
 }
 
+export interface OperatorSeatUsage {
+  plan: "free" | "pro" | "team";
+  used: number;
+  limit: number;
+}
+
 function transactionRunner(ops: DbOps) {
   if (ops.withTransaction) return ops.withTransaction;
   if (ops.one || ops.exec || ops.query) {
@@ -59,34 +117,85 @@ function transactionRunner(ops: DbOps) {
   return defaultWithTransaction;
 }
 
-/** Check if role has permission to edit leaderboards, players, wagers, and scores */
+async function writeTeamAudit(
+  tx: Tx,
+  entry: {
+    actorId: string;
+    action: string;
+    entityType: "site_invite" | "site_member";
+    entityId: string;
+    siteId: string;
+    role?: SiteRole;
+    targetUserId?: string;
+    status?: string;
+  },
+): Promise<void> {
+  await tx.unsafe(
+    `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+     VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [
+      entry.actorId,
+      entry.action,
+      entry.entityType,
+      entry.entityId,
+      {
+        site_id: entry.siteId,
+        ...(entry.role ? { role: entry.role } : {}),
+        ...(entry.targetUserId ? { target_user_id: entry.targetUserId } : {}),
+        ...(entry.status ? { status: entry.status } : {}),
+      },
+    ],
+  );
+}
+
+/** The one server-owned V1 role-to-capability decision point. */
+export function hasSiteCapability(
+  role: SiteRole | null | undefined,
+  capability: SiteCapability,
+): boolean {
+  if (role !== "owner" && role !== "moderator") return false;
+  return SITE_ROLE_CAPABILITIES[role].has(capability);
+}
+
+/** Compatibility boundary for existing leaderboard operations. */
 export function canRoleManageBoard(role: SiteRole | null | undefined): boolean {
-  return role === "owner" || role === "manager" || role === "moderator";
+  return hasSiteCapability(role, "canRoleManageBoard");
 }
 
-/** Check if role has permission to adjust viewer balances and fulfill shop redemptions */
+/** Legacy broad Credits capability. New safe callers use narrower capabilities. */
 export function canRoleManageCredits(role: SiteRole | null | undefined): boolean {
-  return role === "owner" || role === "manager" || role === "moderator";
+  return hasSiteCapability(role, "canRoleManageCredits");
 }
 
-/** Check if role has permission to configure bot replies, commands, and broadcasts */
 export function canRoleManageBot(role: SiteRole | null | undefined): boolean {
-  return role === "owner" || role === "manager";
+  return hasSiteCapability(role, "canRoleManageBot");
 }
 
-/** Check if role has permission to invite, remove, and manage team members */
+export const canRoleViewMembers = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleViewMembers");
+export const canRoleManageMembers = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageMembers");
+export const canRoleManageActivities = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageActivities");
+export const canRoleManageReviews = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageReviews");
+export const canRoleManageClaims = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageClaims");
+export const canRoleViewRewards = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleViewRewards");
+export const canRoleManageRewards = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageRewards");
+export const canRoleAdjustCredits = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleAdjustCredits");
+export const canRoleViewInsights = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleViewInsights");
+export const canRoleManageSiteSettings = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageSiteSettings");
+export const canRoleManageConnections = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageConnections");
+
 export function canRoleManageTeam(role: SiteRole | null | undefined): boolean {
-  return role === "owner";
+  return hasSiteCapability(role, "canRoleManageTeam");
 }
 
-/** Check if role has permission to view and modify billing / payment methods */
 export function canRoleManageBilling(role: SiteRole | null | undefined): boolean {
-  return role === "owner";
+  return hasSiteCapability(role, "canRoleManageBilling");
 }
+
+export const canRoleManageAccountSecurity = (role: SiteRole | null | undefined): boolean => hasSiteCapability(role, "canRoleManageAccountSecurity");
 
 /**
  * Get the effective role for a user on a given site.
- * Returns 'owner', 'manager', 'moderator', or null if not affiliated.
+ * Returns 'owner', 'moderator', or null if not affiliated or Team is inactive.
  */
 export async function getSiteRole(
   siteId: string,
@@ -114,9 +223,7 @@ export async function getSiteRole(
     "SELECT role FROM site_members WHERE site_id=$1 AND user_id=$2",
     [siteId, userId]
   );
-  if (member?.role === "manager" || member?.role === "moderator") {
-    return member.role;
-  }
+  if (member?.role === "moderator") return "moderator";
 
   return null;
 }
@@ -191,6 +298,7 @@ export async function listSiteMembers(
   }
 
   for (const m of members || []) {
+    if (m.role !== "moderator") continue;
     result.push({
       id: m.id,
       siteId: m.site_id,
@@ -231,7 +339,7 @@ export async function listSiteInvites(
     [siteId]
   );
 
-  return (rows || []).map((r) => ({
+  return (rows || []).filter((r) => r.role === "moderator").map((r) => ({
     id: r.id,
     siteId: r.site_id,
     email: r.email,
@@ -241,6 +349,55 @@ export async function listSiteInvites(
     createdAt: r.created_at,
     invitedBy: r.invited_by,
   }));
+}
+
+async function countAccountOperatorIdentities(
+  ownerId: string,
+  one: typeof defaultOne,
+): Promise<number> {
+  const seats = await one<{ count: number }>(
+    `WITH account_sites AS (
+       SELECT id FROM sites WHERE user_id=$1
+     ), identities AS (
+       SELECT 'user:' || $1::text AS identity
+       UNION
+       SELECT 'user:' || sm.user_id::text
+         FROM site_members sm JOIN account_sites a ON a.id=sm.site_id
+       UNION
+       SELECT COALESCE('user:' || invited.id::text, 'email:' || lower(si.email))
+         FROM site_invites si
+         JOIN account_sites a ON a.id=si.site_id
+         LEFT JOIN users invited ON lower(invited.email)=lower(si.email)
+        WHERE si.status='pending' AND si.expires_at > now()
+     ) SELECT count(DISTINCT identity)::int AS count FROM identities`,
+    [ownerId],
+  );
+  return Number(seats?.count) || 0;
+}
+
+/** Account-pooled seat usage for the selected site owner. Preserved rows remain visible after downgrade. */
+export async function getOperatorSeatUsage(
+  siteId: string,
+  { one = defaultOne }: DbOps = {},
+): Promise<OperatorSeatUsage | null> {
+  const owner = await one<{
+    user_id: string;
+    plan: string;
+    plan_expires_at: string | null;
+    status: string;
+  }>(
+    `SELECT s.user_id, u.plan, u.plan_expires_at, u.status
+       FROM sites s JOIN users u ON u.id=s.user_id
+      WHERE s.id=$1`,
+    [siteId],
+  );
+  if (!owner) return null;
+  const plan = effectivePlan(owner);
+  return {
+    plan,
+    used: await countAccountOperatorIdentities(owner.user_id, one),
+    limit: OPERATOR_SEAT_LIMITS[plan],
+  };
 }
 
 /**
@@ -259,8 +416,8 @@ export async function createSiteInvite(
     return { ok: false, error: "Please provide a valid email address.", code: "invalid_email" };
   }
 
-  if (role !== "moderator" && role !== "manager") {
-    return { ok: false, error: "Role must be moderator or manager.", code: "invalid_role" };
+  if (role !== "moderator") {
+    return { ok: false, error: "Role must be Moderator.", code: "invalid_role" };
   }
 
   const requesterRole = await getSiteRole(siteId, inviterId, { one });
@@ -308,31 +465,25 @@ export async function createSiteInvite(
       [siteId, cleanEmail],
     );
     if (existingInvite) {
+      const existingInviteId = String(existingInvite.id);
       await tx.unsafe(
         "UPDATE site_invites SET token_hash=$1, expires_at=now() + interval '7 days', role=$2 WHERE id=$3",
-        [tokenHash, role, existingInvite.id],
+        [tokenHash, role, existingInviteId],
       );
-      return { ok: true, token, inviteId: existingInvite.id };
+      await writeTeamAudit(tx, {
+        actorId: inviterId,
+        action: "team_invitation_created",
+        entityType: "site_invite",
+        entityId: existingInviteId,
+        siteId,
+        role,
+        status: "rotated",
+      });
+      return { ok: true, token, inviteId: existingInviteId };
     }
 
-    const seats = await tx.one(
-      `WITH account_sites AS (
-         SELECT id FROM sites WHERE user_id=$1
-       ), identities AS (
-         SELECT 'user:' || $1::text AS identity
-         UNION
-         SELECT 'user:' || sm.user_id::text
-           FROM site_members sm JOIN account_sites a ON a.id=sm.site_id
-         UNION
-         SELECT COALESCE('user:' || invited.id::text, 'email:' || lower(si.email))
-           FROM site_invites si
-           JOIN account_sites a ON a.id=si.site_id
-           LEFT JOIN users invited ON lower(invited.email)=lower(si.email)
-          WHERE si.status='pending' AND si.expires_at > now()
-       ) SELECT count(DISTINCT identity)::int AS count FROM identities`,
-      [site.user_id],
-    );
-    if ((Number(seats?.count) || 0) >= OPERATOR_SEAT_LIMITS.team) {
+    const seatCount = await countAccountOperatorIdentities(site.user_id, tx.one);
+    if (seatCount >= OPERATOR_SEAT_LIMITS.team) {
       return { ok: false, error: "The Team plan includes 5 operator seats.", code: "seat_limit" };
     }
 
@@ -342,6 +493,16 @@ export async function createSiteInvite(
        RETURNING id`,
       [siteId, cleanEmail, role, tokenHash, inviterId],
     ))[0];
+    if (!created?.id) return { ok: false, error: "Failed to create invitation.", code: "create_failed" };
+    await writeTeamAudit(tx, {
+      actorId: inviterId,
+      action: "team_invitation_created",
+      entityType: "site_invite",
+      entityId: created.id,
+      siteId,
+      role,
+      status: "pending",
+    });
     return { ok: true, token, inviteId: created?.id };
   });
 }
@@ -353,19 +514,31 @@ export async function revokeSiteInvite(
   siteId: string,
   inviteId: string,
   requesterId: string,
-  { one = defaultOne, exec = defaultExec }: DbOps = {}
+  ops: DbOps = {},
 ): Promise<{ ok: boolean; error?: string; code?: string }> {
+  const one = ops.one ?? defaultOne;
   const requesterRole = await getSiteRole(siteId, requesterId, { one });
   if (!canRoleManageTeam(requesterRole)) {
     return { ok: false, error: "Only the site owner can revoke invitations.", code: "forbidden" };
   }
 
-  await exec(
-    "UPDATE site_invites SET status='revoked' WHERE id=$1 AND site_id=$2 AND status='pending'",
-    [inviteId, siteId]
-  );
-
-  return { ok: true };
+  return transactionRunner(ops)(async (tx) => {
+    const rows = await tx.unsafe(
+      "UPDATE site_invites SET status='revoked' WHERE id=$1 AND site_id=$2 AND status='pending' RETURNING id, role",
+      [inviteId, siteId],
+    );
+    if (!rows?.[0]) return { ok: false, error: "Invitation not found.", code: "not_found" };
+    await writeTeamAudit(tx, {
+      actorId: requesterId,
+      action: "team_invitation_revoked",
+      entityType: "site_invite",
+      entityId: rows[0].id,
+      siteId,
+      role: rows[0].role === "moderator" ? "moderator" : undefined,
+      status: "revoked",
+    });
+    return { ok: true };
+  });
 }
 
 /**
@@ -375,47 +548,41 @@ export async function removeSiteMember(
   siteId: string,
   targetUserId: string,
   requesterId: string,
-  { one = defaultOne, exec = defaultExec }: DbOps = {}
+  ops: DbOps = {},
 ): Promise<{ ok: boolean; error?: string; code?: string }> {
+  const one = ops.one ?? defaultOne;
   const requesterRole = await getSiteRole(siteId, requesterId, { one });
   // An owner can remove anyone; a member can remove themselves (leave site)
   if (!canRoleManageTeam(requesterRole) && requesterId !== targetUserId) {
     return { ok: false, error: "Only the site owner can remove team members.", code: "forbidden" };
   }
 
-  await exec(
-    "DELETE FROM site_members WHERE site_id=$1 AND user_id=$2",
-    [siteId, targetUserId]
-  );
-
-  return { ok: true };
-}
-
-/**
- * Update a member's role (e.g. moderator <-> manager).
- */
-export async function updateSiteMemberRole(
-  siteId: string,
-  targetUserId: string,
-  newRole: SiteRole,
-  requesterId: string,
-  { one = defaultOne, exec = defaultExec }: DbOps = {}
-): Promise<{ ok: boolean; error?: string; code?: string }> {
-  if (newRole !== "moderator" && newRole !== "manager") {
-    return { ok: false, error: "Invalid role specified.", code: "invalid_role" };
-  }
-
-  const requesterRole = await getSiteRole(siteId, requesterId, { one });
-  if (!canRoleManageTeam(requesterRole)) {
-    return { ok: false, error: "Only the site owner can change member roles.", code: "forbidden" };
-  }
-
-  await exec(
-    "UPDATE site_members SET role=$1, updated_at=now() WHERE site_id=$2 AND user_id=$3",
-    [newRole, siteId, targetUserId]
-  );
-
-  return { ok: true };
+  return transactionRunner(ops)(async (tx) => {
+    const site = await tx.one<{ user_id: string }>(
+      "SELECT user_id FROM sites WHERE id=$1 FOR UPDATE",
+      [siteId],
+    );
+    if (!site) return { ok: false, error: "Site not found.", code: "not_found" };
+    if (site.user_id === targetUserId) {
+      return { ok: false, error: "The site owner cannot be removed.", code: "owner_protected" };
+    }
+    const removed = await tx.unsafe(
+      "DELETE FROM site_members WHERE site_id=$1 AND user_id=$2 RETURNING id, role",
+      [siteId, targetUserId],
+    );
+    if (!removed?.[0]) return { ok: false, error: "Team member not found.", code: "not_found" };
+    await writeTeamAudit(tx, {
+      actorId: requesterId,
+      action: "team_operator_removed",
+      entityType: "site_member",
+      entityId: removed[0].id,
+      siteId,
+      role: removed[0].role === "moderator" ? "moderator" : undefined,
+      targetUserId,
+      status: "removed",
+    });
+    return { ok: true };
+  });
 }
 
 /**
@@ -450,6 +617,7 @@ export async function getInviteByToken(
   );
 
   if (!row) return null;
+  if (row.role !== "moderator") return null;
 
   return {
     id: row.id,
@@ -524,6 +692,10 @@ export async function acceptSiteInvite(
     return { ok: false, error: "This invitation has expired.", code: "expired" };
   }
 
+  if (invite.role !== "moderator") {
+    return { ok: false, error: "This invitation has an unsupported role.", code: "invalid_role" };
+  }
+
   if (effectivePlan({ plan: invite.plan, plan_expires_at: invite.plan_expires_at, status: invite.owner_status }) !== "team") {
     return { ok: false, error: "The site owner needs the Team plan before this invitation can be accepted.", code: "requires_team" };
   }
@@ -563,6 +735,17 @@ export async function acceptSiteInvite(
     "UPDATE site_invites SET status='accepted' WHERE id=$1",
     [invite.id]
   );
+
+  await writeTeamAudit(tx, {
+    actorId: userId,
+    action: "team_invitation_accepted",
+    entityType: "site_invite",
+    entityId: invite.id,
+    siteId: invite.site_id,
+    role: "moderator",
+    targetUserId: userId,
+    status: "accepted",
+  });
 
   return { ok: true, siteId: invite.site_id, role: invite.role };
   });

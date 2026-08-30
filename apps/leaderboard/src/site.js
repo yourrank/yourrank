@@ -12,6 +12,7 @@ import { detectImageMime, validateLogoData } from "./logo-validation.js";
 import { invalidatePublicBoardCache } from "./public-html-cache.js";
 import { notifyLiveBoard } from "./live-board-config.js";
 import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
+import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
 
 export { detectImageMime, validateLogoData };
 
@@ -221,10 +222,31 @@ export async function getClickRedirectSite(env, slug, request = null) {
 // Multi-board: returns the ACTIVE board for a user (or the first board if none set).
 // Not cached: the dashboard reads this on every load and must see the latest saves
 // immediately, even when the request hits a different worker isolate.
-const getByUser = async (env, uid) => {
-  const owned = await one(`SELECT ${SITE_COLUMNS} FROM sites WHERE user_id=$1 ORDER BY CASE WHEN id=(SELECT active_site_id FROM users WHERE id=$1) THEN 0 ELSE 1 END, id ASC LIMIT 1`, [uid]);
+const getByUser = async (env, uid, {
+  one: oneImpl = one,
+  getSiteRole = sharedGetSiteRole,
+} = {}) => {
+  const owned = await oneImpl(`SELECT ${SITE_COLUMNS} FROM sites WHERE user_id=$1 ORDER BY CASE WHEN id=(SELECT active_site_id FROM users WHERE id=$1) THEN 0 ELSE 1 END, id ASC LIMIT 1`, [uid]);
   if (owned) return owned;
-  return one(`SELECT ${SITE_COLUMNS} FROM sites WHERE id IN (SELECT site_id FROM site_members WHERE user_id=$1) ORDER BY id ASC LIMIT 1`, [uid]);
+  const candidate = await oneImpl(
+    `SELECT ${SITE_COLUMNS}
+       FROM sites
+      WHERE id IN (
+        SELECT sm.site_id
+          FROM site_members sm
+          JOIN sites delegated ON delegated.id=sm.site_id
+          JOIN users owner ON owner.id=delegated.user_id
+         WHERE sm.user_id=$1
+           AND sm.role='moderator'
+           AND lower(owner.plan)='team'
+           AND owner.status IS DISTINCT FROM 'suspended'
+           AND owner.plan_expires_at > now()
+      )
+      ORDER BY id ASC LIMIT 1`,
+    [uid],
+  );
+  if (!candidate) return null;
+  return await getSiteRole(candidate.id, uid, { one: oneImpl }) === "moderator" ? candidate : null;
 };
 
 // Multi-board: returns ALL boards for a user.
@@ -235,14 +257,14 @@ export async function getAllBoards(env, uid) {
 }
 
 // Multi-board: returns a specific board by site ID (if owned or member).
-export async function getBoardById(env, uid, siteId) {
-  const owned = await one(`SELECT ${SITE_COLUMNS} FROM sites WHERE id=$1 AND user_id=$2`, [siteId, uid]);
+export async function getBoardById(env, uid, siteId, {
+  one: oneImpl = one,
+  getSiteRole = sharedGetSiteRole,
+} = {}) {
+  const owned = await oneImpl(`SELECT ${SITE_COLUMNS} FROM sites WHERE id=$1 AND user_id=$2`, [siteId, uid]);
   if (owned) return owned;
-  const member = await one("SELECT role FROM site_members WHERE site_id=$1 AND user_id=$2", [siteId, uid]);
-  if (member) {
-    return one(`SELECT ${SITE_COLUMNS} FROM sites WHERE id=$1`, [siteId]);
-  }
-  return null;
+  if (await getSiteRole(siteId, uid, { one: oneImpl }) !== "moderator") return null;
+  return oneImpl(`SELECT ${SITE_COLUMNS} FROM sites WHERE id=$1`, [siteId]);
 }
 
 export async function getSiteById(env, siteId) {
@@ -528,14 +550,24 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
     };
   }
 
+async function planForSelectedSite(site, uid, fallbackPlan) {
+  if (site.user_id === uid) return fallbackPlan || "free";
+  const owner = await one(
+    "SELECT plan, plan_expires_at, status FROM users WHERE id=$1",
+    [site.user_id],
+  );
+  return effectivePlan(owner);
+}
+
 export async function getUserSite(env, uid, plan) {
       const site = await getByUser(env, uid);
       if (!site) return null;
-      const archiveLimit = ARCHIVE_LIMITS[plan || "free"] || 6;
+      const selectedPlan = await planForSelectedSite(site, uid, plan);
+      const archiveLimit = ARCHIVE_LIMITS[selectedPlan] || 6;
       // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[plan || "free"]);
+      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[selectedPlan]);
     return {
-        id: site.id, slug: site.slug, published: !!site.published,
+        id: site.id, slug: site.slug, published: !!site.published, plan: selectedPlan,
         isDraft: !!site.is_draft,
         passwordProtected: !!site.password_hash,
         updatedAt: site.updated_at,
@@ -558,11 +590,12 @@ export async function getUserSite(env, uid, plan) {
     }
 
 // Multi-board: return a summary list of all boards for a user (owned and delegated).
-export async function getUserBoardsList(env, uid) {
-  const rows = await query(
+export async function getUserBoardsList(env, uid, { query: queryImpl = query } = {}) {
+  const rows = await queryImpl(
     `SELECT s.id, s.slug, s.name, s.casino, s.code, s.published, s.is_draft, s.board_order, s.theme_json,
             s.kick_channel_external_id, s.kick_channel_name,
             'owner' AS user_role, NULL AS owner_name,
+            NULL::text AS owner_plan, NULL::timestamptz AS owner_plan_expires_at, NULL::text AS owner_status,
             (SELECT COUNT(*) FROM players p WHERE p.site_id = s.id) AS player_count
        FROM sites s
       WHERE s.user_id=$1
@@ -570,6 +603,7 @@ export async function getUserBoardsList(env, uid) {
      SELECT s.id, s.slug, s.name, s.casino, s.code, s.published, s.is_draft, s.board_order, s.theme_json,
             s.kick_channel_external_id, s.kick_channel_name,
             sm.role AS user_role, u.display_name AS owner_name,
+            u.plan AS owner_plan, u.plan_expires_at AS owner_plan_expires_at, u.status AS owner_status,
             (SELECT COUNT(*) FROM players p WHERE p.site_id = s.id) AS player_count
        FROM site_members sm
        JOIN sites s ON s.id = sm.site_id
@@ -578,7 +612,13 @@ export async function getUserBoardsList(env, uid) {
       ORDER BY board_order ASC, id ASC`,
     [uid]
   );
-  return (rows || []).map((b) => {
+  return (rows || []).filter((b) => b.user_role === "owner" || (
+    b.user_role === "moderator" && effectivePlan({
+      plan: b.owner_plan,
+      plan_expires_at: b.owner_plan_expires_at,
+      status: b.owner_status,
+    }) === "team"
+  )).map((b) => {
     const theme = parseTheme(b);
     return {
       id: b.id,
@@ -603,11 +643,12 @@ export async function getUserBoardsList(env, uid) {
 export async function getUserSiteById(env, uid, siteId, plan) {
     const site = await getBoardById(env, uid, siteId);
     if (!site) return null;
-    const archiveLimit = ARCHIVE_LIMITS[plan || "free"] || 6;
+    const selectedPlan = await planForSelectedSite(site, uid, plan);
+    const archiveLimit = ARCHIVE_LIMITS[selectedPlan] || 6;
     // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[plan || "free"]);
+    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[selectedPlan]);
   return {
-    id: site.id, slug: site.slug, published: !!site.published,
+    id: site.id, slug: site.slug, published: !!site.published, plan: selectedPlan,
     isDraft: !!site.is_draft,
     passwordProtected: !!site.password_hash,
     updatedAt: site.updated_at,

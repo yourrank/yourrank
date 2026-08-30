@@ -221,10 +221,18 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
             <h2 class="m-0">Team members</h2>
             <p class="card-sub m-0 mt-2">Invite trusted people to help manage the selected site without sharing your login.</p>
           </div>
-          <button class="btn btn--accent" id="btnOpenInviteModal" type="button">
+          <button class="btn btn--accent" id="btnOpenInviteModal" type="button" hidden>
             Invite member
           </button>
+          <a class="btn btn--accent" id="teamUpgradeLink" href="/dashboard/settings/billing" hidden>Upgrade to Team</a>
         </div>
+
+        <div class="account-team-summary" aria-live="polite">
+          <strong id="teamSeatUsage">Loading operator seats…</strong>
+          <span id="teamSeatContext">Seat usage is shared across the owner's sites.</span>
+        </div>
+        <p class="account-team-notice" id="teamPlanNotice" hidden></p>
+        <p class="account-team-notice" id="teamReadOnlyNotice" hidden>You can see who operates this site. Only the owner can invite or remove operators.</p>
 
         <div class="acc-team-section">
           <h3 class="m-0 mb-8">Current team</h3>
@@ -233,7 +241,7 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
           </div>
         </div>
 
-        <div class="acc-team-section">
+        <div class="acc-team-section" id="teamPendingSection" hidden>
           <h3 class="m-0 mb-8">Pending invites</h3>
           <div id="teamInvitesList">
             <p class="hint">No pending invitations.</p>
@@ -241,15 +249,15 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
         </div>
 
         <details class="account-settings-disclosure acc-team-roles-guide">
-          <summary>Choosing a role</summary>
+          <summary>Owner and Moderator permissions</summary>
           <div class="account-settings-disclosure-body account-role-list">
             <div>
-              <strong>Manager</strong>
-              <p>Can manage leaderboards, rewards, and Telegram for this site. Cannot manage billing or account security.</p>
+              <strong>Owner</strong>
+              <p>Manages Team access, billing, account security, site settings, and connections.</p>
             </div>
             <div>
               <strong>Moderator</strong>
-              <p>Can update leaderboards and fulfil reward orders. Cannot manage Telegram, billing, or account security.</p>
+              <p>Can operate Members, Reviews, Claims, safe Activities, Rewards, and read operational insights for this site. Cannot manage Team, billing, account security, site settings, connections, or manual credit adjustments.</p>
             </div>
           </div>
         </details>
@@ -258,17 +266,14 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
 <div class="modal" id="inviteMemberModal" role="dialog" aria-modal="true" aria-labelledby="inviteModalTitle" aria-describedby="inviteModalDescription" aria-hidden="true" hidden>
   <div class="modal-card">
     <h3 id="inviteModalTitle">Invite team member</h3>
-    <p class="card-sub" id="inviteModalDescription">Choose what this person can manage for the selected site.</p>
+    <p class="card-sub" id="inviteModalDescription">Invite this person as a Moderator for the selected site.</p>
     <div class="field">
       <label for="inviteEmail">Email address</label>
       <input id="inviteEmail" type="email" autocomplete="email" placeholder="creator@example.com" required />
     </div>
     <div class="field">
-      <label for="inviteRole">Role</label>
-      <select id="inviteRole" class="field-select">
-        <option value="moderator" selected>Moderator — leaderboards and reward orders</option>
-        <option value="manager">Manager — leaderboards, rewards, and Telegram</option>
-      </select>
+      <span class="field-label" id="inviteRoleLabel">Role</span>
+      <p class="account-invite-role" aria-labelledby="inviteRoleLabel"><strong>Moderator</strong><span>Site-scoped community operations without Team, billing, security, settings, connection, or manual-credit control.</span></p>
     </div>
     <div class="d-flex gap-10 flex-wrap mt-14">
       <button class="btn btn--accent" id="btnSendInvite" type="button">Create invite</button>

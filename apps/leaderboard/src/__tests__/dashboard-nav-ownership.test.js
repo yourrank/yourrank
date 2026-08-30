@@ -287,9 +287,12 @@ describe("dashboard navigation ownership", () => {
   });
 
   it("keeps delegated site lookup unambiguous", () => {
-    expect(siteSource).toContain(
-      "FROM sites WHERE id IN (SELECT site_id FROM site_members WHERE user_id=$1) ORDER BY id ASC LIMIT 1"
-    );
+    expect(siteSource).toContain("FROM sites\n      WHERE id IN (");
+    expect(siteSource).toContain("JOIN users owner ON owner.id=delegated.user_id");
+    expect(siteSource).toContain("AND sm.role='moderator'");
+    expect(siteSource).toContain("AND lower(owner.plan)='team'");
+    expect(siteSource).toContain("AND owner.plan_expires_at > now()");
+    expect(siteSource).toContain("ORDER BY id ASC LIMIT 1");
     expect(siteSource).not.toContain("FROM sites s JOIN site_members sm");
     expect(siteSource).not.toContain("ORDER BY 8 ASC, 1 ASC");
   });

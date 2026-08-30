@@ -52,7 +52,7 @@ const strongestFeatures: Record<PlanTier, string[]> = {
     `${number(ACTIVE_VIEWER_LIMITS.team)} active viewers`,
     `${BOARD_LIMITS.team} sites · ${number(PLAN_LIMITS.team)} players per site`,
     `${OPERATOR_SEAT_LIMITS.team} total operator seats`,
-    "Manager and moderator roles",
+    "Owner and moderator roles",
     `${CREDITS_REWARD_LIMITS.team} reward mappings · ${CREDITS_SHOP_LIMITS.team} shop items`,
     "24 months of accessible history",
   ],

@@ -451,8 +451,8 @@ describe("handleCreditsActivity", () => {
     const second = await handleCreditsActivity(req(`https://test.com/api/credits/activity?siteId=site-1&limit=2&cursor=${encodeURIComponent(firstBody.nextCursor)}`), makeEnv());
     const secondBody = await second.json();
     expect(secondBody.events.map((item) => item.id)).toEqual(["e1"]);
-    expect(db.calls.at(-1).sql).toContain("(cl.created_at, cl.id) < ($5::timestamptz, $6::uuid)");
-    expect(db.calls.at(-1).params.slice(4, 6)).toEqual(["2026-08-12T12:00:02.000Z", "e2"]);
+    expect(db.calls.at(-1).sql).toContain("(cl.created_at, cl.id) < ($4::timestamptz, $5::uuid)");
+    expect(db.calls.at(-1).params.slice(3, 5)).toEqual(["2026-08-12T12:00:02.000Z", "e2"]);
   });
 
   it("passes the username and type filters into the tenant-scoped query", async () => {
@@ -462,8 +462,9 @@ describe("handleCreditsActivity", () => {
     expect(db.calls[0].sql).toContain("lower(v.kick_username) = lower($2)");
     expect(db.calls[0].sql).toContain("lower(v.discord_username) = lower($2)");
     expect(db.calls[0].sql).toContain("cl.type = $3");
-    expect(db.calls[0].sql).toContain("s.user_id = $4");
-    expect(db.calls[0].params.slice(0, 4)).toEqual(["site-1", "Alice", "refund", "user-1"]);
+    expect(db.calls[0].sql).toContain("sv.site_id = $1");
+    expect(db.calls[0].sql).not.toContain("s.user_id =");
+    expect(db.calls[0].params.slice(0, 3)).toEqual(["site-1", "Alice", "refund"]);
   });
 
   it("returns Discord identity in activity rows and finds members by Discord username", async () => {
@@ -488,7 +489,7 @@ describe("handleCreditsActivity", () => {
     const data = await res.json();
     expect(data.events[0].discordUsername).toBe("disc_user");
     const activityQuery = db.calls.find((c) => c.method === "query" && /credit_ledger/.test(c.sql));
-    expect(activityQuery.params.slice(0, 4)).toEqual(["site-1", "disc_user", "", userFixture.id]);
+    expect(activityQuery.params.slice(0, 3)).toEqual(["site-1", "disc_user", ""]);
   });
 });
 

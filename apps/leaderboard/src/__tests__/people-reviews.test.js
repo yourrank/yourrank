@@ -99,7 +99,7 @@ describe("People Reviews queue adapter", () => {
       reason: expect.objectContaining({ code: "duplicate_participation_requires_review" }),
     })]);
 
-    expect(calls.capability[0].capability).toBe("canRoleManageCredits");
+    expect(calls.capability[0].capability).toBe("canRoleManageReviews");
     expect(calls.query).toHaveLength(1);
     expect(calls.query[0].params).toEqual(["site-1", "pending", 100]);
     expect(calls.query[0].sql).toContain("COALESCE(t.entry_fee, 0) = 0");

@@ -52,7 +52,7 @@ export async function handleStats(request, env, {
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardByIdImpl(env, user.id, siteId) : await getByUserImpl(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleViewInsights");
   if (authorization.res) return authorization.res;
   try {
     return json({ ok: true, stats: await getStatsImpl(env, site.id) });
@@ -148,7 +148,7 @@ export async function handleHeatmap(request, env, {
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardByIdImpl(env, user.id, siteId) : await getByUserImpl(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBoard");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleViewInsights");
   if (authorization.res) return authorization.res;
   try {
     const [heatmap, referrers] = await Promise.all([
@@ -228,10 +228,11 @@ export async function handleGetSite(request, env, {
     s = await getUserSiteImpl(env, user.id, plan);
   }
   if (!s) return bad("No site for this account", 404);
+  const selectedPlan = s.plan || plan;
   const boards = await getUserBoardsListImpl(env, user.id);
-  const onboarding = await onboardingForSiteImpl(env, s, user.id, plan);
+  const onboarding = await onboardingForSiteImpl(env, s, user.id, selectedPlan);
   const data = { ...(s.data || {}), playerCount: Array.isArray(s.data?.players) ? s.data.players.length : 0 };
-  return json({ ok: true, slug: s.slug, published: s.published, isDraft: !!s.isDraft, plan: plan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.at, players: a.players, createdAt: a.at ? new Date(a.at).toISOString() : null, playerCount: a.players })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updatedAt, publishedAt: s.publishedAt, passwordProtected: !!s.passwordProtected, autoReset: { enabled: !!s.autoReset?.enabled, clear: s.autoReset?.clear || "wagers" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
+  return json({ ok: true, slug: s.slug, published: s.published, isDraft: !!s.isDraft, plan: selectedPlan, data, socials: s.socials, notify: s.notify || {}, archives: (s.archives || []).map((a) => ({ id: a.id, label: a.label, at: a.at, players: a.players, createdAt: a.at ? new Date(a.at).toISOString() : null, playerCount: a.players })), boards, siteId: s.id, customDomain: s.customDomain || "", domainStatus: s.customDomain ? (s.domainStatus || "pending") : "not_configured", onboarding, updatedAt: s.updatedAt, publishedAt: s.publishedAt, passwordProtected: !!s.passwordProtected, autoReset: { enabled: !!s.autoReset?.enabled, clear: s.autoReset?.clear || "wagers" } }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }
 
 export async function handleListBoards(request, env) {
@@ -373,7 +374,7 @@ export async function handlePutSite(request, env, {
   if (!payload) return bad("Invalid request");
   const site = payload.siteId ? await getBoardById(env, user.id, payload.siteId) : await getByUser(env, user.id);
   if (site) {
-    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBot");
+    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageSiteSettings");
     if (authorization.res) return authorization.res;
   }
   const r = await saveSite(env, user, payload, payload.siteId || null, request);
@@ -393,7 +394,7 @@ export async function handleFinishSetup(request, env, {
   const payload = await readJson(request) || {};
   const site = payload.siteId ? await getBoardById(env, user.id, payload.siteId) : await getByUser(env, user.id);
   if (site) {
-    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBot");
+    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageSiteSettings");
     if (authorization.res) return authorization.res;
   }
   const r = await saveSite(env, user, { isDraft: false, published: true }, payload.siteId || null, request);
@@ -413,7 +414,7 @@ export async function handlePutTheme(request, env, {
   if (!payload) return bad("Invalid request");
   const site = payload.siteId ? await getBoardById(env, user.id, payload.siteId) : await getByUser(env, user.id);
   if (site) {
-    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBot");
+    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageSiteSettings");
     if (authorization.res) return authorization.res;
   }
   const r = await updateSiteTheme(env, user, payload, request);
@@ -495,7 +496,7 @@ export async function handleNotifyTest(request, env, {
     ? await getBoardByIdImpl(env, user.id, String(body.siteId))
     : await getByUserImpl(env, user.id);
   if (!site) return bad("No site found", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBot");
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return authorization.res;
 
   if (channel === "discord") {
@@ -750,7 +751,7 @@ export async function handlePostSiteSections(request, env) {
   const siteId = payload.siteId || null;
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   if (site) {
-    const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
+    const authorization = await requireSiteCapability(user, site, "canRoleManageSiteSettings");
     if (authorization.res) return authorization.res;
   }
   const r = await saveSite(env, user, { siteSections: payload.siteSections }, siteId, request);
