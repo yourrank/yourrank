@@ -42,7 +42,7 @@ const ERROR_MESSAGES = Object.freeze({
   "insufficient balance": "You don't have enough credits for that yet.",
   "item not found": "That reward is no longer available.",
   "out of stock": "That reward just went out of stock.",
-  "viewer blocked": "You can't order on this site right now. Ask the streamer.",
+  "viewer blocked": "You can't claim rewards on this site right now. Ask the streamer.",
   "invalid csrf": "Your session expired. Reload the page and try again.",
 });
 
@@ -115,7 +115,7 @@ function focusEl(id) {
 // and refunded are distinct outcomes and are never collapsed into one label.
 const ORDER_STATUS = Object.freeze({
   pending: "Pending",
-  fulfilled: "Fulfilled",
+  fulfilled: "Completed",
   cancelled: "Cancelled",
   refunded: "Refunded",
 });
@@ -241,7 +241,7 @@ function renderBoards() {
       <span class="vd-site-mark" aria-hidden="true">${esc(initial(b.name || b.slug))}</span>
       <div class="vd-card-main">
         <div class="vd-card-title">${esc(b.name || b.slug)}</div>
-        <div class="hint">${fmtNum(b.balance)} free credits${b.blocked ? " · ordering disabled" : ""}</div>
+        <div class="hint">${fmtNum(b.balance)} free credits${b.blocked ? " · claiming disabled" : ""}</div>
       </div>
       <div class="vd-card-side">
         <button class="btn btn--sm" type="button" data-view-site="${esc(b.slug)}" aria-label="Open ${esc(b.name || b.slug)}">Open</button>
@@ -319,10 +319,10 @@ function renderSite() {
     const isRedeeming = redeemingItemId === i.id;
     const inStock = i.stock === null || i.stock === undefined || i.stock > 0;
     const canBuy = v && !v.blocked && v.balance >= i.cost && inStock && !isRedeeming;
-    // Why an Order button is unavailable is said in words, never left to the
+    // Why a Claim button is unavailable is said in words, never left to the
     // disabled styling alone.
     const state = v.blocked
-      ? "Ordering disabled on this site"
+      ? "Claiming disabled on this site"
       : !inStock
         ? "Out of stock"
         : v.balance < i.cost
@@ -339,7 +339,7 @@ function renderSite() {
         <div class="vd-card-side">
           <div class="vd-card-cost">${fmtNum(i.cost)} credits</div>
           ${state ? `<div class="hint">${esc(state)}</div>` : ""}
-          <button class="btn btn--sm" type="button" data-redeem="${esc(i.id)}" aria-label="Order ${esc(i.name)}" ${canBuy ? "" : "disabled"}>Order</button>
+          <button class="btn btn--sm" type="button" data-redeem="${esc(i.id)}" aria-label="Claim ${esc(i.name)}" ${canBuy ? "" : "disabled"}>Claim</button>
         </div>
       </div>
     `;
@@ -405,11 +405,11 @@ async function claimDrop() {
 }
 
 // The page loads /assets/dialog.js before this module; without it we refuse the
-// order rather than fall back to the browser's native confirm().
+// claim rather than fall back to the browser's native confirm().
 async function confirmOrder(item) {
   const dialog = window.YRDialog;
   if (!dialog) {
-    setStatus("vd-site-status", "Ordering is unavailable right now. Reload the page and try again.", true);
+    setStatus("vd-site-status", "Claiming is unavailable right now. Reload the page and try again.", true);
     return false;
   }
   const balance = state.current?.viewer?.balance;
@@ -417,9 +417,9 @@ async function confirmOrder(item) {
     ? ` You'd have ${fmtNum(balance - item.cost)} credits left.`
     : "";
   return dialog.confirm({
-    title: "Confirm order",
-    body: `Order ${item.name} for ${fmtNum(item.cost)} free credits.${left} Credits have no cash value.`,
-    confirmText: "Place order",
+    title: "Confirm claim",
+    body: `Claim ${item.name} for ${fmtNum(item.cost)} free credits.${left} Credits have no cash value.`,
+    confirmText: "Claim reward",
   });
 }
 
@@ -430,7 +430,7 @@ async function redeem(shopItemId, btn) {
   if (!item) return;
   setStatus("vd-site-status", "");
   if (!await confirmOrder(item)) return;
-  if (btn) setLoading(btn, true, "Placing order…");
+  if (btn) setLoading(btn, true, "Claiming…");
 
   // Tie the idempotency key to the item, not just the DOM node, so retries and
   // rapid clicks resolve to the same order. The key is only cleared on success.
@@ -446,7 +446,7 @@ async function redeem(shopItemId, btn) {
   try {
     const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId, idempotencyKey });
     // The member stays in this creator's detail: apply the server's balance and
-    // the new order in place instead of reloading the whole account.
+    // the new claim in place instead of reloading the whole account.
     state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
     state.current.viewer.balance = data.balance;
     state.current.redemptions = state.current.redemptions || [];
@@ -460,14 +460,14 @@ async function redeem(shopItemId, btn) {
     const board = (state.boards || []).find((b) => b.slug === slug);
     if (board) board.balance = data.balance;
     delete redeemKeys[shopItemId];
-    setStatus("vd-site-status", `Order placed for ${item.name}. The streamer will confirm it.`, false);
+    setStatus("vd-site-status", `Claim submitted for ${item.name}. The creator will complete it.`, false);
   } catch (err) {
-    setStatus("vd-site-status", errorText(err.message, "We couldn't place that order. Try again."), true);
+    setStatus("vd-site-status", errorText(err.message, "We couldn't submit that claim. Try again."), true);
   } finally {
     redeemingItemId = null;
     if (btn) setLoading(btn, false);
-    // Re-render so the visible Order button reflects the latest balance and
-    // order state, then put focus back on the control the member used.
+    // Re-render so the visible Claim button reflects the latest balance and
+    // claim state, then put focus back on the control the member used.
     if (state.current) {
       renderSite();
       renderBoards();

@@ -115,7 +115,7 @@ export function buildTop3Embed(
 }
 
 /**
- * Build a Discord embed for a shop order event.
+ * Build a Discord embed for a reward claim event.
  */
 export function buildRedemptionEmbed(
   siteName: string,
@@ -124,8 +124,8 @@ export function buildRedemptionEmbed(
   cost: number
 ): Record<string, unknown> {
   return {
-    title: "🎁 New Order!",
-    description: `**${viewerName}** ordered **${itemName}** on **${siteName}**`,
+    title: "🎁 New Claim!",
+    description: `**${viewerName}** claimed **${itemName}** on **${siteName}**`,
     color: 0x315cff, // Cobalt
     fields: [
       { name: "Item", value: itemName, inline: true },

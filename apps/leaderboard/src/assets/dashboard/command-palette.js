@@ -71,7 +71,7 @@ const COMMANDS = [
   { id: "nav-predictions", title: "Predictions", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage betting", action: () => requestDashboardRoute("giveaways", "preds", { query: "" }) },
   { id: "nav-tournaments", title: "Tournaments", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage competitions", action: () => requestDashboardRoute("giveaways", "tournaments", { query: "" }) },
   { id: "nav-analytics", title: "Insights", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
-  { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop orders ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
+  { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop claims ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
   { id: "nav-members", title: "People", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
   // Telegram lives on the bot Worker: the entry point resolves it through the
   // manifest and decides the required full document navigation.

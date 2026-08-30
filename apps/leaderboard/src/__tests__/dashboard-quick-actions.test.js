@@ -56,9 +56,9 @@ describe("dashboard overview quick actions", () => {
     expect(setupDefinition).not.toContain('key: "kick"');
     expect(html).not.toContain("Active giveaways");
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
-    expect(overviewJs).toContain('pendingOrders === 1 ? "pending order needs review." : "pending orders need review."');
-    expect(overviewJs).toContain('pendingOrders === 1 ? "Review order" : "Review orders"');
-    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending orders need review.</span>');
+    expect(overviewJs).toContain('pendingOrders === 1 ? "pending claim needs review." : "pending claims need review."');
+    expect(overviewJs).toContain('pendingOrders === 1 ? "Review claim" : "Review claims"');
+    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending claims need review.</span>');
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertAction"');
     expect(html).toContain('id="ovSetupCount"');
   });

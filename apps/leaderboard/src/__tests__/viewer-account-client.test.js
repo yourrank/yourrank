@@ -257,14 +257,14 @@ describe("the viewer account page's creator history", () => {
   });
 });
 
-/* ── orders ──────────────────────────────────────────────────────── */
+/* ── claims ──────────────────────────────────────────────────────── */
 
-describe("placing an order from the viewer account page", () => {
+describe("submitting a claim from the viewer account page", () => {
   const redeemOk = {
     "POST /api/viewer/redeem": { body: { redemptionId: "r1", balance: 400, itemName: "Shoutout", itemCost: 100 } },
   };
 
-  it("keeps the member in the creator's detail and shows the new order by name", async () => {
+  it("keeps the member in the creator's detail and shows the new claim by name", async () => {
     const env = makeEnv({ url: "https://yourrank.site/me?site=alpha", routes: baseRoutes(redeemOk) });
     await env.ready();
     await env.$("vd-shop-list").querySelector('[data-redeem="item-1"]').click();
@@ -275,7 +275,7 @@ describe("placing an order from the viewer account page", () => {
     expect(env.$("vd-site-balance").textContent).toBe("400");
     expect(env.$("vd-redemptions-list").innerHTML).toContain("Shoutout");
     expect(env.$("vd-redemptions-list").innerHTML).not.toContain("undefined");
-    expect(env.$("vd-site-status").textContent).toContain("Order placed for Shoutout.");
+    expect(env.$("vd-site-status").textContent).toContain("Claim submitted for Shoutout.");
     expect(env.$("vd-site-status").className).not.toContain("error");
     // The cross-site list balance follows the server without a reload that
     // would throw the member back to the list.
@@ -283,7 +283,7 @@ describe("placing an order from the viewer account page", () => {
     expect(env.calls.filter((c) => c.path === "/api/viewer/me").length).toBe(1);
   });
 
-  it("shows an order failure where the member is looking, and re-enables Order", async () => {
+  it("shows a claim failure where the member is looking, and re-enables Claim", async () => {
     const env = makeEnv({
       url: "https://yourrank.site/me?site=alpha",
       routes: baseRoutes({ "POST /api/viewer/redeem": { status: 400, body: { error: "insufficient balance" } } }),
@@ -299,13 +299,13 @@ describe("placing an order from the viewer account page", () => {
     expect(env.$("vd-shop-list").querySelector('[data-redeem="item-1"]').disabled).toBe(false);
   });
 
-  it("does not order when the confirmation is cancelled", async () => {
+  it("does not claim when the confirmation is cancelled", async () => {
     const env = makeEnv({ url: "https://yourrank.site/me?site=alpha", routes: baseRoutes(redeemOk), confirm: false });
     await env.ready();
     await env.$("vd-shop-list").querySelector('[data-redeem="item-1"]').click();
     await settle();
     expect(env.dialogConfirms.length).toBe(1);
-    expect(env.dialogConfirms[0].confirmText).toBe("Place order");
+    expect(env.dialogConfirms[0].confirmText).toBe("Claim reward");
     expect(env.calls.some((c) => c.path === "/api/viewer/redeem")).toBe(false);
   });
 

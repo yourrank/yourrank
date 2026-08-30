@@ -310,7 +310,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
         [
           viewerRow.id,
           item.cost,
-          `Ordered: ${item.name || item.id}`,
+          `Claimed: ${item.name || item.id}`,
           { shop_item_id: item.id, redemption_id: redemptionRows[0].id, item_name: item.name || "" },
         ]
       );

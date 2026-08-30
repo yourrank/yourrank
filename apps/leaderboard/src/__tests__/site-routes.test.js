@@ -297,13 +297,13 @@ describe("logged-out vs logged-in rendering", () => {
     expect(rowBodies.join("")).not.toContain("//");
   });
 
-  it("shop is browsable logged out with sign-in CTAs instead of order buttons", async () => {
+  it("shop is browsable logged out with sign-in CTAs instead of claim buttons", async () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/shop"), env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Shoutout");
     expect(html).toContain("Sign in with Kick");
-    expect(html).not.toContain(">Order<");
+    expect(html).not.toContain(">Claim<");
   });
 
   it("games shows a locked panel with a sign-in CTA when logged out", async () => {
@@ -330,18 +330,18 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see their balance and order buttons on shop", async () => {
+  it("logged-in viewers see their balance and claim buttons on shop", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/shop", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the shop hero
-    expect(html).toContain(">Order<");
+    expect(html).toContain(">Claim<");
     expect(html).not.toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see history and orders on Credits", async () => {
+  it("logged-in viewers see history and claims on Credits", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/me", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
@@ -349,7 +349,7 @@ describe("logged-out vs logged-in rendering", () => {
     const html = await res.text();
     expect(html).toContain("Credits");
     expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the hero
-    expect(html).toContain("Shoutout"); // order
+    expect(html).toContain("Shoutout"); // claim
     expect(html).toContain("Stream"); // ledger description
   });
 

@@ -278,7 +278,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(shop).toContain("Rewards will appear here when");
     expect(shop).not.toContain("yr-rwd ");
     expect(me).toContain("No credit activity yet");
-    expect(me).toContain("No orders yet");
+    expect(me).toContain("No claims yet");
     expect(me).not.toContain("Credits / 7d");
   });
 

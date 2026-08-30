@@ -438,6 +438,13 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
     })
     .strict(),
 
+  handleCreatorClaimTransition: z
+    .object({
+      action: z.enum(["complete", "cancel"]),
+      expectedStatus: z.enum(["submitted"]).optional(),
+    })
+    .strict(),
+
   handleCreditsViewerAuth: z
     .object({
       kick: z.union([z.boolean(), z.literal("true"), z.literal("false")]).optional(),

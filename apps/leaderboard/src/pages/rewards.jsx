@@ -18,7 +18,7 @@ export const REWARDS_TABS = [
   { key: "overview", label: "Overview", href: "/dashboard/rewards" },
   { key: "shop", label: "Shop", href: "/dashboard/rewards/shop" },
   { key: "rules", label: "Ways to earn", href: "/dashboard/rewards/rules" },
-  { key: "redemptions", label: "Orders", href: "/dashboard/rewards/redemptions" },
+  { key: "redemptions", label: "Claims", href: "/dashboard/rewards/redemptions" },
   { key: "history", label: "Activity", href: "/dashboard/rewards/activity" },
 ];
 

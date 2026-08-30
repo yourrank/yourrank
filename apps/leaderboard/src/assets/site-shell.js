@@ -322,20 +322,20 @@
     redeemStatus.classList.toggle("is-error", !!isError);
   };
 
-  // Backend order failures arrive as terse codes. The viewer reads a sentence
-  // about their own order instead; anything unrecognised that is not already a
+  // Backend redemption failures arrive as terse codes. The viewer reads a sentence
+  // about their own claim instead; anything unrecognised that is not already a
   // member-facing sentence falls back rather than leaking wording from the API.
   var ORDER_ERRORS = {
     "insufficient balance": "You don’t have enough credits for that yet.",
     "item not found": "That reward is no longer available.",
     "out of stock": "That reward just went out of stock.",
-    "viewer blocked": "You can’t order on this site right now. Ask the streamer.",
+    "viewer blocked": "You can’t claim rewards on this site right now. Ask the streamer.",
     "rate limited": "Too many attempts. Wait a moment and try again.",
     "invalid csrf": "Your session expired. Reload the page and try again.",
-    unauthorized: "Sign in again to place this order.",
+    unauthorized: "Sign in again to submit this claim.",
   };
   var orderErrorText = function (message) {
-    var fallback = "Couldn’t place that order. Please try again.";
+    var fallback = "Couldn’t submit that claim. Please try again.";
     if (!message) return fallback;
     var known = ORDER_ERRORS[String(message).toLowerCase()];
     if (known) return known;
@@ -368,11 +368,11 @@
   }
   var askToOrder = function (name, cost) {
     if (!confirmDialog || !confirmDialog.showModal) {
-      setRedeemStatus("Ordering is unavailable right now. Reload the page and try again.", true);
+      setRedeemStatus("Claiming is unavailable right now. Reload the page and try again.", true);
       return Promise.resolve(false);
     }
     var balance = creditBalance();
-    var detail = "Order “" + name + "” for " + Number(cost).toLocaleString("en-US") + " free credits.";
+    var detail = "Claim “" + name + "” for " + Number(cost).toLocaleString("en-US") + " free credits.";
     if (balance !== null && balance >= Number(cost)) {
       detail += " You'd have " + (balance - Number(cost)).toLocaleString("en-US") + " credits left.";
     }
@@ -409,8 +409,8 @@
     };
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
-    btn.textContent = "Placing order…";
-    setRedeemStatus("Ordering “" + name + "”…");
+    btn.textContent = "Claiming…";
+    setRedeemStatus("Claiming “" + name + "”…");
     var idempotencyKey = btn.dataset.redeemKey;
     if (!idempotencyKey) {
       idempotencyKey = (typeof crypto !== "undefined" && crypto.randomUUID)
@@ -428,10 +428,10 @@
       .then(function (r) {
         if (r.ok && r.data.ok) {
           delete btn.dataset.redeemKey;
-          btn.textContent = "Ordered";
+          btn.textContent = "Claimed";
           btn.removeAttribute("aria-busy");
           btn.classList.add("is-success");
-          setRedeemStatus("Order placed: “" + name + "”. " + cost + " free credits used. The streamer fulfils it by hand.");
+          setRedeemStatus("Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.");
           if (typeof r.data.balance === "number") updateBalance(r.data.balance);
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);

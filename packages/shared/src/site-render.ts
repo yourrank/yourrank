@@ -374,7 +374,7 @@ function emptyState(icon, title, note = "", extra = "") {
 
 const LEDGER_KIND = {
   earn: "Credits earned",
-  spend: "Order",
+  spend: "Claim",
   refund: "Refund",
   adjust: "Adjustment by the streamer",
   game_bet: "Game round",
@@ -383,12 +383,12 @@ const LEDGER_KIND = {
 
 const ORDER_STATUS_LABEL = {
   pending: "Pending",
-  fulfilled: "Fulfilled",
+  fulfilled: "Completed",
   cancelled: "Cancelled",
   refunded: "Refunded",
 };
 
-const ORDER_STATUS_NOTE = "Pending means the streamer hasn't handed it over yet. Fulfilled means they have. Cancelled and refunded both mean the credits went back to your balance.";
+const ORDER_STATUS_NOTE = "Pending means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled means the credits went back to your balance.";
 
 /**
  * The one page opening every viewer surface uses: what the page is, what it is
@@ -414,7 +414,7 @@ ${aside}
 
 /**
  * One reward as a row in a plain list: name and description on the left, cost,
- * state and the single Order action on the right. Every state is stated in
+ * state and the single Claim action on the right. Every state is stated in
  * words — a greyed-out button is not an explanation — and the cost is ordinary
  * text rather than a headline, because free credits are not a price tag.
  */
@@ -427,9 +427,9 @@ function rewardRow({ item, viewer, balance, blocked, signIn }) {
   let state = "";
   let action;
   if (!viewer) {
-    action = `<a class="yr-act" href="${signIn}">Sign in to order</a>`;
+    action = `<a class="yr-act" href="${signIn}">Sign in to claim</a>`;
   } else if (blocked) {
-    state = "Ordering disabled on this site";
+    state = "Claiming disabled on this site";
     action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
   } else if (!inStock) {
     // The control already says it in words, so the row does not say it twice.
@@ -439,7 +439,7 @@ function rewardRow({ item, viewer, balance, blocked, signIn }) {
     action = `<span class="yr-act yr-act--off" role="note">Not enough credits</span>`;
   } else {
     if (stock !== null && stock <= 3) state = `${formatNumber(stock)} left`;
-    action = `<button class="yr-act" type="button" data-redeem="${esc(item.id)}" data-reward-name="${esc(item.name)}" data-reward-cost="${cost}">Order</button>`;
+    action = `<button class="yr-act" type="button" data-redeem="${esc(item.id)}" data-reward-name="${esc(item.name)}" data-reward-cost="${cost}">Claim</button>`;
   }
 
   // A configured reward image belongs to the creator, so it still shows — as a
@@ -460,17 +460,17 @@ ${action}
 </li>`;
 }
 
-/** The viewer's own confirmation step for an order. Native <dialog> so the
+/** The viewer's own confirmation step for a claim. Native <dialog> so the
  *  focus trap, Escape and background inertness are the platform's, not ours. */
 function orderConfirmDialog() {
   return `<dialog class="yr-modal" id="yr-order-confirm" aria-labelledby="yr-order-confirm-t" aria-describedby="yr-order-confirm-d">
 <div class="yr-modal-in">
-<h2 id="yr-order-confirm-t">Confirm order</h2>
+<h2 id="yr-order-confirm-t">Confirm claim</h2>
 <p class="yr-fine" id="yr-order-confirm-d" data-order-detail></p>
 <p class="yr-note">Credits have no cash value.</p>
 <div class="yr-modal-acts">
 <button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-order-cancel>Cancel</button>
-<button class="yr-btn yr-btn--sm" type="button" data-order-confirm>Order</button>
+<button class="yr-btn yr-btn--sm" type="button" data-order-confirm>Claim</button>
 </div>
 </div>
 </dialog>`;
@@ -515,7 +515,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     ? `${titleBase} — ${esc(b.tagline || "Leaderboard & Rewards")}`
     : `${sectionTitle} · ${titleBase}`);
   const rawDesc = opts.pageDescription || (section === "home"
-    ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and order rewards."}`
+    ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and claim rewards."}`
     : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s public site.`);
   const desc = esc(rawDesc);
   const ogImageUrl = logoUrl ? esc(logoUrl) : `${homeUrl}/og.png`;
@@ -846,7 +846,7 @@ function shopMain(ctx) {
   });
 
   const blockedNote = viewer && blocked
-    ? `<p class="yr-note yr-note--w">Ordering is disabled on this site. ${esc(viewerOnSite.block_reason || "The streamer has paused orders for your account.")}</p>`
+    ? `<p class="yr-note yr-note--w">Claiming is disabled on this site. ${esc(viewerOnSite.block_reason || "The streamer has paused reward claims for your account.")}</p>`
     : "";
 
   const list = items.length
@@ -855,10 +855,10 @@ function shopMain(ctx) {
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer
-    ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent orders")}
+    ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent claims")}
 ${redemptions.length
       ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
-      : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.")}</section>`
+      : emptyState(ICONS.book, "No claims yet", "Rewards you claim show up here with their status.")}</section>`
     : "";
 
   const canOrder = viewer && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
@@ -871,14 +871,14 @@ ${history}
 ${canOrder ? orderConfirmDialog() : ""}`;
 }
 
-/** One placed order: what it was, what it cost, when, and where it stands. */
+/** One reward claim: what it was, what it cost, when, and where it stands. */
 function orderRow(row) {
   const status = String(row.status || "pending");
   const label = ORDER_STATUS_LABEL[status] || status;
   const tagCls = status === "pending" ? "yr-tag yr-tag--pending" : status === "fulfilled" ? "yr-tag yr-tag--done" : "yr-tag";
   return `<li class="yr-ord">
 <div class="yr-ord-main">
-<p class="yr-ord-n">${esc(row.item_name || "Order")}</p>
+<p class="yr-ord-n">${esc(row.item_name || "Reward claim")}</p>
 <p class="yr-ord-p">${formatNumber(row.cost)} credits · ${esc(formatDate(row.created_at))}</p>
 </div>
 <span class="${tagCls}">${esc(label)}</span>
@@ -929,12 +929,12 @@ ${sectionHead("After you sign in")}
 <dl class="yr-credit-guide-list">
 <div class="yr-credit-guide-row"><dt>Free credit balance</dt><dd>See the credits earned from ${creator}'s channel-point rewards.</dd></div>
 <div class="yr-credit-guide-row"><dt>Credit activity</dt><dd>Review when credits were earned, used or returned.</dd></div>
-<div class="yr-credit-guide-row"><dt>Reward orders</dt><dd>Follow rewards you order and their current status.</dd></div>
+<div class="yr-credit-guide-row"><dt>Reward claims</dt><dd>Follow rewards you claim and their current status.</dd></div>
 </dl>
 </section>`;
     return `${viewerHead({
       title: "My credits",
-      lede: `Sign in from the header to see your balance, activity and orders on ${creator}.`,
+      lede: `Sign in from the header to see your balance, activity and reward claims on ${creator}.`,
     })}
 ${guide}`;
   }
@@ -970,13 +970,13 @@ ${row.description ? `<p class="yr-hist-p">${esc(row.description)}</p>` : ""}
   const history = `<section class="yr-vsec${ledger.length ? "" : " yr-vsec--empty"}">${sectionHead("Credit history", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
 ${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : emptyState(ICONS.me, "No credit activity yet", `Use ${creator}'s channel-point rewards to earn credits.`)}</section>`;
 
-  const orders = `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Orders")}
+  const orders = `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Claims")}
 ${redemptions.length
     ? `<ul class="yr-ords" role="list">${redemptions.map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
-    : emptyState(ICONS.book, "No orders yet", "Rewards you order show up here with their status.", siteSections.shop !== false ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}</section>`;
+    : emptyState(ICONS.book, "No claims yet", "Rewards you claim show up here with their status.", siteSections.shop !== false ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}</section>`;
 
   // Two columns of the viewer's own record on a wide viewport, one stack on a
-  // phone: history and orders are peers, not a page each.
+  // phone: history and claims are peers, not a page each.
   return `${head}
 <div class="yr-vcols${!ledger.length && !redemptions.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
 }
