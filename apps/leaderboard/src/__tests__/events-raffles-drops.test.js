@@ -83,6 +83,27 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.drops[0].code).toBe("KICK30");
   });
 
+  it("preserves Moderator access to safe code-drop Activities", async () => {
+    const moderator = { id: "moderator-1", email: "moderator@test.com" };
+    deps.requireUser.mockResolvedValueOnce({ user: moderator, res: null });
+    const capability = mock(async (_user, _site, requested) => (
+      requested === "canRoleManageActivities"
+        ? { role: "moderator", res: null }
+        : { role: "moderator", res: new Response("Forbidden", { status: 403 }) }
+    ));
+    deps.requireSiteCapabilityImpl = capability;
+    mockQuery.mockResolvedValueOnce([]);
+
+    const response = await handleGetCodeDrops(
+      new Request("http://localhost/api/events/drops?siteId=site-456"),
+      mockEnv(),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(capability).toHaveBeenCalledWith(moderator, SITE, "canRoleManageActivities");
+  });
+
   it("handleCreateRaffle creates a custom-priced raffle successfully", async () => {
     mockOne.mockResolvedValueOnce({
       id: "raffle-1",
@@ -243,6 +264,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("already claimed");
+    expect(deps.markActive).not.toHaveBeenCalled();
   });
 
   it("does not increment a drop or award credits when the atomic claim conflicts", async () => {
@@ -269,6 +291,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toContain("already claimed");
     expect(mockExec).not.toHaveBeenCalled();
+    expect(deps.markActive).not.toHaveBeenCalled();
     expect(mockOne.mock.calls.some(([sql]) => String(sql).includes("ON CONFLICT (code_drop_id, viewer_id) DO NOTHING"))).toBe(true);
   });
 
@@ -314,6 +337,12 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(body.pointsAwarded).toBe(30);
     expect(body.newBalance).toBe(130);
     expect(deps.expansionRestriction).not.toHaveBeenCalled();
+    expect(deps.markActive).toHaveBeenCalledTimes(1);
+    expect(deps.markActive).toHaveBeenCalledWith("site-456", "viewer-123", expect.any(Object));
+    const membershipSql = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO site_viewers"))[0];
+    const creditSql = mockOne.mock.calls.find(([sql]) => String(sql).includes("UPDATE site_viewers SET balance"))[0];
+    expect(membershipSql).not.toContain("last_active_at");
+    expect(creditSql).not.toContain("last_active_at");
   });
 
   it("handleClaimCodeDrop creates a site_viewer row on first claim", async () => {
@@ -343,6 +372,8 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect((await res.json()).newBalance).toBe(30);
     const siteViewerSql = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO site_viewers"));
     expect(siteViewerSql).toBeTruthy();
+    expect(siteViewerSql[0]).not.toContain("last_active_at");
+    expect(deps.markActive).toHaveBeenCalledTimes(1);
   });
 
 });

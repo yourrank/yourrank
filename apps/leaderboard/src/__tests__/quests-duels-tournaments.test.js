@@ -16,6 +16,7 @@ import {
   handleUpdateMatchScore,
   handleGetBracket,
 } from "../handlers/tournaments.js";
+import { requireSiteOwner } from "../site-authorization.js";
 
 function mockEnv() {
   return {
@@ -426,12 +427,14 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(body.isFinals).toBe(false);
     });
 
-    it("lets a board-managing team member update a match score", async () => {
+    it("denies a board-managing team member before updating a restricted match score", async () => {
       deps.requireUser = mock().mockResolvedValue({
         user: { id: "moderator-1", email: "moderator@test.com" },
         res: null,
       });
-      deps.requireSiteCapabilityImpl = mock().mockResolvedValue({ res: null, role: "moderator" });
+      deps.requireSiteCapabilityImpl = mock((user, site) => requireSiteOwner(user, site, {
+        getSiteRole: async () => "moderator",
+      }));
       mockOne.mockResolvedValueOnce({
         id: "match-1",
         tournament_id: "tourn-1",
@@ -455,12 +458,12 @@ describe("Quests, Duels & Tournaments Suite", () => {
         deps
       );
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(403);
       expect(deps.requireSiteCapabilityImpl).toHaveBeenCalledWith(
         { id: "moderator-1", email: "moderator@test.com" },
-        { id: "site-456", user_id: "owner-1" },
-        "canRoleManageBoard"
+        { id: "site-456", user_id: "owner-1" }
       );
+      expect(mockExec).not.toHaveBeenCalled();
     });
 
     it("rejects a user without a site role from updating a match score", async () => {

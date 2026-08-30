@@ -182,7 +182,14 @@ describe("processKickRewardRedemption earn path", () => {
     const grant = db.calls.find((c) => /UPDATE site_viewers/.test(c.sql) && /balance = balance \+ \$1/.test(c.sql));
     expect(grant).toBeDefined();
     expect(grant.sql).toMatch(/total_earned = total_earned \+ \$1/);
+    expect(grant.sql).toMatch(/last_active_at = now\(\)/);
     expect(grant.params).toEqual([25, "sv-1"]);
+
+    // Membership resolution itself is non-billable; activity is recorded only
+    // by the committed credit grant above.
+    const membership = db.calls.find((c) => /INSERT INTO site_viewers/.test(c.sql));
+    expect(membership).toBeDefined();
+    expect(membership.sql).not.toContain("last_active_at");
 
     // ...and the ledger row records the identical amount.
     const ledger = db.calls.find((c) => /INSERT INTO credit_ledger/.test(c.sql) && c.sql.includes("'earn'"));
@@ -206,6 +213,7 @@ describe("processKickRewardRedemption earn path", () => {
     expect(result.skipped).toBe(true);
     expect(result.reason).toMatch(/cost mismatch/i);
     expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql) && /balance = balance \+/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /last_active_at\s*=\s*now\(\)/.test(c.sql))).toBe(false);
   });
 });
 

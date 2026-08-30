@@ -365,10 +365,10 @@ export async function processKickRewardRedemption(
     // Never block a viewer or membership at the creator's active-viewer allowance.
     const creditAmount = Number(mapping.credits || 0);
     const svRows = (await tx.unsafe(
-      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent, last_active_at)
-       VALUES ($1, $2, 0, 0, 0, now())
+      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+       VALUES ($1, $2, 0, 0, 0)
        ON CONFLICT (site_id, viewer_id)
-       DO UPDATE SET last_active_at=now(), updated_at=now()
+       DO UPDATE SET viewer_id=EXCLUDED.viewer_id
        RETURNING id, balance, blocked, fraud_score`,
       [site.id, viewerId]
     )) as { id: string; balance: number; blocked: boolean; fraud_score: number }[];

@@ -150,7 +150,8 @@ describe("a creator's Rewards page", () => {
 
   it("states a site-wide claiming block once and disables claiming", async () => {
     const html = await shop({ blocked: true });
-    expect(html).toContain("Claiming is disabled on this site.");
+    expect(html).toContain("Claiming is currently unavailable for this membership.");
+    expect(html).not.toContain("Paused.");
     expect(html).toContain("Claiming disabled on this site");
     expect(html).not.toContain("data-redeem=");
   });
@@ -304,6 +305,11 @@ describe("viewer row geometry", () => {
 /* ── the global account page ──────────────────────────────────────── */
 
 describe("the global account page", () => {
+  it("keeps restricted legacy mechanics out of the viewer membership journey", () => {
+    expect(viewerDashboardPage).not.toContain("vd-raffles");
+    expect(viewerDashboardPage).not.toContain("vd-predictions");
+  });
+
   const page = String(viewerDashboardPage);
 
   it("opens with the account, not an operator dashboard head", () => {

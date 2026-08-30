@@ -103,6 +103,14 @@ describe("markup: Site answers what viewers see", () => {
     expect(customize).toMatch(/id="sitePublicDomainManage"[^>]*data-settings-tab-link="domain"/);
   });
 
+  it("does not promote the contained Games route in the target public-section model", async () => {
+    const { SITE_SECTION_ROWS } = await import("../assets/dashboard/site-sections.js");
+    expect(SITE_SECTION_ROWS.map(([key, label]) => [key, label])).toEqual([
+      ["shop", "Shop"],
+      ["credits", "Rewards"],
+    ]);
+  });
+
   it("keeps public identity in Site and redirects leaderboard-specific presentation to Appearance", () => {
     for (const id of ["f_name", "f_tagline", "logoFile", "c_a", "f_font", "socialsList"]) {
       expect(html.match(new RegExp(`id="${id}"`, "g"))).toHaveLength(1);

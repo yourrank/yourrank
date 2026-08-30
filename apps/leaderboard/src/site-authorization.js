@@ -20,3 +20,24 @@ export async function requireSiteCapability(
   }
   return { role, res: null };
 }
+
+/**
+ * Narrow containment boundary for restricted legacy operations.
+ * This deliberately reuses the canonical site-role lookup without adding a
+ * customer-facing role, capability, or parallel policy model.
+ */
+export async function requireSiteOwner(
+  user,
+  site,
+  { getSiteRole = defaultGetSiteRole } = {}
+) {
+  if (!site) return { role: null, res: bad("Site not found.", 404) };
+  const role = site.user_id === user.id ? "owner" : await getSiteRole(site.id, user.id);
+  if (role !== "owner" || site.user_id !== user.id) {
+    return {
+      role,
+      res: bad("Only the site owner can access this legacy operation.", 403),
+    };
+  }
+  return { role, res: null };
+}

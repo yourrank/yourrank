@@ -42,7 +42,7 @@ function usageDependencies({
 }
 
 describe("account-pooled active-viewer usage", () => {
-  test("counts distinct authenticated viewer accounts across all owner sites in a rolling 30-day window", async () => {
+  test("counts repeat activity once per Viewer, pools the same Viewer across owner sites, and counts a second Viewer separately", async () => {
     const deps = usageDependencies({ activeViewers: 173 });
     const usage = await reconcileAccountActiveViewerUsage("owner-1", deps);
     const countCall = deps.calls.find((call) => call.sql.includes("COUNT(DISTINCT sv.viewer_id)"));
@@ -51,6 +51,8 @@ describe("account-pooled active-viewer usage", () => {
     expect(usage?.rollingDays).toBe(30);
     expect(countCall?.params).toEqual(["owner-1"]);
     expect(countCall?.sql).toContain("s.user_id=$1");
+    expect(countCall?.sql).toContain("COUNT(DISTINCT sv.viewer_id)");
+    expect(countCall?.sql).not.toContain("COUNT(DISTINCT sv.site_id");
     expect(countCall?.sql).toContain("sv.last_active_at >= now() - interval '30 days'");
     expect(countCall?.sql).toContain("sv.last_active_at <= now()");
     expect(countCall?.sql).toContain("v.is_system=FALSE");

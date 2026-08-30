@@ -1,9 +1,3 @@
-export function giveawayAction(activeCount) {
-  return Number(activeCount) > 0
-    ? { label: "Review activity", href: "/dashboard/giveaways" }
-    : { label: "Create giveaway", href: "/dashboard/giveaways" };
-}
-
 export function visitsMetricState({ published, statsStatus, stats } = {}) {
   if (!published) return { kind: "unpublished", value: "Not published" };
   if (statsStatus === "loading") return { kind: "loading" };
@@ -31,8 +25,6 @@ export function nextStepAction({
   creditsConnected = false,
   rewardMappings = null,
   shopItems = null,
-  giveawayStatus = "loading",
-  activeGiveaways = null,
   hasActivity = false,
   visits = null,
 } = {}) {
@@ -120,15 +112,6 @@ export function nextStepAction({
       body: "Copy the live link and put it where your viewers will see it.",
       label: "Share site",
       href: "/dashboard/leaderboard/share",
-    };
-  }
-  if (published && giveawayStatus === "ready" && activeGiveaways === 0 && !hasActivity) {
-    return {
-      key: "createGiveaway",
-      title: "Create a giveaway",
-      body: "Give viewers a reason to check the leaderboard while the competition is live.",
-      label: "Create giveaway",
-      href: "/dashboard/giveaways",
     };
   }
   return null;

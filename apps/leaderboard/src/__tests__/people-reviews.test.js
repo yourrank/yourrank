@@ -435,7 +435,7 @@ describe("People Reviews route and UI ownership", () => {
     const index = readFileSync(new URL("../index.js", import.meta.url), "utf8");
     const page = readFileSync(new URL("../pages/audience.jsx", import.meta.url), "utf8");
     const client = readFileSync(new URL("../assets/people.js", import.meta.url), "utf8");
-    const css = readFileSync(new URL("../assets/people.css", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../assets/people.css", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
     expect(routes).toContain('path: "/api/people/reviews"');
     expect(routes).toContain('path: "/api/people/reviews/:id"');

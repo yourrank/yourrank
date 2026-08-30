@@ -69,11 +69,12 @@ describe("public viewer shell", () => {
     expect(html).not.toContain('role="tablist"');
   });
 
-  it("keeps the opaque games entry when the streamer enabled it", async () => {
+  it("does not promote Games in primary viewer navigation when the legacy route is enabled", async () => {
     const html = await render("home", {
       data: { ...baseData, siteSections: { ...baseData.siteSections, games: true } },
     });
-    expect(html).toContain('href="https://example.test/creator/games"><span>Games</span>');
+    expect(html).not.toContain('href="https://example.test/creator/games"><span>Games</span>');
+    expect(html).not.toContain(">Games</a>");
   });
 
   it("builds slug and custom-domain section hrefs from the same helper", async () => {

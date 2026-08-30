@@ -40,8 +40,9 @@ describe("viewer board membership tracking", () => {
 
     expect(injected.calls.exec).toHaveLength(1);
     expect(injected.calls.exec[0].sql).toContain(
-      "INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at, last_active_at)",
+      "INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)",
     );
+    expect(injected.calls.exec[0].sql).not.toContain("last_active_at");
     expect(injected.calls.exec[0].sql).toContain("ON CONFLICT (site_id, viewer_id) DO NOTHING");
     expect(injected.calls.exec[0].params).toEqual(["site-1", "viewer-1"]);
     expect(injected.calls.one).toHaveLength(2);
@@ -57,7 +58,7 @@ describe("viewer board membership tracking", () => {
     expect(injected.calls.exec).toHaveLength(0);
   });
 
-  it("touches an existing member without changing balances or blocked state", async () => {
+  it("touches last-seen for an existing member without changing billable activity, balances, or blocked state", async () => {
     const row = membershipRow({ blocked: true, block_reason: "fraud", balance: 0, total_earned: 0, total_spent: 0 });
     const injected = deps({ rows: [row] });
     const result = await getViewerSiteData("site-1", "viewer-1", {}, injected);
@@ -65,13 +66,22 @@ describe("viewer board membership tracking", () => {
     expect(injected.calls.exec).toHaveLength(1);
     expect(injected.calls.exec[0].sql).toContain("SET last_seen_at = now()");
     expect(injected.calls.exec[0].sql).toContain("last_seen_at < now() - interval '5 minutes'");
+    expect(injected.calls.exec[0].sql).not.toContain("last_active_at");
     expect(result.viewerOnSite).toMatchObject({
       balance: 0,
       total_earned: 0,
       total_spent: 0,
       blocked: true,
-      block_reason: "fraud",
     });
+    expect(result.viewerOnSite).not.toHaveProperty("block_reason");
+  });
+
+  it("keeps an authenticated passive Rewards view non-billable", async () => {
+    const injected = deps({ rows: [membershipRow()] });
+    await getViewerSiteData("site-1", "viewer-1", { shop: true }, injected);
+
+    expect(injected.calls.query).toHaveLength(1);
+    expect(injected.calls.exec.every(({ sql }) => !sql.includes("last_active_at"))).toBe(true);
   });
 
   it("does not touch an existing member inside the five-minute window", async () => {

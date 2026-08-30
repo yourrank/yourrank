@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { PAGES } from "../pages.jsx";
 import { effectivePlan } from "@yourrank/shared/plans";
-import { activityEmptyAction, giveawayAction, nextStepAction } from "../assets/dashboard/overview-state.js";
+import { activityEmptyAction, nextStepAction } from "../assets/dashboard/overview-state.js";
 import { SECTIONS } from "../assets/dashboard/routes.js";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
@@ -78,18 +78,14 @@ describe("dashboard overview quick actions", () => {
     // in overview.js; nothing else may paint Home.
     expect(overviewJs).toContain("renderOverviewSummary");
     expect(overviewJs).toContain("nextStepAction(");
-    // Loading, empty and error surfaces exist for every asynchronous figure.
+    // Loading and empty surfaces exist for the remaining asynchronous figures.
     expect(overviewJs).toContain("setMetricLoading(");
-    expect(overviewJs).toContain("setMetricUnknown(");
+    expect(overviewJs).not.toContain("/api/events/raffles");
+    expect(overviewJs).not.toContain("/api/predictions");
+    expect(overviewJs).not.toContain("GIVEAWAYS_STATUS");
     expect(overviewJs).toContain('renderEmpty($("ovActivityEmpty")');
     expect(overviewJs).toContain('renderEmpty($("ov_topEmpty")');
     expect(html).toContain('class="skeleton v3-skel-kpi"');
-  });
-
-  it("keeps the giveaway KPI action aligned with every active-count state", () => {
-    expect(giveawayAction(0)).toEqual({ label: "Create giveaway", href: "/dashboard/giveaways" });
-    expect(giveawayAction(1)).toEqual({ label: "Review activity", href: "/dashboard/giveaways" });
-    expect(giveawayAction(12)).toEqual({ label: "Review activity", href: "/dashboard/giveaways" });
   });
 
   it("names one contextual next step and lets dedicated surfaces keep their own", () => {
@@ -112,12 +108,12 @@ describe("dashboard overview quick actions", () => {
     expect(addShop.key).toBe("addShopItem");
     expect(addShop.href).toBe("/dashboard/rewards/shop");
     expect(nextStepAction({ ...live, hasActivity: false, visits: 0 }).key).toBe("shareSite");
-    expect(nextStepAction({ ...live, hasActivity: false, visits: 4, giveawayStatus: "ready", activeGiveaways: 0 }).key).toBe("createGiveaway");
+    expect(nextStepAction({ ...live, hasActivity: false, visits: 4 })).toBeNull();
 
     // A healthy, active site is told nothing at all.
-    expect(nextStepAction({ ...live, hasActivity: true, visits: 40, giveawayStatus: "ready", activeGiveaways: 1 })).toBeNull();
+    expect(nextStepAction({ ...live, hasActivity: true, visits: 40 })).toBeNull();
     // Unresolved async state must not produce a premature instruction.
-    expect(nextStepAction({ ...live, hasActivity: true, visits: 40, creditsEnabled: true, creditsStatus: "loading", giveawayStatus: "loading" })).toBeNull();
+    expect(nextStepAction({ ...live, hasActivity: true, visits: 40, creditsEnabled: true, creditsStatus: "loading" })).toBeNull();
   });
 
   it("renders the next step card and suppresses steps another surface owns", () => {
@@ -209,8 +205,8 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .v3-alert--warning");
     expect(dashboardCss).not.toContain(".v3-dash[data-auth-workspace] .v3-block-status");
     expect(dashboardHtml()).toContain('class="v3-alert v3-alert--warning"');
-    // Public-section visibility is a site setting: Games defers to Site
-    // settings → Sections instead of owning the toggles itself.
+    // The contained Games page may remain directly routable for the owner, but
+    // Site settings no longer promotes it as a public navigation pillar.
     const games = dashboardHtml("/dashboard/games");
     expect(games).toContain("Public page visibility");
     expect(games).toContain("Manage public sections in Site settings →");
@@ -300,9 +296,9 @@ describe("dashboard overview quick actions", () => {
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
     expect(html).toContain('>Home</a>');
     for (const label of [
-      "Site", "Leaderboard", "People", "Rewards", "Insights", "Engagement", "Games", "Telegram", "Settings",
+      "Site", "Leaderboard", "People", "Rewards", "Insights", "Telegram", "Settings",
     ]) expect(html).toContain(`>${label}</a>`);
-    for (const label of ["Giveaways", "Raffles", "Predictions", "Drops"]) {
+    for (const label of ["Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
       expect(html).not.toContain(`>${label}</a>`);
     }
     expect(html).not.toContain(">Integrations</a>");

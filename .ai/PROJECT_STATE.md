@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** `main` at `483fd3c584536ce5163e53991de14fa00a1fa069` (Wave H merged)
+**Evidence baseline:** Correction A candidate rebased onto `main` at `24d39a57ac04350ddb9aaf61f4e44fb381d17d2a` (Wave I merged)
 
 **Last reconciled:** 2026-08-30
 
@@ -43,7 +43,7 @@ Maintained to prevent architecture drift.
 ### Navigation ownership — RESOLVED
 
 - The sidebar owns section roots, page subnavigation owns tabs, and the topbar owns context/search/actions.
-- The visible rail presents Home, Sites, Community (Site and Leaderboard), Activities, People, Rewards, Insights, transitional Engagement and Games, Telegram, and Settings.
+- The visible rail presents Home, Sites, Community (Site and Leaderboard), Activities, People, Rewards, Insights, Telegram, and Settings. Restricted legacy Engagement and Games routes remain contained and directly routable for authorized operational use but are not primary product navigation.
 - Community is presentation-only; People and Insights are labels over the existing audience and analytics route families. No route ID, URL, scope, owner, or schema changed with those labels.
 - `requestDashboardRoute` in `apps/leaderboard/src/assets/dashboard/shell.js` is the one authenticated client-navigation entry point.
 - The public viewer account history runtime is separate and does not own dashboard navigation.
@@ -82,7 +82,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 
 - `packages/shared/src/site-render.ts` renders the creator public destination.
 - `site-shell.css` owns its responsive visual system.
-- Current sections include Home, Leaderboard, Rewards, Games, site-scoped My Credits, and a separate global `/me` account/sites surface.
+- Primary viewer navigation includes Home, Leaderboard, Rewards, and site-scoped My Credits, with a separate global `/me` account/sites surface. The legacy Games route may remain operational when its persisted flag is enabled, but it is absent from the primary viewer navigation and Site section editor.
 - Current public labels and routes remain implementation truth until target viewer capabilities exist.
 - Recent viewer waves established shared chrome, truthful auth/empty states, responsive behavior, and creator branding without a parallel renderer.
 
@@ -102,7 +102,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - `/dashboard/activities` is a site-scoped fragment destination for safe community workflows.
 - The current shared presentation and `/api/activities` adapt only existing free code drops. No universal Activity table, new participant model, or schema migration was introduced.
 - Code-drop claims continue to resolve through authenticated Viewer Account and the existing `site_viewers` Site Membership record.
-- Mixed Engagement remains a separate transitional destination. Restricted legacy Games, paid-chance raffles, predictions, wagering, payout, and settlement mechanics are not imported into Activities.
+- Mixed Engagement remains a contained legacy route family rather than a primary navigation destination. Restricted legacy Games, paid-chance raffles, predictions, wagering, payout, and settlement mechanics are not imported into Activities.
 - Challenges are deferred because a shared foundation is not yet sufficiently proven. Tournaments remain outside Activities because current settings include entry-cost and eligibility fields that are not cleanly isolated from the zero-cost subset.
 
 ### Safe Reviews foundation — AVAILABLE; ADAPTER-BASED
@@ -129,6 +129,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 
 - V1 exposes only Owner and Moderator. Owner is represented by `sites.user_id`; delegated, site-scoped access remains in the existing `site_members` table. The Wave H migration deterministically maps the dead pre-launch Manager value to Moderator, records recovery audit rows, aborts on unexpected roles, and constrains member/invite rows to Moderator. No second team table or RBAC engine exists.
 - `packages/shared/src/team.ts` is the canonical server-owned role-to-capability owner. Owner retains every legitimate capability. Moderator can operate the existing leaderboard boundary, Members (including block/unblock), safe Activities, Reviews, ordinary Claims, local Rewards catalog/mappings, and read operational Insights. Moderator cannot manage Team, billing, account security, site settings, provider connections/credentials, bot configuration, the legacy broad Credits boundary, or arbitrary manual credit adjustments.
+- Restricted legacy handlers do not infer Moderator access from the broad compatibility `canRoleManageBoard` capability. Paid-chance raffles, predictions, and the current mixed tournament operational handlers use an owner-only containment guard; safe leaderboard, archive/history, player, Activity, Review, Claim, and Reward capability paths retain their existing Moderator behavior.
 - Team relationships are site-specific; the same operator's relationship to another owner or site never grants access. Role resolution rechecks the selected site, persisted membership, and owner Team entitlement on every protected request. No role is stored in the session. Removal therefore stops the next protected request; downgrade preserves member rows but suspends delegated access, and a restored Team entitlement makes valid rows effective again.
 - Seats remain account-pooled across all sites owned by one creator: Free 1 total operator, Pro 1, Team 5. Pending invites reserve identities, duplicate identities do not consume another pooled seat, and invite creation/acceptance serialize on the owner account row before enforcing the canonical limit. Billing prices and all other entitlements are unchanged.
 - Invitations are email-bound, site-bound, Moderator-only, seven-day records with inviter, expiry, accepted/revoked state, and a 192-bit random bearer token stored only as SHA-256. Acceptance locks the invite and owner row, validates the authenticated account email, role, entitlement, and seat limit, and treats an exact second acceptance as an idempotent replay.
@@ -154,6 +155,15 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Owner retains `canRoleManageConnections`. Moderator receives only the minimal selected-site Kick status already needed to understand Rewards, cannot connect/reconnect/disconnect or change OAuth/configuration, and never receives tokens, expiry, or provider identifiers.
 - Telegram Bot Worker commands, bots, broadcasts, subscribers, and day-to-day operations remain at `/dashboard/telegram*`; Wave I does not create Community → Communication. Communication remains deferred.
 - No schema migration was required. Billing definitions, account-pooled active-viewer measurement, Team caps, restricted legacy systems, and the Wave H capability model are unchanged.
+
+### Critical integrity boundaries — CORRECTED IN CANDIDATE
+
+- Membership, presence, and billable activity are distinct. An authenticated visit may create the existing `site_viewers` membership and may advance throttled `last_seen_at`, but passive creator Home, Leaderboard, Rewards, Claims, site-data, and global `/me` reads do not initialize or update `last_active_at`.
+- Canonical active-viewer usage remains the rolling 30-day `COUNT(DISTINCT sv.viewer_id)` pooled across every site owned by one creator. The current qualifying safe actions are a newly committed authenticated reward claim, a newly committed authenticated free code-drop claim, and a successfully credited provider-signed Kick reward redemption. Failed, blocked, rate-limited, anonymous, passive, and idempotent replay paths do not mark activity. Viewer rights remain available when creator expansion is restricted.
+- Existing `last_active_at` rows do not record which historical caller wrote them, so passive historical marks cannot be distinguished safely from legitimate activity. This candidate performs no destructive reset or migration; future passive membership rows remain null until a qualifying action.
+- `site_viewers.block_reason` and fraud score remain private creator/moderation context. Public and authenticated viewer renderers, APIs, `/me`, site-scoped membership/Rewards/Claims data, and viewer exports omit internal reasons and use controlled generic blocked-membership copy. Viewer-specific JSON responses are private and `no-store`; legitimate authorized People/Credits and owner account-export visibility remains.
+- Restricted legacy is operationally isolated from target creator Home, primary creator navigation, quick actions, command palette, primary viewer navigation, Site public-section controls, and the global viewer membership journey. No restricted business logic, calculations, persistence, or product replacement was introduced.
+- Viewer architecture convergence remains pending; this correction does not redesign `/me`, site-scoped membership, My Community/Communities, Claims navigation, participation history, or Recognition.
 
 Current fulfillment audit:
 
@@ -228,7 +238,7 @@ Community, People, and Insights are current navigation presentation labels only;
 - Creator/operator accounts (`users`), viewer accounts (`viewers`), creator-team access (`site_members`), site memberships (`site_viewers`), leaderboard player rows (`players`), and Telegram subscriber relationships (`bot_subscribers`) are distinct current records. Team Owner is `sites.user_id`; the only persisted delegated V1 role is site-scoped Moderator.
 - `viewers` is the current global viewer-account anchor. A provider connection is treated as authenticated only when its OAuth link timestamp is present; names and raw external identifiers are not linkage proof.
 - `site_viewers` is the current physical Site Membership record. Its foreign keys and unique `(site_id, viewer_id)` constraint already provide the required scope and uniqueness, so no additive membership table or inferred backfill is justified.
-- A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records.
+- A site membership is created by an authenticated viewer entering a site context or by a provider-signed channel-reward interaction. Anonymous browsing does not create one, and creator-entered usernames no longer create viewer or membership records. Passive authenticated entry may advance `last_seen_at` but leaves nullable `last_active_at` untouched; only a qualifying committed safe action advances billable activity.
 - People reuses `/dashboard/audience/members` and `/dashboard/audience/reviews`. Member detail binds membership ID and selected site; review list/detail/decisions bind the source entry and any membership join to the selected site. Creator authorization uses the existing site capability boundary.
 - Rewards Claims bind an existing redemption to its Viewer Account through the selected-site `site_viewers` membership. Creator and viewer Claim APIs independently enforce those site and account boundaries.
 - Leaderboard Player and Telegram Subscriber records remain unlinked to Viewer Account and Site Membership. No username, display-name, IP, device, or fuzzy matching is used to infer identity.
@@ -240,7 +250,7 @@ Community, People, and Insights are current navigation presentation labels only;
 
 | Finding | Current status |
 |---|---|
-| Broader Activities consolidation beyond the free-drop adapter | Deferred; mixed Engagement and restricted Games remain explicit transitional destinations |
+| Broader Activities consolidation beyond the free-drop adapter | Deferred; mixed Engagement and restricted Games remain contained legacy routes outside primary target navigation |
 | Three delivery transports remain | Intentional current state; ownership is already singular |
 | `board` and `siteId` both carry selected-site context | Separate parity-tested migration if changed |
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |
@@ -251,4 +261,4 @@ Community, People, and Insights are current navigation presentation labels only;
 | Shared Activity / Review / Claim persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
 | Claims expansion beyond reward redemptions | Deferred; other safe workflows do not yet expose a proven fulfillment lifecycle, and private fulfillment fields must be evidence-led |
 | Billing terms/providers/enums | Separate reconciliation required |
-| Restricted legacy route families | Operational current implementation; excluded from target architecture work |
+| Restricted legacy route families | Operationally contained for owners where retained; excluded from target Home/navigation and target architecture work |

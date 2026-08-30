@@ -93,8 +93,6 @@ export const viewerDashboardPage = leaderboardPageHtml({
         <button class="btn btn--sm" id="vd-drop-claim-btn" type="button">Claim</button>
       </div>
     </div>
-    <div id="vd-raffles"></div>
-    <div id="vd-predictions"></div>
     <p class="empty" id="vd-events-empty" hidden>No live events right now.</p>
   </section>
 `,

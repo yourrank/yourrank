@@ -20,7 +20,6 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
     IS_DRAFT: false,
     RANK_BY: "wagered",
     STATS_STATUS: "loading",
-    GIVEAWAYS_STATUS: "loading",
     CREDITS_STATUS: "loading",
     CREDITS_PRODUCT_ENABLED: false,
     HEATMAP_STATUS: "loading",
