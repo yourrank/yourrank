@@ -388,14 +388,7 @@ const LEDGER_KIND = {
   game_win: "Game round",
 };
 
-const ORDER_STATUS_LABEL = {
-  pending: "Pending",
-  fulfilled: "Completed",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-};
-
-const ORDER_STATUS_NOTE = "Pending means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled means the credits went back to your balance.";
+const CLAIM_STATUS_NOTE = "Needs fulfillment means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled means the credits went back to your balance.";
 
 /**
  * The one page opening every viewer surface uses: what the page is, what it is
@@ -840,7 +833,7 @@ ${panel({
 function shopMain(ctx) {
   const { r, b, data, viewer, viewerData, viewerOnSite, isMember, balance, returnTo, slug, homeUrl, isCustomDomain, siteSections } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
-  const redemptions = viewerData?.redemptions || [];
+  const claims = viewerData?.claims || [];
   const blocked = !!viewerOnSite?.blocked;
   const signIn = r.viewerKickAuthEnabled
     ? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`
@@ -870,9 +863,9 @@ function shopMain(ctx) {
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer && isMember
-    ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent claims")}
-${redemptions.length
-      ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
+    ? `<section class="yr-vsec${claims.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent claims")}
+${claims.length
+      ? `<ul class="yr-ords" role="list">${claims.slice(0, 5).map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>`
       : emptyState(ICONS.book, "No claims yet", "Rewards you claim show up here with their status.")}</section>`
     : "";
 
@@ -886,15 +879,17 @@ ${history}
 ${canOrder ? orderConfirmDialog() : ""}`;
 }
 
-/** One reward claim: what it was, what it cost, when, and where it stands. */
-function orderRow(row) {
-  const status = String(row.status || "pending");
-  const label = ORDER_STATUS_LABEL[status] || status;
-  const tagCls = status === "pending" ? "yr-tag yr-tag--pending" : status === "fulfilled" ? "yr-tag yr-tag--done" : "yr-tag";
+/** One canonical viewer Claim: what it was, when it was submitted, and its audited outcome. */
+function claimRow(row) {
+  const status = String(row.status || "submitted");
+  const label = String(row.statusLabel || "Needs fulfillment");
+  const tagCls = status === "submitted" ? "yr-tag yr-tag--pending" : status === "completed" ? "yr-tag yr-tag--done" : "yr-tag";
+  const terminalAt = status === "completed" ? row.completedAt : status === "cancelled" ? row.cancelledAt : null;
+  const terminalLabel = status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : "";
   return `<li class="yr-ord">
 <div class="yr-ord-main">
-<p class="yr-ord-n">${esc(row.item_name || "Reward claim")}</p>
-<p class="yr-ord-p">${formatNumber(row.cost)} credits · ${esc(formatDate(row.created_at))}</p>
+<p class="yr-ord-n">${esc(row.reward?.name || "Reward claim")}</p>
+<p class="yr-ord-p">${formatNumber(row.reward?.cost)} credits · Submitted ${esc(formatDate(row.submittedAt))}${terminalAt ? ` · ${terminalLabel} ${esc(formatDate(terminalAt))}` : ""}</p>
 </div>
 <span class="${tagCls}">${esc(label)}</span>
 </li>`;
@@ -996,7 +991,8 @@ ${authError}
   }
 
   const ledger = viewerData?.ledger || [];
-  const redemptions = viewerData?.redemptions || [];
+  const participation = viewerData?.participation || [];
+  const claims = viewerData?.claims || [];
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
 
   const head = viewerHead({
@@ -1005,6 +1001,9 @@ ${authError}
     balance,
     actions: `${siteSections.shop !== false ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">View rewards</a>` : ""}<a class="yr-sec-link" href="${accountHref}">All communities ${ICONS.arrow}</a>`,
   });
+  const membershipNotice = viewerData.viewerOnSite.blocked
+    ? `<p class="yr-note yr-note--w" role="status">Claiming is currently unavailable for this membership.</p>`
+    : "";
 
   // Activity reads as rows rather than a four-column table: on a phone a table
   // this wide either scrolls sideways or shreds the detail column. Sign is
@@ -1026,16 +1025,30 @@ ${row.description ? `<p class="yr-hist-p">${esc(row.description)}</p>` : ""}
   const history = `<section class="yr-vsec${ledger.length ? "" : " yr-vsec--empty"}">${sectionHead("Credits", ledger.length ? `<span class="yr-panel-meta">${formatNumber(ledger.length)} ${ledger.length === 1 ? "entry" : "entries"}</span>` : "")}
 ${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : emptyState(ICONS.me, "No credit activity yet", `Use ${creator}'s channel-point rewards to earn credits.`)}</section>`;
 
-  const orders = `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Claims")}
-${redemptions.length
-    ? `<ul class="yr-ords" role="list">${redemptions.map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
+  const participationRows = participation.map((row) => `<li class="yr-part">
+<div class="yr-part-main">
+<p class="yr-part-n">${esc(row.title || "Community participation")}</p>
+<p class="yr-part-p">${esc(formatDate(row.participatedAt))}</p>
+</div>
+<span class="yr-tag yr-tag--done">${esc(row.statusLabel || "Claimed")}</span>
+</li>`).join("");
+  const participationHistory = `<section class="yr-vsec${participation.length ? "" : " yr-vsec--empty"}">${sectionHead("Participation", participation.length ? `<span class="yr-panel-meta">${formatNumber(participation.length)} recent</span>` : "")}
+${participationRows
+    ? `<ul class="yr-parts" role="list">${participationRows}</ul>${viewerData?.participationTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.participationLimit || participation.length)} most recent participation records.</p>` : ""}`
+    : emptyState(ICONS.book, "No participation history yet", "Successful free code-drop claims will appear here.")}</section>`;
+
+  const orders = `<section class="yr-vsec${claims.length ? "" : " yr-vsec--empty"}">${sectionHead("Claims")}
+${claims.length
+    ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData?.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}`
     : emptyState(ICONS.book, "No claims yet", "Rewards you claim show up here with their status.", siteSections.shop !== false ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}</section>`;
 
   // Two columns of the viewer's own record on a wide viewport, one stack on a
   // phone: history and claims are peers, not a page each.
   return `${head}
 ${authError}
-<div class="yr-vcols${!ledger.length && !redemptions.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
+${membershipNotice}
+${participationHistory}
+<div class="yr-vcols${!ledger.length && !claims.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
 }
 
 function joinAuthButton(r, returnTo, slug) {

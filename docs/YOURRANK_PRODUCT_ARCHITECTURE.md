@@ -1019,7 +1019,7 @@ When nothing is live, this surface should not occupy permanent navigation.
 
 The current real public renderer supports a creator destination with sections including Home, Leaderboard, Rewards, Games, and creator-scoped **My Community**. Global `/me` is the Viewer Account's **My communities** index.
 
-My Community owns membership-specific Rewards/credits and existing Claims. My communities summarizes each membership and links to its creator-owned surface; it does not rebuild a second reward shop, Claim list, or creator destination.
+My Community owns membership-specific Rewards/credits, bounded safe Participation history, and canonical Claims history. My communities summarizes each membership and links to its creator-owned surface; it does not rebuild a second reward shop, Claim list, participation timeline, or creator destination.
 
 ## TARGET
 
@@ -1037,7 +1037,7 @@ Only enabled/useful sections appear.
 
 Use **My Community** only for a real creator-scoped `site_viewers` membership owned by one authenticated Viewer Account. Use **My communities** only for the authenticated cross-community index derived from those memberships.
 
-The current foundation satisfies that rule through one explicit Join mutation plus the narrow approved safe-action writers. A signed-in Viewer without a Membership sees a truthful Join state; a query failure remains a separate unavailable state. New labels for participation, Recognition, or expanded Claims must still wait for real capabilities.
+The current foundation satisfies that rule through one explicit Join mutation plus the narrow approved safe-action writers. A signed-in Viewer without a Membership sees a truthful Join state; a query failure remains a separate unavailable state. Participation and expanded Claims labels now correspond to the proven Wave J reads described below. Recognition must still wait for a real safe, Viewer-linked capability.
 
 Public navigation changes follow capability, not aspiration.
 
@@ -1077,11 +1077,12 @@ Current creator-specific membership surface:
 - Viewer Account and community context,
 - a deliberate Join state for an authenticated non-member,
 - Credits and Rewards where enabled,
-- existing reward Claims and their current status.
+- recent successful free code-drop Participation, bounded to 25 records and linked directly to the Viewer Account, selected site, and Membership,
+- canonical reward Claims, bounded to 50 records, with Wave G states and audit-backed terminal timestamps where available.
 
 Historical `site_viewers.created_at` is not presented as “Member since” because older rows may have been created by passive behavior and therefore do not prove an explicit join date.
 
-Participation history, Recognition, richer profile controls, and expanded Claims history remain future scope.
+Participation never includes Join, visits, presence, passive credits, fuzzy name matches, Reviews, or restricted legacy activity. Claims do not infer completion/cancellation time from mutable redemption updates. Recognition and richer profile controls remain future scope; Recognition is explicitly deferred because no current safe persisted source has canonical Viewer/Membership linkage.
 
 ## 23.6 Global My Communities
 

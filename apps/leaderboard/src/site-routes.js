@@ -122,6 +122,10 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
 
     const cacheableSite = cacheableRequest && isPublicBoardCacheSite(r);
     const { viewer, cookie: viewerCookie } = await resolveViewer(request, env);
+    if (viewer) {
+      respHeaders.set("cache-control", "private, no-store");
+      respHeaders.append("vary", "Cookie");
+    }
     if (viewerCookie) respHeaders.append("set-cookie", viewerCookie);
 
     const renderNonce = cacheableSite ? PUBLIC_HTML_NONCE_PLACEHOLDER : nonce;
@@ -135,9 +139,13 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
 
     let viewerData = null;
     if (section === "home" || section === "shop" || section === "me") {
-      // Home shows the featured reward grid (public), plus the signed-in
-      // viewer's balance, 7-day chart, activity log and pending count.
-      const opts = { shop: true, redemptions: !!viewer, ledger: !!viewer };
+      // Each surface composes only the canonical reads it owns. Personalized
+      // history is loaded only after site-scoped Membership resolution.
+      const opts = section === "home"
+        ? { shop: true }
+        : section === "shop"
+          ? { shop: true, claims: !!viewer }
+          : { claims: !!viewer, ledger: !!viewer, participation: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {
       // Leaderboard and Games only need the balance shown in the header.

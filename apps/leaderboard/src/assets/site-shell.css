@@ -513,8 +513,8 @@
 .yr-vbal-num { font-family: var(--yr-mono); font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yr-vbal-unit { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); font-weight: 700; }
 .yr-vbal.is-zero .yr-vbal-num { font-size: 24px; line-height: 28px; color: var(--yr-mute); }
-/* My Community: the viewer's credit record and Claims are peers, side by side on
-   a wide viewport and stacked on a phone. */
+/* My Community: Participation is a full-width membership record. Credits and
+   Claims remain peers, side by side on a wide viewport and stacked on a phone. */
 .yr-vcols { display: grid; gap: 20px; align-items: start; }
 /* Signed-out viewer pages use one complete reading surface without turning a
    small amount of truthful guidance into a page-wide empty card. */
@@ -536,13 +536,13 @@
    down to a few characters. No width breakpoints are involved. */
 /* The list lives inside its section, so it draws rows, not a second box: one
    card per module, never a card per line. */
-.yr-rwds, .yr-hists, .yr-ords { list-style: none; margin: 0; padding: 0; }
-.yr-rwd, .yr-hist, .yr-ord {
+.yr-rwds, .yr-hists, .yr-ords, .yr-parts { list-style: none; margin: 0; padding: 0; }
+.yr-rwd, .yr-hist, .yr-ord, .yr-part {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
   padding: 16px 0; border-top: 1px solid var(--yr-edge-soft);
 }
-.yr-rwd:first-child, .yr-hist:first-child, .yr-ord:first-child { border-top: 0; }
-.yr-rwd-main, .yr-hist-main, .yr-ord-main { flex: 1 1 24ch; min-width: 0; }
+.yr-rwd:first-child, .yr-hist:first-child, .yr-ord:first-child, .yr-part:first-child { border-top: 0; }
+.yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }
 .yr-rwd-side, .yr-hist-side {
   flex: 0 1 auto; min-width: 0; margin-left: auto;
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
@@ -556,7 +556,8 @@
 .yr-rwd-c { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yr-rwd-state { font-family: var(--yr-sans); font-size: 12px; line-height: 1.4; color: var(--yr-faint); flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
 
-.yr-hist-n, .yr-ord-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
+.yr-hist-n, .yr-ord-n, .yr-part-n { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--yr-fog); overflow-wrap: anywhere; }
+.yr-part-p { margin-top: 2px; font-family: var(--yr-mono); font-size: 12px; line-height: 1.5; color: var(--yr-mute); font-variant-numeric: tabular-nums; }
 .yr-hist-side { flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .yr-hist-amt { font-family: var(--yr-mono); font-size: 14px; font-weight: 700; color: var(--yr-fog); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* A value in a row has no column heading to lean on, so it names its own field

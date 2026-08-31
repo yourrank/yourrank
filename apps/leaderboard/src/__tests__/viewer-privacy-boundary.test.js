@@ -34,7 +34,8 @@ describe("viewer privacy boundary", () => {
       viewerData: {
         viewerOnSite: { id: "sv-1", balance: 20, blocked: true, block_reason: INTERNAL_REASON },
         shopItems: siteData().shopItems,
-        redemptions: [],
+        claims: [],
+        participation: [],
         ledger: [],
       },
       opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n" },

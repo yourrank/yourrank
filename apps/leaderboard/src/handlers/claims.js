@@ -17,7 +17,8 @@ import {
 } from "./credits.js";
 
 const CLAIM_LIMIT = 100;
-const PRIVATE_CACHE = "no-store, no-cache, must-revalidate";
+const MEMBERSHIP_CLAIM_LIMIT = 50;
+const PRIVATE_CACHE = "private, no-store, no-cache, must-revalidate";
 const CREATOR_FILTERS = new Set(["action_required", "submitted", "completed", "cancelled", "all"]);
 const VIEWER_FILTERS = new Set(["submitted", "completed", "cancelled", "all"]);
 
@@ -88,6 +89,12 @@ function claimStatusFromRedemption(status) {
 
 function claimSummary(row) {
   const state = claimStatusFromRedemption(row.source_status);
+  const completedAt = row.source_status === "fulfilled" && row.terminal_action === "claim_completed"
+    ? row.terminal_at
+    : null;
+  const cancelledAt = row.source_status === "cancelled" && row.terminal_action === "claim_cancelled"
+    ? row.terminal_at
+    : null;
   return {
     id: `${CLAIM_SOURCE_PREFIX}${row.source_id}`,
     type: "reward_redemption",
@@ -119,8 +126,31 @@ function claimSummary(row) {
     } : undefined,
     submittedAt: row.created_at,
     updatedAt: row.updated_at,
-    completedAt: row.source_status === "fulfilled" ? row.updated_at : null,
-    cancelledAt: row.source_status === "cancelled" ? row.updated_at : null,
+    completedAt,
+    cancelledAt,
+  };
+}
+
+function viewerClaimSummary(row) {
+  const claim = claimSummary(row);
+  return {
+    id: claim.id,
+    type: claim.type,
+    typeLabel: claim.typeLabel,
+    status: claim.status,
+    statusLabel: claim.statusLabel,
+    terminal: claim.terminal,
+    reward: {
+      name: claim.reward.name,
+      cost: claim.reward.cost,
+    },
+    site: claim.site ? {
+      name: claim.site.name,
+      slug: claim.site.slug,
+    } : undefined,
+    submittedAt: claim.submittedAt,
+    completedAt: claim.completedAt,
+    cancelledAt: claim.cancelledAt,
   };
 }
 
@@ -140,17 +170,38 @@ function claimDetail(row) {
   };
 }
 
+function viewerClaimDetail(row) {
+  return {
+    ...viewerClaimSummary(row),
+    fulfillmentDetails: {
+      privateDataStored: false,
+      fields: [],
+      note: "No private fulfillment details are stored for reward claims yet.",
+    },
+  };
+}
+
 const CLAIM_SELECT = `
   SELECT r.id AS source_id, r.status AS source_status, r.cost, r.created_at, r.updated_at,
          sv.id AS site_viewer_id,
          COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'Member') AS display_name,
          i.id AS shop_item_id, i.name AS item_name,
-         s.id AS site_id, s.slug AS site_slug, s.name AS site_name
+         s.id AS site_id, s.slug AS site_slug, s.name AS site_name,
+         terminal_event.action AS terminal_action, terminal_event.created_at AS terminal_at
     FROM redemptions r
     JOIN site_viewers sv ON sv.id = r.site_viewer_id
     JOIN viewers v ON v.id = sv.viewer_id
     JOIN shop_items i ON i.id = r.shop_item_id
-    JOIN sites s ON s.id = sv.site_id`;
+    JOIN sites s ON s.id = sv.site_id
+    LEFT JOIN LATERAL (
+      SELECT a.action, a.created_at
+        FROM audit_log a
+       WHERE a.entity_type='claim'
+         AND a.entity_id='redemption:' || r.id::text
+         AND a.action IN ('claim_completed', 'claim_cancelled')
+       ORDER BY a.created_at DESC, a.id DESC
+       LIMIT 1
+    ) terminal_event ON true`;
 
 async function creatorAccess(request, env, deps) {
   const { user, res } = await deps.requireUser(request, env);
@@ -242,7 +293,7 @@ async function loadCreatorClaim(siteId, sourceId, deps) {
   );
 }
 
-async function loadClaimHistory(sourceId, submittedAt, deps) {
+async function loadClaimHistory(sourceId, submittedAt, deps, { includeActor = true } = {}) {
   const auditRows = await deps.query(
     `SELECT a.action, a.created_at, a.actor_id,
             COALESCE(NULLIF(u.display_name, ''), u.email::text) AS actor_name
@@ -262,12 +313,15 @@ async function loadClaimHistory(sourceId, submittedAt, deps) {
     createdAt: submittedAt,
   }];
   for (const row of auditRows || []) {
-    history.push({
+    const event = {
       action: row.action === "claim_completed" ? "claim_completed" : "claim_cancelled",
       label: row.action === "claim_completed" ? "Claim completed" : "Claim cancelled",
-      actor: row.actor_id ? { type: "creator", id: row.actor_id, displayName: row.actor_name || "Team member" } : null,
       createdAt: row.created_at,
-    });
+    };
+    if (includeActor) {
+      event.actor = row.actor_id ? { type: "creator", id: row.actor_id, displayName: row.actor_name || "Team member" } : null;
+    }
+    history.push(event);
   }
   return history.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 }
@@ -368,14 +422,50 @@ export async function handleViewerClaims(request, env, injected = {}) {
         )
       ORDER BY r.created_at DESC
       LIMIT $4`,
-    [viewer.id, slug, filter, CLAIM_LIMIT],
+    [viewer.id, slug, filter, CLAIM_LIMIT + 1],
   );
 
+  const visibleRows = (rows || []).slice(0, CLAIM_LIMIT);
+
   return privateOk({
-    viewer: { id: viewer.id },
     filter,
-    claims: (rows || []).map(claimSummary),
+    limit: CLAIM_LIMIT,
+    truncated: (rows || []).length > CLAIM_LIMIT,
+    claims: visibleRows.map(viewerClaimSummary),
   });
+}
+
+/**
+ * Load the canonical viewer-safe Claim history for one proven membership.
+ * All three identity boundaries are checked even though site_viewers.id is
+ * unique, keeping the membership read model explicit and reviewable.
+ */
+export async function getViewerClaimsForMembership(
+  siteId,
+  viewerId,
+  membershipId,
+  { queryImpl = query } = {},
+) {
+  const rows = await queryImpl(
+    `${CLAIM_SELECT}
+     JOIN users u ON u.id = s.user_id
+      WHERE s.id=$1
+        AND sv.viewer_id=$2
+        AND sv.id=$3
+        AND s.published = true
+        AND s.is_draft = false
+        AND u.status != 'suspended'
+        AND u.email_verified = true
+      ORDER BY r.created_at DESC, r.id DESC
+      LIMIT $4`,
+    [siteId, viewerId, membershipId, MEMBERSHIP_CLAIM_LIMIT + 1],
+  );
+  const found = rows || [];
+  return {
+    claims: found.slice(0, MEMBERSHIP_CLAIM_LIMIT).map(viewerClaimSummary),
+    limit: MEMBERSHIP_CLAIM_LIMIT,
+    truncated: found.length > MEMBERSHIP_CLAIM_LIMIT,
+  };
 }
 
 async function loadViewerClaim(viewerId, sourceId, deps) {
@@ -406,10 +496,9 @@ export async function handleViewerClaimDetail(request, env, injected = {}) {
   if (!row) return privateBad("Claim not found.", 404);
 
   return privateOk({
-    viewer: { id: viewer.id },
     claim: {
-      ...claimDetail(row),
-      history: await loadClaimHistory(sourceId, row.created_at, deps),
+      ...viewerClaimDetail(row),
+      history: await loadClaimHistory(sourceId, row.created_at, deps, { includeActor: false }),
     },
   });
 }

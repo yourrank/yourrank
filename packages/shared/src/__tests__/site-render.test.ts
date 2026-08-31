@@ -49,7 +49,11 @@ describe("shared public board renderer", () => {
       viewerData: {
         viewerOnSite: { balance: 500, total_earned: 1000, total_spent: 300 },
         ledger: [{ id: 1, amount: 100, type: "earn", created_at: new Date().toISOString() }],
-        redemptions: [{ id: 1, status: "pending" }, { id: 2, status: "fulfilled" }],
+        participation: [],
+        claims: [
+          { id: "redemption:1", reward: { name: "Reward one", cost: 10 }, status: "submitted", statusLabel: "Needs fulfillment", submittedAt: new Date().toISOString() },
+          { id: "redemption:2", reward: { name: "Reward two", cost: 20 }, status: "completed", statusLabel: "Completed", submittedAt: new Date().toISOString() },
+        ],
         shopItems: [],
       },
       opts,
@@ -64,7 +68,7 @@ describe("shared public board renderer", () => {
     expect(html).toContain(">500</span> <span class=\"yr-vbal-unit\">free credits");
     expect(html).toContain("Credits earned");
     expect(html).toContain("+100");
-    expect(html).toContain("Pending");
+    expect(html).toContain("Needs fulfillment");
     expect(html).toContain("Completed");
     expect(html).not.toContain("yr-gamer-stats-grid");
     expect(html).not.toContain("Credits / 7d");

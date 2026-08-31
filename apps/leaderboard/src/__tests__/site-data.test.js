@@ -13,7 +13,7 @@ const membershipRow = (overrides = {}) => ({
 });
 
 function deps({ rows = [], oneError = null } = {}) {
-  const calls = { one: [], query: [], exec: [] };
+  const calls = { one: [], query: [], exec: [], claims: [], participation: [] };
   let index = 0;
   return {
     calls,
@@ -30,6 +30,14 @@ function deps({ rows = [], oneError = null } = {}) {
       calls.exec.push({ sql, params });
     },
     markActiveImpl: async () => null,
+    getViewerClaimsImpl: async (...args) => {
+      calls.claims.push(args);
+      return { claims: [{ id: "redemption:claim-1" }], limit: 50, truncated: false };
+    },
+    getViewerParticipationImpl: async (...args) => {
+      calls.participation.push(args);
+      return { participation: [{ type: "code_drop_claim" }], limit: 25, truncated: false };
+    },
   };
 }
 
@@ -104,11 +112,28 @@ describe("viewer board membership tracking", () => {
 
   it("does not load private membership history for a non-member", async () => {
     const injected = deps({ rows: [null] });
-    const result = await getViewerSiteData("site-1", "viewer-1", { shop: true, redemptions: true, ledger: true }, injected);
+    const result = await getViewerSiteData("site-1", "viewer-1", { shop: true, claims: true, ledger: true, participation: true }, injected);
 
     expect(result.membershipStatus).toBe("absent");
-    expect(result.redemptions).toEqual([]);
+    expect(result.claims).toEqual([]);
+    expect(result.participation).toEqual([]);
     expect(result.ledger).toEqual([]);
     expect(injected.calls.query).toHaveLength(1);
+    expect(injected.calls.claims).toHaveLength(0);
+    expect(injected.calls.participation).toHaveLength(0);
+  });
+
+  it("loads bounded Claims and participation only after exact membership resolution", async () => {
+    const injected = deps({ rows: [membershipRow()] });
+    const result = await getViewerSiteData("site-1", "viewer-1", { claims: true, participation: true }, injected);
+
+    expect(injected.calls.claims[0].slice(0, 3)).toEqual(["site-1", "viewer-1", "sv-1"]);
+    expect(injected.calls.participation[0].slice(0, 3)).toEqual(["site-1", "viewer-1", "sv-1"]);
+    expect(result.claims).toEqual([{ id: "redemption:claim-1" }]);
+    expect(result.claimsLimit).toBe(50);
+    expect(result.claimsTruncated).toBe(false);
+    expect(result.participation).toEqual([{ type: "code_drop_claim" }]);
+    expect(result.participationLimit).toBe(25);
+    expect(result.participationTruncated).toBe(false);
   });
 });
