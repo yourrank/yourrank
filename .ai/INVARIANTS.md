@@ -106,6 +106,102 @@ Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-participation.tes
 
 Intentional exclusions: leaderboard/archive/Hall-of-Fame names, tournament operations, Reviews, daily quests, provider event payloads, and restricted legacy Games/wagering/chance systems are not Recognition or Participation evidence.
 
+## AUT-001 — Only Explicit Safe Activity Kinds Are Automatable
+
+Name: Server-owned automation allowlist
+
+Scope: template APIs, schedule APIs, due-job queries, and scheduled execution.
+
+Property: Only the explicit `safe_code_drop` kind may enter Automation. A client-supplied type can never select a handler dynamically.
+
+Why it matters: a generic type/handler bridge could make unattended restricted behavior reachable through API manipulation.
+
+Source of truth: `apps/leaderboard/src/code-drop-service.js`, `apps/leaderboard/src/handlers/activity-automation.js`, `apps/leaderboard/src/automation-scheduler.js`, and the Wave K schema checks.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js` and `activity-automation-home.test.js`.
+
+Intentional exclusions: Games, wagering, stakes, predictions, paid chance, raffles, tournament operations, payout, settlement, Telegram, Discord delivery, and generic Communication.
+
+## AUT-002 — One Occurrence Creates At Most One Activity
+
+Name: Durable scheduled-Activity idempotency
+
+Scope: duplicate cron delivery, retry, concurrent Worker execution, and execution/cancellation races.
+
+Property: One `(schedule_id, occurrence_at)` may create at most one `code_drops` Activity. The guarantee must hold under real concurrent Postgres transactions, not a check-then-insert convention.
+
+Why it matters: unattended duplicate rewards corrupt creator intent and viewer fairness.
+
+Source of truth: `activity_schedule_occurrences` uniqueness, `code_drops.automation_occurrence_id` uniqueness, and the locked transaction in `apps/leaderboard/src/automation-scheduler.js`.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `activity-automation-postgres.test.js`, and the `wave-k-safe-activity-automation` isolated E2E scenario.
+
+Intentional exclusions: different intended recurrence instants deliberately create distinct Activities.
+
+## AUT-003 — Manual and Automated Creation Share One Domain Boundary
+
+Name: Canonical free code-drop creation parity
+
+Scope: manual Activity creation, template validation, schedule revalidation, and executor creation.
+
+Property: Manual and scheduled free code drops use the same validation and persistence service. Templates and schedules cannot maintain divergent validators or creation behavior.
+
+Why it matters: two creation paths would drift on reward limits, expiry, secret handling, and viewer history.
+
+Source of truth: `apps/leaderboard/src/code-drop-service.js` and `apps/leaderboard/src/handlers/events.js`.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `events-raffles-drops.test.js`, and `activities-foundation.test.js`.
+
+Intentional exclusions: a Template is inert configuration and is not an Activity instance.
+
+## AUT-004 — Invalid Execution Context Fails Closed
+
+Name: Scheduled execution reauthorization
+
+Scope: cancelled schedules, site lifecycle, creator lifecycle, Moderator membership, and effective owner entitlement.
+
+Property: Cancelled, unsupported, invalid-site, draft/unpublished, suspended-owner/creator, removed-Moderator, or entitlement-ineligible schedules cannot create an Activity. Authorization is rechecked at execution, not inherited indefinitely from the browser session that scheduled it.
+
+Why it matters: unattended execution must not outlive the authority or site state that made it legitimate.
+
+Source of truth: `apps/leaderboard/src/automation-scheduler.js`, canonical Team capabilities, and shared plan metadata.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js` and `activity-automation-postgres.test.js`.
+
+Intentional exclusions: a short platform delay within the documented six-hour window is not invalid context by itself.
+
+## AUT-005 — Restricted Legacy Cannot Enter Automation
+
+Name: Restricted workflow isolation from scheduled execution
+
+Scope: APIs, persistence constraints, executor dispatch, Home, audit, and creator UI.
+
+Property: Restricted legacy mechanics cannot be represented, dispatched, or rendered as Wave K automation. The scheduler has no generic handler registry or arbitrary payload dispatch.
+
+Why it matters: Automation is not permission to redesign or run restricted financial/chance mechanics unattended.
+
+Source of truth: the `safe_code_drop` schema constraints and explicit conditionals in the Wave K handler/executor.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js`, `activity-automation-home.test.js`, and repository restricted-isolation suites.
+
+Intentional exclusions: legacy systems and their own operational scheduler behavior remain unchanged and separately owned.
+
+## AUT-006 — Downgrade Preserves Configuration Without Releasing Backlog
+
+Name: Safe automation entitlement lifecycle
+
+Scope: Free/Pro/Team transitions, due execution, recurrence advancement, and rescheduling.
+
+Property: Plan downgrade preserves templates and schedules, blocks new paid automation, and pauses due execution. Restored entitlement cannot fire missed work until an authorized creator explicitly chooses a new future time; recurrence advances to the first future fixed UTC interval rather than generating historical backlog.
+
+Why it matters: deleting creator configuration loses durable work, while silently releasing old scheduled rewards violates current intent.
+
+Source of truth: `packages/shared/src/plans.ts`, `apps/leaderboard/src/handlers/activity-automation.js`, and `apps/leaderboard/src/automation-scheduler.js`.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/activity-automation.test.js` and `activity-automation-home.test.js`.
+
+Intentional exclusions: deleting/cancelling configuration remains an explicit creator action; manual Free Activities and viewer rights are unaffected.
+
 ## VER-001 — Claims Cannot Exceed Evidence
 
 Completion claims may not be broader than the verified scope.

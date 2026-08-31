@@ -4,14 +4,16 @@
 // introducing universal activity persistence. Claims already resolve to the
 // authenticated viewer and its site_viewers membership; no participant model
 // is inferred or duplicated here.
-import { query } from "@yourrank/shared/db";
+import { one, query } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { requireUser, bad, json } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
+import { listActivityAutomation } from "./activity-automation.js";
 
 const activityDefaults = {
   query,
+  one,
   rateLimit,
   requireUser,
   getByUser,
@@ -97,6 +99,11 @@ export async function handleGetActivities(request, env, injected = {}) {
       LIMIT 50`,
     [site.id],
   );
+  const automation = await listActivityAutomation(site.id, {
+    query: deps.query,
+    one: deps.one,
+    now: new Date(),
+  });
 
   return privateOk({
     site: { id: site.id, name: site.name || site.slug, slug: site.slug },
@@ -107,5 +114,6 @@ export async function handleGetActivities(request, env, injected = {}) {
       challenges: "deferred",
     },
     activities: (rows || []).map((row) => activityFromCodeDrop(row)),
+    automation,
   });
 }

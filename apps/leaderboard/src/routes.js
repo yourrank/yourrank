@@ -54,6 +54,14 @@ import { handleKickWebhook } from "./handlers/kick-webhook.js";
 import { handleGiveawayChatroom } from "./handlers/giveaway.js";
 import { handleGetActivities } from "./handlers/activities.js";
 import {
+  handleCreateActivityTemplate,
+  handleUpdateActivityTemplate,
+  handleDeleteActivityTemplate,
+  handleCreateActivitySchedule,
+  handleCancelActivitySchedule,
+  handleResumeActivitySchedule,
+} from "./handlers/activity-automation.js";
+import {
   handleDomainSearch,
   handleDomainPurchase,
   handleGetMyDomain,
@@ -289,6 +297,12 @@ export const ROUTES = [
 
   // Safe Activities foundation (existing free-workflow adapters only)
   { path: "/api/activities", method: "GET", handler: withHandler(handleGetActivities) },
+  { path: "/api/activities/templates", method: "POST", handler: withHandler(handleCreateActivityTemplate) },
+  { path: "/api/activities/templates", method: "PUT", handler: withHandler(handleUpdateActivityTemplate) },
+  { path: "/api/activities/templates/delete", method: "POST", handler: withHandler(handleDeleteActivityTemplate) },
+  { path: "/api/activities/schedules", method: "POST", handler: withHandler(handleCreateActivitySchedule) },
+  { path: "/api/activities/schedules/cancel", method: "POST", handler: withHandler(handleCancelActivitySchedule) },
+  { path: "/api/activities/schedules/resume", method: "POST", handler: withHandler(handleResumeActivitySchedule) },
   
   // Community Events: Raffles & Flash Code Drops
   { path: "/api/events/raffles", method: "GET", handler: withHandler(handleGetRaffles) },

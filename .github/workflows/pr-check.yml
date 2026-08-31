@@ -247,6 +247,11 @@ jobs:
           SESSION_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test packages/shared/src/__tests__/session-team-postgres.test.ts
 
+      - name: Safe Activity automation concurrency test (against migrated schema)
+        env:
+          AUTOMATION_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: bun test apps/leaderboard/src/__tests__/activity-automation-postgres.test.js
+
       - name: Consumer jsonb writer tests (against migrated schema)
         env:
           JSONB_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test

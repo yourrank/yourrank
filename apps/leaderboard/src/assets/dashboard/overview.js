@@ -2,8 +2,17 @@
 import { $, esc, currentPlayers } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
-import { nextStepAction, visitsMetricState } from "./overview-state.js";
+import { automationHomeState, nextStepAction, visitsMetricState } from "./overview-state.js";
 import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
+import { fetchDashboardJson } from "./request.js";
+
+let automationHome = { comingNext: null, needsAttention: [] };
+
+function formatOverviewDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time unavailable";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
 
 // Home already owns some state in dedicated surfaces: the setup checklist
 // renders brand/players/publish/verification, and the pending-orders banner
@@ -47,6 +56,13 @@ function wirePublicationLink(link) {
 }
 
 export async function loadOverviewLiveData() {
+  if (state.ACTIVE_SITE_ID) {
+    const params = new URLSearchParams({ siteId: state.ACTIVE_SITE_ID });
+    const { body } = await fetchDashboardJson(`/api/activities?${params.toString()}`, { credentials: "same-origin" });
+    automationHome = automationHomeState(body?.automation);
+  } else {
+    automationHome = { comingNext: null, needsAttention: [] };
+  }
   renderOverviewSummary();
 }
 
@@ -64,7 +80,8 @@ export function renderOverviewSummary() {
   const pendingVerification = status.published && !status.emailVerified;
   const needsVerification = !status.emailVerified;
   const headSub = $("ovHeadSub");
-  const hasOperationalAttention = Number(state.CREDITS?.usage?.pendingRedemptions || 0) > 0 || state.CREDITS?.channel?.homeAttention === true;
+  const hasAutomationAttention = Array.isArray(automationHome.needsAttention) && automationHome.needsAttention.length > 0;
+  const hasOperationalAttention = Number(state.CREDITS?.usage?.pendingRedemptions || 0) > 0 || state.CREDITS?.channel?.homeAttention === true || hasAutomationAttention;
   if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open this site." : readyToPublish && needsVerification ? "Confirm your email, then publish this site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live && hasOperationalAttention ? "Review the items that need attention below." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open this site.";
   const showSetup = !done || pendingVerification;
   const setupSection = $("ovSetup");
@@ -149,6 +166,24 @@ export function renderOverviewSummary() {
       connectionAction.href = canManageConnection
         ? buildDashboardPath("settings.connections", { board: state.ACTIVE_SITE_ID })
         : buildDashboardPath("siteConnections.channel", { siteId: state.ACTIVE_SITE_ID });
+  }
+  const activitiesHref = buildDashboardPath("activities.overview", { siteId: state.ACTIVE_SITE_ID });
+  const attentionSchedule = automationHome.needsAttention?.[0] || null;
+  const automationAlert = $("ovAutomationAlert");
+  if (automationAlert) automationAlert.hidden = !attentionSchedule;
+  if (attentionSchedule) {
+    const title = attentionSchedule.status === "paused" ? "Scheduled Activity is paused." : "Scheduled Activity failed.";
+    if ($("ovAutomationAlertTitle")) $("ovAutomationAlertTitle").textContent = title;
+    if ($("ovAutomationAlertDetail")) $("ovAutomationAlertDetail").textContent = `${attentionSchedule.templateName}: ${attentionSchedule.attentionMessage || "Review the schedule before choosing a new future time."}`;
+    if ($("ovAutomationAlertAction")) $("ovAutomationAlertAction").href = activitiesHref;
+  }
+  const upcomingSchedule = automationHome.comingNext || null;
+  const comingNext = $("ovComingNext");
+  if (comingNext) comingNext.hidden = !upcomingSchedule;
+  if (upcomingSchedule) {
+    const recurrence = upcomingSchedule.recurrence === "daily" ? "every 24 hours (UTC)" : upcomingSchedule.recurrence === "weekly" ? "every 7 days (UTC)" : "one time";
+    if ($("ovComingNextDetail")) $("ovComingNextDetail").textContent = `${upcomingSchedule.templateName} · ${formatOverviewDate(upcomingSchedule.nextRunAt)} · ${recurrence}`;
+    if ($("ovComingNextAction")) $("ovComingNextAction").href = activitiesHref;
   }
   const relative = (iso) => {
     const minutes = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));

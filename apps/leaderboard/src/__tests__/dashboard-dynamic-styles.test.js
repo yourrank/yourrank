@@ -167,7 +167,7 @@ describe("Engagement style requirements are declared by one owner", () => {
     const fragment = resolveFragment("/dashboard/activities");
     const payload = await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab });
     expect(payload.styles).toEqual(activitiesConfig.styles);
-    expect(payload.html).toContain("Safe foundation");
+    expect(payload.html).toContain("Safe Activity boundary");
   });
 
   it("declares giveaways.css on the full document", () => {

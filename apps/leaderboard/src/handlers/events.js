@@ -12,6 +12,7 @@ import {
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { creatorExpansionRestriction, markSiteViewerActive } from "@yourrank/shared/plan-usage";
+import { createCanonicalCodeDrop, validateCodeDropConfig } from "../code-drop-service.js";
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -230,23 +231,21 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
     requireUser = defaultRequireUser,
     getByUser = defaultGetByUser,
     getBoardById = defaultGetBoardById,
-    one = defaultOne,
+    exec = defaultExec,
     logAudit = defaultLogAudit,
     expansionRestriction = creatorExpansionRestriction,
     requireSiteCapabilityImpl = requireSiteCapability,
+    createCodeDrop = createCanonicalCodeDrop,
+    now = () => new Date(),
   } = deps;
 
   const { user, res } = await requireUser(request, env);
   if (res) return res;
 
   const body = await readJson(request);
-  const rawCode = String(body?.code || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "");
-  if (!rawCode || rawCode.length < 3) return bad("Code must be at least 3 alphanumeric characters.");
-
-  const pointsReward = Math.max(1, parseInt(body?.pointsReward, 10) || 100);
-  const maxClaims = Math.max(1, parseInt(body?.maxClaims, 10) || 50);
-  const expireMinutes = parseInt(body?.expireMinutes, 10) || 0;
-  const expiresAt = expireMinutes > 0 ? new Date(Date.now() + expireMinutes * 60000).toISOString() : null;
+  const validated = validateCodeDropConfig(body, { requireCode: true });
+  if (!validated.ok) return bad(validated.error);
+  const { code, pointsReward, maxClaims } = validated.value;
 
   const url = new URL(request.url);
   const siteId = body?.siteId || url.searchParams.get("siteId");
@@ -260,12 +259,13 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
   }
 
   try {
-    const result = await one(
-      `INSERT INTO code_drops (site_id, code, points_reward, max_claims, expires_at)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, code, points_reward, max_claims, claimed_count, status, expires_at, created_at`,
-      [site.id, rawCode, pointsReward, maxClaims, expiresAt]
-    );
+    const result = await createCodeDrop({
+      db: { exec },
+      siteId: site.id,
+      config: validated.value,
+      code,
+      now: now(),
+    });
 
     await logAudit({
       actorId: user.id,
@@ -273,10 +273,10 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
       entityType: "code_drop",
       entityId: result.id,
       request,
-      details: { code: rawCode, pointsReward, maxClaims },
+      details: { site_id: site.id, pointsReward, maxClaims },
     });
 
-    return ok({ drop: result, message: `Drop code ${rawCode} is now live! ⚡` });
+    return ok({ drop: result, message: `Drop code ${code} is now live! ⚡` });
   } catch (err) {
     if (String(err?.message || "").includes("idx_code_drops_site_code")) {
       return bad("A drop with this code already exists for this site.");

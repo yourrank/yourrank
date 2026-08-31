@@ -82,7 +82,7 @@ echo "--- starting wrangler dev on https://localhost:${PORT}"
   # Wrangler resolves the Hyperdrive local connection string from the process
   # environment, not from .dev.vars.
   export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$DB_URL"
-  npx --yes wrangler dev --port "$PORT" --local-protocol https --ip 127.0.0.1 >"$LOG" 2>&1 &
+  npx --yes wrangler dev --port "$PORT" --local-protocol https --ip 127.0.0.1 --test-scheduled >"$LOG" 2>&1 &
   echo $! > /tmp/wrangler-e2e.pid
 )
 

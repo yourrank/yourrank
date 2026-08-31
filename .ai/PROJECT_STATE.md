@@ -2,7 +2,7 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** Wave J candidate branched from `main` at `3d5ea3b928e321441630d730ef8052447a1919e2` (Viewer/Membership convergence merged)
+**Evidence baseline:** Wave K candidate branched from `main` at `d36b6253230e6dad3a535feacc02845e0463f52b` (Wave J Viewer Membership Expansion merged)
 
 **Last reconciled:** 2026-08-31
 
@@ -21,7 +21,7 @@ Maintained to prevent architecture drift.
 | Public viewer renderer | `packages/shared/src/site-render.ts` |
 | Public viewer styles | `apps/leaderboard/src/assets/site-shell.css` |
 | Authenticated workspace tokens | `apps/leaderboard/src/assets/dashboard-v4.css`, `ws-token-contract` block |
-| Schema | `supabase/migrations` (124 migration files including the Wave H role convergence migration) |
+| Schema | `supabase/migrations` (125 migration files including the Wave K safe Activity automation migration) |
 | Runtime/deployment description | `ARCHITECTURE.md` plus Worker configuration |
 
 ## Convergence Status
@@ -95,7 +95,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Terminal Claim timestamps come only from matching `claim_completed` / `claim_cancelled` audit events. An old terminal redemption without an event remains terminal but has no displayed terminal timestamp; `redemptions.updated_at` is never promoted into lifecycle evidence.
 - Recognition decision: **DEFERRED — INSUFFICIENT SAFE/LINKED EVIDENCE**. Current leaderboard players and archives are name-based, Hall of Fame reuses that history, mixed tournament placement is outside the safe target boundary, Reviews are internal decisions, and no current creator-recognition or challenge-completion source satisfies safe selected-site ownership plus canonical Viewer/Membership linkage. My Community therefore has no empty Recognition panel, fake badge, points model, or inferred history.
 - Authenticated creator-site HTML is `private, no-store` and varies on `Cookie`. A non-member receives the existing Join state and no history reads. Apex and custom-domain My Community resolve through the same route/read composition; a new Viewer session receives a new server-rendered response with only that Viewer's site-scoped data.
-- Global `/me` remains the My communities index with community identity, balance, claiming availability, and pending Claim count only. Wave K automation has not started.
+- Global `/me` remains the My communities index with community identity, balance, claiming availability, and pending Claim count only. Wave K does not add a parallel viewer automation identity; a scheduled drop becomes a normal code-drop Activity and its successful Claim enters the existing Wave J Participation history.
 
 ### Community ownership — CONSOLIDATED
 
@@ -115,6 +115,20 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Code-drop claims continue to resolve through authenticated Viewer Account and the existing `site_viewers` Site Membership record.
 - Mixed Engagement remains a contained legacy route family rather than a primary navigation destination. Restricted legacy Games, paid-chance raffles, predictions, wagering, payout, and settlement mechanics are not imported into Activities.
 - Challenges are deferred because a shared foundation is not yet sufficiently proven. Tournaments remain outside Activities because current settings include entry-cost and eligibility fields that are not cleanly isolated from the zero-cost subset.
+
+### Safe Activity automation — WAVE K AVAILABLE; ONE EXPLICIT KIND
+
+- Activities owns automation contextually at `/dashboard/activities`; no top-level Automation product, generic workflow graph, dynamic handler lookup, queue, Durable Object, or browser/in-memory timer was added. The only supported kind is the server allowlisted `safe_code_drop` workflow proven by the existing manual free code-drop Activity.
+- `apps/leaderboard/src/code-drop-service.js` is the canonical validation and creation boundary for both manual and scheduled drops. Templates store only reusable reward/claim/expiry settings. Creating a template is inert and cannot create an Activity.
+- Creating a schedule snapshots the validated template name and configuration. Later template edits or deletion cannot silently alter an approved schedule. Schedules persist exact UTC instants and support only one-time, fixed 24-hour UTC daily, or fixed seven-day UTC weekly recurrence.
+- Postgres owns durable schedules and occurrences. The existing Leaderboard Worker five-minute scheduled handler runs one bounded ordered due scan of at most 50 rows. Each transaction locks the schedule; unique `(schedule_id, occurrence_at)` occurrence persistence plus the unique `code_drops.automation_occurrence_id` boundary permits at most one Activity for an occurrence even under duplicate or concurrent invocation.
+- A delay of up to six hours executes once using the intended occurrence identity. A later run becomes a controlled stale failure. Transient infrastructure errors retry at most three times with at least four minutes between attempts; validation, site, creator, Moderator, and entitlement failures do not loop. Recurrence advances from the intended UTC instant to the first future interval and never generates a missed backlog.
+- Cancellation changes durable lifecycle state rather than deleting history. Cancellation and execution serialize on the locked schedule: cancellation wins with no Activity, or execution wins and the completed occurrence cannot be cancelled retroactively. Rescheduling is limited to paused/failed schedules and always requires an explicit new future time.
+- Creation and execution recheck selected-site Activity capability. Owner may manage safe automation. A current Moderator may do so only through canonical `canRoleManageActivities`, and execution also requires the creator to remain an active Owner or active site Moderator under an effective Team owner plan. Removal, suspension, draft/unpublished site state, deletion, and downgrade fail closed.
+- Free retains manual safe code drops. Pro and Team enable new templates, schedules, and recurrence through `canUseAutomation()` in canonical plan metadata; prices and other limits are unchanged. Downgrade preserves configuration and pauses due work. Restoring entitlement never releases missed work automatically: the creator must choose a new future time.
+- Home reads real selected-site schedules only. The next scheduled safe occurrence appears in Coming next; controlled paused/failed schedules appear once in Needs attention. Activities exposes creator-facing controlled reasons without claim codes, secrets, provider data, or stacks. Audit rows cover template lifecycle, scheduling/cancellation/rescheduling, success, controlled failure, recurrence disablement, and entitlement pause without recording generated codes.
+- Generic Communication architecture is **NOT READY**. Safe announcements and external reminders are therefore deferred. Existing Telegram, Discord, queue, auto-reset, restricted event, wagering, prediction, raffle, payout, settlement, and tournament operations remain separate and cannot enter the allowlist.
+- Deployment requires applying `20260907000000_wave_k_safe_activity_automation.sql` before deploying the Worker/configuration that runs the existing five-minute cron. There is no backfill or existing Activity rewrite.
 
 ### Safe Reviews foundation — AVAILABLE; ADAPTER-BASED
 
@@ -147,7 +161,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Team lifecycle writes append-only `team_invitation_created`, `team_invitation_revoked`, `team_invitation_accepted`, and `team_operator_removed` records to the existing `audit_log` in the same transaction as source changes. Review and Claim events retain their source-specific actor audit behavior; no duplicate Team activity UI or audit mutation endpoint was added.
 - Settings → Team is the one Team surface. Owners see pooled seat usage, invite/remove/revoke controls, and the Team upgrade path; Moderators receive minimal read-only context without pending invite data or mutation controls. There is no role-edit route because Moderator is the only delegated V1 role.
 - Reviews and Claims semantics are unchanged; only their capability ownership converged. Claims still contain no private fulfillment PII. If a future Claim workflow introduces sensitive fulfillment data, it requires a new evidence-led access review rather than inheriting current ordinary-Claim access automatically.
-- Wave I Insights/Connection Health and Wave J Viewer Membership history are implemented as described here. Wave K has not started.
+- Wave I Insights/Connection Health, Wave J Viewer Membership history, and the narrow Wave K safe Activity automation described here are implemented. The official architecture roadmap waves are complete; this does not claim generic automation, Communication, Recognition, social features, or restricted workflow support.
 
 ### Insights and connection health — AVAILABLE; AGGREGATE + EVIDENCE-BASED
 
@@ -178,7 +192,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Viewer Account and membership presentation now converge on the existing identity model. Global `/me` is the account-scoped **My communities** index; each `/<slug>/me` or custom-domain `/me` is that creator's **My Community** membership surface. Global account data links into creator-owned Rewards/credits/Claims instead of duplicating those experiences.
 - Global membership summaries expose only community identity, free-credit balance, controlled claiming availability, and the count of pending Claims needing creator action. They do not expose creator plan data, raw site/membership IDs, historical “Member since” provenance, full cross-community Claim history, internal block reasons, or fraud context.
 - Provider connections shown on the Viewer Account require their persisted OAuth link timestamp; names or external identifiers alone are not proof. Custom-domain and apex navigation preserve local community versus global account ownership, and creator-scoped OAuth failures render controlled messages rather than raw provider/query values.
-- Wave J adds bounded free code-drop Participation and canonical expanded Claims history to My Community. Recognition remains deferred for lack of a trustworthy safe Viewer-linked source. Social features, messaging, and automation remain deferred; Wave K has not started.
+- Wave J adds bounded free code-drop Participation and canonical expanded Claims history to My Community. Recognition remains deferred for lack of a trustworthy safe Viewer-linked source. Social features and messaging remain deferred. Wave K adds only creator-side safe code-drop templates/scheduling; scheduled Claims reuse this same Participation history.
 
 Production `site_viewers` creation audit (canonical sources; generated `packages/shared/dist/kick-credits.js` mirrors its TypeScript source and is not a fourth caller):
 
@@ -239,7 +253,7 @@ Privacy, access, retention, and notification decisions:
 | Sites collection | Account-scoped `/dashboard/leaderboards` |
 | Leaderboard editor | Site-scoped SPA route family under `/dashboard/leaderboard` |
 | Site | Site-scoped `/dashboard/site` plus separate Connections fragment |
-| Activities | Site-scoped `/dashboard/activities`; adapter over free code drops only |
+| Activities | Site-scoped `/dashboard/activities`; free code-drop adapter plus Pro/Team templates, UTC scheduling, and fixed UTC recurrence for `safe_code_drop` only |
 | Rewards (including Claims) | Site-scoped fragment route family under `/dashboard/rewards`; Claims adapts existing reward redemptions at `/dashboard/rewards/redemptions` |
 | People (Members + Reviews) | Site-scoped `/dashboard/audience/members` and `/dashboard/audience/reviews` |
 | Insights | Site-scoped SPA route family under `/dashboard/analytics` |
@@ -281,7 +295,8 @@ Community, People, and Insights are current navigation presentation labels only;
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |
 | Legacy `v3-*`/`v4-*` names and raw-value ratchets | Existing debt; do not extend |
 | Legacy route aliases | Retained pending telemetry evidence |
-| Viewer/site membership expansion beyond the converged Viewer Account + existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence; Wave J participation/recognition and expanded Claims history are not present |
+| Viewer/site membership expansion beyond the converged Viewer Account + existing `site_viewers` foundation | Wave J Participation and expanded Claims history are present; further expansion and Recognition remain deferred until proven safe linked evidence exists |
+| Automation beyond safe free code drops | Deferred; Communication is not ready and restricted or unproven workflows cannot enter Wave K automation |
 | Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
 | Shared Activity / Review / Claim persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
 | Claims expansion beyond reward redemptions | Deferred; other safe workflows do not yet expose a proven fulfillment lifecycle, and private fulfillment fields must be evidence-led |

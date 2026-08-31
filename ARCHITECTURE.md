@@ -55,8 +55,44 @@ Recognition is not currently rendered: players, archives/Hall of Fame, mixed
 tournament results, Reviews, and challenge data do not provide a safe persisted
 selected-site record with canonical Viewer/Membership linkage. No fuzzy name
 matching or replacement Recognition persistence exists. Global `/me` remains
-an index and does not aggregate these histories. Wave K automation is not part
-of this runtime.
+an index and does not aggregate these histories.
+
+## Safe Activity automation boundary
+
+The Leaderboard Worker owns one narrow creator automation path inside the
+existing Activities product. `safe_code_drop` is the only server-allowlisted
+kind. Manual and scheduled creation share `code-drop-service.js`; restricted
+Games, wagering, predictions, paid chance, raffles, tournament operations,
+payout, and settlement handlers are not reachable through the scheduler.
+
+`activity_templates` stores inert selected-site configuration. A schedule copies
+the validated template name and configuration, so later template edits do not
+rewrite approved work. `activity_schedules` stores the next exact UTC instant and
+only `once`, fixed 24-hour `daily`, or fixed seven-day `weekly` recurrence.
+`activity_schedule_occurrences` supplies the durable unique
+`(schedule_id, occurrence_at)` identity, and `code_drops` has a second unique
+occurrence foreign key. The executor locks each schedule and creates the
+occurrence plus canonical Activity in one Postgres transaction.
+
+The existing Leaderboard Worker `*/5 * * * *` scheduled event now performs one
+ordered due scan bounded to 50 alongside the separate legacy auto-reset and
+account-export cleanup jobs. It runs delayed work once for up to six hours,
+marks older work stale, retries transient failures at most three times with a
+four-minute minimum interval, and advances recurrence directly to the first
+future UTC interval without materializing backlog rows. Cancellation and
+execution serialize on the schedule lock.
+
+Pro and Team enable automation through shared plan metadata; Free manual code
+drops remain available. Downgrade preserves templates/schedules and pauses due
+execution. Restoring entitlement requires an explicit new future time and never
+fires accumulated work. Execution rechecks the site, creator, effective owner
+plan, and current Owner/Moderator Activity authority. Home consumes only real
+selected-site schedule state for Coming next and Needs attention.
+
+Generic Communication is not implemented, so safe announcements and external
+reminders remain deferred. Deployment order is migration first, then the Worker
+and cron configuration. No automation backfill or restricted data migration is
+performed.
 
 ---
 
@@ -108,7 +144,7 @@ of this runtime.
 | **One Postgres, one `users` table** | The whole point of "one dashboard" is one account. Same email = same streamer, who can have a leaderboard AND a bot. |
 | **Supabase (not D1)** | The bot engine relies on Postgres features D1 can't do: monthly-**partitioned** `clicks`, `count(*) FILTER`, `make_interval`, JSONB. Moving the bot to SQLite would be a downgrade and lose partitioning. So the *leaderboard* moved to Postgres instead. |
 | **Hyperdrive in front of Postgres** | Workers are serverless; opening a raw Postgres connection per request exhausts Supabase's connection cap. Hyperdrive pools + caches. Both Workers share one Hyperdrive config. |
-| **Two Workers, not one** | The two apps have opposite runtimes (plain-JS Worker vs TS+Hono+grammY) and the bot needs **cron triggers** (broadcasts, click rollup) the leaderboard doesn't. Keeping them separate avoids a risky full rewrite and lets each deploy independently. They *feel* like one app via a shared nav + shared session. |
+| **Two Workers, not one** | The two apps have opposite runtimes (plain-JS Worker vs TS+Hono+grammY) and own distinct cron semantics. Keeping them separate avoids a risky full rewrite and lets each deploy independently. They *feel* like one app via a shared nav + shared session. |
 | **Shared session in Postgres** | One `yr_session` cookie scoped to `.yourrank.site` + one shared `sessions` table (both Workers reach it via the same Hyperdrive) = log in once, both Workers recognize you. Sessions used to live in the `SESSIONS` KV namespace; that namespace is now only a legacy rate-limit fallback. |
 
 ## The seam that makes it "one app": the `users` table
