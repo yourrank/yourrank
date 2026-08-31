@@ -122,7 +122,6 @@ function reviewDetail(row) {
     context: {
       membership: row.membership_id ? {
         id: row.membership_id,
-        memberSince: row.member_since || null,
         linkedIdentities: linkedIdentities(row),
       } : null,
       participation: {
@@ -138,7 +137,7 @@ const REVIEW_SELECT = `
   SELECT te.id AS source_id, te.display_name, te.viewer_id,
          te.status AS source_status, te.created_at, te.updated_at,
          t.id AS tournament_id, t.title AS tournament_title,
-         sv.id AS membership_id, sv.created_at AS member_since,
+         sv.id AS membership_id,
          v.kick_username, v.discord_username,
          v.kick_linked_at, v.discord_linked_at,
          review_decision.action AS review_action,

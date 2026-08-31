@@ -70,10 +70,17 @@ const CUSTOM_VIEWER_AUTH_PATHS = new Set([
   "/api/viewer/auth/kick",
   "/api/viewer/auth/kick/callback",
   "/api/viewer/auth/kick/handoff",
+  "/api/viewer/auth/discord",
+  "/api/viewer/auth/discord/callback",
 ]);
 
 export function isCustomViewerAuthPath(method, path) {
   return method === "GET" && CUSTOM_VIEWER_AUTH_PATHS.has(path);
+}
+
+export function isCustomViewerApiPath(method, path) {
+  return isCustomViewerAuthPath(method, path)
+    || (method === "POST" && path === "/api/viewer/membership/join");
 }
 
 function telemetryRoute(path) {
@@ -459,7 +466,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // user's custom domain. If yes, serve their leaderboard at /.
       if (isCustomHost(host)) {
         const customSlug = await resolveCustomDomainImpl(env, host);
-        if (customSlug && !isCustomViewerAuthPath(method, path)) {
+        if (customSlug && !isCustomViewerApiPath(method, path)) {
           // Serve the leaderboard as if the path were /<slug>
           // Rewrite the URL path internally
           url.pathname = "/" + customSlug;

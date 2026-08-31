@@ -234,7 +234,6 @@ function renderViewerRow(v) {
   const avatar = v.avatarUrl
     ? `<img class="cr-viewer-avatar" src="${esc(v.avatarUrl)}" alt="" loading="lazy" />`
     : `<span class="cr-viewer-avatar cr-viewer-avatar--fallback" aria-hidden="true">${esc(uname.slice(0, 1).toUpperCase())}</span>`;
-  const joined = fmtDate(v.joinedAt);
   const lastActiveAt = v.lastSeenAt || v.lastCreditAt;
   const platformHtml = platforms.length
     ? platforms.map((platform) => `<span>${esc(platform)} sign-in</span>`).join("")
@@ -242,7 +241,7 @@ function renderViewerRow(v) {
   const activity = lastActiveAt
     ? `<b title="Last active: ${esc(fmtDate(lastActiveAt))}">Active ${esc(relative(lastActiveAt))}</b>`
     : "<b>No activity yet</b>";
-  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked on this site</span>' : ""}</span></div></td><td data-label="Membership"><div class="cr-member-activity">${activity}<span title="${esc(joined)}">Joined ${esc(relative(v.joinedAt))}</span></div></td><td data-label="Account connection"><div class="cr-member-platforms">${platformHtml}</div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.totalEarned) || 0} · Spent ${Number(v.totalSpent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row"><button class="btn btn--sm" type="button" data-member-detail="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">View member</button></div></td>`;
+  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked on this site</span>' : ""}</span></div></td><td data-label="Membership"><div class="cr-member-activity">${activity}</div></td><td data-label="Account connection"><div class="cr-member-platforms">${platformHtml}</div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.totalEarned) || 0} · Spent ${Number(v.totalSpent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row"><button class="btn btn--sm" type="button" data-member-detail="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">View member</button></div></td>`;
 }
 async function loadMemberHistoryDialog() {
   if (!window.YRDialog) await import("./dialog.js");
@@ -382,8 +381,7 @@ function render() {
         perPage: 15,
         searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.blocked ? "blocked" : "active"}`,
         sortOptions: [
-          { key: "activity", label: "Recently active", fn: (a, b) => new Date(b.lastSeenAt || b.lastCreditAt || b.joinedAt || 0) - new Date(a.lastSeenAt || a.lastCreditAt || a.joinedAt || 0) },
-          { key: "joined", label: "Newest members", fn: (a, b) => new Date(b.joinedAt || 0) - new Date(a.joinedAt || 0) },
+          { key: "activity", label: "Recently active", fn: (a, b) => new Date(b.lastSeenAt || b.lastCreditAt || 0) - new Date(a.lastSeenAt || a.lastCreditAt || 0) },
           { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) },
           { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) },
         ],
@@ -688,7 +686,6 @@ function renderMemberDetail(data) {
       ? `<img class="cr-member-detail-avatar-image" src="${esc(member.avatarUrl)}" alt="" />`
       : esc(name.slice(0, 1).toUpperCase());
   }
-  $("cr-member-history-joined").textContent = fmtDate(member.joinedAt);
   const lastActiveAt = member.lastSeenAt || member.lastCreditAt;
   $("cr-member-history-active").textContent = lastActiveAt ? fmtDate(lastActiveAt) : "No activity yet";
   $("cr-member-history-balance").textContent = `${Number(member.balance) || 0} Credits`;

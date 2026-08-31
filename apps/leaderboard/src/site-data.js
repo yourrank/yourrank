@@ -19,39 +19,33 @@ export async function getViewerSiteData(
   { oneImpl = one, queryImpl = query, execImpl = exec } = {},
 ) {
   if (!viewerId) {
-    if (shop) return { viewerOnSite: null, shopItems: await getShopItems(siteId, queryImpl), redemptions: [], ledger: [] };
-    return { viewerOnSite: null, shopItems: [], redemptions: [], ledger: [] };
+    if (shop) return { membershipStatus: "absent", viewerOnSite: null, shopItems: await getShopItems(siteId, queryImpl), redemptions: [], ledger: [] };
+    return { membershipStatus: "absent", viewerOnSite: null, shopItems: [], redemptions: [], ledger: [] };
   }
 
-  let [viewerOnSite, shopItems] = await Promise.all([
+  const [membershipLookup, shopItems] = await Promise.all([
     oneImpl(
       "SELECT id, balance, blocked, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
-      [siteId, viewerId]
-    ),
+      [siteId, viewerId],
+    ).then((row) => ({ ok: true, row })).catch((err) => {
+      console.error("[site-data] viewer membership lookup failed:", err?.message || err);
+      return { ok: false, row: null };
+    }),
     shop ? getShopItems(siteId, queryImpl) : Promise.resolve([]),
   ]);
+  const viewerOnSite = membershipLookup.row;
 
-  if (!viewerOnSite) {
-    try {
-      await execImpl(
-        `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)
-         VALUES ($1, $2, 0, 0, now())
-         ON CONFLICT (site_id, viewer_id) DO NOTHING`,
-        [siteId, viewerId],
-      );
-      viewerOnSite = await oneImpl(
-        "SELECT id, balance, blocked, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
-        [siteId, viewerId],
-      );
-    } catch (err) {
-      console.error("[site-data] viewer membership registration failed:", err?.message || err);
-      return { viewerOnSite: null, shopItems: shop ? shopItems : [], redemptions: [], ledger: [] };
-    }
-    if (!viewerOnSite) {
-      console.error("[site-data] viewer membership registration returned no row");
-      return { viewerOnSite: null, shopItems: shop ? shopItems : [], redemptions: [], ledger: [] };
-    }
-  } else {
+  if (!membershipLookup.ok || !viewerOnSite) {
+    return {
+      membershipStatus: membershipLookup.ok ? "absent" : "unavailable",
+      viewerOnSite: null,
+      shopItems: shop ? shopItems : [],
+      redemptions: [],
+      ledger: [],
+    };
+  }
+
+  {
     const lastSeen = viewerOnSite.last_seen_at ? Date.parse(viewerOnSite.last_seen_at) : NaN;
     if (!Number.isFinite(lastSeen) || Date.now() - lastSeen >= 5 * 60 * 1000) {
       try {
@@ -88,6 +82,7 @@ export async function getViewerSiteData(
   ]);
 
   return {
+    membershipStatus: "member",
     viewerOnSite: {
       id: viewerOnSite.id,
       balance: viewerOnSite.balance,

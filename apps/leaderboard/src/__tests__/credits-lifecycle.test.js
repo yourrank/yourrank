@@ -212,7 +212,21 @@ describe("processKickRewardRedemption earn path", () => {
     const result = await processKickRewardRedemption(earnEvent({ reward: { id: "reward-1", title: "Hydrate", cost: 1 } }));
     expect(result.skipped).toBe(true);
     expect(result.reason).toMatch(/cost mismatch/i);
+    expect(db.calls.some((c) => /INSERT INTO site_viewers/.test(c.sql))).toBe(false);
     expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql) && /balance = balance \+/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /last_active_at\s*=\s*now\(\)/.test(c.sql))).toBe(false);
+  });
+
+  it("does not create Membership or activity for a rejected blocked provider action", async () => {
+    mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: true, fraud_score: 100 } });
+    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.queryResponses.push([], []);
+    db.unsafeResponses.push([]); // kick_reward_events site update
+
+    const result = await processKickRewardRedemption(earnEvent());
+
+    expect(result).toEqual({ blocked: true });
+    expect(db.calls.some((c) => /INSERT INTO site_viewers/.test(c.sql))).toBe(false);
     expect(db.calls.some((c) => /last_active_at\s*=\s*now\(\)/.test(c.sql))).toBe(false);
   });
 });

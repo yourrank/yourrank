@@ -12,13 +12,14 @@ const membershipRow = (overrides = {}) => ({
   ...overrides,
 });
 
-function deps({ rows = [], execError = null } = {}) {
+function deps({ rows = [], oneError = null } = {}) {
   const calls = { one: [], query: [], exec: [] };
   let index = 0;
   return {
     calls,
     oneImpl: async (sql, params) => {
       calls.one.push({ sql, params });
+      if (oneError) throw oneError;
       return rows[index++] || null;
     },
     queryImpl: async (sql, params) => {
@@ -27,26 +28,20 @@ function deps({ rows = [], execError = null } = {}) {
     },
     execImpl: async (sql, params) => {
       calls.exec.push({ sql, params });
-      if (execError) throw execError;
     },
     markActiveImpl: async () => null,
   };
 }
 
 describe("viewer board membership tracking", () => {
-  it("creates a membership on the first signed-in board view and uses the fresh row", async () => {
-    const injected = deps({ rows: [null, membershipRow({ balance: 0, total_earned: 0, total_spent: 0 })] });
+  it("keeps a signed-in passive visit membership-free", async () => {
+    const injected = deps({ rows: [null] });
     const result = await getViewerSiteData("site-1", "viewer-1", {}, injected);
 
-    expect(injected.calls.exec).toHaveLength(1);
-    expect(injected.calls.exec[0].sql).toContain(
-      "INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)",
-    );
-    expect(injected.calls.exec[0].sql).not.toContain("last_active_at");
-    expect(injected.calls.exec[0].sql).toContain("ON CONFLICT (site_id, viewer_id) DO NOTHING");
-    expect(injected.calls.exec[0].params).toEqual(["site-1", "viewer-1"]);
-    expect(injected.calls.one).toHaveLength(2);
-    expect(result.viewerOnSite.balance).toBe(0);
+    expect(injected.calls.exec).toHaveLength(0);
+    expect(injected.calls.one).toHaveLength(1);
+    expect(result.viewerOnSite).toBeNull();
+    expect(result.membershipStatus).toBe("absent");
   });
 
   it("does not create a membership for an anonymous visitor", async () => {
@@ -54,6 +49,7 @@ describe("viewer board membership tracking", () => {
     const result = await getViewerSiteData("site-1", null, {}, injected);
 
     expect(result.viewerOnSite).toBeNull();
+    expect(result.membershipStatus).toBe("absent");
     expect(injected.calls.one).toHaveLength(0);
     expect(injected.calls.exec).toHaveLength(0);
   });
@@ -73,6 +69,7 @@ describe("viewer board membership tracking", () => {
       total_spent: 0,
       blocked: true,
     });
+    expect(result.membershipStatus).toBe("member");
     expect(result.viewerOnSite).not.toHaveProperty("block_reason");
   });
 
@@ -91,35 +88,27 @@ describe("viewer board membership tracking", () => {
     expect(injected.calls.exec).toHaveLength(0);
   });
 
-  it("keeps board rendering alive when membership creation fails", async () => {
-    const injected = deps({ rows: [null], execError: new Error("database unavailable") });
+  it("distinguishes a membership lookup failure from an absent membership", async () => {
+    const injected = deps({ oneError: new Error("database unavailable") });
     const originalError = console.error;
     console.error = () => {};
     try {
       const result = await getViewerSiteData("site-1", "viewer-1", {}, injected);
       expect(result.viewerOnSite).toBeNull();
-      expect(injected.calls.exec).toHaveLength(1);
+      expect(result.membershipStatus).toBe("unavailable");
+      expect(injected.calls.exec).toHaveLength(0);
     } finally {
       console.error = originalError;
     }
   });
 
-  it("falls back when membership creation succeeds but the re-read is still empty", async () => {
-    const injected = deps({ rows: [null, null] });
-    const originalError = console.error;
-    console.error = () => {};
-    try {
-      const result = await getViewerSiteData("site-1", "viewer-1", {}, injected);
-      expect(result).toEqual({
-        viewerOnSite: null,
-        shopItems: [],
-        redemptions: [],
-        ledger: [],
-      });
-      expect(injected.calls.exec).toHaveLength(1);
-      expect(injected.calls.query).toHaveLength(0);
-    } finally {
-      console.error = originalError;
-    }
+  it("does not load private membership history for a non-member", async () => {
+    const injected = deps({ rows: [null] });
+    const result = await getViewerSiteData("site-1", "viewer-1", { shop: true, redemptions: true, ledger: true }, injected);
+
+    expect(result.membershipStatus).toBe("absent");
+    expect(result.redemptions).toEqual([]);
+    expect(result.ledger).toEqual([]);
+    expect(injected.calls.query).toHaveLength(1);
   });
 });

@@ -480,7 +480,7 @@
 
 /* ── Viewer surfaces: page head, reward / activity / order rows ──────── */
 
-/* Rewards and My credits open with the page, what it is for, the balance and
+/* Rewards and My Community open with the page, what it is for, the balance and
    the fine print — no hero slab, no KPI wall. */
 .yr-vhead { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 /* When the head carries the viewer's balance and their way onward, those travel
@@ -513,7 +513,7 @@
 .yr-vbal-num { font-family: var(--yr-mono); font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yr-vbal-unit { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); font-weight: 700; }
 .yr-vbal.is-zero .yr-vbal-num { font-size: 24px; line-height: 28px; color: var(--yr-mute); }
-/* My credits: the viewer's history and their orders are peers, side by side on
+/* My Community: the viewer's credit record and Claims are peers, side by side on
    a wide viewport and stacked on a phone. */
 .yr-vcols { display: grid; gap: 20px; align-items: start; }
 /* Signed-out viewer pages use one complete reading surface without turning a
@@ -756,9 +756,10 @@
 .yr-foot-links a:hover, .yr-foot-links button:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
-.yr-search-status, .yr-redeem-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
-.yr-search-status:empty, .yr-redeem-status:empty { display: none; }
-.yr-search-status.is-error, .yr-redeem-status.is-error { color: var(--yr-warning-readable); }
+.yr-search-status, .yr-redeem-status, .yr-join-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
+.yr-join-status { padding-inline: 0; }
+.yr-search-status:empty, .yr-redeem-status:empty, .yr-join-status:empty { display: none; }
+.yr-search-status.is-error, .yr-redeem-status.is-error, .yr-join-status.is-error { color: var(--yr-warning-readable); }
 .yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); color: #fff; background: var(--yr-primary); font-size: 14px; font-weight: 600; }
 .yr-search-retry:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 

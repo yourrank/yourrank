@@ -9,8 +9,9 @@ const routesJs = readFileSync(new URL("../routes.js", import.meta.url), "utf8");
 
 describe("viewer membership display", () => {
   it("shows site membership and authenticated connection state without raw IDs", () => {
-    expect(creditsJs).toContain("const joined = fmtDate(v.joinedAt)");
     expect(creditsJs).toContain("v.lastSeenAt || v.lastCreditAt");
+    expect(creditsJs).not.toContain("joinedAt");
+    expect(creditsJs).not.toContain("Member since");
     expect(creditsJs).toContain("v.linkedIdentities");
     expect(creditsJs).toContain("v.avatarUrl");
     expect(creditsJs).toContain("function viewerIdentity(");

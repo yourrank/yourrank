@@ -56,6 +56,40 @@ One concept should have one canonical active implementation unless deliberate ve
 
 No duplicate implementation may exist merely because modifying the canonical implementation was harder.
 
+## MEM-001 — Membership Requires Deliberate or Qualifying Action
+
+Name: Canonical Viewer Membership creation boundary
+
+Scope: Viewer Account authentication, public creator-site reads, global `/me`, explicit Join, free code-drop Claims, and provider-signed Kick credit grants.
+
+Property: `site_viewers` may be created only by the canonical authenticated Join mutation or atomically with a successfully committed approved safe action. Anonymous reads, authenticated passive reads, generic OAuth, unavailable/failed/rejected/rate-limited actions, and replays never create Membership. Join is site-bound, Viewer-session-bound, CSRF/origin protected, rate-limited, idempotent, and never sets `last_active_at`.
+
+Why it matters: Membership drives viewer product truth, Wave I New members, creator operations, and future viewer expansion. Passive or replay-created rows corrupt all four.
+
+Source of truth: `apps/leaderboard/src/viewer-membership.js`, `apps/leaderboard/src/site-data.js`, `apps/leaderboard/src/handlers/viewer-auth.js`, `apps/leaderboard/src/handlers/events.js`, and `packages/shared/src/kick-credits.ts`.
+
+How coverage is derived: search all production `INSERT INTO site_viewers` / upsert callers, then exercise passive reads, generic and explicit OAuth, target substitution, Join replay, two-community isolation, and safe-action success/failure paths.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-membership.test.js`, `site-data.test.js`, `kick-oauth-state.test.js`, `events-raffles-drops.test.js`, and `credits-lifecycle.test.js`.
+
+Intentional exclusions: restricted legacy Games/wagering systems are not redesigned or adopted as Membership-creation examples. Reward redemption requires an existing Membership because credits cannot exist without one.
+
+## MEM-002 — Presence and Billable Activity Stay Separate
+
+Name: Viewer presence/activity separation
+
+Scope: `site_viewers.last_seen_at`, `site_viewers.last_active_at`, active-viewer billing usage, and Wave I Membership counts.
+
+Property: A passive read may throttle-update `last_seen_at` only for an existing Membership. Explicit Join sets neither presence nor activity. Only a newly committed qualifying safe action advances `last_active_at`; failed, rejected, rate-limited, anonymous, passive, and idempotent replay paths do not.
+
+Why it matters: presence is not billable engagement, and Membership creation is not qualifying activity.
+
+Source of truth: `apps/leaderboard/src/site-data.js`, `packages/shared/src/plan-usage.ts`, `apps/leaderboard/src/handlers/events.js`, and `packages/shared/src/kick-credits.ts`.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/site-data.test.js`, `events-raffles-drops.test.js`, `credits-lifecycle.test.js`, and the existing billing/plan-usage suites.
+
+Intentional exclusions: historical `last_active_at` provenance is not rewritten because the source caller cannot be reconstructed safely.
+
 ## VER-001 — Claims Cannot Exceed Evidence
 
 Completion claims may not be broader than the verified scope.

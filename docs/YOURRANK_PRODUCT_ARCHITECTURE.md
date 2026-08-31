@@ -289,15 +289,15 @@ The selected-site context remains visible in the topbar/context selector.
 
 ## 7.5 Viewer account
 
-**CURRENT:** viewer accounts are distinct from creator accounts, leaderboard player records, and Telegram subscriber relationships.
+**CURRENT:** viewer accounts are distinct from creator accounts, leaderboard player records, and Telegram subscriber relationships. `viewers` is the global identity anchor exposed through **My communities**; supported provider connections count as linked only with persisted authentication proof.
 
-**TARGET:** a viewer account becomes the stable global viewer identity anchor.
-
-Do not pretend this unification already exists.
+**TARGET:** keep the viewer account as the stable global viewer identity anchor and add capabilities without collapsing adjacent identities.
 
 ## 7.6 Member
 
-**TARGET:** a **member** is the creator/site-specific relationship between a viewer identity and one selected site/community context.
+**CURRENT:** `site_viewers` is the creator/site-specific relationship between a Viewer Account and one site/community context, unique per site and viewer. It is created only by an explicit, authenticated, site-bound Join or atomically with a successfully committed approved safe action such as a free code-drop Claim or provider-signed credit grant. Anonymous browsing, authenticated passive browsing, global `/me` reads, and generic Viewer OAuth do not create it.
+
+**TARGET:** preserve this boundary as capabilities expand. A **member** remains the creator/site-specific relationship between a viewer identity and one selected site/community context.
 
 Conceptually:
 
@@ -310,7 +310,7 @@ Viewer Account
 
 A member can accumulate creator-specific:
 
-- join/history context,
+- membership lifecycle context once trustworthy provenance exists,
 - participation,
 - recognition,
 - claims,
@@ -725,7 +725,7 @@ Use the existing Audience/Members foundation first.
 A member detail surface can progressively show:
 
 - display identity,
-- member-since context,
+- membership timing only when trustworthy provenance exists,
 - linked identity state,
 - relevant participation history,
 - recognition,
@@ -1017,9 +1017,9 @@ When nothing is live, this surface should not occupy permanent navigation.
 
 ## CURRENT
 
-The current real public renderer supports a creator destination with sections including Home, Leaderboard, Rewards, Games, and site-scoped My Credits, with a separate global `/me` account/sites surface.
+The current real public renderer supports a creator destination with sections including Home, Leaderboard, Rewards, Games, and creator-scoped **My Community**. Global `/me` is the Viewer Account's **My communities** index.
 
-This current implementation is already commercially polished and should be preserved.
+My Community owns membership-specific Rewards/credits and existing Claims. My communities summarizes each membership and links to its creator-owned surface; it does not rebuild a second reward shop, Claim list, or creator destination.
 
 ## TARGET
 
@@ -1035,9 +1035,9 @@ Only enabled/useful sections appear.
 
 ### Critical migration rule
 
-Do **not** rename **My Credits** to **My Community** before the membership/identity product actually exists.
+Use **My Community** only for a real creator-scoped `site_viewers` membership owned by one authenticated Viewer Account. Use **My communities** only for the authenticated cross-community index derived from those memberships.
 
-Likewise, do not transform global `/me` into **My Communities** until the cross-community viewer model is real.
+The current foundation satisfies that rule through one explicit Join mutation plus the narrow approved safe-action writers. A signed-in Viewer without a Membership sees a truthful Join state; a query failure remains a separate unavailable state. New labels for participation, Recognition, or expanded Claims must still wait for real capabilities.
 
 Public navigation changes follow capability, not aspiration.
 
@@ -1072,18 +1072,20 @@ Free loyalty credits/rewards, clear status, and no duplicate auth prompts.
 
 ## 23.5 My Community
 
-Future creator-specific viewer relationship surface:
+Current creator-specific membership surface:
 
-- Overview
-- Profile
-- Activity
-- Recognition
-- Claims
-- Credits/Rewards where enabled
+- Viewer Account and community context,
+- a deliberate Join state for an authenticated non-member,
+- Credits and Rewards where enabled,
+- existing reward Claims and their current status.
+
+Historical `site_viewers.created_at` is not presented as “Member since” because older rows may have been created by passive behavior and therefore do not prove an explicit join date.
+
+Participation history, Recognition, richer profile controls, and expanded Claims history remain future scope.
 
 ## 23.6 Global My Communities
 
-Future global viewer account surface showing creator communities and important pending status without duplicating each creator site.
+Current global Viewer Account index showing only real persisted memberships, free-credit balance, and a controlled pending-Claims count. Each row opens the canonical creator-scoped My Community surface. An account with none says that no communities have been joined; passive visits do not populate it. It never duplicates the creator's reward catalog, full Claim history, live activity, plan data, or internal moderation context.
 
 ## 23.7 Games
 
@@ -1522,13 +1524,13 @@ No fake automatic identity merge.
 
 ## Wave J — Viewer Membership Expansion
 
-Only after identity/membership is real:
+The Viewer Account, My communities index, and creator-scoped My Community foundation already exist. Wave J may expand them only when persistence and product evidence support:
 
-- My Community,
-- global My Communities,
 - viewer participation history,
 - recognition history,
-- claims overview.
+- expanded Claims overview/history.
+
+Wave J must extend the canonical surfaces rather than create parallel viewer or membership products.
 
 ## Wave K — Automation
 

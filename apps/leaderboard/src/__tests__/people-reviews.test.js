@@ -229,9 +229,9 @@ describe("People Reviews queue adapter", () => {
     expect(calls.query[0].params).toEqual([ENTRY_ID]);
     expect(body.review.context.membership).toEqual(expect.objectContaining({
       id: "membership-1",
-      memberSince: "2026-07-01T10:00:00.000Z",
       linkedIdentities: [{ provider: "Kick", displayName: "alice" }],
     }));
+    expect(body.review.context.membership).not.toHaveProperty("memberSince");
     expect(body.review.history).toEqual(expect.arrayContaining([
       expect.objectContaining({ action: "review_created" }),
       expect.objectContaining({ action: "decision_made", actor: { id: "creator-1", name: "Creator" } }),

@@ -253,7 +253,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(html).not.toContain("Prize pool");
   });
 
-  it("keeps empty shop and credits pages focused on their honest state", async () => {
+  it("keeps empty Rewards and My Community pages focused on their honest state", async () => {
     const empty = {
       ...record.data,
       players: [],
@@ -270,7 +270,11 @@ describe("new-shell auxiliary renderers", () => {
       r: { ...record, data: empty },
       section: "me",
       viewer: { name: "Viewer" },
-      viewerData: { ledger: [], redemptions: [] },
+      viewerData: {
+        viewerOnSite: { balance: 0, total_earned: 0, total_spent: 0, created_at: "2026-01-02T00:00:00.000Z" },
+        ledger: [],
+        redemptions: [],
+      },
       opts,
     });
     // An empty page says so plainly, in the viewer's terms, and invents no

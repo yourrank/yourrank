@@ -251,8 +251,13 @@ export async function processKickRewardRedemption(
     }
 
     // Check whether this viewer already existed on this site.
-    const existingSiteViewer = await tx.one<{ id: string }>(
-      "SELECT id FROM site_viewers WHERE site_id = $1 AND viewer_id = $2 LIMIT 1",
+    const existingSiteViewer = await tx.one<{
+      id: string;
+      balance: number;
+      blocked: boolean;
+      fraud_score: number;
+    }>(
+      "SELECT id, balance, blocked, fraud_score FROM site_viewers WHERE site_id = $1 AND viewer_id = $2 LIMIT 1 FOR UPDATE",
       [site.id, viewerId]
     );
 
@@ -362,23 +367,28 @@ export async function processKickRewardRedemption(
       return { skipped: true, reason: `Reward cost mismatch for ${rewardId}: expected ${expectedCost}, got ${rewardCost}` };
     }
 
-    // Never block a viewer or membership at the creator's active-viewer allowance.
-    const creditAmount = Number(mapping.credits || 0);
-    const svRows = (await tx.unsafe(
-      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
-       VALUES ($1, $2, 0, 0, 0)
-       ON CONFLICT (site_id, viewer_id)
-       DO UPDATE SET viewer_id=EXCLUDED.viewer_id
-       RETURNING id, balance, blocked, fraud_score`,
-      [site.id, viewerId]
-    )) as { id: string; balance: number; blocked: boolean; fraud_score: number }[];
-    const siteViewer = svRows[0];
-    const siteViewerId = siteViewer.id;
+    // Reject abuse before creating a Membership. A rate-limited provider event
+    // is not a successful qualifying community action and must not inflate New members.
+    if (env && (env.SESSIONS || env.RATE_LIMITER_DO)) {
+      const limit = await rateLimit(env, `kick-earn:${site.id}:${redeemerKickUserId}`, 15, 60);
+      if (!limit.ok) {
+        if (existingSiteViewer) {
+          await tx.unsafe(
+            `UPDATE site_viewers
+                SET fraud_score = fraud_score + 10,
+                    updated_at = now()
+              WHERE id = $1`,
+            [existingSiteViewer.id]
+          );
+        }
+        return { rateLimited: true };
+      }
+    }
 
     // Anti-fraud scoring.
-    let fraudScore = Number(siteViewer.fraud_score || 0);
+    let fraudScore = Number(existingSiteViewer?.fraud_score || 0);
     let fraudReasons: string[] = [];
-    let isBlocked = siteViewer.blocked || false;
+    let isBlocked = existingSiteViewer?.blocked || false;
 
     if (newUsername) {
       // Detect username reuse by a different Kick account (alt swap).
@@ -421,7 +431,47 @@ export async function processKickRewardRedemption(
       fraudReasons.push("auto-blocked by fraud score");
     }
 
-    if (isBlocked || fraudReasons.length > 0) {
+    if (isBlocked) {
+      // Record routing evidence without manufacturing Membership for a rejected
+      // provider action.
+      await tx.unsafe(
+        "UPDATE kick_reward_events SET site_id = $1 WHERE event_id = $2",
+        [site.id, messageId]
+      );
+      if (existingSiteViewer && fraudReasons.length > 0) {
+        await tx.unsafe(
+          `UPDATE site_viewers
+              SET fraud_score = GREATEST(fraud_score, $1),
+                  blocked = true,
+                  block_reason = CASE
+                    WHEN block_reason IS NULL THEN $2
+                    WHEN block_reason LIKE $3 THEN block_reason
+                    ELSE block_reason || '; ' || $2
+                  END,
+                  updated_at = now()
+            WHERE id = $4`,
+          [fraudScore, fraudReasons.join("; "), `%${fraudReasons.join("; ")}%`, existingSiteViewer.id]
+        );
+      }
+      return { blocked: true };
+    }
+
+    // Never block a viewer or membership at the creator's active-viewer allowance.
+    // Create Membership only once the provider-signed action is otherwise
+    // accepted, in the same transaction as the credit grant and ledger row.
+    const creditAmount = Number(mapping.credits || 0);
+    const svRows = (await tx.unsafe(
+      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+       VALUES ($1, $2, 0, 0, 0)
+       ON CONFLICT (site_id, viewer_id)
+       DO UPDATE SET viewer_id=EXCLUDED.viewer_id
+       RETURNING id, balance, blocked, fraud_score`,
+      [site.id, viewerId]
+    )) as { id: string; balance: number; blocked: boolean; fraud_score: number }[];
+    const siteViewer = svRows[0];
+    const siteViewerId = siteViewer.id;
+
+    if (fraudReasons.length > 0) {
       await tx.unsafe(
         `UPDATE site_viewers
             SET fraud_score = GREATEST(fraud_score, $1),
@@ -443,30 +493,10 @@ export async function processKickRewardRedemption(
       );
     }
 
-    // Update event with the matched site.
     await tx.unsafe(
       "UPDATE kick_reward_events SET site_id = $1 WHERE event_id = $2",
       [site.id, messageId]
     );
-
-    if (isBlocked) {
-      return { blocked: true };
-    }
-
-    // Rate-limit earning per viewer on this site.
-    if (env && (env.SESSIONS || env.RATE_LIMITER_DO)) {
-      const limit = await rateLimit(env, `kick-earn:${site.id}:${redeemerKickUserId}`, 15, 60);
-      if (!limit.ok) {
-        await tx.unsafe(
-          `UPDATE site_viewers
-              SET fraud_score = fraud_score + 10,
-                  updated_at = now()
-            WHERE id = $1`,
-          [siteViewerId]
-        );
-        return { rateLimited: true };
-      }
-    }
 
     // Grant credits and record ledger.
     const creditedRows = (await tx.unsafe(

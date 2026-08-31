@@ -96,7 +96,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       if (cached) {
         setRequestMetrics({ cache: "hit" });
         const csrfToken = generateCsrfToken();
-        return cachedPublicBoardResponse(cached, nonce, csrfToken, csrfCookie(csrfToken));
+        return cachedPublicBoardResponse(cached, nonce, csrfToken, csrfCookie(csrfToken, request));
       }
       setRequestMetrics({ cache: "miss" });
     }
@@ -126,7 +126,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
 
     const renderNonce = cacheableSite ? PUBLIC_HTML_NONCE_PLACEHOLDER : nonce;
     const csrfToken = cacheableSite ? PUBLIC_HTML_CSRF_PLACEHOLDER : generateCsrfToken();
-    respHeaders.append("set-cookie", csrfCookie(csrfToken));
+    respHeaders.append("set-cookie", csrfCookie(csrfToken, request));
 
     const homeUrl = url.origin;
     const paid = r.plan !== "free";
@@ -177,7 +177,19 @@ ${gamesIslandHead()}
       section,
       viewer,
       viewerData,
-      opts: { nonce: renderNonce, homeUrl, slug, isCustomDomain, logoUrl, watermark, csrfToken, boards: r.boards, botUsername: r.botUsername, isDemo },
+      opts: {
+        nonce: renderNonce,
+        homeUrl,
+        slug,
+        isCustomDomain,
+        logoUrl,
+        watermark,
+        csrfToken,
+        boards: r.boards,
+        botUsername: r.botUsername,
+        isDemo,
+        viewerAuthError: section === "me" ? url.searchParams.get("error") : null,
+      },
     });
     const responseHeaders = cacheableSite
       ? new Headers({
@@ -191,7 +203,7 @@ ${gamesIslandHead()}
       if (ctx?.waitUntil) ctx.waitUntil(putPublicBoardCache(request, response));
       else await putPublicBoardCache(request, response);
       const servedCsrfToken = generateCsrfToken();
-      return cachedPublicBoardResponse(response, nonce, servedCsrfToken, csrfCookie(servedCsrfToken));
+      return cachedPublicBoardResponse(response, nonce, servedCsrfToken, csrfCookie(servedCsrfToken, request));
     }
     return response;
   } catch (err) {

@@ -4,6 +4,7 @@ import {
   handleKickViewerAuthCallback,
   handleKickViewerAuthHandoff,
   handleKickViewerAuthStart,
+  handleDiscordViewerAuthStart,
   handleDiscordViewerAuthCallback,
   KICK_VIEWER_STATE_PREFIX,
 } from "../handlers/viewer-auth.js";
@@ -87,6 +88,49 @@ describe("Kick OAuth state integration seams", () => {
     expect(authorizeArgs[4]).toBe("https://yourrank.site/auth/kick/callback");
   });
 
+  test("explicit Kick and Discord Join starts store a site-bound intent in single-use OAuth state", async () => {
+    const stored = [];
+    const common = {
+      rateLimit: noRateLimit,
+      clientIp: () => "127.0.0.1",
+      storeOAuthState: async (...args) => stored.push(args),
+      getPublicSite: async (_env, slug) => ({ id: "site-beta", slug, data: { siteSections: { me: true } } }),
+      resolveCustomDomain: async () => "beta",
+    };
+    await handleKickViewerAuthStart(request("/api/viewer/auth/kick?intent=join&site=beta&returnTo=/me"), {}, {
+      ...common,
+      generatePKCE: pkce,
+      buildKickViewerAuthorizeURL: () => "https://kick.test/authorize",
+    });
+    await handleDiscordViewerAuthStart(request("/api/viewer/auth/discord?intent=join&site=beta&returnTo=/me"), {}, {
+      ...common,
+      buildDiscordAuthorizeURL: () => "https://discord.test/authorize",
+    });
+
+    expect(stored).toHaveLength(2);
+    for (const [, , stateData] of stored) {
+      expect(stateData).toMatchObject({
+        flow: "viewer",
+        intent: "join",
+        joinSiteId: "site-beta",
+        joinSiteSlug: "beta",
+      });
+    }
+  });
+
+  test("substituted custom-domain Join targets are rejected before OAuth state is stored", async () => {
+    let stored = false;
+    const response = await handleKickViewerAuthStart(request("/api/viewer/auth/kick?intent=join&site=other&returnTo=/me"), {}, {
+      rateLimit: noRateLimit,
+      clientIp: () => "127.0.0.1",
+      resolveCustomDomain: async () => "beta",
+      getPublicSite: async () => { throw new Error("must not resolve a substituted target"); },
+      storeOAuthState: async () => { stored = true; },
+    });
+    expect(response.headers.get("location")).toContain("error=join_unavailable");
+    expect(stored).toBe(false);
+  });
+
   test("the canonical callback dispatches a viewer state after consuming it once", async () => {
     let consumed = 0;
     let dispatched;
@@ -164,7 +208,7 @@ describe("Kick OAuth state integration seams", () => {
     expect(response.headers.get("set-cookie")).toContain("yr_viewer=session-token");
   });
 
-  test("viewer callback registers membership from a platform site path", async () => {
+  test("generic Kick sign-in from a creator path authenticates only the Viewer Account", async () => {
     const queries = [];
     const memberships = [];
     const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
@@ -186,12 +230,8 @@ describe("Kick OAuth state integration seams", () => {
     });
 
     expect(response.status).toBe(302);
-    expect(queries.some((sql) => sql.includes("SELECT id FROM sites WHERE slug=$1"))).toBe(true);
-    expect(memberships).toHaveLength(1);
-    expect(memberships[0].params).toEqual(["site-1", "viewer-1"]);
-    expect(memberships[0].sql).toContain("ON CONFLICT (site_id, viewer_id)");
-    expect(memberships[0].sql).toContain("last_seen_at=now()");
-    expect(memberships[0].sql).not.toContain("last_active_at");
+    expect(queries.some((sql) => sql.includes("FROM sites"))).toBe(false);
+    expect(memberships).toHaveLength(0);
   });
 
   test("platform paths do not create a viewer site membership", async () => {
@@ -214,7 +254,7 @@ describe("Kick OAuth state integration seams", () => {
     expect(memberships).toHaveLength(0);
   });
 
-  test("custom-domain viewer callbacks register the resolved site", async () => {
+  test("generic custom-domain Kick sign-in does not join the resolved site", async () => {
     const memberships = [];
     await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
       stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://streamer.example", returnTo: "/me" },
@@ -231,10 +271,10 @@ describe("Kick OAuth state integration seams", () => {
       storeOAuthState: async () => {},
     });
 
-    expect(memberships).toEqual([["site-custom", "viewer-1"]]);
+    expect(memberships).toEqual([]);
   });
 
-  test("Discord viewer callbacks register membership without making the session depend on it", async () => {
+  test("generic Discord sign-in authenticates only the Viewer Account", async () => {
     const memberships = [];
     const response = await handleDiscordViewerAuthCallback(
       request("/api/viewer/auth/discord/callback?code=code&state=state"),
@@ -261,7 +301,98 @@ describe("Kick OAuth state integration seams", () => {
     );
 
     expect(response.status).toBe(302);
-    expect(memberships).toEqual([["site-discord", "viewer-discord"]]);
+    expect(memberships).toEqual([]);
+  });
+
+  test("Discord consumes Join state even when the provider returns an error", async () => {
+    let consumes = 0;
+    const response = await handleDiscordViewerAuthCallback(
+      request("/api/viewer/auth/discord/callback?error=access_denied&state=join-state"),
+      {},
+      {
+        consumeOAuthState: async () => {
+          consumes += 1;
+          return consumes === 1
+            ? { origin: "https://yourrank.site", intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta" }
+            : null;
+        },
+      },
+    );
+
+    expect(response.headers.get("location")).toBe("/me?error=access_denied");
+    expect(consumes).toBe(1);
+  });
+
+  test("valid explicit Kick and Discord Join state creates only the bound membership", async () => {
+    const joined = [];
+    const one = async (sql, params) => {
+      if (sql.includes("SELECT s.id, s.slug")) return params[0] === "site-beta" && params[1] === "beta" ? { id: "site-beta", slug: "beta" } : null;
+      if (sql.includes("WITH inserted AS")) {
+        joined.push({ sql, params });
+        return { id: "membership-beta", balance: 0, created: true };
+      }
+      return null;
+    };
+    const exec = async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-joined" }] : [];
+    const kick = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      stateData: {
+        flow: "viewer", codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
+        intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta",
+      },
+      exchangeKickViewerCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
+      encryptKickToken: async (value) => `enc:${value}`,
+      one, exec,
+      createViewerSession: async () => "session-token",
+      viewerCookieSet: (token) => `yr_viewer=${token}`,
+    });
+    const discord = await handleDiscordViewerAuthCallback(request("/api/viewer/auth/discord/callback?code=code&state=state"), {}, {
+      consumeOAuthState: async () => ({
+        flow: "viewer", origin: "https://yourrank.site", returnTo: "/beta/me",
+        redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback",
+        intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta",
+      }),
+      exchangeDiscordCode: async () => ({ access_token: "access" }),
+      fetchDiscordCurrentUser: async () => ({ id: "discord-1", username: "viewer", global_name: "Viewer", avatar: null }),
+      encryptDiscordToken: async (value) => `enc:${value}`,
+      discordAvatarUrl: () => null,
+      one, exec,
+      createViewerSession: async () => "session-token",
+      viewerCookieSet: (token) => `yr_viewer=${token}`,
+    });
+
+    expect(kick.status).toBe(302);
+    expect(discord.status).toBe(302);
+    expect(joined).toHaveLength(2);
+    expect(joined.map(({ params }) => params)).toEqual([
+      ["site-beta", "viewer-joined"],
+      ["site-beta", "viewer-joined"],
+    ]);
+    expect(joined.every(({ sql }) => !sql.includes("last_active_at") && !sql.includes("last_seen_at"))).toBe(true);
+  });
+
+  test("expired or substituted explicit Join state cannot create Membership", async () => {
+    const joined = [];
+    const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      stateData: {
+        flow: "viewer", codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
+        intent: "join", joinSiteId: "site-alpha", joinSiteSlug: "beta",
+      },
+      exchangeKickViewerCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
+      encryptKickToken: async (value) => `enc:${value}`,
+      one: async (sql) => {
+        if (sql.includes("SELECT s.id, s.slug")) return null;
+        return null;
+      },
+      exec: async (sql) => {
+        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-joined" }];
+        if (sql.includes("site_viewers")) joined.push(sql);
+        return [];
+      },
+    });
+    expect(response.headers.get("location")).toContain("error=join_failed");
+    expect(joined).toHaveLength(0);
   });
 
   test("viewer callback creates a short-lived custom-domain handoff", async () => {

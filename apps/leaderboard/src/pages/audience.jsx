@@ -41,7 +41,6 @@ const MEMBER_HISTORY_DRAWER = `
           <div><h3 id="cr-member-identity-heading">Member</h3><p id="cr-member-history-identity-summary">Site membership</p></div>
         </div>
         <dl class="cr-member-context-facts">
-          <div><dt>Member since</dt><dd id="cr-member-history-joined">—</dd></div>
           <div><dt>Last active</dt><dd id="cr-member-history-active">—</dd></div>
         </dl>
       </section>

@@ -21,7 +21,8 @@ import {
 import { bad, json, rateLimit, clientIp } from "../auth.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
 import { resolveCustomDomain } from "../middleware/custom-domain.js";
-import { NON_SITE_PATHS, PLATFORM_HOST } from "../constants.js";
+import { PLATFORM_HOST } from "../constants.js";
+import { applyOAuthJoinIntent, resolveJoinableCommunity } from "../viewer-membership.js";
 
 const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
@@ -139,41 +140,12 @@ async function resolveViewerOrigin(rawOrigin, env, resolveCustomDomainImpl = res
   return (await resolveViewerOriginInfo(rawOrigin, env, resolveCustomDomainImpl)).origin;
 }
 
-function siteSlugFromReturnTo(rawReturnTo, targetOrigin) {
-  try {
-    const path = new URL(String(rawReturnTo || ""), targetOrigin).pathname;
-    const slug = path.split("/").filter(Boolean)[0]?.toLowerCase();
-    return slug && !NON_SITE_PATHS.has(slug) ? slug : null;
-  } catch {
-    return null;
-  }
-}
-
-async function registerViewerMembership({
-  viewerId,
-  stateData,
-  targetOriginInfo,
-  oneImpl,
-  execImpl,
-}) {
-  try {
-    const slug = targetOriginInfo.siteSlug ||
-      (!targetOriginInfo.isCustomDomain
-        ? siteSlugFromReturnTo(stateData?.returnTo, targetOriginInfo.origin)
-        : null);
-    if (!slug) return;
-    const site = await oneImpl("SELECT id FROM sites WHERE slug=$1", [slug]);
-    if (!site?.id) return;
-    await execImpl(
-      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, last_seen_at)
-       VALUES ($1, $2, 0, 0, now())
-       ON CONFLICT (site_id, viewer_id)
-       DO UPDATE SET last_seen_at=now(), updated_at=now()`,
-      [site.id, viewerId],
-    );
-  } catch (err) {
-    console.error("[viewer-auth] membership registration failed:", err?.message || err);
-  }
+async function explicitJoinState(request, env, url, deps) {
+  if (url.searchParams.get("intent") !== "join") return {};
+  const community = await resolveJoinableCommunity(request, env, url.searchParams.get("site"), deps);
+  return community
+    ? { intent: "join", joinSiteId: community.id, joinSiteSlug: community.slug }
+    : null;
 }
 
 function viewerReturnLocation(stateData, targetOrigin) {
@@ -208,10 +180,12 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
   const origin = url.origin;
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = env.KICK_REDIRECT_URI || "https://yourrank.site/auth/kick/callback";
+  const joinState = await explicitJoinState(request, env, url, deps);
+  if (!joinState) return errorRedirect("join_unavailable", origin);
 
   const { codeVerifier, codeChallenge } = await generatePKCEImpl();
   const state = `${KICK_VIEWER_STATE_PREFIX}${randomState()}`;
-  await storeOAuthStateImpl("kick", state, { provider: "kick", flow: "viewer", codeVerifier, returnTo, origin, redirectUri });
+  await storeOAuthStateImpl("kick", state, { provider: "kick", flow: "viewer", codeVerifier, returnTo, origin, redirectUri, ...joinState });
 
   const authorizeURL = buildKickViewerAuthorizeURLImpl(env, state, codeChallenge, undefined, redirectUri);
   return redirect(authorizeURL);
@@ -330,13 +304,8 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
       }
     }
 
-    await registerViewerMembership({
-      viewerId,
-      stateData,
-      targetOriginInfo,
-      oneImpl,
-      execImpl,
-    });
+    const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
+    if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
 
     if (isCookieCoveredOrigin(targetOrigin) || url.origin === targetOrigin) {
       const sessionToken = await createViewerSessionImpl(env, viewerId);
@@ -389,19 +358,25 @@ export async function handleKickViewerAuthHandoff(request, env, deps = {}) {
 
 // --- Discord ---
 
-export async function handleDiscordViewerAuthStart(request, env) {
-  if (!(await rateLimit(env, `viewer-oauth-start:discord:${clientIp(request)}`, 20, 60)).ok) {
+export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
+  const rateLimitImpl = deps.rateLimit || rateLimit;
+  const clientIpImpl = deps.clientIp || clientIp;
+  const storeOAuthStateImpl = deps.storeOAuthState || storeOAuthState;
+  const buildDiscordAuthorizeURLImpl = deps.buildDiscordAuthorizeURL || buildDiscordAuthorizeURL;
+  if (!(await rateLimitImpl(env, `viewer-oauth-start:discord:${clientIpImpl(request)}`, 20, 60)).ok) {
     return redirect("/me?error=rate_limited");
   }
   const url = new URL(request.url);
   const origin = url.origin;
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = `${origin}/api/viewer/auth/discord/callback`;
+  const joinState = await explicitJoinState(request, env, url, deps);
+  if (!joinState) return errorRedirect("join_unavailable", origin);
 
   const state = randomState();
-  await storeOAuthState("discord", state, { provider: "discord", returnTo, origin, redirectUri });
+  await storeOAuthStateImpl("discord", state, { provider: "discord", flow: "viewer", returnTo, origin, redirectUri, ...joinState });
 
-  const authorizeURL = buildDiscordAuthorizeURL(env, state, undefined, redirectUri);
+  const authorizeURL = buildDiscordAuthorizeURLImpl(env, state, undefined, redirectUri);
   return redirect(authorizeURL);
 }
 
@@ -423,20 +398,15 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
 
-  if (error) {
-    return redirect(`/me?error=${encodeURIComponent(error)}`);
-  }
-  if (!code || !state) {
-    return redirect(`/me?error=${encodeURIComponent("missing_oauth_params")}`);
-  }
+  if (!state) return errorRedirect("missing_oauth_params");
 
   const stateData = await consumeOAuthStateImpl("discord", state);
-  if (!stateData) {
-    return redirect(`/me?error=${encodeURIComponent("oauth_state_expired")}`);
-  }
+  if (!stateData) return errorRedirect("oauth_state_expired");
 
   const targetOriginInfo = await resolveViewerOriginInfo(stateData.origin, env, resolveCustomDomainImpl);
   const targetOrigin = targetOriginInfo.origin;
+  if (error) return errorRedirect(error === "access_denied" ? "access_denied" : "discord_auth_failed", targetOrigin);
+  if (!code) return errorRedirect("missing_oauth_params", targetOrigin);
 
   try {
     const tokens = await exchangeDiscordCodeImpl(env, code, stateData.redirectUri);
@@ -511,19 +481,14 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
       }
     }
 
-    await registerViewerMembership({
-      viewerId,
-      stateData,
-      targetOriginInfo,
-      oneImpl,
-      execImpl,
-    });
+    const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
+    if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
 
     const sessionToken = await createViewerSessionImpl(env, viewerId);
     return redirect(safeReturnTo(stateData.returnTo, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
   } catch (err) {
     console.error("[viewer-auth] discord callback failed:", err?.message || err);
-    return redirect("/me?error=discord_auth_failed");
+    return errorRedirect("discord_auth_failed", targetOrigin);
   }
 }
 

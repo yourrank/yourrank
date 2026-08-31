@@ -312,9 +312,12 @@ describe("YourRank E2E smoke", () => {
     it("GET /me returns the viewer account page", async () => {
       const res = await client.get("/me");
       expect(res.status).toBe(200);
-      // The global surface is "your sites & account"; "My credits" is the
-      // creator-scoped page at /<slug>/me.
-      expect(res.body).toContain("Your sites");
+      // The global surface owns the Viewer Account and membership index;
+      // each creator-scoped /<slug>/me page owns My Community detail.
+      expect(res.body).toContain("My communities");
+      expect(res.body).toContain("One Viewer Account");
+      expect(res.body).toContain("Community memberships");
+      expect(res.body).not.toContain(">My credits<");
     });
 
     it.skipIf(!PUBLIC_ACCESS_AVAILABLE)("GET /<slug>/credits redirects to the canonical shop page", async () => {

@@ -8,10 +8,19 @@ export function generateCsrfToken() {
   return [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function csrfCookie(token) {
+export function csrfCookie(token, request = null) {
   const raw = (typeof process !== "undefined" && process.env && process.env.SESSION_COOKIE_DOMAIN) || "";
   const domain = (raw && raw !== "undefined") ? raw : ".yourrank.site";
-  return `__csrf=${token}; Path=/; Domain=${domain}; Secure; SameSite=Lax; Max-Age=86400`;
+  let domainAttribute = ` Domain=${domain};`;
+  if (request) {
+    try {
+      const hostname = new URL(request.url).hostname.toLowerCase();
+      if (hostname !== "yourrank.site" && !hostname.endsWith(".yourrank.site")) domainAttribute = "";
+    } catch {
+      domainAttribute = "";
+    }
+  }
+  return `__csrf=${token}; Path=/;${domainAttribute} Secure; SameSite=Lax; Max-Age=86400`;
 }
 
 export function readCsrfToken(req) {

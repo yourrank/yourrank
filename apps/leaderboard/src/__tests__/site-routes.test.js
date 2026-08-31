@@ -1,6 +1,6 @@
 // Tests for the public multi-section site shell.
 // Covers route parsing, section visibility enforcement, and the logged-out vs
-// logged-in rendering split for Home, Leaderboard, Shop, Games and My Credits.
+// logged-in rendering split for Home, Leaderboard, Shop, Games and My Community.
 //
 // Run: bun test src/__tests__/site-routes.test.js
 
@@ -129,7 +129,7 @@ const routeDeps = {
 
 // ── Import after mocks ─────────────────────────────────────────────────
 import { parseSitePath, renderSiteRoute as renderSiteRouteImpl } from "../site-routes.js";
-import { handleRequest, isCustomViewerAuthPath } from "../index.js";
+import { handleRequest, isCustomViewerApiPath, isCustomViewerAuthPath } from "../index.js";
 const renderSiteRoute = (args) => renderSiteRouteImpl({ ...args, deps: routeDeps });
 
 function req(url, opts = {}) {
@@ -177,12 +177,16 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/unknown", true, "foo")).toBeNull();
   });
 
-  it("passes only viewer Kick auth paths through custom-domain routing", () => {
+  it("passes only supported viewer auth and Join paths through custom-domain routing", () => {
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/callback")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/handoff")).toBe(true);
+    expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/discord")).toBe(true);
+    expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/discord/callback")).toBe(true);
     expect(isCustomViewerAuthPath("POST", "/api/viewer/auth/kick/handoff")).toBe(false);
     expect(isCustomViewerAuthPath("GET", "/api/dashboard/status")).toBe(false);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
   });
 
   it("routes the custom-domain viewer handoff through the normal handler", async () => {
@@ -202,6 +206,29 @@ describe("parseSitePath", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("viewer handoff handler");
+  });
+
+  it("routes custom-domain explicit Join through the normal API handler", async () => {
+    const apiApp = {
+      fetch: async (request) => {
+        expect(request.method).toBe("POST");
+        expect(new URL(request.url).pathname).toBe("/api/viewer/membership/join");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    };
+    const response = await handleRequest(
+      req("https://streamer.example/api/viewer/membership/join", { method: "POST" }),
+      {},
+      ctx,
+      {},
+      { resolveCustomDomain: async () => "streamer", apiApp },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
   });
 });
 
@@ -322,12 +349,21 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("returnTo=https%3A%2F%2Fstreamer.example%2Fstreamer%2Fgames");
   });
 
-  it("Credits is a sign-in prompt when logged out", async () => {
+  it("My Community explains membership when logged out", async () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Credits");
+    expect(html).toContain("My Community");
+    expect(html).toContain("Community membership");
     expect(html).toContain("Sign in with Kick");
+  });
+
+  it("shows controlled OAuth errors on creator-scoped My Community", async () => {
+    const res = await renderSiteRoute({ request: req("https://streamer.example/me?error=not-a-real-provider-error"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("We couldn&#39;t complete sign-in. Try again.");
+    expect(html).not.toContain("not-a-real-provider-error");
   });
 
   it("logged-in viewers see their balance and claim buttons on shop", async () => {
@@ -341,7 +377,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see history and claims on Credits", async () => {
+  it("logged-in viewers see credits and Claims in My Community", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/me", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
