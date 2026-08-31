@@ -5,6 +5,7 @@ import {
   handleCreatorClaimTransition,
   handleViewerClaimDetail,
   handleViewerClaims,
+  getViewerClaimsForMembership,
 } from "../handlers/claims.js";
 import { transitionRedemptionClaimStatus } from "../handlers/credits.js";
 
@@ -23,6 +24,8 @@ function claimRow(overrides = {}) {
     cost: 250,
     created_at: "2026-08-29T10:00:00.000Z",
     updated_at: "2026-08-29T10:00:00.000Z",
+    terminal_action: null,
+    terminal_at: null,
     site_viewer_id: "membership-1",
     display_name: "Alice",
     shop_item_id: "item-1",
@@ -164,8 +167,8 @@ describe("canonical Claims adapter", () => {
     const { deps } = dependencies({
       query: async () => [
         claimRow({ source_status: "pending" }),
-        claimRow({ source_id: "22222222-2222-4222-8222-222222222222", source_status: "fulfilled" }),
-        claimRow({ source_id: "33333333-3333-4333-8333-333333333333", source_status: "cancelled" }),
+        claimRow({ source_id: "22222222-2222-4222-8222-222222222222", source_status: "fulfilled", terminal_action: "claim_completed", terminal_at: "2026-08-29T11:00:00.000Z" }),
+        claimRow({ source_id: "33333333-3333-4333-8333-333333333333", source_status: "cancelled", terminal_action: "claim_cancelled", terminal_at: "2026-08-29T12:00:00.000Z" }),
       ],
       one: async () => ({ action_required: 1, completed: 1, cancelled: 1 }),
     });
@@ -173,6 +176,52 @@ describe("canonical Claims adapter", () => {
     const body = await response.json();
     expect(body.claims.map((claim) => claim.status)).toEqual(["submitted", "completed", "cancelled"]);
     expect(JSON.stringify(body.claims)).not.toMatch(/approved|needs_review|expired|waiting_for_viewer/i);
+    expect(body.claims[1].completedAt).toBe("2026-08-29T11:00:00.000Z");
+    expect(body.claims[2].cancelledAt).toBe("2026-08-29T12:00:00.000Z");
+  });
+
+  it("never fabricates terminal timestamps from a mutable redemption update", async () => {
+    const { deps } = dependencies({
+      query: async () => [
+        claimRow({ source_status: "fulfilled", updated_at: "2026-08-30T18:00:00.000Z" }),
+        claimRow({ source_id: "33333333-3333-4333-8333-333333333333", source_status: "cancelled", updated_at: "2026-08-30T19:00:00.000Z" }),
+      ],
+      one: async () => ({ action_required: 0, completed: 1, cancelled: 1 }),
+    });
+    const response = await handleCreatorClaims(request("/api/claims?siteId=site-1&status=all"), {}, deps);
+    const body = await response.json();
+
+    expect(body.claims[0].completedAt).toBeNull();
+    expect(body.claims[1].cancelledAt).toBeNull();
+  });
+
+  it("loads one bounded membership's Claims through the canonical viewer projection", async () => {
+    const rows = Array.from({ length: 51 }, (_, index) => claimRow({
+      source_id: `${String(index + 1).padStart(8, "0")}-1111-4111-8111-111111111111`,
+    }));
+    const calls = [];
+    const result = await getViewerClaimsForMembership(SITE.id, VIEWER.id, "membership-1", {
+      queryImpl: async (sql, params) => {
+        calls.push({ sql: String(sql), params });
+        return rows;
+      },
+    });
+
+    expect(result.limit).toBe(50);
+    expect(result.truncated).toBe(true);
+    expect(result.claims).toHaveLength(50);
+    expect(calls[0].params).toEqual([SITE.id, VIEWER.id, "membership-1", 51]);
+    expect(calls[0].sql).toContain("s.id=$1");
+    expect(calls[0].sql).toContain("sv.viewer_id=$2");
+    expect(calls[0].sql).toContain("sv.id=$3");
+    expect(calls[0].sql).toContain("ORDER BY r.created_at DESC, r.id DESC");
+    expect(calls[0].sql).toContain("LEFT JOIN LATERAL");
+    expect(result.claims[0]).toEqual(expect.objectContaining({
+      id: expect.stringMatching(/^redemption:/),
+      reward: { name: "VIP role", cost: 250 },
+      submittedAt: "2026-08-29T10:00:00.000Z",
+    }));
+    expect(JSON.stringify(result)).not.toMatch(/membership-1|site-1|item-1|source_id|shop_item_id|updatedAt|allowedActions/);
   });
 
   it("lists only the authenticated viewer's claims on eligible sites", async () => {
@@ -182,12 +231,40 @@ describe("canonical Claims adapter", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
-    expect(body.viewer).toEqual({ id: VIEWER.id });
+    expect(body).not.toHaveProperty("viewer");
     expect(body.claims[0].id).toBe(CLAIM_ID);
-    expect(calls.query[0].params).toEqual([VIEWER.id, "one", "all", 100]);
+    expect(calls.query[0].params).toEqual([VIEWER.id, "one", "all", 101]);
     expect(calls.query[0].sql).toContain("WHERE sv.viewer_id=$1");
     expect(calls.query[0].sql).toContain("s.published = true");
     expect(calls.query[0].sql).toContain("u.email_verified = true");
+    expect(body.limit).toBe(100);
+    expect(body.truncated).toBe(false);
+    expect(JSON.stringify(body.claims[0])).not.toMatch(/membership-1|site-1|item-1|updatedAt|allowedActions/);
+  });
+
+  it("redacts creator identity from viewer Claim history", async () => {
+    const { calls, deps } = dependencies({
+      one: async (sql, params) => {
+        calls.one.push({ sql: String(sql), params });
+        return claimRow({ source_status: "fulfilled", terminal_action: "claim_completed", terminal_at: "2026-08-29T11:00:00.000Z" });
+      },
+      query: async (sql, params) => {
+        calls.query.push({ sql: String(sql), params });
+        return [{ action: "claim_completed", created_at: "2026-08-29T11:00:00.000Z", actor_id: USER.id, actor_name: "Creator" }];
+      },
+    });
+    const response = await handleViewerClaimDetail(
+      request(`/api/viewer/claims/${encodeURIComponent(CLAIM_ID)}`),
+      {},
+      deps,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.claim.completedAt).toBe("2026-08-29T11:00:00.000Z");
+    expect(body.claim.history[1]).toEqual(expect.objectContaining({ action: "claim_completed", createdAt: "2026-08-29T11:00:00.000Z" }));
+    expect(body.claim.history[1]).not.toHaveProperty("actor");
+    expect(JSON.stringify(body.claim)).not.toMatch(/creator-1|membership-1|site-1|item-1|Creator/);
   });
 
   it("denies anonymous viewer access before any Claim lookup", async () => {

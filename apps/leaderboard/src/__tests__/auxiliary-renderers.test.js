@@ -273,7 +273,8 @@ describe("new-shell auxiliary renderers", () => {
       viewerData: {
         viewerOnSite: { balance: 0, total_earned: 0, total_spent: 0, created_at: "2026-01-02T00:00:00.000Z" },
         ledger: [],
-        redemptions: [],
+        claims: [],
+        participation: [],
       },
       opts,
     });

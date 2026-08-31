@@ -2,9 +2,9 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** Correction A candidate rebased onto `main` at `24d39a57ac04350ddb9aaf61f4e44fb381d17d2a` (Wave I merged)
+**Evidence baseline:** Wave J candidate branched from `main` at `3d5ea3b928e321441630d730ef8052447a1919e2` (Viewer/Membership convergence merged)
 
-**Last reconciled:** 2026-08-30
+**Last reconciled:** 2026-08-31
 
 **Scope:** current implementation reality only. Target product direction lives in [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md).
 
@@ -78,13 +78,24 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Serving Workers derive behavior from the manifest, with parity tests and legacy-route telemetry.
 - Redirect removal remains deferred until operational evidence supports it.
 
-### Public viewer — ONE IMPLEMENTATION, CURRENTLY POLISHED
+### Public viewer — ONE IMPLEMENTATION, MEMBERSHIP HISTORY EXPANDED
 
 - `packages/shared/src/site-render.ts` renders the creator public destination.
 - `site-shell.css` owns its responsive visual system.
-- Primary viewer navigation includes Home, Leaderboard, Rewards, and site-scoped My Credits, with a separate global `/me` account/sites surface. The legacy Games route may remain operational when its persisted flag is enabled, but it is absent from the primary viewer navigation and Site section editor.
+- Primary viewer navigation includes Home, Leaderboard, Rewards, and site-scoped My Community, with a separate global `/me` My communities index. The legacy Games route may remain operational when its persisted flag is enabled, but it is absent from the primary viewer navigation and Site section editor.
 - Current public labels and routes remain implementation truth until target viewer capabilities exist.
-- Recent viewer waves established shared chrome, truthful auth/empty states, responsive behavior, and creator branding without a parallel renderer.
+- My Community composes bounded Participation, Credits, and Claims reads only after exact Viewer Account plus selected-site Membership resolution. The global index remains compact and does not aggregate or duplicate history.
+- Recent viewer waves established shared chrome, truthful auth/empty states, responsive behavior, creator branding, and persistent membership history without a parallel renderer.
+
+### Viewer Membership history — WAVE J AVAILABLE; RECOGNITION DEFERRED
+
+- `packages/shared/src/site-render.ts` remains the one creator-scoped My Community renderer. No viewer-history endpoint, replacement renderer, universal event store, or history table was introduced.
+- Participation currently means only a successfully persisted free code-drop Claim in `code_drop_claims`. The read joins its `code_drops.site_id`, direct canonical `viewer_id`, exact `site_viewer_id`, and a non-system Viewer; it orders by immutable Claim creation time and returns at most 25 viewer-safe records. Failed/exhausted attempts, Join, visits, `last_seen_at`, passive credits, names, provider identifiers, Reviews, and all restricted legacy workflows are absent.
+- Claims remain owned by the Wave G adapter in `apps/leaderboard/src/handlers/claims.js`. My Community calls that adapter for the exact site, Viewer, and Membership instead of issuing a second raw redemption query. Viewer projections expose the canonical Claim ID, reward name/cost, canonical status, submission time, and an audit-backed completion/cancellation time where one exists; raw site, Membership, reward/source, actor, and mutable `updated_at` values are omitted. Membership Claim history is bounded at 50.
+- Terminal Claim timestamps come only from matching `claim_completed` / `claim_cancelled` audit events. An old terminal redemption without an event remains terminal but has no displayed terminal timestamp; `redemptions.updated_at` is never promoted into lifecycle evidence.
+- Recognition decision: **DEFERRED — INSUFFICIENT SAFE/LINKED EVIDENCE**. Current leaderboard players and archives are name-based, Hall of Fame reuses that history, mixed tournament placement is outside the safe target boundary, Reviews are internal decisions, and no current creator-recognition or challenge-completion source satisfies safe selected-site ownership plus canonical Viewer/Membership linkage. My Community therefore has no empty Recognition panel, fake badge, points model, or inferred history.
+- Authenticated creator-site HTML is `private, no-store` and varies on `Cookie`. A non-member receives the existing Join state and no history reads. Apex and custom-domain My Community resolve through the same route/read composition; a new Viewer session receives a new server-rendered response with only that Viewer's site-scoped data.
+- Global `/me` remains the My communities index with community identity, balance, claiming availability, and pending Claim count only. Wave K automation has not started.
 
 ### Community ownership — CONSOLIDATED
 
@@ -136,7 +147,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Team lifecycle writes append-only `team_invitation_created`, `team_invitation_revoked`, `team_invitation_accepted`, and `team_operator_removed` records to the existing `audit_log` in the same transaction as source changes. Review and Claim events retain their source-specific actor audit behavior; no duplicate Team activity UI or audit mutation endpoint was added.
 - Settings → Team is the one Team surface. Owners see pooled seat usage, invite/remove/revoke controls, and the Team upgrade path; Moderators receive minimal read-only context without pending invite data or mutation controls. There is no role-edit route because Moderator is the only delegated V1 role.
 - Reviews and Claims semantics are unchanged; only their capability ownership converged. Claims still contain no private fulfillment PII. If a future Claim workflow introduces sensitive fulfillment data, it requires a new evidence-led access review rather than inheriting current ordinary-Claim access automatically.
-- Wave I Insights/Connection Health is implemented as described below. Wave J and Wave K have not started.
+- Wave I Insights/Connection Health and Wave J Viewer Membership history are implemented as described here. Wave K has not started.
 
 ### Insights and connection health — AVAILABLE; AGGREGATE + EVIDENCE-BASED
 
@@ -167,7 +178,7 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Viewer Account and membership presentation now converge on the existing identity model. Global `/me` is the account-scoped **My communities** index; each `/<slug>/me` or custom-domain `/me` is that creator's **My Community** membership surface. Global account data links into creator-owned Rewards/credits/Claims instead of duplicating those experiences.
 - Global membership summaries expose only community identity, free-credit balance, controlled claiming availability, and the count of pending Claims needing creator action. They do not expose creator plan data, raw site/membership IDs, historical “Member since” provenance, full cross-community Claim history, internal block reasons, or fraud context.
 - Provider connections shown on the Viewer Account require their persisted OAuth link timestamp; names or external identifiers alone are not proof. Custom-domain and apex navigation preserve local community versus global account ownership, and creator-scoped OAuth failures render controlled messages rather than raw provider/query values.
-- Participation history, Recognition, expanded Claims history, social features, messaging, and automation remain deferred to later work; this convergence does not implement Wave J.
+- Wave J adds bounded free code-drop Participation and canonical expanded Claims history to My Community. Recognition remains deferred for lack of a trustworthy safe Viewer-linked source. Social features, messaging, and automation remain deferred; Wave K has not started.
 
 Production `site_viewers` creation audit (canonical sources; generated `packages/shared/dist/kick-credits.js` mirrors its TypeScript source and is not a fourth caller):
 

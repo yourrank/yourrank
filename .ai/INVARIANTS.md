@@ -90,6 +90,22 @@ Named enforcement/test: `apps/leaderboard/src/__tests__/site-data.test.js`, `eve
 
 Intentional exclusions: historical `last_active_at` provenance is not rewritten because the source caller cannot be reconstructed safely.
 
+## MEM-003 — Membership History Requires Exact Safe Ownership
+
+Name: Viewer Membership history isolation and evidence boundary
+
+Scope: creator-scoped My Community Participation and Claims on apex and custom domains.
+
+Property: Participation may read only successfully persisted free code-drop Claims whose `site_id`, canonical `viewer_id`, and exact `site_viewer_id` all match the current request, excluding system Viewers and every restricted or inferred source. Claims must reuse the canonical Wave G adapter, use audit events rather than `updated_at` for terminal timestamps, omit internal identifiers/private actor data, and remain bounded. Non-members receive no history reads. Recognition remains absent until a safe persisted selected-site source has explicit Viewer/Membership linkage.
+
+Why it matters: a cross-site, cross-account, inferred, or fabricated history entry would turn the Viewer Account into an identity/privacy failure rather than a persistent membership record.
+
+Source of truth: `apps/leaderboard/src/site-data.js`, `apps/leaderboard/src/handlers/claims.js`, `apps/leaderboard/src/site-routes.js`, and `packages/shared/src/site-render.ts`.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/viewer-participation.test.js`, `claims.test.js`, `site-data.test.js`, `site-routes.test.js`, `viewer-rewards-credits.test.js`, `viewer-membership.test.js`, and `viewer-privacy-boundary.test.js`.
+
+Intentional exclusions: leaderboard/archive/Hall-of-Fame names, tournament operations, Reviews, daily quests, provider event payloads, and restricted legacy Games/wagering/chance systems are not Recognition or Participation evidence.
+
 ## VER-001 — Claims Cannot Exceed Evidence
 
 Completion claims may not be broader than the verified scope.

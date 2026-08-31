@@ -41,7 +41,7 @@ function render(section, { data = baseData, viewer = null, viewerData = null, cu
 }
 
 const viewer = { kick_username: "viewer_one" };
-const viewerData = { viewerOnSite: { balance: 1234 }, ledger: [], redemptions: [] };
+const viewerData = { viewerOnSite: { balance: 1234 }, ledger: [], claims: [], participation: [] };
 
 describe("public viewer shell", () => {
   it("gives the creator header sole ownership of public chrome", async () => {

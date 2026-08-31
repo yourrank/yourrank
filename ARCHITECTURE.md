@@ -25,6 +25,39 @@ internal proxy cannot loop.
 
 A streamer signs up **once**. That single account owns both their leaderboard and their bot.
 
+## Public Viewer Account and Membership boundary
+
+The Leaderboard Worker also owns the current Viewer Account product. Global
+`/me` is the account-scoped **My communities** index derived from persisted
+`viewers` → `site_viewers` relationships. `/<slug>/me`, and `/me` on a creator
+custom domain, are the creator-scoped **My Community** surface rendered by
+`packages/shared/src/site-render.ts`.
+
+Membership is never created by anonymous/passive browsing or generic OAuth. It
+is created only by explicit site-bound Join or atomically with an approved safe
+action. A creator-scoped membership page resolves that relationship before
+reading personalized history, returns `private, no-store`, and varies on the
+Viewer session cookie.
+
+Wave J composes three separate current read owners rather than a universal
+history service:
+
+- Participation: at most 25 successful free code-drop Claims from
+  `code_drop_claims`, matched by selected site, canonical `viewer_id`, and exact
+  `site_viewer_id`, excluding system Viewers.
+- Credits: the existing membership `credit_ledger` read; credit history is not
+  reclassified as Participation.
+- Claims: at most 50 Viewer-safe rows from the canonical Wave G redemption
+  adapter. Terminal timestamps come from `claim_completed` / `claim_cancelled`
+  audit events, never `redemptions.updated_at`.
+
+Recognition is not currently rendered: players, archives/Hall of Fame, mixed
+tournament results, Reviews, and challenge data do not provide a safe persisted
+selected-site record with canonical Viewer/Membership linkage. No fuzzy name
+matching or replacement Recognition persistence exists. Global `/me` remains
+an index and does not aggregate these histories. Wave K automation is not part
+of this runtime.
+
 ---
 
 ## The picture

@@ -103,16 +103,20 @@ const routeSite = {
 
 // ── Mock site-data.js to avoid DB queries for viewer data ───────────────
 const routeSiteData = {
+  calls: [],
   getShopItems: () => Promise.resolve(SHOP_ITEMS),
   getViewerSiteData: (_siteId, viewerId, opts) => {
+    routeSiteData.calls.push({ siteId: _siteId, viewerId, opts });
     if (!viewerId) {
-      return Promise.resolve({ viewerOnSite: null, shopItems: SHOP_ITEMS, redemptions: [], ledger: [] });
+      return Promise.resolve({ viewerOnSite: null, shopItems: opts?.shop ? SHOP_ITEMS : [], claims: [], ledger: [], participation: [] });
     }
+    const ownsHistory = viewerId !== "v2";
     return Promise.resolve({
       viewerOnSite: { id: "sv-1", balance: 500, blocked: false, total_earned: 1000, total_spent: 100 },
       shopItems: opts?.shop ? SHOP_ITEMS : [],
-      redemptions: opts?.redemptions ? [{ id: "r-1", cost: 100, status: "pending", created_at: new Date().toISOString(), item_name: "Shoutout" }] : [],
-      ledger: opts?.ledger ? [{ id: "l-1", type: "earn", amount: 50, description: "Stream", created_at: new Date().toISOString() }] : [],
+      claims: opts?.claims && ownsHistory ? [{ id: "redemption:r-1", reward: { name: "Shoutout", cost: 100 }, status: "submitted", statusLabel: "Needs fulfillment", submittedAt: new Date().toISOString(), completedAt: null, cancelledAt: null }] : [],
+      ledger: opts?.ledger && ownsHistory ? [{ id: "l-1", type: "earn", amount: 50, description: "Stream", created_at: new Date().toISOString() }] : [],
+      participation: opts?.participation && ownsHistory ? [{ type: "code_drop_claim", title: "Claimed a code drop", status: "claimed", statusLabel: "Claimed", participatedAt: new Date().toISOString() }] : [],
     });
   },
 };
@@ -377,7 +381,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see credits and Claims in My Community", async () => {
+  it("logged-in viewers see site-scoped Participation, credits and canonical Claims in My Community", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/me", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
@@ -387,6 +391,45 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the hero
     expect(html).toContain("Shoutout"); // claim
     expect(html).toContain("Stream"); // ledger description
+    expect(html).toContain("Claimed a code drop");
+    expect(html).not.toContain(">Recognition<");
+  });
+
+  it("uses the same site-scoped history composition on a custom domain", async () => {
+    routeSiteData.calls.length = 0;
+    const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
+    const request = req("https://streamer.example/me", { viewer });
+    const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
+    const html = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(routeSiteData.calls.at(-1)).toEqual({
+      siteId: "site-1",
+      viewerId: "v1",
+      opts: { claims: true, ledger: true, participation: true },
+    });
+    expect(html).toContain("Claimed a code drop");
+    expect(html).toContain("Shoutout");
+    expect(html).toContain('href="https://yourrank.site/me"');
+  });
+
+  it("never carries one Viewer Account's history into the next signed-in response", async () => {
+    const viewerARequest = req("https://example.com/streamer/me", { viewer: { id: "v1", kick_username: "viewer1" } });
+    const viewerAResponse = await renderSiteRoute({ request: viewerARequest, env, ctx, nonce: "a", slug: "streamer", section: "me", isCustomDomain: false });
+    const viewerAHtml = await viewerAResponse.text();
+    expect(viewerAHtml).toContain("Claimed a code drop");
+    expect(viewerAHtml).toContain("Shoutout");
+
+    const viewerBRequest = req("https://example.com/streamer/me", { viewer: { id: "v2", kick_username: "viewer2" } });
+    const viewerBResponse = await renderSiteRoute({ request: viewerBRequest, env, ctx, nonce: "b", slug: "streamer", section: "me", isCustomDomain: false });
+    const viewerBHtml = await viewerBResponse.text();
+    expect(viewerBResponse.headers.get("cache-control")).toContain("private");
+    expect(viewerBResponse.headers.get("cache-control")).toContain("no-store");
+    expect(viewerBResponse.headers.get("vary")).toContain("Cookie");
+    expect(viewerBHtml).not.toContain("Claimed a code drop");
+    expect(viewerBHtml).not.toContain("Shoutout");
+    expect(viewerBHtml).toContain("No participation history yet");
+    expect(viewerBHtml).toContain("No claims yet");
   });
 
   it("leaderboard renders inside the shared site shell", async () => {

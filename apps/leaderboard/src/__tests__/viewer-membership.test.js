@@ -128,7 +128,7 @@ describe("explicit Viewer membership Join", () => {
     });
 
     expect((await (await globalMe()).json()).communities.map(({ slug }) => slug)).toEqual(["alpha"]);
-    for (const options of [{}, {}, { shop: true }, { shop: true, redemptions: true, ledger: true }]) {
+    for (const options of [{}, {}, { shop: true }, { shop: true, claims: true, ledger: true, participation: true }]) {
       const passive = await visitBeta(options);
       expect(passive.membershipStatus).toBe("absent");
     }

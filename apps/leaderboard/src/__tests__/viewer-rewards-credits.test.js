@@ -45,9 +45,9 @@ function shop({ viewer = { kick_username: "member" }, balance = 50, blocked = fa
     viewerData: {
       viewerOnSite: { balance, blocked, block_reason: blocked ? "Paused." : null },
       shopItems: items,
-      redemptions: [
-        { id: "o1", item_name: LONG_NAME, cost: 50, status: "pending", created_at: "2024-02-01T00:00:00Z" },
-        { id: "o2", item_name: "Wallpaper pack", cost: 500, status: "refunded", created_at: "2024-01-01T00:00:00Z" },
+      claims: [
+        { id: "redemption:o1", reward: { name: LONG_NAME, cost: 50 }, status: "submitted", statusLabel: "Needs fulfillment", submittedAt: "2024-02-01T00:00:00Z", completedAt: null, cancelledAt: null },
+        { id: "redemption:o2", reward: { name: "Wallpaper pack", cost: 500 }, status: "cancelled", statusLabel: "Cancelled", submittedAt: "2024-01-01T00:00:00Z", completedAt: null, cancelledAt: "2024-01-02T00:00:00Z" },
       ],
     },
     opts,
@@ -67,12 +67,18 @@ function credits({ balance = 1234567 } = {}) {
         { id: 2, amount: -50, type: "spend", created_at: "2024-02-01T00:00:00Z", description: LONG_NAME },
         { id: 3, amount: 25, type: "adjust", created_at: "2024-01-30T00:00:00Z" },
       ],
-      redemptions: [
-        { id: "o1", item_name: "Profile shoutout", cost: 50, status: "pending", created_at: "2024-02-01T00:00:00Z" },
-        { id: "o2", item_name: "Chat badge", cost: 10, status: "fulfilled", created_at: "2024-01-20T00:00:00Z" },
-        { id: "o3", item_name: "Sticker pack", cost: 10, status: "cancelled", created_at: "2024-01-10T00:00:00Z" },
-        { id: "o4", item_name: "Wallpaper pack", cost: 500, status: "refunded", created_at: "2024-01-05T00:00:00Z" },
+      participation: [
+        { type: "code_drop_claim", title: "Claimed a code drop", status: "claimed", statusLabel: "Claimed", participatedAt: "2024-02-03T00:00:00Z" },
       ],
+      participationLimit: 25,
+      participationTruncated: false,
+      claims: [
+        { id: "redemption:o1", reward: { name: "Profile shoutout", cost: 50 }, status: "submitted", statusLabel: "Needs fulfillment", submittedAt: "2024-02-01T00:00:00Z", completedAt: null, cancelledAt: null },
+        { id: "redemption:o2", reward: { name: "Chat badge", cost: 10 }, status: "completed", statusLabel: "Completed", submittedAt: "2024-01-20T00:00:00Z", completedAt: "2024-01-21T00:00:00Z", cancelledAt: null },
+        { id: "redemption:o3", reward: { name: "Sticker pack", cost: 10 }, status: "cancelled", statusLabel: "Cancelled", submittedAt: "2024-01-10T00:00:00Z", completedAt: null, cancelledAt: "2024-01-11T00:00:00Z" },
+      ],
+      claimsLimit: 50,
+      claimsTruncated: false,
     },
     opts,
   });
@@ -97,7 +103,8 @@ function zeroCredits() {
       viewerOnSite: { balance: 0, blocked: false },
       shopItems: [],
       ledger: [],
-      redemptions: [],
+      participation: [],
+      claims: [],
     },
     opts,
   });
@@ -256,7 +263,8 @@ describe("a creator's My Community page", () => {
     const html = await zeroCredits();
     expect(html).toContain('class="yr-vbal is-zero"');
     expect(html).toContain('class="yr-vcols yr-vcols--empty"');
-    expect((html.match(/class="yr-empty /g) || []).length).toBe(2);
+    expect((html.match(/class="yr-empty /g) || []).length).toBe(3);
+    expect(html).toContain("No participation history yet");
   });
 
   it("does not invent a zero-balance membership when persistence is unavailable", async () => {
@@ -264,7 +272,7 @@ describe("a creator's My Community page", () => {
       r: record,
       section: "me",
       viewer: { kick_username: "member" },
-      viewerData: { membershipStatus: "unavailable", viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
+      viewerData: { membershipStatus: "unavailable", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
       opts,
     });
     expect(html).toContain("We couldn't load your community membership right now.");
@@ -277,7 +285,7 @@ describe("a creator's My Community page", () => {
       r: record,
       section: "me",
       viewer: { kick_username: "member" },
-      viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
+      viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
       opts,
     });
     expect(html).toContain("Signed in as <b>member</b>.");
@@ -324,15 +332,53 @@ describe("a creator's My Community page", () => {
     expect(html).toContain(LONG_DETAIL);
   });
 
-  it("names every claim source state the backend can report, and explains them once", async () => {
+  it("shows safe Participation as a bounded reverse-chronological membership record", async () => {
     const html = await credits();
-    for (const label of ["Pending", "Completed", "Cancelled", "Refunded"]) {
+    expect(html).toContain('<h2 class="yr-sec-title">Participation</h2>');
+    expect(html).toContain("Claimed a code drop");
+    expect(html).toContain(">Claimed</span>");
+    expect(html).toContain("Feb 3, 2024");
+    const participationHtml = html.match(/<section class="yr-vsec">[\s\S]*?<h2 class="yr-sec-title">Participation<\/h2>[\s\S]*?<\/section>/)?.[0] || "";
+    for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
+      expect(participationHtml.toLowerCase()).not.toContain(banned);
+    }
+  });
+
+  it("uses canonical Claim states and audit-backed terminal timestamps", async () => {
+    const html = await credits();
+    for (const label of ["Needs fulfillment", "Completed", "Cancelled"]) {
       expect(html).toContain(`>${label}</span>`);
     }
-    expect((html.match(/Pending means the creator/g) || []).length).toBe(1);
+    expect((html.match(/Needs fulfillment means the creator/g) || []).length).toBe(1);
+    expect(html).toContain("Completed Jan 21, 2024");
+    expect(html).toContain("Cancelled Jan 11, 2024");
     // Backend truth only: no invented delivery date or fulfilment estimate.
     expect(html).not.toContain("Arrives");
     expect(html).not.toContain("Estimated");
+    expect(html).not.toContain("updated_at");
+  });
+
+  it("does not introduce Recognition without a proven linked source", async () => {
+    const html = await credits();
+    expect(html).not.toContain(">Recognition<");
+    expect(html).not.toContain("yr-recognition");
+  });
+
+  it("names a blocked Membership generically without exposing creator-only reasons", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: {
+        viewerOnSite: { balance: 25, blocked: true, block_reason: "internal fraud investigation" },
+        ledger: [],
+        participation: [],
+        claims: [],
+      },
+      opts,
+    });
+    expect(html).toContain("Claiming is currently unavailable for this membership.");
+    expect(html).not.toMatch(/fraud|investigation/i);
   });
 });
 
@@ -340,7 +386,7 @@ describe("a creator's My Community page", () => {
 
 describe("viewer row geometry", () => {
   it("lets the title keep a readable measure instead of stacking at one width", () => {
-    expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main { flex: 1 1 24ch; min-width: 0; }");
+    expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }");
     expect(appCss).toContain(".vd-card-main{flex:1 1 22ch;min-width:0}");
     // The 360px stacking workaround is gone: wrapping is the root behaviour.
     expect(appCss).not.toContain("@media (max-width:360px)");
