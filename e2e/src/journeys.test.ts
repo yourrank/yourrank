@@ -524,8 +524,9 @@ describe("release-gate journeys", () => {
  * otherwise they are reported SKIPPED, never PASSED.
  */
 /**
- * A minted viewer session alone is not enough to wager: the viewer also needs a
- * funded membership on the board under test. In production that balance comes
+ * A minted viewer session alone is not enough to wager: the viewer first uses
+ * the real explicit Join mutation, then needs a funded membership on the board
+ * under test. In production that balance comes
  * from Kick channel-point claims (OAuth + webhooks, not runnable headless), so
  * the gate grants it through the owner-facing credit-adjust API instead — a real
  * product path, not a database write. E2E_VIEWER_USERNAME is the minted viewer's
@@ -591,7 +592,22 @@ describeViewer("viewer wagering journeys", () => {
     viewer = new Client(BASE_URL);
     viewer.setViewerSession(VIEWER_SESSION);
     const viewerLanding = await viewer.get(`/${slug}`);
-    if (viewerLanding.status !== 200) throw new Error(`viewer membership registration failed: ${viewerLanding.status} ${viewerLanding.body}`);
+    if (viewerLanding.status !== 200) throw new Error(`viewer landing failed: ${viewerLanding.status} ${viewerLanding.body}`);
+
+    const beforeJoin = await viewer.get("/api/viewer/me");
+    if (beforeJoin.status !== 200) throw new Error(`viewer account lookup failed: ${beforeJoin.status} ${beforeJoin.body}`);
+    if ((beforeJoin.json?.communities || []).some((community: any) => community.slug === slug)) {
+      throw new Error("passive viewer landing unexpectedly created Membership");
+    }
+
+    const joined = await viewer.post("/api/viewer/membership/join", { slug });
+    if (!joined.json?.ok) throw new Error(`explicit viewer Join failed: ${joined.status} ${joined.body}`);
+    const replayedJoin = await viewer.post("/api/viewer/membership/join", { slug });
+    if (!replayedJoin.json?.ok) throw new Error(`idempotent viewer Join failed: ${replayedJoin.status} ${replayedJoin.body}`);
+
+    const afterJoin = await viewer.get("/api/viewer/me");
+    const joinedRows = (afterJoin.json?.communities || []).filter((community: any) => community.slug === slug);
+    if (joinedRows.length !== 1) throw new Error(`explicit Join should create exactly one Membership, found ${joinedRows.length}`);
 
     // Owner funds the viewer on this board through the dashboard's own API.
     const grant = await ownerClient.post("/api/credits/tip", {

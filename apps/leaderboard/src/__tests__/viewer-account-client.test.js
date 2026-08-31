@@ -80,7 +80,6 @@ const ACCOUNT = {
     balance: 1234,
     totalEarned: 1500,
     totalSpent: 266,
-    memberSince: "2026-02-03T00:00:00.000Z",
     pendingClaims: 1,
     claimingAvailable: true,
   }],
@@ -100,6 +99,7 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities").innerHTML).toContain("1,234 free credits");
     expect(env.$("vd-communities").innerHTML).toContain("1 Claim needs creator action");
     expect(env.$("vd-communities").innerHTML).toContain('href="/alpha/me"');
+    expect(env.$("vd-communities").innerHTML).not.toContain("Member since");
     expect(env.calls).toEqual([{ path: "/api/viewer/me", method: "GET" }]);
   });
 
@@ -116,6 +116,23 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-login-card").hidden).toBe(false);
     expect(env.$("vd-profile").hidden).toBe(true);
     expect(env.$("vd-communities-card").hidden).toBe(true);
+  });
+
+  it("clears the previous account's memberships before another login", async () => {
+    const env = makeEnvironment({
+      response: (path, opts) => opts.method === "POST"
+        ? { body: { ok: true } }
+        : { body: ACCOUNT },
+    });
+    await env.ready();
+    expect(env.$("vd-communities").innerHTML).toContain("Alpha Community");
+
+    await env.$("vd-logout").click();
+
+    expect(env.$("vd-profile").hidden).toBe(true);
+    expect(env.$("vd-communities-card").hidden).toBe(true);
+    expect(env.$("vd-username").textContent).toBe("");
+    expect(env.$("vd-communities").innerHTML).toBe("");
   });
 
   it("keeps an account failure visible and retryable", async () => {
@@ -143,6 +160,8 @@ describe("global Viewer Account ownership", () => {
     expect(page).toContain("One Viewer Account for every creator community you join.");
     expect(page).toContain(">Community memberships<");
     expect(page).toContain("Rewards, free credits and Claims");
+    expect(page).toContain("You haven't joined any communities yet.");
+    expect(page).not.toContain("appear here automatically");
     expect(page).not.toContain("Your sites");
     expect(page).not.toContain(">My credits<");
   });

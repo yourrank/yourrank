@@ -239,9 +239,11 @@ describe("the creator home credit state", () => {
 describe("a creator's My Community page", () => {
   it("explains the signed-out state without repeating the header sign-in action", async () => {
     const html = await signedOut("me");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Sign in from the header to join");
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(2);
+    expect(html).toContain('class="yr-vhead-aside"');
+    expect(html).toContain("Join community</a>");
+    expect(html).toContain("intent=join");
+    expect(html).toContain("site=demo-board");
     expect(html).toContain('<section class="yr-vsec yr-vsec--narrow yr-credit-guide">');
     expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
     expect(html).toContain("Community membership");
@@ -262,12 +264,29 @@ describe("a creator's My Community page", () => {
       r: record,
       section: "me",
       viewer: { kick_username: "member" },
-      viewerData: { viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
+      viewerData: { membershipStatus: "unavailable", viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
       opts,
     });
     expect(html).toContain("We couldn't load your community membership right now.");
     expect(html).not.toContain('class="yr-vbal');
     expect(html).not.toContain("No credit activity yet");
+  });
+
+  it("renders a real signed-in non-member Join state without a fake zero membership", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
+      opts,
+    });
+    expect(html).toContain("Signed in as <b>member</b>.");
+    expect(html).toContain("You haven&#39;t joined this community yet.");
+    expect(html).toContain('data-membership-join');
+    expect(html).toContain("Membership connects this Viewer Account");
+    expect(html).not.toContain("We couldn&#39;t load your community membership");
+    expect(html).not.toContain('class="yr-vbal');
+    expect(html).not.toContain("Member since");
   });
 
   it("shows and then clears controlled creator-scoped sign-in errors", async () => {
@@ -289,6 +308,7 @@ describe("a creator's My Community page", () => {
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
     expect(html).toContain("Your membership in");
+    expect(html).not.toContain("Member since");
     expect(html).not.toContain("yr-gamer");
     expect(html).not.toContain("Credits / 7d");
     expect(html).not.toContain("Lifetime");

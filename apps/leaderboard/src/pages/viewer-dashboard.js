@@ -54,8 +54,8 @@ export const viewerDashboardPage = leaderboardPageHtml({
     <p class="status" id="vd-communities-status" role="status" aria-live="polite" tabindex="-1"></p>
     <div id="vd-communities" class="vd-community-list"></div>
     <div class="empty vd-community-empty" id="vd-communities-empty" hidden>
-      <p>You haven't joined a community yet.</p>
-      <p class="hint">Visit a creator's YourRank site while signed in. Your membership will appear here automatically.</p>
+      <p>You haven't joined any communities yet.</p>
+      <p class="hint">Communities appear here after you choose to join them.</p>
     </div>
   </section>
 `,

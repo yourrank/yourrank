@@ -49,7 +49,7 @@ describe("viewer privacy boundary", () => {
     const query = mock().mockResolvedValueOnce([{
       id: "site-1", membership_id: "membership-1", slug: "creator", name: "Creator",
       balance: 20, total_earned: 30, total_spent: 10, blocked: true,
-      block_reason: INTERNAL_REASON, member_since: "2026-08-02T00:00:00.000Z",
+      block_reason: INTERNAL_REASON,
       pending_claims: 2,
     }]);
     const response = await handleViewerMe(new Request("https://example.test/api/viewer/me"), {}, {
@@ -70,6 +70,7 @@ describe("viewer privacy boundary", () => {
     expect(text).not.toContain('"siteId"');
     expect(text).not.toContain('"totalEarned"');
     expect(text).not.toContain('"totalSpent"');
+    expect(text).not.toContain("memberSince");
     expect(text).toContain('"pendingClaims":2');
     expect(query).toHaveBeenCalledTimes(1);
     expect(query.mock.calls.every(([sql]) => !String(sql).includes("last_active_at"))).toBe(true);

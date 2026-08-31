@@ -85,6 +85,10 @@ function renderLoggedOut() {
   $("vd-login-card").hidden = false;
   $("vd-profile").hidden = true;
   $("vd-communities-card").hidden = true;
+  $("vd-username").textContent = "";
+  $("vd-identity").textContent = "";
+  $("vd-communities").innerHTML = "";
+  $("vd-communities-empty").hidden = true;
 }
 
 function renderAccount(viewer) {
@@ -126,14 +130,13 @@ function renderCommunities(communities) {
   $("vd-communities-empty").hidden = communities.length > 0;
   list.innerHTML = communities.map((community) => {
     const name = community.name || community.slug;
-    const memberSince = community.memberSince ? `Member since ${fmtDate(community.memberSince)}` : "Community membership";
     const href = `/${encodeURIComponent(community.slug)}/me`;
     return `
       <article class="vd-card-row vd-community-row">
         <span class="vd-site-mark" aria-hidden="true">${esc(initial(name))}</span>
         <div class="vd-card-main">
           <h3 class="vd-card-title">${esc(name)}</h3>
-          <p class="hint">${esc(memberSince)}</p>
+          <p class="hint">Community membership</p>
           <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
         </div>
         <div class="vd-card-side">

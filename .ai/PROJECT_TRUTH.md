@@ -4,9 +4,9 @@
 
 **Owner-approved target:** [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md)
 
-**Current implementation baseline:** `main` at `e71faab725f322c8aa965398aab941f9fb7a6f5d`
+**Current implementation baseline:** `main` at `2c5d94e4cc1a57b044d8ff0b8766f5e417b79285`
 
-**Last reconciled:** 2026-08-28
+**Last reconciled:** 2026-08-31
 
 This file is the repository authority map. It separates owner-approved target product direction from verified current implementation. Existing code is evidence of the present implementation, not automatic proof of intended product behavior.
 
@@ -79,6 +79,9 @@ Current public/site ownership:
 Current identity boundaries:
 
 - Creator/operator accounts, viewer accounts, site membership records, leaderboard player rows, and Telegram subscriber relationships are distinct.
+- `viewers` is the global Viewer Account anchor; `site_viewers` is the unique creator/site-specific Membership. A Membership is created only by explicit Join or by a successfully committed approved safe action that logically requires it. Passive creator-site reads and generic Viewer OAuth authenticate/read identity only and never create Membership.
+- Existing Members may receive a throttled `last_seen_at` presence update on passive creator-site reads. `last_active_at` is reserved for successfully committed qualifying activity; explicit Join, generic sign-in, failed/rejected/rate-limited actions, and replays do not advance it.
+- Historical `site_viewers.created_at` is not universal explicit-join provenance because older rows may have originated from passive behavior. It may support internal ordering and forward-looking Insights counts, but current customer surfaces must not label it “Member since.”
 - Never merge those identities from matching usernames, display names, network data, or behavioral similarity.
 - Any future linkage requires authenticated ownership or equally strong platform-supported proof.
 

@@ -12,6 +12,11 @@ import {
   CREDITS_REDEMPTIONS_PER_30D_LIMITS,
 } from "@yourrank/shared/plans";
 import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
+import {
+  createViewerMembership,
+  requestIsSameOrigin,
+  resolveJoinableCommunity,
+} from "../viewer-membership.js";
 
 const privateViewerJson = (data) => json(
   { ok: true, ...data },
@@ -34,7 +39,7 @@ export async function handleViewerMe(request, env, deps = {}) {
   const communities = await queryImpl(
     `SELECT s.slug, s.name,
             sv.id AS membership_id, sv.balance,
-            sv.blocked, sv.created_at AS member_since,
+            sv.blocked,
             count(r.id) FILTER (WHERE r.status = 'pending')::int AS pending_claims
        FROM site_viewers sv
        JOIN sites s ON s.id = sv.site_id
@@ -46,7 +51,7 @@ export async function handleViewerMe(request, env, deps = {}) {
         AND u.status != 'suspended'
         AND u.email_verified = true
       GROUP BY s.slug, s.name, sv.id, sv.balance, sv.blocked,
-               sv.created_at, sv.updated_at
+               sv.updated_at
       ORDER BY sv.updated_at DESC`,
     [viewer.id]
   );
@@ -55,7 +60,6 @@ export async function handleViewerMe(request, env, deps = {}) {
     slug: community.slug,
     name: community.name,
     balance: community.balance,
-    memberSince: community.member_since,
     pendingClaims: Number(community.pending_claims || 0),
     claimingAvailable: !community.blocked,
   }));
@@ -85,6 +89,33 @@ export async function handleViewerMe(request, env, deps = {}) {
       connections,
     },
     communities: safeCommunities,
+  });
+}
+
+export async function handleViewerJoin(request, env, deps = {}) {
+  const requireViewerImpl = deps.requireViewer || requireViewer;
+  const rateLimitImpl = deps.rateLimit || rateLimit;
+  const oneImpl = deps.one || one;
+  const { viewer, res } = await requireViewerImpl(request, env);
+  if (res) return res;
+  if (!requestIsSameOrigin(request)) return bad("Join request origin is not allowed.", 403);
+
+  const rl = await rateLimitImpl(env, `viewer:join:${viewer.id}`, 10, 60);
+  if (!rl.ok) return bad("Too many join attempts. Try again shortly.", 429);
+
+  const body = request.validatedBody || await (async () => {
+    try { return await request.json(); } catch { return null; }
+  })();
+  const community = await resolveJoinableCommunity(request, env, body?.slug, deps);
+  if (!community) return bad("Community is not available.", 404);
+
+  const membership = await createViewerMembership(community.id, viewer.id, { oneImpl });
+  if (!membership) return bad("Community membership is unavailable.", 503);
+  return privateViewerJson({
+    membership: {
+      slug: community.slug,
+      balance: Number(membership.balance || 0),
+    },
   });
 }
 

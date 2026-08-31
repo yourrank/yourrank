@@ -140,7 +140,7 @@ function renderReviewDetail(review) {
   $("people-review-detail").innerHTML = `
     <section class="people-review-section"><div class="people-review-reason"><span aria-hidden="true">!</span><div><h3>${esc(review.reason.label)}</h3><p>${esc(review.reason.explanation)}</p></div></div></section>
     <section class="people-review-section"><h3>Signup context</h3><dl class="people-review-facts"><div><dt>Workflow</dt><dd>${esc(review.source.workflow)}</dd></div><div><dt>Tournament</dt><dd>${esc(review.source.title)}</dd></div><div><dt>Entry</dt><dd>Zero cost</dd></div><div><dt>Submitted</dt><dd>${esc(fmtDate(review.createdAt))}</dd></div></dl></section>
-    <section class="people-review-section"><div class="people-review-section__head"><h3>Site membership</h3>${memberLink}</div>${membership ? `<p>Member since ${esc(fmtDate(membership.memberSince))}</p><ul class="people-review-identities">${identities}</ul>` : ""}</section>
+    <section class="people-review-section"><div class="people-review-section__head"><h3>Site membership</h3>${memberLink}</div>${membership ? `<ul class="people-review-identities">${identities}</ul>` : ""}</section>
     <aside class="people-review-guidance"><strong>Use context, not assumptions.</strong><p>${esc(review.context.guidance)}</p></aside>
     <section class="people-review-section"><h3>History</h3><ol class="people-review-history">${historyHtml(review.history)}</ol></section>`;
   const actions = $("people-review-actions");

@@ -341,16 +341,6 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     return bad("All claims for this drop have been taken!", 400);
   }
 
-  // Resolve viewer. Create a site membership row on first interaction
-  // so a viewer can claim a drop without having earned credits first.
-  const siteViewer = await one(
-    `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
-     VALUES ($1, $2, 0, 0, 0)
-     ON CONFLICT (site_id, viewer_id) DO UPDATE SET viewer_id=EXCLUDED.viewer_id
-     RETURNING id, balance`,
-    [site.id, viewerId]
-  );
-
   // Check if viewer already claimed
   const alreadyClaimed = await one(
     "SELECT id FROM code_drop_claims WHERE code_drop_id=$1 AND viewer_id=$2",
@@ -368,6 +358,16 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
       await tx.unsafe("UPDATE code_drops SET status='exhausted' WHERE id=$1", [drop.id]);
       return { exhausted: true };
     }
+
+    // Membership is part of the successful safe action transaction. Passive,
+    // invalid, exhausted, rate-limited and already-claimed requests never create it.
+    const siteViewer = await tx.one(
+      `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
+       VALUES ($1, $2, 0, 0, 0)
+       ON CONFLICT (site_id, viewer_id) DO UPDATE SET viewer_id=EXCLUDED.viewer_id
+       RETURNING id, balance`,
+      [site.id, viewerId],
+    );
 
     // Claim first: a duplicate conflicts here, so the count below only ever
     // counts claims that were actually recorded.

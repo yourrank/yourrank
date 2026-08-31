@@ -48,7 +48,6 @@ function memberSummary(row) {
     id: row.id,
     displayName: displayName(row),
     avatarUrl: row.avatar_url || null,
-    joinedAt: row.created_at,
     lastSeenAt: row.last_seen_at || null,
     lastCreditAt: row.last_earned_at || null,
     balance: Number(row.balance) || 0,
@@ -133,7 +132,7 @@ export async function handlePeopleMemberDetail(request, env, injected = {}) {
 
   const row = await deps.one(
     `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked,
-            sv.block_reason, sv.last_earned_at, sv.last_seen_at, sv.created_at,
+            sv.block_reason, sv.last_earned_at, sv.last_seen_at,
             v.kick_username, v.discord_username, v.avatar_url,
             v.kick_linked_at, v.discord_linked_at
        FROM site_viewers sv

@@ -247,7 +247,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       claimed_count: 5,
       status: "active",
     }); // find drop
-    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // site_viewer
     mockOne.mockResolvedValueOnce({ id: "claim-1" }); // already claimed check
 
     const req = new Request("http://localhost/api/events/drops/claim", {
@@ -277,9 +276,9 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       claimed_count: 5,
       status: "active",
     }); // find drop
-    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // site_viewer
     mockOne.mockResolvedValueOnce(null); // not yet claimed in pre-check
     mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // membership inside transaction
     mockOne.mockResolvedValueOnce(null); // ON CONFLICT DO NOTHING
 
     const res = await handleClaimCodeDrop(new Request("http://localhost/api/events/drops/claim", {
@@ -314,9 +313,9 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       claimed_count: 5,
       status: "active",
     }); // find drop
-    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // site_viewer
     mockOne.mockResolvedValueOnce(null); // not yet claimed
     mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // membership inside transaction
     mockOne.mockResolvedValueOnce({ id: "claim-2" }); // atomic claim insert
     mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 130 }); // credit update
 
@@ -355,9 +354,9 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       claimed_count: 5,
       status: "active",
     }); // find drop
-    mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 0 }); // upsert site_viewer
     mockOne.mockResolvedValueOnce(null); // not yet claimed
     mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 0 }); // membership inside transaction
     mockOne.mockResolvedValueOnce({ id: "claim-2" }); // atomic claim insert
     mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 30 }); // credit update
 

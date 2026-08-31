@@ -129,7 +129,7 @@ const routeDeps = {
 
 // ── Import after mocks ─────────────────────────────────────────────────
 import { parseSitePath, renderSiteRoute as renderSiteRouteImpl } from "../site-routes.js";
-import { handleRequest, isCustomViewerAuthPath } from "../index.js";
+import { handleRequest, isCustomViewerApiPath, isCustomViewerAuthPath } from "../index.js";
 const renderSiteRoute = (args) => renderSiteRouteImpl({ ...args, deps: routeDeps });
 
 function req(url, opts = {}) {
@@ -177,12 +177,16 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/unknown", true, "foo")).toBeNull();
   });
 
-  it("passes only viewer Kick auth paths through custom-domain routing", () => {
+  it("passes only supported viewer auth and Join paths through custom-domain routing", () => {
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/callback")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/handoff")).toBe(true);
+    expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/discord")).toBe(true);
+    expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/discord/callback")).toBe(true);
     expect(isCustomViewerAuthPath("POST", "/api/viewer/auth/kick/handoff")).toBe(false);
     expect(isCustomViewerAuthPath("GET", "/api/dashboard/status")).toBe(false);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
   });
 
   it("routes the custom-domain viewer handoff through the normal handler", async () => {
@@ -202,6 +206,29 @@ describe("parseSitePath", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("viewer handoff handler");
+  });
+
+  it("routes custom-domain explicit Join through the normal API handler", async () => {
+    const apiApp = {
+      fetch: async (request) => {
+        expect(request.method).toBe("POST");
+        expect(new URL(request.url).pathname).toBe("/api/viewer/membership/join");
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    };
+    const response = await handleRequest(
+      req("https://streamer.example/api/viewer/membership/join", { method: "POST" }),
+      {},
+      ctx,
+      {},
+      { resolveCustomDomain: async () => "streamer", apiApp },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
   });
 });
 

@@ -171,6 +171,7 @@ import {
 } from "./handlers/viewer-auth.js";
 import {
   handleViewerMe,
+  handleViewerJoin,
   handleViewerRedeem,
 } from "./handlers/viewer-dashboard.js";
 import {
@@ -395,6 +396,7 @@ export const ROUTES = [
 
   // Viewer dashboard API
   { path: "/api/viewer/me", method: "GET", handler: withHandler(handleViewerMe) },
+  { path: "/api/viewer/membership/join", method: "POST", handler: withHandler(handleViewerJoin) },
   { path: "/api/viewer/claims", method: "GET", handler: withHandler(handleViewerClaims) },
   { path: "/api/viewer/claims/:id", method: "GET", handler: withHandler(handleViewerClaimDetail) },
   { path: "/api/viewer/redeem", method: "POST", handler: withHandler(handleViewerRedeem) },

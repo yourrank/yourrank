@@ -325,6 +325,59 @@
     return (csrfEl && csrfEl.content) || "";
   };
 
+  // ── My Community: explicit Membership Join ───────────────────────
+  var joinButton = document.querySelector("[data-membership-join]");
+  var joinStatus = document.getElementById("yr-membership-join-status");
+  var setJoinStatus = function (message, isError) {
+    if (!joinStatus) return;
+    joinStatus.textContent = message || "";
+    joinStatus.classList.toggle("is-error", !!isError);
+  };
+  if (joinButton) {
+    joinButton.addEventListener("click", function () {
+      var label = joinButton.textContent;
+      joinButton.disabled = true;
+      joinButton.setAttribute("aria-busy", "true");
+      joinButton.textContent = "Joining…";
+      setJoinStatus("Joining this community…");
+      fetch("/api/viewer/membership/join", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        body: JSON.stringify({ slug: joinButton.dataset.siteSlug || slug }),
+      })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          if (result.ok && result.data.ok) {
+            joinButton.textContent = "Joined";
+            joinButton.removeAttribute("aria-busy");
+            setJoinStatus("Community joined. Loading your membership…");
+            window.location.reload();
+            return;
+          }
+          joinButton.disabled = false;
+          joinButton.removeAttribute("aria-busy");
+          joinButton.textContent = label;
+          var known = result.data.error === "Too many join attempts. Try again shortly."
+            ? result.data.error
+            : result.data.error === "Community is not available."
+              ? result.data.error
+              : result.data.error === "invalid csrf"
+                ? "Your session expired. Reload the page and try again."
+                : "We couldn't join this community. Try again.";
+          setJoinStatus(known, true);
+          focusWithoutScroll(joinStatus || joinButton);
+        })
+        .catch(function () {
+          joinButton.disabled = false;
+          joinButton.removeAttribute("aria-busy");
+          joinButton.textContent = label;
+          setJoinStatus("Network error. This community was not joined. Try again.", true);
+          focusWithoutScroll(joinStatus || joinButton);
+        });
+    });
+  }
+
   // ── Shop: redeem ────────────────────────────────────────────────────
   var redeemStatus = document.getElementById("yr-redeem-status");
   var setRedeemStatus = function (message, isError) {

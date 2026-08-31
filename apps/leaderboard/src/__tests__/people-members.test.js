@@ -63,7 +63,6 @@ describe("People member list", () => {
       id: "membership-1",
       displayName: "alice",
       avatarUrl: "https://cdn.example/avatar.png",
-      joinedAt: "2026-08-01T00:00:00Z",
       lastSeenAt: "2026-08-21T00:00:00Z",
       lastCreditAt: "2026-08-20T00:00:00Z",
       balance: 80,

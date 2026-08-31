@@ -756,9 +756,10 @@
 .yr-foot-links a:hover, .yr-foot-links button:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
-.yr-search-status, .yr-redeem-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
-.yr-search-status:empty, .yr-redeem-status:empty { display: none; }
-.yr-search-status.is-error, .yr-redeem-status.is-error { color: var(--yr-warning-readable); }
+.yr-search-status, .yr-redeem-status, .yr-join-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
+.yr-join-status { padding-inline: 0; }
+.yr-search-status:empty, .yr-redeem-status:empty, .yr-join-status:empty { display: none; }
+.yr-search-status.is-error, .yr-redeem-status.is-error, .yr-join-status.is-error { color: var(--yr-warning-readable); }
 .yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); color: #fff; background: var(--yr-primary); font-size: 14px; font-weight: 600; }
 .yr-search-retry:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 

@@ -231,14 +231,14 @@ function monogram(name, cls) {
  * It carries nothing the bar and footer do not already own, so it is never a
  * second navigation surface.
  */
-function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance }) {
+function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember }) {
   const enabled = sectionList(siteSections);
   const items = enabled.map((s) => navItem({
     key: s,
     label: SECTION_LABELS[s],
     href: `${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}`,
     active: s === section,
-    badge: s === "me" && viewer ? compact(balance) : null,
+    badge: s === "me" && viewer && isMember ? compact(balance) : null,
   })).join("");
 
   const name = esc(b.name || slug);
@@ -253,7 +253,7 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
   const userRow = siteSections.me === false
     ? ""
     : viewer
-      ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">${formatNumber(balance)} credits in this community</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
+      ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">${isMember ? `${formatNumber(balance)} credits in this community` : "Not joined yet"}</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
       : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My Community</span><span class="yr-user-sub">Sign in to join</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
   const foot = `${userRow}${acct}`;
 
@@ -286,7 +286,7 @@ function avatarHtml(viewer) {
  * the viewer's own controls on the right. No workspace rail, no search field —
  * player search belongs to the leaderboard it filters.
  */
-function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl }) {
+function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember }) {
   const name = esc(b.name || slug);
   const tagline = b.tagline ? esc(b.tagline) : "";
   const accountHref = globalViewerAccountHref(isCustomDomain);
@@ -300,8 +300,11 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
   // breakpoint the viewer's own avatar next to the creator's mark reads as a
   // second unlabelled identity, so the stylesheet hides it there and the
   // drawer's account row — the same destination — carries it instead.
+  const localAccount = isMember
+    ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" data-credit-balance="${Number(balance) || 0}" data-credit-balance-label="Credits in this community" aria-label="Credits in this community: ${formatNumber(balance)}"><span class="yr-bal-num" data-credit-balance-num>${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>`
+    : `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}">My Community</a>`;
   const right = viewer
-    ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" data-credit-balance="${Number(balance) || 0}" data-credit-balance-label="Credits in this community" aria-label="Credits in this community: ${formatNumber(balance)}"><span class="yr-bal-num" data-credit-balance-num>${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>
+    ? `${localAccount}
 <a class="yr-account-link" href="${accountHref}" aria-label="My communities and Viewer Account"><span class="yr-ava">${avatarHtml(viewer)}</span><span class="yr-account-txt">My communities</span></a>`
     : signInLink(r, returnTo, "yr-btn yr-btn--ghost", accountHref);
 
@@ -422,7 +425,7 @@ ${aside}
  * words — a greyed-out button is not an explanation — and the cost is ordinary
  * text rather than a headline, because free credits are not a price tag.
  */
-function rewardRow({ item, viewer, balance, blocked, signIn }) {
+function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, membershipHref = "" }) {
   const cost = Number(item.cost) || 0;
   const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
   const inStock = stock === null || stock > 0;
@@ -432,6 +435,9 @@ function rewardRow({ item, viewer, balance, blocked, signIn }) {
   let action;
   if (!viewer) {
     action = `<a class="yr-act" href="${signIn}">Sign in to claim</a>`;
+  } else if (!member) {
+    state = "Join this community first";
+    action = `<a class="yr-act" href="${membershipHref}">Join to claim</a>`;
   } else if (blocked) {
     state = "Claiming disabled on this site";
     action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
@@ -503,6 +509,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const accent = accentColor(br, br.options);
 
   const viewerOnSite = viewerData?.viewerOnSite || null;
+  const membershipStatus = viewerData?.membershipStatus || (viewerOnSite ? "member" : "unavailable");
+  const isMember = membershipStatus === "member" && !!viewerOnSite;
   const balance = Number(viewerOnSite?.balance || 0);
   const kickUrl = (Array.isArray(data.socials) ? data.socials : []).find((s) => /kick/i.test(s?.type || s?.name || ""))?.url;
 
@@ -526,7 +534,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 
   const ctx = {
     r, data, b, br, section, siteSections, slug, isCustomDomain, homeUrl, logoUrl,
-    viewer, viewerData, viewerOnSite, balance, casino, pool, period, ctaHref, hasCta,
+    viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, casino, pool, period, ctaHref, hasCta,
     returnTo, nonce, watermark, isDemo: !!opts.isDemo,
     viewerAuthError: typeof opts.viewerAuthError === "string" ? opts.viewerAuthError : "",
   };
@@ -575,12 +583,12 @@ FIRST VIEWPORT: Creator identity and sections in one compact bar, then the creat
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->
 <a class="yr-sr" href="#main-content">Skip to content</a>
-${topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl })}
+${topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="yr-main" id="main-content">
 ${mainInner}
 ${footer}
 </main>
-${drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance })}
+${drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
 <script src="/assets/site-shell.js" nonce="${nonce}" defer></script>
@@ -644,7 +652,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
  * has not configured.
  */
 function homeMain(ctx) {
-  const { data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, balance, period, pool, siteSections } = ctx;
+  const { data, b, slug, isCustomDomain, homeUrl, viewer, viewerData, isMember, balance, period, pool, siteSections } = ctx;
   const shopHref = `${homeUrl}${siteSectionHref("shop", slug, isCustomDomain)}`;
   const boardHref = `${homeUrl}${siteSectionHref("leaderboard", slug, isCustomDomain)}`;
   const meHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
@@ -709,7 +717,7 @@ ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "N
 </section>`
     : "";
 
-  const viewerNote = viewer
+  const viewerNote = viewer && isMember
     ? `<section class="yr-vnote${balance === 0 ? " is-zero" : ""}">
 <p class="yr-vnote-bal"><span class="yr-vnote-num">${formatNumber(balance)}</span> <span class="yr-vnote-unit">credits on this site</span></p>
 <p class="yr-vnote-p">Free credits from ${name}'s channel-point rewards. No purchase, no cash value.</p>
@@ -830,7 +838,7 @@ ${panel({
 /* ── Rewards ──────────────────────────────────────────────────────────── */
 
 function shopMain(ctx) {
-  const { r, b, data, viewer, viewerData, viewerOnSite, balance, returnTo, slug, homeUrl, isCustomDomain, siteSections } = ctx;
+  const { r, b, data, viewer, viewerData, viewerOnSite, isMember, balance, returnTo, slug, homeUrl, isCustomDomain, siteSections } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
   const redemptions = viewerData?.redemptions || [];
   const blocked = !!viewerOnSite?.blocked;
@@ -842,9 +850,11 @@ function shopMain(ctx) {
   const head = viewerHead({
     title: "Rewards",
     lede: viewer
-      ? `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`
+      ? (isMember
+        ? `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`
+        : `Browse rewards from ${esc(b.name || slug)}. Join this community before claiming one.`)
       : `Browse rewards from ${esc(b.name || slug)}. Sign in from the header to use your credits.`,
-    balance: viewer ? balance : null,
+    balance: viewer && isMember ? balance : null,
     actions: viewer
       ? (siteSections.me !== false ? `<a class="yr-sec-link" href="${creditsHref}">My Community ${ICONS.arrow}</a>` : "")
       : "",
@@ -856,17 +866,17 @@ function shopMain(ctx) {
 
   const list = items.length
     ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
-<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, balance, blocked, signIn })).join("")}</ul></section>`
+<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, signIn, membershipHref: creditsHref })).join("")}</ul></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
-  const history = viewer
+  const history = viewer && isMember
     ? `<section class="yr-vsec${redemptions.length ? "" : " yr-vsec--empty"}">${sectionHead("Recent claims")}
 ${redemptions.length
       ? `<ul class="yr-ords" role="list">${redemptions.slice(0, 5).map(orderRow).join("")}</ul><p class="yr-fine">${esc(ORDER_STATUS_NOTE)}</p>`
       : emptyState(ICONS.book, "No claims yet", "Rewards you claim show up here with their status.")}</section>`
     : "";
 
-  const canOrder = viewer && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
+  const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
 
   return `${head}
 ${blockedNote}
@@ -926,7 +936,7 @@ ${mount}`;
 /* ── My Community ───────────────────────────────────────────────── */
 
 function meMain(ctx) {
-  const { b, slug, viewer, viewerData, balance, homeUrl, isCustomDomain, siteSections, viewerAuthError } = ctx;
+  const { r, b, slug, viewer, viewerData, membershipStatus, balance, returnTo, homeUrl, isCustomDomain, siteSections, viewerAuthError } = ctx;
   const creator = esc(b.name || slug);
   const authErrorMessages = {
     oauth_state_expired: "That sign-in took too long. Try again.",
@@ -934,6 +944,8 @@ function meMain(ctx) {
     missing_oauth_params: "We couldn't complete sign-in. Try again.",
     kick_auth_failed: "We couldn't complete Kick sign-in. Try again.",
     discord_auth_failed: "We couldn't complete Discord sign-in. Try again.",
+    join_unavailable: "This community isn't available to join right now.",
+    join_failed: "We couldn't join this community. Try again.",
     rate_limited: "Too many sign-in attempts. Wait a moment, then try again.",
   };
   const authErrorMessage = authErrorMessages[viewerAuthError] || (viewerAuthError ? "We couldn't complete sign-in. Try again." : "");
@@ -951,14 +963,29 @@ ${sectionHead("After you sign in")}
 </section>`;
     return `${viewerHead({
       title: "My Community",
-      lede: `Sign in from the header to join ${creator}'s community with your Viewer Account.`,
+      lede: `Join ${creator}'s community with your Viewer Account.`,
+      actions: joinAuthButton(r, returnTo, slug),
     })}
 ${authError}
 ${guide}`;
   }
 
   const accountHref = globalViewerAccountHref(isCustomDomain);
-  if (!viewerData?.viewerOnSite) {
+  if (membershipStatus === "absent") {
+    return `${viewerHead({
+      title: "My Community",
+      lede: `Signed in as <b>${esc(viewerName(viewer))}</b>.`,
+      actions: `<button class="yr-btn" id="yr-membership-join" type="button" data-membership-join data-site-slug="${esc(slug)}">Join community</button><a class="yr-sec-link" href="${accountHref}">All communities ${ICONS.arrow}</a>`,
+    })}
+${authError}
+<section class="yr-vsec yr-vsec--narrow">
+${sectionHead("You haven't joined this community yet.")}
+<p class="yr-note yr-note--w">Membership connects this Viewer Account to ${creator}. It keeps Rewards, free credits and your own Claims here where supported.</p>
+<p class="yr-join-status" id="yr-membership-join-status" role="status" aria-live="polite" tabindex="-1"></p>
+</section>`;
+  }
+
+  if (membershipStatus === "unavailable" || !viewerData?.viewerOnSite) {
     return `${viewerHead({
       title: "My Community",
       lede: `Signed in as <b>${esc(viewerName(viewer))}</b>.`,
@@ -974,7 +1001,7 @@ ${authError}
 
   const head = viewerHead({
     title: "My Community",
-    lede: `Your membership in ${creator}. Signed in as <b>${esc(viewerName(viewer))}</b>${viewerData.viewerOnSite.created_at ? ` · Member since ${esc(formatDate(viewerData.viewerOnSite.created_at))}` : ""}.`,
+    lede: `Your membership in ${creator}. Signed in as <b>${esc(viewerName(viewer))}</b>.`,
     balance,
     actions: `${siteSections.shop !== false ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">View rewards</a>` : ""}<a class="yr-sec-link" href="${accountHref}">All communities ${ICONS.arrow}</a>`,
   });
@@ -1009,4 +1036,11 @@ ${redemptions.length
   return `${head}
 ${authError}
 <div class="yr-vcols${!ledger.length && !redemptions.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
+}
+
+function joinAuthButton(r, returnTo, slug) {
+  const query = `returnTo=${encodeURIComponent(returnTo)}&intent=join&site=${encodeURIComponent(slug)}`;
+  if (r.viewerKickAuthEnabled) return `<a class="yr-btn" href="/api/viewer/auth/kick?${query}">Join community</a>`;
+  if (r.viewerDiscordAuthEnabled) return `<a class="yr-btn" href="/api/viewer/auth/discord?${query}">Join community</a>`;
+  return "";
 }
