@@ -1,501 +1,183 @@
-// Viewer account (/me) client: the member's YourRank account, their credits on
-// every streamer site, and one creator's detail at a time.
+// Global Viewer Account (/me): one identity and its community memberships.
 //
-// The open creator lives in the URL as /me?site=<slug>, so Back, Forward, a
-// hard refresh and a shared link all land where the member expects. The page
-// owns its own confirmation dialog (window.YRDialog, loaded by the page) and
-// never imports dashboard code.
-const SITE_PARAM = "site";
+// Per-community Rewards, credits and Claims stay on the creator-branded
+// /<slug>/me surface. This account page deliberately links there instead of
+// rebuilding a second copy of the creator's product.
 
 function $(id) { return document.getElementById(id); }
-function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function fmtDate(iso) { return iso ? new Date(iso).toLocaleString() : "—"; }
-function fmtNum(n) { return Number(n || 0).toLocaleString("en-US"); }
+function esc(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
+function fmtDate(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }
 function initial(value) { return Array.from(String(value || "").trim())[0]?.toUpperCase() || "Y"; }
 
 function csrf() {
-  const m = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
-  return m ? m[1] : "";
+  const match = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
+  return match ? match[1] : "";
 }
 
-async function api(method, path, body) {
-  const opts = { method, credentials: "same-origin", headers: { "x-csrf-token": csrf() } };
-  if (body) { opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
-  const res = await fetch(path, opts);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+async function api(method, path) {
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: { "x-csrf-token": csrf() },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
   return data;
 }
 
-let state = {};
-let selectedSlug = null;
-let redeemingItemId = null;
-const redeemKeys = {};
-
-// The API answers with short internal codes for some failures. Members see a
-// sentence they can act on; anything unrecognised falls back to the caller's
-// own wording rather than leaking server vocabulary.
 const ERROR_MESSAGES = Object.freeze({
-  unauthorized: "Your session expired. Log in again.",
-  "site not found": "That site isn't available any more.",
-  "rate limited": "Too many attempts. Wait a moment and try again.",
-  "insufficient balance": "You don't have enough credits for that yet.",
-  "item not found": "That reward is no longer available.",
-  "out of stock": "That reward just went out of stock.",
-  "viewer blocked": "You can't claim rewards on this site right now. Ask the streamer.",
+  unauthorized: "Your session expired. Sign in again.",
   "invalid csrf": "Your session expired. Reload the page and try again.",
 });
 
 function errorText(message, fallback) {
-  if (!message) return fallback;
   if (ERROR_MESSAGES[message]) return ERROR_MESSAGES[message];
-  // Server-authored sentences (capacity, monthly limits, password) are already
-  // member-facing; terse codes and "HTTP 500" are not.
-  const sentence = /^[A-Z].*[.!?]$/.test(message) && !/^HTTP /.test(message);
+  const sentence = /^[A-Z].*[.!?]$/.test(String(message || "")) && !/^HTTP /.test(message);
   return sentence ? message : fallback;
 }
 
-// Some failures are terminal: a site that is gone or a reward that sold out will
-// not come back on a second request, so those states get no retry control.
-const TERMINAL_ERRORS = new Set(["unauthorized", "site not found", "item not found", "out of stock", "viewer blocked", "invalid csrf"]);
-const retryable = (message) => !TERMINAL_ERRORS.has(String(message || ""));
-
-const STATUS_IDS = ["vd-login-status", "vd-account-status", "vd-boards-status", "vd-site-status", "vd-drop-status"];
-
-function setStatus(id, msg, err, retry) {
-  const el = $(id);
-  if (!el) return;
-  el.textContent = msg || "";
-  el.className = msg && err ? "status error" : "status";
-  // A failure that says "try again" has to offer the retry itself: a real
-  // keyboard-reachable button that re-runs the request, not just the sentence.
-  if (msg && typeof retry === "function") {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "btn btn--sm vd-retry";
-    btn.textContent = "Try again";
-    btn.addEventListener("click", () => { setStatus(id, ""); retry(); });
-    el.append(" ", btn);
+function setStatus(id, message, isError, retry) {
+  const element = $(id);
+  if (!element) return;
+  element.textContent = message || "";
+  element.className = message && isError ? "status error" : "status";
+  if (message && typeof retry === "function") {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn--sm vd-retry";
+    button.textContent = "Try again";
+    button.addEventListener("click", () => {
+      setStatus(id, "");
+      retry();
+    });
+    element.append(" ", button);
   }
 }
 
-function clearStatuses(ids) {
-  (ids || STATUS_IDS).forEach((id) => setStatus(id, ""));
-}
-
-function setLoading(idOrEl, loading, text = "Loading…") {
-  const el = typeof idOrEl === "string" ? $(idOrEl) : idOrEl;
-  if (!el) return;
+function setLoading(element, loading, text = "Loading…") {
+  if (!element) return;
   if (loading) {
-    el.dataset.origText = el.textContent;
-    el.disabled = true;
-    el.setAttribute("aria-busy", "true");
-    el.classList.add("btn--loading");
-    el.textContent = text;
-  } else {
-    el.disabled = false;
-    el.removeAttribute("aria-busy");
-    el.classList.remove("btn--loading");
-    el.textContent = el.dataset.origText || el.textContent;
-    delete el.dataset.origText;
+    element.dataset.origText = element.textContent;
+    element.disabled = true;
+    element.setAttribute("aria-busy", "true");
+    element.classList.add("btn--loading");
+    element.textContent = text;
+    return;
   }
+  element.disabled = false;
+  element.removeAttribute("aria-busy");
+  element.classList.remove("btn--loading");
+  element.textContent = element.dataset.origText || element.textContent;
+  delete element.dataset.origText;
 }
 
 function setGlobalLoading(loading) {
-  const el = $("vd-loading");
-  if (el) el.hidden = !loading;
-}
-
-function focusEl(id) {
-  const el = $(id);
-  if (el && typeof el.focus === "function") el.focus();
-}
-
-// Every state the backend can report, named in the member's words. Cancelled
-// and refunded are distinct outcomes and are never collapsed into one label.
-const ORDER_STATUS = Object.freeze({
-  pending: "Pending",
-  fulfilled: "Completed",
-  cancelled: "Cancelled",
-  refunded: "Refunded",
-});
-
-// One client shape for an order. The API returns camelCase; a freshly placed
-// order is built locally, and both must render identically.
-function normalizeRedemption(r) {
-  return {
-    id: r.id,
-    itemName: r.itemName || r.item_name || "Reward",
-    cost: Number(r.cost || 0),
-    status: r.status || "pending",
-    createdAt: r.createdAt || r.created_at || null,
-  };
-}
-
-/* ── history ─────────────────────────────────────────────────────── */
-
-function siteFromUrl() {
-  return new URLSearchParams(window.location.search).get(SITE_PARAM) || null;
-}
-
-function setUrl(slug, replace) {
-  const url = new URL(window.location.href);
-  if (slug) url.searchParams.set(SITE_PARAM, slug);
-  else url.searchParams.delete(SITE_PARAM);
-  const next = `${url.pathname}${url.search}${url.hash}`;
-  const method = replace ? "replaceState" : "pushState";
-  window.history[method]({ site: slug || null }, "", next);
-}
-
-// Back/Forward: the URL is the source of truth, so re-derive the view from it.
-window.addEventListener("popstate", () => { syncFromUrl().catch(() => {}); });
-
-async function syncFromUrl() {
-  if (!state.viewer) return;
-  const slug = siteFromUrl();
-  if (!slug) {
-    selectedSlug = null;
-    state.current = null;
-    showList({ focus: true });
-    return;
-  }
-  if (slug === selectedSlug && state.current) {
-    showDetail({ focus: true });
-    return;
-  }
-  await openSite(slug, { history: "none", focus: true });
-}
-
-/* ── views ───────────────────────────────────────────────────────── */
-
-function showList({ focus = false } = {}) {
-  $("vd-login-card").hidden = true;
-  $("vd-profile").hidden = false;
-  $("vd-boards-card").hidden = false;
-  $("vd-site-card").hidden = true;
-  setStatus("vd-site-status", "");
-  if (focus) focusEl("vd-boards-heading");
-}
-
-function showDetail({ focus = false } = {}) {
-  $("vd-login-card").hidden = true;
-  $("vd-profile").hidden = false;
-  $("vd-boards-card").hidden = true;
-  $("vd-site-card").hidden = false;
-  if (focus) focusEl("vd-site-name");
+  const element = $("vd-loading");
+  if (element) element.hidden = !loading;
 }
 
 function renderLoggedOut() {
-  state = {};
-  selectedSlug = null;
   $("vd-login-card").hidden = false;
   $("vd-profile").hidden = true;
-  $("vd-boards-card").hidden = true;
-  $("vd-site-card").hidden = true;
+  $("vd-communities-card").hidden = true;
 }
 
-async function load() {
-  setGlobalLoading(true);
-  try {
-    const data = await api("GET", "/api/viewer/me");
-    state = { ...data, redemptions: (data.redemptions || []).map(normalizeRedemption), current: state.current };
-    if (!state.viewer) { renderLoggedOut(); return; }
-    renderAccount();
-    renderBoards();
-    if (selectedSlug && state.current) showDetail();
-    else showList();
-  } catch (err) {
-    if (err.message === "unauthorized") renderLoggedOut();
-    else setStatus("vd-login-status", errorText(err.message, "We couldn't load your account."), true, () => { load().catch(() => {}); });
-  } finally {
-    setGlobalLoading(false);
-  }
-}
-
-function renderAccount() {
-  const v = state.viewer;
-  if (!v) return;
-  const name = v.discordUsername || v.kickUsername || "Member";
+function renderAccount(viewer) {
+  const name = viewer.displayName || "Member";
   $("vd-username").textContent = name;
   $("vd-avatar-fallback").textContent = initial(name);
-  if (v.avatarUrl) {
-    $("vd-avatar").src = v.avatarUrl;
-    $("vd-avatar").alt = name;
+
+  if (viewer.avatarUrl) {
+    $("vd-avatar").src = viewer.avatarUrl;
+    $("vd-avatar").alt = `${name}'s profile picture`;
     $("vd-avatar").hidden = false;
     $("vd-avatar-fallback").hidden = true;
   } else {
     $("vd-avatar").hidden = true;
     $("vd-avatar-fallback").hidden = false;
   }
-  const providerName = v.provider === "kick" ? "Kick" : v.provider === "discord" ? "Discord" : "YourRank";
-  const linkedAt = v.provider === "kick" ? v.kickLinkedAt : v.provider === "discord" ? v.discordLinkedAt : null;
-  $("vd-identity").textContent = `Logged in with ${providerName} as @${name}${linkedAt ? " · linked " + fmtDate(linkedAt) : ""}`;
+
+  const connections = (viewer.connections || []).map((connection) => {
+    const provider = connection.provider === "kick" ? "Kick" : connection.provider === "discord" ? "Discord" : "Provider";
+    const username = connection.username ? ` as @${connection.username}` : "";
+    return `${provider}${username}`;
+  });
+  const accountAge = viewer.createdAt ? ` · Viewer Account since ${fmtDate(viewer.createdAt)}` : "";
+  $("vd-identity").textContent = `${connections.length ? `Connected to ${connections.join(" and ")}` : "Signed in to YourRank"}${accountAge}`;
   $("vd-wrong-account").hidden = false;
 }
 
-function renderBoards() {
-  const boards = state.boards || [];
-  $("vd-boards-empty").hidden = boards.length > 0;
-  $("vd-boards").innerHTML = boards.map((b) => `
-    <div class="vd-card-row">
-      <span class="vd-site-mark" aria-hidden="true">${esc(initial(b.name || b.slug))}</span>
-      <div class="vd-card-main">
-        <div class="vd-card-title">${esc(b.name || b.slug)}</div>
-        <div class="hint">${fmtNum(b.balance)} free credits${b.blocked ? " · claiming disabled" : ""}</div>
-      </div>
-      <div class="vd-card-side">
-        <button class="btn btn--sm" type="button" data-view-site="${esc(b.slug)}" aria-label="Open ${esc(b.name || b.slug)}">Open</button>
-      </div>
-    </div>
-  `).join("");
-
-  $("vd-boards").querySelectorAll("[data-view-site]").forEach((b) => {
-    b.addEventListener("click", () => openSite(b.dataset.viewSite, { btn: b, focus: true }));
-  });
+function membershipSummary(community) {
+  const parts = [`${fmtNum(community.balance)} free credits`];
+  if (community.pendingClaims > 0) {
+    parts.push(`${fmtNum(community.pendingClaims)} ${community.pendingClaims === 1 ? "Claim needs" : "Claims need"} creator action`);
+  }
+  if (!community.claimingAvailable) parts.push("Claiming unavailable");
+  return parts.join(" · ");
 }
 
-/* ── creator detail ──────────────────────────────────────────────── */
-
-// history: "push" from the list, "replace" for a deep link, "none" for popstate.
-async function openSite(slug, { btn = null, history = "push", focus = false } = {}) {
-  if (btn) setLoading(btn, true, "Opening…");
-  setStatus("vd-boards-status", "");
-  try {
-    const data = await api("GET", `/api/viewer/site?slug=${encodeURIComponent(slug)}`);
-    data.redemptions = (data.redemptions || []).map(normalizeRedemption);
-    state.current = data;
-    selectedSlug = slug;
-    if (history === "push") setUrl(slug, false);
-    else if (history === "replace") setUrl(slug, true);
-    renderSite();
-    showDetail({ focus });
-  } catch (err) {
-    state.current = null;
-    selectedSlug = null;
-    setUrl(null, true);
-    showList({ focus });
-    setStatus(
-      "vd-boards-status",
-      errorText(err.message, "We couldn't open that creator."),
-      true,
-      retryable(err.message) ? () => { openSite(slug, { focus }).catch(() => {}); } : null,
-    );
-  } finally {
-    if (btn) setLoading(btn, false);
-  }
-}
-
-function renderSite() {
-  const data = state.current;
-  if (!data) return;
-
-  $("vd-site-name").textContent = data.site.name || data.site.slug;
-  const channel = data.site.kickChannelName;
-  $("vd-site-streamer").textContent = channel
-    ? `Kick channel: @${channel}`
-    : "Streamer site";
-
-  const v = data.viewer || { balance: 0, blocked: false };
-  $("vd-site-balance").textContent = fmtNum(v.balance);
-
-  // The creator's own site is the canonical place to see everything they offer.
-  const visit = $("vd-site-visit");
-  if (visit) {
-    visit.href = `/${encodeURIComponent(data.site.slug)}`;
-    visit.textContent = `Visit ${data.site.name || data.site.slug}`;
-    visit.hidden = false;
-  }
-
-  const earnHint = $("vd-earn-hint");
-  if (earnHint) {
-    earnHint.textContent = channel
-      ? `Earn credits by using @${channel}'s linked Kick rewards during a live stream.`
-      : "Earn credits by using the streamer's linked Kick rewards during a live stream.";
-  }
-
-  const items = data.shopItems || [];
-  $("vd-shop-empty").hidden = items.length > 0;
-  $("vd-shop-list").innerHTML = items.map((i) => {
-    const isRedeeming = redeemingItemId === i.id;
-    const inStock = i.stock === null || i.stock === undefined || i.stock > 0;
-    const canBuy = v && !v.blocked && v.balance >= i.cost && inStock && !isRedeeming;
-    // Why a Claim button is unavailable is said in words, never left to the
-    // disabled styling alone.
-    const state = v.blocked
-      ? "Claiming disabled on this site"
-      : !inStock
-        ? "Out of stock"
-        : v.balance < i.cost
-          ? `Not enough credits — ${fmtNum(i.cost - v.balance)} more needed`
-          : i.stock !== null && i.stock !== undefined && i.stock <= 3
-            ? `${i.stock} left`
-            : "";
+function renderCommunities(communities) {
+  const list = $("vd-communities");
+  $("vd-communities-empty").hidden = communities.length > 0;
+  list.innerHTML = communities.map((community) => {
+    const name = community.name || community.slug;
+    const memberSince = community.memberSince ? `Member since ${fmtDate(community.memberSince)}` : "Community membership";
+    const href = `/${encodeURIComponent(community.slug)}/me`;
     return `
-      <div class="vd-card-row">
+      <article class="vd-card-row vd-community-row">
+        <span class="vd-site-mark" aria-hidden="true">${esc(initial(name))}</span>
         <div class="vd-card-main">
-          <div class="vd-card-title">${esc(i.name)}</div>
-          ${i.description ? `<div class="hint">${esc(i.description)}</div>` : ""}
+          <h3 class="vd-card-title">${esc(name)}</h3>
+          <p class="hint">${esc(memberSince)}</p>
+          <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
         </div>
         <div class="vd-card-side">
-          <div class="vd-card-cost">${fmtNum(i.cost)} credits</div>
-          ${state ? `<div class="hint">${esc(state)}</div>` : ""}
-          <button class="btn btn--sm" type="button" data-redeem="${esc(i.id)}" aria-label="Claim ${esc(i.name)}" ${canBuy ? "" : "disabled"}>Claim</button>
+          <a class="btn btn--sm" href="${href}" aria-label="Open your membership in ${esc(name)}">Open membership</a>
         </div>
-      </div>
-    `;
+      </article>`;
   }).join("");
-
-  $("vd-shop-list").querySelectorAll("[data-redeem]").forEach((b) => {
-    b.addEventListener("click", () => redeem(b.dataset.redeem, b));
-  });
-
-  const redemptions = (data.redemptions || []).map(normalizeRedemption);
-  $("vd-redemptions-empty").hidden = redemptions.length > 0;
-  $("vd-redemptions-list").innerHTML = redemptions.map((r) => {
-    const statusLabel = ORDER_STATUS[r.status] || "Pending";
-    return `
-    <div class="vd-card-row vd-redemption-row">
-      <div class="vd-card-main">
-        <div class="vd-card-title">${esc(r.itemName)}</div>
-        <div class="hint">${fmtNum(r.cost)} credits · ${fmtDate(r.createdAt)}</div>
-      </div>
-      <div class="vd-card-side">
-        <span class="pill pill--${r.status === "pending" ? "muted" : r.status === "fulfilled" ? "good" : "bad"}">${esc(statusLabel)}</span>
-      </div>
-    </div>
-  `}).join("");
-
-  renderEvents();
 }
 
-function renderEvents() {
-  const data = state.current;
-  if (!data) return;
-
-  const dropClaim = $("vd-drop-claim");
-  const eventsEmpty = $("vd-events-empty");
-
-  dropClaim.hidden = !(data.activeDropCount > 0);
-  eventsEmpty.hidden = data.activeDropCount > 0;
-}
-
-$("vd-drop-claim-btn")?.addEventListener("click", claimDrop);
-
-async function claimDrop() {
-  const input = $("vd-drop-code");
-  const code = String(input.value).trim().toUpperCase();
-  if (!code) {
-    setStatus("vd-drop-status", "Enter a code.", true);
-    return;
-  }
-  const btn = $("vd-drop-claim-btn");
-  setLoading(btn, true, "Claiming…");
+async function load() {
+  setGlobalLoading(true);
+  setStatus("vd-login-status", "");
+  setStatus("vd-communities-status", "");
   try {
-    const data = await api("POST", "/api/events/drops/claim", { site: state.current.site.slug, code });
-    setStatus("vd-drop-status", `+${data.pointsAwarded} credits claimed.`, false);
-    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
-    state.current.viewer.balance = data.newBalance;
-    $("vd-drop-code").value = "";
-    renderSite();
-  } catch (err) {
-    setStatus("vd-drop-status", errorText(err.message, "We couldn't claim that code. Check it and try again."), true);
-  } finally {
-    setLoading(btn, false);
-  }
-}
-
-// The page loads /assets/dialog.js before this module; without it we refuse the
-// claim rather than fall back to the browser's native confirm().
-async function confirmOrder(item) {
-  const dialog = window.YRDialog;
-  if (!dialog) {
-    setStatus("vd-site-status", "Claiming is unavailable right now. Reload the page and try again.", true);
-    return false;
-  }
-  const balance = state.current?.viewer?.balance;
-  const left = typeof balance === "number" && balance >= item.cost
-    ? ` You'd have ${fmtNum(balance - item.cost)} credits left.`
-    : "";
-  return dialog.confirm({
-    title: "Confirm claim",
-    body: `Claim ${item.name} for ${fmtNum(item.cost)} free credits.${left} Credits have no cash value.`,
-    confirmText: "Claim reward",
-  });
-}
-
-async function redeem(shopItemId, btn) {
-  const slug = state.current?.site?.slug;
-  if (!slug) return;
-  const item = (state.current.shopItems || []).find((i) => i.id === shopItemId);
-  if (!item) return;
-  setStatus("vd-site-status", "");
-  if (!await confirmOrder(item)) return;
-  if (btn) setLoading(btn, true, "Claiming…");
-
-  // Tie the idempotency key to the item, not just the DOM node, so retries and
-  // rapid clicks resolve to the same order. The key is only cleared on success.
-  let idempotencyKey = redeemKeys[shopItemId] || btn?.dataset.redeemKey;
-  if (!idempotencyKey) {
-    idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    redeemKeys[shopItemId] = idempotencyKey;
-  }
-  if (btn) btn.dataset.redeemKey = idempotencyKey;
-
-  redeemingItemId = shopItemId;
-
-  try {
-    const data = await api("POST", "/api/viewer/redeem", { slug, shopItemId, idempotencyKey });
-    // The member stays in this creator's detail: apply the server's balance and
-    // the new claim in place instead of reloading the whole account.
-    state.current.viewer = state.current.viewer || { balance: 0, blocked: false };
-    state.current.viewer.balance = data.balance;
-    state.current.redemptions = state.current.redemptions || [];
-    state.current.redemptions.unshift(normalizeRedemption({
-      id: data.redemptionId,
-      itemName: data.itemName || item.name,
-      cost: data.itemCost ?? item.cost,
-      status: data.status || "pending",
-      createdAt: new Date().toISOString(),
-    }));
-    const board = (state.boards || []).find((b) => b.slug === slug);
-    if (board) board.balance = data.balance;
-    delete redeemKeys[shopItemId];
-    setStatus("vd-site-status", `Claim submitted for ${item.name}. The creator will complete it.`, false);
-  } catch (err) {
-    setStatus("vd-site-status", errorText(err.message, "We couldn't submit that claim. Try again."), true);
-  } finally {
-    redeemingItemId = null;
-    if (btn) setLoading(btn, false);
-    // Re-render so the visible Claim button reflects the latest balance and
-    // claim state, then put focus back on the control the member used.
-    if (state.current) {
-      renderSite();
-      renderBoards();
-      const again = $("vd-shop-list").querySelector(`[data-redeem="${shopItemId}"]`);
-      if (again && !again.disabled) again.focus();
-      else focusEl("vd-site-status");
+    const data = await api("GET", "/api/viewer/me");
+    if (!data.viewer) {
+      renderLoggedOut();
+      return;
     }
+    $("vd-login-card").hidden = true;
+    $("vd-profile").hidden = false;
+    $("vd-communities-card").hidden = false;
+    renderAccount(data.viewer);
+    renderCommunities(data.communities || []);
+  } catch (error) {
+    if (error.message === "unauthorized") renderLoggedOut();
+    else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
+  } finally {
+    setGlobalLoading(false);
   }
 }
 
 $("vd-logout")?.addEventListener("click", async () => {
-  const btn = $("vd-logout");
-  setLoading(btn, true, "Logging out…");
+  const button = $("vd-logout");
+  setLoading(button, true, "Signing out…");
   try {
     await api("POST", "/api/viewer/logout");
-    clearStatuses();
-    setUrl(null, true);
+    setStatus("vd-account-status", "");
     renderLoggedOut();
-  } catch (err) { setStatus("vd-account-status", errorText(err.message, "We couldn't sign you out. Try again."), true); }
-  finally { setLoading(btn, false); }
-});
-
-$("vd-back")?.addEventListener("click", () => {
-  state.current = null;
-  selectedSlug = null;
-  setUrl(null, false);
-  showList({ focus: true });
-  load().catch(() => {});
+  } catch (error) {
+    setStatus("vd-account-status", errorText(error.message, "We couldn't sign you out. Try again."), true);
+  } finally {
+    setLoading(button, false);
+  }
 });
 
 $("vd-switch")?.addEventListener("click", async () => {
@@ -504,35 +186,23 @@ $("vd-switch")?.addEventListener("click", async () => {
 });
 
 const LOGIN_ERROR_MESSAGES = Object.freeze({
-  rate_limited: "Too many login attempts. Try again shortly.",
-  missing_oauth_params: "Kick did not return the information needed. Try again.",
-  oauth_state_expired: "That login took too long — try again.",
-  access_denied: "Kick login was cancelled.",
-  kick_auth_failed: "We couldn't complete Kick login. Try again.",
+  rate_limited: "Too many sign-in attempts. Try again shortly.",
+  missing_oauth_params: "The provider did not return the information needed. Try again.",
+  oauth_state_expired: "That sign-in took too long. Try again.",
+  access_denied: "Sign-in was cancelled.",
+  kick_auth_failed: "We couldn't complete Kick sign-in. Try again.",
+  discord_auth_failed: "We couldn't complete Discord sign-in. Try again.",
 });
 
-// Show any sign-in error in the URL, then remove the one-time code.
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.get("error")) {
-  setStatus("vd-login-status", LOGIN_ERROR_MESSAGES[urlParams.get("error")] || "We couldn't complete login. Try again.", true);
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete("error");
-  window.history.replaceState({}, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
-}
-
-async function boot() {
-  const slug = siteFromUrl();
-  await load();
-  if (!state.viewer) {
-    // A ?site= link is meaningless until the member logs in.
-    if (slug) setUrl(null, true);
-    return;
-  }
-  if (slug) await openSite(slug, { history: "replace" });
-  else setUrl(null, true);
+const url = new URL(window.location.href);
+if (url.searchParams.get("error")) {
+  const code = url.searchParams.get("error");
+  setStatus("vd-login-status", LOGIN_ERROR_MESSAGES[code] || "We couldn't complete sign-in. Try again.", true);
+  url.searchParams.delete("error");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 // Exposed so tests and runtime checks can await the first render.
-window.__yrViewerReady = boot().catch((err) => {
-  setStatus("vd-login-status", errorText(err.message, "We couldn't load your account. Try again."), true);
+window.__yrViewerReady = load().catch((error) => {
+  setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account. Try again."), true);
 });

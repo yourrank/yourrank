@@ -61,7 +61,7 @@ describe("public viewer shell", () => {
     expect(tabs).toContain(">Home<");
     expect(tabs).toContain(">Leaderboard<");
     expect(tabs).toContain(">Rewards<");
-    expect(tabs).toContain(">My credits<");
+    expect(tabs).toContain(">My Community<");
     expect(tabs).not.toContain(">Games<");
     expect((html.match(/aria-current="page"/g) || []).length).toBe(2); // header link + drawer link
     expect(tabs).toContain('href="https://example.test/creator/shop" aria-current="page"');
@@ -151,7 +151,7 @@ describe("public viewer shell", () => {
       viewerData: { ...viewerData, viewerOnSite: { balance: 1234567 } },
     });
     expect(big).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234,567</span>');
-    expect(big).toContain('aria-label="My credits on this site: 1,234,567"');
+    expect(big).toContain('aria-label="Credits in this community: 1,234,567"');
   });
 
   it("leaves signing in to the bar alone on a signed-out page", async () => {
@@ -191,9 +191,17 @@ describe("public viewer shell", () => {
 
     const signedIn = await render("home", { viewer, viewerData });
     expect(signedIn).toContain('<span class="yr-bal-num" data-credit-balance-num>1,234</span>');
-    expect(signedIn).toContain('aria-label="My credits on this site: 1,234"');
+    expect(signedIn).toContain('aria-label="Credits in this community: 1,234"');
     expect(signedIn).toContain('<a class="yr-account-link" href="/me"');
     expect(signedIn).not.toContain(">Sign in<");
+  });
+
+  it("keeps local membership and global account destinations distinct on custom domains", async () => {
+    const html = await render("home", { viewer, viewerData, custom: true });
+    expect(html).toContain('class="yr-bal" href="https://example.test/me"');
+    expect(html).toContain('class="yr-account-link" href="https://yourrank.site/me"');
+    expect(html).toContain('class="yr-sec-link yr-drawer-acct" href="https://yourrank.site/me"');
+    expect(html).toContain(">All communities ");
   });
 
   it("drops the dashboard reading of home", async () => {
@@ -239,12 +247,12 @@ describe("public viewer shell", () => {
     expect(noShop).not.toContain("yr-preview");
   });
 
-  it("gives a signed-in viewer their balance and both credit destinations", async () => {
+  it("gives a signed-in viewer their balance and local/global membership destinations", async () => {
     const html = await render("home", { viewer, viewerData });
     expect(html).toContain('<span class="yr-vnote-num">1,234</span>');
     expect(html).toContain("credits on this site");
     expect(html).toContain('href="https://example.test/creator/shop">Spend credits</a>');
-    expect(html).toContain('href="https://example.test/creator/me">My credits ');
+    expect(html).toContain('href="https://example.test/creator/me">My Community ');
     expect(html).toContain("No purchase, no cash value.");
   });
 
@@ -262,7 +270,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('<p class="yr-empty-t">No players on the board yet</p>');
     expect(html).not.toContain("yr-chips");
     expect(html).not.toContain("yr-vnote");
-    expect(html).not.toContain(">My credits<");
+    expect(html).not.toContain(">My Community<");
   });
 
   it("links the creator's configured channels and nothing else", async () => {
@@ -530,7 +538,7 @@ describe("public viewer shell", () => {
     // Quiet in the normal view means the working header's destinations are not
     // repeated outside that fallback.
     const quiet = foot.slice(0, foot.indexOf("yr-foot-nav"));
-    for (const section of [">Home</a>", ">Leaderboard</a>", ">Rewards</a>", ">My credits</a>"]) {
+    for (const section of [">Home</a>", ">Leaderboard</a>", ">Rewards</a>", ">My Community</a>"]) {
       expect(quiet).not.toContain(section);
     }
     expect(quiet).toContain("data-feedback-open");

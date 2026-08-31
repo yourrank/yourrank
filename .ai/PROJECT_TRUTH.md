@@ -73,7 +73,7 @@ Current public/site ownership:
 
 - `packages/shared/src/site-render.ts` is the one public viewer renderer.
 - `apps/leaderboard/src/assets/site-shell.css` is the public viewer stylesheet owner.
-- The current public viewer exposes Home, Leaderboard, Rewards, Games, site-scoped My Credits, and a separate global `/me` account/sites surface. Future Activities/My Community labels must follow real capability.
+- The current public viewer exposes Home, Leaderboard, Rewards, Games, creator-scoped **My Community**, and global `/me` as the Viewer Account's **My communities** index. My communities links into each creator-owned surface without duplicating its Rewards or Claims detail. Future Activities, participation, Recognition, and expanded Claims labels must follow real capability.
 - Current Site Settings is owned by the canonical dashboard Site surface and previews through the real public renderer. Do not build a second creator-site editor.
 
 Current identity boundaries:
@@ -128,7 +128,7 @@ Restricted routes may remain operational current implementation. Generic shared 
 ## Deferred / Unresolved
 
 - Exact billing prices, provider behavior, recurring/lifetime semantics, stored plan values, and entitlement migration.
-- Physical schema for shared Activity, Review, Claims, and viewer/site membership expansion.
-- Timing and route details for target Community, Activities, People, Insights, and viewer My Community surfaces.
+- Physical schema for shared Activity, Review, Claims, and viewer/site membership expansion beyond the existing `viewers` + `site_viewers` foundation.
+- Timing and route details for target Activities and viewer participation/Recognition/expanded Claims surfaces.
 - Migration of eligible Telegram operations into a future channel-neutral Communication surface.
 - Removal timing for legacy aliases, which requires operational evidence.

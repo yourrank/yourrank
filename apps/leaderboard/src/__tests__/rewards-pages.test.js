@@ -76,11 +76,11 @@ describe("server-rendered rewards pages", () => {
     expect(rewardsClientSource).toContain("const statusClearTimers = new Map()");
   });
 
-  it("maps viewer login errors to plain language and removes the one-time query", () => {
+  it("maps Viewer Account sign-in errors to plain language and removes the one-time query", () => {
     expect(viewerClientSource).toContain("LOGIN_ERROR_MESSAGES");
-    expect(viewerClientSource).toContain("That login took too long — try again.");
-    expect(viewerClientSource).toContain('cleanUrl.searchParams.delete("error")');
-    expect(viewerClientSource).toContain("cleanUrl.search");
+    expect(viewerClientSource).toContain("That sign-in took too long. Try again.");
+    expect(viewerClientSource).toContain('url.searchParams.delete("error")');
+    expect(viewerClientSource).toContain("url.search");
     expect(viewerClientSource).not.toContain('"Login failed: " + urlParams.get("error")');
   });
 });

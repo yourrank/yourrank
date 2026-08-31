@@ -25,7 +25,7 @@ export async function getViewerSiteData(
 
   let [viewerOnSite, shopItems] = await Promise.all([
     oneImpl(
-      "SELECT id, balance, blocked, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+      "SELECT id, balance, blocked, total_earned, total_spent, created_at, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
       [siteId, viewerId]
     ),
     shop ? getShopItems(siteId, queryImpl) : Promise.resolve([]),
@@ -40,7 +40,7 @@ export async function getViewerSiteData(
         [siteId, viewerId],
       );
       viewerOnSite = await oneImpl(
-        "SELECT id, balance, blocked, total_earned, total_spent, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
+        "SELECT id, balance, blocked, total_earned, total_spent, created_at, last_seen_at FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
         [siteId, viewerId],
       );
     } catch (err) {
@@ -94,6 +94,7 @@ export async function getViewerSiteData(
       blocked: viewerOnSite.blocked,
       total_earned: viewerOnSite.total_earned,
       total_spent: viewerOnSite.total_spent,
+      created_at: viewerOnSite.created_at,
       last_seen_at: viewerOnSite.last_seen_at,
     },
     shopItems: shop ? shopItems : [],

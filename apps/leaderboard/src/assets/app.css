@@ -1242,31 +1242,33 @@ html{color-scheme:light}
 .vd-identity-card{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel)}
 .vd-sec{margin-top:24px}
 .vd-sec>h2{margin:0}
-.vd-balance{font-size:1.25rem;font-weight:700;margin:10px 0 0}
 .vd-profile-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .vd-profile-txt{min-width:0;flex:1 1 24ch}
 .vd-profile-txt h2{font-size:1.05rem;margin:0}
+.vd-account-name{font-size:1rem;font-weight:700;margin:3px 0 0;overflow-wrap:anywhere}
 .vd-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover}
 .vd-avatar-fallback,.vd-site-mark{display:grid;place-items:center;flex:0 0 auto;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--panel));color:var(--accent);font-weight:700}
 .vd-avatar-fallback{width:40px;height:40px;border-radius:50%}
 .vd-profile-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.vd-site-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
 /* The row keeps its title readable at any width: the main column asks for a
    readable measure, so when the row can no longer grant it the side column
    wraps onto its own line instead of squeezing the title into a few
    characters. No width breakpoint decides this. */
-.vd-card-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;gap:8px 12px;flex-wrap:wrap}
+.vd-community-list{margin-top:14px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+.vd-card-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);gap:8px 12px;flex-wrap:wrap}
+.vd-card-row:last-child{border-bottom:0}
 .vd-site-mark{width:34px;height:34px;border-radius:8px;font-size:13px}
 .vd-card-main{flex:1 1 22ch;min-width:0}
-.vd-card-title{font-weight:600;margin-bottom:2px;overflow-wrap:anywhere}
+.vd-card-title{font-size:1rem;font-weight:600;margin:0 0 2px;overflow-wrap:anywhere}
 .vd-card-main .hint{overflow-wrap:anywhere}
 .vd-card-side{flex:0 1 auto;min-width:0;margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .vd-card-side .hint{min-width:0;overflow-wrap:anywhere}
-.vd-card-cost{font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.vd-drop-code{width:120px;max-width:100%;text-transform:uppercase}
+.vd-membership-summary{margin:5px 0 0;font-size:13px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.vd-community-empty p{margin:0}
+.vd-community-empty .hint{margin-top:6px}
 /* Viewer errors must not be colour-only. */
-#vd-login-status.error::before,#vd-account-status.error::before,#vd-boards-status.error::before,#vd-site-status.error::before,#vd-drop-status.error::before{content:"⚠ "}
-#vd-account-status:empty,#vd-boards-status:empty,#vd-site-status:empty{margin:0}
+#vd-login-status.error::before,#vd-account-status.error::before,#vd-communities-status.error::before{content:"⚠ "}
+#vd-account-status:empty,#vd-communities-status:empty{margin:0}
 @media(max-width:640px){.viewer-account-page .vd-account-shell{padding-bottom:36px}.viewer-account-page .vd-account-shell>:not(.gm-shell-nav){width:min(calc(100% - 24px),880px)}.viewer-account-page .vd-head{margin-top:24px}.vd-profile-actions{width:100%;margin-left:52px}.vd-profile-actions .btn{flex:1 1 auto}.vd-card-side{width:100%;margin-left:46px}.vd-card-side .btn{width:100%}}
 .mt-32{margin-top:32px}.mt-48{margin-top:48px}.mt-64{margin-top:64px}.text-accent{color:var(--accent)}.text-center{text-align:center}
 .pg-narrow{max-width:620px;margin:0 auto;padding:48px 24px}

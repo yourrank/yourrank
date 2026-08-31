@@ -177,7 +177,19 @@ ${gamesIslandHead()}
       section,
       viewer,
       viewerData,
-      opts: { nonce: renderNonce, homeUrl, slug, isCustomDomain, logoUrl, watermark, csrfToken, boards: r.boards, botUsername: r.botUsername, isDemo },
+      opts: {
+        nonce: renderNonce,
+        homeUrl,
+        slug,
+        isCustomDomain,
+        logoUrl,
+        watermark,
+        csrfToken,
+        boards: r.boards,
+        botUsername: r.botUsername,
+        isDemo,
+        viewerAuthError: section === "me" ? url.searchParams.get("error") : null,
+      },
     });
     const responseHeaders = cacheableSite
       ? new Headers({

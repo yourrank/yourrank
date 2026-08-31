@@ -5,6 +5,17 @@
 (function () {
   "use strict";
 
+  // OAuth errors are one-time context. The server renders a controlled message
+  // on My Community; remove only the known query key so refresh does not replay
+  // stale failure feedback and unrelated navigation state remains intact.
+  if (document.body && document.body.dataset.section === "me") {
+    var authUrl = new URL(window.location.href);
+    if (authUrl.searchParams.has("error")) {
+      authUrl.searchParams.delete("error");
+      window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
+    }
+  }
+
   var side = document.getElementById("yr-side");
   var scrim = document.getElementById("yr-scrim");
   var menu = document.getElementById("yr-menu");

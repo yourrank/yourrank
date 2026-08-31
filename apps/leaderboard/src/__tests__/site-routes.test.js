@@ -1,6 +1,6 @@
 // Tests for the public multi-section site shell.
 // Covers route parsing, section visibility enforcement, and the logged-out vs
-// logged-in rendering split for Home, Leaderboard, Shop, Games and My Credits.
+// logged-in rendering split for Home, Leaderboard, Shop, Games and My Community.
 //
 // Run: bun test src/__tests__/site-routes.test.js
 
@@ -322,12 +322,21 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("returnTo=https%3A%2F%2Fstreamer.example%2Fstreamer%2Fgames");
   });
 
-  it("Credits is a sign-in prompt when logged out", async () => {
+  it("My Community explains membership when logged out", async () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Credits");
+    expect(html).toContain("My Community");
+    expect(html).toContain("Community membership");
     expect(html).toContain("Sign in with Kick");
+  });
+
+  it("shows controlled OAuth errors on creator-scoped My Community", async () => {
+    const res = await renderSiteRoute({ request: req("https://streamer.example/me?error=not-a-real-provider-error"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("We couldn&#39;t complete sign-in. Try again.");
+    expect(html).not.toContain("not-a-real-provider-error");
   });
 
   it("logged-in viewers see their balance and claim buttons on shop", async () => {
@@ -341,7 +350,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).not.toContain("Sign in with Kick");
   });
 
-  it("logged-in viewers see history and claims on Credits", async () => {
+  it("logged-in viewers see credits and Claims in My Community", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
     const request = req("https://example.com/streamer/me", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });

@@ -164,7 +164,10 @@ These modes share route, chrome, navigation, and shell ownership. A migration ma
 - Existing `last_active_at` rows do not record which historical caller wrote them, so passive historical marks cannot be distinguished safely from legitimate activity. This candidate performs no destructive reset or migration; future passive membership rows remain null until a qualifying action.
 - `site_viewers.block_reason` and fraud score remain private creator/moderation context. Public and authenticated viewer renderers, APIs, `/me`, site-scoped membership/Rewards/Claims data, and viewer exports omit internal reasons and use controlled generic blocked-membership copy. Viewer-specific JSON responses are private and `no-store`; legitimate authorized People/Credits and owner account-export visibility remains.
 - Restricted legacy is operationally isolated from target creator Home, primary creator navigation, quick actions, command palette, primary viewer navigation, Site public-section controls, and the global viewer membership journey. No restricted business logic, calculations, persistence, or product replacement was introduced.
-- Viewer architecture convergence remains pending; this correction does not redesign `/me`, site-scoped membership, My Community/Communities, Claims navigation, participation history, or Recognition.
+- Viewer Account and membership presentation now converge on the existing identity model. Global `/me` is the account-scoped **My communities** index; each `/<slug>/me` or custom-domain `/me` is that creator's **My Community** membership surface. Global account data links into creator-owned Rewards/credits/Claims instead of duplicating those experiences.
+- Global membership summaries expose only community identity, membership timing, free-credit balance, controlled claiming availability, and the count of pending Claims needing creator action. They do not expose creator plan data, raw site/membership IDs, full cross-community Claim history, internal block reasons, or fraud context.
+- Provider connections shown on the Viewer Account require their persisted OAuth link timestamp; names or external identifiers alone are not proof. Custom-domain and apex navigation preserve local community versus global account ownership, and creator-scoped OAuth failures render controlled messages rather than raw provider/query values.
+- Participation history, Recognition, expanded Claims history, social features, messaging, and automation remain deferred to later work; this convergence does not implement Wave J.
 
 Current fulfillment audit:
 
@@ -223,7 +226,7 @@ Privacy, access, retention, and notification decisions:
 | Settings | Account-scoped fragment routes under `/dashboard/settings` |
 | Public creator destination | `renderSite()` via apex slug routes and custom-domain routes |
 
-Community, People, and Insights are current navigation presentation labels only; they do not imply new entity or persistence boundaries. Activities has a narrow current route and adapter boundary for free code drops; broader Activity families remain target-only. Recognition, Communication, My Community, and My Communities remain target-only claims.
+Community, People, and Insights are current navigation presentation labels only; they do not imply new entity or persistence boundaries. Activities has a narrow current route and adapter boundary for free code drops; broader Activity families remain target-only. **My Community** and global **My communities** now present the existing Viewer Account/`site_viewers` foundation; Recognition and Communication remain target-only claims.
 
 ## Worker and Runtime Topology
 
@@ -257,7 +260,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |
 | Legacy `v3-*`/`v4-*` names and raw-value ratchets | Existing debt; do not extend |
 | Legacy route aliases | Retained pending telemetry evidence |
-| Viewer/site membership expansion beyond the existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence |
+| Viewer/site membership expansion beyond the converged Viewer Account + existing `site_viewers` foundation | Deferred until a proven capability needs additive persistence; Wave J participation/recognition and expanded Claims history are not present |
 | Recognition destination | Deferred; current archive evidence remains owned by Leaderboard History and the public Hall of Fame |
 | Shared Activity / Review / Claim persistence | Shared presentation uses narrow adapters; universal persistence remains deferred until real reuse and migration safety are proven |
 | Claims expansion beyond reward redemptions | Deferred; other safe workflows do not yet expose a proven fulfillment lifecycle, and private fulfillment fields must be evidence-led |

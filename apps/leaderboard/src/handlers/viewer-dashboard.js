@@ -1,4 +1,4 @@
-// Viewer-facing dashboard API: cross-board credits, per-board shop, and redeem.
+// Viewer-facing account API plus the site-scoped reward-claim action.
 
 import { one, query, withTransaction } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
@@ -10,7 +10,6 @@ import { buildRedemptionEmbed, sendDiscordWebhook } from "@yourrank/shared/notif
 import {
   CREDITS_PENDING_REDEMPTIONS_LIMITS,
   CREDITS_REDEMPTIONS_PER_30D_LIMITS,
-  effectivePlan,
 } from "@yourrank/shared/plans";
 import { markSiteViewerActive } from "@yourrank/shared/plan-usage";
 
@@ -32,169 +31,60 @@ export async function handleViewerMe(request, env, deps = {}) {
   if (res) return res;
   if (!(await rateLimitImpl(env, `viewer:me:${viewer.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
 
-  const boards = await queryImpl(
-    `SELECT s.id, s.slug, s.name, sv.balance, sv.total_earned, sv.total_spent,
-            sv.blocked,
-            u.plan, u.plan_expires_at, u.status, u.email_verified
+  const communities = await queryImpl(
+    `SELECT s.slug, s.name,
+            sv.id AS membership_id, sv.balance,
+            sv.blocked, sv.created_at AS member_since,
+            count(r.id) FILTER (WHERE r.status = 'pending')::int AS pending_claims
        FROM site_viewers sv
        JOIN sites s ON s.id = sv.site_id
        JOIN users u ON u.id = s.user_id
+       LEFT JOIN redemptions r ON r.site_viewer_id = sv.id
       WHERE sv.viewer_id = $1
         AND s.published = true
         AND s.is_draft = false
         AND u.status != 'suspended'
         AND u.email_verified = true
+      GROUP BY s.slug, s.name, sv.id, sv.balance, sv.blocked,
+               sv.created_at, sv.updated_at
       ORDER BY sv.updated_at DESC`,
     [viewer.id]
   );
 
-  const safeBoards = (boards || []).map((b) => ({
-    siteId: b.id,
-    slug: b.slug,
-    name: b.name,
-    balance: b.balance,
-    totalEarned: b.total_earned,
-    totalSpent: b.total_spent,
-    blocked: b.blocked,
-    plan: effectivePlan({ plan: b.plan, plan_expires_at: b.plan_expires_at }),
+  const safeCommunities = (communities || []).map((community) => ({
+    slug: community.slug,
+    name: community.name,
+    balance: community.balance,
+    memberSince: community.member_since,
+    pendingClaims: Number(community.pending_claims || 0),
+    claimingAvailable: !community.blocked,
   }));
 
-  const redemptions = await queryImpl(
-    `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at,
-            s.slug AS site_slug, s.name AS site_name, i.name AS item_name
-       FROM redemptions r
-       JOIN site_viewers sv ON sv.id = r.site_viewer_id
-       JOIN sites s ON s.id = sv.site_id
-       JOIN users u ON u.id = s.user_id
-       JOIN shop_items i ON i.id = r.shop_item_id
-      WHERE sv.viewer_id = $1
-        AND s.published = true
-        AND s.is_draft = false
-        AND u.status != 'suspended'
-        AND u.email_verified = true
-      ORDER BY r.created_at DESC
-      LIMIT 50`,
-    [viewer.id]
-  );
-
-  let provider = "unknown";
-  if (viewer.kick_user_id) provider = "kick";
-  else if (viewer.discord_user_id) provider = "discord";
+  const connections = [];
+  if (viewer.kick_linked_at) {
+    connections.push({
+      provider: "kick",
+      username: viewer.kick_username,
+      linkedAt: viewer.kick_linked_at,
+    });
+  }
+  if (viewer.discord_linked_at) {
+    connections.push({
+      provider: "discord",
+      username: viewer.discord_username,
+      linkedAt: viewer.discord_linked_at,
+    });
+  }
+  const displayName = connections.find((connection) => connection.username)?.username || "Member";
 
   return privateViewerJson({
     viewer: {
-      id: viewer.id,
-      provider,
-      kickUsername: viewer.kick_username,
-      discordUsername: viewer.discord_username,
+      displayName,
       avatarUrl: viewer.avatar_url,
-      kickLinkedAt: viewer.kick_linked_at,
-      discordLinkedAt: viewer.discord_linked_at,
+      createdAt: viewer.created_at,
+      connections,
     },
-    boards: safeBoards,
-    redemptions: (redemptions || []).map((r) => ({
-      id: r.id,
-      cost: r.cost,
-      status: r.status,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-      siteSlug: r.site_slug,
-      siteName: r.site_name,
-      itemName: r.item_name,
-    })),
-  });
-}
-
-export async function handleViewerSite(request, env, deps = {}) {
-  const requireViewerImpl = deps.requireViewer || requireViewer;
-  const rateLimitImpl = deps.rateLimit || rateLimit;
-  const getPublicSiteImpl = deps.getPublicSite || getPublicSite;
-  const oneImpl = deps.one || one;
-  const queryImpl = deps.query || query;
-  const { viewer, res } = await requireViewerImpl(request, env);
-  if (res) return res;
-
-  const url = new URL(request.url);
-  const slug = String(url.searchParams.get("slug") || "").trim().toLowerCase();
-  if (!slug) return bad("slug required");
-  if (!(await rateLimitImpl(env, `viewer:site:${viewer.id}:${slug}`, 60, 60)).ok) return bad("Too many requests.", 429);
-
-  const r = await getPublicSiteImpl(env, slug, request);
-  if (r && r.requiresPassword) return bad("Password required.", 401);
-  if (!r || r.suspended) return bad("site not found", 404);
-
-  const site = await oneImpl(
-    `SELECT id, name, slug, kick_channel_external_id, kick_channel_name,
-            viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled
-       FROM sites WHERE slug = $1`,
-    [slug]
-  );
-  if (!site) return bad("site not found", 404);
-
-  const viewerRow = await oneImpl(
-    `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked
-       FROM site_viewers sv
-      WHERE sv.site_id = $1 AND sv.viewer_id = $2`,
-    [site.id, viewer.id]
-  );
-
-  const shopItems = await queryImpl(
-    // Defensive ceiling above the highest current plan's active-item limit.
-    `SELECT id, name, description, cost, stock, active
-       FROM shop_items
-      WHERE site_id=$1 AND active=true
-      ORDER BY cost ASC
-      LIMIT 1024`,
-    [site.id]
-  );
-
-  const redemptions = viewerRow
-    ? await queryImpl(
-        `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at, i.name AS item_name
-           FROM redemptions r
-           JOIN shop_items i ON i.id = r.shop_item_id
-          WHERE r.site_viewer_id = $1
-          ORDER BY r.created_at DESC
-          LIMIT 50`,
-        [viewerRow.id]
-      )
-    : [];
-
-  const activeDropCount = await oneImpl(
-    "SELECT count(*)::int AS count FROM code_drops WHERE site_id=$1 AND status='active'",
-    [site.id]
-  );
-
-  return privateViewerJson({
-    site: {
-      id: site.id,
-      slug: site.slug,
-      name: site.name,
-      kickChannelName: site.kick_channel_name,
-      kickChannelExternalId: site.kick_channel_external_id,
-      kickAuthEnabled: site.viewer_kick_auth_enabled,
-      discordAuthEnabled: site.viewer_discord_auth_enabled,
-      publicRedeemEnabled: site.viewer_public_redeem_enabled,
-    },
-    viewer: viewerRow
-      ? {
-          siteViewerId: viewerRow.id,
-          balance: viewerRow.balance,
-          totalEarned: viewerRow.total_earned,
-          totalSpent: viewerRow.total_spent,
-          blocked: viewerRow.blocked,
-        }
-      : null,
-    shopItems: shopItems || [],
-    redemptions: (redemptions || []).map((r) => ({
-      id: r.id,
-      cost: r.cost,
-      status: r.status,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-      itemName: r.item_name,
-    })),
-    activeDropCount: activeDropCount?.count || 0,
+    communities: safeCommunities,
   });
 }
 

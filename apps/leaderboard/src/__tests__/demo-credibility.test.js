@@ -60,7 +60,7 @@ describe("demo credibility invariants", () => {
       leaderboard: "Leaderboard",
       shop: "Rewards",
       games: "Games",
-      me: "My credits",
+      me: "My Community",
     };
 
     // Each section names itself in its own heading; the shared chrome no

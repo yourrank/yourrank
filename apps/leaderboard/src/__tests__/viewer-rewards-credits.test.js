@@ -1,8 +1,7 @@
-// The viewer's three credit surfaces — a creator's Rewards page, a creator's My
-// credits page and the global /me account — are consumer pages: a small list of
-// things you can get with free loyalty points, your own balance and history, and
-// your account across creators. They are not a shop, not a dashboard and not a
-// gambling surface, and every one of those regressions is asserted here.
+// The viewer product has three explicit scopes: a creator's Rewards page, that
+// creator's My Community membership, and the global My communities account.
+// The global surface links to the creator-branded owner instead of duplicating
+// its Rewards, credits and Claims product.
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { renderSite } from "@yourrank/shared/site-render";
@@ -235,19 +234,19 @@ describe("the creator home credit state", () => {
   });
 });
 
-/* ── a creator's My credits page ──────────────────────────────────── */
+/* ── a creator's My Community page ───────────────────────────────── */
 
-describe("a creator's My credits page", () => {
+describe("a creator's My Community page", () => {
   it("explains the signed-out state without repeating the header sign-in action", async () => {
     const html = await signedOut("me");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Sign in from the header to see your balance, activity and reward claims");
+    expect(html).toContain("Sign in from the header to join");
     expect(html).toContain('<section class="yr-vsec yr-vsec--narrow yr-credit-guide">');
     expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
-    expect(html).toContain("Free credit balance");
-    expect(html).toContain("Credit activity");
-    expect(html).toContain("Reward claims");
+    expect(html).toContain("Community membership");
+    expect(html).toContain("Rewards and credits");
+    expect(html).toContain(">Claims<");
     expect(html).not.toContain("yr-kpi");
   });
 
@@ -258,11 +257,38 @@ describe("a creator's My credits page", () => {
     expect((html.match(/class="yr-empty /g) || []).length).toBe(2);
   });
 
+  it("does not invent a zero-balance membership when persistence is unavailable", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: { viewerOnSite: null, shopItems: [], ledger: [], redemptions: [] },
+      opts,
+    });
+    expect(html).toContain("We couldn't load your community membership right now.");
+    expect(html).not.toContain('class="yr-vbal');
+    expect(html).not.toContain("No credit activity yet");
+  });
+
+  it("shows and then clears controlled creator-scoped sign-in errors", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "me",
+      viewer: null,
+      viewerData: null,
+      opts: { ...opts, viewerAuthError: "untrusted-provider-detail" },
+    });
+    expect(html).toContain("We couldn&#39;t complete sign-in. Try again.");
+    expect(html).not.toContain("untrusted-provider-detail");
+    expect(shellSource).toContain('authUrl.searchParams.delete("error")');
+    expect(shellSource).toContain("window.history.replaceState");
+  });
+
   it("shows the balance, activity and claims without a stat dashboard", async () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
-    expect(html).toContain("Free loyalty credits on");
+    expect(html).toContain("Your membership in");
     expect(html).not.toContain("yr-gamer");
     expect(html).not.toContain("Credits / 7d");
     expect(html).not.toContain("Lifetime");
@@ -312,15 +338,15 @@ describe("the global account page", () => {
 
   const page = String(viewerDashboardPage);
 
-  it("opens with the account, not an operator dashboard head", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title">Your account</h1>');
+  it("opens with My communities, not an operator dashboard head", () => {
+    expect(page).toContain('<h1 class="vd-h1" id="vd-title">My communities</h1>');
     expect((page.match(/<h1\b/g) || []).length).toBe(1);
     expect(page).not.toContain("an-eyebrow");
     expect(page).not.toContain("an-title");
-    expect(page).toContain("no purchase, no cash value, no cashout");
+    expect(page).toContain("One Viewer Account for every creator community you join.");
   });
 
-  it("keeps one identity row, your sites, and one creator detail", () => {
+  it("keeps one identity row and one community membership list", () => {
     expect(page).toContain('<main class="wrap cr-wrap vd-account-shell"');
     expect(page).toContain('id="vd-avatar"');
     expect(page).toContain('id="vd-avatar-fallback"');
@@ -328,40 +354,33 @@ describe("the global account page", () => {
     expect(page).toContain('id="vd-identity"');
     expect(page).toContain('id="vd-logout"');
     expect(page).toContain('class="vd-profile-actions"');
-    expect(page).toContain(">Your sites<");
-    expect(page).toContain('id="vd-back" type="button">Back to your sites<');
-    expect(page).toContain('id="vd-site-visit"');
-    expect(page).toContain('id="vd-site-balance"');
-    expect(page).toContain("Cancelled and refunded both mean the credits went back to your balance.");
+    expect(page).toContain(">Community memberships<");
+    expect(page).toContain('id="vd-communities"');
+    expect(page).not.toContain('id="vd-site-card"');
+    expect(page).not.toContain('id="vd-back"');
     expect(clientSource).toContain('class="vd-site-mark"');
   });
 
-  it("keeps ?site=<slug> history, with no hash route and no router library", () => {
-    expect(clientSource).toContain("history[method]");
-    expect(clientSource).toContain('"popstate"');
-    expect(clientSource).not.toContain("location.hash =");
-    expect(clientSource).not.toContain("/me/");
+  it("links to the canonical creator membership without a client router", () => {
+    expect(clientSource).toContain('const href = `/${encodeURIComponent(community.slug)}/me`');
+    expect(clientSource).not.toContain('"popstate"');
+    expect(clientSource).not.toContain("pushState");
+    expect(clientSource).not.toContain("/api/viewer/site");
     for (const banned of ["react", "vue", "page.js", "navigo"]) {
       expect(clientSource.toLowerCase()).not.toContain(`import ${banned}`);
     }
   });
 
-  it("names every claim source state and explains an unavailable Claim in words", () => {
-    for (const label of ["Pending", "Completed", "Cancelled", "Refunded"]) {
-      expect(clientSource).toContain(`"${label}"`);
-    }
-    expect(clientSource).toContain("Claiming disabled on this site");
-    expect(clientSource).toContain("Out of stock");
-    expect(clientSource).toContain("Not enough credits");
-    expect(clientSource).toContain("Credits have no cash value.");
-    expect(clientSource).toContain("free credits");
+  it("shows only compact membership status, not expanded Claims history", () => {
+    expect(clientSource).toContain("pendingClaims");
+    expect(clientSource).toContain("Claiming unavailable");
+    expect(clientSource).not.toContain("redemptions");
+    expect(clientSource).not.toContain("ORDER_STATUS");
+    expect(clientSource).not.toContain("/api/viewer/claims");
   });
 
   it("groups large credit numbers so a balance stays readable", () => {
-    expect(clientSource).toContain('function fmtNum(n) { return Number(n || 0).toLocaleString("en-US"); }');
-    expect(clientSource).toContain("${fmtNum(b.balance)} free credits");
-    expect(clientSource).toContain('$("vd-site-balance").textContent = fmtNum(v.balance)');
-    expect(clientSource).toContain("${fmtNum(i.cost)} credits");
-    expect(clientSource).toContain("${fmtNum(r.cost)} credits");
+    expect(clientSource).toContain('function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }');
+    expect(clientSource).toContain("${fmtNum(community.balance)} free credits");
   });
 });

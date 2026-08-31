@@ -25,6 +25,8 @@ export interface ViewerRecord {
   discord_user_id: string | null;
   discord_username: string | null;
   avatar_url: string | null;
+  kick_linked_at: string | null;
+  discord_linked_at: string | null;
   created_at: string;
 }
 
@@ -170,7 +172,8 @@ export async function resolveViewerSession(
 export async function loadViewer(_env: ViewerSessionEnv, viewerId: string): Promise<ViewerRecord | null> {
   try {
     return (await one<ViewerRecord>(
-      `SELECT id, kick_user_id, kick_username, discord_user_id, discord_username, avatar_url, created_at
+      `SELECT id, kick_user_id, kick_username, discord_user_id, discord_username,
+              avatar_url, kick_linked_at, discord_linked_at, created_at
          FROM viewers WHERE id = $1`,
       [viewerId]
     )) ?? null;

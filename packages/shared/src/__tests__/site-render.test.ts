@@ -58,9 +58,9 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("VIP");
     expect(html).not.toContain("Active Streak");
     expect(html).not.toContain("Events & Duels");
-    // The page states the viewer's own balance, activity and claims — no stat
-    // grid and no analytics reading of a loyalty balance.
-    expect(html).toContain("Free loyalty credits on Ampersand &amp; Board.");
+    // The page states the viewer's membership, own balance, credits and Claims —
+    // no stat grid and no analytics reading of a loyalty balance.
+    expect(html).toContain("Your membership in Ampersand &amp; Board.");
     expect(html).toContain(">500</span> <span class=\"yr-vbal-unit\">free credits");
     expect(html).toContain("Credits earned");
     expect(html).toContain("+100");
