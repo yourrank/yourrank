@@ -85,6 +85,13 @@ export const SCENARIOS: Scenario[] = [
     reason: "Creating an isolated Team membership requires the E2E database fixture connection.",
   },
   {
+    key: "wave-k-safe-activity-automation",
+    title: "A scheduled safe Activity executes once and records normal viewer participation",
+    tier: "required",
+    requires: ["E2E_DB_URL", "E2E_VIEWER_SESSION"],
+    reason: "The isolated gate provisions both the scheduler database and a viewer session.",
+  },
+  {
     key: "games-bet-placement",
     title: "A viewer bet debits balance and returns a settled round",
     tier: "conditional",

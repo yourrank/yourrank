@@ -16,6 +16,20 @@ export function activityEmptyAction(published) {
     : { label: "Publish your site", href: "/dashboard/leaderboard/setup" };
 }
 
+export function automationHomeState(automation = {}) {
+  const schedules = Array.isArray(automation.schedules) ? automation.schedules : [];
+  const seen = new Set();
+  const unique = schedules.filter((schedule) => {
+    if (!schedule?.id || seen.has(schedule.id)) return false;
+    seen.add(schedule.id);
+    return schedule.kind === "safe_code_drop";
+  });
+  return {
+    comingNext: unique.find((schedule) => schedule.status === "scheduled") || null,
+    needsAttention: unique.filter((schedule) => ["paused", "failed"].includes(schedule.status)).slice(0, 5),
+  };
+}
+
 export function nextStepAction({
   status,
   steps,

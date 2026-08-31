@@ -26,8 +26,15 @@ function deps(overrides = {}) {
         calls.rateLimit.push({ key, max, windowSeconds });
         return { ok: true };
       },
+      one: async (sql) => {
+        if (sql.includes("JOIN users")) {
+          return { plan: "pro", plan_expires_at: "2099-01-01T00:00:00.000Z", status: "active" };
+        }
+        return null;
+      },
       query: async (sql, params) => {
         calls.query.push({ sql, params });
+        if (sql.includes("activity_templates") || sql.includes("activity_schedules")) return [];
         return [{
           id: "drop-1",
           code: "HELLO100",
@@ -63,6 +70,15 @@ describe("Wave E safe Activities foundation", () => {
       includedTypes: ["drop"],
       challenges: "deferred",
     });
+    expect(body.automation).toMatchObject({
+      entitlement: { plan: "pro", canAutomate: true },
+      kinds: ["safe_code_drop"],
+      templateSemantics: "snapshot_on_schedule",
+      timezone: "UTC",
+      templates: [],
+      schedules: [],
+      announcements: "deferred_communication_not_ready",
+    });
     expect(body.activities).toEqual([{
       id: "drop:drop-1",
       source: { kind: "code_drop", id: "drop-1" },
@@ -80,10 +96,10 @@ describe("Wave E safe Activities foundation", () => {
 
     expect(mock.calls.capability).toEqual([{ user: USER, site: SITE, capability: "canRoleManageActivities" }]);
     expect(mock.calls.rateLimit).toEqual([{ key: "activities:operator-1:site-1", max: 60, windowSeconds: 60 }]);
-    expect(mock.calls.query).toHaveLength(1);
+    expect(mock.calls.query).toHaveLength(3);
     expect(mock.calls.query[0].params).toEqual(["site-1"]);
     expect(mock.calls.query[0].sql).toContain("FROM code_drops");
-    expect(mock.calls.query[0].sql).not.toMatch(/raffle|prediction|tournament|wager|ticket|payout|settlement/i);
+    expect(mock.calls.query.map(({ sql }) => sql).join("\n")).not.toMatch(/raffle|prediction|tournament|wager|ticket|payout|settlement/i);
   });
 
   it("derives presentation state without mutating workflow records", () => {
@@ -164,8 +180,8 @@ describe("Wave E safe Activities foundation", () => {
     expect(PAGES.activities.Component).toBeTruthy();
     expect(activitiesConfig.canonical).toBe("https://yourrank.site/dashboard/activities");
     expect(activitiesConfig.styles).toContain("/assets/activities.css");
-    expect(activitiesContentHtml).toContain("Free community activities");
-    expect(activitiesContentHtml).toContain("Challenges are deferred");
+    expect(activitiesContentHtml).toContain("Safe Activity boundary");
+    expect(activitiesContentHtml).toContain("Plan repeat work");
     expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);
 

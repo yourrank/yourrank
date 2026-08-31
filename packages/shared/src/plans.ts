@@ -75,6 +75,17 @@ export const OPERATOR_SEAT_LIMITS: Record<PlanTier, number> = {
   team: 5,
 };
 
+/** Creator automation is a paid operator capability; manual safe Activities stay free. */
+export const AUTOMATION_ENABLED: Record<PlanTier, boolean> = {
+  free: false,
+  pro: true,
+  team: true,
+};
+
+export function canUseAutomation(plan: PlanTier): boolean {
+  return AUTOMATION_ENABLED[plan];
+}
+
 export const ACTIVE_VIEWER_WINDOW_DAYS = 30;
 export const ACTIVE_VIEWER_GRACE_DAYS = 14;
 
@@ -124,6 +135,7 @@ export const PLAN_META: Record<PlanTier, {
       "3 sites and 1,000 players per site",
       "Custom domain and stronger branding",
       "Higher Rewards and integration limits",
+      "Activity templates and scheduling",
       "12 months of accessible history",
     ],
     cta: "Start Pro",
@@ -137,6 +149,7 @@ export const PLAN_META: Record<PlanTier, {
       "10 sites and 5,000 players per site",
       "5 operator seats",
       "Roles and permissions",
+      "Team-operated Activity automation",
       "24 months of accessible history",
     ],
     cta: "Start Team",

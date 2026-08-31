@@ -1926,6 +1926,10 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .ov-next-step h2 { max-width: 42ch; margin: 0 0 4px; font-size: 17px; line-height: 1.25; }
 .v3-dash[data-auth-workspace] .ov-next-step p { max-width: 68ch; margin: 0; color: var(--ws-text-soft); font-size: 14px; }
 .v3-dash[data-auth-workspace] .ov-next-step .btn { flex: 0 0 auto; }
+.v3-dash[data-auth-workspace] .ov-coming-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-4); padding: var(--ws-space-4) var(--ws-space-5); border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
+.v3-dash[data-auth-workspace] .ov-coming-next h2 { margin: 0 0 var(--ws-space-1); font-size: var(--ws-type-card-size); line-height: var(--ws-type-card-leading); }
+.v3-dash[data-auth-workspace] .ov-coming-next p { margin: 0; color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); line-height: var(--ws-type-meta-leading); }
+.v3-dash[data-auth-workspace] .ov-coming-next .btn { flex: 0 0 auto; }
 .v3-dash[data-auth-workspace] .ov-setup { overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
 .v3-dash[data-auth-workspace] .ov-setup.is-attention { border-color: var(--ws-warning); }
 .v3-dash[data-auth-workspace] .ov-setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; background: var(--ws-surface-soft); }
@@ -4071,6 +4075,9 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-board-select { min-height: 44px; }
   .v3-dash[data-auth-workspace] .ov-next-step { align-items: flex-start; }
   .v3-dash[data-auth-workspace] .ov-next-step .btn { width: 100%; }
+  .v3-dash[data-auth-workspace] .ov-coming-next { align-items: flex-start; }
+  .v3-dash[data-auth-workspace] .ov-coming-next .btn { width: 100%; min-height: var(--ws-control-h-touch); }
+  .v3-dash[data-auth-workspace] #ovAutomationAlert .btn { min-height: var(--ws-control-h-touch); }
   .v3-dash[data-auth-workspace] .lb-main { padding-bottom: 48px; }
   .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }
   body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }

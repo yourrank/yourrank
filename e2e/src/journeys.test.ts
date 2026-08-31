@@ -485,6 +485,86 @@ describe("release-gate journeys", () => {
     }
   });
 
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE || !VIEWER_SESSION)(`${tag("wave-k-safe-activity-automation")} scheduled safe Activity executes once and records normal viewer participation`, async () => {
+    const template = await client.post("/api/activities/templates", {
+      siteId,
+      kind: "safe_code_drop",
+      name: "E2E scheduled drop",
+      config: { pointsReward: 25, maxClaims: 10, expireMinutes: 30 },
+    });
+    expect(template.status).toBe(201);
+    expect(template.json?.ok).toBe(true);
+    const templateId = template.json?.template?.id;
+    expect(templateId).toBeDefined();
+
+    const schedule = await client.post("/api/activities/schedules", {
+      siteId,
+      templateId,
+      recurrence: "once",
+      runAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    });
+    expect(schedule.status).toBe(201);
+    expect(schedule.json?.ok).toBe(true);
+    const scheduleId = schedule.json?.schedule?.id;
+    expect(scheduleId).toBeDefined();
+
+    const sql = new SQL(DB_URL);
+    let generatedCode = "";
+    try {
+      await sql`
+        update activity_schedules
+           set next_run_at=now() - interval '1 minute'
+         where id=${scheduleId} and site_id=${siteId} and status='scheduled'`;
+
+      const scheduledPath = `/__scheduled?cron=${encodeURIComponent("*/5 * * * *")}`;
+      const firstRun = await client.get(scheduledPath);
+      expect(firstRun.status).toBe(200);
+      const replay = await client.get(scheduledPath);
+      expect(replay.status).toBe(200);
+
+      let persisted: any = null;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const rows = await sql`
+          select
+            count(distinct o.id)::int as occurrences,
+            count(distinct d.id)::int as activities,
+            max(d.code) as code
+          from activity_schedule_occurrences o
+          left join code_drops d on d.automation_occurrence_id=o.id
+          where o.schedule_id=${scheduleId} and o.status='succeeded'`;
+        persisted = rows[0];
+        if (persisted?.activities === 1) break;
+        await Bun.sleep(100);
+      }
+      expect(persisted).toEqual(expect.objectContaining({ occurrences: 1, activities: 1 }));
+      generatedCode = String(persisted?.code || "");
+      expect(generatedCode).toMatch(/^YR-[A-F0-9]{16}$/);
+
+      const activityRows = await sql`
+        select count(*)::int as count
+          from code_drops
+         where automation_occurrence_id in (
+           select id from activity_schedule_occurrences where schedule_id=${scheduleId}
+         )`;
+      expect(activityRows[0]?.count).toBe(1);
+    } finally {
+      await sql.end();
+    }
+
+    const viewer = new Client(BASE_URL);
+    await viewer.get("/login");
+    viewer.setViewerSession(VIEWER_SESSION);
+    const claim = await viewer.post("/api/events/drops/claim", { site: slug, code: generatedCode });
+    expect(claim.status).toBe(200);
+    expect(claim.json?.ok).toBe(true);
+    expect(claim.json?.pointsAwarded).toBe(25);
+
+    const history = await viewer.get(`/${slug}/me`);
+    expect(history.status).toBe(200);
+    expect(history.body).toContain("Claimed a code drop");
+    expect(history.body).toContain(">Claimed</span>");
+  });
+
   it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("publish-draft-navigation")} returning a board to draft removes public access and republishing restores it`, async () => {
     const published = await client.get(`/${slug}`);
     expect(published.status).toBe(200);

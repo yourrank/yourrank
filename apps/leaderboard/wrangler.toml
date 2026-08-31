@@ -59,7 +59,7 @@ binding = "EVENTS_QUEUE"
 binding = "HYPERDRIVE"
 id = "9e5b625bfdd84cd691b44c4780bdaf13"
 
-[[triggers]]
+[triggers]
 crons = ["*/5 * * * *"]
 
 [vars]
@@ -129,6 +129,9 @@ head_sampling_rate = 1
 enabled = true
 head_sampling_rate = 1
 invocation_logs = true
+
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
 
 [env.staging.vars]
 DLQ_HEALTH_DEGRADE_THRESHOLD = "100"

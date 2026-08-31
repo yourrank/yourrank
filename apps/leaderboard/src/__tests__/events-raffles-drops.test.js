@@ -197,7 +197,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("handleCreateCodeDrop creates a drop code with custom reward and claims limit", async () => {
-    mockOne.mockResolvedValueOnce({
+    mockExec.mockResolvedValueOnce([{
       id: "drop-1",
       code: "KICK30",
       points_reward: 30, // custom points
@@ -205,7 +205,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       claimed_count: 0,
       status: "active",
       created_at: new Date().toISOString(),
-    });
+    }]);
 
     const req = new Request("http://localhost/api/events/drops", {
       method: "POST",

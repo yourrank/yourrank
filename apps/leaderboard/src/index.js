@@ -17,6 +17,7 @@ import { PAGES } from "./pages.jsx";
 import { DEVIN_DESIGN_CONTRACT, leaderboardPageHtml } from "@yourrank/shared/page-shell";
 import { bumpStat } from "./stats.js";
 import { runAutoReset } from "./auto-reset.js";
+import { runSafeActivityAutomation } from "./automation-scheduler.js";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import { shellNavHtml, publicNavHtml } from "@yourrank/shared/shell-nav";
 import apiApp from "./router.js";
@@ -322,6 +323,11 @@ async function handleScheduled(event, env, ctx) {
     );
     ctx.waitUntil(cleanupExpiredExports(env).catch((err) => {
       console.error("[scheduled] account export cleanup failed:", String(err?.message || err));
+    }));
+    ctx.waitUntil(runSafeActivityAutomation(env).catch(() => {
+      // Per-schedule failures are recorded with controlled codes by the executor.
+      // This top-level line intentionally excludes exception text and drop codes.
+      console.error("[scheduled] safe activity automation run failed");
     }));
   }
 }

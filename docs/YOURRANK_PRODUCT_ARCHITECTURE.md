@@ -1543,6 +1543,17 @@ Only after the manual workflows are proven:
 - recurring safe activities,
 - safe announcements after communication architecture is approved.
 
+Current implementation result (2026-08-31): the official roadmap closes with
+one proven safe automation kind, `safe_code_drop`. Activities owns inert
+templates, snapshot-at-schedule UTC execution, one-time plus fixed UTC
+daily/weekly recurrence, bounded Postgres-backed idempotent execution, and
+in-product Home status. Pro/Team enable automation while Free manual Activities
+remain available; downgrade preserves configuration and requires explicit future
+rescheduling after entitlement returns. Generic Communication is not ready, so
+safe announcements and external reminder delivery remain deferred. This roadmap
+completion does not imply a generic workflow engine or support for restricted or
+unproven workflows.
+
 ---
 
 # 33. Route Migration Policy
