@@ -18,7 +18,7 @@ const PRODUCTS: ProductStory[] = [
   {
     kind: "sites",
     title: "Publish the place viewers return to.",
-    description: "Create a branded community site with live standings, offers, games, and an OBS-ready overlay at one memorable address.",
+    description: "Create a branded community site with live standings, rewards, viewer membership, and an OBS-ready overlay at one memorable address.",
     href: "/sites",
     action: "Explore Sites",
   },
@@ -109,7 +109,7 @@ function CreditsVisual() {
   const rewards = [
     ["Stream shoutout", "500 cr", "Active"],
     ["Community VIP role", "2,500 cr", "12 left"],
-    ["1v1 game session", "5,000 cr", "3 left"],
+    ["Community coaching call", "5,000 cr", "3 left"],
   ];
   return (
     <div className="h-full bg-white p-4 sm:p-6">

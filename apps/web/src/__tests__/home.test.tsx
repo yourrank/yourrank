@@ -8,6 +8,18 @@ import { ProofMarquee, HowItWorks, ComparisonSection, PricingSnapshot } from "..
 import { ProductPage } from "../components/product-page";
 import { PricingPlans } from "../app/pricing/pricing-plans";
 
+const PRIMARY_MARKETING_SOURCES = [
+  "../components/site-shell.tsx",
+  "../components/product-page.tsx",
+  "../components/home/sticky-scroll-reveal.tsx",
+  "../app/sites/page.tsx",
+  "../app/switch/page.tsx",
+  "../app/about/page.tsx",
+  "../app/credits/page.tsx",
+  "../app/docs/page.tsx",
+  "../app/changelog/page.tsx",
+].map((path) => new URL(path, import.meta.url));
+
 describe("Home & Product components", () => {
   it("renders the rotating hero words with one accessible headline", () => {
     const html = renderToString(<Hero />);
@@ -82,5 +94,13 @@ describe("Home & Product components", () => {
     expect(html).toContain("Give your community a place worth returning to.");
     expect(html).toContain("Choose the experience");
     expect(html).toContain("Explore the connected suite.");
+    expect(html).not.toContain('href="/games"');
+  });
+
+  it("keeps restricted legacy mechanics out of primary launch marketing", async () => {
+    const source = (await Promise.all(PRIMARY_MARKETING_SOURCES.map((url) => Bun.file(url).text()))).join("\n");
+    expect(source).not.toMatch(/\b(?:games?|raffles?|predictions?|wager(?:ed|ing)?|casino)\b/i);
+    const retiredPage = await Bun.file(new URL("../app/games/page.tsx", import.meta.url)).text();
+    expect(retiredPage).toContain('permanentRedirect("/sites")');
   });
 });

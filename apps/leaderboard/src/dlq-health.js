@@ -13,6 +13,7 @@ export async function readDlqHealth(
   queryImpl = one,
   threshold = 100,
   limit = DLQ_HEALTH_LIMIT,
+  maxAgeSeconds = 86400,
 ) {
   try {
     const row = await queryImpl(DLQ_HEALTH_SQL, [limit]);
@@ -26,12 +27,17 @@ export async function readDlqHealth(
     const oldestPendingAgeSeconds = Number.isFinite(oldestPendingMs)
       ? Math.max(0, Math.floor((Date.now() - oldestPendingMs) / 1000))
       : null;
+    const countDegraded = pending >= threshold;
+    const ageDegraded = pending > 0
+      && oldestPendingAgeSeconds !== null
+      && oldestPendingAgeSeconds >= maxAgeSeconds;
     return {
       pending,
       oldest_pending_at: oldestPendingAt,
       oldest_pending_age_seconds: oldestPendingAgeSeconds,
       pending_capped: pending >= limit,
-      degraded: pending >= threshold,
+      degraded: countDegraded || ageDegraded,
+      degraded_reasons: [countDegraded ? "count_threshold" : null, ageDegraded ? "oldest_pending_age" : null].filter(Boolean),
       error: null,
     };
   } catch (err) {
@@ -46,7 +52,8 @@ export async function readDlqHealth(
       oldest_pending_at: null,
       oldest_pending_age_seconds: null,
       pending_capped: false,
-      degraded: false,
+      degraded: true,
+      degraded_reasons: ["probe_failed"],
       error: "probe_failed",
     };
   }

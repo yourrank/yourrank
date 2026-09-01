@@ -13,6 +13,7 @@ describe("DLQ health", () => {
       pending_capped: false,
       oldest_pending_age_seconds: null,
       degraded: false,
+      degraded_reasons: [],
       error: null,
     });
   });
@@ -20,7 +21,7 @@ describe("DLQ health", () => {
   it("reports an under-threshold backlog without degrading", async () => {
     const health = await readDlqHealth(async () => ({
       pending: 12,
-      oldest_received_at: new Date("2026-08-25T01:00:00Z"),
+      oldest_received_at: new Date(Date.now() - 3600_000),
     }), 100);
 
     expect(health).toMatchObject({
@@ -29,6 +30,7 @@ describe("DLQ health", () => {
       oldest_pending_age_seconds: expect.any(Number),
       pending_capped: false,
       degraded: false,
+      degraded_reasons: [],
     });
   });
 
@@ -39,6 +41,17 @@ describe("DLQ health", () => {
     }), 100);
 
     expect(health.degraded).toBe(true);
+    expect(health.degraded_reasons).toContain("count_threshold");
+  });
+
+  it("degrades a small backlog that has remained pending for a day", async () => {
+    const health = await readDlqHealth(async () => ({
+      pending: 1,
+      oldest_received_at: new Date(Date.now() - 25 * 3600_000),
+    }), 100, 1000, 86400);
+
+    expect(health.degraded).toBe(true);
+    expect(health.degraded_reasons).toEqual(["oldest_pending_age"]);
   });
 
   it("keeps a query failure from breaking health", async () => {
@@ -59,7 +72,8 @@ describe("DLQ health", () => {
       oldest_pending_at: null,
       oldest_pending_age_seconds: null,
       pending_capped: false,
-      degraded: false,
+      degraded: true,
+      degraded_reasons: ["probe_failed"],
       error: "probe_failed",
     });
     expect(JSON.parse(String(logs[0][0]))).toMatchObject({

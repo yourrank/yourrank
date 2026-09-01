@@ -8,7 +8,7 @@ export function applyLegalIdentity(html, identity) {
   const country = i.company_country?.trim() || "";
   const number = i.company_number?.trim() || "";
   const supportEmail = i.support_email?.trim() || "contact@yourrank.site";
-  const affiliate = i.affiliate_disclosure?.trim() || "Some links and offers on this site are affiliate links. We may earn a commission if you sign up or deposit through them, at no extra cost to you.";
+  const affiliate = i.affiliate_disclosure?.trim() || "Some creator links may be affiliate links. The creator is responsible for identifying their promotions and applicable terms.";
 
   const parts = [companyName, country ? `registered in ${country}` : "", number].filter(Boolean);
   const companyLine = parts.length ? `<p class="legal-company">${parts.join(" · ")}</p>` : "";
@@ -56,7 +56,7 @@ function platformFooter(pagePath) {
 {{COMPANY_LINE}}
 <p class="ftr-affiliate">{{AFFILIATE_DISCLOSURE}}</p>
 <p class="ftr-copy">© {{YEAR}} {{COMPANY_NAME}} · <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a></p>
-<p class="ftr-fine">18+ · For entertainment purposes only. Play responsibly.</p>
+<p class="ftr-fine">18+ · Community credits have no cash value. Participate responsibly.</p>
 </footer>`;
 }
 

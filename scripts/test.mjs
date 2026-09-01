@@ -25,8 +25,10 @@ runCmd("bun", ["test", "src/__tests__/"], "packages/shared");
 // meant src/viewer-export.test.js never ran in CI.
 runCmd("bun", ["test", "src/"], "apps/consumer");
 
-// 3. Run bot tests
-runCmd("bun", ["test", "src/__tests__/"], "apps/bot");
+// 3. Run bot tests through its exact-file runner. Bun treats directory test
+// filters as substrings, which can rediscover ignored compiled tests under
+// dist/ after a local build and execute the suite twice.
+runCmd("bun", ["run", "test"], "apps/bot");
 
 // 4. Run leaderboard tests one by one to avoid mock.module cross-contamination
 runCmd("node", ["scripts/test-leaderboard.mjs"]);

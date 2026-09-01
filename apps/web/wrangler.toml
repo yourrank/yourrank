@@ -33,3 +33,27 @@ binding = "HYPERDRIVE"
 id = "9e5b625bfdd84cd691b44c4780bdaf13"
 # Local dev fallback (override with CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE)
 localConnectionString = "postgresql://postgres:postgres@localhost:5432/yourrank"
+
+# Staging is a service-binding target for the apex staging Worker. It has no
+# public custom-domain route of its own.
+[env.staging]
+name = "yourrank-web-staging"
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[env.staging.assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+run_worker_first = true
+
+# Replace before the first staging deploy; staging must never share production DB access.
+[[env.staging.hyperdrive]]
+binding = "HYPERDRIVE"
+id = "STAGING_HYPERDRIVE_ID_PLACEHOLDER"

@@ -3,8 +3,8 @@ import { legal } from "./legal-helper.js";
 // terms page
 export const termsPage = legal("Terms of Service", "July 2026", `
 <h2>What YourRank is</h2>
-<p>YourRank is a software platform that lets streamers and community managers create and host leaderboard pages. You get a dashboard to edit your page's content — prize pool, referral code, player standings — and we serve that page at a public URL. That's the whole service.</p>
-<p><b>YourRank is not a casino, bookmaker, or gambling operator.</b> No wagering, betting or gambling happens on this platform. The platform is intended for entertainment, community engagement, and fan recognition only. Leaderboard standings are provided by the page owner — entered manually or updated automatically from third-party postbacks they configure. Prizes shown on any page are offered and paid by that page's owner, not by YourRank.</p>
+<p>YourRank is a software platform that lets streamers and community managers operate public community sites, leaderboards, viewer memberships, free credits, creator-provided rewards, and related engagement tools from one dashboard.</p>
+<p><b>YourRank is not a casino, bookmaker, or gambling operator.</b> The launch product accepts no deposits, permits no cash withdrawals, and does not operate cash wagering. Free credits have no cash value. Leaderboard standings are provided by the page owner — entered manually or updated automatically from third-party postbacks they configure. Rewards shown on a community page are offered and fulfilled by that page's owner, not by YourRank.</p>
 <h2>Your account</h2>
 <p>You need to be at least 18 to use YourRank. You're responsible for keeping your password safe and for everything published on your page. One account per person. Site capacity depends on your plan — Free includes one, Pro up to three, and Team up to ten.</p>
 <h2>Your content and compliance</h2>

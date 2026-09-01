@@ -92,6 +92,15 @@ describe("new-shell auxiliary renderers", () => {
     const legal = await renderNewLegalPage(record.data, "responsible", opts);
     expect(legal).toContain(">Responsible Play<");
     expect(legal).not.toContain("Responsible Gaming");
+    expect(legal).toContain("Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.");
+    const policyBody = legal.match(/<div class="yr-prose">([\s\S]*?)<\/div>/)?.[1] || "";
+    expect(policyBody).not.toMatch(/gambl|casino|wager/i);
+  });
+
+  it("does not promise creator recurring or cryptocurrency billing on the refund page", async () => {
+    const legal = await renderNewLegalPage(record.data, "refund", opts);
+    expect(legal).toContain("does not currently offer recurring checkout");
+    expect(legal).not.toMatch(/cryptocurrency|blockchain|subscription payments/i);
   });
 
   it("formats player profile currency consistently", async () => {
@@ -184,10 +193,13 @@ describe("new-shell auxiliary renderers", () => {
   });
 
   it("hides external new-tab disclosures with the public shell utility", async () => {
-    const legal = await renderNewLegalPage(record.data, "responsible", opts);
-    expect(legal).toContain('rel="noopener noreferrer"');
-    expect(legal).toContain('class="yr-sr"> (opens in a new tab)</span>');
-    expect(legal).not.toContain('class="sr-only"');
+    const profile = await renderNewStreamerProfile({
+      ...record.data,
+      socials: [{ name: "Twitch", url: "https://twitch.tv/example", enabled: true }],
+    }, opts);
+    expect(profile).toContain('rel="noopener noreferrer"');
+    expect(profile).toContain('class="yr-sr"> (opens in a new tab)</span>');
+    expect(profile).not.toContain('class="sr-only"');
   });
 
   it("canonicalises auxiliary pages to their own URL on both host shapes", async () => {

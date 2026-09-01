@@ -68,14 +68,14 @@ export function onboardingEmail(day: 0 | 3 | 7, user: OnboardingOptions) {
 
   if (day === 0) {
     const subject = "Welcome to YourRank — set up your first leaderboard";
-    const text = `Hi ${name},\n\nWelcome to YourRank. Your leaderboard is live at ${origin}/${user.slug || ""}\n\nNext steps:\n1. Add players or import them from CSV in ${dashboard}\n2. Customize the design and sections\n3. Share your page with viewers\n\nNeed help? Reply to this email or use /support in Telegram.\n\nYourRank team`;
+    const text = `Hi ${name},\n\nWelcome to YourRank. Your draft community site is ready at ${origin}/${user.slug || ""}\n\nNext steps:\n1. Confirm your email\n2. Add players or import them from CSV in ${dashboard}\n3. Customize the site, then publish it when you are ready to share\n\nNeed help? Reply to this email or use /support in Telegram.\n\nYourRank team`;
     const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
 <h2 style="margin:0 0 12px">Welcome to YourRank, ${name}</h2>
-<p style="color:#555;line-height:1.5">Your leaderboard is live. Here are the fastest ways to get value:</p>
+<p style="color:#555;line-height:1.5">Your draft community site is ready. Here are the next steps:</p>
 <ul style="color:#555;line-height:1.6;padding-left:20px">
+  <li>Confirm your email</li>
   <li><a href="${dashboard}">Add players</a> or import a CSV</li>
-  <li>Pick a design and toggle sections in the dashboard</li>
-  <li>Share your public page: ${origin}/${user.slug || ""}</li>
+  <li>Customize the site, then publish it when you are ready to share</li>
 </ul>
 <p style="margin:24px 0"><a href="${dashboard}" style="background:#111;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">Open dashboard</a></p>
 <p style="color:#999;font-size:13px">Need help? Reply to this email.</p></div>`;
@@ -83,15 +83,15 @@ export function onboardingEmail(day: 0 | 3 | 7, user: OnboardingOptions) {
   }
 
   if (day === 3) {
-    const subject = "YourRank tip: connect your Telegram bot + offers";
-    const text = `Hi ${name},\n\nBy now you have a leaderboard. The next growth loop is Telegram:\n\n1. Connect a bot at ${botDashboard}\n2. Add casino offers so viewers can click tracked links\n3. Set up postback URLs in Settings so deposits count automatically\n\nYourRank team`;
+    const subject = "YourRank tip: connect your community";
+    const text = `Hi ${name},\n\nWhen your community site is ready, the next step is connecting safe participation:\n\n1. Connect a Telegram bot at ${botDashboard}\n2. Publish a free code drop from Activities\n3. Add a creator-provided reward and follow claims through fulfilment\n\nYourRank team`;
     const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-<h2 style="margin:0 0 12px">Turn clicks into conversions</h2>
-<p style="color:#555;line-height:1.5">Your leaderboard is running. The next growth loop is Telegram + offers:</p>
+<h2 style="margin:0 0 12px">Connect your community</h2>
+<p style="color:#555;line-height:1.5">When your community site is ready, connect the safe participation loop:</p>
 <ul style="color:#555;line-height:1.6;padding-left:20px">
   <li><a href="${botDashboard}">Connect a Telegram bot</a></li>
-  <li>Add casino offers with tracked links</li>
-  <li>Set up postback URLs in Settings so deposits count automatically</li>
+  <li>Publish a free code drop from Activities</li>
+  <li>Add a creator-provided reward and follow claims through fulfilment</li>
 </ul>
 <p style="margin:24px 0"><a href="${botDashboard}" style="background:#111;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block">Open bot dashboard</a></p>
 <p style="color:#999;font-size:13px">Need help? Reply to this email.</p></div>`;

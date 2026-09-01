@@ -29,7 +29,16 @@ const REFERRAL_REWARD_DAYS = 31;
 const REFERRAL_MAX_EXTENSION_DAYS = 365;
 const VERIFICATION_TTL_HOURS = 24;
 
-async function issueVerificationEmail(env, userId, email, origin, waitUntil) {
+export function emailVerificationDeliveryState(env = {}) {
+  const environment = String(env.ENVIRONMENT || "").trim().toLowerCase();
+  const required = environment === "production" || environment === "staging";
+  return {
+    configured: Boolean(String(env.RESEND_API_KEY || "").trim() && String(env.MAIL_FROM || "").trim()),
+    required,
+  };
+}
+
+async function issueVerificationEmail(env, userId, email, origin, sendVerificationEmailImpl = sendVerificationEmail) {
   const token = newToken();
   const tokenHash = await hashToken(token);
   await exec(
@@ -37,11 +46,14 @@ async function issueVerificationEmail(env, userId, email, origin, waitUntil) {
     [tokenHash, userId]
   );
   const link = `${origin}/verify-email?token=${encodeURIComponent(token)}`;
-  const task = sendVerificationEmail(env, email, link).catch((err) => {
-    console.error("[verification] email failed:", err);
-  });
-  if (waitUntil) waitUntil(task);
-  else task.catch(() => {});
+  try {
+    const result = await sendVerificationEmailImpl(env, email, link);
+    if (!result?.sent) console.error("[verification] email not sent:", result?.reason || "unknown");
+    return result || { sent: false, reason: "unknown" };
+  } catch (err) {
+    console.error("[verification] email failed:", String(err?.message || err));
+    return { sent: false, reason: "exception" };
+  }
 }
 
 async function applyReferralReward(referrerId, referredId) {
@@ -71,6 +83,10 @@ async function applyReferralReward(referrerId, referredId) {
 
 export async function handleSignup(request, env) {
   try {
+    const delivery = emailVerificationDeliveryState(env);
+    if (delivery.required && !delivery.configured) {
+      return bad("Account creation is temporarily unavailable because email delivery is not configured.", 503);
+    }
     if (!(await rateLimit(env, `signup:${clientIp(request)}`, 10, 3600)).ok) return bad("Too many attempts. Try again later.", 429);
     const body = await readJson(request);
     if (!body) return bad("Invalid request");
@@ -149,11 +165,11 @@ export async function handleSignup(request, env) {
 
     const token = await createSession(env, userId);
     const origin = new URL(request.url).origin;
-    await issueVerificationEmail(env, userId, email, origin, routeContext(request).waitUntil);
+    const verification = await issueVerificationEmail(env, userId, email, origin);
     const onboardingPromise = sendOnboardingEmail(env, 0, { id: userId, email, display_name: displayName, slug: finalSlug, origin });
     routeContext(request).waitUntil(onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
     trackActivation("leaderboard", userId, "signup", { email, referred: !!referrerId });
-    return json({ ok: true, user: { id: userId, email, slug: finalSlug, emailVerified: false }, needsVerification: true }, 200, { "set-cookie": cookieSet(token, env) });
+    return json({ ok: true, user: { id: userId, email, slug: finalSlug, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": cookieSet(token, env) });
   } catch (e) {
     console.error("signup failed:", String(e?.message || e));
     return bad("Sign-up failed, please try again", 500);
@@ -207,8 +223,8 @@ export async function handleLogin(request, env) {
     ]);
     const origin = new URL(request.url).origin;
     if (!user.email_verified) {
-      await issueVerificationEmail(env, user.id, user.email, origin, routeContext(request).waitUntil);
-      return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: false }, needsVerification: true }, 200, { "set-cookie": cookieSet(token, env) });
+      const verification = await issueVerificationEmail(env, user.id, user.email, origin);
+      return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": cookieSet(token, env) });
     }
     return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: true } }, 200, { "set-cookie": cookieSet(token, env) });
   } catch (e) {
@@ -302,6 +318,10 @@ export async function handleMe(request, env) {
 // error occurs during the email send or KV write.
 export async function handleForgot(request, env) {
   try {
+    const delivery = emailVerificationDeliveryState(env);
+    if (delivery.required && !delivery.configured) {
+      return bad("Password recovery is temporarily unavailable because email delivery is not configured.", 503);
+    }
     if (!(await rateLimit(env, `forgot:${clientIp(request)}`, 5, 3600)).ok) return bad("Too many attempts. Try again later.", 429);
     const body = await readJson(request);
     const email = String(body?.email || "").trim().toLowerCase();
@@ -411,18 +431,29 @@ export async function handleVerifyEmail(request, _env) {
 
 // POST /api/auth/resend-verification — { email }
 // Does not reveal whether the email exists.
-export async function handleResendVerification(request, env) {
+export async function handleResendVerification(request, env, deps = {}) {
   try {
+    const delivery = emailVerificationDeliveryState(env);
+    if (delivery.required && !delivery.configured) {
+      return bad("Verification email delivery is temporarily unavailable.", 503);
+    }
     const body = await readJson(request);
-    const email = String(body?.email || "").trim().toLowerCase();
+    let email = String(body?.email || "").trim().toLowerCase();
+    let authenticated = false;
+    if (!isEmail(email)) {
+      const signedInUser = await (deps.currentUser || currentUser)(request, env);
+      email = String(signedInUser?.email || "").trim().toLowerCase();
+      authenticated = isEmail(email);
+    }
     if (!isEmail(email)) return bad("Enter a valid email");
-    if (!(await rateLimit(env, `resend-verification:${email}`, 3, 3600)).ok) {
+    if (!(await (deps.rateLimit || rateLimit)(env, `resend-verification:${email}`, 3, 3600)).ok) {
       return bad("Too many requests. Try again later.", 429);
     }
-    const user = await one("SELECT id, email_verified FROM users WHERE email=$1", [email]);
+    const user = await (deps.one || one)("SELECT id, email_verified FROM users WHERE email=$1", [email]);
     if (user && !user.email_verified) {
       const origin = new URL(request.url).origin;
-      await issueVerificationEmail(env, user.id, email, origin, routeContext(request).waitUntil);
+      const result = await (deps.issueVerificationEmail || issueVerificationEmail)(env, user.id, email, origin);
+      if (authenticated && !result?.sent) return bad("Verification email delivery is temporarily unavailable.", 503);
     }
     return ok({ sent: true });
   } catch (e) {

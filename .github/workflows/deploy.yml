@@ -344,6 +344,10 @@ jobs:
             echo "FAIL: /health reported db != true — response: $BODY"
             exit 1
           fi
+          if ! printf '%s' "$BODY" | jq -e '.email_verification.required == true and .email_verification.configured == true' >/dev/null 2>&1; then
+            echo "FAIL: /health reported creator verification email delivery is not configured — response: $BODY"
+            exit 1
+          fi
           HEALTH_STATUS=$(printf '%s' "$BODY" | jq -r '.status // empty')
           if [ "$HEALTH_STATUS" != "ok" ]; then
             echo "::warning::/health is not fully healthy; downstream signals may be degraded: $BODY"

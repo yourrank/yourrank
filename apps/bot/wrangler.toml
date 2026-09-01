@@ -86,6 +86,7 @@ routes = [
   { pattern = "staging.yourrank.site/bot/*",         zone_name = "yourrank.site" },
   { pattern = "staging.yourrank.site/dashboard/telegram*", zone_name = "yourrank.site" },
   { pattern = "staging.yourrank.site/hook/*",        zone_name = "yourrank.site" },
+  { pattern = "staging.yourrank.site/billing/hook/*", zone_name = "yourrank.site" },
   { pattern = "staging.yourrank.site/r/*",           zone_name = "yourrank.site" },
   { pattern = "staging.yourrank.site/pb",            zone_name = "yourrank.site" },
   { pattern = "staging.yourrank.site/pb/*",          zone_name = "yourrank.site" },
@@ -101,12 +102,26 @@ head_sampling_rate = 1
 invocation_logs = true
 
 [env.staging.triggers]
-crons = []
+crons = ["* * * * *", "*/5 * * * *", "0 3 * * *"]
 
 [env.staging.vars]
 PUBLIC_BASE_URL = "https://staging.yourrank.site"
-POSTBACK_UNSIGNED_ENABLED = "true"
+RL_BACKEND = "do"
+RL_FAIL_OPEN = "false"
+POSTBACK_UNSIGNED_ENABLED = "false"
 SESSION_COOKIE_DOMAIN = ".staging.yourrank.site"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+[[env.staging.queues.producers]]
+queue = "yourrank-events-staging"
+binding = "EVENTS_QUEUE"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER_DO"
+class_name = "RateLimiter"
 
 
 # Staging Hyperdrive — points to a dedicated staging Supabase DB.

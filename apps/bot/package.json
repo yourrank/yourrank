@@ -12,7 +12,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/__tests__/",
+    "test": "bun run scripts/test.mjs",
     "db:setup": "psql \"$DATABASE_URL\" -f schema.sql",
     "deploy": "wrangler deploy",
     "demo": "tsx src/demo.ts",

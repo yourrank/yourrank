@@ -15,7 +15,7 @@ const dbModule = {
   }),
   getSql: () => null,
 };
-import { verifyEmailToken as verifyEmailTokenImpl } from "../handlers/auth.js";
+import { emailVerificationDeliveryState, handleResendVerification, verifyEmailToken as verifyEmailTokenImpl } from "../handlers/auth.js";
 const verifyEmailToken = (token) => verifyEmailTokenImpl(token, dbModule);
 import { verifyEmailPageHtml } from "../pages/verify-email.js";
 
@@ -60,6 +60,44 @@ describe("verifyEmailToken", () => {
     expect(result.ok).toBe(false);
     expect(result.status).toBe(410);
     expect(mockExec).not.toHaveBeenCalled();
+  });
+});
+
+describe("verification email delivery", () => {
+  test("is required and only configured with a provider and From address in deployed environments", () => {
+    expect(emailVerificationDeliveryState({ ENVIRONMENT: "production" })).toEqual({ configured: false, required: true });
+    expect(emailVerificationDeliveryState({ ENVIRONMENT: "staging", RESEND_API_KEY: "configured", MAIL_FROM: "YourRank <hey@example.com>" })).toEqual({ configured: true, required: true });
+    expect(emailVerificationDeliveryState({ ENVIRONMENT: "development" })).toEqual({ configured: false, required: false });
+  });
+
+  test("lets the signed-in dashboard resend without posting its email address", async () => {
+    const sent = mock(() => Promise.resolve({ sent: true }));
+    const response = await handleResendVerification(
+      new Request("https://test.com/api/auth/resend-verification", { method: "POST" }),
+      { ENVIRONMENT: "development" },
+      {
+        currentUser: () => Promise.resolve({ id: "user-1", email: "creator@example.com" }),
+        rateLimit: () => Promise.resolve({ ok: true }),
+        one: () => Promise.resolve({ id: "user-1", email_verified: false }),
+        issueVerificationEmail: sent,
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, sent: true });
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(sent.mock.calls[0][2]).toBe("creator@example.com");
+  });
+
+  test("fails closed before lookup when deployed email configuration is missing", async () => {
+    const lookup = mock(() => Promise.resolve(null));
+    const request = new Request("https://test.com/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "creator@example.com" }),
+    });
+    const response = await handleResendVerification(request, { ENVIRONMENT: "production" }, { one: lookup });
+    expect(response.status).toBe(503);
+    expect(lookup).not.toHaveBeenCalled();
   });
 });
 

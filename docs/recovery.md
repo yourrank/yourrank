@@ -4,9 +4,7 @@ This runbook outlines the procedures for verifying backups and restoring the You
 
 ## 1. Backup Strategy (Supabase)
 
-YourRank relies on Supabase's managed Postgres infrastructure. The current backup posture consists of:
-- **Daily Automated Backups**: Supabase takes full daily backups automatically.
-- **Point-in-Time Recovery (PITR)**: Supabase Pro plans (or higher) include PITR. This allows restoring the database to any exact second within the retention window (e.g., last 7 days).
+YourRank relies on Supabase's managed Postgres infrastructure. The repository does not prove that production automated backups or point-in-time recovery are enabled. Treat both as **NOT VERIFIED** until the provider dashboard is checked and a restore into an isolated scratch project succeeds. Record a successful drill through the admin backup-verification endpoint; `/api/health/backup` remains degraded without that evidence.
 
 ### 1.1 Verifying Backup Status
 1. Log in to the [Supabase Dashboard](https://app.supabase.com).
