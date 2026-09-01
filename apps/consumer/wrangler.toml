@@ -58,3 +58,55 @@ RL_FAIL_OPEN = "false"
 
 # Secrets (set via wrangler secret put):
 #   DISCORD_MONITORING_WEBHOOK — optional Discord webhook for DLQ alerts
+
+[env.staging]
+name = "yourrank-consumer-staging"
+
+routes = [
+  { pattern = "staging.yourrank.site/consumer/*", zone_name = "yourrank.site" },
+]
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+[[env.staging.queues.producers]]
+queue = "yourrank-events-staging"
+binding = "EVENTS_QUEUE"
+
+[[env.staging.queues.consumers]]
+queue = "yourrank-events-staging"
+max_batch_size = 50
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "yourrank-events-staging-dlq"
+
+[[env.staging.queues.consumers]]
+queue = "yourrank-events-staging-dlq"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 0
+
+[[env.staging.hyperdrive]]
+binding = "HYPERDRIVE"
+id = "STAGING_HYPERDRIVE_ID_PLACEHOLDER"
+
+[[env.staging.durable_objects.bindings]]
+name = "RATE_LIMITER_DO"
+class_name = "RateLimiter"
+
+[env.staging.vars]
+RL_BACKEND = "do"
+RL_FAIL_OPEN = "false"

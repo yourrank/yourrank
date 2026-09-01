@@ -68,4 +68,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bun run deploy:ci
+        run: |
+          if [ "${{ github.event.inputs.environment || 'production' }}" = "staging" ]; then
+            bun run deploy:ci -- --env staging
+          else
+            bun run deploy:ci
+          fi

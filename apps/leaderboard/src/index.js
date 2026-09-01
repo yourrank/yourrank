@@ -11,7 +11,7 @@ import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
 import { verifyEmailPageHtml } from "./pages/verify-email.js";
-import { verifyEmailToken } from "./handlers/auth.js";
+import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
 import { PAGES } from "./pages.jsx";
 import { DEVIN_DESIGN_CONTRACT, leaderboardPageHtml } from "@yourrank/shared/page-shell";
@@ -605,6 +605,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // --- health check ---
       if (path === "/health") {
         const result = { status: "ok", timestamp: new Date().toISOString() };
+        const emailVerification = emailVerificationDeliveryState(env);
+        result.email_verification = emailVerification;
+        if (emailVerification.required && !emailVerification.configured) result.status = "degraded";
         try {
           await one('SELECT 1 AS ok');
           result.db = true;
@@ -649,12 +652,17 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const dlqThreshold = Number.isFinite(dlqThresholdRaw) && dlqThresholdRaw >= 1
           ? Math.floor(dlqThresholdRaw)
           : 100;
-        const dlq = await readDlqHealth(one, dlqThreshold);
+        const dlqMaxAgeRaw = Number(env.DLQ_HEALTH_MAX_AGE_SECONDS ?? "86400");
+        const dlqMaxAgeSeconds = Number.isFinite(dlqMaxAgeRaw) && dlqMaxAgeRaw >= 60
+          ? Math.floor(dlqMaxAgeRaw)
+          : 86400;
+        const dlq = await readDlqHealth(one, dlqThreshold, 1000, dlqMaxAgeSeconds);
         result.dlq = {
           pending: dlq.pending,
           oldest_pending_at: dlq.oldest_pending_at,
           oldest_pending_age_seconds: dlq.oldest_pending_age_seconds,
           pending_capped: dlq.pending_capped,
+          degraded_reasons: dlq.degraded_reasons,
         };
         if (dlq.error) result.dlq.error = dlq.error;
         if (dlq.degraded) result.status = "degraded";
@@ -762,7 +770,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // Verification happens server-side: the emailed link must work even if
         // client JavaScript fails to load or run.
         const token = url.searchParams.get("token");
-        let verifyState = { message: "Open the link we emailed you to confirm your address.", showResend: true };
+        let verifyState = url.searchParams.get("delivery") === "failed"
+          ? { message: "We couldn't send your verification email.", error: "Email delivery is temporarily unavailable. Try sending it again later.", showResend: true }
+          : { message: "Open the link we emailed you to confirm your address.", showResend: true };
         let status = 200;
         if (token) {
           const result = await verifyEmailToken(token);

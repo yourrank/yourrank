@@ -4,7 +4,7 @@ import { MarketingShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
   title: "Switch — YourRank",
-  description: "Why streamers move their community from spreadsheets and Discord bots to one connected suite: leaderboards, Telegram, rewards, overlays, and games.",
+  description: "Why streamers move their community from spreadsheets and Discord bots to one connected suite: leaderboards, Telegram, rewards, memberships, and overlays.",
   alternates: { canonical: "https://yourrank.site/switch" },
 };
 
@@ -35,9 +35,9 @@ const ROWS: Array<{ task: string; manual: string; yourrank: string }> = [
     yourrank: "Kick channel-point sync, a credits shop, and a fulfilment ledger",
   },
   {
-    task: "Run giveaways",
-    manual: "Random.org and a copy-pasted list of names",
-    yourrank: "Chat giveaways, ticket raffles, code drops, and predictions built in",
+    task: "Run a free code drop",
+    manual: "Copy a code into chat and reconcile participants by hand",
+    yourrank: "Create a free code drop with replay, expiry, and participation evidence built in",
   },
   {
     task: "Answer \u201cwhat's my rank?\u201d",
@@ -49,7 +49,7 @@ const ROWS: Array<{ task: string; manual: string; yourrank: string }> = [
 const KEEPS = [
   { title: "Keep Discord for talking", body: "YourRank doesn't replace your community's chat. It replaces the spreadsheet, the manual point tally, and the copy-pasted links around it \u2014 and can post updates into your Discord on Pro." },
   { title: "Bring your data with you", body: "Import your existing standings from CSV on any paid plan, so nobody loses their rank when you switch." },
-  { title: "Start free, switch gradually", body: "The Free plan is a full working site with a leaderboard, bot, rewards, and games. Run it next to your current setup until you're sure." },
+  { title: "Start free, switch gradually", body: "The Free plan is a working community site with a leaderboard, bot, rewards, and viewer memberships. Run it next to your current setup until you're sure." },
 ];
 
 export default function SwitchPage() {

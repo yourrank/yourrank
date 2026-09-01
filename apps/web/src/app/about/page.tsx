@@ -11,15 +11,15 @@ export const metadata: Metadata = {
 const BELIEFS = [
   {
     title: "One suite, not five tools",
-    body: "A streamer's leaderboard, Telegram bot, rewards shop, overlays, and games should share one dashboard and one set of data — update a score once and every surface reflects it.",
+    body: "A streamer's leaderboard, Telegram bot, rewards shop, viewer memberships, and overlays should share one dashboard and one set of data — update a score once and every surface reflects it.",
   },
   {
     title: "Built for streamers, not developers",
     body: "Nobody should need to understand webhooks or tokens to run their community. Setup is guided, and the product proves each step worked before moving on.",
   },
   {
-    title: "Entertainment, never gambling",
-    body: "Credits have no cash value anywhere in the product. There are no deposits and no cashouts — games and rewards exist to keep communities engaged, full stop.",
+    title: "Community credits, never cash",
+    body: "Credits have no cash value anywhere in the launch product. There are no deposits and no cashouts — credits connect safe participation to creator-provided rewards.",
   },
   {
     title: "Calm, honest design",
@@ -46,7 +46,7 @@ export default function AboutPage() {
               <p>
                 YourRank replaces that stack with one connected suite: a branded public site with live standings, a
                 Telegram bot that reaches viewers off-stream, a credits shop synced to Kick channel points, an OBS
-                overlay for the broadcast, and mini-games that keep chat playing between rounds.
+                overlay for the broadcast, and viewer memberships that keep each community relationship clear.
               </p>
               <p>
                 It runs on Cloudflare&apos;s edge, starts free, and is built so that a streamer — not a developer — can set

@@ -5,7 +5,7 @@ import { MarketingShell } from "@/components/site-shell";
 
 export const metadata: Metadata = {
   title: "Docs — YourRank",
-  description: "YourRank guides and API documentation: quickstart, OBS overlay setup, Kick rewards, custom domains, public endpoints, chat bot commands, and score postbacks.",
+  description: "YourRank guides and API documentation: quickstart, OBS overlay setup, Kick rewards, custom domains, public endpoints, and chat bot commands.",
   alternates: { canonical: "https://yourrank.site/docs" },
 };
 
@@ -16,7 +16,6 @@ const TOC = [
   { href: "#custom-domain", label: "Custom domain" },
   { href: "#api", label: "API reference" },
   { href: "#chat-bots", label: "Chat bots" },
-  { href: "#postbacks", label: "Postbacks" },
   { href: "#openapi", label: "OpenAPI" },
 ];
 
@@ -78,7 +77,7 @@ export default function DocsPage() {
                   <span className="font-mono text-xs text-devin-ink-soft">02</span>
                   <div>
                     <h3 className="font-medium">Set up your leaderboard</h3>
-                    <p className={P}>In the dashboard editor, add your challenge details, prize breakdown, and players — or import them from CSV on a paid plan. Choose which sections your site shows: home, leaderboard, shop, and games.</p>
+                    <p className={P}>In the dashboard editor, add your challenge details, prize breakdown, and players — or import them from CSV on a paid plan. Choose which launch sections your site shows: home, leaderboard, rewards, and viewer access.</p>
                   </div>
                 </li>
                 <li className="grid gap-2 sm:grid-cols-[60px_1fr]">
@@ -145,20 +144,6 @@ export default function DocsPage() {
                   </tbody>
                 </table>
               </div>
-              <h3 className="mt-8 font-medium">Standings example</h3>
-              <Code>{`curl https://yourrank.site/api/public/demo/standings`}</Code>
-              <Code>{`{
-  "slug": "demo",
-  "name": "Demo Challenge",
-  "casino": "",
-  "period": "Monthly",
-  "prizePool": "500 points",
-  "players": [
-    { "name": "Alex", "wagered": 9500, "prize": 250, "position": 1 },
-    { "name": "Bree", "wagered": 7200, "prize": 150, "position": 2 },
-    { "name": "Casey", "wagered": 5400, "prize": 100, "position": 3 }
-  ]
-}`}</Code>
               <h3 className="mt-8 font-medium">JavaScript</h3>
               <Code>{`const res = await fetch("https://yourrank.site/api/public/demo/standings");
 const data = await res.json();
@@ -170,22 +155,6 @@ console.log(data.players[0].name);`}</Code>
               <Code>{`!rank $(customapi https://yourrank.site/api/public/demo/rank?user=Alex)`}</Code>
               <p className={P}><b className="font-medium text-devin-ink">Streamlabs</b> rank lookup:</p>
               <Code>{`!rank $(readapi https://yourrank.site/api/public/demo/rank?user=Alex)`}</Code>
-            </Section>
-
-            <Section id="postbacks" title="Score postback (Pro/Team only)">
-              <p className={P}>Push updated player lists from your own backend. Requires <span className={IC}>X-Postback-Key</span> and an HMAC-SHA256 signature of the raw request body in <span className={IC}>X-Postback-Signature</span>.</p>
-              <Code>{`POST /api/scores
-Content-Type: application/json
-X-Postback-Key: your-key
-X-Postback-Signature: hex-signature
-
-{
-  "slug": "demo",
-  "players": [
-    { "name": "Alice", "wagered": 15000, "prize": 600 }
-  ]
-}`}</Code>
-              <p className={P}>Find your postback key and secret in your dashboard under <b className="font-medium text-devin-ink">Postbacks &amp; Attribution</b>.</p>
             </Section>
 
             <Section id="openapi" title="OpenAPI spec">

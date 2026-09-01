@@ -118,7 +118,6 @@ export function SiteFooter() {
           <a href="/telegram" className="text-devin-ink hover:text-devin-primary">Telegram</a>
           <a href="/credits" className="text-devin-ink hover:text-devin-primary">Credits &amp; Shop</a>
           <a href="/overlays" className="text-devin-ink hover:text-devin-primary">Overlays</a>
-          <a href="/games" className="text-devin-ink hover:text-devin-primary">Games</a>
         </div>
         <div className="grid content-start gap-2 text-sm">
           <p className="mb-1 font-mono text-[11px] uppercase tracking-widest text-devin-ink-soft">Company</p>

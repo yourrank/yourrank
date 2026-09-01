@@ -2,11 +2,15 @@
 import { one, query } from "@yourrank/shared/db";
 import { currentUser, json, bad, readJson } from "../auth.js";
 
-const BACKUP_VERIFICATION_LIMIT_HOURS = Number(process.env.BACKUP_VERIFICATION_LIMIT_HOURS || 168);
+export function backupVerificationLimitHours(env = {}) {
+  const parsed = Number(env.BACKUP_VERIFICATION_LIMIT_HOURS ?? 168);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 168;
+}
 
-export async function handleBackupHealth(_request, _env) {
+export async function handleBackupHealth(_request, env, deps = { one }) {
   try {
-    const latest = await one(
+    const limitHours = backupVerificationLimitHours(env);
+    const latest = await deps.one(
       `SELECT completed_at, provider, target, rto_seconds, rpo_seconds, notes
          FROM backup_verifications
         WHERE success = true
@@ -18,9 +22,10 @@ export async function handleBackupHealth(_request, _env) {
     }
     const completedAt = new Date(latest.completed_at).getTime();
     const ageHours = (Date.now() - completedAt) / 36e5;
-    if (ageHours > BACKUP_VERIFICATION_LIMIT_HOURS) {
+    if (ageHours > limitHours) {
+      const unit = limitHours === 1 ? "hour" : "hours";
       return bad(
-        `Last successful backup verification was ${Math.round(ageHours)} hours ago. Limit is ${BACKUP_VERIFICATION_LIMIT_HOURS} hours.`,
+        `Last successful backup verification was ${Math.round(ageHours)} hours ago. Limit is ${limitHours} ${unit}.`,
         503
       );
     }
@@ -28,7 +33,7 @@ export async function handleBackupHealth(_request, _env) {
       ok: true,
       lastVerifiedAt: latest.completed_at,
       ageHours: Math.round(ageHours * 100) / 100,
-      limitHours: BACKUP_VERIFICATION_LIMIT_HOURS,
+      limitHours,
       provider: latest.provider,
       target: latest.target,
       rtoSeconds: latest.rto_seconds,

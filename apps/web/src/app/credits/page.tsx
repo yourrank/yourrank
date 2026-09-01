@@ -11,7 +11,7 @@ export default function CreditsPage() {
   return <ProductPage content={{
     kind: "credits",
     title: "Make every act of participation count.",
-    intro: "Connect Kick-powered earning rules to viewer balances, a reward catalog, games, redemptions, and a fulfilment trail your team can follow.",
+    intro: "Connect safe participation to viewer balances, a reward catalog, claims, and a fulfilment trail your team can follow.",
     outcome: "A visible path from participation to reward.",
     steps: [
       { number: "01", title: "Define how credits work", body: "Configure site-scoped earning rules and keep viewer balances connected to the right community." },

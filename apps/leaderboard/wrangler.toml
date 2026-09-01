@@ -64,6 +64,7 @@ crons = ["*/5 * * * *"]
 
 [vars]
 APP_NAME = "YourRank"
+ENVIRONMENT = "production"
 CF_ZONE_ID = "dd79a3ac13643b94732f2fef6ce3b1f5"
 RL_BACKEND = "do"  # Change to "kv" to use KV for rate limiting
 RL_FAIL_OPEN = "false"  # Block requests when the rate-limit backend is down (fail-closed).
@@ -72,6 +73,7 @@ LIVE_BOARD_STREAM_KILL_SWITCH = "false"
 LIVE_BOARD_FALLBACK_POLL_MS = "60000"
 LIVE_BOARD_MAX_SUBSCRIBERS = "1000"
 DLQ_HEALTH_DEGRADE_THRESHOLD = "100"
+DLQ_HEALTH_MAX_AGE_SECONDS = "86400"
 REQUEST_METRICS = "true"  # Set false to disable per-request capacity telemetry.
 POSTBACK_UNSIGNED_ENABLED = "false"  # Signed postbacks only.
 # Production session cookie is scoped to the apex domain so it is shared across
@@ -94,7 +96,7 @@ service = "yourrank-web"
 #   DATABASE_URL            (fallback if Hyperdrive isn't bound)
 #   NOWPAYMENTS_API_KEY
 #   NOWPAYMENTS_IPN_SECRET
-#   RESEND_API_KEY          (optional; transactional email — signup/lead/reset)
+#   RESEND_API_KEY          (required in production; creator verification and recovery)
 #   TOKEN_ENC_KEY           # 32-byte hex, encrypts TOTP secrets for admin 2FA
 #   MAIL_FROM               (required if RESEND_API_KEY is set; the From: address,
 #                            e.g. "YourRank <hey@yourrank.site>" — Resend rejects
@@ -135,18 +137,27 @@ crons = ["*/5 * * * *"]
 
 [env.staging.vars]
 DLQ_HEALTH_DEGRADE_THRESHOLD = "100"
+DLQ_HEALTH_MAX_AGE_SECONDS = "86400"
 APP_NAME = "YourRank (Staging)"
-POSTBACK_UNSIGNED_ENABLED = "true"
+ENVIRONMENT = "staging"
+CF_ZONE_ID = "dd79a3ac13643b94732f2fef6ce3b1f5"
+RL_BACKEND = "do"
+RL_FAIL_OPEN = "false"
+REQUEST_METRICS = "true"
+ALLOW_DEMO_LOGIN = "false"
+DEMO_USER_EMAIL = "demo@yourrank.site"
+POSTBACK_UNSIGNED_ENABLED = "false"
 LIVE_BOARD_PUSH_ENABLED = "false"
 LIVE_BOARD_STREAM_KILL_SWITCH = "false"
 LIVE_BOARD_FALLBACK_POLL_MS = "60000"
 LIVE_BOARD_MAX_SUBSCRIBERS = "1000"
 # Staging cookies must not be visible to the production apex domain.
 SESSION_COOKIE_DOMAIN = ".staging.yourrank.site"
+# RESEND_API_KEY and MAIL_FROM are required before staging creator signup is enabled.
 
 [[env.staging.migrations]]
 tag = "v1"
-new_sqlite_classes = ["LiveBoard"]
+new_sqlite_classes = ["RateLimiter", "LiveBoard"]
 
 
 [[env.staging.durable_objects.bindings]]
@@ -156,6 +167,14 @@ class_name = "RateLimiter"
 [[env.staging.durable_objects.bindings]]
 name = "LIVE_BOARD_DO"
 class_name = "LiveBoard"
+
+[[env.staging.queues.producers]]
+queue = "yourrank-events-staging"
+binding = "EVENTS_QUEUE"
+
+[[env.staging.services]]
+binding = "MARKETING"
+service = "yourrank-web-staging"
 
 # Staging Hyperdrive — points to a dedicated staging Supabase DB.
 # TODO: Replace placeholder with actual staging Hyperdrive ID before flipping staging infra.

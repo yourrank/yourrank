@@ -33,7 +33,7 @@ const ENTRIES: Array<{ date: string; title: string; tag: EntryTag; body: string 
     date: "August 18, 2026",
     tag: "New",
     title: "A new public site",
-    body: "The homepage was rebuilt with an interactive product tour, and the four giveaway types — chat giveaways, ticket raffles, code drops, and predictions — each got their own link in the dashboard.",
+    body: "The homepage was rebuilt with an interactive product tour, and free code drops gained a dedicated safe Activity path with participation evidence.",
   },
   {
     date: "August 18, 2026",

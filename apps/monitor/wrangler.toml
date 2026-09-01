@@ -26,3 +26,23 @@ MONITOR_SLUG = ""        # set to a known board slug after first board exists
 #
 # Vars:
 #   MONITOR_BACKUP_CHECK = "true"  — also check /api/health/backup freshness
+
+[env.staging]
+name = "yourrank-monitor-staging"
+
+[env.staging.observability]
+enabled = true
+head_sampling_rate = 1
+
+[env.staging.observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[env.staging.triggers]
+crons = ["*/5 * * * *"]
+
+[env.staging.vars]
+MONITOR_TARGET = "https://staging.yourrank.site"
+MONITOR_SLUG = ""
+MONITOR_BACKUP_CHECK = "true"

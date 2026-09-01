@@ -217,7 +217,10 @@ form.addEventListener("submit", async (e) => {
       return;
     }
     if (data.needsVerification) {
-      location.href = nextPath ? `/verify-email?next=${encodeURIComponent(nextPath)}` : "/verify-email";
+      const verifyParams = new URLSearchParams();
+      if (nextPath) verifyParams.set("next", nextPath);
+      if (data.verificationSent === false) verifyParams.set("delivery", "failed");
+      location.href = `/verify-email${verifyParams.size ? `?${verifyParams}` : ""}`;
       return;
     }
     if (mode === "signup") {

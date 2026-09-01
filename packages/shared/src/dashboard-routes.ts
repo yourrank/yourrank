@@ -418,6 +418,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
     { classification: "one-shot-action", context: "dashboard documents after OAuth", where: "credits.js OAuth error banner; deleted from the URL after display." },
     { classification: "feature", context: "auth/login pages", where: "Login error display outside the dashboard." },
   ],
+  delivery: [{ classification: "feature", context: "auth verification page", where: "Server-rendered email-delivery failure state on /auth/verify-email; not dashboard routing." }],
   gid: [{ classification: "feature", context: "Players → Google Sheets import", where: "players.js: worksheet id inside a pasted import URL; not a dashboard parameter." }],
   token: [{ classification: "feature", context: "invite/auth URLs", where: "Invite acceptance (/dashboard/invite) and auth flows; capability token, not navigation." }],
   path: [{ classification: "feature", context: "/dashboard/_content endpoint", where: "/dashboard/_content internal fragment endpoint input; not a user-facing route." }],

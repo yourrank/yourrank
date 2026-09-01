@@ -2,11 +2,23 @@
 
 Maintained to prevent architecture drift.
 
-**Evidence baseline:** Wave K candidate branched from `main` at `d36b6253230e6dad3a535feacc02845e0463f52b` (Wave J Viewer Membership Expansion merged)
+**Evidence baseline:** Release-readiness audit branched from `main` at `fc0fd1ca7fa4e639a1ee30a2cea23b4c3f9c29fc` (Wave K merged)
 
-**Last reconciled:** 2026-08-31
+**Last reconciled:** 2026-09-01
 
 **Scope:** current implementation reality only. Target product direction lives in [`docs/YOURRANK_PRODUCT_ARCHITECTURE.md`](../docs/YOURRANK_PRODUCT_ARCHITECTURE.md).
+
+## Release Readiness (separate from roadmap completion)
+
+- The official product architecture roadmap is complete through Wave K. No Wave L exists in current scope.
+- The 2026-09-01 production launch audit disposition is **DO NOT LAUNCH**: Closed Beta, Public Free, and Paid Public are currently **NOT READY**. See [`docs/RELEASE_READINESS.md`](../docs/RELEASE_READINESS.md) for evidence and exact blockers.
+- Production recovery has no recorded successful isolated restore (`/api/health/backup` returns 503), and the live DLQ probe found 12 pending rows with the oldest more than eight days old. These are operational launch blockers, not roadmap capabilities.
+- Staging now fails closed, applies migrations before code, and defines isolated Web, Consumer, Leaderboard, Bot, Monitor, queue, service and binding topology. Dedicated staging Supabase/Hyperdrive resources and required mail configuration still need provisioning; placeholders must never be replaced with production identifiers.
+- Creator verification/recovery email delivery is required and health-visible in deployed production/staging. Signup and password recovery fail before mutation when `RESEND_API_KEY` plus `MAIL_FROM` are unavailable, and signed-in resend resolves the account email server-side.
+- Public marketing/onboarding/legal product copy no longer promotes restricted legacy mechanics or nonexistent recurring/crypto billing. The marketing `/games` destination redirects to `/sites`; contained authorized legacy runtime was not redesigned.
+- DLQ health now fails closed for probe failure and degrades on pending count or oldest-row age (24-hour default). This makes the existing stale production backlog visible but does not resolve it.
+- Canonical plan metadata remains Free/Pro/Team and unchanged. **Paid Public launch is blocked because no real recurring subscription provider/reconciliation lifecycle exists.** Manual or trial grants are not billing evidence.
+- Roadmap completion therefore remains true while release readiness remains independently blocked. Do not present either state as evidence for the other.
 
 ## Canonical Current Sources
 

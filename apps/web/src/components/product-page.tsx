@@ -1,7 +1,7 @@
 import { MagneticCursor } from "./home/magnetic-cursor";
 import { MarketingShell } from "./site-shell";
 
-export type ProductKind = "sites" | "telegram" | "credits" | "overlays" | "games";
+export type ProductKind = "sites" | "telegram" | "credits" | "overlays";
 
 export interface ProductPageContent {
   kind: ProductKind;
@@ -16,7 +16,6 @@ const PEERS = [
   { label: "Telegram", href: "/telegram", kind: "telegram" },
   { label: "Credits & Shop", href: "/credits", kind: "credits" },
   { label: "Overlays", href: "/overlays", kind: "overlays" },
-  { label: "Games", href: "/games", kind: "games" },
 ] as const;
 
 function SitesVisual() {
@@ -31,7 +30,7 @@ function SitesVisual() {
       <aside className="border-b border-devin-line bg-devin-secondary/45 p-5 md:border-b-0 md:border-r">
         <p className="font-mono text-[10px] uppercase tracking-widest text-devin-ink-soft">Site editor</p>
         <div className="mt-5 grid gap-1 text-sm">
-          {['Home', 'Leaderboard', 'Shop', 'Games'].map((item, index) => (
+          {['Home', 'Leaderboard', 'Rewards', 'My Community'].map((item, index) => (
             <span key={item} className={`rounded-[2px] px-3 py-2 ${index === 1 ? 'bg-white text-devin-ink' : 'text-devin-ink-soft'}`}>
               {item}
             </span>
@@ -178,43 +177,10 @@ function OverlaysVisual() {
   );
 }
 
-function GamesVisual() {
-  const games = [
-    { name: "Mines", detail: "Pick tiles, dodge the mines" },
-    { name: "Plinko", detail: "Drop the ball, follow the bounce" },
-    { name: "Dice", detail: "Roll over or under a target" },
-  ];
-  return (
-    <div className="min-h-[430px] bg-white p-5 sm:p-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-devin-primary">Community games</p>
-          <h2 className="mt-2 text-2xl font-medium">Play with credits, not money.</h2>
-        </div>
-        <span className="rounded-full border border-devin-line px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-devin-ink-soft">Provably fair</span>
-      </div>
-      <div className="mt-6 grid gap-px overflow-hidden rounded-[2px] border border-devin-line bg-devin-line sm:grid-cols-3">
-        {games.map((game) => (
-          <div key={game.name} className="bg-white p-5">
-            <p className="text-lg font-medium">{game.name}</p>
-            <p className="mt-2 text-sm leading-relaxed text-devin-ink-soft">{game.detail}</p>
-            <span className="mt-5 inline-block rounded-[2px] bg-devin-secondary px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-devin-ink-soft">Credits only</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 rounded-[2px] border border-devin-line bg-devin-secondary/25 p-5">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-devin-ink-soft">Fairness check</p>
-        <p className="mt-2 font-mono text-xs text-devin-ink-soft">server seed hash · a97f…c21e — revealed after each round</p>
-      </div>
-    </div>
-  );
-}
-
 function ProductVisual({ kind }: { kind: ProductKind }) {
   if (kind === "telegram") return <TelegramVisual />;
   if (kind === "credits") return <CreditsVisual />;
   if (kind === "overlays") return <OverlaysVisual />;
-  if (kind === "games") return <GamesVisual />;
   return <SitesVisual />;
 }
 
@@ -270,7 +236,7 @@ export function ProductPage({ content }: { content: ProductPageContent }) {
         <section className="px-6 py-24 sm:py-32">
           <div className="mx-auto max-w-6xl">
             <h2 className="text-3xl font-medium tracking-[-0.02em]">Explore the connected suite.</h2>
-            <div className="mt-8 grid border-y border-devin-line sm:grid-cols-3 lg:grid-cols-5">
+            <div className="mt-8 grid border-y border-devin-line sm:grid-cols-2 lg:grid-cols-4">
               {PEERS.map((peer) => (
                 <a
                   key={peer.kind}
