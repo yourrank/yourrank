@@ -18,7 +18,7 @@ This report evaluates the product that exists after Wave K. It does not create a
 | Launch mode | Disposition | Blocking reasons |
 |---|---|---|
 | Closed beta | **NOT READY** | No successful restore drill is recorded; production has 12 pending DLQ rows with the oldest more than eight days old; dedicated staging infrastructure and required mail configuration are not verified. |
-| Public Free | **NOT READY** | Closed-beta blockers remain, and the dedicated staging release path cannot run until its isolated Supabase/Hyperdrive resources are provisioned and the complete PR gates pass. |
+| Public Free | **NOT READY** | Closed-beta blockers remain, and the dedicated staging release path cannot run until its isolated Supabase/Hyperdrive resources and required mail configuration are provisioned and verified. |
 | Paid Public | **NOT READY** | All Free-launch blockers remain, and no real recurring subscription provider, verified subscription webhook, renewal/failure/cancellation reconciliation, or durable provider subscription mapping exists. |
 
 Final recommendation: **DO NOT LAUNCH**.
@@ -178,7 +178,7 @@ Page views, `/me`, Join, OAuth sign-in, passive browsing, failed/blocked/rate-li
 
 ## Claims/Rewards
 
-Result: **PASSED at transactional boundaries; PostgreSQL race execution pending CI.**
+Result: **PASSED at transactional boundaries, including the PR PostgreSQL migration/race gate.**
 
 - Create/list, viewer balance, Claim submission, pending creator view, Complete and Cancel paths reuse the canonical redemption adapter.
 - Terminal transitions are atomic/idempotent; contradictory transitions fail; cancellation restores balance/stock/ledger once.
@@ -196,7 +196,7 @@ Result: **PASSED at validation/service boundaries; deployed end-to-end mutation 
 
 ## Automation
 
-Result: **PASSED in unit/service tests; real PostgreSQL concurrency and scheduler E2E pending CI.**
+Result: **PASSED in unit/service, real PostgreSQL concurrency and isolated scheduler E2E tests.**
 
 - Only `safe_code_drop` is accepted. Template/schedule validation, one-time/daily/weekly UTC recurrence, cancellation, three bounded retries, stale >6h handling, entitlement downgrade/restore, removal/suspension/unpublish failure and 50-row due batch are covered.
 - Transaction lock plus unique occurrence and Activity constraints enforce at most one Activity per occurrence.
@@ -227,8 +227,8 @@ The endpoint accepts only 7/30, uses UTC, requires `canRoleViewInsights`, exclud
 
 - Migration filename/order/static audit: **PASSED**.
 - Wave I indexes, Wave H role constraints, Viewer/Membership/billing reconciliation and Wave K occurrence constraints are present in the ordered migration set.
-- Empty-database apply, realistic upgrade, Postgres concurrency and fresh `EXPLAIN (ANALYZE, BUFFERS)`: **NOT VERIFIED locally** because Docker/PostgreSQL was unavailable.
-- GitHub PR `Migration Dry-Run` provisions PostgreSQL 16, applies every migration with `ON_ERROR_STOP`, then runs wagering, rollup, session/team, automation concurrency and JSONB writer tests. Final result must be taken from PR CI.
+- Empty-database apply and PostgreSQL concurrency: **PASSED in PR CI**. PostgreSQL 16 applied all 125 migrations with `ON_ERROR_STOP`, then passed wagering, rollup, session/team, two real automation race/cancel tests, JSONB writer tests and schema-consistency checks.
+- A separate realistic production-data upgrade and fresh `EXPLAIN (ANALYZE, BUFFERS)` run remain **NOT VERIFIED**; the CI database is an empty isolated schema.
 - Recovery is forward-fix plus restore evidence; no unsafe generic rollback SQL was invented.
 
 ## Deployment order
@@ -319,18 +319,20 @@ Local evidence before PR:
 | Leaderboard build/assets | **PASSED** |
 | Bot build | **PASSED** |
 | Web Next.js compile/prerender | **PASSED** — 15 pages |
-| OpenNext final Worker bundle on Windows | **NOT VERIFIED** — Windows symlink permission failure after successful Next build; Linux PR build is authoritative |
+| OpenNext final Worker bundle | **PASSED in Linux PR CI**; local Windows stopped at a symlink permission after successful Next compile |
 | Dependency audit | **PASSED** — no moderate-or-higher unignored vulnerability reported |
 | SBOM | **PASSED** — CycloneDX 1.5 generated with 637 components in a temporary artifact |
-| TruffleHog | **NOT RUN locally** — executable unavailable; PR workflow is authoritative |
+| TruffleHog | **PASSED in PR CI** (`--only-verified`) |
 | Test-mock guard | **PASSED** — 11 documented legacy files |
 | `.ai` self-check | **PASSED** — 95 skills/contracts and instruction graph; external `skills-ref` executable unavailable |
 | `git diff --check` | **PASSED** |
-| Migration/Postgres race tests | **SKIPPED / NOT VERIFIED locally** — no Docker/Postgres runtime |
-| E2E and scheduler E2E | **NOT RUN locally** — isolated runtime unavailable; required PR jobs pending |
-| CodeQL | **NOT RUN locally**; if the conditional PR job skips, report **CodeQL SKIPPED** |
+| Migration/Postgres race tests | **PASSED in PR CI** — all 125 migrations plus wagering, rollup, session/team, automation concurrency and JSONB writers |
+| E2E and scheduler E2E | **PASSED in PR CI** — 60 passed, 0 failed; the Wave K scheduled Activity executed once and recorded normal participation |
+| E2E environment-dependent cases | **SKIPPED: 12** — marketing root/pricing, separate Bot Worker/Telegram routes and real Telegram bot were unavailable in the isolated Worker runtime |
+| Password-reset email token | **NOT VERIFIABLE** in E2E — no mailbox; API reset request/bogus-token/change-password path passed |
+| CodeQL | **CodeQL SKIPPED** — the repository's conditional analysis job did not run |
 
-PR CI status must be added after the branch is pushed. A workflow success is not a substitute for a skipped CodeQL analysis.
+PR #681 executable checks passed: Build, Dependency Audit, E2E, Lint, Migration Dry-Run, Test, Typecheck, SBOM and TruffleHog. A workflow success is not a substitute for the skipped CodeQL analysis.
 
 ## Production smoke plan
 
@@ -354,7 +356,7 @@ Use isolated launch-test accounts/data; do not mutate restricted systems or exis
 1. Record a successful isolated database restore and confirm provider backup/PITR configuration; require backup health to become 200.
 2. Investigate and resolve the 12-row production DLQ backlog, including the row older than eight days; require age/count health to be green.
 3. Provision dedicated staging Supabase/Hyperdrive/queues/workers and required mail configuration; remove placeholders only with verified non-production identifiers.
-4. Run and pass the full PR CI matrix: Linux OpenNext build, migration dry-run, PostgreSQL race tests, isolated E2E, scheduler E2E, dependency audit, SBOM and secret scan. Report CodeQL honestly.
+4. On provisioned staging, run the 12 environment-dependent E2E cases for marketing, the separate Bot Worker/Telegram routes and real provider wiring; verify a real verification/reset email through a test mailbox. Enable CodeQL only when repository entitlement is available and report it separately.
 5. Before any Paid Public launch, implement and independently audit a real recurring subscription provider and reconciliation lifecycle.
 
 Until blockers 1–4 are resolved, Closed Beta and Public Free remain **NOT READY**. Paid Public remains **NOT READY** until all five are resolved.
