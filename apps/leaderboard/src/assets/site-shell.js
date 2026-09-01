@@ -378,6 +378,78 @@
     });
   }
 
+  // ── My Community: safe free code-drop claim ─────────────────────
+  var codeDropForm = document.querySelector("[data-code-drop-claim]");
+  var codeDropInput = document.getElementById("yr-code-drop-code");
+  var codeDropStatus = document.getElementById("yr-code-drop-status");
+  var codeDropButton = codeDropForm && codeDropForm.querySelector("[data-code-drop-submit]");
+  var setCodeDropStatus = function (message, isError) {
+    if (!codeDropStatus) return;
+    codeDropStatus.textContent = message || "";
+    codeDropStatus.classList.toggle("is-error", !!isError);
+  };
+  var CODE_DROP_ERRORS = {
+    "Invalid or expired drop code.": "That code is invalid or no longer active.",
+    "This drop code has expired.": "That code has expired.",
+    "All claims for this drop have been taken!": "That code has no claims remaining.",
+    "You have already claimed this drop code!": "You already claimed that code.",
+    "Too many attempts. Please wait a minute.": "Too many attempts. Wait a minute, then try again.",
+    "Claiming is unavailable for this membership.": "Claiming is unavailable for this membership.",
+    "invalid csrf": "Your session expired. Reload the page and try again.",
+    unauthorized: "Sign in again to claim this code.",
+  };
+  var codeDropErrorText = function (message) {
+    return CODE_DROP_ERRORS[message] || "Couldn’t claim that code. Check it and try again.";
+  };
+  if (codeDropForm && codeDropInput && codeDropButton) {
+    codeDropForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var code = codeDropInput.value.trim().toUpperCase();
+      if (!code) {
+        setCodeDropStatus("Enter the free code shared by the creator.", true);
+        focusWithoutScroll(codeDropInput);
+        return;
+      }
+      var label = codeDropButton.textContent;
+      codeDropButton.disabled = true;
+      codeDropButton.setAttribute("aria-busy", "true");
+      codeDropButton.textContent = "Claiming…";
+      setCodeDropStatus("Checking that code…");
+      fetch("/api/events/drops/claim", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        body: JSON.stringify({ site: codeDropForm.dataset.siteSlug || slug, code: code }),
+      })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          if (result.ok && result.data.ok) {
+            codeDropButton.textContent = "Claimed";
+            codeDropButton.removeAttribute("aria-busy");
+            codeDropButton.classList.add("is-success");
+            var points = Number(result.data.pointsAwarded || 0);
+            setCodeDropStatus("Code claimed. " + points.toLocaleString("en-US") + " free credits added. Loading your participation…");
+            if (typeof result.data.newBalance === "number") updateBalance(result.data.newBalance);
+            focusWithoutScroll(codeDropStatus || codeDropButton);
+            window.location.reload();
+            return;
+          }
+          codeDropButton.disabled = false;
+          codeDropButton.removeAttribute("aria-busy");
+          codeDropButton.textContent = label;
+          setCodeDropStatus(codeDropErrorText(result.data.error), true);
+          focusWithoutScroll(codeDropStatus || codeDropButton);
+        })
+        .catch(function () {
+          codeDropButton.disabled = false;
+          codeDropButton.removeAttribute("aria-busy");
+          codeDropButton.textContent = label;
+          setCodeDropStatus("Network error. The code was not confirmed as claimed; try again.", true);
+          focusWithoutScroll(codeDropStatus || codeDropButton);
+        });
+    });
+  }
+
   // ── Shop: redeem ────────────────────────────────────────────────────
   var redeemStatus = document.getElementById("yr-redeem-status");
   var setRedeemStatus = function (message, isError) {

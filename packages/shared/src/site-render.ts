@@ -953,6 +953,7 @@ ${sectionHead("After you sign in")}
 <dl class="yr-credit-guide-list">
 <div class="yr-credit-guide-row"><dt>Community membership</dt><dd>Keep one persistent relationship with ${creator} through your Viewer Account.</dd></div>
 <div class="yr-credit-guide-row"><dt>Rewards and credits</dt><dd>See free credits earned from ${creator}'s channel-point rewards.</dd></div>
+<div class="yr-credit-guide-row"><dt>Free code drops</dt><dd>Claim a code shared by ${creator}; a successful claim records participation in this community.</dd></div>
 <div class="yr-credit-guide-row"><dt>Claims</dt><dd>Follow the current status of rewards you claim in this community.</dd></div>
 </dl>
 </section>`;
@@ -977,7 +978,8 @@ ${authError}
 ${sectionHead("You haven't joined this community yet.")}
 <p class="yr-note yr-note--w">Membership connects this Viewer Account to ${creator}. It keeps Rewards, free credits and your own Claims here where supported.</p>
 <p class="yr-join-status" id="yr-membership-join-status" role="status" aria-live="polite" tabindex="-1"></p>
-</section>`;
+</section>
+${codeDropClaimSection({ slug, creator, joinsMembership: true })}`;
   }
 
   if (membershipStatus === "unavailable" || !viewerData?.viewerOnSite) {
@@ -1004,6 +1006,9 @@ ${authError}
   const membershipNotice = viewerData.viewerOnSite.blocked
     ? `<p class="yr-note yr-note--w" role="status">Claiming is currently unavailable for this membership.</p>`
     : "";
+  const codeDropClaim = viewerData.viewerOnSite.blocked
+    ? ""
+    : codeDropClaimSection({ slug, creator });
 
   // Activity reads as rows rather than a four-column table: on a phone a table
   // this wide either scrolls sideways or shreds the detail column. Sign is
@@ -1047,8 +1052,27 @@ ${claims.length
   return `${head}
 ${authError}
 ${membershipNotice}
+${codeDropClaim}
 ${participationHistory}
 <div class="yr-vcols${!ledger.length && !claims.length ? " yr-vcols--empty" : ""}">${history}${orders}</div>`;
+}
+
+function codeDropClaimSection({ slug, creator, joinsMembership = false }) {
+  const membershipNote = joinsMembership
+    ? " A successful claim joins this community and records the participation on your Membership."
+    : " A successful claim appears in Participation on this Membership.";
+  return `<section class="yr-vsec yr-code-drop" aria-label="Claim a free code drop">
+${sectionHead("Claim a free code drop")}
+<p class="yr-note" id="yr-code-drop-help">Enter a code shared by ${creator}.${membershipNote} Each code can be claimed once while it is active.</p>
+<form class="yr-code-drop-form" data-code-drop-claim data-site-slug="${esc(slug)}">
+<label class="yr-code-drop-label" for="yr-code-drop-code">Free code</label>
+<div class="yr-code-drop-controls">
+<input class="yr-code-drop-input" id="yr-code-drop-code" name="code" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" placeholder="COMMUNITY100" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="yr-code-drop-help" required />
+<button class="yr-btn yr-btn--sm" type="submit" data-code-drop-submit>Claim free code</button>
+</div>
+<p class="yr-code-drop-status" id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"></p>
+</form>
+</section>`;
 }
 
 function joinAuthButton(r, returnTo, slug) {
