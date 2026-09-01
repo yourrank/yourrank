@@ -375,4 +375,31 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(deps.markActive).toHaveBeenCalledTimes(1);
   });
 
+  it("does not let a blocked Membership claim a free code drop", async () => {
+    mockOne.mockResolvedValueOnce(SITE); // find site
+    mockOne.mockResolvedValueOnce({
+      id: "drop-1",
+      code: "KICK30",
+      points_reward: 30,
+      max_claims: 20,
+      claimed_count: 5,
+      status: "active",
+    });
+    mockOne.mockResolvedValueOnce(null); // not yet claimed
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // locked drop
+    mockOne.mockResolvedValueOnce({ id: "sv-blocked", balance: 10, blocked: true });
+
+    const res = await handleClaimCodeDrop(new Request("http://localhost/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "streamer", code: "KICK30" }),
+    }), mockEnv(), deps);
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("Claiming is unavailable for this membership.");
+    expect(mockOne.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO code_drop_claims"))).toBe(false);
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(deps.markActive).not.toHaveBeenCalled();
+  });
+
 });

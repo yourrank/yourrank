@@ -81,7 +81,10 @@ export function isCustomViewerAuthPath(method, path) {
 
 export function isCustomViewerApiPath(method, path) {
   return isCustomViewerAuthPath(method, path)
-    || (method === "POST" && path === "/api/viewer/membership/join");
+    || (method === "POST" && (
+      path === "/api/viewer/membership/join"
+      || path === "/api/events/drops/claim"
+    ));
 }
 
 function telemetryRoute(path) {

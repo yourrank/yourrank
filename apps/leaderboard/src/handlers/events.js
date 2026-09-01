@@ -365,9 +365,10 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
       `INSERT INTO site_viewers (site_id, viewer_id, balance, total_earned, total_spent)
        VALUES ($1, $2, 0, 0, 0)
        ON CONFLICT (site_id, viewer_id) DO UPDATE SET viewer_id=EXCLUDED.viewer_id
-       RETURNING id, balance`,
+       RETURNING id, balance, blocked`,
       [site.id, viewerId],
     );
+    if (siteViewer.blocked) return { blocked: true };
 
     // Claim first: a duplicate conflicts here, so the count below only ever
     // counts claims that were actually recorded.
@@ -407,6 +408,9 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   }
   if (outcome?.alreadyClaimed) {
     return bad("You have already claimed this drop code!", 400);
+  }
+  if (outcome?.blocked) {
+    return bad("Claiming is unavailable for this membership.", 403);
   }
 
   await markActive(site.id, viewerId, { one, exec });
