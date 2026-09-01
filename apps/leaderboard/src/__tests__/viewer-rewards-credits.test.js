@@ -255,8 +255,36 @@ describe("a creator's My Community page", () => {
     expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
     expect(html).toContain("Community membership");
     expect(html).toContain("Rewards and credits");
+    expect(html).toContain("Free code drops");
     expect(html).toContain(">Claims<");
+    expect(html).not.toContain("data-code-drop-claim");
     expect(html).not.toContain("yr-kpi");
+  });
+
+  it("restores free code-drop claiming to the creator-branded membership surface", async () => {
+    const memberHtml = await credits();
+    const nonMemberHtml = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
+      opts,
+    });
+
+    for (const html of [memberHtml, nonMemberHtml]) {
+      expect(html).toContain('data-code-drop-claim');
+      expect(html).toContain('data-site-slug="demo-board"');
+      expect(html).toContain('id="yr-code-drop-code"');
+      expect(html).toContain('id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"');
+      expect(html).toContain("Claim free code");
+      const claimSection = html.match(/<section class="yr-vsec yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
+      expect(claimSection).not.toMatch(/raffle|prediction|wager|stake|odds|payout|settlement/i);
+    }
+
+    expect(nonMemberHtml).toContain("A successful claim joins this community");
+    expect(shellSource).toContain('fetch("/api/events/drops/claim"');
+    expect(shellSource).toContain("codeDropForm.addEventListener(\"submit\"");
+    expect(shellSource).toContain("window.location.reload()");
   });
 
   it("keeps a signed-in zero balance and empty activity compact", async () => {
@@ -378,6 +406,7 @@ describe("a creator's My Community page", () => {
       opts,
     });
     expect(html).toContain("Claiming is currently unavailable for this membership.");
+    expect(html).not.toContain("data-code-drop-claim");
     expect(html).not.toMatch(/fraud|investigation/i);
   });
 });

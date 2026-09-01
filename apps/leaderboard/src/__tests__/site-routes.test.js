@@ -181,7 +181,7 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/unknown", true, "foo")).toBeNull();
   });
 
-  it("passes only supported viewer auth and Join paths through custom-domain routing", () => {
+  it("passes only supported viewer auth, Join, and free code-drop claim paths through custom-domain routing", () => {
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/callback")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/handoff")).toBe(true);
@@ -190,6 +190,9 @@ describe("parseSitePath", () => {
     expect(isCustomViewerAuthPath("POST", "/api/viewer/auth/kick/handoff")).toBe(false);
     expect(isCustomViewerAuthPath("GET", "/api/dashboard/status")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
+    expect(isCustomViewerApiPath("POST", "/api/events/drops/claim")).toBe(true);
+    expect(isCustomViewerApiPath("GET", "/api/events/drops/claim")).toBe(false);
+    expect(isCustomViewerApiPath("POST", "/api/events/raffles")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
   });
 
@@ -233,6 +236,29 @@ describe("parseSitePath", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it("routes a custom-domain free code-drop claim through the normal API handler", async () => {
+    const apiApp = {
+      fetch: async (request) => {
+        expect(request.method).toBe("POST");
+        expect(new URL(request.url).pathname).toBe("/api/events/drops/claim");
+        return new Response(JSON.stringify({ ok: true, pointsAwarded: 25 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    };
+    const response = await handleRequest(
+      req("https://streamer.example/api/events/drops/claim", { method: "POST" }),
+      {},
+      ctx,
+      {},
+      { resolveCustomDomain: async () => "streamer", apiApp },
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, pointsAwarded: 25 });
   });
 });
 

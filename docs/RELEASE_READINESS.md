@@ -44,7 +44,7 @@ The production deployment order encoded in the repository is migrations, Leaderb
 
 ## P1 findings
 
-**Count: 7.**
+**Count: 8.**
 
 | ID | Finding | Audit disposition |
 |---|---|---|
@@ -55,6 +55,7 @@ The production deployment order encoded in the repository is migrations, Leaderb
 | P1-05 | Recovery evidence is absent, and the backup freshness handler read `process.env` rather than the Worker environment. `/api/health/backup` currently returns 503 because no successful restore verification is recorded. | **CODE FIXED / OPERATIONAL BLOCKER OPEN.** The handler now validates the Worker environment threshold and fails closed; recovery documentation no longer claims unverified backups/PITR. An isolated restore drill and provider-side backup/PITR verification are still required. |
 | P1-06 | The canonical bot test command used Bun's substring directory filter, so an ignored local `dist` tree caused duplicate compiled tests and false failures. | **FIXED.** The bot runner enumerates exact source test files. It passes 164 tests, skips 10 PostgreSQL-dependent tests, and runs no compiled duplicate. |
 | P1-07 | Canonical paid checkout is not implemented. Manual/trial entitlement evidence does not establish subscription billing. | **DEFERRED INDEPENDENT BLOCKER.** No provider was invented in this audit. Paid Public remains blocked until a separate provider project supplies recurring checkout, verified webhooks, idempotent reconciliation, renewal/failure/cancellation handling and durable mappings. |
+| P1-08 | Viewer convergence removed the safe code-drop claim control from global `/me` without re-homing it to the creator-branded Membership surface. The API and persistence remained, but viewers had no public creator-site control for the action. | **FIXED.** `/<slug>/me` now owns the free-code claim form for signed-in viewers, including viewers without a Membership. A successful claim uses the existing atomic Membership/credit/ledger/Participation transaction. Global `/me` remains a compact community index, and blocked Memberships cannot claim. |
 
 ## P2 findings
 
@@ -93,13 +94,14 @@ Result: **PASSED at authorization/service boundaries; real invitation browser jo
 
 ## Viewer journey
 
-Result: **PASSED at renderer/service boundaries; full deployed mutation journey NOT VERIFIED.**
+Result: **PASSED at renderer/service boundaries and isolated local browser behavior; full deployed mutation journey NOT VERIFIED.**
 
 - Passive visit and generic OAuth do not create Membership. Join is explicit and does not set billable `last_active_at`.
 - Successfully committed safe participation may create Membership through the canonical transaction.
 - Global `/me` remains the My communities index; creator-local `/me` is the exact selected Community relationship.
 - Participation is bounded to persisted free code-drop claims; Claims reuse the canonical lifecycle; Recognition remains absent; no “Member since” date is fabricated.
 - Anonymous demo browser checks reached creator Home, Leaderboard, Rewards, local My Community and global My communities at all required widths without overflow.
+- An isolated stateful local browser run used the real creator Activities component/client and creator-branded My Community renderer/client: a manual `FREE25` drop appeared with 25 credits and 10 claims, a signed-in non-member claimed it, the page reloaded as a Membership with 25 free credits, and Participation showed `Claimed a code drop`. Clean creator and viewer repeats had zero console errors and no restricted launch terminology.
 - A fresh deployed Viewer OAuth/Join/Claim/Participation browser journey is **NOT VERIFIED** because isolated provider and database infrastructure were unavailable.
 
 ## Multi-site isolation
@@ -187,12 +189,32 @@ Result: **PASSED at transactional boundaries, including the PR PostgreSQL migrat
 
 ## Safe Activities
 
-Result: **PASSED at validation/service boundaries; deployed end-to-end mutation NOT VERIFIED.**
+Result: **PASSED at validation/service boundaries and isolated local browser behavior; deployed end-to-end mutation NOT VERIFIED.**
 
 - Manual and automation paths share one canonical free code-drop validator/service.
 - Successful claim commits membership, credits, ledger and Participation evidence together.
 - Failed, exhausted, expired, blocked and replayed attempts cannot mark activity or billing activity.
 - No name/IP/device matching is used as identity.
+- Local browser behavior verified manual creation, safe `safe_code_drop` template/schedule presentation, viewer claim, Membership convergence, credit balance, Participation readback and restricted-copy absence. Persistence and transaction guarantees remain established by the service/handler tests; the browser harness did not replace those tests with a mock claim.
+
+### Safe engagement deletion audit and restoration
+
+The audit compared the current branch with the Viewer convergence change (`3d5ea3b9`) and this release-readiness branch's starting SHA. “Restore” means restore the capability at its canonical owner, not necessarily reinstate the deleted component or URL.
+
+| Removed item | Safe free engagement? | Restricted/chance/wagering? | Restore? | Reason |
+|---|---:|---:|---:|---|
+| Global `/me?site=<slug>` creator-detail mode | Yes: it previously carried Rewards, Claims and free-code claiming | No | No | Creator-specific Membership state now belongs to creator-branded `/<slug>/me`; restoring the global detail mode would recreate duplicate ownership. |
+| `GET /api/viewer/site` detail endpoint and `activeDropCount` response | Yes | No | No | The creator-branded page is server-rendered from the canonical site/Membership composition and does not need a duplicate account-detail API or an active-drop count to validate a shared code. |
+| Global `/me` Rewards list, redemption controls and Claims history | Yes | No | No | These safe capabilities already moved to the creator-branded Rewards and My Community pages. They remain covered there and the global account stays an index. |
+| Global `/me` “Live events” / code-drop claim component | Yes | No | **Yes, at `/<slug>/me`** | Removing this control without a branded replacement broke the public viewer entry point. The restored form is explicitly a free code drop and uses the existing authenticated endpoint. |
+| Global `viewer-dashboard.js` creator-detail, redemption and drop-claim client branch | Mixed safe viewer behavior | No | **Partial** | The old client router and duplicate Rewards/Claims logic stay removed. Only code-drop submission behavior is restored in canonical `site-shell.js`. |
+| Viewer-account client tests for creator detail, Rewards, Claims and code-drop submission | Yes | No | **Equivalent branded coverage** | Rewards, Claims and Participation already had branded renderer tests. Regression coverage now pins the branded claim form, non-member Membership creation message, blocked state and safe-only copy. |
+| Primary Engagement/Giveaways navigation entry and mixed legacy giveaway hub | Code-drop tab was safe | Chat-name giveaway, paid-ticket raffle and settled prediction paths were mixed/restricted | No | `/dashboard/activities` is the canonical safe creator surface. The mixed hub remains directly routable only for authorized legacy containment and is not restored to primary navigation. |
+| Marketing “Run giveaways” row listing chat giveaways, ticket raffles, code drops and predictions | Code-drop portion was safe | Other listed mechanisms were unsafe or unproven | **Safe portion only** | Launch copy now names the existing free code-drop workflow and participation evidence without restoring the other mechanisms. |
+| Marketing Games route, Games product component and Games peer/footer navigation | No | Yes | No | These were restricted game promotion, not safe engagement. `/games` continues to redirect to `/sites`. |
+| Username/random-winner giveaway presentation | Not with current evidence | Chance-based and not tied to canonical Viewer/Membership identity | **DEFERRED — needs safe identity-backed giveaway design.** | The old implementation cannot be relabelled into the safe layer. No replacement giveaway system is introduced here. |
+
+The following safe owners were not deleted and remain canonical: `/dashboard/activities`, `/api/activities`, manual `POST /api/events/drops`, authenticated `POST /api/events/drops/claim`, `code_drops` / `code_drop_claims`, Membership-backed Participation history, Rewards, Claims, and Wave K `safe_code_drop` automation.
 
 ## Automation
 
@@ -280,7 +302,7 @@ Recovery readiness is nevertheless **FAILED** for launch because no successful i
 
 ## Custom domains
 
-Result: **PASSED in shared renderer/auth tests; live custom-domain OAuth/cookie run NOT VERIFIED.** Apex and custom domains share route, Viewer Account, Join, Membership, Claims and Participation code paths. Host-bound OAuth state and cookie-domain construction are tested. Actual DNS/TLS/provider callback behavior for a creator custom domain was unavailable locally.
+Result: **PASSED in shared renderer/auth tests; live custom-domain OAuth/cookie run NOT VERIFIED.** Apex and custom domains share route, Viewer Account, Join, free-code Claim, Membership, Claims and Participation code paths. Route tests admit only the exact `POST /api/events/drops/claim` safe action while keeping other event APIs out of the custom-domain pass-through. Host-bound OAuth state and cookie-domain construction are tested. Actual DNS/TLS/provider callback behavior for a creator custom domain was unavailable locally.
 
 ## Responsive/accessibility
 
@@ -288,8 +310,8 @@ Result: **PASSED in shared renderer/auth tests; live custom-domain OAuth/cookie 
 - Widths: 320, 360, 390, 430, 640, 768, 900, 1024, 1280 and 1440 CSS pixels.
 - Creator: 70/70 route-width combinations had no document horizontal overflow.
 - Viewer: 50/50 route-width combinations had no document horizontal overflow and exposed main heading/skip-link structure.
-- Focus/drawer/form/status behavior is regression-tested in source. A fresh browser keyboard/focus run against the changed local verification state was **NOT VERIFIED** because the browser/runtime connector was unavailable after the branch changes.
-- The Impeccable static detector found only the existing accepted Inter-font warning and no new audit-change defect.
+- The changed code-drop forms use native labels/controls, status live regions, disabled/busy submission state and focus continuity. A local browser run exercised creator form entry/submission and viewer form entry/submission/reload; broader keyboard-only traversal across every route remains **NOT VERIFIED**.
+- The Impeccable static detector returned no findings for the changed renderer, client and stylesheet.
 
 ## Dead routes
 
