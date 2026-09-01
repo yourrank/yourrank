@@ -47,12 +47,12 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>1</span>
 <a class="yr-srow-name" href="/board%20fixture/player/Alice%20%3C3">Alice &lt;3</a>
 <span class="yr-srow-val"><span class="yr-sr">Wagered: </span>$5,000</span>
-<span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$0</span>
+<span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$100</span>
 </li><li class="yr-srow yr-srow--top" data-player-name="bob" data-position="2">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>2</span>
 <a class="yr-srow-name" href="/board%20fixture/player/Bob">Bob</a>
 <span class="yr-srow-val"><span class="yr-sr">Wagered: </span>$3,000</span>
-<span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$0</span>
+<span class="yr-srow-prize"><span class="yr-sr">Prize: </span>$60</span>
 </li></ol>
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>

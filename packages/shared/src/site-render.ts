@@ -110,6 +110,11 @@ function formatNumber(n) {
   return Number(n || 0).toLocaleString("en-US");
 }
 
+function hasConfiguredPrizePool(value) {
+  const text = String(value || "").trim();
+  return !!text && !/^\D*0(?:\.0+)?\D*$/.test(text);
+}
+
 function compact(n) {
   const v = Math.abs(Number(n) || 0);
   const sign = Number(n) < 0 ? "-" : "";
@@ -567,7 +572,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
 
   const template = data.theme?.template || data.brand?.template || "cyber_arcade";
 
-  const body = `<body class="yr-site" data-template="${esc(template)}" data-section="${esc(section)}" data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "score" ? "score" : "wagered"}">
+  const body = `<body class="yr-site" data-template="${esc(template)}" data-section="${esc(section)}" data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 <!-- PUBLIC-VIEWER-DIRECTION
 THESIS: A creator's own destination for one board, not a workspace and not a gaming dashboard.
 OWN-WORLD: Deep asphalt surfaces, fog-white type, one creator accent, orange warnings, mint success, 6–10px geometry, one shared foundation for every template.
@@ -656,7 +661,7 @@ function homeMain(ctx) {
   const ended = !!data.ended || (!data.scheduled && cd.kind === "expired");
   const players = Array.isArray(data.players) ? data.players : [];
   const playerCount = Number(data.playerCount) || players.length;
-  const rankBy = data.rankBy === "score" ? "score" : "wagered";
+  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
   const hidePrizes = !!data.brand?.hidePrizeAmounts;
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
   const playerHref = (player) => isCustomDomain ? `/player/${encodeURIComponent(player)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(player)}`;
@@ -693,7 +698,7 @@ ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
     `${esc(period)} leaderboard`,
     timing,
     playerCount ? `${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}` : "",
-    pool && !hidePrizes ? `${esc(pool)} prize pool` : "",
+    hasConfiguredPrizePool(pool) && !hidePrizes ? `${esc(pool)} prize pool` : "",
   ].filter(Boolean).join(" · ");
 
   const leaders = players.slice(0, 5).map((p, i) => `<li class="yr-lead">
@@ -760,11 +765,12 @@ function boardMain(ctx) {
   const ended = !!data.ended || (!data.scheduled && cd.kind === "expired");
   const players = (Array.isArray(data.players) ? data.players : []).slice().sort((x, z) => (x.rank || 0) - (z.rank || 0) || String(x.name || "").localeCompare(String(z.name || "")));
   const playerCount = Number(data.playerCount) || players.length;
-  const rankBy = data.rankBy === "score" ? "score" : "wagered";
+  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
   const wagerLabel = esc(rankBy === "score" ? "Points" : (data.prizes?.wagerLabel || "Amount"));
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
   const prizeLabel = esc(data.prizes?.prizeLabel || "Prize");
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
+  const showPrizes = !hidePrizes && (hasConfiguredPrizePool(pool) || players.some((player) => Number(player.prize) > 0));
   const playerHref = (name) => isCustomDomain ? `/player/${encodeURIComponent(name)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(name)}`;
 
   // Compact intro: the title, one state line built only from board data that is
@@ -776,7 +782,7 @@ function boardMain(ctx) {
     `<span>${esc(period)} leaderboard</span>`,
 
     !ended ? timingHtml(cd, { scheduled }) : "",
-    pool && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
+    hasConfiguredPrizePool(pool) && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
   ].filter(Boolean).join("");
 
   const introHtml = `<section class="yr-lbh">
@@ -789,7 +795,7 @@ function boardMain(ctx) {
   // typography instead of a second, duplicate representation of the top three.
   const rows = players.map((p, i) => {
     const rank = Number(p.rank) || i + 1;
-    const prize = !hidePrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
+    const prize = showPrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
     return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
 <a class="yr-srow-name" href="${playerHref(p.name)}">${esc(p.name)}</a>
@@ -800,11 +806,11 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 
   // Column labels are a wide-viewport reading aid only: every cell already
   // carries its own screen-reader label, so announcing them twice is noise.
-  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${hidePrizes ? "true" : "false"}"><span>#</span><span>Player</span><span class="yr-r">${wagerLabel}</span>${hidePrizes ? "" : `<span class="yr-r">${prizeLabel}</span>`}</div>`;
+  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${showPrizes ? "false" : "true"}"><span>#</span><span>Player</span><span class="yr-r">${wagerLabel}</span>${showPrizes ? `<span class="yr-r">${prizeLabel}</span>` : ""}</div>`;
 
   const standings = players.length
     ? `${columns}
-<ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${wagerLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${hidePrizes ? "true" : "false"}">${rows}</ol>
+<ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${wagerLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${showPrizes ? "false" : "true"}">${rows}</ol>
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
@@ -812,7 +818,7 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
-    pool && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
+    hasConfiguredPrizePool(pool) && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
   ].filter(Boolean).join("");
 
   return `${introHtml}

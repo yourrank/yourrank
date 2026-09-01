@@ -11,6 +11,7 @@ const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
 const player = (name, rank, wagered, prize) => ({ name, rank, wagered, prize });
 
 const baseData = {
+  rankBy: "wagered",
   brand: { name: "Creator Name", tagline: "Weekly board", period: "Monthly", prizePool: "$500" },
   branding: { template: "cyber_arcade", font: "Inter", options: {} },
   players: [player("Alice", 1, 5000, 300), player("Bob", 2, 3000, 150), player("Cara", 3, 1000, 50)],
@@ -35,6 +36,38 @@ function render(section = "leaderboard", { data = baseData, viewer = null, viewe
 const rowsOf = (html) => html.match(/<li class="yr-srow[\s\S]*?<\/li>/g) || [];
 
 describe("public leaderboard standings", () => {
+  it("uses neutral score language when ranking configuration is missing", async () => {
+    const neutral = {
+      ...baseData,
+      rankBy: undefined,
+      brand: { name: "Neutral Creator", tagline: "Community standings", period: "Monthly", prizePool: "" },
+      prizes: {},
+      players: [
+        { name: "High score", rank: 1, score: 42, wagered: 0, prize: 0 },
+        { name: "Second", rank: 2, score: 20, wagered: 900, prize: 0 },
+      ],
+    };
+    const home = await render("home", { data: neutral });
+    const leaderboard = await render("leaderboard", { data: neutral });
+
+    for (const html of [home, leaderboard]) {
+      expect(html).toContain("42 pts");
+      for (const restricted of ["wagered", "wager total", "casino", "paid in cash", "cash payout", "prize pool", "deposit", "rakeback", "odds", "betting"]) {
+        expect(html.toLowerCase()).not.toContain(restricted);
+      }
+    }
+    expect(leaderboard).toContain("Ranked by points");
+    expect(leaderboard).toContain(">Player</span><span class=\"yr-r\">Points</span>");
+    expect(leaderboard).not.toContain(">Prize</span>");
+  });
+
+  it("keeps explicitly wager-ranked historical boards contained", async () => {
+    const html = await render("leaderboard", { data: { ...baseData, rankBy: "wagered" } });
+    expect(html).toContain("Ranked by wagered");
+    expect(html).toContain('<span class="yr-sr">Wagered: </span>');
+    expect(html).toContain("$5,000");
+  });
+
   it("opens with one leaderboard heading and a generic state line", async () => {
     const html = await render();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);

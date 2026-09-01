@@ -86,6 +86,10 @@ export function renderNewPlayerProfile(data, player, history, opts) {
   const p = player || {};
   const currency = prizeCurrency(r.data);
   const hidePrizes = r.data.prizes?.hidePrizeAmounts === true;
+  const rankBy = r.data.rankBy === "wagered" ? "wagered" : "score";
+  const prizePool = String(r.data.brand?.prizePool || "").trim();
+  const hasPrizePool = !!prizePool && !/^\D*0(?:\.0+)?\D*$/.test(prizePool);
+  const showPrizes = !hidePrizes && (hasPrizePool || Number(p.prize) > 0 || (history || []).some((row) => Number(row.prize) > 0));
   // A player asks two things on a phone: where they stand now, and what they
   // did before. Both answers are flat rows in the viewer's own row shape; the
   // three-KPI card wall and the four-column table behind a 620px horizontal
@@ -97,16 +101,21 @@ export function renderNewPlayerProfile(data, player, history, opts) {
   const rank = Number(p.rank) > 0 ? `#${Number(p.rank)}` : "Unranked";
   const standing = [
     { label: "Current rank", value: rank },
-    { label: "Wagered", value: formatMoney(currency, p.wagered) },
-    ...(hidePrizes ? [] : [{ label: "Prize", value: formatMoney(currency, p.prize) }]),
+    rankBy === "score"
+      ? { label: "Score", value: `${Number(p.score || 0).toLocaleString("en-US")} points` }
+      : { label: "Wagered", value: formatMoney(currency, p.wagered) },
+    ...(showPrizes ? [{ label: "Prize", value: formatMoney(currency, p.prize) }] : []),
   ]
     .map((s) => `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(s.label)}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${esc(s.value)}</p></div></li>`)
     .join("");
   const rows = (history || []).length
     ? `<ul class="yr-hists" role="list">${history.map((h) => {
       const place = Number(h.rank) > 0 ? `Rank #${Number(h.rank)}` : "Unranked";
-      const prize = hidePrizes ? "" : `<p class="yr-hist-d">Prize ${esc(formatMoney(currency, h.prize))}</p>`;
-      return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt"><span class="yr-hist-lbl">Wagered</span>${esc(formatMoney(currency, h.wagered))}</p>${prize}</div></li>`;
+      const prize = showPrizes ? `<p class="yr-hist-d">Prize ${esc(formatMoney(currency, h.prize))}</p>` : "";
+      const metric = rankBy === "score"
+        ? `<span class="yr-hist-lbl">Score</span>${esc(`${Number(h.score || 0).toLocaleString("en-US")} points`)}`
+        : `<span class="yr-hist-lbl">Wagered</span>${esc(formatMoney(currency, h.wagered))}`;
+      return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${metric}</p>${prize}</div></li>`;
     }).join("")}</ul>`
     : '<p class="yr-empty">No archived results yet.</p>';
   const content = `<header class="yr-vhead"><span class="yr-cue">Player</span><h1 class="yr-h1">${esc(name)}</h1><p class="yr-vhead-lede">Where this player stands on ${esc(r.data.brand?.name || r.slug)} right now, and their archived results.</p></header><section class="yr-vsec" aria-labelledby="yr-player-standing"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-standing">Current standing</h2></div><ul class="yr-hists" role="list">${standing}</ul></section><section class="yr-vsec" aria-labelledby="yr-player-history"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-history">Archived results</h2></div>${rows}</section>`;
@@ -144,11 +153,16 @@ export function renderNewStreamerProfile(data, opts) {
 export function renderNewEmbed(data, opts) {
   const b = data.brand || {};
   const hidePrizes = data.prizes?.hidePrizeAmounts === true;
-  const players = Array.isArray(data.players) ? data.players.slice().sort((a, z) => (Number(z.wagered) || 0) - (Number(a.wagered) || 0)) : [];
+  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const players = Array.isArray(data.players) ? data.players.slice().sort((a, z) => (Number(z[rankBy]) || 0) - (Number(a[rankBy]) || 0)) : [];
   // The embed keeps its table: it is a chrome-less widget inside someone
   // else's page, not a viewer surface of ours. Its empty state uses the public
   // shell's class, because .empty belongs to ui.css and is never loaded here.
   const currency = prizeCurrency(data);
-  const rows = players.length ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(formatMoney(currency, p.wagered))}</td><td>${hidePrizes ? "\u2014" : esc(formatMoney(currency, p.prize))}</td></tr>`).join("") : '<tr><td colspan="4"><p class="yr-empty">No players yet.</p></td></tr>';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(b.name || opts.slug)}</title><link rel="stylesheet" href="/assets/site-shell.css"><link rel="stylesheet" href="/assets/devin-system.css"><style nonce="${esc(opts.nonce)}">body{margin:0;background:transparent}.yr-embed{max-width:680px;margin:0 auto;padding:12px}.yr-embed .yr-card{padding:18px}.yr-embed table{width:100%}</style></head><body class="yr-site"><main class="yr-embed"><section class="yr-card yr-lb"><p class="yr-cue">${esc(b.period || "Current board")}</p><h1 class="yr-h1">${esc(b.name || opts.slug)}</h1><p class="yr-lede">${esc(b.prizePool || "")}</p><div class="yr-table-wrap"><table class="yr-table"><thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">Wagered</th><th scope="col">Prize</th></tr></thead><tbody>${rows}</tbody></table></div></section></main></body></html>`;
+  const hasPrizes = !hidePrizes && players.some((player) => Number(player.prize) > 0);
+  const metricLabel = rankBy === "score" ? "Score" : "Wagered";
+  const metricValue = (player) => rankBy === "score" ? `${Number(player.score || 0).toLocaleString("en-US")} pts` : formatMoney(currency, player.wagered);
+  const columnCount = hasPrizes ? 4 : 3;
+  const rows = players.length ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(metricValue(p))}</td>${hasPrizes ? `<td>${esc(formatMoney(currency, p.prize))}</td>` : ""}</tr>`).join("") : `<tr><td colspan="${columnCount}"><p class="yr-empty">No players yet.</p></td></tr>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(b.name || opts.slug)}</title><link rel="stylesheet" href="/assets/site-shell.css"><link rel="stylesheet" href="/assets/devin-system.css"><style nonce="${esc(opts.nonce)}">body{margin:0;background:transparent}.yr-embed{max-width:680px;margin:0 auto;padding:12px}.yr-embed .yr-card{padding:18px}.yr-embed table{width:100%}</style></head><body class="yr-site"><main class="yr-embed"><section class="yr-card yr-lb"><p class="yr-cue">${esc(b.period || "Current board")}</p><h1 class="yr-h1">${esc(b.name || opts.slug)}</h1><p class="yr-lede">${esc(b.prizePool || "")}</p><div class="yr-table-wrap"><table class="yr-table"><thead><tr><th scope="col">#</th><th scope="col">Player</th><th scope="col">${metricLabel}</th>${hasPrizes ? '<th scope="col">Prize</th>' : ""}</tr></thead><tbody>${rows}</tbody></table></div></section></main></body></html>`;
 }

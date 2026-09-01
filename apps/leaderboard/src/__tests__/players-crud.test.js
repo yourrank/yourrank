@@ -204,12 +204,13 @@ describe("Players CRUD validation", () => {
   it("round-trips staged rows through per-site session storage and clears them", () => {
     setupRows({ name: "Draft", wagered: "abc", prize: "" });
     register("qa_name", Object.assign(new FakeElement("input"), { value: "Quick" }));
+    register("qa_score", Object.assign(new FakeElement("input"), { value: "" }));
     register("qa_wager", Object.assign(new FakeElement("input"), { value: "12" }));
     register("qa_prize", Object.assign(new FakeElement("input"), { value: "" }));
     players.persistPlayersDraft();
     expect(players.loadPlayersDraft()).toEqual({
       players: [{ name: "Draft", wagered: "abc", prize: "", score: "", hands: "", netProfit: "", winRate: "", change: "" }],
-      quickAdd: { name: "Quick", wagered: "12", prize: "" },
+      quickAdd: { name: "Quick", score: "", wagered: "12", prize: "" },
     });
     players.clearPlayersDraft();
     expect(players.loadPlayersDraft()).toBeNull();
@@ -227,14 +228,13 @@ describe("Players CRUD validation", () => {
     expect(players.draftHasChanges(null, saved)).toBe(false);
   });
 
-  // A redrawn table used to read as a change — the score input falls back to
-  // the amount and money inputs hold formatted values — so the unsaved-changes
-  // state came back on every later load of the same page.
+  // Formatting-only redraws must not create an unsaved change. Score is an
+  // independent metric, so an empty saved score remains empty after redraw.
   it("does not read a redrawn table's formatting as a change", () => {
     const saved = [{ name: "Alice", wagered: 1000, prize: 0 }];
     const redrawn = {
-      players: [{ name: "Alice", wagered: "$1,000.00", prize: "$0.00", score: "1000.00", hands: "", netProfit: "", winRate: "", change: "" }],
-      quickAdd: { name: "", wagered: "", prize: "" },
+      players: [{ name: "Alice", wagered: "$1,000.00", prize: "$0.00", score: "", hands: "", netProfit: "", winRate: "", change: "" }],
+      quickAdd: { name: "", score: "", wagered: "", prize: "" },
     };
     expect(players.draftHasChanges(redrawn, saved)).toBe(false);
     expect(players.draftHasChanges({ players: [{ ...redrawn.players[0], score: "5" }] }, saved)).toBe(true);

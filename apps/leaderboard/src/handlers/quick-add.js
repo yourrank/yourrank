@@ -53,22 +53,23 @@ export async function handleQuickAdd(request, env) {
   
   // Find or create player
   const searchName = normalizePlayerName(playerName);
+  const metric = rankField(site.rank_by);
   let playerIndex = players.findIndex((player) => normalizePlayerName(player.name) === searchName);
   
   if (playerIndex >= 0) {
     // Update existing
-    players[playerIndex].wagered = (players[playerIndex].wagered || 0) + amount;
-    if (players[playerIndex].score !== undefined) players[playerIndex].score += amount;
+    players[playerIndex][metric] = (players[playerIndex][metric] || 0) + amount;
   } else {
     // Create new
     players.push({
       name: playerName,
-      wagered: amount,
-      prize: 0
+      wagered: metric === "wagered" ? amount : 0,
+      score: metric === "score" ? amount : 0,
+      prize: 0,
     });
   }
 
-  const sortedPlayers = sortPlayersForRanking(players, rankField(site.rank_by));
+  const sortedPlayers = sortPlayersForRanking(players, metric);
 
   // Save against the version we read so a concurrent dashboard or API update is
   // rejected instead of being overwritten by this full-roster mutation.

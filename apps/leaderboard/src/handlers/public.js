@@ -30,7 +30,7 @@ export async function handlePublicStandings(request, env, deps = {}) {
     if (slug === "demo") {
       const d = demoLeaderboardData();
       const sorted = (d.players || []).slice().sort((a, b) => (a.rank || 0) - (b.rank || 0));
-      const players = sorted.map((p, i) => ({ name: p.name, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
+      const players = sorted.map((p, i) => ({ name: p.name, score: p.score, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
       const endsAt = d.endsAt || null;
       let countdown = null;
       if (endsAt) {
@@ -43,6 +43,7 @@ export async function handlePublicStandings(request, env, deps = {}) {
         casino: d.brand?.casino || "",
         period: d.brand?.period || "Monthly",
         prizePool: d.brand?.prizePool || "$0",
+        rankBy: d.rankBy === "wagered" ? "wagered" : "score",
         players,
         countdown,
       }, 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
@@ -53,7 +54,7 @@ export async function handlePublicStandings(request, env, deps = {}) {
     if (!r || r.suspended) return bad("not found", 404);
     const d = r.data;
     const sorted = (d.players || []).slice().sort((a, b) => (a.rank || 0) - (b.rank || 0));
-    const players = sorted.map((p, i) => ({ name: p.name, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
+    const players = sorted.map((p, i) => ({ name: p.name, score: p.score, wagered: p.wagered, prize: p.prize, position: Number(p.rank) || i + 1 }));
     const endsAt = d.endsAt || null;
     let countdown = null;
     if (endsAt) {
@@ -66,6 +67,7 @@ export async function handlePublicStandings(request, env, deps = {}) {
       casino: d.brand?.casino || "",
       period: d.brand?.period || "Monthly",
       prizePool: d.brand?.prizePool || "$0",
+      rankBy: d.rankBy === "wagered" ? "wagered" : "score",
       players,
       countdown,
     }, 200, { "cache-control": "public, max-age=30", ...rateLimitHeaders(rl) });
@@ -100,7 +102,8 @@ export async function handlePublicPlayers(request, env, deps = {}) {
     // Demo board has no DB row — serve static demo data.
     if (slug === "demo") {
       const d = demoLeaderboardData();
-      const all = (d.players || []).slice().sort((a, b) => b.wagered - a.wagered);
+      const rankBy = d.rankBy === "wagered" ? "wagered" : "score";
+      const all = (d.players || []).slice().sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0));
       const filtered = search ? all.filter((p) => String(p.name || "").toLowerCase().includes(search)) : all;
       const players = filtered.slice(offset, offset + limit).map((p) => ({ ...p, rank: all.indexOf(p) + 1 }));
       return json({ players, total: all.length, offset, limit, hasMore: offset + players.length < filtered.length },
@@ -254,7 +257,8 @@ export async function handlePublicRank(request, env, deps = {}) {
     // Demo board has no DB row — serve static demo data.
     if (slug === "demo") {
       const d = demoLeaderboardData();
-      const sorted = (d.players || []).slice().sort((a, b) => (b.wagered || 0) - (a.wagered || 0));
+      const rankBy = d.rankBy === "wagered" ? "wagered" : "score";
+      const sorted = (d.players || []).slice().sort((a, b) => (b[rankBy] || 0) - (a[rankBy] || 0));
       const matchUser = userParam.toLowerCase().replace(/^@/, "").replace(/\s+/g, " ").trim();
       const normalizeForRank = (n) => String(n || "").toLowerCase().replace(/^\*+/, "").replace(/\s+/g, " ").trim();
       const idx = sorted.findIndex(p => normalizeForRank(p.name) === matchUser);
@@ -266,17 +270,21 @@ export async function handlePublicRank(request, env, deps = {}) {
       const player = sorted[idx];
       const rank = idx + 1;
       const total = sorted.length;
-      const wagered = "$" + Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
+      const metric = rankBy === "score"
+        ? `${Number(player.score || 0).toLocaleString("en-US")} points`
+        : `$${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })} wagered`;
       let gap = "";
       if (rank > 1) {
         const ahead = sorted[idx - 1];
-        const diff = (ahead.wagered || 0) - (player.wagered || 0);
-        gap = ` ($${Number(diff).toLocaleString("en-US", { maximumFractionDigits: 0 })} behind #${rank - 1})`;
+        const diff = (ahead[rankBy] || 0) - (player[rankBy] || 0);
+        gap = rankBy === "score"
+          ? ` (${Number(diff).toLocaleString("en-US")} points behind #${rank - 1})`
+          : ` ($${Number(diff).toLocaleString("en-US", { maximumFractionDigits: 0 })} behind #${rank - 1})`;
       }
       const name = d.brand?.name || slug;
       const text = rank === 1
-        ? `${player.name} is #1 of ${total} on ${name}'s leaderboard! 🏆 ${wagered} wagered`
-        : `${player.name} is #${rank} of ${total} on ${name}'s leaderboard. ${wagered} wagered${gap}`;
+        ? `${player.name} is #1 of ${total} on ${name}'s leaderboard! 🏆 ${metric}`
+        : `${player.name} is #${rank} of ${total} on ${name}'s leaderboard. ${metric}${gap}`;
       return new Response(text, {
         headers: { ...rankHeaders, "cache-control": "public, max-age=30" }
       });
@@ -292,7 +300,8 @@ export async function handlePublicRank(request, env, deps = {}) {
         headers: { ...rankHeaders, "cache-control": "public, max-age=30" }
       });
     }
-    const sorted = (r.data.players || []).slice().sort((a, b) => (b.wagered || 0) - (a.wagered || 0));
+    const rankBy = r.data.rankBy === "wagered" ? "wagered" : "score";
+    const sorted = (r.data.players || []).slice().sort((a, b) => (b[rankBy] || 0) - (a[rankBy] || 0));
     const matchUser = userParam.toLowerCase().replace(/^@/, "").replace(/\s+/g, " ").trim();
     const normalizeForRank = (n) => String(n || "").toLowerCase().replace(/^\*+/, "").replace(/\s+/g, " ").trim();
     const idx = sorted.findIndex(p => normalizeForRank(p.name) === matchUser);
@@ -304,17 +313,21 @@ export async function handlePublicRank(request, env, deps = {}) {
     const player = sorted[idx];
     const rank = idx + 1;
     const total = sorted.length;
-    const wagered = "$" + Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
+    const metric = rankBy === "score"
+      ? `${Number(player.score || 0).toLocaleString("en-US")} points`
+      : `$${Number(player.wagered || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })} wagered`;
     let gap = "";
     if (rank > 1) {
       const ahead = sorted[idx - 1];
-      const diff = (ahead.wagered || 0) - (player.wagered || 0);
-      gap = ` ($${Number(diff).toLocaleString("en-US", { maximumFractionDigits: 0 })} behind #${rank - 1})`;
+      const diff = (ahead[rankBy] || 0) - (player[rankBy] || 0);
+      gap = rankBy === "score"
+        ? ` (${Number(diff).toLocaleString("en-US")} points behind #${rank - 1})`
+        : ` ($${Number(diff).toLocaleString("en-US", { maximumFractionDigits: 0 })} behind #${rank - 1})`;
     }
     const name = r.data.brand?.name || slug;
     const text = rank === 1
-      ? `${player.name} is #1 of ${total} on ${name}'s leaderboard! 🏆 ${wagered} wagered`
-      : `${player.name} is #${rank} of ${total} on ${name}'s leaderboard. ${wagered} wagered${gap}`;
+      ? `${player.name} is #1 of ${total} on ${name}'s leaderboard! 🏆 ${metric}`
+      : `${player.name} is #${rank} of ${total} on ${name}'s leaderboard. ${metric}${gap}`;
     return new Response(text, {
       headers: { ...rankHeaders, "cache-control": "public, max-age=30" }
     });

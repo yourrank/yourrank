@@ -12,6 +12,7 @@
   const THEME = _cfg?.dataset?.theme ?? "default";
   const SPONSOR_TEXT = _cfg?.dataset?.sponsor ?? "";
   const SPONSOR_URL = _cfg?.dataset?.sponsorUrl ?? "";
+  let rankBy = "score";
 
   // --- Format helpers ---
   function fmtMoney(n) {
@@ -72,7 +73,7 @@
   let prevWagers = {};
 
   function renderPlayers(players) {
-    const sorted = players.slice().sort((a, b) => b.wagered - a.wagered).slice(0, TOP_N);
+    const sorted = players.slice().sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0)).slice(0, TOP_N);
     const container = document.getElementById("ov-players");
     if (!container) return;
 
@@ -89,7 +90,8 @@
       const rank = i + 1;
       const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "#" + rank;
       const isNew = !prevRanks[p.name];
-      const scoreChanged = prevWagers[p.name] !== undefined && prevWagers[p.name] !== p.wagered;
+      const metricValue = Number(p[rankBy] || 0);
+      const scoreChanged = prevWagers[p.name] !== undefined && prevWagers[p.name] !== metricValue;
       const movedUp = prevRanks[p.name] && prevRanks[p.name] > rank;
       const movedDown = prevRanks[p.name] && prevRanks[p.name] < rank;
       const dirClass = movedUp ? "ov-moved-up" : movedDown ? "ov-moved-down" : "";
@@ -98,7 +100,7 @@
       return `<div class="ov-row ${dirClass} ${flashClass} ${entryClass}" data-name="${esc(p.name)}">
         <span class="ov-medal">${medal}</span>
         <span class="ov-name">${esc(p.name)}</span>
-        <span class="ov-wager">${fmtMoney(p.wagered)}</span>
+        <span class="ov-wager">${rankBy === "score" ? metricValue.toLocaleString("en-US") + " pts" : fmtMoney(metricValue)}</span>
       </div>`;
     }).join("");
 
@@ -129,12 +131,12 @@
       }
     });
 
-    // Track previous ranks and wagers
+    // Track previous ranks and the active score/legacy metric.
     prevRanks = {};
     prevWagers = {};
     sorted.forEach((p, i) => {
       prevRanks[p.name] = i + 1;
-      prevWagers[p.name] = p.wagered;
+      prevWagers[p.name] = Number(p[rankBy] || 0);
     });
 
     // Update count
@@ -210,6 +212,7 @@
     if (!ssr && _cfg?.dataset?.json) { try { ssr = JSON.parse(_cfg.dataset.json); } catch { /* JSON parse */ } }
     if (ssr) {
       endsAt = ssr.endsAt || null;
+      rankBy = ssr.rankBy === "wagered" ? "wagered" : "score";
       renderPlayers(ssr.players || []);
     }
 

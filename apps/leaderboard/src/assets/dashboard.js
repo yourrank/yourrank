@@ -4,7 +4,7 @@ import { markDirty, setState, state, subscribe } from "./dashboard/state.js";
 import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, setupShell } from "./dashboard/shell.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
 import { clearSession } from "./dashboard/session.js";
-import { renderPlayers } from "./dashboard/players.js";
+import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.js";
 import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderSections, renderSocials, wirePublishAction } from "./dashboard/site.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
 import { initPerformance } from "./dashboard/performance.js";
@@ -152,7 +152,7 @@ async function init() {
   state.PUBLISHED_AT = p.publishedAt || null;
   state.PUBLISHED = !!p.published;
   state.IS_DRAFT = !!p.isDraft;
-  state.RANK_BY = p.data?.rankBy === "score" ? "score" : "wagered";
+  state.RANK_BY = p.data?.rankBy === "wagered" ? "wagered" : "score";
   state.ONBOARDING = p.onboarding || {};
   state.SAMPLE_PLAYERS = Boolean(p.data?.samplePlayers);
 
@@ -191,7 +191,8 @@ async function init() {
     $("f_rank_by").value = state.RANK_BY;
     if ($("playerSort")) $("playerSort").value = state.RANK_BY;
     $("f_rank_by").addEventListener("change", () => {
-      setState({ RANK_BY: $("f_rank_by").value === "score" ? "score" : "wagered" });
+      setState({ RANK_BY: $("f_rank_by").value === "wagered" ? "wagered" : "score" });
+      applyPlayerFieldVisibility();
       if ($("playerSort")) {
         $("playerSort").value = state.RANK_BY;
         $("playerSort").dispatchEvent(new Event("change"));

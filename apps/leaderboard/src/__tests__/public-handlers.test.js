@@ -10,6 +10,7 @@ import { describe, it, expect, mock } from "bun:test";
 const dbOne = mock(() => Promise.resolve(null));
 
 const mockSiteData = {
+  rankBy: "wagered",
   brand: { name: "Test Casino", casino: "Stake", period: "Monthly", prizePool: "$10,000" },
   playerCount: 3,
   players: [
@@ -55,9 +56,10 @@ const siteDeps = {
     if (slug === "nonexistent") return null;
     if (slug === "suspended") return { suspended: true, data: {} };
     if (slug === "protected") return { requiresPassword: true, id: "site-1", slug: "protected" };
+    const source = _env.__siteData || mockSiteData;
     const data = options
-      ? { ...mockSiteData, players: mockSiteData.players.slice(Number(options.offset) || 0, (Number(options.offset) || 0) + (Number(options.limit) || 100)) }
-      : mockSiteData;
+      ? { ...source, players: source.players.slice(Number(options.offset) || 0, (Number(options.offset) || 0) + (Number(options.limit) || 100)) }
+      : source;
     return { id: "site-1", data, plan: "pro", suspended: false };
   },
   getPublicStreamVersion: streamVersion,
@@ -171,6 +173,25 @@ describe("handlePublicPlayers", () => {
 
 // ── handlePublicRank ───────────────────────────────────────────────────
 describe("handlePublicRank", () => {
+  it("uses score for a normal board without ranking configuration", async () => {
+    const env = mockEnv({
+      brand: { name: "Community Board", period: "Monthly", prizePool: "" },
+      players: [
+        { name: "Score Leader", score: 80, wagered: 1, prize: 0, rank: 1 },
+        { name: "Amount Leader", score: 20, wagered: 999, prize: 0, rank: 2 },
+      ],
+    });
+    const response = await handlePublicRank(
+      req("https://test.com/api/public/testboard/rank?user=Score%20Leader"),
+      env,
+      { slug: "testboard" },
+    );
+    const text = await response.text();
+    expect(text).toContain("#1 of 2");
+    expect(text).toContain("80 points");
+    expect(text.toLowerCase()).not.toContain("wager");
+  });
+
   it("returns plain-text rank for matching user", async () => {
     const env = mockEnv();
     const res = await handlePublicRank(req("https://test.com/api/public/testboard/rank?user=Alice"), env, { slug: "testboard" });

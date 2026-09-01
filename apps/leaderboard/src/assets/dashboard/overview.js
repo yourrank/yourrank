@@ -201,7 +201,7 @@ export function renderOverviewSummary() {
   const sampleNotice = state.SAMPLE_PLAYERS
     ? `<div class="v3-alert v3-alert--warning ov-sample-players" role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="/dashboard/leaderboard/players">Manage players</a></div>`
     : "";
-  const rankBy = state.RANK_BY === "score" ? "score" : "wagered";
+  const rankBy = state.RANK_BY === "wagered" ? "wagered" : "score";
   const top = [...players].sort((a, b) => Number(b[rankBy] || 0) - Number(a[rankBy] || 0) || String(a.name).localeCompare(String(b.name))).slice(0, 5);
   const topPlayers = $("ovTopPlayers");
   if (topPlayers) topPlayers.innerHTML = sampleNotice + top.map((player, i) => `

@@ -7,6 +7,7 @@ const record = {
   slug: "demo-board",
   plan: "pro",
   data: {
+    rankBy: "wagered",
     brand: { name: "Demo Board", tagline: "A sample board", period: "Monthly", prizePool: "$500" },
     prizes: { hidePrizeAmounts: false },
     players: [{ name: "Alex", wagered: 100, prize: 25 }],
@@ -18,6 +19,26 @@ const record = {
 const opts = { slug: record.slug, homeUrl: "https://test.com", nonce: "nonce" };
 
 describe("new-shell auxiliary renderers", () => {
+  it("renders score-ranked player profiles without legacy money terminology", async () => {
+    const data = {
+      ...record.data,
+      rankBy: "score",
+      brand: { ...record.data.brand, prizePool: "" },
+      prizes: {},
+    };
+    const profile = await renderNewPlayerProfile(
+      data,
+      { name: "Score Player", rank: 2, score: 77, wagered: 900, prize: 0 },
+      [{ label: "August", rank: 1, score: 65, wagered: 800, prize: 0 }],
+      opts,
+    );
+
+    expect(profile).toContain("<p class=\"yr-hist-n\">Score</p>");
+    expect(profile).toContain("77 points");
+    expect(profile).toContain("65 points");
+    expect(profile).not.toContain("Wagered");
+    expect(profile).not.toContain("Prize");
+  });
   it("renders legal and streamer pages in the site shell with honest empty states", async () => {
     const legal = await renderNewLegalPage(record.data, "privacy", opts);
     const profile = await renderNewStreamerProfile(record.data, opts);

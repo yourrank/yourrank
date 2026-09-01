@@ -304,7 +304,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     },
     startsAt: scheduleResult.startsAt,
     endsAt: scheduleResult.endsAt,
-    rankBy: $("f_rank_by")?.value === "score" ? "score" : "wagered",
+    rankBy: $("f_rank_by")?.value === "wagered" ? "wagered" : "score",
     partner: { blurb: $("f_blurb").value.trim(), chips: state.EXTRA.chips },
     whyStats: state.EXTRA.whyStats,
     rules: state.EXTRA.rules,
@@ -1915,7 +1915,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     clearPlayersDraft();
     const restoredNotice = $("playersDraftNotice");
     if (restoredNotice) restoredNotice.hidden = true;
-    setState({ _dirty: false, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "score" ? "score" : "wagered" });
+    setState({ _dirty: false, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "wagered" ? "wagered" : "score" });
     status.textContent = justPublished && !boardStatus().emailVerified
       ? "Published — Your leaderboard will open to visitors after you confirm your email."
       : "Saved";
