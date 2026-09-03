@@ -690,8 +690,8 @@ export async function createBoard(env, uid, { slug, name, casino = "", code = ""
   const cleanCode = String(code || "").trim().slice(0, 40);
   const themeObj = { template: "classic" };
   await dbExec(
-    "INSERT INTO sites (id,user_id,slug,name,casino,code,prize_pool,period,published,is_draft,extra_json,theme_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb)",
-    [siteId, uid, slug, name || slug, cleanCasino, cleanCode, "$0", "Monthly", published, is_draft, DEFAULT_EXTRA, themeObj]
+    "INSERT INTO sites (id,user_id,slug,name,casino,code,prize_pool,period,rank_by,published,is_draft,extra_json,theme_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb)",
+    [siteId, uid, slug, name || slug, cleanCasino, cleanCode, "", "Monthly", "score", published, is_draft, DEFAULT_EXTRA, themeObj]
   );
   // If the user has no active board, make the new one active.
   await dbExec("UPDATE users SET active_site_id=$1, updated_at=now() WHERE id=$2 AND active_site_id IS NULL", [siteId, uid]);
@@ -711,20 +711,19 @@ export async function createBoard(env, uid, { slug, name, casino = "", code = ""
   return { ok: true, id: siteId, slug };
 }
 
-// Seed a freshly-created board with sample players so the dashboard and public page
-// are never empty. Uses generic names/prizes and a short countdown.
+// Seed the explicitly requested demo board with neutral score examples.
 export async function seedSamplePlayers(tx, siteId) {
   const endsAt = new Date(Date.now() + 7 * 86400000).toISOString();
   await tx.unsafe(
     "UPDATE sites SET prize_pool=$1, ends_at=$2, extra_json=jsonb_set(COALESCE(extra_json, '{}'::jsonb), '{samplePlayers}', 'true'::jsonb, true) WHERE id=$3",
-    ["$500", endsAt, siteId]
+    ["", endsAt, siteId]
   );
   const players = [
-    { name: "Alex", wagered: 9500, prize: 250 },
-    { name: "Bree", wagered: 7200, prize: 150 },
-    { name: "Casey", wagered: 5400, prize: 100 },
-    { name: "Drew", wagered: 3100, prize: 0 },
-    { name: "Ellis", wagered: 1800, prize: 0 },
+    { name: "Alex", score: 9500 },
+    { name: "Bree", score: 7200 },
+    { name: "Casey", score: 5400 },
+    { name: "Drew", score: 3100 },
+    { name: "Ellis", score: 1800 },
   ];
   const valueRows = [];
   const params = [];
@@ -736,7 +735,7 @@ export async function seedSamplePlayers(tx, siteId) {
     valueRows.push(`(${row.join(",")})`);
     params.push(
       crypto.randomUUID(), siteId, p.name, normalizePlayerName(p.name),
-      p.wagered, p.prize, i, 1, p.wagered, 0, 0, 0, 0
+      0, 0, i, 1, p.score, 0, 0, 0, 0
     );
   });
   await tx.unsafe(
@@ -1142,7 +1141,7 @@ export async function saveSite(env, user, payload, siteId, request = null) {
     if (closed) {
       const comparable = (player) => JSON.stringify([
         normalizePlayerName(player.name), Number(player.wagered || 0), Number(player.prize || 0),
-        Number(player.score ?? player.wagered ?? 0), Number(player.hands || 0),
+        Number(player.score ?? 0), Number(player.hands || 0),
         Number(player.netProfit ?? player.net_profit ?? 0), Number(player.winRate ?? player.win_rate ?? 0),
       ]);
       const before = oldPlayers.map(comparable).sort();

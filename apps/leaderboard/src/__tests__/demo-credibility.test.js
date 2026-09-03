@@ -20,18 +20,18 @@ async function render(section, data = demoLeaderboardData()) {
 }
 
 describe("demo credibility invariants", () => {
-  it("uses one canonical cash currency for the pool and every payout", async () => {
+  it("uses a neutral score board without implying a cash pool or payout", async () => {
     const data = demoLeaderboardData();
-    const top = data.players.slice(0, 3);
-    const pool = Number(data.brand.prizePool.replace(/[^\d.]/g, ""));
-
-    expect(data.prizes.currency).toBe("$");
-    expect(top.reduce((sum, player) => sum + player.prize, 0)).toBe(pool);
+    expect(data.rankBy).toBe("score");
+    expect(data.brand.prizePool).toBe("");
+    expect(data.players.every((player) => player.score > 0 && player.wagered === 0 && player.prize === 0)).toBe(true);
 
     const html = await render("leaderboard", data);
-    expect(html).toContain("$500");
-    for (const player of top) expect(html).toContain(`$${player.prize}`);
-    expect(html).not.toContain("500 points");
+    expect(html).toContain("Points");
+    expect(html).toContain("pts");
+    expect(html).not.toContain("$500");
+    expect(html).not.toContain("Wagered");
+    expect(html).not.toContain(">Prize<");
   });
 
   it("gives every player exactly one representation behind one generic marker", async () => {

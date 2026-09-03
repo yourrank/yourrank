@@ -132,7 +132,7 @@
   var searchController = null;
   var pageRequest = 0;
   var currency = document.body.dataset.currency || "$";
-  var rankBy = document.body.dataset.rankBy === "score" ? "score" : "wagered";
+  var rankBy = document.body.dataset.rankBy === "wagered" ? "wagered" : "score";
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
   var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
   var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";

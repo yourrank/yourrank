@@ -12,9 +12,10 @@ const fixture = {
       ctaUrl: "https://sponsor.example/offer",
     },
     branding: { template: "classic", font: "Inter", options: {} },
+    rankBy: "wagered",
     players: [
-      { name: "Alice <3", rank: 1, wagered: 5000, prize: "$100" },
-      { name: "Bob", rank: 2, wagered: 3000, prize: "$60" },
+      { name: "Alice <3", rank: 1, wagered: 5000, prize: 100 },
+      { name: "Bob", rank: 2, wagered: 3000, prize: 60 },
     ],
     prizes: { wagerLabel: "Wagered", prizeLabel: "Prize" },
     socials: [],

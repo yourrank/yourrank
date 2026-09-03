@@ -135,7 +135,7 @@ export async function handleSignup(request, env) {
       try {
         await withTransaction(async (tx) => {
           await createUser(tx, userId, email, hash, salt, referralCode, referrerId);
-          const board = await createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true, seed: true }, request, tx);
+          const board = await createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
           if (!board.ok) throw new Error(board.error || "board_create_failed");
         });
         created = true;

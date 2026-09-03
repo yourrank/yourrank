@@ -45,7 +45,7 @@ export function validateAndNormalizePlayers(players) {
 
     const wagered = numberField(player.wagered, { field: `${name}'s amount`, min: 0, max: SCORE_MAX, fallback: 0 });
     const prize = numberField(player.prize, { field: `${name}'s prize`, min: 0, max: SCORE_MAX, fallback: 0 });
-    const score = numberField(player.score, { field: `${name}'s score`, min: 0, max: SCORE_MAX, fallback: wagered.value });
+    const score = numberField(player.score, { field: `${name}'s score`, min: 0, max: SCORE_MAX, fallback: 0 });
     const hands = numberField(player.hands, { field: `${name}'s hands`, min: 0, max: INT32_MAX, integer: true, fallback: 0 });
     const netProfit = numberField(player.netProfit ?? player.net_profit, { field: `${name}'s net profit`, min: -SCORE_MAX, max: SCORE_MAX, fallback: (prize.value ?? 0) - (wagered.value ?? 0) });
     const winRate = numberField(player.winRate ?? player.win_rate, { field: `${name}'s win rate`, min: -WIN_RATE_MAX, max: WIN_RATE_MAX, fallback: 0 });
@@ -74,10 +74,10 @@ export function validateIncrementAmount(value) {
 }
 
 export function rankField(value) {
-  return RANK_FIELDS[value] || RANK_FIELDS.wagered;
+  return RANK_FIELDS[value] || RANK_FIELDS.score;
 }
 
-export function sortPlayersForRanking(players, field = "wagered") {
+export function sortPlayersForRanking(players, field = "score") {
   const key = rankField(field);
   return [...players].sort((a, b) => {
     const metric = Number(b[key] || 0) - Number(a[key] || 0);

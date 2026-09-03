@@ -11,6 +11,7 @@ let _siteRow = null;
 let _ownerRow = null;
 let _existingSiteRow = null;
 let _saveSiteResult = {};
+let _savedPayload = null;
 
 const dbDeps = ({
   one: (sql, _params) => {
@@ -82,7 +83,10 @@ const invokeScores = (request, env) =>
     ...sessionDeps,
     ...cryptoDeps,
     ...postbackDeps,
-    saveSiteImpl: async () => _saveSiteResult,
+    saveSiteImpl: async (_env, _user, payload) => {
+      _savedPayload = payload;
+      return _saveSiteResult;
+    },
   });
 
 // QA-006: Freeze the clock so Date.now()-based tests are deterministic
@@ -133,6 +137,7 @@ describe("handleScores — auth", () => {
     _ownerRow = proOwner();
     _existingSiteRow = existingSite();
     _saveSiteResult = {};
+    _savedPayload = null;
     _rateLimitCount = 0;
   });
 
@@ -217,6 +222,7 @@ describe("handleScores — payload validation", () => {
     _ownerRow = proOwner();
     _existingSiteRow = existingSite();
     _saveSiteResult = {};
+    _savedPayload = null;
   });
 
   test("missing JSON body returns 400", async () => {
@@ -258,6 +264,16 @@ describe("handleScores — payload validation", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(body.players).toBe(2);
+  });
+
+  test("accepts name and score without requiring wagered", async () => {
+    const req = makeRequest({
+      headers: { "x-postback-key": "key" },
+      body: { slug: "test", players: [{ name: "Score Player", score: 88 }] },
+    });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(200);
+    expect(_savedPayload.players[0]).toMatchObject({ name: "Score Player", score: 88, wagered: 0 });
   });
 
   test("players without a name are rejected", async () => {

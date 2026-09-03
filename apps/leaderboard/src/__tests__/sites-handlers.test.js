@@ -320,7 +320,7 @@ describe("handleQuickAdd", () => {
     mockOne.mockReset();
     mockOne.mockResolvedValueOnce(USER_ROW); // loadUser
     mockGetBoardById.mockReset();
-    mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", extra_json: "{}" });
+    mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", rank_by: "wagered", extra_json: "{}" });
     mockGetPlayers.mockReset();
     mockGetPlayers.mockResolvedValue([
       { name: "Alice", wagered: 100, prize: 0, score: 100, hands: 0, net_profit: 0, win_rate: 0, change: 0 },
@@ -356,5 +356,14 @@ describe("handleQuickAdd", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.players[0].wagered).toBe(125);
+  });
+
+  it("adds points without deriving them from wagered on a score board", async () => {
+    mockGetBoardById.mockResolvedValue({ id: "site-1", slug: "testboard", published: true, user_id: "user-1", rank_by: "score", extra_json: "{}" });
+    const request = req("https://test.com/api/sites/site-1/quick-add", "POST", { name: "Bob", amount: 50 });
+    const res = await handleQuickAdd(request, mockEnv());
+    expect(res.status).toBe(200);
+    const payload = mockSaveSite.mock.calls[0][2];
+    expect(payload.players.find((player) => player.name === "Bob")).toMatchObject({ score: 50, wagered: 0 });
   });
 });

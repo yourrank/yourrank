@@ -198,7 +198,7 @@ export function playerLimitMessage() {
   return `${planLabel} allows up to ${limit} players. Upgrade to add more.`;
 }
 
-export function validateQuickAddValues({ name = "", wagered = "", prize = "" } = {}) {
+export function validateQuickAddValues({ name = "", wagered = "", prize = "", score = "" } = {}) {
   const errors = [];
   if (!String(name).trim()) errors.push({ field: "name", message: "Enter a player name." });
   else {
@@ -213,7 +213,9 @@ export function validateQuickAddValues({ name = "", wagered = "", prize = "" } =
   if (!wager.ok) errors.push({ field: "wagered", message: wager.message });
   const prizeValue = parsePlayerNumber(prize);
   if (!prizeValue.ok) errors.push({ field: "prize", message: prizeValue.message });
-  return { ok: errors.length === 0, errors, wagered: wager.value, prize: prizeValue.value };
+  const scoreValue = parsePlayerNumber(score);
+  if (!scoreValue.ok) errors.push({ field: "score", message: scoreValue.message });
+  return { ok: errors.length === 0, errors, wagered: wager.value, prize: prizeValue.value, score: scoreValue.value };
 }
 
 function playerDraftStorageKey() {
@@ -242,6 +244,7 @@ function rawQuickAdd() {
     name: $("qa_name")?.value || "",
     wagered: $("qa_wager")?.value || "",
     prize: $("qa_prize")?.value || "",
+    score: $("qa_score")?.value || "",
   };
 }
 
@@ -294,6 +297,7 @@ function restoreQuickAdd(values = {}) {
   if ($("qa_name")) $("qa_name").value = values.name || "";
   if ($("qa_wager")) $("qa_wager").value = values.wagered || "";
   if ($("qa_prize")) $("qa_prize").value = values.prize || "";
+  if ($("qa_score")) $("qa_score").value = values.score || "";
   updateNameCounter($("qa_name"));
   updateDuplicateWarnings();
 }
@@ -357,9 +361,9 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
   tr.innerHTML = `<td class="sel" data-label="Select"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" /></td>
     <td class="rank" data-label="Rank"></td>
     <td class="player-name" data-label="Player"><input class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}" maxlength="160" value="${esc(p.name)}" aria-describedby="${rowId}-name-counter ${rowId}-name-warning"><span class="player-name-counter" id="${rowId}-name-counter" hidden aria-live="polite"></span><span class="field-err" data-field-error="p-name" hidden role="alert" aria-live="polite"></span><span class="field-warn" data-field-warning="p-name" id="${rowId}-name-warning" hidden role="status" aria-live="polite"></span></td>
-    <td class="num" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
-    <td class="num col-score" data-label="Score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? p.wagered ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-legacy" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-legacy" data-label="Prize"><input class="p-prize" data-field="p-prize" aria-label="Prize for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.prize)}" aria-describedby="${rowId}-prize-error"><span class="field-err" data-field-error="p-prize" id="${rowId}-prize-error" hidden role="alert" aria-live="polite"></span></td>
+    <td class="num col-score" data-label="Score" hidden><input class="p-score" data-field="p-score" aria-label="Score for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.score ?? "")}" aria-describedby="${rowId}-score-error"><span class="field-err" data-field-error="p-score" id="${rowId}-score-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-hands" data-label="Hands played" hidden><input class="p-hands" data-field="p-hands" aria-label="Hands played for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.hands)}" aria-describedby="${rowId}-hands-error"><span class="field-err" data-field-error="p-hands" id="${rowId}-hands-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-net" data-label="Net profit" hidden><input class="p-net-profit" data-field="p-net-profit" aria-label="Net profit for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.netProfit)}" aria-describedby="${rowId}-net-error"><span class="field-err" data-field-error="p-net-profit" id="${rowId}-net-error" hidden role="alert" aria-live="polite"></span></td>
     <td class="num col-win" data-label="Win rate" hidden><input class="p-win-rate" data-field="p-win-rate" aria-label="Win rate for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.winRate)}" aria-describedby="${rowId}-win-error"><span class="field-err" data-field-error="p-win-rate" id="${rowId}-win-error" hidden role="alert" aria-live="polite"></span></td>
@@ -452,10 +456,14 @@ function syncColumnDropdown(fields) {
 export function applyPlayerFieldVisibility(fields) {
   const table = $("rows")?.closest("table");
   const merged = { ...DEFAULT_EDITOR_PLAYER_FIELDS, ...state.EXTRA?.playerFields, ...(fields || {}) };
+  const scoreMode = state.RANK_BY !== "wagered";
+  if (scoreMode) merged.score = true;
+  table?.querySelectorAll(".col-legacy").forEach((el) => { el.hidden = scoreMode; });
   const visibleOptionalCount = Object.keys(FIELD_COLS).reduce((count, key) => count + (merged[key] !== false ? 1 : 0), 0);
+  const baseWidth = scoreMode ? 44 + 56 + 200 + 96 : PLAYER_TABLE_BASE_WIDTH;
   table?.style.setProperty(
     "--players-table-min-width",
-    `${PLAYER_TABLE_BASE_WIDTH + visibleOptionalCount * PLAYER_OPTIONAL_COLUMN_WIDTH}px`
+    `${baseWidth + visibleOptionalCount * PLAYER_OPTIONAL_COLUMN_WIDTH}px`
   );
   for (const [key, cls] of Object.entries(FIELD_COLS)) {
     const shown = merged[key] !== false;
@@ -467,17 +475,14 @@ export function applyPlayerFieldVisibility(fields) {
 /**
  * Stable comparison key for a set of player rows. Stored drafts hold raw input
  * strings while the server holds numbers, so both sides are normalized before
- * comparison. The score field mirrors the same fallback the row renders with,
- * otherwise a redrawn-but-unedited table reads as a change and resurrects the
- * unsaved-changes state on the next load.
+ * comparison. Missing score stays independently empty/zero rather than
+ * inheriting a historical amount field.
  */
 function playersFingerprint(rows) {
   return JSON.stringify((Array.isArray(rows) ? rows : []).map((row) => [
     String(row?.name ?? "").trim(),
     ...PLAYER_NUMBER_FIELDS.map(({ key }) => {
-      const raw = key === "score" && (row?.score === undefined || row?.score === null || String(row?.score).trim() === "")
-        ? row?.wagered
-        : row?.[key];
+      const raw = row?.[key];
       if (raw === undefined || raw === null || String(raw).trim() === "") return null;
       // Money inputs hold their formatted display value ("$9,500.00"), so the
       // currency dressing comes off before the numeric comparison.
@@ -596,7 +601,7 @@ export function toggleEmpty() {
   if (empty) $("selectAll") && ($("selectAll").checked = false);
 }
 
-// Live re-sort the player table as wagered numbers change, with a tiny
+// Live re-sort the player table as active ranking values change, with a tiny
 // FLIP-style translate animation so the operator sees the row move.
 let sortTimer;
 let currentPage = 1;
@@ -608,7 +613,7 @@ function sortRows() {
   const before = new Map();
   for (const row of rowsEl.children) before.set(row, row.getBoundingClientRect().top);
   const rowsArr = [...rowsEl.children];
-  const sort = $("playerSort")?.value || "wagered";
+  const sort = $("playerSort")?.value || "score";
   rowsArr.sort((a, b) => {
     if (sort === "name") {
       return a.querySelector(".p-name").value.localeCompare(b.querySelector(".p-name").value, undefined, { sensitivity: "base" });
@@ -660,7 +665,7 @@ function sortRows() {
 }
 
 function onSortableInput() {
-  if (($("playerSort")?.value || "wagered") !== state.RANK_BY) return;
+  if (($("playerSort")?.value || "score") !== state.RANK_BY) return;
   clearTimeout(sortTimer);
   sortTimer = setTimeout(sortRows, 200);
 }
@@ -696,13 +701,20 @@ function addQuickRow() {
   const name = nameInput.value.trim();
   const wagerInput = $("qa_wager");
   const prizeInput = $("qa_prize");
-  const quickValidation = validateQuickAddValues({ name, wagered: wagerInput.value, prize: prizeInput.value });
+  const scoreInput = $("qa_score");
+  const scoreMode = state.RANK_BY !== "wagered";
+  const quickValidation = validateQuickAddValues({
+    name,
+    wagered: scoreMode ? "" : wagerInput.value,
+    prize: scoreMode ? "" : prizeInput.value,
+    score: scoreMode ? scoreInput.value : "",
+  });
   if (!quickValidation.ok) {
     const firstError = quickValidation.errors[0];
-    const input = firstError.field === "name" ? nameInput : firstError.field === "wagered" ? wagerInput : prizeInput;
+    const input = firstError.field === "name" ? nameInput : firstError.field === "wagered" ? wagerInput : firstError.field === "score" ? scoreInput : prizeInput;
     setPlayerFieldError(input, firstError.message);
     quickValidation.errors.slice(1).forEach((error) => {
-      const target = error.field === "wagered" ? wagerInput : prizeInput;
+      const target = error.field === "wagered" ? wagerInput : error.field === "score" ? scoreInput : prizeInput;
       setPlayerFieldError(target, error.message);
     });
     input.focus();
@@ -716,12 +728,19 @@ function addQuickRow() {
   clearPlayerFieldError(nameInput);
   clearPlayerFieldError(wagerInput);
   clearPlayerFieldError(prizeInput);
+  clearPlayerFieldError(scoreInput);
   updateDuplicateWarnings();
   commitDraftMutation(() => {
-    $("rows").appendChild(playerRow({ name, wagered: quickValidation.wagered, prize: quickValidation.prize }));
+    $("rows").appendChild(playerRow({
+      name,
+      wagered: quickValidation.wagered,
+      prize: quickValidation.prize,
+      score: quickValidation.score,
+    }));
     $("qa_name").value = "";
     $("qa_wager").value = "";
     $("qa_prize").value = "";
+    $("qa_score").value = "";
     renumber();
     toggleEmpty();
     applyPlayerFieldVisibility();
@@ -739,7 +758,9 @@ $("qa_name")?.addEventListener("input", (e) => {
 $("playersDraftNoticeDismiss")?.addEventListener("click", () => showPlayersDraftNotice(false));
 $("qa_wager") && wireNumberInput($("qa_wager"), { money: true });
 $("qa_prize") && wireNumberInput($("qa_prize"), { money: true });
-$("qa_name")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("qa_wager")?.focus(); } });
+$("qa_score") && wireNumberInput($("qa_score"));
+$("qa_name")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); (state.RANK_BY === "wagered" ? $("qa_wager") : $("qa_score"))?.focus(); } });
+$("qa_score")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addQuickRow(); $("qa_name")?.focus(); } });
 $("qa_wager")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("qa_prize")?.focus(); } });
 $("qa_prize")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addQuickRow(); $("qa_name")?.focus(); } });
 
@@ -944,7 +965,7 @@ $("csvFileInput")?.addEventListener("change", () => {
   const reader = new FileReader();
   reader.onload = () => {
     const result = parseImportText(reader.result, "csv");
-    if (!result.rows.length) { $("status").textContent = "No players found. Expected: name, wagered, prize and optional score, hands, net profit, win rate, change."; return; }
+    if (!result.rows.length) { $("status").textContent = "No players found. Use headers such as name and score; historical amount and prize columns remain optional."; return; }
     $("importPanel").hidden = false;
     $("importText").value = result.rows.map((p) => [p.name, p.wagered, p.prize, p.score ?? "", p.hands ?? "", p.netProfit ?? "", p.winRate ?? "", p.change ?? ""].join("\t")).join("\n");
     $("importText").dispatchEvent(new Event("input"));
@@ -957,7 +978,7 @@ $("csvFileInput")?.addEventListener("change", () => {
 
 $("csvTemplateBtn")?.addEventListener("click", () => {
   closeMenus(false);
-  const csv = "name,wagered,prize\nCryptoKing,152000,1500\nLuckyStar,98000,700\nDiceHero,61250,500\nSlotMaster,45000,250\nBetPro,32000,0\n";
+  const csv = "name,score\nAvery,120\nBlair,80\nCasey,45\n";
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1026,7 +1047,7 @@ $("gsheetFetch")?.addEventListener("click", async () => {
     if (!res.ok) { status.textContent = `Google returned ${res.status}. Make the sheet public or use CSV import.`; return; }
     const text = await res.text();
     const result = parseImportText(text, "gsheet");
-    if (!result.rows.length) { status.textContent = result.errors.length ? result.errors[0] : "No players found. Expected: name, wagered, prize, ..."; return; }
+    if (!result.rows.length) { status.textContent = result.errors.length ? result.errors[0] : "No players found. Use headers such as name and score; historical amount and prize columns remain optional."; return; }
     $("gsheetPanel").hidden = true;
     $("importPanel").hidden = false;
     $("importText").value = result.rows.map((p) => [p.name, p.wagered, p.prize, p.score ?? "", p.hands ?? "", p.netProfit ?? "", p.winRate ?? "", p.change ?? ""].join("\t")).join("\n");

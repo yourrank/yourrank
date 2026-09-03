@@ -27,7 +27,7 @@ const spec = {
     "/api/public/{slug}/standings": {
       get: {
         summary: "Sorted player standings",
-        description: "Returns players sorted by wagered amount with positions and countdown.",
+        description: "Returns players sorted by the board's configured ranking metric (score by default) with positions and countdown.",
         parameters: [{ $ref: "#/components/parameters/Slug" }],
         responses: {
           200: { description: "Standings object", content: { "application/json": { schema: { $ref: "#/components/schemas/Standings" } } } },

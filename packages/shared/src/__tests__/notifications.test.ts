@@ -37,7 +37,8 @@ describe("notification delivery", () => {
       "site-1",
       "Board",
       [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 50 }],
-      [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 50 }]
+      [{ name: "Alice", wagered: 100 }, { name: "Bob", wagered: 50 }],
+      "wagered"
     );
 
     expect(query).not.toHaveBeenCalled();
@@ -56,7 +57,7 @@ describe("notification delivery", () => {
       { name: "Drew", wagered: 70 },
     ];
 
-    expect(getRankChangedPlayerNames(oldPlayers, newPlayers)).toEqual(["Bob", "Alice", "Drew"]);
+    expect(getRankChangedPlayerNames(oldPlayers, newPlayers, "wagered")).toEqual(["Bob", "Alice", "Drew"]);
   });
 
   it("continues notifying other subscribers when one send fails", async () => {

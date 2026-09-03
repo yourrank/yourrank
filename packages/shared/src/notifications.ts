@@ -97,7 +97,7 @@ export function buildTop3Embed(
   playerName: string,
   rank: number,
   wagered: number,
-  metricLabel = "Wagered",
+  metricLabel = "Points",
   metricValue: number = wagered
 ): Record<string, unknown> {
   const medal = ["🥇", "🥈", "🥉"][rank - 1] || "🏆";
@@ -192,7 +192,7 @@ function requireDelivery(channel: string, result: { ok: boolean; error?: string 
 export function detectTop3Changes(
   oldPlayers: Array<{ name: string; wagered: number; score?: number }>,
   newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "wagered"
+  rankBy: "wagered" | "score" = "score"
 ): Array<{ name: string; rank: number; wagered: number; score?: number; rankBy: "wagered" | "score" }> {
   const oldTop3Names = new Set((oldPlayers || []).slice(0, 3).map((p) => p.name));
   const changes: Array<{ name: string; rank: number; wagered: number; score?: number; rankBy: "wagered" | "score" }> = [];
@@ -339,7 +339,7 @@ function buildPlayerRankText(siteName: string, playerName: string, oldRank: numb
 export function getRankChangedPlayerNames(
   oldPlayers: Array<{ name: string; wagered: number; score?: number; rank?: number }>,
   newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "wagered"
+  rankBy: "wagered" | "score" = "score"
 ): string[] {
   const oldRankMap = new Map<string, number>();
   (oldPlayers || []).forEach((p, i) => oldRankMap.set(p.name, p.rank || i + 1));
@@ -407,7 +407,7 @@ export async function notifySubscribedPlayers(
   siteName: string,
   oldPlayers: Array<{ name: string; wagered: number; score?: number }>,
   newPlayers: Array<{ name: string; wagered: number; score?: number }>,
-  rankBy: "wagered" | "score" = "wagered",
+  rankBy: "wagered" | "score" = "score",
   sendNotification: typeof sendPlayerRankNotification = sendPlayerRankNotification
 ): Promise<void> {
   const oldRankMap = new Map<string, number>();

@@ -222,14 +222,16 @@ export async function renderFragmentPayload(pageObj, { user, tab } = {}) {
 
 function findProfilePlayer(data, rawName) {
   const name = decodeURIComponent(rawName).trim();
-  const players = (data.players || []).slice().sort((a, b) => (Number(b.wagered) || 0) - (Number(a.wagered) || 0));
+  const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
+  const players = (data.players || []).slice().sort((a, b) => (Number(b[rankBy]) || 0) - (Number(a[rankBy]) || 0));
   const idx = players.findIndex((p) => String(p.name || "").toLowerCase() === name.toLowerCase());
   if (idx === -1) return null;
   return { player: players[idx], rank: idx + 1 };
 }
 
-async function buildPlayerHistory(env, siteId, rawName, plan) {
+async function buildPlayerHistory(env, siteId, rawName, plan, rankByValue) {
   const name = decodeURIComponent(rawName).trim().toLowerCase();
+  const rankBy = rankByValue === "wagered" ? "wagered" : "score";
   const archives = await getArchiveSnapshots(
     env,
     siteId,
@@ -240,11 +242,11 @@ async function buildPlayerHistory(env, siteId, rawName, plan) {
   for (const a of archives) {
     const parsed = fromJsonb(a.snapshot_json);
     const snap = Array.isArray(parsed) ? parsed : [];
-    const sorted = snap.slice().sort((x, y) => (Number(y.wagered) || 0) - (Number(x.wagered) || 0));
+    const sorted = snap.slice().sort((x, y) => (Number(y[rankBy]) || 0) - (Number(x[rankBy]) || 0));
     const idx = sorted.findIndex((p) => String(p.name || "").toLowerCase() === name);
     if (idx !== -1) {
       const p = sorted[idx];
-      out.push({ label: a.label || "Archived", at: a.created_at, rank: idx + 1, wagered: p.wagered || 0, prize: p.prize || 0 });
+      out.push({ label: a.label || "Archived", at: a.created_at, rank: idx + 1, wagered: p.wagered || 0, score: p.score || 0, prize: p.prize || 0 });
     }
   }
   return out;
@@ -549,7 +551,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
             const playerName = path.slice(8).split("/")[0];
             const profile = findProfilePlayer(r.data, playerName);
             if (!profile) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
-            const history = await buildPlayerHistory(env, r.id, playerName, r.plan);
+            const history = await buildPlayerHistory(env, r.id, playerName, r.plan, r.data.rankBy);
             const paid = r.plan === "pro" || r.plan === "team";
             return new Response(
               await renderNewPlayerProfile(r.data, { ...profile.player, rank: profile.rank }, history, {
@@ -1274,7 +1276,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
         const playerName = path.split("/").slice(3).join("/");
         const profile = findProfilePlayer(r.data, playerName);
         if (!profile) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
-        const history = await buildPlayerHistory(env, r.id, playerName, r.plan);
+        const history = await buildPlayerHistory(env, r.id, playerName, r.plan, r.data.rankBy);
         const paid = r.plan !== "free";
         return new Response(
           await renderNewPlayerProfile(r.data, { ...profile.player, rank: profile.rank }, history, {
