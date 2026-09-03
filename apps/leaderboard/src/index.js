@@ -616,6 +616,15 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         try {
           await one('SELECT 1 AS ok');
           result.db = true;
+          // F-039/F-044: expose the effective Hyperdrive identity as booleans only
+          // (no role names) so release readiness can certify the backend login.
+          const identity = await one(
+            "SELECT current_user = $1 AS expected, r.rolsuper AS superuser, r.rolbypassrls AS bypassrls, pg_has_role(current_user, 'yourrank_app', 'USAGE') AS app_member FROM pg_roles r WHERE r.rolname = current_user",
+            [env.EXPECTED_DB_IDENTITY || "yourrank_worker"]
+          );
+          result.db_identity = identity
+            ? { expected: identity.expected === true, superuser: identity.superuser === true, bypassrls: identity.bypassrls === true, app_member: identity.app_member === true }
+            : { expected: false, superuser: null, bypassrls: null, app_member: null };
         } catch (e) {
           if (workerLog) workerLog.warn("health_db_probe_failed", { error: String(e) });
           else console.error("[leaderboard] health_db_probe_failed:", String(e));
