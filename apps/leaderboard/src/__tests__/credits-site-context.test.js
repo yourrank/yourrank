@@ -33,7 +33,11 @@ function installBrowserGlobals() {
     addEventListener: () => {},
     createElement: () => makeEl(""),
     body: { appendChild: () => {} },
-    documentElement: { setAttribute: () => {}, getAttribute: () => null },
+    documentElement: {
+      setAttribute: () => {},
+      getAttribute: () => null,
+      classList: { add: () => {}, remove: () => {}, toggle: () => {}, contains: () => false },
+    },
   };
   const location = {
     href: "http://localhost:8787/dashboard/rewards",
@@ -62,7 +66,11 @@ describe("credits applyOAuthContext site fallback", () => {
     const { addElement } = installBrowserGlobals();
     const { setState } = await import("../assets/dashboard/state.js");
     setState({ ACTIVE_SITE_ID: "site-from-dashboard" });
-    const { applyOAuthContext } = await import("../assets/credits.js");
+    const { applyOAuthContext, enter, leave } = await import("../assets/credits.js");
+    // The module caches the site id across calls; re-enter the area so a
+    // previous in-process test cannot leave a stale id behind.
+    enter();
+    leave();
     const link = addElement("cr-channel-connect", makeEl("cr-channel-connect", "a"));
     applyOAuthContext();
     expect(link.href).toContain("siteId=site-from-dashboard");
