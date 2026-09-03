@@ -4,6 +4,27 @@ import { readFile } from "node:fs/promises";
 const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
 
 describe("release configuration", () => {
+  it("gates production migration on the semantic N-1 compatibility suite", async () => {
+    const [deploy, prCheck, baseline, packageJson] = await Promise.all([
+      rootFile(".github/workflows/deploy.yml"),
+      rootFile(".github/workflows/pr-check.yml"),
+      rootFile("release/n1-production-baseline.json"),
+      rootFile("package.json"),
+    ]);
+
+    expect(deploy).toContain("n1-compatibility:");
+    expect(deploy).toContain("needs: n1-compatibility");
+    expect(deploy).toContain("bun run verify:n1-compatibility");
+    expect(prCheck).toContain("bun run verify:n1-compatibility");
+    expect(packageJson).toContain('"verify:n1-compatibility"');
+
+    const evidence = JSON.parse(baseline);
+    expect(evidence.schema.baselineThrough).toBe("20260906000000");
+    expect(evidence.workers.leaderboard.liveSourceSha).toBe("5fdcc1d005db05105b7ec645972eb6799af97d69");
+    expect(evidence.workers.bot.liveSourceSha).toBe("d36b6253230e6dad3a535feacc02845e0463f52b");
+    expect(evidence.workers.consumer.liveSourceSha).toBe("d36b6253230e6dad3a535feacc02845e0463f52b");
+  });
+
   it("fails staging before code deployment and applies schema first", async () => {
     const workflow = await rootFile(".github/workflows/staging.yml");
     expect(workflow).toContain("Refuse incomplete or production-shared staging infrastructure");

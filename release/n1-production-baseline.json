@@ -1,0 +1,35 @@
+{
+  "finding": "F-004",
+  "capturedAt": "2026-09-03",
+  "schema": {
+    "baselineThrough": "20260906000000",
+    "firstExpandMigration": "20260907000000_wave_k_safe_activity_automation.sql"
+  },
+  "coherentRollbackSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+  "workers": {
+    "leaderboard": {
+      "liveSourceSha": "5fdcc1d005db05105b7ec645972eb6799af97d69",
+      "rollbackSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "evidenceRun": "33563161577",
+      "evidence": "Wrangler uploaded and deployed yourrank-site before the Cron Trigger update failed."
+    },
+    "bot": {
+      "liveSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "rollbackSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "evidenceRun": "33407769942",
+      "evidence": "Last fully successful production release; later bot jobs were skipped."
+    },
+    "consumer": {
+      "liveSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "rollbackSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "evidenceRun": "33407769942",
+      "evidence": "Last fully successful production release; later consumer jobs were skipped."
+    },
+    "monitor": {
+      "liveSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "rollbackSourceSha": "d36b6253230e6dad3a535feacc02845e0463f52b",
+      "evidenceRun": "33407769942",
+      "evidence": "Last fully successful production release; later monitor jobs were skipped."
+    }
+  }
+}
