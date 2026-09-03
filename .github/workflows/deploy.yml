@@ -60,6 +60,10 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
         run: node scripts/release-recovery-state.mjs capture
+      - name: Verify migration baseline is recorded in production
+        env:
+          RELEASE_STATE: ${{ steps.capture.outputs.state }}
+        run: node scripts/check-migration-compatibility.mjs baseline-applied
 
   # F-004: prove the exact production N-1 Worker sources against every schema
   # migration in this release before the production database is mutated.

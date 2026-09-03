@@ -53,6 +53,12 @@ and revoking privileges. Introduce additive schema first, deploy code that works
 with both old and new schema, backfill safely, and perform contract removal only
 in a later deliberately reviewed release after the rollback window is compatible.
 
+Contract migrations are marked `-- yourrank:migration-phase: contract` plus
+`-- yourrank:contract-requires-release: <commit sha>` and are refused by
+`deploy.yml`. They run only through the manual `contract-migration.yml`
+workflow, which verifies that every production Worker serves that release
+exclusively before applying them (see `DEPLOY.md`).
+
 ## Deprecated Directory
 
 The `db/migrations/` directory is deprecated and should no longer be used. All new migrations should be added to this `supabase/migrations/` directory using the timestamped format.
