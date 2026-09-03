@@ -351,6 +351,7 @@ const collectImpl = () => ({ payload: { siteId: "site-1", name: "Kick Cup" }, in
 describe("behavior: save state is honest about unsaved changes", () => {
   beforeEach(() => {
     elements.clear();
+    state._dirty = false;
     state.ACTIVE_SITE_ID = "site-1";
     state.SLUG = "kick-cup";
     state.SAVED_PLAYERS = [];
