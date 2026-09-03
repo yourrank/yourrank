@@ -6,8 +6,8 @@
 import { getPublicSite as defaultGetPublicSite } from "./site.js";
 import { resolveViewer as defaultResolveViewer } from "@yourrank/shared/viewer-session";
 import { createQueueProducer as defaultCreateQueueProducer } from "@yourrank/shared/queue-producer";
+import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { decideBoardView } from "@yourrank/shared/board-views";
-import { bumpStat as defaultBumpStat } from "./stats.js";
 import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
@@ -48,14 +48,7 @@ export function parseSitePath(path, isCustomDomain, customSlug) {
 }
 
 function enqueueBump(env, ctx, siteId, field, referer, visitorHash, deps) {
-  const producer = deps.createQueueProducer(
-    env.EVENTS_QUEUE,
-    async (event) => {
-      if (event.type === "bump") {
-        await deps.bumpStat(event.siteId, event.field, event.referer, event.visitorHash);
-      }
-    }
-  );
+  const producer = deps.createQueueProducer(env.EVENTS_QUEUE, deps.queueFallback, env);
   const p = producer.send({ type: "bump", siteId, field, referer, visitorHash, timestamp: Date.now() });
   ctx.waitUntil(p);
 }
@@ -78,13 +71,13 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     getPublicSite = defaultGetPublicSite,
     resolveViewer = defaultResolveViewer,
     createQueueProducer = defaultCreateQueueProducer,
-    bumpStat = defaultBumpStat,
+    queueFallback = directQueueFallback,
     hashToken = defaultHashToken,
     renderPasswordGate = defaultRenderPasswordGate,
     renderSite = defaultRenderSite,
     getViewerSiteData = defaultGetViewerSiteData,
   } = deps;
-  const collaborators = { createQueueProducer, bumpStat, hashToken };
+  const collaborators = { createQueueProducer, queueFallback, hashToken };
   setRequestMetrics({ route: `/site/${section}`, site: slug });
   const cacheableRequest = isPublicBoardCacheRequest(request, section);
   const HTML_N = withNonce(HTML, nonce);

@@ -3,6 +3,7 @@
 // instead of writing to Postgres inline.
 
 import { z } from "zod";
+import { currentCorrelationId } from "./request-id.js";
 
 const id = z.string().min(1).max(128);
 const label = z.string().max(256);
@@ -117,60 +118,179 @@ export function parseQueueEvent(input: unknown): QueueEvent {
   return queueEventSchema.parse(input);
 }
 
+// ---------------------------------------------------------------------------
+// Canonical envelope
+//
+// `eventId` is the identity of the logical side effect. It is minted once by
+// the producer and preserved verbatim across queue retries, DLQ persistence,
+// replay and consumer processing; consumers never regenerate it. Legacy flat
+// events (no envelope) remain accepted while the queues drain.
+// ---------------------------------------------------------------------------
+
+export const QUEUE_ENVELOPE_VERSION = 1;
+
+const envelopeId = z.string().min(8).max(160);
+
+export const queueEnvelopeSchema = z.object({
+  v: z.literal(QUEUE_ENVELOPE_VERSION),
+  eventId: envelopeId,
+  eventType: z.string().min(1).max(64),
+  createdAt: z.string().datetime(),
+  causationId: envelopeId.optional(),
+  correlationId: z.string().min(1).max(160).optional(),
+  payload: queueEventSchema,
+}).strict().refine((env) => env.eventType === env.payload.type, {
+  message: "envelope eventType must match payload.type",
+});
+
+export type QueueEnvelope = z.infer<typeof queueEnvelopeSchema>;
+
+export type ParsedQueueMessage =
+  | { legacy: false; envelope: QueueEnvelope; event: QueueEvent; eventId: string }
+  | { legacy: true; envelope: null; event: QueueEvent; eventId: null };
+
+export function isQueueEnvelope(input: unknown): boolean {
+  return typeof input === "object" && input !== null && "payload" in input && "eventId" in input;
+}
+
+/**
+ * Parse either a canonical envelope or a legacy flat event. Legacy events carry
+ * no producer-assigned identity; callers must not invent one (they may only use
+ * the delivery's Cloudflare message id, which is stable across retries of that
+ * one delivery but not across producer-side duplicates or replays).
+ */
+export function parseQueueMessage(input: unknown): ParsedQueueMessage {
+  if (isQueueEnvelope(input)) {
+    const envelope = queueEnvelopeSchema.parse(input);
+    return { legacy: false, envelope, event: envelope.payload, eventId: envelope.eventId };
+  }
+  return { legacy: true, envelope: null, event: queueEventSchema.parse(input), eventId: null };
+}
+
+export function newQueueEventId(): string {
+  return crypto.randomUUID();
+}
+
+export interface EnvelopeOptions {
+  eventId?: string;
+  correlationId?: string | null;
+  causationId?: string | null;
+}
+
+export function buildQueueEnvelope(event: QueueEvent, options: EnvelopeOptions = {}): QueueEnvelope {
+  const envelope: QueueEnvelope = {
+    v: QUEUE_ENVELOPE_VERSION,
+    eventId: options.eventId || newQueueEventId(),
+    eventType: event.type,
+    createdAt: new Date().toISOString(),
+    payload: event,
+  };
+  const correlationId = options.correlationId === undefined ? currentCorrelationId() : options.correlationId;
+  if (correlationId) envelope.correlationId = String(correlationId).slice(0, 160);
+  if (options.causationId) envelope.causationId = options.causationId;
+  return envelope;
+}
+
+export type QueueFallback = (event: QueueEvent, env: any, envelope: QueueEnvelope) => Promise<void>;
+
 interface QueueProducer {
-  send(message: QueueEvent): Promise<void>;
-  sendBatch(messages: QueueEvent[]): Promise<void>;
+  send(message: QueueEvent, options?: EnvelopeOptions): Promise<QueueEnvelope>;
+  sendBatch(messages: QueueEvent[], options?: EnvelopeOptions): Promise<QueueEnvelope[]>;
 }
 
 // Cloudflare Queues accepts at most 100 messages in one sendBatch request.
 const QUEUE_BATCH_SIZE = 100;
 
+export class QueueBindingRequiredError extends Error {
+  constructor() {
+    super("EVENTS_QUEUE binding is required (QUEUE_REQUIRED=true) but is not configured; refusing to downgrade to direct execution");
+    this.name = "QueueBindingRequiredError";
+  }
+}
+
+export function queueBindingRequired(env: unknown): boolean {
+  const value = (env as { QUEUE_REQUIRED?: unknown } | undefined)?.QUEUE_REQUIRED;
+  return String(value ?? "").toLowerCase() === "true";
+}
+
 /**
- * Create a queue producer that sends events to a Cloudflare Queue.
- * Falls back to direct DB write if the queue is not bound or the enqueue fails.
- * Optional `env` is passed as the second argument to `fallbackFn`.
+ * Create a queue producer that sends canonical envelopes to a Cloudflare Queue.
+ *
+ * The envelope (and therefore the eventId) is built BEFORE the send attempt, so
+ * when a send throws after the broker actually accepted the message and the
+ * fallback executes the side effect directly, both paths carry the same eventId
+ * and the durable event ledger collapses them into one logical effect.
+ *
+ * When `env.QUEUE_REQUIRED === "true"` a missing binding is a configuration
+ * error: direct execution is refused instead of silently replacing durable
+ * async processing.
  */
 export function createQueueProducer(
   queue: {
-    send: (message: QueueEvent) => Promise<void>;
-    sendBatch?: (messages: Iterable<{ body: QueueEvent }>) => Promise<unknown>;
+    send: (message: unknown) => Promise<void>;
+    sendBatch?: (messages: Iterable<{ body: unknown }>) => Promise<unknown>;
   } | undefined,
-  fallbackFn: (event: QueueEvent, env?: any) => Promise<void>,
+  fallbackFn: QueueFallback,
   env?: any
 ): QueueProducer {
-  const fallbackBatch = async (events: QueueEvent[]): Promise<void> => {
-    const results = await Promise.allSettled(events.map((event) => fallbackFn(event, env)));
+  if (!queue && queueBindingRequired(env)) throw new QueueBindingRequiredError();
+
+  const fallbackBatch = async (envelopes: QueueEnvelope[]): Promise<void> => {
+    const results = await Promise.allSettled(envelopes.map((envelope) => fallbackFn(envelope.payload, env, envelope)));
     const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failure) throw failure.reason;
   };
 
   if (!queue) {
     return {
-      send: (event) => fallbackFn(event, env),
-      sendBatch: fallbackBatch,
+      async send(event, options) {
+        const envelope = buildQueueEnvelope(event, options);
+        await fallbackFn(event, env, envelope);
+        return envelope;
+      },
+      async sendBatch(events, options) {
+        const envelopes = events.map((event) => buildQueueEnvelope(event, options));
+        await fallbackBatch(envelopes);
+        return envelopes;
+      },
     };
   }
 
   return {
-    async send(event: QueueEvent): Promise<void> {
+    async send(event, options) {
+      const envelope = buildQueueEnvelope(event, options);
       try {
-        await queue.send(event);
+        await queue.send(envelope);
       } catch (err) {
-        console.error("[queue-producer] enqueue failed, using fallback:", String(err));
-        await fallbackFn(event, env);
+        console.error(JSON.stringify({
+          event: "queue_enqueue_failed_fallback",
+          event_id: envelope.eventId,
+          event_type: envelope.eventType,
+          correlation_id: envelope.correlationId ?? null,
+          error: String(err),
+        }));
+        await fallbackFn(event, env, envelope);
       }
+      return envelope;
     },
-    async sendBatch(events: QueueEvent[]): Promise<void> {
+    async sendBatch(events, options) {
+      const envelopes = events.map((event) => buildQueueEnvelope(event, options));
       if (!queue.sendBatch) {
-        return fallbackBatch(events);
+        await fallbackBatch(envelopes);
+        return envelopes;
       }
       let firstFailure: unknown;
-      for (let i = 0; i < events.length; i += QUEUE_BATCH_SIZE) {
-        const chunk = events.slice(i, i + QUEUE_BATCH_SIZE);
+      for (let i = 0; i < envelopes.length; i += QUEUE_BATCH_SIZE) {
+        const chunk = envelopes.slice(i, i + QUEUE_BATCH_SIZE);
         try {
           await queue.sendBatch(chunk.map((body) => ({ body })));
         } catch (err) {
-          console.error("[queue-producer] batch enqueue failed, using fallback:", String(err));
+          console.error(JSON.stringify({
+            event: "queue_batch_enqueue_failed_fallback",
+            event_ids: chunk.map((e) => e.eventId),
+            correlation_id: chunk[0]?.correlationId ?? null,
+            error: String(err),
+          }));
           try {
             await fallbackBatch(chunk);
           } catch (fallbackError) {
@@ -179,6 +299,7 @@ export function createQueueProducer(
         }
       }
       if (firstFailure) throw firstFailure;
+      return envelopes;
     },
   };
 }

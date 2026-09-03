@@ -41,7 +41,10 @@ dead_letter_queue = "yourrank-events-dlq"
 queue = "yourrank-events-dlq"
 max_batch_size = 10
 max_batch_timeout = 5
-max_retries = 0
+# Persistence of the DLQ record itself gets a finite retry budget (attempts
+# 1..4 = DLQ_PERSIST_MAX_ATTEMPTS); no dead_letter_queue here, so there is no
+# DLQ-to-DLQ loop — exhaustion is logged/alerted as terminal and acked.
+max_retries = 3
 
 [[hyperdrive]]
 binding = "HYPERDRIVE"
@@ -55,6 +58,9 @@ class_name = "RateLimiter"
 [vars]
 RL_BACKEND = "do"
 RL_FAIL_OPEN = "false"
+# Readiness (/consumer/ready) requires a fresh cron heartbeat (crons above) and
+# never refreshes it. "disabled" is only legitimate where crons are off.
+CONSUMER_SCHEDULED_HEARTBEAT = "required"
 
 # Secrets (set via wrangler secret put):
 #   DISCORD_MONITORING_WEBHOOK — optional Discord webhook for DLQ alerts
@@ -98,7 +104,10 @@ dead_letter_queue = "yourrank-events-staging-dlq"
 queue = "yourrank-events-staging-dlq"
 max_batch_size = 10
 max_batch_timeout = 5
-max_retries = 0
+# Persistence of the DLQ record itself gets a finite retry budget (attempts
+# 1..4 = DLQ_PERSIST_MAX_ATTEMPTS); no dead_letter_queue here, so there is no
+# DLQ-to-DLQ loop — exhaustion is logged/alerted as terminal and acked.
+max_retries = 3
 
 [[env.staging.hyperdrive]]
 binding = "HYPERDRIVE"
@@ -111,3 +120,6 @@ class_name = "RateLimiter"
 [env.staging.vars]
 RL_BACKEND = "do"
 RL_FAIL_OPEN = "false"
+# Staging crons are disabled, so the scheduled-heartbeat readiness check is
+# explicitly (not silently) disabled here.
+CONSUMER_SCHEDULED_HEARTBEAT = "disabled"

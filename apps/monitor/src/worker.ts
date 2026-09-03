@@ -234,10 +234,9 @@ export async function runChecks(env: Env): Promise<CheckResult[]> {
     );
   }
 
-  // 8. Consumer health: ping the consumer Worker's /health route. This both
-  // checks the consumer is reachable and updates its DB heartbeat row, which
-  // the leaderboard /health check above also reads.
-  checks.push(checkEndpoint(`${base}/consumer/health`, { method: "GET" }, "GET /consumer/health"));
+  // 8. Consumer readiness: DB reachable + scheduled heartbeat fresh, 503
+  // otherwise. Read-only — the probe never refreshes the heartbeat it checks.
+  checks.push(checkEndpoint(`${base}/consumer/ready`, { method: "GET" }, "GET /consumer/ready"));
 
   return Promise.all(checks);
 }

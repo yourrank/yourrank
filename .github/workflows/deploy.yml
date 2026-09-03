@@ -382,19 +382,19 @@ jobs:
               ;;
           esac
 
-      - name: "Backend: consumer health ping"
+      - name: "Backend: consumer readiness (DB + scheduled heartbeat)"
         run: |
-          MAX_RETRIES=6
+          MAX_RETRIES=40
           for i in $(seq 1 $MAX_RETRIES); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://yourrank.site/consumer/health || true)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://yourrank.site/consumer/ready || true)
             if [ "$STATUS" = "200" ]; then
-              echo "OK: consumer /health returned HTTP 200 (attempt $i)"
+              echo "OK: consumer /ready returned HTTP 200 (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i/$MAX_RETRIES: consumer /health HTTP $STATUS — retrying in 10s…"
+            echo "Attempt $i/$MAX_RETRIES: consumer /ready HTTP $STATUS — retrying in 10s…"
             sleep 10
           done
-          echo "FAIL: consumer /health did not return 200 after $MAX_RETRIES attempts"
+          echo "FAIL: consumer /ready did not return 200 after $MAX_RETRIES attempts"
           exit 1
 
       - name: "Backend: DB connectivity (yourrank.site/health)"
@@ -749,7 +749,7 @@ jobs:
             HEALTH_STATUS=$(printf '%s\n' "$HEALTH_RESPONSE" | tail -n1)
             HEALTH_BODY=$(printf '%s\n' "$HEALTH_RESPONSE" | sed '$d')
             BOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://yourrank.site/r/smoke-probe-ci || true)
-            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://yourrank.site/consumer/health || true)
+            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://yourrank.site/consumer/ready || true)
             if { [ "$HEALTH_STATUS" = "200" ] || [ "$HEALTH_STATUS" = "503" ]; } \
               && printf '%s' "$HEALTH_BODY" | jq -e '.db == true' >/dev/null 2>&1 \
               && [ "$BOT_STATUS" = "404" ] \

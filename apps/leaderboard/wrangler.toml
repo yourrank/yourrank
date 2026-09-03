@@ -63,6 +63,9 @@ id = "9e5b625bfdd84cd691b44c4780bdaf13"
 crons = ["*/5 * * * *"]
 
 [vars]
+# Producers must fail closed when EVENTS_QUEUE is unbound instead of silently
+# executing side effects inline (F-054).
+QUEUE_REQUIRED = "true"
 APP_NAME = "YourRank"
 ENVIRONMENT = "production"
 CF_ZONE_ID = "dd79a3ac13643b94732f2fef6ce3b1f5"
@@ -138,6 +141,7 @@ invocation_logs = true
 crons = []
 
 [env.staging.vars]
+QUEUE_REQUIRED = "true"
 DLQ_HEALTH_DEGRADE_THRESHOLD = "100"
 DLQ_HEALTH_MAX_AGE_SECONDS = "86400"
 APP_NAME = "YourRank (Staging)"

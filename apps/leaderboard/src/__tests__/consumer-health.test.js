@@ -14,7 +14,7 @@ describe("consumer health", () => {
     expect(health.healthy).toBe(false);
   });
 
-  it("keeps new deployments healthy before any processing", () => {
+  it("does not grant unlimited grace to a consumer with zero processed work", () => {
     const health = evaluateConsumerHealth({
       seconds_ago: 3600,
       processed_count: "0",
@@ -22,6 +22,34 @@ describe("consumer health", () => {
       last_failure_at: null,
       last_success_at: null,
     }, Date.parse("2026-08-24T12:00:00Z"));
+    expect(health.healthy).toBe(false);
+    expect(health.stale).toBe(true);
+    expect(health.heartbeat_source).toBe("traffic");
+  });
+
+  it("is healthy on a fresh scheduled heartbeat even without traffic", () => {
+    const health = evaluateConsumerHealth({
+      seconds_ago: 3600,
+      scheduled_seconds_ago: 120,
+      processed_count: "0",
+      failed_count: "0",
+      last_failure_at: null,
+      last_success_at: null,
+    }, Date.parse("2026-08-24T12:00:00Z"));
     expect(health.healthy).toBe(true);
+    expect(health.heartbeat_source).toBe("scheduled");
+  });
+
+  it("prefers the scheduled heartbeat over recent queue traffic", () => {
+    const health = evaluateConsumerHealth({
+      seconds_ago: 5,
+      scheduled_seconds_ago: 2000,
+      processed_count: "10",
+      failed_count: "0",
+      last_failure_at: null,
+      last_success_at: "2026-08-24T11:59:55Z",
+    }, Date.parse("2026-08-24T12:00:00Z"));
+    expect(health.healthy).toBe(false);
+    expect(health.stale).toBe(true);
   });
 });

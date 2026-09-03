@@ -15,10 +15,10 @@ import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/aut
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
 import { PAGES } from "./pages.jsx";
 import { DEVIN_DESIGN_CONTRACT, leaderboardPageHtml } from "@yourrank/shared/page-shell";
-import { bumpStat } from "./stats.js";
 import { runAutoReset } from "./auto-reset.js";
 import { runSafeActivityAutomation } from "./automation-scheduler.js";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
+import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { shellNavHtml, publicNavHtml } from "@yourrank/shared/shell-nav";
 import apiApp from "./router.js";
 import { OG_IMAGE_PNG_BASE64 } from "./og-image.js";
@@ -57,7 +57,7 @@ import {
 import { parseDashboardPath, trimTrailingSlashes } from "./assets/dashboard/routes.js";
 import { deferClickWrite, trackedDestination } from "./tracked-redirect.js";
 import { getLogger, setRequestMetrics } from "@yourrank/shared/request-id";
-import { evaluateConsumerHealth } from "./consumer-health.js";
+import { CONSUMER_HEARTBEAT_STALE_SECONDS, evaluateConsumerHealth } from "./consumer-health.js";
 import { readDlqHealth } from "./dlq-health.js";
 import { proxyMarketingHome } from "./marketing-proxy.js";
 import { redirectResponse, redirectToLogin } from "./login-redirect.js";
@@ -116,14 +116,7 @@ function telemetrySite(path) {
 
 
 function enqueueBump(env, ctx, siteId, field, referer = null, visitorHash = null) {
-  const producer = createQueueProducer(
-    env.EVENTS_QUEUE,
-    async (event) => {
-      if (event.type === "bump") {
-        await bumpStat(event.siteId, event.field, event.referer, event.visitorHash);
-      }
-    }
-  );
+  const producer = createQueueProducer(env.EVENTS_QUEUE, directQueueFallback, env);
   const p = producer.send({ type: "bump", siteId, field, referer, visitorHash, timestamp: Date.now() });
   ctx.waitUntil(p);
 }
@@ -635,15 +628,20 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // Surface analytics consumer health. If the consumer stops processing,
         // dashboard analytics silently starve; this makes that outage visible.
         try {
-          const hb = await one("SELECT EXTRACT(EPOCH FROM (now() - last_seen))::int AS seconds_ago, processed_count, failed_count, last_failure_at, last_success_at FROM consumer_heartbeat WHERE name='consumer'");
-          const consumerStaleSeconds = 600; // 10 minutes without a batch is an outage
+          const hb = await one(
+            `SELECT EXTRACT(EPOCH FROM (now() - c.last_seen))::int AS seconds_ago,
+                    c.processed_count, c.failed_count, c.last_failure_at, c.last_success_at,
+                    EXTRACT(EPOCH FROM (now() - s.last_seen))::int AS scheduled_seconds_ago
+             FROM consumer_heartbeat c
+             LEFT JOIN consumer_heartbeat s ON s.name = 'consumer_scheduled'
+             WHERE c.name = 'consumer'`
+          );
           if (hb) {
-            // A brand-new deploy has no queue events yet, so the heartbeat row
-            // may be stale even though the consumer is healthy. Once it has
-            // processed any events we start enforcing freshness.
-            const consumerHealth = evaluateConsumerHealth(hb, Date.now(), consumerStaleSeconds);
+            const consumerHealth = evaluateConsumerHealth(hb, Date.now(), CONSUMER_HEARTBEAT_STALE_SECONDS);
             result.consumer = {
               healthy: consumerHealth.healthy,
+              heartbeat_source: consumerHealth.heartbeat_source,
+              heartbeat_seconds_ago: consumerHealth.heartbeat_seconds_ago,
               last_seen: Number(hb.seconds_ago),
               processed_count: Number(hb.processed_count),
               failed_count: Number(hb.failed_count),

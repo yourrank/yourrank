@@ -34,6 +34,9 @@ head_sampling_rate = 1
 invocation_logs = true
 
 [vars]
+# Producers must fail closed when EVENTS_QUEUE is unbound instead of silently
+# executing side effects inline (F-054).
+QUEUE_REQUIRED = "true"
 PUBLIC_BASE_URL = "https://yourrank.site"
 RL_BACKEND = "do"  # Change to "kv" to use KV for rate limiting
 RL_FAIL_OPEN = "false"  # Block requests when the rate-limit backend is down (fail-closed).
@@ -106,6 +109,7 @@ invocation_logs = true
 crons = []
 
 [env.staging.vars]
+QUEUE_REQUIRED = "true"
 PUBLIC_BASE_URL = "https://staging.yourrank.site"
 RL_BACKEND = "do"
 RL_FAIL_OPEN = "false"

@@ -39,7 +39,7 @@ export function escapeTgMarkdown(text: string | number | null | undefined): stri
 export async function sendDiscordWebhook(
   webhookUrl: string,
   embed: Record<string, unknown>
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<DeliveryResult> {
   if (!webhookUrl) return { ok: false, error: "No webhook URL" };
   try {
     const res = await fetch(webhookUrl, {
@@ -58,7 +58,8 @@ export async function sendDiscordWebhook(
     }
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: errMessage(err) };
+    // No response was observed: the provider may or may not have delivered.
+    return { ok: false, error: errMessage(err), ambiguous: true };
   }
 }
 
@@ -151,7 +152,7 @@ export async function sendTelegramMessage(
   botToken: string,
   chatId: string | number,
   text: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<DeliveryResult> {
   if (!botToken || !chatId) return { ok: false, error: "Missing bot token or chat ID" };
   try {
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -169,14 +170,32 @@ export async function sendTelegramMessage(
     if (!data.ok) return { ok: false, error: data.description || "Telegram API error" };
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: errMessage(err) };
+    return { ok: false, error: errMessage(err), ambiguous: true };
   }
 }
 
-function requireDelivery(channel: string, result: { ok: boolean; error?: string }): void {
-  if (!result.ok) {
-    throw new Error(`${channel} delivery failed: ${result.error || "unknown error"}`);
+export interface DeliveryResult {
+  ok: boolean;
+  error?: string;
+  /** True when no provider response was observed (timeout/network), so the send may have landed. */
+  ambiguous?: boolean;
+}
+
+export class DeliveryError extends Error {
+  readonly ambiguous: boolean;
+  constructor(channel: string, result: DeliveryResult) {
+    super(`${channel} delivery failed: ${result.error || "unknown error"}`);
+    this.name = "DeliveryError";
+    this.ambiguous = result.ambiguous === true;
   }
+}
+
+export function isAmbiguousDeliveryError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { ambiguous?: unknown }).ambiguous === true;
+}
+
+function requireDelivery(channel: string, result: DeliveryResult): void {
+  if (!result.ok) throw new DeliveryError(channel, result);
 }
 
 // ----------------------------------------------------------------------------

@@ -144,8 +144,10 @@ describe("F-012 staging release verification", () => {
     expect(checkStagingConfig(worker("leaderboard"), withoutTriggers).join("\n")).toContain("[env.staging.triggers] must declare crons explicitly");
 
     const consumer = await readRendered("apps/consumer/wrangler.toml");
-    const withoutDlq = consumer.replace(/\[\[env\.staging\.queues\.consumers\]\]\nqueue = "yourrank-events-staging-dlq"\n(?:.*\n)*?max_retries = 0\n/, "");
+    const withoutDlq = consumer.replace(/\[\[env\.staging\.queues\.consumers\]\]\nqueue = "yourrank-events-staging-dlq"\n(?:.*\n)*?max_retries = 3\n/, "");
     expect(checkStagingConfig(worker("consumer"), withoutDlq).join("\n")).toContain("missing staging DLQ consumer");
+    const loopingDlq = consumer.replace(/(queue = "yourrank-events-staging-dlq"\n(?:.*\n)*?max_retries = 3\n)/, '$1dead_letter_queue = "yourrank-events-staging-dlq"\n');
+    expect(checkStagingConfig(worker("consumer"), loopingDlq).join("\n")).toContain("DLQ-to-DLQ loop");
   });
 
   it("fails preflight when a required staging variable or secret is missing and never accepts production names", () => {
