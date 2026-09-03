@@ -39,8 +39,10 @@ enabled = true
 head_sampling_rate = 1
 invocation_logs = true
 
+# Staging schedules are intentionally disabled; the staging release triggers the
+# protected /check endpoint deterministically instead.
 [env.staging.triggers]
-crons = ["*/5 * * * *"]
+crons = []
 
 [env.staging.vars]
 MONITOR_TARGET = "https://staging.yourrank.site"

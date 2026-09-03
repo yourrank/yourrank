@@ -38,6 +38,14 @@ dispatch). There is no independent production Web promotion path. `deploy.yml`
 and `rollback.yml` share the `production-mutation` concurrency group, and
 `rollback.yml` accepts `web` as a Worker.
 
+`staging.yml` runs the same release topology (preflight → capture → N−1 →
+migrate → Leaderboard → Bot → Consumer → readiness → Monitor → Web → readiness →
+smoke → finalizer) against the isolated `-staging` Workers, staging queues and a
+dedicated staging Supabase/Hyperdrive, under its own `staging-mutation` lock. It
+fails closed via `scripts/staging-preflight.mjs` until real staging resource ids
+and secrets exist in the GitHub `staging` environment, and offers staging-only
+failure injection to verify the finalizer. Setup: `apps/leaderboard/STAGING.md`.
+
 ## 1. Database (once)
 Apply migrations via Supabase CLI:
 ```bash

@@ -48,6 +48,10 @@ enabled = true
 head_sampling_rate = 1
 invocation_logs = true
 
+# Staging schedules are intentionally disabled (see apps/leaderboard/STAGING.md).
+[env.staging.triggers]
+crons = []
+
 [env.staging.assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
