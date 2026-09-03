@@ -48,7 +48,7 @@ describe("postback conversion durability", () => {
           releaseReplayHash: async (_userId, replayHash) => claimed.delete(replayHash),
           createQueueProducer: () => ({
             send: async () => { throw new Error("queue unavailable"); },
-            sendBatch: async () => {},
+            sendBatch: async () => [],
           }),
         },
       }),

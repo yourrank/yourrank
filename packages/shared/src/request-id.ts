@@ -151,6 +151,11 @@ export function getLogger(): Logger {
   return loggerStore.getStore()?.logger || createLogger("unknown", "no-ctx");
 }
 
+/** Request id of the current request context, or null outside a request (cron, queue). */
+export function currentCorrelationId(): string | null {
+  return loggerStore.getStore()?.logger.reqId || null;
+}
+
 export function getRequestMetrics(): RequestMetrics | null {
   return metricsStore.getStore() || null;
 }

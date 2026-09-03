@@ -71,10 +71,11 @@ export async function logMinimizedClick(
   shortLinkId: string,
   ipHash: string,
   tgUserId: number | null,
-  clickRef: string
+  clickRef: string,
+  { withTransactionImpl = withTransaction }: { withTransactionImpl?: typeof withTransaction } = {}
 ): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(ipHash)) {
     throw new Error("invalid click IP hash");
   }
-  await insertClick(shortLinkId, Buffer.from(ipHash, "hex"), null, null, null, tgUserId, clickRef);
+  await insertClick(shortLinkId, Buffer.from(ipHash, "hex"), null, null, null, tgUserId, clickRef, { withTransactionImpl });
 }

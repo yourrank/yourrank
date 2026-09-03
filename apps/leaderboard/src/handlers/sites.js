@@ -1,7 +1,7 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
 import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
-import { bumpStat, getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
+import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
 import { one, exec, query } from "@yourrank/shared/db";
 import { fromJsonb } from "@yourrank/shared/jsonb";
@@ -38,6 +38,7 @@ async function onboardingForSite(env, site, userId, plan) {
 }
 
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
+import { directQueueFallback } from "@yourrank/shared/queue-effects";
 
 export async function handleStats(request, env, {
   requireUserImpl = requireUser,
@@ -171,14 +172,7 @@ export async function handleTrackCopy(request, env) {
   if (!(await rateLimit(env, `copy:${slug}:${ip}`, 20, 60)).ok) return json({ ok: false, error: "Too many requests." }, 429);
   const site = await one("SELECT id FROM sites WHERE slug=$1 AND published=true AND is_draft=false", [slug]);
   if (site) {
-    const producer = createQueueProducer(
-      env.EVENTS_QUEUE,
-      async (event) => {
-        if (event.type === "bump") {
-          await bumpStat(event.siteId, event.field, event.referer);
-        }
-      }
-    );
+    const producer = createQueueProducer(env.EVENTS_QUEUE, directQueueFallback, env);
     const p = producer.send({ type: "bump", siteId: site.id, field: "copies", referer: null, timestamp: Date.now() });
     routeContext(request).waitUntil(p);
     p.catch((err) => { console.error("[trackCopy] copy enqueue failed:", err); });

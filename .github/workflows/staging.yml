@@ -388,18 +388,18 @@ jobs:
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/dashboard/telegram")
           [ "$STATUS" = "200" ] || { echo "FAIL: Telegram dashboard returned HTTP $STATUS"; exit 1; }
           echo "OK: Telegram dashboard HTTP $STATUS"
-      - name: "Backend: consumer health ping (queue consumer bound to yourrank-events-staging)"
+      - name: "Backend: consumer readiness (queue consumer bound to yourrank-events-staging; scheduled heartbeat explicitly disabled in staging)"
         run: |
           for i in $(seq 1 6); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$STAGING_APEX/consumer/health" || true)
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$STAGING_APEX/consumer/ready" || true)
             if [ "$STATUS" = "200" ]; then
-              echo "OK: consumer /health returned HTTP 200 (attempt $i)"
+              echo "OK: consumer /ready returned HTTP 200 (attempt $i)"
               exit 0
             fi
-            echo "Attempt $i/6: consumer /health HTTP $STATUS — retrying in 10s…"
+            echo "Attempt $i/6: consumer /ready HTTP $STATUS — retrying in 10s…"
             sleep 10
           done
-          echo "FAIL: consumer /health did not return 200 after 6 attempts"
+          echo "FAIL: consumer /ready did not return 200 after 6 attempts"
           exit 1
       - name: "Backend: queue processing (staging DLQ health via leaderboard /health)"
         run: |
@@ -710,7 +710,7 @@ jobs:
             HEALTH_STATUS=$(printf '%s\n' "$HEALTH_RESPONSE" | tail -n1)
             HEALTH_BODY=$(printf '%s\n' "$HEALTH_RESPONSE" | sed '$d')
             BOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/r/smoke-probe-ci" || true)
-            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/consumer/health" || true)
+            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/consumer/ready" || true)
             if { [ "$HEALTH_STATUS" = "200" ] || [ "$HEALTH_STATUS" = "503" ]; } \
               && printf '%s' "$HEALTH_BODY" | jq -e '.db == true' >/dev/null 2>&1 \
               && [ "$BOT_STATUS" = "404" ] \

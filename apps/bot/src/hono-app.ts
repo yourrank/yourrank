@@ -7,10 +7,10 @@ import { getBotBySecret, handleUpdateForBot } from "./botEngine.js";
 import { gateAndDeferTelegramUpdate } from "./telegram-webhook.js";
 import { getMe, setWebhook } from "./telegram.js";
 import { buildDashboard } from "./dashboard.js";
-import { logMinimizedClick } from "./clicks.js";
 import { withPlanLimit } from "./plans.js";
 import { rateLimit, type RateLimitKV } from "./ratelimit.js";
 import { createQueueProducer, type QueueEvent } from "@yourrank/shared/queue-producer";
+import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { getDlqPage, replayDlq, type DlqDb } from "./dlq-ops.js";
 import { recordConversion, type PostbackQuery } from "@yourrank/shared/conversions";
 import {
@@ -283,14 +283,7 @@ export function buildHonoApp({
       .replaceAll("{click_id}", ref);
 
     // Enqueue click event to Cloudflare Queue (or fall back to direct write).
-    const queueProducer = createQueueProducer(
-      c.env.EVENTS_QUEUE,
-      async (event: QueueEvent) => {
-        if (event.type === "click") {
-          await logMinimizedClick(event.shortLinkId, event.ipHash, event.tgUserId, event.clickRef);
-        }
-      }
-    );
+    const queueProducer = createQueueProducer(c.env.EVENTS_QUEUE, directQueueFallback, c.env);
     let ctx: HonoExecutionContext | undefined;
     try { ctx = c.executionCtx; } catch { /* not on Workers */ }
     const bg = ctx?.waitUntil

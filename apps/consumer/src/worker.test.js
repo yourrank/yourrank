@@ -1,25 +1,60 @@
 import { describe, expect, it } from "bun:test";
-import { handleDlq, handleEvent, processQueueMessages, refreshConsumerHeartbeat } from "./worker.js";
+import { SCHEDULED_HEARTBEAT_NAME, handleDlq, handleEvent, processQueueMessages, refreshConsumerHeartbeat } from "./worker.js";
 import { processAccountExport } from "./account-export.js";
 
 function message(id) {
   return { id, acked: 0, retried: 0, ack() { this.acked++; }, retry() { this.retried++; } };
 }
 
+const legacyBump = {
+  type: "bump",
+  siteId: "site-1",
+  field: "views",
+  referer: "https://example.com",
+  visitorHash: "hash-1",
+  timestamp: 1,
+};
+
 describe("analytics queue events", () => {
-  it("forwards the visitor hash to bumpStat", async () => {
+  it("applies an enveloped bump through the ledger with the producer eventId", async () => {
     const calls = [];
-    await handleEvent({
-      type: "bump",
-      siteId: "site-1",
-      field: "views",
-      referer: "https://example.com",
-      visitorHash: "hash-1",
-      timestamp: 1,
-    }, new Map(), {}, {
-      bumpStatImpl: async (...args) => calls.push(args),
+    const envelope = {
+      v: 1,
+      eventId: "11111111-1111-4111-8111-111111111111",
+      eventType: "bump",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      correlationId: "req-1",
+      payload: legacyBump,
+    };
+    await handleEvent(envelope, new Map(), {}, {
+      messageId: "cf-msg-1",
+      applyBumpOnceImpl: async (identity, event) => { calls.push([identity, event]); return { outcome: "applied" }; },
     });
-    expect(calls).toEqual([["site-1", "views", "https://example.com", "hash-1"]]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toMatchObject({
+      eventId: envelope.eventId,
+      eventType: "bump",
+      correlationId: "req-1",
+      identitySource: "envelope",
+    });
+    expect(calls[0][1]).toEqual(legacyBump);
+  });
+
+  it("keeps legacy flat bump events consumable, identified by the delivery id only", async () => {
+    const calls = [];
+    await handleEvent(legacyBump, new Map(), {}, {
+      messageId: "cf-msg-legacy",
+      applyBumpOnceImpl: async (identity, event) => { calls.push([identity, event]); return { outcome: "applied" }; },
+    });
+    expect(calls[0][0].identitySource).toBe("cloudflare_message_id");
+    expect(calls[0][0].eventId).toContain("cf-msg-legacy");
+    expect(calls[0][1]).toEqual(legacyBump);
+  });
+
+  it("refuses a legacy bump with no identity at all", async () => {
+    await expect(handleEvent(legacyBump, new Map(), {}, {
+      applyBumpOnceImpl: async () => ({ outcome: "applied" }),
+    })).rejects.toThrow(/stable identity/);
   });
 });
 
@@ -49,6 +84,47 @@ describe("dead-letter queue persistence", () => {
     });
     expect(msg.acked).toBe(0);
     expect(msg.retried).toBe(1);
+  });
+
+  it("stores the envelope eventId and correlationId alongside the untouched body", async () => {
+    const calls = [];
+    const body = { v: 1, eventId: "evt-1", eventType: "bump", createdAt: "2026-09-01T00:00:00.000Z",
+      correlationId: "req-9", payload: { type: "bump", siteId: "site-1" } };
+    const msg = { id: "message-3", body, acked: 0, retried: 0, ack() { this.acked++; }, retry() { this.retried++; } };
+    await handleDlq({ queue: "events-dlq", messages: [msg] }, {}, undefined, {
+      execImpl: async (...args) => calls.push(args),
+      alertImpl: async () => {},
+    });
+    expect(calls[0][1]).toEqual(["message-3", "events-dlq", "bump", body, "evt-1", "req-9"]);
+    expect(msg.acked).toBe(1);
+  });
+
+  it("acks with a terminal critical record once the persistence retry budget is spent", async () => {
+    const logged = [];
+    const alerts = [];
+    const origError = console.error;
+    console.error = (line) => logged.push(JSON.parse(line));
+    try {
+      const msg = { id: "message-4", attempts: 3, body: { type: "click" }, acked: 0, retried: 0,
+        ack() { this.acked++; }, retry() { this.retried++; } };
+      const pending = [];
+      const ctx = { waitUntil(p) { pending.push(p); } };
+      await handleDlq({ queue: "events-dlq", messages: [msg] }, {}, ctx, {
+        execImpl: async () => { throw new Error("database unavailable"); },
+        alertImpl: async (...args) => { alerts.push(args); },
+        maxAttempts: 3,
+      });
+      await Promise.all(pending);
+      expect(msg.retried).toBe(0);
+      expect(msg.acked).toBe(1);
+      const terminal = logged.find((l) => l.event === "queue_dlq_persist_terminal");
+      expect(terminal).toMatchObject({ severity: "critical", attempt: 3, max_attempts: 3, message_id: "message-4" });
+      expect(JSON.stringify(terminal)).not.toContain("\"body\"");
+      expect(alerts.length).toBe(1);
+      expect(alerts[0][2]).toEqual(["message-4"]);
+    } finally {
+      console.error = origError;
+    }
   });
 });
 
@@ -85,10 +161,10 @@ describe("consumer heartbeat", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0][0]).toBe(
       `INSERT INTO consumer_heartbeat (name, last_seen, processed_count, failed_count)
-       VALUES ('consumer', now(), 0, 0)
+       VALUES ($1, now(), 0, 0), ('consumer', now(), 0, 0)
        ON CONFLICT (name) DO UPDATE SET last_seen = now()`
     );
-    expect(calls[0][1]).toEqual([]);
+    expect(calls[0][1]).toEqual([SCHEDULED_HEARTBEAT_NAME]);
     expect(row).toEqual({ last_seen: 1, processed_count: 17, failed_count: 4 });
   });
 });

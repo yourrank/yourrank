@@ -233,16 +233,33 @@ async function verifyBot() {
 async function verifyConsumer() {
   const consumer = await import(moduleUrl("apps/consumer/src/worker.js"));
   await consumer.refreshConsumerHeartbeat();
-  const response = await consumer.default.fetch(
-    new Request("https://yourrank.site/consumer/health"),
-    { DATABASE_URL: databaseUrl, HYPERDRIVE: { connectionString: databaseUrl } },
-    { waitUntil() {}, passThroughOnException() {} },
+  const env = {
+    DATABASE_URL: databaseUrl,
+    HYPERDRIVE: { connectionString: databaseUrl },
+    EVENTS_QUEUE: { async send() {}, async sendBatch() {} },
+  };
+  const ctx = { waitUntil() {}, passThroughOnException() {} };
+  const before = await sql.unsafe(
+    "SELECT name, last_seen FROM public.consumer_heartbeat WHERE name IN ('consumer', 'consumer_scheduled') ORDER BY name",
   );
+  // Readiness (current Workers) or the legacy health route (N-1 Workers that
+  // predate the liveness/readiness split and answer unknown paths with a plain
+  // "consumer ok") must answer 200 against this schema.
+  let response = await consumer.default.fetch(new Request("https://yourrank.site/consumer/ready"), env, ctx);
+  const readinessIsJson = (response.headers.get("content-type") || "").includes("application/json");
+  if (response.status === 404 || !readinessIsJson) {
+    response = await consumer.default.fetch(new Request("https://yourrank.site/consumer/health"), env, ctx);
+  } else {
+    const after = await sql.unsafe(
+      "SELECT name, last_seen FROM public.consumer_heartbeat WHERE name IN ('consumer', 'consumer_scheduled') ORDER BY name",
+    );
+    assert.deepEqual(after, before, "readiness probe must not refresh the heartbeat it verifies");
+  }
   assert.equal(response.status, 200);
   const [heartbeat] = await sql.unsafe(
-    "SELECT count(*)::int AS count FROM public.consumer_heartbeat WHERE name IN ('consumer', 'consumer_probe')",
+    "SELECT count(*)::int AS count FROM public.consumer_heartbeat WHERE name IN ('consumer', 'consumer_probe', 'consumer_scheduled')",
   );
-  assert.equal(heartbeat.count, 2);
+  assert.ok(heartbeat.count >= 2);
 }
 
 async function verifyMonitorContract() {
@@ -250,7 +267,7 @@ async function verifyMonitorContract() {
   assert.doesNotMatch(source, /@yourrank\/shared\/db|\bDATABASE_URL\b|\bpostgres\s*\(/);
   assert.match(source, /\/health/);
   assert.match(source, /\/bot\/health/);
-  assert.match(source, /\/consumer\/health/);
+  assert.match(source, /\/consumer\/(ready|health)/);
 }
 
 try {

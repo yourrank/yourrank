@@ -346,7 +346,10 @@ export function checkStagingConfig(worker, source) {
       if (!(Number(primary.max_retries) > 0)) problems.push(`${worker.config}: ${STAGING_QUEUES.events} consumer must retry before dead-lettering.`);
     }
     if (!dlq) problems.push(`${worker.config}: missing staging DLQ consumer for ${STAGING_QUEUES.dlq}.`);
-    else if (Number(dlq.max_retries) !== 0) problems.push(`${worker.config}: DLQ consumer must not retry (max_retries = 0).`);
+    else {
+      if (!(Number(dlq.max_retries) > 0)) problems.push(`${worker.config}: DLQ consumer needs a finite persistence retry budget (max_retries > 0).`);
+      if (dlq.dead_letter_queue) problems.push(`${worker.config}: DLQ consumer must not dead-letter again (DLQ-to-DLQ loop).`);
+    }
   } else if (consumers.length > 0) {
     problems.push(`${worker.config}: ${worker.key} must not consume a queue in staging.`);
   }

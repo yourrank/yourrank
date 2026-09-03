@@ -2,10 +2,11 @@
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
-import { detectTop3Changes, dispatchNotifyEvent, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
+import { detectTop3Changes, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
 import { RESERVED, slugify, hashPassword } from "./auth.js";
 import { logAudit } from "@yourrank/shared/audit";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
+import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { encrypt } from "@yourrank/shared/crypto";
 import { verifyBoardPasswordCookie } from "./board-password.js";
 import { detectImageMime, validateLogoData } from "./logo-validation.js";
@@ -26,14 +27,7 @@ function getTokenEncKey() {
 const DISCORD_WEBHOOK_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/.+/;
 
 function createNotifyQueue(env) {
-  return createQueueProducer(
-    env.EVENTS_QUEUE,
-    async (event) => {
-      if (event.type === "notify") {
-        await dispatchNotifyEvent({ one, query }, env, event);
-      }
-    }
-  );
+  return createQueueProducer(env.EVENTS_QUEUE, directQueueFallback, env);
 }
 
 // NOTE: chips + whyStats intentionally start empty. They render casino perks
