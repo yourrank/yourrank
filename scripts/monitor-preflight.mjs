@@ -24,10 +24,11 @@
 //     staging may declare alert integrations disabled, production may not
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseToml, parseSecretNames } from "./staging-preflight.mjs";
 
 export const MONITOR_CONFIG_PATH = "apps/monitor/wrangler.toml";
+export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 export const MONITOR_ENVIRONMENTS = Object.freeze({
   production: Object.freeze({
@@ -159,7 +160,7 @@ async function main() {
   if (!MONITOR_ENVIRONMENTS[environment]) {
     throw new Error("Usage: node scripts/monitor-preflight.mjs <production|staging>");
   }
-  const source = await readFile(resolve(process.cwd(), MONITOR_CONFIG_PATH), "utf8");
+  const source = await readFile(resolve(REPO_ROOT, MONITOR_CONFIG_PATH), "utf8");
   const problems = [
     ...checkMonitorConfig(source, environment),
     ...checkMonitorEnvironment(process.env, environment),
