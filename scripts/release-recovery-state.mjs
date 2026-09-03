@@ -1,4 +1,4 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -7,19 +7,26 @@ export const RELEASE_WORKERS = Object.freeze([
   { key: "bot", scriptName: "yourrank-bot" },
   { key: "consumer", scriptName: "yourrank-consumer" },
   { key: "monitor", scriptName: "yourrank-monitor" },
+  { key: "web", scriptName: "yourrank-web" },
 ]);
+
+export const BACKEND_WORKERS = Object.freeze(["leaderboard", "bot", "consumer", "monitor"]);
 
 export const RELEASE_STAGES = Object.freeze([
   "migrate",
   "deploy-leaderboard",
   "deploy-bot",
   "deploy-consumer",
-  "smoke-test",
+  "backend-readiness",
   "deploy-monitor",
+  "deploy-web",
+  "web-readiness",
+  "release-smoke",
 ]);
 
 const FAILED_RESULTS = new Set(["failure", "cancelled"]);
 const VERSION_ID = /^[0-9a-f-]{16,64}$/i;
+const COMMIT_SHA = /^[0-9a-f]{40}$/;
 
 function required(value, name) {
   if (!value) throw new Error(`${name} is required.`);
@@ -53,7 +60,9 @@ function normalizeVersions(versions, scriptName) {
     if (!VERSION_ID.test(versionId) || !Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
       throw new Error(`${scriptName}: active deployment contains an invalid version allocation.`);
     }
-    return { versionId, percentage };
+    const entry = { versionId, percentage };
+    if (version.tag !== undefined) entry.tag = version.tag;
+    return entry;
   }).sort((left, right) => left.versionId.localeCompare(right.versionId));
   const total = normalized.reduce((sum, version) => sum + version.percentage, 0);
   if (Math.abs(total - 100) > 0.001) {
@@ -82,6 +91,21 @@ export function latestDeploymentState(payload, scriptName) {
     createdOn: required(latest.created_on, `${scriptName} deployment timestamp`),
     versions: normalizeVersions(latest.versions, scriptName),
   };
+}
+
+// Wrangler `deploy --tag <sha>` stores the tag as the `workers/tag` version
+// annotation; the Versions API returns annotations on the version object.
+export function versionTag(versionPayload) {
+  const annotations = versionPayload?.annotations ?? versionPayload?.metadata?.annotations ?? {};
+  const tag = annotations["workers/tag"];
+  return typeof tag === "string" && tag.length > 0 ? tag : null;
+}
+
+export function versionSourceSha(workerState) {
+  const tags = new Set(workerState.versions.map((version) => version.tag ?? null));
+  if (tags.size !== 1) return null;
+  const [tag] = tags;
+  return COMMIT_SHA.test(tag ?? "") ? tag : null;
 }
 
 export function versionSpecs(workerState) {
@@ -117,13 +141,19 @@ export async function fetchReleaseState({
 
   const workers = {};
   for (const worker of RELEASE_WORKERS) {
-    const payload = await requestJson(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${worker.scriptName}/deployments`,
-      cloudflareToken,
-      fetchImpl,
-      `${worker.scriptName} deployments`,
-    );
-    workers[worker.key] = latestDeploymentState(payload, worker.scriptName);
+    const scriptUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${worker.scriptName}`;
+    const payload = await requestJson(`${scriptUrl}/deployments`, cloudflareToken, fetchImpl, `${worker.scriptName} deployments`);
+    const state = latestDeploymentState(payload, worker.scriptName);
+    for (const version of state.versions) {
+      const detail = await requestJson(
+        `${scriptUrl}/versions/${version.versionId}`,
+        cloudflareToken,
+        fetchImpl,
+        `${worker.scriptName} version ${version.versionId}`,
+      );
+      version.tag = versionTag(detail);
+    }
+    workers[worker.key] = state;
   }
   const migrations = normalizeMigrations(await requestJson(
     `https://api.supabase.com/v1/projects/${projectRef}/database/migrations`,
@@ -170,6 +200,44 @@ export function buildRecoveryPlan({ baseline, current, stages }) {
   };
 }
 
+export function buildReleaseManifest({ intendedReleaseSha, state, stages = {} }) {
+  if (!COMMIT_SHA.test(intendedReleaseSha ?? "")) throw new Error("intendedReleaseSha must be a full 40-character commit SHA.");
+  if (state?.schemaVersion !== 1) throw new Error("Unsupported or missing release-state schema.");
+  const workers = {};
+  const incoherent = [];
+  for (const worker of RELEASE_WORKERS) {
+    const workerState = required(state.workers?.[worker.key], `release state for ${worker.key}`);
+    const sourceSha = versionSourceSha(workerState);
+    workers[worker.key] = {
+      scriptName: worker.scriptName,
+      sourceSha,
+      allocation: versionSpecs(workerState),
+      versions: workerState.versions.map(({ versionId, percentage, tag }) => ({ versionId, percentage, tag: tag ?? null })),
+    };
+    if (sourceSha !== intendedReleaseSha) incoherent.push(worker.key);
+  }
+  const stagesFailed = RELEASE_STAGES.filter((stage) => FAILED_RESULTS.has(stages[stage]));
+  const stagesIncomplete = RELEASE_STAGES.filter((stage) => stages[stage] !== "success");
+  const promoted = incoherent.length === 0 && stagesIncomplete.length === 0;
+  const latestMigration = state.migrations.at(-1) ?? null;
+  return {
+    schemaVersion: 1,
+    recordedAt: new Date().toISOString(),
+    intendedReleaseSha,
+    promotedReleaseSha: promoted ? intendedReleaseSha : null,
+    promotion: promoted ? "promoted" : "refused",
+    incoherentWorkers: incoherent,
+    stagesFailed,
+    stagesIncomplete,
+    workers,
+    database: {
+      migrationVersion: latestMigration?.version ?? null,
+      migrationName: latestMigration?.name ?? null,
+      appliedMigrations: state.migrations.length,
+    },
+  };
+}
+
 async function writeOutputs(values) {
   const outputPath = required(process.env.GITHUB_OUTPUT, "GITHUB_OUTPUT");
   const lines = Object.entries(values).map(([key, value]) => `${key}=${value}`).join("\n");
@@ -190,7 +258,10 @@ function environmentStateOptions() {
 }
 
 function stateSummary(state) {
-  return RELEASE_WORKERS.map((worker) => `${worker.key}=${versionSpecs(state.workers[worker.key])}`).join(", ");
+  return RELEASE_WORKERS.map((worker) => {
+    const sha = versionSourceSha(state.workers[worker.key]);
+    return `${worker.key}=${versionSpecs(state.workers[worker.key])}${sha ? ` (${sha.slice(0, 12)})` : ""}`;
+  }).join(", ");
 }
 
 async function captureCommand() {
@@ -216,6 +287,7 @@ async function planCommand() {
     runtime_health_required: String(
       plan.migrationsAdded.length > 0 || ["leaderboard", "bot", "consumer"].some((key) => plan.workers[key].changed),
     ),
+    web_health_required: String(plan.workers.web.changed),
   };
   for (const worker of RELEASE_WORKERS) {
     outputs[`${worker.key}_changed`] = String(plan.workers[worker.key].changed);
@@ -265,12 +337,42 @@ async function verifyCommand() {
   await appendSummary("## Recovery state verification\n\nExact captured Worker version allocations restored. Database migrations were retained.");
 }
 
+async function promoteCommand() {
+  const intendedReleaseSha = required(process.env.GITHUB_SHA, "GITHUB_SHA");
+  const stages = JSON.parse(required(process.env.RELEASE_STAGE_RESULTS, "RELEASE_STAGE_RESULTS"));
+  const manifestPath = required(process.env.RELEASE_MANIFEST_PATH, "RELEASE_MANIFEST_PATH");
+  const state = await fetchReleaseState(environmentStateOptions());
+  const manifest = buildReleaseManifest({ intendedReleaseSha, state, stages });
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeOutputs({ promoted: String(manifest.promotion === "promoted"), promoted_release_sha: manifest.promotedReleaseSha ?? "" });
+  const rows = RELEASE_WORKERS.map((worker) => {
+    const entry = manifest.workers[worker.key];
+    return `| ${worker.key} | \`${entry.allocation}\` | ${entry.sourceSha ? `\`${entry.sourceSha}\`` : "unknown"} | ${entry.sourceSha === intendedReleaseSha ? "coherent" : "INCOHERENT"} |`;
+  }).join("\n");
+  await appendSummary(
+    `## Release provenance\n\n- Intended release SHA: \`${intendedReleaseSha}\`\n` +
+    `- Promoted release SHA: ${manifest.promotedReleaseSha ? `\`${manifest.promotedReleaseSha}\`` : "none (promotion refused)"}\n` +
+    `- Database migration version: ${manifest.database.migrationVersion ?? "unknown"} (${manifest.database.appliedMigrations} applied)\n\n` +
+    `| Worker | Active allocation | Source SHA | Coherence |\n|---|---|---|---|\n${rows}`,
+  );
+  console.log(`Release manifest written to ${manifestPath}`);
+  if (manifest.promotion !== "promoted") {
+    throw new Error(
+      `Release ${intendedReleaseSha} was not promoted: ` +
+      `incoherent workers [${manifest.incoherentWorkers.join(", ") || "none"}], ` +
+      `incomplete stages [${manifest.stagesIncomplete.join(", ") || "none"}].`,
+    );
+  }
+  console.log(`Promoted release ${intendedReleaseSha}: every production Worker serves this commit.`);
+}
+
 async function main() {
   const command = process.argv[2];
   if (command === "capture") return captureCommand();
   if (command === "plan") return planCommand();
   if (command === "verify") return verifyCommand();
-  throw new Error("Usage: node scripts/release-recovery-state.mjs <capture|plan|verify>");
+  if (command === "promote") return promoteCommand();
+  throw new Error("Usage: node scripts/release-recovery-state.mjs <capture|plan|verify|promote>");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

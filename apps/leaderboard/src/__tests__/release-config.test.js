@@ -14,7 +14,7 @@ import {
 
 const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
 
-const releaseState = ({ migrations = ["20260907000000"], leaderboard = "lb-old", bot = "bot-old", consumer = "consumer-old", monitor = "monitor-old" } = {}) => ({
+const releaseState = ({ migrations = ["20260907000000"], leaderboard = "lb-old", bot = "bot-old", consumer = "consumer-old", monitor = "monitor-old", web = "web-old" } = {}) => ({
   schemaVersion: 1,
   migrations: migrations.map((version) => ({ version, name: version })),
   workers: {
@@ -22,6 +22,7 @@ const releaseState = ({ migrations = ["20260907000000"], leaderboard = "lb-old",
     bot: { scriptName: "yourrank-bot", versions: [{ versionId: bot, percentage: 100 }] },
     consumer: { scriptName: "yourrank-consumer", versions: [{ versionId: consumer, percentage: 100 }] },
     monitor: { scriptName: "yourrank-monitor", versions: [{ versionId: monitor, percentage: 100 }] },
+    web: { scriptName: "yourrank-web", versions: [{ versionId: web, percentage: 100 }] },
   },
 });
 
@@ -30,8 +31,11 @@ const successfulStages = {
   "deploy-leaderboard": "success",
   "deploy-bot": "success",
   "deploy-consumer": "success",
-  "smoke-test": "success",
+  "backend-readiness": "success",
   "deploy-monitor": "success",
+  "deploy-web": "success",
+  "web-readiness": "success",
+  "release-smoke": "success",
 };
 
 describe("release configuration", () => {
@@ -94,7 +98,7 @@ describe("release configuration", () => {
   it("recovers a partially changed leaderboard when its deployment reports failure", () => {
     const baseline = releaseState();
     const current = releaseState({ migrations: ["20260907000000", "20260908000000"], leaderboard: "lb-new" });
-    const stages = { ...successfulStages, "deploy-leaderboard": "failure", "deploy-bot": "skipped", "deploy-consumer": "skipped", "smoke-test": "skipped", "deploy-monitor": "skipped" };
+    const stages = { ...successfulStages, "deploy-leaderboard": "failure", "deploy-bot": "skipped", "deploy-consumer": "skipped", "backend-readiness": "skipped", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     expect(shouldRunRecovery({ captureResult: "success", stages })).toBe(true);
     const partialMutation = buildRecoveryPlan({ baseline, current, stages });
     expect(partialMutation.restoreTargets).toEqual(["leaderboard"]);
@@ -110,7 +114,7 @@ describe("release configuration", () => {
   });
 
   it("restores only leaderboard when bot fails without changing production", () => {
-    const stages = { ...successfulStages, "deploy-bot": "failure", "deploy-consumer": "skipped", "smoke-test": "skipped", "deploy-monitor": "skipped" };
+    const stages = { ...successfulStages, "deploy-bot": "failure", "deploy-consumer": "skipped", "backend-readiness": "skipped", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     const plan = buildRecoveryPlan({ baseline: releaseState(), current: releaseState({ leaderboard: "lb-new" }), stages });
     expect(plan.restoreTargets).toEqual(["leaderboard"]);
     expect(plan.unchangedWorkers).toContain("bot");
@@ -124,7 +128,7 @@ describe("release configuration", () => {
   });
 
   it("detects a consumer partial mutation even when its deployment reports failure", () => {
-    const stages = { ...successfulStages, "deploy-consumer": "failure", "smoke-test": "skipped", "deploy-monitor": "skipped" };
+    const stages = { ...successfulStages, "deploy-consumer": "failure", "backend-readiness": "skipped", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     const plan = buildRecoveryPlan({
       baseline: releaseState(),
       current: releaseState({ leaderboard: "lb-new", bot: "bot-new", consumer: "consumer-new" }),
@@ -133,8 +137,8 @@ describe("release configuration", () => {
     expect(plan.restoreTargets).toEqual(["leaderboard", "bot", "consumer"]);
   });
 
-  it("restores every changed backend Worker when smoke fails", () => {
-    const stages = { ...successfulStages, "smoke-test": "failure", "deploy-monitor": "skipped" };
+  it("restores every changed backend Worker when backend readiness fails", () => {
+    const stages = { ...successfulStages, "backend-readiness": "failure", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     const plan = buildRecoveryPlan({
       baseline: releaseState(),
       current: releaseState({ leaderboard: "lb-new", bot: "bot-new", consumer: "consumer-new" }),
@@ -151,7 +155,7 @@ describe("release configuration", () => {
   });
 
   it("enters recovery for a cancelled release after mutation and targets observed changes", () => {
-    const stages = { ...successfulStages, "deploy-consumer": "cancelled", "smoke-test": "skipped", "deploy-monitor": "skipped" };
+    const stages = { ...successfulStages, "deploy-consumer": "cancelled", "backend-readiness": "skipped", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     expect(shouldRunRecovery({ captureResult: "success", stages })).toBe(true);
     expect(buildRecoveryPlan({
       baseline: releaseState(),
@@ -187,7 +191,7 @@ describe("release configuration", () => {
     expect(workflow).toContain("capture-release-state:");
     expect(workflow).toMatch(/migrate:\s+needs: \[capture-release-state, n1-compatibility\]/);
     expect(workflow).toContain("release-finalizer:");
-    for (const job of ["migrate", "deploy-leaderboard", "deploy-bot", "deploy-consumer", "smoke-test", "deploy-monitor"]) {
+    for (const job of ["migrate", "deploy-leaderboard", "deploy-bot", "deploy-consumer", "backend-readiness", "deploy-monitor", "deploy-web", "web-readiness", "release-smoke"]) {
       expect(workflow).toContain(`      - ${job}`);
       expect(workflow).toContain(`needs.${job}.result`);
     }
@@ -201,7 +205,7 @@ describe("release configuration", () => {
   it("keeps recovery command and verification failures red", async () => {
     const workflow = await rootFile(".github/workflows/deploy.yml");
     const finalizer = workflow.slice(workflow.indexOf("  release-finalizer:"));
-    const stages = { ...successfulStages, "deploy-leaderboard": "failure", "deploy-bot": "skipped", "deploy-consumer": "skipped", "smoke-test": "skipped", "deploy-monitor": "skipped" };
+    const stages = { ...successfulStages, "deploy-leaderboard": "failure", "deploy-bot": "skipped", "deploy-consumer": "skipped", "backend-readiness": "skipped", "deploy-monitor": "skipped", "deploy-web": "skipped", "web-readiness": "skipped", "release-smoke": "skipped" };
     expect(buildRecoveryPlan({
       baseline: releaseState(),
       current: releaseState({ leaderboard: "lb-new" }),
