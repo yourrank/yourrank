@@ -67,7 +67,8 @@ describe("release configuration", () => {
     expect(workflow).toContain("node scripts/check-migration-compatibility.mjs");
     expect(workflow).toContain("CLOUDFLARE_WORKERS_PLAN: ${{ vars.CLOUDFLARE_WORKERS_PLAN }}");
     expect(workflow).toMatch(/capture-release-state:[\s\S]*?needs: release-preflight/);
-    expect(workflow).toMatch(/migrate:\s+needs: capture-release-state/);
+    expect(workflow).toMatch(/n1-compatibility:[\s\S]*?needs: release-preflight/);
+    expect(workflow).toMatch(/migrate:\s+needs: \[capture-release-state, n1-compatibility\]/);
   });
 
   it("keeps automatic pre-deploy migrations expand-only", () => {
@@ -184,7 +185,7 @@ describe("release configuration", () => {
   it("keeps one always-evaluated finalizer connected to every production mutation stage", async () => {
     const workflow = await rootFile(".github/workflows/deploy.yml");
     expect(workflow).toContain("capture-release-state:");
-    expect(workflow).toMatch(/migrate:\s+needs: capture-release-state/);
+    expect(workflow).toMatch(/migrate:\s+needs: \[capture-release-state, n1-compatibility\]/);
     expect(workflow).toContain("release-finalizer:");
     for (const job of ["migrate", "deploy-leaderboard", "deploy-bot", "deploy-consumer", "smoke-test", "deploy-monitor"]) {
       expect(workflow).toContain(`      - ${job}`);
@@ -215,6 +216,27 @@ describe("release configuration", () => {
     expect(finalizer).toContain("if: ${{ always() && (steps.plan.outcome != 'success' || steps.plan.outputs.release_failed == 'true') }}");
     expect(finalizer).toContain("Recovered Worker versions did not return to a coherent healthy state after bounded retries");
     expect(finalizer).not.toMatch(/supabase\s+(?:db reset|migration down)/);
+  });
+
+  it("gates production migration on the semantic N-1 compatibility suite", async () => {
+    const [deploy, prCheck, baseline, packageJson] = await Promise.all([
+      rootFile(".github/workflows/deploy.yml"),
+      rootFile(".github/workflows/pr-check.yml"),
+      rootFile("release/n1-production-baseline.json"),
+      rootFile("package.json"),
+    ]);
+
+    expect(deploy).toContain("n1-compatibility:");
+    expect(deploy).toMatch(/migrate:\s+needs: \[capture-release-state, n1-compatibility\]/);
+    expect(deploy).toContain("bun run verify:n1-compatibility");
+    expect(prCheck).toContain("bun run verify:n1-compatibility");
+    expect(packageJson).toContain('"verify:n1-compatibility"');
+
+    const evidence = JSON.parse(baseline);
+    expect(evidence.schema.baselineThrough).toBe("20260906000000");
+    expect(evidence.workers.leaderboard.liveSourceSha).toBe("5fdcc1d005db05105b7ec645972eb6799af97d69");
+    expect(evidence.workers.bot.liveSourceSha).toBe("d36b6253230e6dad3a535feacc02845e0463f52b");
+    expect(evidence.workers.consumer.liveSourceSha).toBe("d36b6253230e6dad3a535feacc02845e0463f52b");
   });
 
   it("fails staging before code deployment and applies schema first", async () => {
