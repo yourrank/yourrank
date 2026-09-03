@@ -1,46 +1,168 @@
-name: Deploy Staging
+name: Staging release
 
-# Manual trigger only — staging deploys are on-demand, not automatic.
-# Trigger from the GitHub Actions tab with "Run workflow".
+# Production-like staging release verification (F-012). Runs the same topology as
+# .github/workflows/deploy.yml — preflight, exact state capture, semantic N-1 gate,
+# expand-only migrations, Leaderboard -> Bot -> Consumer, backend readiness,
+# Monitor, Web, web readiness, cross-service smoke, finalizer — against isolated
+# staging resources only (yourrank-*-staging Workers, yourrank-events-staging queues,
+# a dedicated staging Supabase project and Hyperdrive config).
+#
+# This workflow can never promote production: every Wrangler command targets
+# `--env staging`, the recovery machinery runs with RELEASE_ENVIRONMENT=staging, the
+# concurrency group is separate from `production-mutation`, and it uses only the
+# GitHub `staging` environment (no production Supabase names are accepted).
+#
+# Manual trigger only. `inject_failure` exists solely to exercise the F-003/F-005
+# finalizer against staging: fail after backend mutation, after Web mutation, or
+# make the recovery command itself fail so the run stays red.
+#
+# GitHub `staging` environment contract (validated by scripts/staging-preflight.mjs):
+#   vars:    STAGING_HYPERDRIVE_ID, STAGING_SUPABASE_PROJECT_REF, STAGING_WEB_URL,
+#            STAGING_MONITOR_URL, STAGING_DISABLED_INTEGRATIONS (optional)
+#   secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, STAGING_SUPABASE_ACCESS_TOKEN,
+#            STAGING_SUPABASE_DB_PASSWORD, STAGING_RESEND_API_KEY, STAGING_MAIL_FROM,
+#            STAGING_TOKEN_ENC_KEY, STAGING_IP_HASH_SALT, STAGING_MONITOR_CHECK_SECRET
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      inject_failure:
+        description: "Staging-only failure injection for finalizer verification"
+        type: choice
+        default: none
+        options:
+          - none
+          - after-backend-mutation
+          - after-web-mutation
+          - recovery-command
 
 permissions:
   contents: read
 
+# Staging-only lock. Deliberately distinct from `production-mutation` so a staging
+# release can never queue behind or block a production release/rollback, and
+# cancel-in-progress is off so a superseded staging release still reaches its finalizer.
 concurrency:
-  group: deploy-staging
-  cancel-in-progress: true
+  group: staging-mutation
+  cancel-in-progress: false
+
+env:
+  RELEASE_ENVIRONMENT: staging
+  STAGING_APEX: https://staging.yourrank.site
 
 jobs:
-  preflight:
+  staging-preflight:
+    name: Validate staging configuration contract
     runs-on: ubuntu-latest
     environment: staging
     steps:
       - uses: actions/checkout@v7
-      - name: Refuse incomplete or production-shared staging infrastructure
+      - name: Validate GitHub staging environment contract (names only)
         env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
           STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          STAGING_MONITOR_URL: ${{ vars.STAGING_MONITOR_URL }}
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
           STAGING_RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
           STAGING_MAIL_FROM: ${{ secrets.STAGING_MAIL_FROM }}
+          STAGING_TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
+          STAGING_IP_HASH_SALT: ${{ secrets.STAGING_IP_HASH_SALT }}
+          STAGING_MONITOR_CHECK_SECRET: ${{ secrets.STAGING_MONITOR_CHECK_SECRET }}
+        run: node scripts/staging-preflight.mjs environment
+      - name: Render staging Hyperdrive id and refuse placeholder or production resources
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
+      - name: Validate migration compatibility window
+        run: node scripts/check-migration-compatibility.mjs
+      - name: Record failure injection mode
+        if: ${{ inputs.inject_failure != 'none' }}
         run: |
-          set -e
-          if grep -Rqs 'STAGING_HYPERDRIVE_ID_PLACEHOLDER' apps/leaderboard/wrangler.toml apps/bot/wrangler.toml apps/consumer/wrangler.toml apps/web/wrangler.toml; then
-            echo "::error::Staging Hyperdrive IDs are not configured; refusing a partial deploy."
-            exit 1
-          fi
-          for name in STAGING_SUPABASE_PROJECT_REF STAGING_SUPABASE_ACCESS_TOKEN STAGING_SUPABASE_DB_PASSWORD STAGING_RESEND_API_KEY STAGING_MAIL_FROM; do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is required for a staging deployment."
-              exit 1
-            fi
-          done
+          echo "::notice::Staging failure injection enabled: ${{ inputs.inject_failure }} (staging Workers only)."
+          echo "## Staging failure injection: \`${{ inputs.inject_failure }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  capture-staging-state:
+    name: Capture exact pre-mutation staging state
+    needs: staging-preflight
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      state: ${{ steps.capture.outputs.state }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Capture staging Worker versions and applied migrations
+        id: capture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+        run: node scripts/release-recovery-state.mjs capture
+      - name: Verify migration baseline is recorded in staging
+        env:
+          RELEASE_STATE: ${{ steps.capture.outputs.state }}
+        run: node scripts/check-migration-compatibility.mjs baseline-applied
+
+  # F-004: the same semantic N-1 gate production runs, executed from the staging branch.
+  n1-compatibility:
+    name: Semantic N-1 Compatibility
+    needs: staging-preflight
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: yourrank_n1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - name: Install current dependencies
+        run: bun install --frozen-lockfile
+      - name: Read production N-1 source refs
+        id: n1-baseline
+        run: node -e "const fs=require('fs'),m=require('./release/n1-production-baseline.json');fs.appendFileSync(process.env.GITHUB_OUTPUT,'coherent='+m.coherentRollbackSourceSha+'\nleaderboard='+m.workers.leaderboard.liveSourceSha+'\n')"
+      - name: Check out coherent rollback source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.n1-baseline.outputs.coherent }}
+          path: .n1/coherent
+          persist-credentials: false
+      - name: Check out live Leaderboard source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.n1-baseline.outputs.leaderboard }}
+          path: .n1/leaderboard
+          persist-credentials: false
+      - name: Build exact N-1 source dependencies
+        run: |
+          bun install --cwd .n1/coherent --frozen-lockfile --ignore-scripts
+          bun run --cwd .n1/coherent/packages/shared build
+          bun install --cwd .n1/leaderboard --frozen-lockfile --ignore-scripts
+          bun run --cwd .n1/leaderboard/packages/shared build
+          bun run --cwd packages/shared build
+      - name: Verify N-1 Workers against the expanded schema
+        env:
+          N1_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_n1_test
+        run: bun run verify:n1-compatibility
 
   migrate-staging:
-    needs: preflight
+    name: Apply expand-only migrations to the staging database
+    needs: [capture-staging-state, n1-compatibility]
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -49,18 +171,23 @@ jobs:
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
         with:
           version: 2.39.2
-      - name: Apply staging migrations before Worker code
+      - name: Link the staging project and push migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
           STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
         run: |
           set -e
+          if [ "$STAGING_SUPABASE_PROJECT_REF" = "lygcqzjxlqbvymkfjvel" ]; then
+            echo "::error::STAGING_SUPABASE_PROJECT_REF is the production project — refusing to migrate."
+            exit 1
+          fi
           supabase link --project-ref "$STAGING_SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
           supabase db push --include-all
 
   deploy-leaderboard-staging:
-    needs: [migrate-staging, deploy-web-staging, deploy-consumer-staging]
+    name: Deploy Leaderboard (staging)
+    needs: migrate-staging
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -69,72 +196,47 @@ jobs:
         with:
           bun-version: '1.3.0'
       - run: bun install --frozen-lockfile
-      - name: Audit dependencies
-        run: bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg
-        # sharp <0.35.0 (transitive via wrangler, dev-only) and brace-expansion <=5.0.7
-        # (transitive via eslint, dev-only) are tracked separately; both are build-time-only.
-      - name: Run leaderboard tests
+      - name: Build shared
+        working-directory: packages/shared
+        run: bun run build
+      - name: Run tests
         run: bun run test
       - name: Build leaderboard
         working-directory: apps/leaderboard
         run: node build.js
+      - name: Render staging Hyperdrive id
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
           MAIL_FROM: ${{ secrets.STAGING_MAIL_FROM }}
+          TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/leaderboard
-          command: deploy --env staging
+          environment: staging
+          command: deploy --env staging --tag ${{ github.sha }} --message staging-${{ github.sha }}-run-${{ github.run_id }}
           wranglerVersion: "4.106.0"
           secrets: |
             RESEND_API_KEY
             MAIL_FROM
-
-  deploy-web-staging:
-    needs: migrate-staging
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: '1.3.0'
-      - run: bun install --frozen-lockfile
-      - name: Build, test, and deploy the staging marketing Worker
-        working-directory: apps/web
+            TOKEN_ENC_KEY
+      - name: Verify deployed secret contract
+        working-directory: apps/leaderboard
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER: leaderboard
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
         run: |
-          bun run lint
-          bun run test
-          bun run build:worker
-          bun run deploy:ci -- --env staging
-
-  deploy-consumer-staging:
-    needs: migrate-staging
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: '1.3.0'
-      - run: bun install --frozen-lockfile
-      - name: Test consumer
-        working-directory: apps/consumer
-        run: bun test
-      - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/consumer
-          command: deploy --env staging
-          wranglerVersion: "4.106.0"
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
+            node ../../scripts/staging-preflight.mjs worker-secrets
 
   deploy-bot-staging:
+    name: Deploy Bot (staging)
     needs: [migrate-staging, deploy-leaderboard-staging]
     runs-on: ubuntu-latest
     environment: staging
@@ -144,54 +246,44 @@ jobs:
         with:
           bun-version: '1.3.0'
       - run: bun install --frozen-lockfile
-      - name: Audit dependencies
-        run: bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg
-        # sharp <0.35.0 (transitive via wrangler, dev-only) and brace-expansion <=5.0.7
-        # (transitive via eslint, dev-only) are tracked separately; both are build-time-only.
-      - name: Run bot tests
-        run: bun run test
+      - name: Build shared
+        working-directory: packages/shared
+        run: bun run build
       - name: Typecheck bot
         working-directory: apps/bot
         run: bun run typecheck
+      - name: Render staging Hyperdrive id
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
+        env:
+          TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
+          IP_HASH_SALT: ${{ secrets.STAGING_IP_HASH_SALT }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/bot
-          command: deploy --env staging
+          environment: staging
+          command: deploy --env staging --tag ${{ github.sha }} --message staging-${{ github.sha }}-run-${{ github.run_id }}
           wranglerVersion: "4.106.0"
-
-  smoke-test-staging:
-    needs: [deploy-leaderboard-staging, deploy-bot-staging]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for Cloudflare propagation
-        run: sleep 15
-
-      - name: "Smoke: staging health"
+          secrets: |
+            TOKEN_ENC_KEY
+            IP_HASH_SALT
+      - name: Verify deployed secret contract
+        working-directory: apps/bot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER: bot
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
         run: |
-          RESPONSE=$(curl -sS -L --max-time 20 -w '\n%{http_code}' https://staging.yourrank.site/health || true)
-          STATUS=$(printf '%s\n' "$RESPONSE" | tail -n1)
-          BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
-          if [ "$STATUS" = "200" ] && printf '%s' "$BODY" | jq -e '.db == true and .email_verification.configured == true' >/dev/null 2>&1; then
-            echo "OK: staging health and creator email delivery are ready"
-          else
-            echo "::error::Staging health failed (HTTP $STATUS): $BODY"
-            exit 1
-          fi
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
+            node ../../scripts/staging-preflight.mjs worker-secrets
 
-      - name: "Smoke: staging Telegram dashboard"
-        run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://staging.yourrank.site/dashboard/telegram || true)
-          if [ "$STATUS" = "200" ]; then
-            echo "OK: staging Telegram dashboard HTTP $STATUS"
-          else
-            echo "WARNING: staging Telegram dashboard returned HTTP $STATUS"
-            exit 1
-          fi
-
-  deploy-monitor-staging:
-    needs: smoke-test-staging
+  deploy-consumer-staging:
+    name: Deploy queue consumer (staging)
+    needs: [migrate-staging, deploy-bot-staging]
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -200,23 +292,431 @@ jobs:
         with:
           bun-version: '1.3.0'
       - run: bun install --frozen-lockfile
-      - name: Test and typecheck monitor
-        working-directory: apps/monitor
+      - name: Build shared
+        working-directory: packages/shared
+        run: bun run build
+      - name: Render staging Hyperdrive id
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
+      - name: Verify deployed secret contract
+        working-directory: apps/consumer
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER: consumer
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
         run: |
-          bun test
-          bun run typecheck
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
+            node ../../scripts/staging-preflight.mjs worker-secrets
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/monitor
-          command: deploy --env staging
+          workingDirectory: apps/consumer
+          environment: staging
+          command: deploy --env staging --tag ${{ github.sha }} --message staging-${{ github.sha }}-run-${{ github.run_id }}
           wranglerVersion: "4.106.0"
 
-      - name: Staging deploy summary
-        if: always()
+  # Backend-local readiness against the staging apex only. The injected
+  # `after-backend-mutation` failure happens here: Workers were mutated, Web was not.
+  backend-readiness-staging:
+    name: Backend-local readiness (staging)
+    needs: [deploy-leaderboard-staging, deploy-bot-staging, deploy-consumer-staging]
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Backend: leaderboard health endpoint reachable"
         run: |
-          echo "==========================================="
-          echo "STAGING DEPLOY COMPLETE"
-          echo "Commit: ${{ github.sha }}"
-          echo "==========================================="
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 10 "$STAGING_APEX/health" || true)
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "503" ]; then
+              echo "OK: leaderboard /health answers HTTP $STATUS (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i/6: HTTP $STATUS — retrying in 10s…"
+            sleep 10
+          done
+          echo "FAIL: leaderboard /health not reachable after 6 attempts"
+          exit 1
+      - name: "Backend: DB connectivity through the staging Hyperdrive"
+        run: |
+          RESPONSE=$(curl -sS -L --max-time 20 -w '\n%{http_code}' "$STAGING_APEX/health" || true)
+          STATUS=$(printf '%s\n' "$RESPONSE" | tail -n1)
+          BODY=$(printf '%s\n' "$RESPONSE" | sed '$d')
+          if [ "$STATUS" != "200" ] && [ "$STATUS" != "503" ]; then
+            echo "FAIL: /health returned HTTP $STATUS — response: $BODY"; exit 1
+          fi
+          if ! printf '%s' "$BODY" | jq -e '.db == true' >/dev/null 2>&1; then
+            echo "FAIL: /health reported db != true — response: $BODY"; exit 1
+          fi
+          if ! printf '%s' "$BODY" | jq -e '.email_verification.configured == true' >/dev/null 2>&1; then
+            echo "FAIL: staging email delivery (RESEND_API_KEY/MAIL_FROM) is not configured — response: $BODY"; exit 1
+          fi
+          echo "OK: /health HTTP $STATUS with db=true"
+      - name: "Backend: bot worker + database"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/r/smoke-probe-ci")
+          if [ "$STATUS" = "404" ]; then
+            echo "OK: bot worker + DB healthy (HTTP 404 — slug not found, as expected)"
+          else
+            echo "FAIL: unexpected HTTP $STATUS from bot worker"; exit 1
+          fi
+      - name: "Backend: Telegram dashboard"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/dashboard/telegram")
+          [ "$STATUS" = "200" ] || { echo "FAIL: Telegram dashboard returned HTTP $STATUS"; exit 1; }
+          echo "OK: Telegram dashboard HTTP $STATUS"
+      - name: "Backend: consumer health ping (queue consumer bound to yourrank-events-staging)"
+        run: |
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$STAGING_APEX/consumer/health" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: consumer /health returned HTTP 200 (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i/6: consumer /health HTTP $STATUS — retrying in 10s…"
+            sleep 10
+          done
+          echo "FAIL: consumer /health did not return 200 after 6 attempts"
+          exit 1
+      - name: "Backend: queue processing (staging DLQ health via leaderboard /health)"
+        run: |
+          BODY=$(curl -sS -L --max-time 20 "$STAGING_APEX/health" || true)
+          if ! printf '%s' "$BODY" | jq -e '.dlq != null and .dlq.error == null and .dlq.pending != null' >/dev/null 2>&1; then
+            echo "FAIL: /health could not read the staging DLQ table through Hyperdrive — response: $BODY"; exit 1
+          fi
+          echo "OK: staging DLQ health readable (pending=$(printf '%s' "$BODY" | jq -r '.dlq.pending'))"
+      - name: Staging-only failure injection (after backend mutation)
+        if: ${{ inputs.inject_failure == 'after-backend-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}
+        run: |
+          echo "::error::Injected staging failure after backend mutation; finalizer must restore Leaderboard/Bot/Consumer and leave Web untouched."
+          exit 1
+
+  deploy-monitor-staging:
+    name: Deploy uptime monitor (staging)
+    needs: [backend-readiness-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+    if: success()
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - run: bun install --frozen-lockfile
+      - name: Typecheck monitor
+        working-directory: apps/monitor
+        run: bun run typecheck
+      - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
+        env:
+          MONITOR_CHECK_SECRET: ${{ secrets.STAGING_MONITOR_CHECK_SECRET }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/monitor
+          environment: staging
+          command: deploy --env staging --tag ${{ github.sha }} --message staging-${{ github.sha }}-run-${{ github.run_id }}
+          wranglerVersion: "4.106.0"
+          secrets: |
+            MONITOR_CHECK_SECRET
+      - name: Verify deployed secret contract
+        working-directory: apps/monitor
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER: monitor
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
+        run: |
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
+            node ../../scripts/staging-preflight.mjs worker-secrets
+
+  deploy-web-staging:
+    name: Deploy Next.js web Worker (staging)
+    needs: [backend-readiness-staging, deploy-monitor-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+    if: success()
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - run: bun install --frozen-lockfile
+      - name: Build shared
+        working-directory: packages/shared
+        run: bun run build
+      - name: Typecheck web
+        working-directory: apps/web
+        run: bun run typecheck
+      - name: Render staging Hyperdrive id
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
+      - name: Build web worker
+        working-directory: apps/web
+        run: bun run build:worker
+      - name: Verify deployed secret contract
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER: web
+          STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
+        run: |
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
+            node ../../scripts/staging-preflight.mjs worker-secrets
+      - name: Deploy web worker tagged with the release SHA
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun run deploy:ci -- --env staging --tag "${{ github.sha }}" --message staging-${{ github.sha }}-run-${{ github.run_id }}
+
+  web-readiness-staging:
+    name: Web-local readiness (staging)
+    needs: [deploy-web-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: "Web: staging marketing Worker serves its homepage and pricing directly"
+        env:
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+        run: |
+          for i in $(seq 1 12); do
+            HOME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/" || true)
+            PRICING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/pricing" || true)
+            if [ "$HOME_STATUS" = "200" ] && [ "$PRICING_STATUS" = "200" ]; then
+              echo "OK: staging web Worker home=$HOME_STATUS pricing=$PRICING_STATUS (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i/12: home=$HOME_STATUS pricing=$PRICING_STATUS — retrying in 10s…"
+            sleep 10
+          done
+          echo "FAIL: staging web Worker not serving marketing pages after 12 attempts"
+          exit 1
+
+  # Final integration gate: staging apex -> Leaderboard -> service binding -> Web,
+  # plus the monitor's protected manual check. The injected `after-web-mutation`
+  # failure happens here: every Worker has been mutated and must be restored.
+  release-smoke-staging:
+    name: Cross-service release smoke (staging)
+    needs: [backend-readiness-staging, web-readiness-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: "Integration: staging apex homepage proxied from Leaderboard to Web"
+        run: |
+          for i in $(seq 1 6); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$STAGING_APEX/" || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "OK: staging apex / HTTP $STATUS (attempt $i)"
+              exit 0
+            fi
+            echo "Attempt $i/6: HTTP $STATUS — retrying in 10s…"
+            sleep 10
+          done
+          echo "FAIL: staging apex homepage not returning 200 after 6 attempts"
+          exit 1
+      - name: "Integration: staging apex pricing proxied from Leaderboard to Web"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$STAGING_APEX/pricing")
+          [ "$STATUS" = "200" ] || { echo "FAIL: pricing returned HTTP $STATUS"; exit 1; }
+          echo "OK: pricing HTTP $STATUS"
+      - name: "Integration: staging apex links into the dashboard journey"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$STAGING_APEX/dashboard/telegram")
+          [ "$STATUS" = "200" ] || { echo "FAIL: dashboard entry returned HTTP $STATUS"; exit 1; }
+          echo "OK: dashboard entry HTTP $STATUS"
+      - name: "Integration: monitor Worker health and protected manual check against staging"
+        env:
+          STAGING_MONITOR_URL: ${{ vars.STAGING_MONITOR_URL }}
+          MONITOR_CHECK_SECRET: ${{ secrets.STAGING_MONITOR_CHECK_SECRET }}
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_MONITOR_URL/health")
+          [ "$STATUS" = "200" ] || { echo "FAIL: monitor /health returned HTTP $STATUS"; exit 1; }
+          UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_MONITOR_URL/check")
+          [ "$UNAUTH" = "401" ] || { echo "FAIL: monitor /check is not protected (HTTP $UNAUTH)"; exit 1; }
+          BODY=$(curl -sS --max-time 60 -H "Authorization: Bearer $MONITOR_CHECK_SECRET" "$STAGING_MONITOR_URL/check")
+          if ! printf '%s' "$BODY" | jq -e 'type == "array" and length > 0 and all(.[]; .ok == true)' >/dev/null 2>&1; then
+            echo "FAIL: monitor checks against the staging target did not all pass:"
+            printf '%s\n' "$BODY" | jq '.[] | select(.ok != true) | {name, status, error}' || printf '%s\n' "$BODY"
+            exit 1
+          fi
+          echo "OK: monitor /health 200, /check protected, all monitor checks ok"
+      - name: Staging-only failure injection (after web mutation)
+        if: ${{ inputs.inject_failure == 'after-web-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}
+        run: |
+          echo "::error::Injected staging failure after Web mutation; finalizer must restore all five staging Workers."
+          exit 1
+
+  staging-finalizer:
+    name: Finalize staging release or recover exact staging state
+    needs:
+      - capture-staging-state
+      - migrate-staging
+      - deploy-leaderboard-staging
+      - deploy-bot-staging
+      - deploy-consumer-staging
+      - backend-readiness-staging
+      - deploy-monitor-staging
+      - deploy-web-staging
+      - web-readiness-staging
+      - release-smoke-staging
+    if: ${{ always() && needs.capture-staging-state.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+      BASELINE_RELEASE_STATE: ${{ needs.capture-staging-state.outputs.state }}
+      RELEASE_STAGE_RESULTS: >-
+        {"migrate":"${{ needs.migrate-staging.result }}","deploy-leaderboard":"${{ needs.deploy-leaderboard-staging.result }}","deploy-bot":"${{ needs.deploy-bot-staging.result }}","deploy-consumer":"${{ needs.deploy-consumer-staging.result }}","backend-readiness":"${{ needs.backend-readiness-staging.result }}","deploy-monitor":"${{ needs.deploy-monitor-staging.result }}","deploy-web":"${{ needs.deploy-web-staging.result }}","web-readiness":"${{ needs.web-readiness-staging.result }}","release-smoke":"${{ needs.release-smoke-staging.result }}"}
+      RELEASE_MANIFEST_PATH: ${{ github.workspace }}/staging-release-manifest.json
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Observe staging and build deterministic recovery plan
+        id: plan
+        run: node scripts/release-recovery-state.mjs plan
+
+      # Staging "promotion" only records provenance for the staging Workers; it never
+      # touches production state.
+      - name: Record staging release provenance manifest
+        id: promote
+        if: ${{ steps.plan.outputs.release_failed == 'false' }}
+        run: node scripts/release-recovery-state.mjs promote
+
+      - name: Upload staging provenance manifest
+        if: ${{ always() && steps.promote.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-release-manifest-${{ github.sha }}
+          path: ${{ github.workspace }}/staging-release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record failed release with no observed staging mutation
+        if: ${{ steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.mutation_observed == 'false' }}
+        run: |
+          echo "## Recovery not required" >> "$GITHUB_STEP_SUMMARY"
+          echo "The staging release failed, but staging still matches the captured pre-mutation state." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Revalidate retained migration compatibility
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.migrations_changed == 'true' }}
+        run: node scripts/check-migration-compatibility.mjs
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' }}
+        with:
+          bun-version: '1.3.0'
+
+      - name: Install pinned recovery dependencies
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' }}
+        run: bun install --frozen-lockfile
+
+      # Staging-only: make the first recovery command fail so the run must stay red.
+      - name: Staging-only failure injection (recovery command)
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' && inputs.inject_failure == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging' }}
+        run: |
+          echo "::error::Injected staging recovery-command failure; the release must remain red and verify must not report a restored state."
+          exit 1
+
+      - name: Restore exact Leaderboard version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        working-directory: apps/leaderboard
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.leaderboard_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Bot version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        working-directory: apps/bot
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.bot_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Consumer version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        working-directory: apps/consumer
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.consumer_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Monitor version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        working-directory: apps/monitor
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.monitor_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Web version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        working-directory: apps/web
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.web_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Verify exact Worker state and retained migration history
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.mutation_observed == 'true' }}
+        run: node scripts/release-recovery-state.mjs verify
+
+      - name: Verify recovered staging backend health with bounded retries
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.runtime_health_required == 'true' }}
+        run: |
+          for attempt in $(seq 1 6); do
+            HEALTH_RESPONSE=$(curl -sS -L --max-time 20 -w '\n%{http_code}' "$STAGING_APEX/health" || true)
+            HEALTH_STATUS=$(printf '%s\n' "$HEALTH_RESPONSE" | tail -n1)
+            HEALTH_BODY=$(printf '%s\n' "$HEALTH_RESPONSE" | sed '$d')
+            BOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/r/smoke-probe-ci" || true)
+            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_APEX/consumer/health" || true)
+            if { [ "$HEALTH_STATUS" = "200" ] || [ "$HEALTH_STATUS" = "503" ]; } \
+              && printf '%s' "$HEALTH_BODY" | jq -e '.db == true' >/dev/null 2>&1 \
+              && [ "$BOT_STATUS" = "404" ] \
+              && [ "$CONSUMER_STATUS" = "200" ]; then
+              echo "Recovered staging backend is coherent (health=$HEALTH_STATUS, bot=$BOT_STATUS, consumer=$CONSUMER_STATUS)."
+              exit 0
+            fi
+            echo "Recovery health attempt $attempt/6 failed (health=$HEALTH_STATUS, bot=$BOT_STATUS, consumer=$CONSUMER_STATUS)."
+            [ "$attempt" = "6" ] || sleep 10
+          done
+          echo "::error::Recovered staging Worker versions did not return to a coherent healthy state."
+          exit 1
+
+      - name: Verify recovered staging Web health with bounded retries
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_health_required == 'true' }}
+        env:
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+        run: |
+          for attempt in $(seq 1 6); do
+            WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/" || true)
+            APEX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$STAGING_APEX/" || true)
+            if [ "$WEB_STATUS" = "200" ] && [ "$APEX_STATUS" = "200" ]; then
+              echo "Recovered staging Web is coherent (web=$WEB_STATUS, apex=$APEX_STATUS)."
+              exit 0
+            fi
+            echo "Web recovery health attempt $attempt/6 failed (web=$WEB_STATUS, apex=$APEX_STATUS)."
+            [ "$attempt" = "6" ] || sleep 10
+          done
+          echo "::error::Recovered staging Web did not return to a healthy state."
+          exit 1
+
+      - name: Emit recovery incident summary
+        if: ${{ always() && (steps.plan.outcome != 'success' || steps.plan.outputs.release_failed == 'true') }}
+        run: |
+          echo "## Staging release failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Failure injection: ${{ inputs.inject_failure }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "The staging release remains RED. Recovery details are in the plan/verify steps above." >> "$GITHUB_STEP_SUMMARY"
+          exit 1

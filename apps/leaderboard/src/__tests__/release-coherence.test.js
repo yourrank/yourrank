@@ -282,6 +282,6 @@ describe("F-005 coherent Web/backend production promotion", () => {
     expect(rollbackWorkflow).toMatch(/concurrency:\n\s+group: production-mutation\n\s+cancel-in-progress: false/);
     expect(rollbackWorkflow).toContain("- web");
     expect(webWorkflow).not.toContain("group: deploy-web\n");
-    expect(webWorkflow).toContain("group: deploy-web-staging");
+    expect(webWorkflow).toContain("group: staging-mutation");
   });
 });

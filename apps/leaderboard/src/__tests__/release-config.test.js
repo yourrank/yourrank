@@ -245,9 +245,11 @@ describe("release configuration", () => {
 
   it("fails staging before code deployment and applies schema first", async () => {
     const workflow = await rootFile(".github/workflows/staging.yml");
-    expect(workflow).toContain("Refuse incomplete or production-shared staging infrastructure");
+    expect(workflow).toContain("node scripts/staging-preflight.mjs environment");
+    expect(workflow).toContain("node scripts/staging-preflight.mjs render");
     expect(workflow).toContain("supabase db push --include-all");
-    expect(workflow).toContain("needs: [migrate-staging, deploy-web-staging, deploy-consumer-staging]");
+    expect(workflow).toContain("needs: [capture-staging-state, n1-compatibility]");
+    expect(workflow).toMatch(/deploy-leaderboard-staging:\n(?:.*\n){1,3}\s+needs: migrate-staging/);
     expect(workflow).toContain("command: deploy --env staging");
     expect(workflow).toContain("STAGING_RESEND_API_KEY");
     expect(workflow).toContain("STAGING_MAIL_FROM");

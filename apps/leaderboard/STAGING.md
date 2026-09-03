@@ -1,98 +1,191 @@
 # Staging Environment
 
-The leaderboard Worker has a dedicated staging environment for testing changes
-before they hit production.
+Staging is the production-like release verification environment for all five
+Workers (Leaderboard, Bot, Consumer, Monitor, Web). It exercises the same
+topology as the production release — preflight, exact state capture, semantic
+N−1 gate, expand-only migrations, ordered Worker deploys, readiness, cross-service
+smoke, and the F-003/F-005 finalizer — against isolated staging resources only.
+
+Everything below is enforced by `scripts/staging-preflight.mjs`; the release
+(`.github/workflows/staging.yml`) fails closed until every item is real.
 
 ## Quick Reference
 
-| Item               | Value                                   |
-|---------------------|-----------------------------------------|
-| Subdomain           | `staging.yourrank.site`                 |
-| Wrangler env name   | `staging`                               |
-| Database            | Separate Supabase project (see below)   |
-| KV (sessions)       | Separate staging namespace              |
-| Hyperdrive          | Separate staging config                 |
-| Deploy command      | `wrangler deploy --env staging`         |
+| Item                | Production                         | Staging                                           |
+|---------------------|------------------------------------|---------------------------------------------------|
+| Apex                | `yourrank.site`                    | `staging.yourrank.site`                           |
+| Workers             | `yourrank-site/-bot/-consumer/-monitor/-web` | same names with `-staging` suffix        |
+| Supabase project    | `lygcqzjxlqbvymkfjvel`             | dedicated project (`STAGING_SUPABASE_PROJECT_REF`)|
+| Hyperdrive          | `9e5b625bfdd84cd691b44c4780bdaf13` | dedicated config (`STAGING_HYPERDRIVE_ID`)        |
+| Queues              | `yourrank-events`, `yourrank-events-dlq` | `yourrank-events-staging`, `yourrank-events-staging-dlq` |
+| Durable Objects     | `RateLimiter`, `LiveBoard`, `Leaderboard` | same classes, staging script namespaces    |
+| Cron triggers       | production schedules               | **disabled** (`crons = []`), run locally with `wrangler dev --env staging --test-scheduled` |
+| Release lock        | `production-mutation`              | `staging-mutation`                                |
+| Release workflow    | `deploy.yml` (push to `main`)      | `staging.yml` (manual `workflow_dispatch`)        |
 
-## 1. Set Up the Staging Worker
+`STAGING_HYPERDRIVE_ID_PLACEHOLDER` stays in the checked-in `wrangler.toml`
+files on purpose: the release renders the real id from the GitHub `staging`
+environment variable at deploy time and refuses placeholder, malformed, or
+production ids. Never paste a Hyperdrive id into the repo.
 
-### Prerequisites
+## 1. Provision staging infrastructure (one-time, account-side)
 
-1. **Separate Supabase project** — create a second Supabase project for staging
-   data. Run the same migrations from `supabase/migrations/` against it. This ensures
-   staging never touches production users, payments, or sites.
+These steps need Cloudflare/Supabase account permissions and cannot be
+automated from CI. Do them once; the preflight verifies the result.
 
-2. **Hyperdrive config for staging** — point a new Hyperdrive config at the
-   staging Supabase direct host:
+### 1.1 Dedicated Supabase project
+
+1. Create a new Supabase project for staging (any region). Do **not** restore a
+   production backup into it — staging must not hold production customer data.
+2. Note the project ref (20 lowercase letters) and the database password.
+3. Create a Supabase personal access token scoped to that project for the
+   Supabase CLI/Management API used by the release.
+4. Apply the schema once so the release's `baseline-applied` check passes:
    ```bash
-   npx wrangler hyperdrive create yourrank-staging-pg \
-     --connection-string="postgresql://postgres.<ref>:<pw>@db.<staging-ref>.supabase.co:5432/postgres"
+   supabase link --project-ref <staging-ref> --password '<db-password>'
+   supabase db push --include-all
    ```
-   Paste the generated ID into the `[env.staging]` section of `wrangler.toml`.
 
-3. **KV namespace for staging** — create a separate KV namespace for session
-   tokens. Sessions are **not** shared between staging and production (logging
-   into staging does not log you into prod and vice versa):
-   ```bash
-   npx wrangler kv namespace create SESSIONS --env staging
-   ```
-   Paste the ID into `wrangler.toml` under `[env.staging]`.
-
-4. **DNS** — add a `CNAME` record for `staging.yourrank.site` pointing at your
-   Cloudflare zone (or use the Workers route pattern).
-
-### Secrets
-
-Set the same secrets as production (they may differ if the staging DB has
-different credentials):
+### 1.2 Dedicated Hyperdrive config
 
 ```bash
-wrangler secret put DATABASE_URL --env staging
-wrangler secret put NOWPAYMENTS_API_KEY --env staging
-wrangler secret put NOWPAYMENTS_IPN_SECRET --env staging
-wrangler secret put RESEND_API_KEY --env staging
-wrangler secret put MAIL_FROM --env staging
-wrangler secret put LEAD_WEBHOOK_URL --env staging
-wrangler secret put DISCORD_MONITORING_WEBHOOK --env staging
+npx wrangler hyperdrive create yourrank-staging-pg \
+  --connection-string="postgresql://postgres.<staging-ref>:<db-password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
 ```
 
-### Deploy
+Use the staging project's Supavisor session-mode pooler host (SSL is required;
+Hyperdrive negotiates TLS). Copy the 32-character hex id it prints into the
+GitHub `staging` environment as `STAGING_HYPERDRIVE_ID` — not into the repo.
+
+### 1.3 Queues
 
 ```bash
-# From apps/leaderboard/
-node build.js
-wrangler deploy --env staging
+npx wrangler queues create yourrank-events-staging
+npx wrangler queues create yourrank-events-staging-dlq
 ```
 
-Or trigger the [staging workflow](../../.github/workflows/staging.yml) via
-`workflow_dispatch` from the GitHub Actions tab.
+### 1.4 DNS / routes
 
-## 2. Differences from Production
+`staging.yourrank.site` must resolve in the `yourrank.site` zone (proxied). The
+Leaderboard and Bot staging routes are declared in their `wrangler.toml`. Web and
+Monitor are reached on their `workers.dev` hostnames; enable the workers.dev
+subdomain for `yourrank-web-staging` and `yourrank-monitor-staging`.
 
-| Aspect              | Production                    | Staging                          |
-|---------------------|-------------------------------|----------------------------------|
-| Route               | `yourrank.site/*`             | `staging.yourrank.site/*`        |
-| Database            | Main Supabase project         | Separate Supabase project        |
-| KV sessions         | Main KV namespace             | Staging KV namespace             |
-| Hyperdrive          | Main Hyperdrive config        | Staging Hyperdrive config        |
-| APP_NAME env var    | `YourRank`                    | `YourRank (Staging)`             |
-| Cron triggers       | Same as production            | **None** (staging has no crons)  |
+### 1.5 Worker secrets (per Worker, `--env staging`)
 
-## 3. Testing Checklist
+Required (the release uploads these from the GitHub environment):
 
-- [ ] Sign up / log in on staging
-- [ ] Create and publish a leaderboard
-- [ ] Verify the public page loads at `staging.yourrank.site/<slug>`
-- [ ] Test the overlay at `staging.yourrank.site/<slug>/overlay`
-- [ ] Submit a test lead via the landing page
-- [ ] Verify Discord monitoring webhook fires on errors (if configured)
-- [ ] Confirm production data is unaffected
+| Worker      | Secrets                                   |
+|-------------|-------------------------------------------|
+| Leaderboard | `RESEND_API_KEY`, `MAIL_FROM`, `TOKEN_ENC_KEY` |
+| Bot         | `TOKEN_ENC_KEY`, `IP_HASH_SALT`           |
+| Monitor     | `MONITOR_CHECK_SECRET`                    |
 
-## 4. Staging Teardown
+Integrations (set manually, or declare them disabled — see 2.2):
 
-To remove the staging environment:
+| Integration          | Secrets                                         | Workers                |
+|----------------------|-------------------------------------------------|------------------------|
+| `telegram`           | `LOGIN_BOT_TOKEN`, `LOGIN_BOT_USERNAME` (a **staging** bot) | Leaderboard, Bot |
+| `kick`               | `KICK_WEBHOOK_PUBLIC_KEY`                       | Leaderboard            |
+| `nowpayments`        | `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET` (sandbox) | Leaderboard  |
+| `discord-monitoring` | `DISCORD_MONITORING_WEBHOOK` (staging channel)  | all backend Workers    |
+| `lead-webhook`       | `LEAD_WEBHOOK_URL`                              | Leaderboard            |
+| `sentry`             | `SENTRY_DSN`                                    | Bot                    |
+| `monitor-email`      | `RESEND_API_KEY`, `ALERT_EMAIL`, `ALERT_FROM`   | Monitor                |
+
+Forbidden on every staging Worker: `DATABASE_URL` (would bypass Hyperdrive),
+production Supabase service keys, production Telegram/NOWPayments credentials.
+
+## 2. GitHub `staging` environment
+
+### 2.1 Variables
+
+| Variable                        | Value                                                    |
+|---------------------------------|----------------------------------------------------------|
+| `STAGING_HYPERDRIVE_ID`         | id from 1.2 (32 hex chars, not the production id)        |
+| `STAGING_SUPABASE_PROJECT_REF`  | ref from 1.1 (not `lygcqzjxlqbvymkfjvel`)                |
+| `STAGING_WEB_URL`               | `https://yourrank-web-staging.<subdomain>.workers.dev`   |
+| `STAGING_MONITOR_URL`           | `https://yourrank-monitor-staging.<subdomain>.workers.dev` |
+| `STAGING_DISABLED_INTEGRATIONS` | optional, comma-separated (see 2.2)                      |
+
+### 2.2 Intentionally disabled integrations
+
+Staging must not spam real users or pay real invoices. Any integration that is
+not configured with staging-safe credentials must be declared explicitly, e.g.
+
+```
+STAGING_DISABLED_INTEGRATIONS=telegram,kick,nowpayments,lead-webhook,sentry,monitor-email
+```
+
+The preflight accepts a missing integration secret **only** when its integration
+is listed here; unknown names are rejected. The application state transitions
+still run — only the outbound side effect is absent.
+
+### 2.3 Secrets
+
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `STAGING_SUPABASE_ACCESS_TOKEN`,
+`STAGING_SUPABASE_DB_PASSWORD`, `STAGING_RESEND_API_KEY`, `STAGING_MAIL_FROM`,
+`STAGING_TOKEN_ENC_KEY` (64 hex chars, different from production),
+`STAGING_IP_HASH_SALT`, `STAGING_MONITOR_CHECK_SECRET`.
+
+Production names (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`,
+`SUPABASE_PROJECT_REF`, `DATABASE_URL`) must **not** exist in the staging
+environment; the preflight fails if they are visible.
+
+## 3. Running a staging release
+
+Actions → **Staging release** → Run workflow. Jobs, in order:
+
+`staging-preflight → capture-staging-state → n1-compatibility → migrate-staging →
+deploy-leaderboard-staging → deploy-bot-staging → deploy-consumer-staging →
+backend-readiness-staging → deploy-monitor-staging → deploy-web-staging →
+web-readiness-staging → release-smoke-staging → staging-finalizer`
+
+The finalizer runs `scripts/release-recovery-state.mjs` with
+`RELEASE_ENVIRONMENT=staging`: it captures/observes the five `-staging` Workers,
+restores exact prior version allocations on failure, keeps migrations applied,
+records a `staging-release-manifest-<sha>` artifact, and exits non-zero whenever
+the release or its recovery failed.
+
+### 3.1 Verifying the finalizer (staging-only failure injection)
+
+`inject_failure` input:
+
+| Value                    | Effect                                                            | Expected finalizer outcome |
+|--------------------------|-------------------------------------------------------------------|----------------------------|
+| `none`                   | normal release                                                    | provenance manifest, green |
+| `after-backend-mutation` | fails backend readiness after Leaderboard/Bot/Consumer deployed  | those three restored exactly, Monitor/Web untouched, migrations retained, run red |
+| `after-web-mutation`     | fails cross-service smoke after all five Workers deployed         | all five restored exactly, run red |
+| `recovery-command`       | skips the restore commands after a real failure                   | `verify` reports drift, run stays red |
+
+The input exists only in `staging.yml`; `deploy.yml`, `rollback.yml` and
+`contract-migration.yml` have no injection hook.
+
+### 3.2 Local cron verification
+
+Staging has no cron schedules. Exercise scheduled handlers deterministically:
 
 ```bash
-wrangler delete --env staging
-# Then delete the Hyperdrive config and KV namespace from the Cloudflare dashboard.
+cd apps/leaderboard && wrangler dev --env staging --test-scheduled
+curl "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"
+```
+
+## 4. Preflight commands
+
+```bash
+node scripts/staging-preflight.mjs config        # static wrangler.toml contract (fails on placeholder)
+node scripts/staging-preflight.mjs environment   # GitHub staging vars/secrets (names + shape, never values)
+node scripts/staging-preflight.mjs render        # substitute STAGING_HYPERDRIVE_ID, refuse production/placeholder
+STAGING_WORKER=bot WORKER_SECRET_LIST="$(wrangler secret list --env staging --format json)" \
+  node scripts/staging-preflight.mjs worker-secrets
+```
+
+## 5. Teardown
+
+```bash
+for app in leaderboard bot consumer monitor web; do (cd apps/$app && wrangler delete --env staging); done
+npx wrangler queues delete yourrank-events-staging
+npx wrangler queues delete yourrank-events-staging-dlq
+npx wrangler hyperdrive delete <staging-hyperdrive-id>
+# then delete the staging Supabase project from the Supabase dashboard
 ```

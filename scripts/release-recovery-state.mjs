@@ -10,6 +10,26 @@ export const RELEASE_WORKERS = Object.freeze([
   { key: "web", scriptName: "yourrank-web" },
 ]);
 
+// Staging mirrors the production topology one Worker per script with a `-staging`
+// suffix, so the same capture/plan/verify/promote machinery certifies the release
+// controls against isolated staging resources.
+export const STAGING_RELEASE_WORKERS = Object.freeze(
+  RELEASE_WORKERS.map((worker) => Object.freeze({ key: worker.key, scriptName: `${worker.scriptName}-staging` })),
+);
+
+export const PRODUCTION_SUPABASE_PROJECT_REF = "lygcqzjxlqbvymkfjvel";
+
+export const RELEASE_ENVIRONMENTS = Object.freeze({
+  production: Object.freeze({ workers: RELEASE_WORKERS, label: "production" }),
+  staging: Object.freeze({ workers: STAGING_RELEASE_WORKERS, label: "staging" }),
+});
+
+export function releaseEnvironment(name = "production") {
+  const environment = RELEASE_ENVIRONMENTS[name];
+  if (!environment) throw new Error(`RELEASE_ENVIRONMENT must be one of ${Object.keys(RELEASE_ENVIRONMENTS).join(", ")}.`);
+  return environment;
+}
+
 export const BACKEND_WORKERS = Object.freeze(["leaderboard", "bot", "consumer", "monitor"]);
 
 export const RELEASE_STAGES = Object.freeze([
@@ -133,6 +153,7 @@ export async function fetchReleaseState({
   supabaseProjectRef,
   supabaseAccessToken,
   fetchImpl = fetch,
+  releaseWorkers = RELEASE_WORKERS,
 } = {}) {
   const accountId = required(cloudflareAccountId, "CLOUDFLARE_ACCOUNT_ID");
   const cloudflareToken = required(cloudflareApiToken, "CLOUDFLARE_API_TOKEN");
@@ -140,7 +161,7 @@ export async function fetchReleaseState({
   const supabaseToken = required(supabaseAccessToken, "SUPABASE_ACCESS_TOKEN");
 
   const workers = {};
-  for (const worker of RELEASE_WORKERS) {
+  for (const worker of releaseWorkers) {
     const scriptUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${worker.scriptName}`;
     const payload = await requestJson(`${scriptUrl}/deployments`, cloudflareToken, fetchImpl, `${worker.scriptName} deployments`);
     const state = latestDeploymentState(payload, worker.scriptName);
@@ -169,7 +190,7 @@ export function shouldRunRecovery({ captureResult, stages }) {
   return captureResult === "success" && RELEASE_STAGES.some((stage) => FAILED_RESULTS.has(stages[stage]));
 }
 
-export function buildRecoveryPlan({ baseline, current, stages }) {
+export function buildRecoveryPlan({ baseline, current, stages, releaseWorkers = RELEASE_WORKERS }) {
   if (baseline?.schemaVersion !== 1 || current?.schemaVersion !== 1) {
     throw new Error("Unsupported or missing release-state schema.");
   }
@@ -181,7 +202,7 @@ export function buildRecoveryPlan({ baseline, current, stages }) {
   const unchangedWorkers = [];
   const workers = {};
 
-  for (const worker of RELEASE_WORKERS) {
+  for (const worker of releaseWorkers) {
     const before = required(baseline.workers?.[worker.key], `baseline state for ${worker.key}`);
     const after = required(current.workers?.[worker.key], `current state for ${worker.key}`);
     const changed = !sameVersions(before, after);
@@ -200,12 +221,13 @@ export function buildRecoveryPlan({ baseline, current, stages }) {
   };
 }
 
-export function buildReleaseManifest({ intendedReleaseSha, state, stages = {} }) {
+export function buildReleaseManifest({ intendedReleaseSha, state, stages = {}, releaseWorkers = RELEASE_WORKERS, environment = "production" }) {
   if (!COMMIT_SHA.test(intendedReleaseSha ?? "")) throw new Error("intendedReleaseSha must be a full 40-character commit SHA.");
   if (state?.schemaVersion !== 1) throw new Error("Unsupported or missing release-state schema.");
+  releaseEnvironment(environment);
   const workers = {};
   const incoherent = [];
-  for (const worker of RELEASE_WORKERS) {
+  for (const worker of releaseWorkers) {
     const workerState = required(state.workers?.[worker.key], `release state for ${worker.key}`);
     const sourceSha = versionSourceSha(workerState);
     workers[worker.key] = {
@@ -223,6 +245,7 @@ export function buildReleaseManifest({ intendedReleaseSha, state, stages = {} })
   return {
     schemaVersion: 1,
     recordedAt: new Date().toISOString(),
+    environment,
     intendedReleaseSha,
     promotedReleaseSha: promoted ? intendedReleaseSha : null,
     promotion: promoted ? "promoted" : "refused",
@@ -248,35 +271,48 @@ async function appendSummary(markdown) {
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${markdown}\n`);
 }
 
+function environmentName() {
+  return process.env.RELEASE_ENVIRONMENT || "production";
+}
+
 function environmentStateOptions() {
+  const name = environmentName();
+  const environment = releaseEnvironment(name);
+  const supabaseProjectRef = process.env.SUPABASE_PROJECT_REF;
+  if (name !== "production" && supabaseProjectRef === PRODUCTION_SUPABASE_PROJECT_REF) {
+    throw new Error(`${name} release state must not read the production Supabase project.`);
+  }
   return {
     cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID,
     cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
-    supabaseProjectRef: process.env.SUPABASE_PROJECT_REF,
+    supabaseProjectRef,
     supabaseAccessToken: process.env.SUPABASE_ACCESS_TOKEN,
+    releaseWorkers: environment.workers,
   };
 }
 
-function stateSummary(state) {
-  return RELEASE_WORKERS.map((worker) => {
+function stateSummary(state, releaseWorkers) {
+  return releaseWorkers.map((worker) => {
     const sha = versionSourceSha(state.workers[worker.key]);
     return `${worker.key}=${versionSpecs(state.workers[worker.key])}${sha ? ` (${sha.slice(0, 12)})` : ""}`;
   }).join(", ");
 }
 
 async function captureCommand() {
-  const state = await fetchReleaseState(environmentStateOptions());
+  const options = environmentStateOptions();
+  const state = await fetchReleaseState(options);
   await writeOutputs({ state: JSON.stringify(state) });
   console.log(`Captured ${state.migrations.length} applied migrations.`);
-  console.log(`Captured Worker versions: ${stateSummary(state)}`);
-  await appendSummary(`## Pre-mutation release state\n\n- Applied migrations: ${state.migrations.length}\n- Worker versions: ${stateSummary(state)}`);
+  console.log(`Captured Worker versions: ${stateSummary(state, options.releaseWorkers)}`);
+  await appendSummary(`## Pre-mutation release state\n\n- Applied migrations: ${state.migrations.length}\n- Worker versions: ${stateSummary(state, options.releaseWorkers)}`);
 }
 
 async function planCommand() {
   const baseline = JSON.parse(required(process.env.BASELINE_RELEASE_STATE, "BASELINE_RELEASE_STATE"));
   const stages = JSON.parse(required(process.env.RELEASE_STAGE_RESULTS, "RELEASE_STAGE_RESULTS"));
-  const current = await fetchReleaseState(environmentStateOptions());
-  const plan = buildRecoveryPlan({ baseline, current, stages });
+  const options = environmentStateOptions();
+  const current = await fetchReleaseState(options);
+  const plan = buildRecoveryPlan({ baseline, current, stages, releaseWorkers: options.releaseWorkers });
   const outputs = {
     release_failed: String(plan.releaseFailed),
     mutation_observed: String(plan.mutationObserved),
@@ -289,7 +325,7 @@ async function planCommand() {
     ),
     web_health_required: String(plan.workers.web.changed),
   };
-  for (const worker of RELEASE_WORKERS) {
+  for (const worker of options.releaseWorkers) {
     outputs[`${worker.key}_changed`] = String(plan.workers[worker.key].changed);
     outputs[`${worker.key}_restore_specs`] = plan.workers[worker.key].restoreSpecs;
     console.log(
@@ -303,7 +339,7 @@ async function planCommand() {
   console.log(`Observed migrations missing: ${outputs.migrations_missing}`);
   console.log(`Workers requiring exact restoration: ${plan.restoreTargets.join(", ") || "none"}`);
   console.log(`Workers still at captured state: ${plan.unchangedWorkers.join(", ") || "none"}`);
-  const workerRows = RELEASE_WORKERS.map((worker) => {
+  const workerRows = options.releaseWorkers.map((worker) => {
     const state = plan.workers[worker.key];
     return `| ${worker.key} | \`${versionSpecs(state.before)}\` | \`${versionSpecs(state.after)}\` | ${state.changed ? "restore" : "unchanged"} |`;
   }).join("\n");
@@ -319,8 +355,9 @@ async function planCommand() {
 
 async function verifyCommand() {
   const baseline = JSON.parse(required(process.env.BASELINE_RELEASE_STATE, "BASELINE_RELEASE_STATE"));
-  const current = await fetchReleaseState(environmentStateOptions());
-  const comparison = buildRecoveryPlan({ baseline, current, stages: {} });
+  const options = environmentStateOptions();
+  const current = await fetchReleaseState(options);
+  const comparison = buildRecoveryPlan({ baseline, current, stages: {}, releaseWorkers: options.releaseWorkers });
   if (comparison.migrationsMissing.length > 0) {
     throw new Error(
       `Recovery never rolls back the database, but applied migration history lost: ` +
@@ -330,7 +367,7 @@ async function verifyCommand() {
   if (comparison.restoreTargets.length > 0) {
     throw new Error(`Worker state was not restored exactly: ${comparison.restoreTargets.join(", ")}.`);
   }
-  console.log(`Exact Worker version state restored: ${stateSummary(current)}`);
+  console.log(`Exact Worker version state restored: ${stateSummary(current, options.releaseWorkers)}`);
   console.log(
     `Database migrations retained: ${comparison.migrationsAdded.map(({ version }) => version).join(",") || "no additions"}`,
   );
@@ -341,16 +378,18 @@ async function promoteCommand() {
   const intendedReleaseSha = required(process.env.GITHUB_SHA, "GITHUB_SHA");
   const stages = JSON.parse(required(process.env.RELEASE_STAGE_RESULTS, "RELEASE_STAGE_RESULTS"));
   const manifestPath = required(process.env.RELEASE_MANIFEST_PATH, "RELEASE_MANIFEST_PATH");
-  const state = await fetchReleaseState(environmentStateOptions());
-  const manifest = buildReleaseManifest({ intendedReleaseSha, state, stages });
+  const options = environmentStateOptions();
+  const environment = environmentName();
+  const state = await fetchReleaseState(options);
+  const manifest = buildReleaseManifest({ intendedReleaseSha, state, stages, releaseWorkers: options.releaseWorkers, environment });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeOutputs({ promoted: String(manifest.promotion === "promoted"), promoted_release_sha: manifest.promotedReleaseSha ?? "" });
-  const rows = RELEASE_WORKERS.map((worker) => {
+  const rows = options.releaseWorkers.map((worker) => {
     const entry = manifest.workers[worker.key];
     return `| ${worker.key} | \`${entry.allocation}\` | ${entry.sourceSha ? `\`${entry.sourceSha}\`` : "unknown"} | ${entry.sourceSha === intendedReleaseSha ? "coherent" : "INCOHERENT"} |`;
   }).join("\n");
   await appendSummary(
-    `## Release provenance\n\n- Intended release SHA: \`${intendedReleaseSha}\`\n` +
+    `## Release provenance (${environment})\n\n- Intended release SHA: \`${intendedReleaseSha}\`\n` +
     `- Promoted release SHA: ${manifest.promotedReleaseSha ? `\`${manifest.promotedReleaseSha}\`` : "none (promotion refused)"}\n` +
     `- Database migration version: ${manifest.database.migrationVersion ?? "unknown"} (${manifest.database.appliedMigrations} applied)\n\n` +
     `| Worker | Active allocation | Source SHA | Coherence |\n|---|---|---|---|\n${rows}`,
@@ -363,7 +402,7 @@ async function promoteCommand() {
       `incomplete stages [${manifest.stagesIncomplete.join(", ") || "none"}].`,
     );
   }
-  console.log(`Promoted release ${intendedReleaseSha}: every production Worker serves this commit.`);
+  console.log(`Promoted release ${intendedReleaseSha}: every ${environment} Worker serves this commit.`);
 }
 
 async function main() {
@@ -379,7 +418,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try {
     await main();
   } catch (error) {
-    console.error(`::error title=Production release recovery state failed::${error.message}`);
+    console.error(`::error title=${environmentName()} release recovery state failed::${error.message}`);
     process.exitCode = 1;
   }
 }

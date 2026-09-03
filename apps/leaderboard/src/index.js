@@ -740,10 +740,13 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       const csrfToken = generateCsrfToken();
       const csrfHeader = { "set-cookie": csrfCookie(csrfToken) };
 
-      if (host === PLATFORM_HOST && (path.startsWith("/_next/") || path.startsWith("/brand/"))) {
+      // The staging apex (staging.yourrank.site) proxies marketing routes to its own
+      // Web Worker so the cross-service journey is verifiable outside production.
+      const marketingApex = host === PLATFORM_HOST || (env.ENVIRONMENT === "staging" && host === `staging.${PLATFORM_HOST}`);
+      if (marketingApex && (path.startsWith("/_next/") || path.startsWith("/brand/"))) {
         return proxyMarketingHome({ request, binding: env.MARKETING, workerLog });
       }
-      if (host === PLATFORM_HOST && MARKETING_PAGES.has(path)) {
+      if (marketingApex && MARKETING_PAGES.has(path)) {
         return proxyMarketingHome({ request, binding: env.MARKETING, workerLog });
       }
       if (path === "/login" || path === "/login.html") {

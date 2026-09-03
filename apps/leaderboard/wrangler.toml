@@ -132,8 +132,10 @@ enabled = true
 head_sampling_rate = 1
 invocation_logs = true
 
+# Staging schedules are intentionally disabled: cron side effects (rollups, notifications,
+# backups) are exercised locally with `wrangler dev --env staging --test-scheduled`.
 [env.staging.triggers]
-crons = ["*/5 * * * *"]
+crons = []
 
 [env.staging.vars]
 DLQ_HEALTH_DEGRADE_THRESHOLD = "100"

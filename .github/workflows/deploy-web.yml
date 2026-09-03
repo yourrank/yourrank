@@ -14,8 +14,10 @@ on:
 permissions:
   contents: read
 
+# Shares the staging lock with .github/workflows/staging.yml so an ad-hoc Web push
+# can never interleave with a staging release/recovery.
 concurrency:
-  group: deploy-web-staging
+  group: staging-mutation
   cancel-in-progress: false
 
 jobs:
@@ -47,6 +49,11 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Render staging Hyperdrive id (fails closed on placeholder/production ids)
+        env:
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+        run: node scripts/staging-preflight.mjs render
 
       - name: Build web worker
         working-directory: apps/web
