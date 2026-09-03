@@ -53,8 +53,61 @@ jobs:
           SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
         run: node scripts/release-recovery-state.mjs capture
 
+  # F-004: prove the exact production N-1 Worker sources against every schema
+  # migration in this release before the production database is mutated.
+  n1-compatibility:
+    name: Semantic N-1 Compatibility
+    needs: release-preflight
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: yourrank_n1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - name: Install current dependencies
+        run: bun install --frozen-lockfile
+      - name: Read production N-1 source refs
+        id: n1-baseline
+        run: node -e "const fs=require('fs'),m=require('./release/n1-production-baseline.json');fs.appendFileSync(process.env.GITHUB_OUTPUT,'coherent='+m.coherentRollbackSourceSha+'\nleaderboard='+m.workers.leaderboard.liveSourceSha+'\n')"
+      - name: Check out coherent rollback source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.n1-baseline.outputs.coherent }}
+          path: .n1/coherent
+          persist-credentials: false
+      - name: Check out live Leaderboard source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ steps.n1-baseline.outputs.leaderboard }}
+          path: .n1/leaderboard
+          persist-credentials: false
+      - name: Build exact N-1 source dependencies
+        run: |
+          bun install --cwd .n1/coherent --frozen-lockfile --ignore-scripts
+          bun run --cwd .n1/coherent/packages/shared build
+          bun install --cwd .n1/leaderboard --frozen-lockfile --ignore-scripts
+          bun run --cwd .n1/leaderboard/packages/shared build
+          bun run --cwd packages/shared build
+      - name: Verify N-1 Workers against the expanded schema
+        env:
+          N1_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_n1_test
+        run: bun run verify:n1-compatibility
+
   migrate:
-    needs: capture-release-state
+    needs: [capture-release-state, n1-compatibility]
     runs-on: ubuntu-latest
     outputs:
       applied: ${{ steps.push-migrations.outputs.applied }}
