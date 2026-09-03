@@ -20,15 +20,46 @@ Supabase project: `lygcqzjxlqbvymkfjvel`
 
 ### 2. Perform Restore Drill
 
-1. Create a scratch Supabase project
-2. Restore from backup to the scratch project
-3. Verify data integrity:
-   - All tables present
-   - Row counts match
-   - Foreign key constraints intact
-   - RLS policies applied
-4. Time the restore process (RTO - Recovery Time Objective)
-5. Document results here
+The drill is executable: `.github/workflows/restore-drill.yml` (manual dispatch)
+driving `scripts/restore-drill.mjs`. It restores the newest backup into an
+isolated scratch database, runs integrity checks (required tables, non-empty
+`users`/`sites`, validated foreign keys, RLS on server-only tables, migration
+history, application roles) and Worker read paths, measures RTO/RPO, retires the
+scratch copy, and publishes a secret-free evidence document. A failed restore or
+failed check exits red and the evidence is `success:false`; nothing is recorded
+automatically.
+
+One-time setup (GitHub environment `recovery-drill`, credentials separate from
+the Worker identity `yourrank_worker` and from release secrets):
+
+1. Create a dedicated scratch Supabase project (never the production ref
+   `lygcqzjxlqbvymkfjvel`); set variable `RESTORE_TARGET_ID` to its ref and
+   secret `RESTORE_TARGET_DATABASE_URL` to its `postgres` connection URL.
+2. `provider-backup` drills: secret `SUPABASE_ACCESS_TOKEN` (Management API,
+   read backup metadata) and, per run, secret `RESTORE_BACKUP_DOWNLOAD_URL` — the
+   short-lived download link of the newest completed backup from Dashboard →
+   Database → Backups. The Management API restore endpoints target the same
+   project (which would overwrite production), so a download link is the
+   automation-compatible input for an isolated restore.
+3. `logical-dump` drills: secret `RESTORE_SOURCE_DATABASE_URL`, a dedicated
+   read-only production credential (not `yourrank_worker`).
+
+Recording the result (F-058): an admin with fresh step-up 2FA posts the evidence
+to `POST /api/admin/backup-verifications`:
+
+```json
+{ "provider": "supabase", "target": "restore-drill:<RESTORE_TARGET_ID>",
+  "startedAt": "<evidence.startedAt>", "completedAt": "<evidence.completedAt>",
+  "rtoSeconds": <evidence.rtoSeconds>, "rpoSeconds": <evidence.rpoSeconds>,
+  "releaseSha": "<evidence.releaseSha>",
+  "evidence": { "workflowRunId": "...", "sourceBackupId": "...", "restoreTargetId": "...",
+                "restoreTargetRetired": true, "integrityChecks": [...], "applicationReadChecks": [...] } }
+```
+
+The API and a database trigger reject future `completedAt` (beyond 5 min skew),
+`startedAt > completedAt`, negative RTO/RPO, and credential-like strings.
+Freshness for `/api/health/backup` is computed from the server-stamped
+`verified_at`, not the supplied timestamps.
 
 ### 3. Document RTO/RPO
 

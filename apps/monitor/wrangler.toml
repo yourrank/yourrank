@@ -15,17 +15,23 @@ invocation_logs = true
 [triggers]
 crons = ["*/5 * * * *"]
 
-# Production environment variables (non-secret)
+# Production environment variables (non-secret). The contract below is enforced
+# by `node scripts/monitor-preflight.mjs production` before any production
+# mutation and again against the deployed Worker's secret names.
 [vars]
 MONITOR_TARGET = "https://yourrank.site"
 MONITOR_SLUG = ""        # set to a known board slug after first board exists
+# Backup-freshness monitoring is mandatory for production: the monitor fails the
+# "GET /api/health/backup" check until a valid successful restore drill is
+# recorded (launch prerequisite, see docs/recovery.md).
+MONITOR_BACKUP_CHECK = "true"
 
-# Secrets (set via wrangler secret put):
-#   DISCORD_MONITORING_WEBHOOK — Discord webhook for uptime alerts
+# Secrets (set via wrangler secret put / the release workflow):
+#   MONITOR_CHECK_SECRET — REQUIRED; /check is disabled (503) without it and only
+#                          accepts `Authorization: Bearer <secret>`
+#   DISCORD_MONITORING_WEBHOOK — alert path (at least one alert path is required)
+#   RESEND_API_KEY + ALERT_EMAIL — email alert path
 #   MONITOR_PB_KEY — known postback key for /pb canary check
-#
-# Vars:
-#   MONITOR_BACKUP_CHECK = "true"  — also check /api/health/backup freshness
 
 [env.staging]
 name = "yourrank-monitor-staging"

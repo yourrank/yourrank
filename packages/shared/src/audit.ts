@@ -63,7 +63,10 @@ const AUDIT_SAFE_KEYS = new Set([
   "players",
   "provider",
   "reason",
+  "release_sha",
   "remaining_boards",
+  "rpo_seconds",
+  "rto_seconds",
   "site_id",
   "site_slug",
   "slug_rename",
@@ -71,10 +74,13 @@ const AUDIT_SAFE_KEYS = new Set([
   "source_site_id",
   "status",
   "subject",
+  "target",
   "target_user_id",
   "template",
   "to_plan",
   "user_id",
+  "verification_id",
+  "workflow_run_id",
 ]);
 
 function sanitizeAuditDetails(details: Record<string, unknown>): Record<string, unknown> {
