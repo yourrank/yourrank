@@ -26,7 +26,7 @@ function required(value, name) {
   return value;
 }
 
-async function requestJson(url, token, fetchImpl) {
+async function requestJson(url, token, fetchImpl, label) {
   const response = await fetchImpl(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
@@ -35,10 +35,10 @@ async function requestJson(url, token, fetchImpl) {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = body?.errors?.map((error) => error.message).join("; ") || body?.message || `HTTP ${response.status}`;
-    throw new Error(`Release-state request failed for ${url}: ${detail}`);
+    throw new Error(`Release-state request failed for ${label}: ${detail}`);
   }
   if (body && Object.hasOwn(body, "success") && body.success !== true) {
-    throw new Error(`Release-state request failed for ${url}: API returned success=false.`);
+    throw new Error(`Release-state request failed for ${label}: API returned success=false.`);
   }
   return body?.result ?? body;
 }
@@ -121,6 +121,7 @@ export async function fetchReleaseState({
       `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${worker.scriptName}/deployments`,
       cloudflareToken,
       fetchImpl,
+      `${worker.scriptName} deployments`,
     );
     workers[worker.key] = latestDeploymentState(payload, worker.scriptName);
   }
@@ -128,6 +129,7 @@ export async function fetchReleaseState({
     `https://api.supabase.com/v1/projects/${projectRef}/database/migrations`,
     supabaseToken,
     fetchImpl,
+    "Supabase migration history",
   ));
 
   return { schemaVersion: 1, capturedAt: new Date().toISOString(), migrations, workers };
