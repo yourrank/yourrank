@@ -1,0 +1,14 @@
+{
+  "$comment": "F-039/F-044 backend database identity enforcement per environment. `enforce: true` makes the release readiness gate fail unless /health reports db_identity.expected=true, superuser=false, bypassrls=false, app_member=true. A `false` entry is an explicit, reviewed PENDING state (never a silent skip) and must carry a reason; flip it to true in the release that follows the Hyperdrive credential switch.",
+  "expectedRole": "yourrank_worker",
+  "groupRole": "yourrank_app",
+  "environments": {
+    "staging": {
+      "enforce": true
+    },
+    "production": {
+      "enforce": false,
+      "reason": "Production Hyperdrive still authenticates with the pre-F-039 credential. The yourrank_worker role is created by migration 20260908000000 in this release; the password is set out of Git and Hyperdrive is switched only after staging certification (DEPLOY.md, 'Database identity'). Until then production identity is reported as PENDING by the readiness step, which is a warning, not a pass."
+    }
+  }
+}

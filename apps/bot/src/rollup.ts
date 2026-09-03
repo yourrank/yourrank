@@ -49,10 +49,15 @@ async function pruneOldClickPartitions(): Promise<void> {
   // Click partitions older than the 90-day retention window can be detached as
   // tables; raw rows in those months have already been removed above and the
   // dashboard queries click_daily, not the raw partition.
+  // DROP TABLE requires ownership; partitions owned by another role (created
+  // before the Worker moved to its own login) are left for an operator-run
+  // contract migration instead of failing the nightly rollup.
   const rows = await query<{ name: string }>(
     `SELECT inhrelid::regclass::text AS name
        FROM pg_inherits
+       JOIN pg_class ON pg_class.oid = inhrelid
       WHERE inhparent = 'clicks'::regclass
+        AND pg_has_role(current_user, pg_class.relowner, 'USAGE')
         AND inhrelid::regclass::text ~ '^clicks_\\d{4}_\\d{2}$'
         AND to_date(split_part(inhrelid::regclass::text, '_', 2) || '-' ||
                     split_part(inhrelid::regclass::text, '_', 3) || '-01',
@@ -65,25 +70,18 @@ async function pruneOldClickPartitions(): Promise<void> {
   }
 }
 
+/** Create the monthly `clicks` partition through the SECURITY DEFINER helper so
+ *  the Worker login never needs to own the parent table. */
+async function ensureMonthPartition(monthOffset: number): Promise<void> {
+  const now = new Date();
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + monthOffset, 1));
+  await query(`SELECT app_private.ensure_clicks_partition($1::date)`, [from.toISOString().slice(0, 10)]);
+}
+
 /** Ensure the partition for next month exists so inserts never hit the default table. */
 export async function ensureNextMonthPartition(): Promise<void> {
   try {
-    const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 1));
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
-    const name = `clicks_${from.getUTCFullYear()}_${String(from.getUTCMonth() + 1).padStart(2, "0")}`;
-    // `name` is derived entirely from the server clock, so it can't be attacker-
-    // controlled — but DDL can't be parameterized, so we assert the exact shape
-    // before interpolating. This makes the identifier injection-proof by
-    // construction even if the derivation above ever changes.
-    if (!/^clicks_\d{4}_\d{2}$/.test(name)) {
-      throw new Error(`refusing to create partition with unexpected name: ${name}`);
-    }
-    await query(
-      `CREATE TABLE IF NOT EXISTS ${name} PARTITION OF clicks
-         FOR VALUES FROM ('${iso(from)}') TO ('${iso(to)}')`
-    );
+    await ensureMonthPartition(1);
   } catch (err) {
     console.error("[rollup] ensureNextMonthPartition failed:", err);
     throw err;
@@ -93,18 +91,7 @@ export async function ensureNextMonthPartition(): Promise<void> {
 /** Ensure the partition for the current month exists. Call this on Worker startup/deploy. */
 export async function ensureCurrentMonthPartition(): Promise<void> {
   try {
-    const now = new Date();
-    const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
-    const name = `clicks_${from.getUTCFullYear()}_${String(from.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (!/^clicks_\d{4}_\d{2}$/.test(name)) {
-      throw new Error(`refusing to create partition with unexpected name: ${name}`);
-    }
-    await query(
-      `CREATE TABLE IF NOT EXISTS ${name} PARTITION OF clicks
-         FOR VALUES FROM ('${iso(from)}') TO ('${iso(to)}')`
-    );
+    await ensureMonthPartition(0);
   } catch (err) {
     console.error("[rollup] ensureCurrentMonthPartition failed:", err);
     throw err;

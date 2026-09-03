@@ -258,6 +258,14 @@ jobs:
           ROLLUP_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test apps/bot/src/__tests__/rollup-postgres.test.ts
 
+      # F-039/F-044: real PostgreSQL proof of the backend identity model (LOGIN role,
+      # yourrank_app group, RLS behaviour, anon/authenticated isolation, old-identity
+      # rollback). Fails closed when the database URL is absent.
+      - name: Database identity and RLS certification (F-039/F-044)
+        env:
+          DB_IDENTITY_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: node scripts/verify-db-identity.mjs certify
+
       - name: Session and team tests (against migrated schema)
         env:
           SESSION_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
