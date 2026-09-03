@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@yourrank/shared": "workspace:*",
-    "grammy": "1.44.0",
+    "grammy": "1.45.1",
     "hono": "^4.13.0",
     "postgres": "3.4.9",
     "toucan-js": "4.1.1",
