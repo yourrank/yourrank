@@ -39,20 +39,28 @@ const successfulStages = {
 };
 
 describe("release configuration", () => {
-  it("derives the six-trigger production inventory and requires Workers Paid capacity", async () => {
-    const paid = await validateProductionCronCapacity({ plan: "paid" });
-    expect(paid.required).toBe(6);
-    expect(paid.capacity).toBe(250);
-    expect(paid.workers.map(({ worker, crons }) => [worker, crons.length])).toEqual([
+  it("derives the five-trigger production inventory that fits Workers Free capacity", async () => {
+    const free = await validateProductionCronCapacity({ plan: "free" });
+    expect(free.required).toBe(5);
+    expect(free.capacity).toBe(5);
+    expect(free.workers.map(({ worker, crons }) => [worker, crons.length])).toEqual([
       ["Leaderboard", 1],
-      ["Bot", 3],
+      ["Bot", 2],
       ["Consumer", 1],
       ["Monitor", 1],
     ]);
 
-    await expect(validateProductionCronCapacity({ plan: "free" })).rejects.toThrow(
-      "Production requires 6 Cloudflare Cron Triggers",
+    const paid = await validateProductionCronCapacity({ plan: "paid" });
+    expect(paid.required).toBe(5);
+    expect(paid.capacity).toBe(250);
+
+    await expect(validateProductionCronCapacity({ plan: "" })).rejects.toThrow(
+      "CLOUDFLARE_WORKERS_PLAN must explicitly be 'free' or 'paid'",
     );
+    await expect(validateProductionCronCapacity({
+      plan: "free",
+      inventory: [{ worker: "Bot", config: "apps/bot/wrangler.toml", expected: 3 }],
+    })).rejects.toThrow("expected 3 production Cron Trigger(s) for Bot, found 2");
   });
 
   it("rejects the malformed array-table trigger syntax that Wrangler previously ignored", () => {

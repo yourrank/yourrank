@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PRODUCTION_CRON_INVENTORY = Object.freeze([
   { worker: "Leaderboard", config: "apps/leaderboard/wrangler.toml", expected: 1 },
-  { worker: "Bot", config: "apps/bot/wrangler.toml", expected: 3 },
+  { worker: "Bot", config: "apps/bot/wrangler.toml", expected: 2 },
   { worker: "Consumer", config: "apps/consumer/wrangler.toml", expected: 1 },
   { worker: "Monitor", config: "apps/monitor/wrangler.toml", expected: 1 },
 ]);
@@ -77,8 +77,8 @@ export async function validateProductionCronCapacity({
   const capacity = CLOUDFLARE_CRON_CAPACITY[normalizedPlan];
   if (!capacity) {
     throw new Error(
-      "CLOUDFLARE_WORKERS_PLAN must explicitly be 'paid' for this six-trigger production inventory " +
-      "('free' is accepted only to produce the capacity failure). Set the GitHub repository variable after the account upgrade.",
+      "CLOUDFLARE_WORKERS_PLAN must explicitly be 'free' or 'paid' (GitHub repository variable) so the " +
+      "production Cron Trigger inventory is checked against the real account capacity.",
     );
   }
 
@@ -99,8 +99,8 @@ export async function validateProductionCronCapacity({
     const breakdown = workers.map((worker) => `${worker.worker}=${worker.crons.length}`).join(", ");
     throw new Error(
       `Production requires ${required} Cloudflare Cron Triggers (${breakdown}), but the declared ` +
-      `${normalizedPlan} plan capacity is ${capacity}. Upgrade the Cloudflare account to Workers Paid; ` +
-      "do not consolidate unrelated scheduler ownership to fit the Free plan.",
+      `${normalizedPlan} plan capacity is ${capacity}. Upgrade the Cloudflare account to Workers Paid or ` +
+      "consolidate schedules within the owning Worker; do not move scheduler ownership across Workers.",
     );
   }
 

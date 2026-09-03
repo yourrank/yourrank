@@ -62,7 +62,7 @@ Name: Cloudflare production Cron Trigger capacity gate
 
 Scope: Production Wrangler configuration for Leaderboard, Bot, Consumer, and Monitor Workers.
 
-Property: The repository must declare exactly one, three, one, and one production Cron Triggers respectively; every trigger must use a valid `[triggers]` object table; and the six-trigger total must fit the explicitly declared Cloudflare Workers plan before any production database or Worker mutation starts.
+Property: The repository must declare exactly one, two, one, and one production Cron Triggers respectively; every trigger must use a valid `[triggers]` object table; and the five-trigger total must fit the explicitly declared Cloudflare Workers plan (`free` = 5, `paid` = 250) before any production database or Worker mutation starts. The Bot's every-minute trigger owns both broadcast batches and (on 5-minute boundaries of `scheduledTime`) Telegram webhook recovery; scheduler ownership is never moved across Workers to fit capacity.
 
 Why it matters: Wrangler uploads Worker code before applying Cron Trigger changes. An invalid or over-capacity schedule update can therefore report deployment failure after production code has already changed.
 

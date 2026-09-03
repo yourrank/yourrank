@@ -49,9 +49,9 @@ queue = "yourrank-events"
 binding = "EVENTS_QUEUE"
 
 [triggers]
-# every minute: broadcast batches | every five minutes: webhook recovery
-# | 03:00 UTC: rollup + partitions + expired plans
-crons = ["* * * * *", "*/5 * * * *", "0 3 * * *"]
+# every minute: broadcast batches (+ webhook recovery on 5-minute boundaries,
+# see isWebhookRecoveryTick) | 03:00 UTC: rollup + partitions + expired plans
+crons = ["* * * * *", "0 3 * * *"]
 
 
 # --- Durable Object for rate limiting ---
