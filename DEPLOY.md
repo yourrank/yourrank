@@ -13,11 +13,30 @@ Everything runs on managed edge infra: Cloudflare Workers (stateless, auto-scale
 - `wrangler` authed to the account.
 
 The canonical application is the Leaderboard Worker on `yourrank.site`.
-`apps/web` is a separately deployed OpenNext Worker containing only the
-marketing homepage; the Leaderboard Worker proxies `/` and `/_next/*` assets
-to it. Its `app.yourrank.site` custom domain is an internal proxy target:
-unmarked requests on `app.yourrank.site` and `next.yourrank.site` 301 to the
-equivalent `yourrank.site` path.
+`apps/web` is a separate OpenNext Worker containing only the marketing
+homepage; the Leaderboard Worker proxies `/` and `/_next/*` assets to it. Its
+`app.yourrank.site` custom domain is an internal proxy target: unmarked requests
+on `app.yourrank.site` and `next.yourrank.site` 301 to the equivalent
+`yourrank.site` path.
+
+### Production release (CI)
+
+Production is promoted only by `.github/workflows/deploy.yml` on push to `main`:
+preflight → capture exact Worker/migration state (Leaderboard, Bot, Consumer,
+Monitor, **Web**) → N-1 compatibility → expand-only migrations → Leaderboard →
+Bot → Consumer → backend-local readiness → Monitor → **Web from the same commit
+SHA** → web-local readiness → cross-service smoke → promote/record release SHA →
+finalizer. Every Worker version is deployed with `--tag <commit sha>`; the
+finalizer refuses promotion unless every Worker's active allocation carries the
+release SHA, writes a `release-manifest-<sha>` artifact (intended/promoted SHA,
+per-Worker SHA + allocation, DB migration version), and on any failure or
+cancellation restores changed Workers — Web included — to their captured exact
+version allocations. Migrations are never rolled back.
+
+`deploy-web.yml` deploys **staging only** (`yourrank-web-staging`, manual
+dispatch). There is no independent production Web promotion path. `deploy.yml`
+and `rollback.yml` share the `production-mutation` concurrency group, and
+`rollback.yml` accepts `web` as a Worker.
 
 ## 1. Database (once)
 Apply migrations via Supabase CLI:

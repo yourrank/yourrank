@@ -1,39 +1,28 @@
-name: Deploy web
+name: Deploy web (staging only)
 
-# Deploys the Next.js web Worker (marketing pages served at the apex) on push to
-# main when its sources change, and on demand via workflow_dispatch.
+# Staging-only deployment of the Next.js web Worker (yourrank-web-staging).
+#
+# Production Web is promoted exclusively by .github/workflows/deploy.yml as part of
+# the coherent release (same commit SHA as Leaderboard/Bot/Consumer/Monitor, one
+# promotion decision, F-003 recovery). This workflow has no push trigger and no
+# production target, so it can never promote apps/web, packages/shared, bun.lock,
+# or any other change to production independently of the backend release.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "apps/web/**"
-      - "packages/shared/**"
-      - "bun.lock"
-      - ".github/workflows/deploy-web.yml"
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Environment to deploy to"
-        required: true
-        default: "production"
-        type: choice
-        options:
-          - production
-          - staging
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-web
+  group: deploy-web-staging
   cancel-in-progress: false
 
 jobs:
-  deploy-web:
-    name: Deploy Next.js web app
+  deploy-web-staging:
+    name: Deploy Next.js web app to staging
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'production' }}
+    environment: staging
     steps:
       - uses: actions/checkout@v7
 
@@ -63,14 +52,9 @@ jobs:
         working-directory: apps/web
         run: bun run build:worker
 
-      - name: Deploy web worker
+      - name: Deploy web worker to staging
         working-directory: apps/web
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          if [ "${{ github.event.inputs.environment || 'production' }}" = "staging" ]; then
-            bun run deploy:ci -- --env staging
-          else
-            bun run deploy:ci
-          fi
+        run: bun run deploy:ci -- --env staging --tag "${{ github.sha }}" --message staging-${{ github.sha }}-run-${{ github.run_id }}
