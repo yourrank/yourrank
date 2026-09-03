@@ -210,6 +210,37 @@ The two phases are:
 
 Both trigger on push to `main`. You can also trigger manually from repo → Actions.
 
+### Expand → deploy → backfill → CONTRACT (F-009)
+
+`deploy.yml` applies **expand-phase migrations only**. `check-migration-compatibility.mjs`
+runs in preflight and rejects any post-baseline migration that is not marked
+`-- yourrank:migration-phase: expand`, is marked `contract`, or contains a
+contract operation (DROP/RENAME/SET SCHEMA, column type or NOT NULL narrowing,
+DROP DEFAULT, write constraints/unique indexes, CREATE OR REPLACE of
+functions/views/triggers, ALTER FUNCTION/POLICY, ENABLE/FORCE RLS, REVOKE,
+TRUNCATE/DELETE). After state capture the release also verifies that
+`supabase/migration-policy.json` `appliedThrough` is fully recorded in
+production, so the immutable baseline cannot be advanced to smuggle a contract
+migration past the gate. The F-004 `n1-compatibility` job then executes the
+N-1 Worker contracts against the expanded schema before `migrate` runs.
+
+Contract migrations run only through **`contract-migration.yml`** (manual
+`workflow_dispatch`, `production-mutation` lock, `production` environment). The
+file must declare
+
+```sql
+-- yourrank:migration-phase: contract
+-- yourrank:contract-requires-release: <40-char commit sha of the compatible release>
+```
+
+and be the **only** pending migration. The gate captures production state and
+refuses unless every Worker (Leaderboard, Bot, Consumer, Monitor, Web) serves
+exactly that release at 100% (rollback/N-1 window provably closed), production
+has recorded the whole baseline, and the operator confirmed
+`backfill_complete`, `rollback_window_closed`, `data_validation_passed` and typed
+`CONTRACT <file name>`. Afterwards advance `migration-policy.json` in a follow-up
+PR; until then `deploy.yml` preflight fails, which is intentional.
+
 ## 9. Production go-live checklist
 
 Before announcing the site:
