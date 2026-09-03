@@ -15,6 +15,7 @@ import { populateEnv } from "@yourrank/shared/env";
 import { exec as dbExec } from "@yourrank/shared/db";
 import { Toucan } from "toucan-js";
 import type { BotRow } from "./botEngine.js";
+import { NIGHTLY_CRON, isWebhookRecoveryTick } from "./cron-schedule.js";
 
 // Cache the Hono app instance so it's built once per isolate, not per request.
 let cachedApp: any = null;
@@ -87,9 +88,10 @@ export default {
   }),
 
   // Cron Triggers (see wrangler.toml):
-  //   * * * * *  — broadcast worker: one rate-limited batch per tick
+  //   * * * * *  — broadcast worker: one rate-limited batch per tick;
+  //                 Telegram webhook recovery on every 5th minute
   //   0 3 * * *  — nightly: click rollup, partitions, expired plans
-  async scheduled(event: { cron: string }, env: Record<string, any>, ctx: { waitUntil: (p: Promise<unknown>) => void }): Promise<void> {
+  async scheduled(event: { cron: string; scheduledTime: number }, env: Record<string, any>, ctx: { waitUntil: (p: Promise<unknown>) => void }): Promise<void> {
     const sentry = env.SENTRY_DSN ? (() => { const s = new Toucan({
       dsn: env.SENTRY_DSN,
       context: ctx,
@@ -98,7 +100,7 @@ export default {
     }); s.setTag("worker", "bot"); return s; })() : null;
     populateEnv(env);
     try {
-      if (event.cron === "0 3 * * *") {
+      if (event.cron === NIGHTLY_CRON) {
         const { rollupClicks, ensureNextMonthPartition, ensureCurrentMonthPartition } = await import("./rollup.js");
         const { downgradeExpired } = await import("./billing.js");
 
@@ -230,8 +232,6 @@ export default {
         } else {
           console.log(`[cron 0 3 * * *] All tasks completed successfully at ${new Date().toISOString()}`);
         }
-      } else if (event.cron === "*/5 * * * *") {
-        await recoverTelegramWebhookUpdatesForCron(env, event.cron);
       } else {
         // Default: broadcast batch (every minute cron)
         const { processBroadcastBatch } = await import("./broadcasts.js");
@@ -241,6 +241,9 @@ export default {
             notifyCronFailure(env, event.cron, "processBroadcastBatch", err).catch(() => {});
           }),
         );
+        if (isWebhookRecoveryTick(event.scheduledTime)) {
+          await recoverTelegramWebhookUpdatesForCron(env, event.cron);
+        }
       }
     } catch (err) {
       sentry?.captureException(err);
