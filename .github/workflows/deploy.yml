@@ -1,8 +1,9 @@
 name: Deploy
 
-# Push to main -> run pending DB migrations via Supabase CLI, then deploy both Workers.
-# If the smoke test fails after a successful deploy, the rollback job automatically
-# reverts both Workers to their previous Cloudflare deployment via `wrangler rollback`.
+# Push to main -> validate and capture production state, run pending DB migrations,
+# deploy the backend Workers, smoke test, and deploy the Monitor Worker. A bounded
+# finalizer re-reads actual production state after every failure/cancellation and
+# restores only changed Workers to their exact captured version allocations.
 # Required GitHub repo secrets:
 #   CLOUDFLARE_API_TOKEN   — Cloudflare API token
 #   CLOUDFLARE_ACCOUNT_ID  — Cloudflare account id
@@ -22,7 +23,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-preflight:
+    name: Validate production release capacity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate Cloudflare Cron Trigger inventory and capacity
+        env:
+          CLOUDFLARE_WORKERS_PLAN: ${{ vars.CLOUDFLARE_WORKERS_PLAN }}
+        run: node scripts/check-production-cron-capacity.mjs
+      - name: Validate migration compatibility window
+        run: node scripts/check-migration-compatibility.mjs
+
+  capture-release-state:
+    name: Capture exact pre-mutation production state
+    needs: release-preflight
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      state: ${{ steps.capture.outputs.state }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Capture Worker versions and applied migrations
+        id: capture
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
+        run: node scripts/release-recovery-state.mjs capture
+
   migrate:
+    needs: capture-release-state
     runs-on: ubuntu-latest
     outputs:
       applied: ${{ steps.push-migrations.outputs.applied }}
@@ -67,8 +99,6 @@ jobs:
     needs: migrate
     runs-on: ubuntu-latest
     environment: production
-    outputs:
-      lb-version: ${{ steps.capture-lb.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
@@ -128,20 +158,6 @@ jobs:
       - name: Build leaderboard
         working-directory: apps/leaderboard
         run: node build.js
-      - name: Capture current leaderboard version
-        id: capture-lb
-        continue-on-error: true
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          CURRENT=$(curl -sf \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/services/yourrank-site/environments/production" \
-            -H "Authorization: Bearer ${CF_API_TOKEN}" \
-            | jq -r '.result.default_environment.script.hash // "none"')
-          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "Current leaderboard version: $CURRENT"
-
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -154,8 +170,6 @@ jobs:
     needs: [migrate, deploy-leaderboard]
     runs-on: ubuntu-latest
     environment: production
-    outputs:
-      bot-version: ${{ steps.capture-bot.outputs.version }}
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
@@ -174,20 +188,6 @@ jobs:
       - name: Typecheck bot
         working-directory: apps/bot
         run: bun run typecheck
-      - name: Capture current bot version
-        id: capture-bot
-        continue-on-error: true
-        env:
-          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          CURRENT=$(curl -sf \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/services/yourrank-bot/environments/production" \
-            -H "Authorization: Bearer ${CF_API_TOKEN}" \
-            | jq -r '.result.default_environment.script.hash // "none"')
-          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          echo "Current bot version: $CURRENT"
-
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -361,7 +361,7 @@ jobs:
           echo "==========================================="
           echo "SMOKE TEST FAILED — deploy may be broken."
           echo "Commit: ${{ github.sha }}"
-          echo "Rollback job will attempt automatic recovery."
+          echo "Release finalizer will inspect actual production state and recover changed Workers."
           echo "==========================================="
 
   deploy-monitor:
@@ -397,82 +397,139 @@ jobs:
           command: deploy
           wranglerVersion: "4.106.0"
 
-  # -----------------------------------------------------------------
-  # Auto-rollback: triggered ONLY when smoke-test fails.
-  # Uses `wrangler rollback` to revert each Worker to its previous
-  # Cloudflare deployment — no manual intervention needed.
-  # -----------------------------------------------------------------
-  rollback:
-    needs: [migrate, deploy-leaderboard, deploy-bot, deploy-consumer, smoke-test]
-    if: always() && needs.migrate.result == 'success' && needs.smoke-test.result == 'failure'
+  release-finalizer:
+    name: Finalize release or recover exact production state
+    needs:
+      - capture-release-state
+      - migrate
+      - deploy-leaderboard
+      - deploy-bot
+      - deploy-consumer
+      - smoke-test
+      - deploy-monitor
+    if: ${{ always() && needs.capture-release-state.result == 'success' }}
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
+      BASELINE_RELEASE_STATE: ${{ needs.capture-release-state.outputs.state }}
+      RELEASE_STAGE_RESULTS: >-
+        {"migrate":"${{ needs.migrate.result }}","deploy-leaderboard":"${{ needs.deploy-leaderboard.result }}","deploy-bot":"${{ needs.deploy-bot.result }}","deploy-consumer":"${{ needs.deploy-consumer.result }}","smoke-test":"${{ needs.smoke-test.result }}","deploy-monitor":"${{ needs.deploy-monitor.result }}"}
     steps:
       - uses: actions/checkout@v7
+
+      - name: Observe production and build deterministic recovery plan
+        id: plan
+        run: node scripts/release-recovery-state.mjs plan
+
+      - name: Record successful release finalization
+        if: ${{ steps.plan.outputs.release_failed == 'false' }}
+        run: |
+          echo "## Production release finalized" >> "$GITHUB_STEP_SUMMARY"
+          echo "All mutation, smoke, and Monitor stages completed successfully for $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record failed release with no observed production mutation
+        if: ${{ steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.mutation_observed == 'false' }}
+        run: |
+          echo "No production migration or Worker version change was observed; no rollback command will run."
+          echo "## Recovery not required" >> "$GITHUB_STEP_SUMMARY"
+          echo "The release failed, but production still matches the captured pre-mutation state." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Revalidate retained migration compatibility
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.migrations_changed == 'true' }}
+        run: node scripts/check-migration-compatibility.mjs
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' }}
         with:
           bun-version: '1.3.0'
 
-      - name: Warn if schema is ahead of rolled-back code
-        if: needs.migrate.outputs.applied == 'true'
+      - name: Install pinned recovery dependencies
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' }}
+        run: bun install --frozen-lockfile
+
+      - name: Restore exact Leaderboard version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' }}
+        working-directory: apps/leaderboard
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.leaderboard_restore_specs }}
         run: |
-          echo "::warning::Migrations were applied before rollback; the database schema is ahead of the rolled-back code and needs manual review."
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" -y --message "Automatic recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Bot version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' }}
+        working-directory: apps/bot
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.bot_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" -y --message "Automatic recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Consumer version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' }}
+        working-directory: apps/consumer
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.consumer_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" -y --message "Automatic recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Restore exact Monitor version allocation
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' }}
+        working-directory: apps/monitor
+        env:
+          VERSION_SPECS: ${{ steps.plan.outputs.monitor_restore_specs }}
+        run: |
+          read -ra SPECS <<< "$VERSION_SPECS"
+          bunx wrangler versions deploy "${SPECS[@]}" -y --message "Automatic recovery for GitHub run ${GITHUB_RUN_ID}"
+
+      - name: Verify exact Worker state and retained migration history
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.mutation_observed == 'true' }}
+        run: node scripts/release-recovery-state.mjs verify
+
+      - name: Verify recovered backend health with bounded retries
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.runtime_health_required == 'true' }}
+        run: |
+          for attempt in $(seq 1 6); do
+            HEALTH_RESPONSE=$(curl -sS -L --max-time 20 -w '\n%{http_code}' https://yourrank.site/health || true)
+            HEALTH_STATUS=$(printf '%s\n' "$HEALTH_RESPONSE" | tail -n1)
+            HEALTH_BODY=$(printf '%s\n' "$HEALTH_RESPONSE" | sed '$d')
+            BOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://yourrank.site/r/smoke-probe-ci || true)
+            CONSUMER_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://yourrank.site/consumer/health || true)
+            if { [ "$HEALTH_STATUS" = "200" ] || [ "$HEALTH_STATUS" = "503" ]; } \
+              && printf '%s' "$HEALTH_BODY" | jq -e '.db == true' >/dev/null 2>&1 \
+              && [ "$BOT_STATUS" = "404" ] \
+              && [ "$CONSUMER_STATUS" = "200" ]; then
+              echo "Recovered backend is coherent (health=$HEALTH_STATUS, bot=$BOT_STATUS, consumer=$CONSUMER_STATUS)."
+              exit 0
+            fi
+            echo "Recovery health attempt $attempt/6 failed (health=$HEALTH_STATUS, bot=$BOT_STATUS, consumer=$CONSUMER_STATUS)."
+            [ "$attempt" = "6" ] || sleep 10
+          done
+          echo "::error::Recovered Worker versions did not return to a coherent healthy state after bounded retries."
+          exit 1
+
+      - name: Emit recovery incident summary
+        if: ${{ always() && (steps.plan.outcome != 'success' || steps.plan.outputs.release_failed == 'true') }}
+        run: |
           {
-            echo "## Rollback schema warning"
+            echo "## Production release incident"
             echo ""
-            echo "Migrations were applied before rollback. The database schema is now ahead of the rolled-back code and needs manual review."
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Migration job: ${{ needs.migrate.result }}"
+            echo "- Leaderboard deploy: ${{ needs.deploy-leaderboard.result }}"
+            echo "- Bot deploy: ${{ needs.deploy-bot.result }}"
+            echo "- Consumer deploy: ${{ needs.deploy-consumer.result }}"
+            echo "- Smoke: ${{ needs.smoke-test.result }}"
+            echo "- Monitor deploy: ${{ needs.deploy-monitor.result }}"
+            echo "- Migrations added and retained: ${{ steps.plan.outputs.migrations_added || 'state query failed' }}"
+            echo "- Worker recovery targets: ${{ steps.plan.outputs.worker_changes == 'true' && 'see recovery plan above' || 'none observed' }}"
+            echo "- Recovery job status: ${{ job.status }}"
+            echo ""
+            echo "Database migrations were not rolled back. Review failed recovery steps immediately."
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Rollback leaderboard worker
-        if: ${{ always() && needs.deploy-leaderboard.result == 'success' }}
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/leaderboard
-          command: rollback
-          wranglerVersion: "4.106.0"
-
-      - name: Rollback bot worker
-        if: ${{ always() && needs.deploy-bot.result == 'success' }}
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/bot
-          command: rollback
-          wranglerVersion: "4.106.0"
-
-      - name: Rollback consumer worker
-        if: ${{ always() && needs.deploy-consumer.result == 'success' }}
-        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/consumer
-          command: rollback
-          wranglerVersion: "4.106.0"
-
-      - name: Verify rollback health
-        run: |
-          echo "Waiting 15s for Cloudflare propagation…"
-          sleep 15
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 https://yourrank.site/ || true)
-          if [ "$STATUS" = "200" ]; then
-            echo "OK: yourrank.site healthy after rollback (HTTP $STATUS)"
-          else
-            echo "WARNING: yourrank.site returned HTTP $STATUS after rollback"
-            echo "Manual intervention may be required."
-          fi
-
-      - name: Rollback summary
-        if: always()
-        run: |
-          echo "==========================================="
-          echo "AUTO-ROLLBACK EXECUTED"
-          echo "Smoke test failed on commit: ${{ github.sha }}"
-          echo "Leaderboard, bot, and consumer Workers reverted to previous deployments."
-          echo "Pre-deploy leaderboard version: ${{ needs.deploy-leaderboard.outputs.lb-version || 'unknown' }}"
-          echo "Pre-deploy bot version:         ${{ needs.deploy-bot.outputs.bot-version || 'unknown' }}"
-          echo "Verify: https://yourrank.site"
-          echo "==========================================="
