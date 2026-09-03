@@ -1,4 +1,5 @@
 node_modules/
+.n1/
 npm-cache/
 dist/
 .dev.vars

@@ -50,6 +50,7 @@
     "check:test-mocks": "node scripts/check-test-mocks.mjs",
     "typecheck": "(cd packages/shared && bun run build) && (cd apps/bot && bun run typecheck) && (cd apps/leaderboard && bun run typecheck:games) && (cd apps/monitor && bun run typecheck) && (cd apps/web && bun run typecheck) && tsc -p apps/consumer/tsconfig.json",
     "test": "bun run scripts/test.mjs",
+    "verify:n1-compatibility": "node scripts/verify-n1-compatibility.mjs",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "overrides": {
