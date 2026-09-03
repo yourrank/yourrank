@@ -35,6 +35,24 @@ The following migrations were consolidated from the previous `db/migrations/` di
 
 When applying migrations, they should be applied in timestamp order (oldest to newest) to ensure the database schema evolves correctly.
 
+Production has recorded every migration through `20260907000000`. Do not edit,
+rename, remove, or insert a lower-versioned migration; the immutable baseline is
+recorded in `../migration-policy.json` and checked in CI and before production
+migration execution.
+
+Every later migration must begin with:
+
+```sql
+-- yourrank:migration-phase: expand
+```
+
+The automatic deployment path accepts expand-phase changes only. It rejects
+contract operations such as dropping or renaming schema objects, narrowing
+column types/nullability, adding write constraints, destructive data removal,
+and revoking privileges. Introduce additive schema first, deploy code that works
+with both old and new schema, backfill safely, and perform contract removal only
+in a later deliberately reviewed release after the rollback window is compatible.
+
 ## Deprecated Directory
 
 The `db/migrations/` directory is deprecated and should no longer be used. All new migrations should be added to this `supabase/migrations/` directory using the timestamped format.

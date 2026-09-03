@@ -56,6 +56,60 @@ One concept should have one canonical active implementation unless deliberate ve
 
 No duplicate implementation may exist merely because modifying the canonical implementation was harder.
 
+## REL-001 — Production Cron Capacity Is Validated Before Mutation
+
+Name: Cloudflare production Cron Trigger capacity gate
+
+Scope: Production Wrangler configuration for Leaderboard, Bot, Consumer, and Monitor Workers.
+
+Property: The repository must declare exactly one, three, one, and one production Cron Triggers respectively; every trigger must use a valid `[triggers]` object table; and the six-trigger total must fit the explicitly declared Cloudflare Workers plan before any production database or Worker mutation starts.
+
+Why it matters: Wrangler uploads Worker code before applying Cron Trigger changes. An invalid or over-capacity schedule update can therefore report deployment failure after production code has already changed.
+
+Source of truth: `apps/*/wrangler.toml`, `scripts/check-production-cron-capacity.mjs`, and the `CLOUDFLARE_WORKERS_PLAN` GitHub repository variable.
+
+How coverage is derived: The preflight's inventory names every production Worker with a `[triggers]` table and reads each canonical Wrangler file directly.
+
+Named enforcement/test: `.github/workflows/deploy.yml` release preflight and `apps/leaderboard/src/__tests__/release-config.test.js`.
+
+Intentional exclusions: The Web Worker has no scheduler. Staging is separately blocked until its isolated infrastructure is provisioned and is not counted against this production inventory.
+
+## REL-002 — Failed Production Releases Reconcile Actual Mutated State
+
+Name: Deterministic post-mutation Worker recovery
+
+Scope: Production migrations and the Leaderboard, Bot, Consumer, smoke, and Monitor stages in `.github/workflows/deploy.yml`.
+
+Property: Exact Cloudflare Worker version allocations and Supabase migration history are captured before mutation. An always-evaluated finalizer observes production after every failed or cancelled mutation stage, retains migrations, and restores only Workers whose active version allocations differ from the captured state. Failed recovery commands, state mismatch, or bounded health failure leave the workflow red.
+
+Why it matters: GitHub skips dependent jobs after an upstream failure by default, while Wrangler can change the active Worker version before returning a later deployment error. Job success is therefore not a reliable proxy for production state.
+
+Source of truth: `.github/workflows/deploy.yml` and `scripts/release-recovery-state.mjs`.
+
+How coverage is derived: The recovery model enumerates the canonical production Worker inventory and every mutation/finalization job in the workflow.
+
+Named enforcement/test: `apps/leaderboard/src/__tests__/release-config.test.js` covers failures at each deploy boundary, smoke failure, preflight failure, cancellation, exact state capture, and recovery failure behavior.
+
+Intentional exclusions: Database migrations are never rolled back. Compatibility with retained expand migrations is enforced by DB-001. A GitHub force-cancel or platform outage can prevent any in-workflow recovery and remains an operational incident.
+
+## DB-001 — Pre-deploy Migrations Preserve the N/N-1 Window
+
+Name: Expand-only automatic production migrations
+
+Scope: `supabase/migrations/*.sql` newer than the production migration baseline.
+
+Property: Applied migration history is immutable and new migration versions sort after it. The automatic production migration job accepts only explicitly marked expand-phase SQL and rejects contract operations that can make the deployed or immediately previous Worker version incompatible.
+
+Why it matters: Production migrations run before Worker deployment, and a later deployment failure leaves the schema ahead of code. Additive schema is safe in that state; destructive contraction is not.
+
+Source of truth: `supabase/migration-policy.json`, `scripts/check-migration-compatibility.mjs`, and `supabase/migrations/README.md`.
+
+How coverage is derived: The preflight hashes every migration at or below the recorded production baseline and validates every higher migration in filename order.
+
+Named enforcement/test: The production release preflight, the PR migration dry-run, and `apps/leaderboard/src/__tests__/release-config.test.js`.
+
+Intentional exclusions: Contract migrations are not silently accepted by the automatic pre-deploy path. They require a later release whose deployed and rollback versions no longer depend on the retired contract.
+
 ## MEM-001 — Membership Requires Deliberate or Qualifying Action
 
 Name: Canonical Viewer Membership creation boundary

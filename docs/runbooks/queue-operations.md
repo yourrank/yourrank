@@ -23,6 +23,6 @@ Conversions with a click reference are deduplicated. Clicks, counters, and provi
 
 ## Rollback
 
-The deploy workflow rolls back the leaderboard, bot, and consumer Workers when the production smoke gate fails. The manual rollback workflow can deploy a pinned ref for any Worker.
+The deploy workflow captures exact production Worker version allocations before migrations. After any failed or cancelled mutation stage, its finalizer re-reads Cloudflare state and restores only changed Leaderboard, Bot, Consumer, or Monitor Workers to those captured versions. Applied migrations remain in place under the expand/N-1 compatibility rule. The manual rollback workflow can deploy a pinned ref for any Worker.
 
 Rollback never applies database migrations. Deployments must keep schema changes backward-compatible with the previous Worker version.

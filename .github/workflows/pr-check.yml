@@ -187,6 +187,9 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
+      - name: Validate migration compatibility window
+        run: node scripts/check-migration-compatibility.mjs
+
       - name: Validate migration filenames
         run: |
           echo "Checking migration file naming..."
