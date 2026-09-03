@@ -52,3 +52,4 @@ tailwind.config.js
 .impeccable/review/
 # impeccable-ignore-end
 __pycache__/
+.restore-drill/

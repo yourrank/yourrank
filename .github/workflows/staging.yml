@@ -78,6 +78,10 @@ jobs:
         env:
           STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
         run: node scripts/staging-preflight.mjs render
+      - name: Monitor configuration preflight (staging)
+        env:
+          MONITOR_CHECK_SECRET_PRESENT: ${{ secrets.STAGING_MONITOR_CHECK_SECRET != '' }}
+        run: node scripts/monitor-preflight.mjs staging
       - name: Validate migration compatibility window
         run: node scripts/check-migration-compatibility.mjs
       - name: Record failure injection mode
@@ -444,9 +448,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           STAGING_WORKER: monitor
           STAGING_DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
+          DISABLED_INTEGRATIONS: ${{ vars.STAGING_DISABLED_INTEGRATIONS }}
+          MONITOR_CHECK_SECRET_PRESENT: ${{ secrets.STAGING_MONITOR_CHECK_SECRET != '' }}
+          REQUIRE_DEPLOYED_SECRETS: "true"
         run: |
-          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
-            node ../../scripts/staging-preflight.mjs worker-secrets
+          WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json)
+          export WORKER_SECRET_LIST
+          node ../../scripts/staging-preflight.mjs worker-secrets
+          node ../../scripts/monitor-preflight.mjs staging
 
   deploy-web-staging:
     name: Deploy Next.js web Worker (staging)
@@ -554,6 +563,8 @@ jobs:
           [ "$STATUS" = "200" ] || { echo "FAIL: monitor /health returned HTTP $STATUS"; exit 1; }
           UNAUTH=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_MONITOR_URL/check")
           [ "$UNAUTH" = "401" ] || { echo "FAIL: monitor /check is not protected (HTTP $UNAUTH)"; exit 1; }
+          QS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$STAGING_MONITOR_URL/check?secret=not-a-credential")
+          [ "$QS" = "400" ] || { echo "FAIL: monitor /check accepts query-string credentials (HTTP $QS)"; exit 1; }
           BODY=$(curl -sS --max-time 60 -H "Authorization: Bearer $MONITOR_CHECK_SECRET" "$STAGING_MONITOR_URL/check")
           if ! printf '%s' "$BODY" | jq -e 'type == "array" and length > 0 and all(.[]; .ok == true)' >/dev/null 2>&1; then
             echo "FAIL: monitor checks against the staging target did not all pass:"
