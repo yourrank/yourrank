@@ -41,7 +41,7 @@ const ANALYTICS_TABS = ANALYTICS_ROUTES.slice(1).map(({ tab }) => tab);
 
 /** Every .js/.jsx source file under src, excluding tests and the generated bundle. */
 function sourceFiles(dir = SRC_ROOT, out = []) {
-  for (const name of readdirSync(dir)) {
+  for (const name of readdirSync(dir).sort()) {
     const full = path.join(dir, name);
     if (statSync(full).isDirectory()) {
       if (name === "__tests__" || name === "node_modules") continue;
