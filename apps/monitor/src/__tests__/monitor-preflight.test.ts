@@ -54,6 +54,31 @@ describe("monitor-preflight.mjs", () => {
     expect(unknown.out).not.toContain("forbidden secret");
   });
 
+  it("releases without an alert path only under the exact explicit opt-out, with a warning", () => {
+    const base = { MONITOR_CHECK_SECRET_PRESENT: "true", WORKER_SECRET_LIST: JSON.stringify([{ name: "MONITOR_CHECK_SECRET" }]) };
+    const optedOut = run(monitorDir, { ...base, MONITOR_ALERT_OPT_OUT: "unalerted-production-accepted" });
+    expect(optedOut.code).toBe(0);
+    expect(optedOut.out).toContain("::warning title=Monitor alerting::");
+    expect(optedOut.out).toContain("NO ALERT PATH");
+
+    const wrongValue = run(monitorDir, { ...base, MONITOR_ALERT_OPT_OUT: "true" });
+    expect(wrongValue.code).toBe(1);
+    expect(wrongValue.out).toContain("MONITOR_ALERT_OPT_OUT must be exactly");
+    expect(wrongValue.out).toContain("no alert path is configured");
+
+    const empty = run(monitorDir, { ...base, MONITOR_ALERT_OPT_OUT: "" });
+    expect(empty.code).toBe(1);
+    expect(empty.out).toContain("no alert path is configured");
+
+    const withAlert = run(monitorDir, {
+      ...base,
+      MONITOR_ALERT_OPT_OUT: "unalerted-production-accepted",
+      WORKER_SECRET_LIST: JSON.stringify([{ name: "MONITOR_CHECK_SECRET" }, { name: "DISCORD_MONITORING_WEBHOOK" }]),
+    });
+    expect(withAlert.code).toBe(0);
+    expect(withAlert.out).not.toContain("::warning");
+  });
+
   it("fails closed when the GitHub environment lacks MONITOR_CHECK_SECRET", () => {
     const { code, out } = run(monitorDir, { MONITOR_CHECK_SECRET_PRESENT: "false", WORKER_SECRET_LIST: "[]" });
     expect(code).toBe(1);
