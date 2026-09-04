@@ -716,7 +716,7 @@ jobs:
 
       - name: Upload release provenance manifest
         if: ${{ always() && steps.promote.outcome != 'skipped' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-manifest-${{ github.sha }}
           path: ${{ github.workspace }}/release-manifest.json
