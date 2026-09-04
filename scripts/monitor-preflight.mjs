@@ -12,6 +12,10 @@
 //   WORKER_SECRET_LIST             optional JSON from `wrangler secret list` for the
 //                                  deployed Worker; when set the deployed secret
 //                                  names are validated as well
+//   RELEASE_PUSHED_SECRETS         optional comma list of Worker secret names the
+//                                  release is about to push from GitHub secrets;
+//                                  counted pre-mutation only (ignored when
+//                                  REQUIRE_DEPLOYED_SECRETS=true)
 //   DISABLED_INTEGRATIONS          staging only: comma list of intentionally
 //                                  disabled alert integrations
 //                                  (discord-monitoring, monitor-email)
@@ -140,6 +144,16 @@ export function checkMonitorSecrets(secretNames, environment, disabledIntegratio
   return { problems, report, alertPaths };
 }
 
+export const MONITOR_PUSHABLE_SECRETS = Object.freeze([
+  ...MONITOR_REQUIRED_SECRETS,
+  ...Object.values(MONITOR_ALERT_INTEGRATIONS).flat(),
+]);
+
+export function parseReleasePushedSecrets(value) {
+  const names = String(value ?? "").split(",").map((name) => name.trim()).filter(Boolean);
+  return names.filter((name) => MONITOR_PUSHABLE_SECRETS.includes(name));
+}
+
 export function checkMonitorEnvironment(env, environment) {
   const spec = MONITOR_ENVIRONMENTS[environment];
   if (!spec) throw new Error(`Unknown monitor environment ${environment}.`);
@@ -167,11 +181,12 @@ async function main() {
   ];
   if (process.env.WORKER_SECRET_LIST !== undefined) {
     const names = parseSecretNames(process.env.WORKER_SECRET_LIST);
-    // Pre-mutation the release has not pushed MONITOR_CHECK_SECRET yet; the GitHub
-    // environment secret it will push counts. Post-deploy (REQUIRE_DEPLOYED_SECRETS)
-    // only the names actually present on the Worker count.
-    if (process.env.REQUIRE_DEPLOYED_SECRETS !== "true" && process.env.MONITOR_CHECK_SECRET_PRESENT === "true") {
-      names.push("MONITOR_CHECK_SECRET");
+    // Pre-mutation the release has not pushed the GitHub-held secrets yet; the
+    // names it will push count. Post-deploy (REQUIRE_DEPLOYED_SECRETS) only the
+    // names actually present on the Worker count.
+    if (process.env.REQUIRE_DEPLOYED_SECRETS !== "true") {
+      if (process.env.MONITOR_CHECK_SECRET_PRESENT === "true") names.push("MONITOR_CHECK_SECRET");
+      names.push(...parseReleasePushedSecrets(process.env.RELEASE_PUSHED_SECRETS));
     }
     const disabled = parseDisabledAlertIntegrations(process.env.DISABLED_INTEGRATIONS);
     const secrets = checkMonitorSecrets(names, environment, disabled);

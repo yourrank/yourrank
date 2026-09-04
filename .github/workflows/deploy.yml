@@ -65,6 +65,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MONITOR_CHECK_SECRET_PRESENT: ${{ secrets.MONITOR_CHECK_SECRET != '' }}
+          # Alert-path secrets held in the GitHub environment are pushed to the
+          # monitor by the Deploy monitor Worker step; count them pre-mutation.
+          RELEASE_PUSHED_SECRETS: >-
+            ${{ secrets.DISCORD_MONITORING_WEBHOOK != '' && 'DISCORD_MONITORING_WEBHOOK,' || '' }}
+            ${{ secrets.RESEND_API_KEY != '' && 'RESEND_API_KEY,' || '' }}
+            ${{ secrets.ALERT_EMAIL != '' && 'ALERT_EMAIL' || '' }}
         run: |
           WORKER_SECRET_LIST=$(bunx wrangler secret list --format json) \
             node ../../scripts/monitor-preflight.mjs production
@@ -464,18 +470,34 @@ jobs:
         working-directory: apps/monitor
         run: bun run typecheck
 
+      - name: Resolve monitor secrets pushed by this release
+        id: monitor_secrets
+        env:
+          HAS_DISCORD: ${{ secrets.DISCORD_MONITORING_WEBHOOK != '' }}
+          HAS_RESEND: ${{ secrets.RESEND_API_KEY != '' }}
+          HAS_ALERT_EMAIL: ${{ secrets.ALERT_EMAIL != '' }}
+        run: |
+          NAMES="MONITOR_CHECK_SECRET"
+          [ "$HAS_DISCORD" = "true" ] && NAMES="$NAMES"$'\n'"DISCORD_MONITORING_WEBHOOK"
+          [ "$HAS_RESEND" = "true" ] && NAMES="$NAMES"$'\n'"RESEND_API_KEY"
+          [ "$HAS_ALERT_EMAIL" = "true" ] && NAMES="$NAMES"$'\n'"ALERT_EMAIL"
+          { echo "names<<EOF"; echo "$NAMES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          echo "Pushing monitor secrets: $(echo "$NAMES" | tr '\n' ' ')"
+
       - name: Deploy monitor Worker
         uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           MONITOR_CHECK_SECRET: ${{ secrets.MONITOR_CHECK_SECRET }}
+          DISCORD_MONITORING_WEBHOOK: ${{ secrets.DISCORD_MONITORING_WEBHOOK }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/monitor
           command: deploy --tag ${{ github.sha }} --message release-${{ github.sha }}-run-${{ github.run_id }}
           wranglerVersion: "4.106.0"
-          secrets: |
-            MONITOR_CHECK_SECRET
+          secrets: ${{ steps.monitor_secrets.outputs.names }}
 
       - name: Verify deployed monitor secret contract and protected /check
         working-directory: apps/monitor
