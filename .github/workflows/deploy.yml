@@ -65,6 +65,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MONITOR_CHECK_SECRET_PRESENT: ${{ secrets.MONITOR_CHECK_SECRET != '' }}
+          MONITOR_ALERT_OPT_OUT: ${{ vars.MONITOR_ALERT_OPT_OUT }}
           # Alert-path secrets held in the GitHub environment are pushed to the
           # monitor by the Deploy monitor Worker step; count them pre-mutation.
           RELEASE_PUSHED_SECRETS: >-
@@ -506,6 +507,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           MONITOR_CHECK_SECRET_PRESENT: ${{ secrets.MONITOR_CHECK_SECRET != '' }}
           REQUIRE_DEPLOYED_SECRETS: "true"
+          MONITOR_ALERT_OPT_OUT: ${{ vars.MONITOR_ALERT_OPT_OUT }}
           MONITOR_URL: ${{ vars.MONITOR_URL }}
         run: |
           WORKER_SECRET_LIST=$(bunx wrangler secret list --format json) \
