@@ -33,6 +33,27 @@ describe("monitor-preflight.mjs", () => {
     }
   });
 
+  it("counts GitHub-held alert secrets the release will push, pre-mutation only", () => {
+    const pending = {
+      MONITOR_CHECK_SECRET_PRESENT: "true",
+      WORKER_SECRET_LIST: "[]",
+      RELEASE_PUSHED_SECRETS: " DISCORD_MONITORING_WEBHOOK, ",
+    };
+    const pre = run(monitorDir, pending);
+    expect(pre.out).toContain("discord-monitoring: CONFIGURED");
+    expect(pre.code).toBe(0);
+
+    const post = run(monitorDir, { ...pending, REQUIRE_DEPLOYED_SECRETS: "true" });
+    expect(post.code).toBe(1);
+    expect(post.out).toContain("required secret MONITOR_CHECK_SECRET is not set");
+    expect(post.out).toContain("no alert path is configured");
+
+    const unknown = run(monitorDir, { ...pending, RELEASE_PUSHED_SECRETS: "DATABASE_URL,RESEND_API_KEY" });
+    expect(unknown.code).toBe(1);
+    expect(unknown.out).toContain("no alert path is configured");
+    expect(unknown.out).not.toContain("forbidden secret");
+  });
+
   it("fails closed when the GitHub environment lacks MONITOR_CHECK_SECRET", () => {
     const { code, out } = run(monitorDir, { MONITOR_CHECK_SECRET_PRESENT: "false", WORKER_SECRET_LIST: "[]" });
     expect(code).toBe(1);
