@@ -16,6 +16,9 @@
 //                                  release is about to push from GitHub secrets;
 //                                  counted pre-mutation only (ignored when
 //                                  REQUIRE_DEPLOYED_SECRETS=true)
+//   MONITOR_ALERT_OPT_OUT          production only: must equal exactly
+//                                  "unalerted-production-accepted" to release with
+//                                  no alert path; every run emits a warning
 //   DISABLED_INTEGRATIONS          staging only: comma list of intentionally
 //                                  disabled alert integrations
 //                                  (discord-monitoring, monitor-email)
@@ -25,7 +28,8 @@
 //   * MONITOR_BACKUP_CHECK is explicitly "true" (production may never opt out)
 //   * MONITOR_CHECK_SECRET exists — /check fails closed without it
 //   * at least one alert path (Discord webhook, or Resend + recipient) exists;
-//     staging may declare alert integrations disabled, production may not
+//     staging may declare alert integrations disabled; production may only
+//     release without one under the explicit MONITOR_ALERT_OPT_OUT variable
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -109,10 +113,18 @@ export function parseDisabledAlertIntegrations(value) {
   return new Set(relevant);
 }
 
-export function checkMonitorSecrets(secretNames, environment, disabledIntegrations = new Set()) {
+export const MONITOR_ALERT_OPT_OUT_VALUE = "unalerted-production-accepted";
+
+export function checkMonitorSecrets(secretNames, environment, disabledIntegrations = new Set(), options = {}) {
   const spec = MONITOR_ENVIRONMENTS[environment];
   if (!spec) throw new Error(`Unknown monitor environment ${environment}.`);
   const problems = [];
+  const warnings = [];
+  const optOut = options.alertOptOut === undefined ? undefined : String(options.alertOptOut);
+  if (optOut !== undefined && optOut !== "" && optOut !== MONITOR_ALERT_OPT_OUT_VALUE) {
+    problems.push(`${spec.scriptName}: MONITOR_ALERT_OPT_OUT must be exactly "${MONITOR_ALERT_OPT_OUT_VALUE}" or unset.`);
+  }
+  const alertOptOut = optOut === MONITOR_ALERT_OPT_OUT_VALUE;
   const names = new Set(secretNames);
   for (const secretName of MONITOR_REQUIRED_SECRETS) {
     if (!names.has(secretName)) problems.push(`${spec.scriptName}: required secret ${secretName} is not set; /check would fail closed and the release cannot trigger monitor checks.`);
@@ -134,14 +146,16 @@ export function checkMonitorSecrets(secretNames, environment, disabledIntegratio
       report.push(`${integration}: NOT CONFIGURED (missing ${missing.join(", ")})`);
     }
   }
-  if (alertPaths === 0 && !spec.allowDisabledAlerts) {
+  if (alertPaths === 0 && !spec.allowDisabledAlerts && alertOptOut) {
+    warnings.push(`${spec.scriptName}: NO ALERT PATH — releasing with MONITOR_ALERT_OPT_OUT; monitor failures are recorded but nobody is notified. Add DISCORD_MONITORING_WEBHOOK (or RESEND_API_KEY + ALERT_EMAIL) and remove the opt-out.`);
+  } else if (alertPaths === 0 && !spec.allowDisabledAlerts) {
     problems.push(`${spec.scriptName}: no alert path is configured (need DISCORD_MONITORING_WEBHOOK or RESEND_API_KEY + ALERT_EMAIL); failures would go unalerted.`);
   }
   if (alertPaths === 0 && spec.allowDisabledAlerts) {
     const declared = Object.keys(MONITOR_ALERT_INTEGRATIONS).every((integration) => disabledIntegrations.has(integration));
     if (!declared) problems.push(`${spec.scriptName}: no alert path is configured and not every alert integration is declared in DISABLED_INTEGRATIONS.`);
   }
-  return { problems, report, alertPaths };
+  return { problems, warnings, report, alertPaths };
 }
 
 export const MONITOR_PUSHABLE_SECRETS = Object.freeze([
@@ -189,8 +203,9 @@ async function main() {
       names.push(...parseReleasePushedSecrets(process.env.RELEASE_PUSHED_SECRETS));
     }
     const disabled = parseDisabledAlertIntegrations(process.env.DISABLED_INTEGRATIONS);
-    const secrets = checkMonitorSecrets(names, environment, disabled);
+    const secrets = checkMonitorSecrets(names, environment, disabled, { alertOptOut: process.env.MONITOR_ALERT_OPT_OUT });
     for (const line of secrets.report) console.log(`${MONITOR_ENVIRONMENTS[environment].scriptName}: ${line}`);
+    for (const warning of secrets.warnings) console.log(`::warning title=Monitor alerting::${warning}`);
     problems.push(...secrets.problems);
   }
   if (problems.length > 0) fail(problems);
