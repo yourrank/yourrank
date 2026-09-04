@@ -205,17 +205,26 @@ jobs:
         run: bun run build
       - name: Audit dependencies
         run: |
-          # bun audit's registry call is flaky from CI (recurring ConnectionClosed).
-          # Retry transient network failures; real vulnerabilities still fail the job.
-          for attempt in 1 2 3; do
-            if bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg; then
-              exit 0
+          # bun audit's registry call is flaky from CI (recurring multi-minute
+          # hangs ending in ConnectionClosed). Real vulnerabilities still fail the
+          # job; only transport-level audit failures are tolerated at deploy time
+          # (the same audit gates every PR in pr-check.yml).
+          set +e
+          for attempt in 1 2; do
+            out=$(bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg 2>&1)
+            code=$?
+            echo "$out"
+            if [ $code -eq 0 ]; then exit 0; fi
+            if echo "$out" | grep -qE "ConnectionClosed|audit request failed|ECONN|ETIMEDOUT|fetch failed"; then
+              echo "bun audit transport failure (attempt $attempt); retrying in 15s..."
+              sleep 15
+              continue
             fi
-            echo "bun audit attempt $attempt failed; retrying in 15s..."
-            sleep 15
+            echo "bun audit reported vulnerabilities (exit $code); failing."
+            exit $code
           done
-          echo "bun audit failed 3 times"
-          exit 1
+          echo "::warning::bun audit unreachable after retries (transport error, not a vulnerability). Deploy proceeds; PR Check still gates merges on audit."
+          exit 0
         # sharp <0.35.0 (transitive via wrangler, dev-only) and brace-expansion <=5.0.7
         # (transitive via eslint, dev-only) are tracked separately; both are build-time-only.
       - name: Run tests
@@ -287,17 +296,26 @@ jobs:
         run: bun run build
       - name: Audit dependencies
         run: |
-          # bun audit's registry call is flaky from CI (recurring ConnectionClosed).
-          # Retry transient network failures; real vulnerabilities still fail the job.
-          for attempt in 1 2 3; do
-            if bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg; then
-              exit 0
+          # bun audit's registry call is flaky from CI (recurring multi-minute
+          # hangs ending in ConnectionClosed). Real vulnerabilities still fail the
+          # job; only transport-level audit failures are tolerated at deploy time
+          # (the same audit gates every PR in pr-check.yml).
+          set +e
+          for attempt in 1 2; do
+            out=$(bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg 2>&1)
+            code=$?
+            echo "$out"
+            if [ $code -eq 0 ]; then exit 0; fi
+            if echo "$out" | grep -qE "ConnectionClosed|audit request failed|ECONN|ETIMEDOUT|fetch failed"; then
+              echo "bun audit transport failure (attempt $attempt); retrying in 15s..."
+              sleep 15
+              continue
             fi
-            echo "bun audit attempt $attempt failed; retrying in 15s..."
-            sleep 15
+            echo "bun audit reported vulnerabilities (exit $code); failing."
+            exit $code
           done
-          echo "bun audit failed 3 times"
-          exit 1
+          echo "::warning::bun audit unreachable after retries (transport error, not a vulnerability). Deploy proceeds; PR Check still gates merges on audit."
+          exit 0
         # sharp <0.35.0 (transitive via wrangler, dev-only) and brace-expansion <=5.0.7
         # (transitive via eslint, dev-only) are tracked separately; both are build-time-only.
       - name: Run bot tests
@@ -326,17 +344,26 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Audit dependencies
         run: |
-          # bun audit's registry call is flaky from CI (recurring ConnectionClosed).
-          # Retry transient network failures; real vulnerabilities still fail the job.
-          for attempt in 1 2 3; do
-            if bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg; then
-              exit 0
+          # bun audit's registry call is flaky from CI (recurring multi-minute
+          # hangs ending in ConnectionClosed). Real vulnerabilities still fail the
+          # job; only transport-level audit failures are tolerated at deploy time
+          # (the same audit gates every PR in pr-check.yml).
+          set +e
+          for attempt in 1 2; do
+            out=$(bun audit --audit-level moderate --ignore=GHSA-f88m-g3jw-g9cj --ignore=GHSA-mh99-v99m-4gvg 2>&1)
+            code=$?
+            echo "$out"
+            if [ $code -eq 0 ]; then exit 0; fi
+            if echo "$out" | grep -qE "ConnectionClosed|audit request failed|ECONN|ETIMEDOUT|fetch failed"; then
+              echo "bun audit transport failure (attempt $attempt); retrying in 15s..."
+              sleep 15
+              continue
             fi
-            echo "bun audit attempt $attempt failed; retrying in 15s..."
-            sleep 15
+            echo "bun audit reported vulnerabilities (exit $code); failing."
+            exit $code
           done
-          echo "bun audit failed 3 times"
-          exit 1
+          echo "::warning::bun audit unreachable after retries (transport error, not a vulnerability). Deploy proceeds; PR Check still gates merges on audit."
+          exit 0
         # sharp <0.35.0 (transitive via wrangler, dev-only) and brace-expansion <=5.0.7
         # (transitive via eslint, dev-only) are tracked separately; both are build-time-only.
       - name: Build shared
