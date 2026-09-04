@@ -29,7 +29,21 @@ BEGIN
   END IF;
 END $$;
 
-ALTER ROLE yourrank_worker NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
+-- Harden the role's attributes. In environments where yourrank_worker was
+-- pre-provisioned with SUPERUSER (e.g. created manually via a dashboard), the
+-- migration identity is not privileged enough to strip it (SQLSTATE 42501:
+-- only superusers may alter superuser roles). That must not fail the whole
+-- release: skip with a loud warning so an operator can strip SUPERUSER by hand,
+-- and let the additive policies/grants below proceed (they are what the
+-- Workers actually need to function).
+DO $$
+BEGIN
+  BEGIN
+    ALTER ROLE yourrank_worker NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE WARNING 'yourrank_worker keeps its current attributes: migration role cannot ALTER a SUPERUSER role (42501). Strip SUPERUSER manually: ALTER ROLE yourrank_worker NOSUPERUSER NOBYPASSRLS;';
+  END;
+END $$;
 
 GRANT yourrank_app TO yourrank_worker;
 GRANT USAGE ON SCHEMA public TO yourrank_worker;
