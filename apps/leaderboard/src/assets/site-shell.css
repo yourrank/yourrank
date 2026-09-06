@@ -396,7 +396,7 @@
 .yr-home-cols { display: grid; gap: 20px; align-items: start; }
 /* Grid children default to min-width:auto, which lets one unbreakable name
    push the whole column past the viewport. Every band child stays shrinkable. */
-.yr-home-top > *, .yr-home-cols > *, .yr-vcols > *, .yr-vhead--split > * { min-width: 0; }
+.yr-home-top > *, .yr-home-cols > *, .yr-vhead--split > * { min-width: 0; }
 
 /* The bar owns creator identity, so Home opens as an editorial band rather than
    a second identity card or hero slab. */
@@ -513,9 +513,6 @@
 .yr-vbal-num { font-family: var(--yr-mono); font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .yr-vbal-unit { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--yr-faint); font-weight: 700; }
 .yr-vbal.is-zero .yr-vbal-num { font-size: 24px; line-height: 28px; color: var(--yr-mute); }
-/* My Community: Participation is a full-width membership record. Credits and
-   Claims remain peers, side by side on a wide viewport and stacked on a phone. */
-.yr-vcols { display: grid; gap: 20px; align-items: start; }
 .yr-code-drop { width: min(100%, 760px); }
 .yr-code-drop .yr-sec-head { margin-bottom: 8px; }
 .yr-code-drop-form { margin-top: 18px; }
@@ -856,7 +853,7 @@
      sparse intro is not stretched to the balance card and left half empty. */
   .yr-home-top { grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); }
   .yr-home-top--solo { grid-template-columns: minmax(0, 1fr); }
-  .yr-home-cols, .yr-vcols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .yr-home-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .yr-vhead--split { grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); align-items: start; }
 }
 
@@ -1053,4 +1050,3 @@
   font-weight: 700;
   color: var(--yr-text, #ffffff);
 }
-

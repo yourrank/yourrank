@@ -79,7 +79,7 @@ describe("brand identity", () => {
       "packages/shared/src/shell-nav.ts",
       "packages/shared/src/page-shell.ts",
       "packages/shared/src/dashboard-chrome.ts",
-      "apps/leaderboard/src/pages/viewer-dashboard.js",
+      "packages/shared/src/viewer-shell.ts",
       "apps/leaderboard/src/middleware/seo.js",
       "apps/web/src/components/site-shell.tsx",
       "apps/web/src/components/home/workspace-preview.tsx",
@@ -89,6 +89,9 @@ describe("brand identity", () => {
       expect(source, `${rel} should be scanned`).toBeDefined();
       expect(source.text, `${rel} must import from brand-assets`).toMatch(/brand-assets/);
     }
+    const viewerPage = sources.find((s) => s.rel === "apps/leaderboard/src/pages/viewer-dashboard.js");
+    expect(viewerPage.text).toContain('@yourrank/shared/viewer-shell');
+    expect(viewerPage.text).toContain('viewerNavigation()');
   });
 
   it("serves the canonical mark as the favicon", () => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { PolicyLinks } from "./policy-links";
+
 import { useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { brandLogoSvg } from "@yourrank/shared/brand-assets";
@@ -129,11 +131,11 @@ export function SiteFooter() {
           <a href="/changelog" className="text-devin-ink hover:text-devin-primary">Changelog</a>
           <a href="/status" className="text-devin-ink hover:text-devin-primary">Status</a>
           <a href="/brand" className="text-devin-ink hover:text-devin-primary">Brand</a>
-          <a href="/contact" className="text-devin-ink hover:text-devin-primary">Contact</a>
         </div>
       </div>
       <div className="mx-auto mt-10 flex max-w-6xl flex-col justify-between gap-3 border-t border-devin-line pt-5 text-xs text-devin-ink-soft sm:flex-row">
         <span>© YourRank · contact@yourrank.site</span>
+        <PolicyLinks />
         <span className="font-mono">18+ · Entertainment only. Play responsibly.</span>
       </div>
     </footer>

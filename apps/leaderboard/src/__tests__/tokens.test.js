@@ -1,5 +1,5 @@
 // The operator workspace and marketing site intentionally use separate accent
-// axes: authenticated actions use electric violet, while marketing uses cobalt.
+// axes: authenticated actions use indigo, while marketing uses cobalt.
 // This test protects ownership, consistency within each axis, and legibility.
 
 import { describe, it, expect } from "bun:test";
@@ -10,7 +10,7 @@ const root = path.resolve(import.meta.dir, "../../../..");
 const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8").replaceAll("\r\n", "\n");
 
 const MARKETING_ACCENT = "#315cff";
-const V4_ACCENT = "#2200ff";
+const V4_ACCENT = "#4056b9";
 
 const sources = {
   app: read("apps/leaderboard/src/assets/app.css"),
@@ -127,8 +127,8 @@ function contrastRatio(foreground, background) {
 describe("design tokens", () => {
   it("defines the complete authenticated workspace type scale", () => {
     for (const [name, value] of [
-      ["--ws-type-page-size", "34px"],
-      ["--ws-type-page-leading", "40px"],
+      ["--ws-type-page-size", "28px"],
+      ["--ws-type-page-leading", "36px"],
       ["--ws-type-section-size", "20px"],
       ["--ws-type-section-leading", "28px"],
       ["--ws-type-card-size", "17px"],
@@ -326,7 +326,7 @@ describe("dashboard design foundation", () => {
     expect(sources.dashboard).toContain(
       ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-side input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] .lb-side select:focus-visible,\n.v3-dash[data-auth-workspace] .lb-side textarea:focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
     );
-    expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("#b8aaff");
+    expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("#304398");
     expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }");
     expect(sources.devinSystem || "").toContain("body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible");
   });

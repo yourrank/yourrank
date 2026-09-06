@@ -1,5 +1,6 @@
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
-import { dashboardNavItems, workspaceAccountTopbarHtml, workspaceSearchHtml } from "./dashboard-shell.jsx";
+import { dashboardNavItems, workspaceAccountTopbarHtml } from "./dashboard-shell.jsx";
+import { workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
 
 // Help center pages: a creator-facing hub plus Support and Feedback forms.
 // A signed-in streamer keeps the workspace chrome (rail, topbar, account menu).

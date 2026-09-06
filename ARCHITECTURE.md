@@ -10,10 +10,12 @@ Target product grouping does not change Worker ownership, URLs, schema, billing 
 
 There is one canonical application frontend: the `apps/leaderboard` Worker on
 `yourrank.site`. It owns the homepage entrypoint's surrounding application,
-marketing subpages, auth, dashboard, account/settings, help, admin, public
-boards, and APIs. `apps/web` is intentionally reduced to the animated
-marketing homepage only. The apex Worker proxies `/` and the homepage's
-`/_next/*` assets to that app.
+auth, dashboard, account/settings, help, admin, public boards, and APIs.
+The apex Worker proxies the routes in `MARKETING_PAGES` in
+`apps/leaderboard/src/index.js` to `apps/web`: the homepage, product pages,
+pricing, documentation and company pages. It also proxies `/_next/*` and
+`/brand/*` assets. Marketing page ownership does not move authenticated
+application routes or APIs into Next.js.
 
 `app.yourrank.site` and `next.yourrank.site` do not serve application routes.
 They return a 301 to the equivalent apex path. The homepage proxy sends

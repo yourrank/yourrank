@@ -24,7 +24,7 @@ const playersJs = read("assets/dashboard/players.js");
 const EDITOR_PATHS = [
   "/dashboard/leaderboard/setup",
   "/dashboard/leaderboard/players",
-  "/dashboard/leaderboard/appearance",
+  "/dashboard/leaderboard/design",
   "/dashboard/leaderboard/share",
   "/dashboard/leaderboard/history",
 ];
@@ -202,6 +202,20 @@ describe("authenticated editor body", () => {
     expect(mobileCards).toContain("td.num input");
     expect(mobileCards).toContain("flex: 1 1 auto");
     expect(mobileCards).toContain("td.act .row-x");
+    // Quick add remains visible on mobile; clipped focusable form controls are
+    // an accessibility failure even when the desktop table looks correct.
+    expect(mobileCards).toContain(".v3-players-table tfoot {");
+    expect(mobileCards).toContain("position: static");
+    expect(mobileCards).toContain("clip-path: none");
+    expect(mobileCards).toContain(".v3-players-table tfoot input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]),");
+    expect(mobileCards).toContain("min-height: 44px");
+  });
+
+  it("adapts the canonical preview to narrow screens and announces its state", () => {
+    const html = editorHtml("/dashboard/leaderboard/design");
+    expect(html).toContain('aria-label="Preview device" data-preview-default-device="auto"');
+    expect(html).toContain('id="previewSyncStatus" data-preview-status="true" role="status" aria-live="polite"');
+    expect(html).toContain('id="previewError" data-preview-error="true" role="status" aria-live="polite" hidden');
   });
 
   it("presents History as a close-and-restore workflow", () => {

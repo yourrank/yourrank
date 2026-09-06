@@ -2,11 +2,12 @@
 import { $, esc, currentPlayers } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
-import { automationHomeState, nextStepAction, visitsMetricState } from "./overview-state.js";
+import { activityHomeState, automationHomeState, nextStepAction, visitsMetricState } from "./overview-state.js";
 import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 import { fetchDashboardJson } from "./request.js";
 
 let automationHome = { comingNext: null, needsAttention: [] };
+let activityHome = { open: [], totalOpen: 0 };
 
 function formatOverviewDate(value) {
   const date = new Date(value);
@@ -23,7 +24,7 @@ const NEXT_STEP_OWNED_ELSEWHERE = new Set(["verifyEmail", "brand", "players", "p
 
 const ACTIVITY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
 const SETUP_STEPS = [
-  { key: "brand", required: true, label: "Name your site", description: "Give your public page a clear name.", href: "/dashboard/leaderboard/setup", action: "Name your site" },
+  { key: "brand", required: true, label: "Name your site", description: "Give your public page a clear name.", href: "/dashboard/site", action: "Name your site" },
   { key: "players", required: true, label: "Add players", description: "Add the names and scores you want to rank.", href: "/dashboard/leaderboard/players", action: "Add players" },
   { key: "publish", required: true, label: "Publish your site", description: "Open the standings to visitors and get your live link.", href: "#publish", action: "Publish site" },
 ];
@@ -60,8 +61,10 @@ export async function loadOverviewLiveData() {
     const params = new URLSearchParams({ siteId: state.ACTIVE_SITE_ID });
     const { body } = await fetchDashboardJson(`/api/activities?${params.toString()}`, { credentials: "same-origin" });
     automationHome = automationHomeState(body?.automation);
+    activityHome = activityHomeState(body?.activities);
   } else {
     automationHome = { comingNext: null, needsAttention: [] };
+    activityHome = { open: [], totalOpen: 0 };
   }
   renderOverviewSummary();
 }
@@ -73,16 +76,26 @@ export function renderOverviewSummary() {
   const steps = computeSetupSteps();
   const activeBoard = state.BOARDS.find((board) => board.id === state.ACTIVE_SITE_ID);
   const siteName = $("f_name")?.value.trim() || activeBoard?.name || state.SLUG || "Selected site";
+  const isModerator = activeBoard?.userRole === "moderator";
+  const ownerName = activeBoard?.ownerName || "the site owner";
   if ($("ovSiteName")) $("ovSiteName").textContent = siteName;
+  const operatorContext = $("ovOperatorContext");
+  if (operatorContext) {
+    operatorContext.hidden = !isModerator;
+    operatorContext.textContent = isModerator ? ` · Moderator for ${ownerName}` : "";
+  }
   const done = isBoardSetup();
   const readyToPublish = steps.brand && steps.players;
   const firstIncomplete = SETUP_STEPS.find((step) => step.required && !steps[step.key]);
+  const firstActionableIncomplete = SETUP_STEPS.find((step) => step.required && !steps[step.key] && !(isModerator && step.key === "brand"));
   const pendingVerification = status.published && !status.emailVerified;
   const needsVerification = !status.emailVerified;
+  const pendingOrders = Number(state.CREDITS?.usage?.pendingRedemptions || 0);
+  const connectionAttention = state.CREDITS?.channel?.homeAttention === true;
+  const automationAttentionCount = automationHome.needsAttention?.length || 0;
+  const hasOperationalAttention = pendingOrders > 0 || connectionAttention || automationAttentionCount > 0;
   const headSub = $("ovHeadSub");
-  const hasAutomationAttention = Array.isArray(automationHome.needsAttention) && automationHome.needsAttention.length > 0;
-  const hasOperationalAttention = Number(state.CREDITS?.usage?.pendingRedemptions || 0) > 0 || state.CREDITS?.channel?.homeAttention === true || hasAutomationAttention;
-  if (headSub) headSub.textContent = pendingVerification ? "Confirm your email so visitors can open this site." : readyToPublish && needsVerification ? "Confirm your email, then publish this site." : readyToPublish && !status.published ? "Publish when you want visitors to see the standings." : status.live && hasOperationalAttention ? "Review the items that need attention below." : status.live ? "Nothing needs your attention right now." : "Finish the steps below to open this site.";
+  if (headSub) headSub.textContent = status.live && hasOperationalAttention ? "Your community is running. Here’s what needs you." : status.live ? "You’re up to date. Here’s your community’s latest." : "Your community at a glance.";
   const showSetup = !done || pendingVerification;
   const setupSection = $("ovSetup");
   if (setupSection) setupSection.hidden = !showSetup;
@@ -97,38 +110,50 @@ export function renderOverviewSummary() {
   const setupMessage = $("ovSetupMessage");
   const setupAction = $("ovSetupAction");
   if (setupMessage) {
-    setupMessage.textContent = pendingVerification
-      ? "Your site is published, but email confirmation is still required."
-      : firstIncomplete?.key === "brand"
-        ? "Your site ranks the players you add and gives you one link to share."
-        : firstIncomplete?.key === "players"
-          ? "Add the players you want to rank."
-          : firstIncomplete?.key === "publish"
-            ? "The essentials are done. Publish when you’re ready."
-            : "The essentials are done.";
+    setupMessage.textContent = needsVerification && (readyToPublish || pendingVerification)
+      ? "Confirm your email to make this site available to visitors. Your setup is saved."
+      : firstIncomplete?.key === "brand" && isModerator
+        ? `Ask ${ownerName} to name the site. You can complete the remaining setup in the meantime.`
+        : firstIncomplete?.key === "brand"
+          ? "Your site ranks the players you add and gives you one link to share."
+          : firstIncomplete?.key === "players"
+            ? "Add the players you want to rank."
+            : firstIncomplete?.key === "publish"
+              ? "The essentials are done. Publish when you’re ready."
+              : "The essentials are done.";
   }
+  const setupTitle = $("ovSetupTitle");
+  if (setupTitle) setupTitle.textContent = needsVerification && (readyToPublish || pendingVerification)
+    ? "Confirm your email to go live"
+    : readyToPublish ? "Your site is ready to publish" : "Get your community ready";
   // One primary action: the next launch step while setup is open, the public
   // site once there is nothing left to do.
   if (setupAction) {
     const verificationIsNext = pendingVerification || (readyToPublish && needsVerification);
-    const publicationIsNext = !verificationIsNext && firstIncomplete?.key === "publish";
-    setupAction.hidden = !showSetup;
-    setupAction.href = verificationIsNext ? "/verify-email" : publicationIsNext ? "#publish" : firstIncomplete?.href || "/dashboard/leaderboard/setup";
-    setupAction.textContent = verificationIsNext ? "Confirm email" : firstIncomplete?.action || "Edit site";
+    const actionStep = isModerator && firstIncomplete?.key === "brand" ? firstActionableIncomplete : firstIncomplete;
+    const publicationIsNext = !verificationIsNext && actionStep?.key === "publish";
+    setupAction.hidden = !showSetup || (!verificationIsNext && !actionStep);
+    setupAction.href = verificationIsNext ? "/verify-email" : publicationIsNext ? "#publish" : actionStep?.href || "/dashboard";
+    setupAction.textContent = verificationIsNext ? "Confirm email" : actionStep?.action || "Continue setup";
     setupAction.dataset.publicationAction = publicationIsNext ? "true" : "false";
     if (publicationIsNext) wirePublicationLink(setupAction);
   }
   const setupList = $("ovSetupList");
   if (setupList) {
-    const nextKey = firstIncomplete?.key;
+    const nextKey = isModerator && firstIncomplete?.key === "brand" ? firstActionableIncomplete?.key : firstIncomplete?.key;
     setupList.innerHTML = SETUP_STEPS.map((step) => {
       const complete = Boolean(steps[step.key]);
-      const next = !complete && step.key === nextKey;
-      const stateLabel = complete ? "Done" : next ? "Next" : "Not started";
-      const rowClass = `ov-setup-row${complete ? " is-done" : ""}${next ? " is-next" : ""}`;
-      const href = step.key === "publish" ? "#publish" : step.href;
-      const publicationAttribute = step.key === "publish" ? ' data-publication-action="true"' : "";
-      return `<li><a class="${rowClass}" href="${href}" data-setup-step="${step.key}" data-setup-state="${complete ? "done" : next ? "next" : "not-started"}"${publicationAttribute}><span class="ov-step-icon${complete ? " is-done" : ""}" aria-hidden="true">${complete ? "✓" : ""}</span><span class="ov-step-body"><b>${step.label}</b><span class="hint">${step.description}</span></span><span class="ov-step-status${complete ? " is-done" : ""}" aria-hidden="true">${stateLabel}</span><span class="sr-only">${stateLabel}</span></a></li>`;
+      const ownerOnly = isModerator && step.key === "brand";
+      const next = !complete && !ownerOnly && step.key === nextKey;
+      const stateLabel = complete ? "Done" : ownerOnly ? "Owner action required" : next ? "Next" : "Not started";
+      const stateKey = complete ? "done" : ownerOnly ? "owner-action" : next ? "next" : "not-started";
+      const rowClass = `ov-setup-row${complete ? " is-done" : ""}${next ? " is-next" : ""}${ownerOnly ? " is-owner-action" : ""}`;
+      const description = ownerOnly && !complete ? `${ownerName} manages the site name and public identity.` : step.description;
+      const content = `<span class="ov-step-icon${complete ? " is-done" : ""}" aria-hidden="true">${complete ? "✓" : ""}</span><span class="ov-step-body"><b>${step.label}</b><span class="hint">${esc(description)}</span></span><span class="ov-step-status${complete ? " is-done" : ""}" aria-hidden="true">${stateLabel}</span><span class="sr-only">${stateLabel}</span>`;
+      if (ownerOnly) return `<li><span class="${rowClass}" data-setup-step="${step.key}" data-setup-state="${stateKey}">${content}</span></li>`;
+      const href = step.key === "publish" ? (needsVerification ? "/verify-email" : "#publish") : step.href;
+      const publicationAttribute = step.key === "publish" && !needsVerification ? ' data-publication-action="true"' : "";
+      return `<li><a class="${rowClass}" href="${href}" data-setup-step="${step.key}" data-setup-state="${stateKey}"${publicationAttribute}>${content}</a></li>`;
     }).join("");
     setupList.querySelectorAll("[data-publication-action='true']").forEach(wirePublicationLink);
   }
@@ -145,7 +170,6 @@ export function renderOverviewSummary() {
     setMetricValue($("ovViews14"), typeof visits.value === "number" ? number(visits.value) : visits.value);
   }
   const creditsEnabled = state.CREDITS_PRODUCT_ENABLED === true;
-  const pendingOrders = Number(state.CREDITS?.usage?.pendingRedemptions || 0);
   const pendingAlert = $("ovPendingOrdersAlert");
   if (pendingAlert) pendingAlert.hidden = pendingOrders <= 0;
   const pendingAlertCount = $("ovPendingOrdersAlertCount");
@@ -154,7 +178,6 @@ export function renderOverviewSummary() {
   if (pendingAlertLabel) pendingAlertLabel.textContent = pendingOrders === 1 ? "pending claim needs review." : "pending claims need review.";
   const pendingOrdersAction = $("ovPendingOrdersAlertAction");
   if (pendingOrdersAction) pendingOrdersAction.textContent = pendingOrders === 1 ? "Review claim" : "Review claims";
-  const connectionAttention = state.CREDITS?.channel?.homeAttention === true;
   const connectionAlert = $("ovConnectionAlert");
   if (connectionAlert) connectionAlert.hidden = !connectionAttention;
   const connectionDetail = $("ovConnectionAlertDetail");
@@ -172,11 +195,35 @@ export function renderOverviewSummary() {
   const automationAlert = $("ovAutomationAlert");
   if (automationAlert) automationAlert.hidden = !attentionSchedule;
   if (attentionSchedule) {
-    const title = attentionSchedule.status === "paused" ? "Scheduled Activity is paused." : "Scheduled Activity failed.";
+    const remaining = Math.max(0, automationAttentionCount - 1);
+    const title = automationAttentionCount > 1
+      ? `${automationAttentionCount} scheduled Activities need attention.`
+      : attentionSchedule.status === "paused" ? "Scheduled Activity is paused." : "Scheduled Activity failed.";
+    const firstDetail = `${attentionSchedule.templateName}: ${attentionSchedule.attentionMessage || "Review the schedule before choosing a new future time."}`;
     if ($("ovAutomationAlertTitle")) $("ovAutomationAlertTitle").textContent = title;
-    if ($("ovAutomationAlertDetail")) $("ovAutomationAlertDetail").textContent = `${attentionSchedule.templateName}: ${attentionSchedule.attentionMessage || "Review the schedule before choosing a new future time."}`;
+    if ($("ovAutomationAlertDetail")) $("ovAutomationAlertDetail").textContent = remaining ? `${firstDetail} ${remaining} more ${remaining === 1 ? "schedule needs" : "schedules need"} review.` : firstDetail;
     if ($("ovAutomationAlertAction")) $("ovAutomationAlertAction").href = activitiesHref;
   }
+  const attentionCount = pendingOrders + Number(connectionAttention) + automationAttentionCount;
+  const attentionSection = $("ovAttention");
+  if (attentionSection) attentionSection.hidden = attentionCount === 0;
+  if ($("ovAttentionCount")) $("ovAttentionCount").textContent = `${number(attentionCount)} ${attentionCount === 1 ? "item" : "items"}`;
+
+  const openActivities = activityHome.open || [];
+  const happeningNow = $("ovHappeningNow");
+  if (happeningNow) happeningNow.hidden = activityHome.totalOpen === 0;
+  if ($("ovHappeningNowSummary")) $("ovHappeningNowSummary").textContent = `${number(activityHome.totalOpen)} open ${activityHome.totalOpen === 1 ? "Activity" : "Activities"} on this site.`;
+  if ($("ovHappeningNowAction")) $("ovHappeningNowAction").href = activitiesHref;
+  const happeningNowList = $("ovHappeningNowList");
+  if (happeningNowList) {
+    happeningNowList.innerHTML = openActivities.map((item) => {
+      const progress = item.capacity > 0 ? `${number(item.claimed)} of ${number(item.capacity)} claims` : `${number(item.claimed)} claims`;
+      const reward = item.creditsPerClaim > 0 ? ` · ${number(item.creditsPerClaim)} credits each` : "";
+      const ending = item.endsAt ? ` · Ends ${formatOverviewDate(item.endsAt)}` : " · No end time";
+      return `<div class="ov-live-row"><div><strong>${esc(item.typeLabel)}</strong><span>${esc(progress + reward + ending)}</span></div><span class="ov-live-state">${esc(item.stateLabel)}</span></div>`;
+    }).join("");
+  }
+
   const upcomingSchedule = automationHome.comingNext || null;
   const comingNext = $("ovComingNext");
   if (comingNext) comingNext.hidden = !upcomingSchedule;
@@ -228,7 +275,7 @@ export function renderOverviewSummary() {
       creditsConnected: Boolean(state.CREDITS?.channel?.connected),
       rewardMappings: state.CREDITS?.usage?.rewardMappings ?? null,
       shopItems: state.CREDITS?.usage?.shopItems ?? null,
-      hasActivity: activity.length > 0,
+      hasActivity: activity.length > 0 || activityHome.totalOpen > 0,
       visits: typeof visits.value === "number" ? visits.value : null,
     });
     // A healthy live site already has one clear action in the page head. Keep

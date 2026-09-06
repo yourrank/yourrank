@@ -332,13 +332,13 @@ describe("public leaderboard standings", () => {
     expect(css).toMatch(/\.yr-search[^}]*font-family: var\(--yr-sans\)/);
   });
 
-  it("leaves the wave 2 shell and the home preview untouched", async () => {
+  it("uses the shared viewer shell and preserves the home preview", async () => {
     const html = await render();
-    expect((html.match(/<header class="yr-top">/g) || []).length).toBe(1);
+    expect((html.match(/<aside class="viewer-rail"/g) || []).length).toBe(1);
     expect((html.match(/<main\b/g) || []).length).toBe(1);
-    expect(html).toContain('<div class="yr-drawer" id="yr-side"');
-    expect(html).not.toContain("<aside");
-    expect((html.match(/aria-current="page"/g) || []).length).toBe(2);
+    expect(html).not.toContain('id="yr-side"');
+    expect(html).not.toContain('class="yr-top"');
+    expect((html.match(/aria-current="page"/g) || []).length).toBe(1);
 
     const home = await render("home");
     expect(home).toContain('<a class="yr-lead-name" href="/creator/player/Alice">Alice</a>');

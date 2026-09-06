@@ -10,12 +10,14 @@ export function generateCsrfToken() {
 
 export function csrfCookie(token, request = null) {
   const raw = (typeof process !== "undefined" && process.env && process.env.SESSION_COOKIE_DOMAIN) || "";
-  const domain = (raw && raw !== "undefined") ? raw : ".yourrank.site";
-  let domainAttribute = ` Domain=${domain};`;
+  let domainAttribute = "";
+  if (raw && raw !== "undefined") {
+    domainAttribute = ` Domain=${raw};`;
+  }
   if (request) {
     try {
       const hostname = new URL(request.url).hostname.toLowerCase();
-      if (hostname !== "yourrank.site" && !hostname.endsWith(".yourrank.site")) domainAttribute = "";
+      if (!domainAttribute || (hostname !== "yourrank.site" && !hostname.endsWith(".yourrank.site"))) domainAttribute = "";
     } catch {
       domainAttribute = "";
     }

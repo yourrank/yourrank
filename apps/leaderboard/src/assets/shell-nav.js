@@ -104,9 +104,11 @@
   var sharedRoot = document.querySelector('.v3-dash[data-shell-drawer="shared"]');
   if (sharedRoot) {
     var side = sharedRoot.querySelector("#lbSide");
-    var main = sharedRoot.querySelector(".lb-main");
     var menuButtons = sharedRoot.querySelectorAll(".lb-menu");
     var closeButtons = sharedRoot.querySelectorAll("[data-close-side]");
+    var isolated = [];
+    var drawerTrigger = null;
+    var previousOverflow = "";
     var backdrop = document.querySelector(".lb-backdrop");
     if (!backdrop) {
       backdrop = document.createElement("div");
@@ -117,11 +119,18 @@
     function trapDrawerFocus(event) {
       if (event.key !== "Tab" || !side || !side.classList.contains("is-open")) return;
       var focusable = Array.prototype.slice.call(side.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary'))
-        .filter(function (element) { return element.offsetParent !== null; });
+        .filter(function (element) {
+          var details = element.closest("details:not([open])");
+          return element.getClientRects().length > 0 && !element.closest("[hidden], [inert]") &&
+            (!details || element === details.querySelector("summary"));
+        });
       if (!focusable.length) return;
       var first = focusable[0];
       var last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (!side.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -136,9 +145,11 @@
       side.removeAttribute("role");
       side.removeAttribute("aria-modal");
       backdrop.classList.remove("is-open");
-      if (main) main.inert = false;
+      isolated.forEach(function (entry) { entry.element.inert = entry.inert; });
+      isolated = [];
+      document.body.style.overflow = previousOverflow;
       menuButtons.forEach(function (button) { button.setAttribute("aria-expanded", "false"); });
-      if (returnFocus !== false && menuButtons[0]) menuButtons[0].focus();
+      if (returnFocus !== false && drawerTrigger) drawerTrigger.focus();
     }
 
     // Dashboard navigation requests this event when an in-document route
@@ -149,12 +160,25 @@
     });
 
     function openDrawer() {
-      if (!side) return;
+      if (!side || side.classList.contains("is-open")) return;
+      drawerTrigger = document.activeElement;
+      previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
       side.classList.add("is-open");
       side.setAttribute("role", "dialog");
       side.setAttribute("aria-modal", "true");
       backdrop.classList.add("is-open");
-      if (main) main.inert = true;
+      // Isolate every sibling up to body, including the outer skip link and
+      // document footer, not just the content inside this shell.
+      var branch = side;
+      while (branch && branch !== document.body) {
+        Array.prototype.forEach.call(branch.parentElement.children, function (sibling) {
+          if (sibling === branch || sibling === backdrop || /^(SCRIPT|STYLE|LINK)$/.test(sibling.tagName)) return;
+          isolated.push({ element: sibling, inert: sibling.inert });
+          sibling.inert = true;
+        });
+        branch = branch.parentElement;
+      }
       menuButtons.forEach(function (button) { button.setAttribute("aria-expanded", "true"); });
       // The trigger lives in .lb-main, which just became inert, so focus has to
       // move into the drawer or it is lost behind the backdrop: a container
@@ -173,6 +197,12 @@
       button.addEventListener("click", function () { closeDrawer(true); });
     });
     backdrop.addEventListener("click", function () { closeDrawer(true); });
+    document.addEventListener("focusin", function (event) {
+      if (side && side.classList.contains("is-open") && !side.contains(event.target)) {
+        var close = side.querySelector("[data-close-side]");
+        if (close) close.focus();
+      }
+    });
     window.addEventListener("resize", function () {
       if (window.innerWidth > 980) closeDrawer(false);
     });

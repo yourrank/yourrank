@@ -7,6 +7,8 @@ import { WorkspacePreview } from "../components/home/workspace-preview";
 import { ProofMarquee, HowItWorks, ComparisonSection, PricingSnapshot } from "../components/home/sections";
 import { ProductPage } from "../components/product-page";
 import { PricingPlans } from "../app/pricing/pricing-plans";
+import { SiteFooter } from "../components/site-shell";
+import { MotionFooter } from "../components/home/motion-footer";
 
 const PRIMARY_MARKETING_SOURCES = [
   "../components/site-shell.tsx",
@@ -21,6 +23,15 @@ const PRIMARY_MARKETING_SOURCES = [
 ].map((path) => new URL(path, import.meta.url));
 
 describe("Home & Product components", () => {
+  it("keeps legal and contact destinations available in both marketing footers", () => {
+    for (const footer of [<SiteFooter />, <MotionFooter />]) {
+      const html = renderToString(footer);
+      expect(html).toContain('aria-label="Legal and contact"');
+      for (const path of ["/terms", "/privacy", "/cookies", "/contact"]) {
+        expect(html).toContain(`href="${path}"`);
+      }
+    }
+  });
   it("renders the rotating hero words with one accessible headline", () => {
     const html = renderToString(<Hero />);
 

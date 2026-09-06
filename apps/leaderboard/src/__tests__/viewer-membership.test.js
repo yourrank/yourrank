@@ -22,10 +22,17 @@ function joinRequest(origin = "https://yourrank.site", body = { slug: "beta" }, 
 
 describe("explicit Viewer membership Join", () => {
   it("uses a host-only CSRF cookie on custom domains and the shared domain on YourRank", () => {
-    const custom = csrfCookie("token", new Request("https://creator.example/me"));
-    const platform = csrfCookie("token", new Request("https://yourrank.site/beta/me"));
-    expect(custom).not.toContain("Domain=");
-    expect(platform).toContain("Domain=.yourrank.site");
+    const previousDomain = process.env.SESSION_COOKIE_DOMAIN;
+    try {
+      process.env.SESSION_COOKIE_DOMAIN = ".yourrank.site";
+      const custom = csrfCookie("token", new Request("https://creator.example/me"));
+      const platform = csrfCookie("token", new Request("https://yourrank.site/beta/me"));
+      expect(custom).not.toContain("Domain=");
+      expect(platform).toContain("Domain=.yourrank.site");
+    } finally {
+      if (previousDomain === undefined) delete process.env.SESSION_COOKIE_DOMAIN;
+      else process.env.SESSION_COOKIE_DOMAIN = previousDomain;
+    }
   });
 
   it("creates exactly the authenticated Viewer's target-bound membership without activity", async () => {

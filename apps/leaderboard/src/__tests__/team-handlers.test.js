@@ -36,7 +36,7 @@ describe("Team API Handlers", () => {
 
   it("allows a moderator to read the team list but blocks every mutation", async () => {
     const user = { id: "moderator-1", email: "mod@example.com" };
-    const site = { id: "site-1" };
+    const site = { id: "site-1", name: "Alpha community", slug: "alpha" };
     const deps = {
       requireUser: async () => ({ user, res: null }),
       getSiteById: async (env, siteId) => siteId === site.id ? site : null,
@@ -61,6 +61,7 @@ describe("Team API Handlers", () => {
     expect(listRes.headers.get("cache-control")).toContain("no-store");
     const listBody = await listRes.json();
     expect(listBody.currentRole).toBe("moderator");
+    expect(listBody.siteName).toBe("Alpha community");
     expect(listBody.invites).toEqual([]);
     expect(listBody.seats).toEqual({ plan: "team", used: 2, limit: 5 });
 
@@ -113,7 +114,7 @@ describe("Team API Handlers", () => {
   it("returns 404 for a non-member instead of exposing team existence", async () => {
     const deps = {
       requireUser: async () => ({ user: { id: "outsider" }, res: null }),
-      getSiteById: async () => null,
+      getSiteById: async () => ({ id: "site-1", name: "Private community" }),
       getSiteRole: async () => null,
     };
     const res = await handleTeamList(
@@ -122,6 +123,7 @@ describe("Team API Handlers", () => {
       deps,
     );
     expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain("Private community");
   });
 
   it("preserves the invite after signed-out visitors authenticate", () => {

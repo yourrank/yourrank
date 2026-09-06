@@ -58,6 +58,8 @@ export interface LeaderboardPageOpts {
   footerBrandHref?: string;
   wide?: boolean;
   bootWatchdog?: boolean;
+  /** A surface-owned replacement contract also opts out of legacy material. */
+  designContract?: string;
   content: string;
 }
 
@@ -71,9 +73,10 @@ export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
   const bodyAttr = `${bodyClass}${opts.wide ? ' data-wide="true"' : ""}`;
   const reqIdMeta = opts.reqId ? `<meta name="request-id" content="${esc(opts.reqId)}" />` : "";
   const description = opts.description ? `<meta name="description" content="${esc(opts.description)}" />` : "";
+  const workspace = opts.content.includes('data-auth-workspace="true"');
   const styles = (opts.styles || ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css"])
     .map((href) => `<link rel="stylesheet" href="${esc(href)}" />`)
-    .join("") + '<link rel="stylesheet" href="/assets/devin-system.css" />';
+    .join("") + (workspace || opts.designContract ? "" : '<link rel="stylesheet" href="/assets/devin-system.css" />');
   const scripts = (opts.scripts || []).join("");
   const noscript =
     opts.noscript ||
@@ -98,7 +101,7 @@ ${reqIdMeta}
 ${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${GOOGLE_FONTS}
 ${styles}
 ${opts.bootWatchdog ? DASHBOARD_BOOT_WATCHDOG : ""}
-</head><body${bodyAttr}>${DEVIN_DESIGN_CONTRACT}
+</head><body${bodyAttr}>${opts.designContract || (workspace ? "" : DEVIN_DESIGN_CONTRACT)}
 <noscript><div class="noscript-msg">${noscript}</div></noscript>
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
 ${navPlaceholder}
@@ -213,11 +216,11 @@ export function botPageHtml(opts: BotPageOpts): string {
   // Bot component CSS is emitted before the shared dashboard sheets so the
   // shell chrome remains identical to the leaderboard while panel rules work.
   const chromeCss = opts.dashboardChrome
-    ? '<link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/shell-nav.css"><link rel="stylesheet" href="/assets/ui.css"><link rel="stylesheet" href="/assets/dashboard-v4.css"><link rel="stylesheet" href="/assets/devin-system.css">'
+    ? '<link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/shell-nav.css"><link rel="stylesheet" href="/assets/ui.css"><link rel="stylesheet" href="/assets/dashboard-v4.css">'
     : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(opts.documentTitle || DEFAULT_DASHBOARD_TITLE)}</title>${GOOGLE_FONTS}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${DEVIN_DESIGN_CONTRACT}
+<title>${esc(opts.documentTitle || DEFAULT_DASHBOARD_TITLE)}</title>${GOOGLE_FONTS}<style${nonceAttr}>${BOT_STYLE_ATTR_CSS}${BOT_BASE_CSS}${BOT_DASH_V2_CSS}</style>${chromeCss}</head><body class="yr-ui" data-page="${esc(opts.page)}">${opts.dashboardChrome ? "" : DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="skip-link">Skip to main content</a>
 ${nav}
 ${opts.content}

@@ -122,7 +122,7 @@ describe("authenticated dashboard v4 contract", () => {
     expect(ruleBlocks.some(({ declarations }) => /--ws-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
   });
 
-  it("keeps mobile top-bar controls on the light surface and allows reflow", () => {
+  it("keeps mobile top-bar controls on one compact light-surface row", () => {
     const baseTopbar = css.match(/\.v3-dash\[data-auth-workspace\] \.lb-topbar\s*\{([^{}]*)\}/)?.[1] || "";
     const menuRule = [...css.matchAll(/\.v3-dash\[data-auth-workspace\] \.lb-topbar-menu\s*\{([^{}]*)\}/g)]
       .map(([, declarations]) => declarations)
@@ -143,7 +143,7 @@ describe("authenticated dashboard v4 contract", () => {
     const narrowStart = css.indexOf("@media (max-width: 700px) {");
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
-    expect(narrowShell).toContain("--ws-topbar-h: 153px");
+    expect(narrowShell).toContain("--ws-topbar-h: 64px");
     expect(narrowShell).toContain("height: var(--ws-topbar-h)");
     expect(narrowShell).toContain("min-height: var(--ws-topbar-h)");
     expect(narrowShell).toContain("--ws-main-pad-inline: 16px");
@@ -151,14 +151,14 @@ describe("authenticated dashboard v4 contract", () => {
     expect(narrowShell).toContain("lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }");
     expect(narrowShell).not.toContain("min-height: 112px");
     expect(narrowShell).not.toContain("padding: 136px");
-    expect(css).toContain("animation: workspaceFadeIn");
-    expect(css).toMatch(/@keyframes workspaceFadeIn\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?opacity:\s*1;/);
+    expect(css).not.toContain("animation: workspaceFadeIn");
+    expect(css).not.toContain("@keyframes workspaceFadeIn");
     const compactTablet = css.slice(css.indexOf("@media (max-width: 1050px) and (min-width: 981px) {"), css.indexOf("\n@media", css.indexOf("@media (max-width: 1050px) and (min-width: 981px) {") + 1));
     expect(compactTablet).toContain(".lb-topbar-cmd { width: 130px");
     expect(compactTablet).toContain(".lb-topbar-cmd kbd { display: none; }");
     expect(compactTablet).toContain(".lb-availability { gap: 4px; }");
-    expect(css).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.lb-topbar\s*\{[\s\S]*?flex-wrap:\s*wrap/);
-    expect(css).toMatch(/@media \(max-width: 700px\) \{[\s\S]*?\.lb-topbar-hud\s*\{[\s\S]*?flex:\s*1 0 100%/);
+    expect(narrowShell).toMatch(/\.lb-topbar\s*\{[^}]*flex-wrap:\s*nowrap/);
+    expect(narrowShell).toMatch(/\.lb-topbar-hud\s*\{[^}]*flex:\s*1 1 auto/);
     const devinTopbar = devinSystemCss.match(/\.v3-dash\[data-auth-workspace\] \.lb-topbar\s*\{([^{}]*)\}/)?.[1] || "";
     expect(devinTopbar).not.toMatch(/background\s*:/);
     expect(devinTopbar).not.toMatch(/rgba\s*\(/);

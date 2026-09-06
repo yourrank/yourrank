@@ -30,6 +30,34 @@ export function automationHomeState(automation = {}) {
   };
 }
 
+// Home needs enough information to operate an open Activity without exposing
+// the claim code embedded in the Activity title. Keep this as a deliberately
+// smaller projection than the Activities page and accept only the proven safe
+// code-drop adapter.
+export function activityHomeState(activities = []) {
+  const seen = new Set();
+  const open = (Array.isArray(activities) ? activities : []).flatMap((activity) => {
+    if (
+      !activity?.id ||
+      seen.has(activity.id) ||
+      activity.source?.kind !== "code_drop" ||
+      activity.type !== "drop" ||
+      activity.state !== "open"
+    ) return [];
+    seen.add(activity.id);
+    return [{
+      id: activity.id,
+      typeLabel: "Code drop",
+      stateLabel: "Open",
+      endsAt: activity.endsAt || null,
+      claimed: Number(activity.progress?.claimed) || 0,
+      capacity: Number(activity.progress?.capacity) || 0,
+      creditsPerClaim: Number(activity.reward?.creditsPerClaim) || 0,
+    }];
+  });
+  return { open: open.slice(0, 3), totalOpen: open.length };
+}
+
 export function nextStepAction({
   status,
   steps,
@@ -59,9 +87,9 @@ export function nextStepAction({
     return {
       key: "brand",
       title: "Finish setting up your site",
-      body: "Name the leaderboard so visitors know what they are following.",
-      label: "Name leaderboard",
-      href: "/dashboard/leaderboard/setup",
+      body: "Give the public site a clear name so visitors know where they are.",
+      label: "Name site",
+      href: "/dashboard/site",
     };
   }
   if (!setup.players) {

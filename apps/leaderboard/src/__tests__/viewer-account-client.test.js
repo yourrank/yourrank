@@ -28,6 +28,7 @@ function makeElement(document, id = "") {
       for (const part of parts) this.textContent += typeof part === "string" ? part : part.textContent;
     },
     async click() { await Promise.all((listeners.click || []).map((listener) => listener())); },
+    async submit() { await Promise.all((listeners.submit || []).map((listener) => listener({ preventDefault() {} }))); },
     focus() { document.activeElement = this; },
   };
 }
@@ -62,7 +63,9 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
   run(window, document, fetch, location);
   return {
     $: (id) => document.getElementById(id),
+    activeElement: () => document.activeElement,
     calls,
+    location,
     ready: () => window.__yrViewerReady,
   };
 }
@@ -92,6 +95,7 @@ describe("global Viewer Account client", () => {
 
     expect(env.$("vd-login-card").hidden).toBe(true);
     expect(env.$("vd-profile").hidden).toBe(false);
+    expect(env.$("viewer-account-link").hidden).toBe(false);
     expect(env.$("vd-communities-card").hidden).toBe(false);
     expect(env.$("vd-username").textContent).toBe("member");
     expect(env.$("vd-identity").textContent).toContain("Connected to Kick as @member");
@@ -110,10 +114,24 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities").innerHTML).toBe("");
   });
 
+  it("keeps the initial until an avatar loads and restores it after an image failure", async () => {
+    const env = makeEnvironment({ response: { body: { ...ACCOUNT, viewer: { ...ACCOUNT.viewer, avatarUrl: "https://example.invalid/avatar.png" } } } });
+    await env.ready();
+    expect(env.$("vd-avatar").hidden).toBe(true);
+    expect(env.$("vd-avatar-fallback").hidden).toBe(false);
+    env.$("vd-avatar").onload();
+    expect(env.$("vd-avatar").hidden).toBe(false);
+    expect(env.$("vd-avatar-fallback").hidden).toBe(true);
+    env.$("vd-avatar").onerror();
+    expect(env.$("vd-avatar").hidden).toBe(true);
+    expect(env.$("vd-avatar-fallback").hidden).toBe(false);
+  });
+
   it("shows sign-in when the Viewer Account session is absent", async () => {
     const env = makeEnvironment({ response: { status: 401, body: { error: "unauthorized" } } });
     await env.ready();
     expect(env.$("vd-login-card").hidden).toBe(false);
+    expect(env.$("viewer-account-link").hidden).toBe(true);
     expect(env.$("vd-profile").hidden).toBe(true);
     expect(env.$("vd-communities-card").hidden).toBe(true);
   });
@@ -128,7 +146,9 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities").innerHTML).toContain("Alpha Community");
 
     await env.$("vd-logout").click();
+    expect(env.$("viewer-account-link").hidden).toBe(true);
 
+    expect(env.activeElement()).toBe(env.$("vd-login-card"));
     expect(env.$("vd-profile").hidden).toBe(true);
     expect(env.$("vd-communities-card").hidden).toBe(true);
     expect(env.$("vd-username").textContent).toBe("");
@@ -157,9 +177,9 @@ describe("global Viewer Account ownership", () => {
 
   it("names the real account-to-membership hierarchy", () => {
     expect(page).toContain('<h1 class="vd-h1" id="vd-title">My communities</h1>');
-    expect(page).toContain("One Viewer Account for every creator community you join.");
-    expect(page).toContain(">Community memberships<");
-    expect(page).toContain("Rewards, free credits and Claims");
+    expect(page).toContain("Your rewards and claims stay with each community.");
+    expect(page).toContain(">Your memberships<");
+    expect(page).toContain("Separate memberships, rewards and credit balances.");
     expect(page).toContain("You haven't joined any communities yet.");
     expect(page).not.toContain("appear here automatically");
     expect(page).not.toContain("Your sites");
@@ -187,5 +207,74 @@ describe("global Viewer Account ownership", () => {
     for (const id of ["vd-login-status", "vd-account-status", "vd-communities-status"]) {
       expect(page).toContain(`id="${id}" role="status" aria-live="polite"`);
     }
+  });
+
+  it("uses one replacement material owner and puts memberships before account maintenance", () => {
+    expect(page).not.toContain('/assets/devin-system.css');
+    expect(page).toContain('direction seed c2610fb4');
+    expect(page.indexOf('id="vd-communities-card"')).toBeLessThan(page.indexOf('id="vd-profile"'));
+    expect(page).toContain('<summary>Manage your login</summary>');
+    expect(page).not.toContain('href="/dashboard"');
+    expect(page).not.toContain('class="viewer-context"');
+  });
+});
+
+describe("viewer login recovery", () => {
+  it("opens the named community from the empty membership directory without creating a membership", async () => {
+    const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
+    await env.ready();
+    expect(env.$("vd-communities-empty").hidden).toBe(false);
+    env.$("vd-community-name").value = " Atlas-Community ";
+    await env.$("vd-open-community").submit();
+    expect(env.location.pathname).toBe("/atlas-community/me");
+    // Existing slugify truncates after trimming, so a stored slug can end in '-'.
+    const truncatedSlug = "a".repeat(39) + "-";
+    env.$("vd-community-name").value = truncatedSlug;
+    await env.$("vd-open-community").submit();
+    expect(env.location.pathname).toBe(`/${truncatedSlug}/me`);
+    expect(env.calls.every(call => call.method === "GET")).toBe(true);
+  });
+
+  it("rejects a URL or path entered as a community name", async () => {
+    const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
+    await env.ready();
+    for (const invalid of ["https://other.example", "../dashboard", "alpha/me", ""]) {
+      env.$("vd-community-name").value = invalid;
+      await env.$("vd-open-community").submit();
+      expect(env.location.pathname).toBe("/me");
+      expect(env.$("vd-community-name").attributes["aria-invalid"]).toBe("true");
+      expect(env.activeElement()).toBe(env.$("vd-community-name"));
+    }
+  });
+
+  it("keeps a signed-out account deep link on a visible sign-in panel", async () => {
+    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: { status: 401, body: { error: "unauthorized" } } });
+    await env.ready();
+    expect(env.$("vd-login-card").hidden).toBe(false);
+    expect(env.$("viewer-account-link").attributes.href).toBe("/me#vd-login-card");
+    expect(env.activeElement()).toBe(env.$("vd-login-card"));
+  });
+
+  it("keeps signed-in account navigation inside the viewer experience", async () => {
+    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: { body: ACCOUNT } });
+    await env.ready();
+    expect(env.$("vd-profile").hidden).toBe(false);
+    expect(env.$("viewer-account-link").attributes.href).toBe("/me#vd-profile");
+    expect(env.activeElement()).toBe(env.$("vd-profile"));
+  });
+
+  it("keeps a provider cancellation visible after the account request finishes", async () => {
+    const env = makeEnvironment({ url: "https://yourrank.site/me?error=access_denied", response: { status: 401, body: { error: "unauthorized" } } });
+    await env.ready();
+    expect(env.$("vd-login-status").textContent).toBe("Sign-in was cancelled.");
+  });
+
+  it("does not claim a login switch succeeded when sign-out fails", async () => {
+    const env = makeEnvironment({ response: (_path, opts) => opts.method === "POST" ? { status: 500, body: { error: "failed" } } : { body: ACCOUNT } });
+    await env.ready();
+    await env.$("vd-switch").click();
+    expect(env.$("vd-profile").hidden).toBe(false);
+    expect(env.$("vd-account-status").textContent).toContain("We couldn't switch your login.");
+    expect(env.$("vd-switch").disabled).toBe(false);
   });
 });
