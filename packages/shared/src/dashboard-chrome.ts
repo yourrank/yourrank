@@ -11,11 +11,11 @@ import { profileMenuHtml, type ShellUser } from "./shell-nav.js";
 import { brandMarkSvg } from "./brand-assets.js";
 
 const DESIGN_CONTRACT = `<!--
-THESIS: A creator run-sheet workspace turns dashboard state into the next clear action; it refuses the generic dark tile wall.
-OWN-WORLD: Cool-gray canvas, white 12-column modules, deep-navy production rail, cobalt actions, and narrow status cue bands.
+THESIS: The creator workspace organizes community work around one next action and readable activity.
+OWN-WORLD: Cool mineral canvas, white work surfaces, quiet slate navigation, indigo actions, Fira Sans UI and measured Fira Code data.
 STORY: A non-technical streamer sees what is live, what needs attention, acts immediately, and can reach every feature from one rail.
-FIRST VIEWPORT: Fixed branded rail at left; operational topbar above a status cue, three KPIs, and an asymmetric activity workspace; primary action sits beside the page title.
-FORM: Creator Run-Sheet workspace, selected direction, seed 562938e8.
+FIRST VIEWPORT: Compact navigation and site context frame a Home heading, one launch region with its action, a two-value summary and activity/player lists. Mobile keeps context on one row.
+FORM: Creator workspace; task-led replacement of the incumbent visual system, seed 135f2aab; owner brief governs direction.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`;
 
@@ -40,6 +40,11 @@ export interface NavGroupItem {
 }
 
 export type NavItem = NavLinkItem | NavGroupItem;
+
+/** Shared trigger for the workspace command palette, including Worker documents. */
+export function workspaceSearchHtml(): string {
+  return '<button class="lb-topbar-cmd" type="button" id="topbarCmdTrigger" aria-label="Search (⌘K or Ctrl+K)" title="Press ⌘K or Ctrl+K to search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search…</span><kbd>⌘K</kbd></button>';
+}
 
 function esc(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (ch) =>

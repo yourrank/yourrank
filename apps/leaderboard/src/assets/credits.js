@@ -373,7 +373,7 @@ function render() {
         emptySpec: {
           kind: "empty",
           title: "No members yet",
-          body: "People become members after they sign in on this site or interact through a connected channel reward.",
+          body: "People become members when they choose to join this community or complete a supported community action.",
           compact: true,
           actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }],
         },
@@ -434,6 +434,18 @@ function renderOnboarding() {
   }
   const connectionAction = $("cr-step-1")?.querySelector("a");
   if (connectionAction) connectionAction.hidden = !canManageConnections;
+  const next = $("cr-onboarding-next");
+  if (next) {
+    next.replaceChildren();
+    const source = current ? $(`cr-step-${current}`) : null;
+    if (source) {
+      const row = document.createElement("div");
+      row.className = "cr-step current";
+      row.innerHTML = source.innerHTML;
+      row.querySelector("a")?.classList.add("btn--accent");
+      next.appendChild(row);
+    }
+  }
   const ready = steps[4].done;
   if (ready && !hidden) { hidden = true; try { localStorage.setItem("cr-onboarding-hide", "1"); } catch { void 0; } }
   wrap.hidden = hidden;

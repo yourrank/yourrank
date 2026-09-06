@@ -82,28 +82,36 @@ function setGlobalLoading(loading) {
 }
 
 function renderLoggedOut() {
+  $("viewer-account-link").setAttribute("href", "/me#vd-login-card");
+  $("viewer-account-link").hidden = true;
   $("vd-login-card").hidden = false;
   $("vd-profile").hidden = true;
   $("vd-communities-card").hidden = true;
   $("vd-username").textContent = "";
   $("vd-identity").textContent = "";
   $("vd-communities").innerHTML = "";
+  $("vd-membership-count").textContent = "";
   $("vd-communities-empty").hidden = true;
 }
 
 function renderAccount(viewer) {
+  $("viewer-account-link").setAttribute("href", "/me#vd-profile");
+  $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
   $("vd-username").textContent = name;
   $("vd-avatar-fallback").textContent = initial(name);
 
+  const avatar = $("vd-avatar");
+  const fallback = $("vd-avatar-fallback");
+  avatar.hidden = true;
+  fallback.hidden = false;
+  avatar.onload = () => { avatar.hidden = false; fallback.hidden = true; };
+  avatar.onerror = () => { avatar.hidden = true; fallback.hidden = false; };
   if (viewer.avatarUrl) {
-    $("vd-avatar").src = viewer.avatarUrl;
-    $("vd-avatar").alt = `${name}'s profile picture`;
-    $("vd-avatar").hidden = false;
-    $("vd-avatar-fallback").hidden = true;
+    avatar.alt = `${name}'s profile picture`;
+    avatar.src = viewer.avatarUrl;
   } else {
-    $("vd-avatar").hidden = true;
-    $("vd-avatar-fallback").hidden = false;
+    avatar.removeAttribute("src");
   }
 
   const connections = (viewer.connections || []).map((connection) => {
@@ -127,6 +135,7 @@ function membershipSummary(community) {
 
 function renderCommunities(communities) {
   const list = $("vd-communities");
+  $("vd-membership-count").textContent = `${communities.length}`;
   $("vd-communities-empty").hidden = communities.length > 0;
   list.innerHTML = communities.map((community) => {
     const name = community.name || community.slug;
@@ -135,8 +144,7 @@ function renderCommunities(communities) {
       <article class="vd-card-row vd-community-row">
         <span class="vd-site-mark" aria-hidden="true">${esc(initial(name))}</span>
         <div class="vd-card-main">
-          <h3 class="vd-card-title">${esc(name)}</h3>
-          <p class="hint">Community membership</p>
+          <h3 class="vd-card-title"><a href="${href}">${esc(name)}</a></h3>
           <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
         </div>
         <div class="vd-card-side">
@@ -148,7 +156,7 @@ function renderCommunities(communities) {
 
 async function load() {
   setGlobalLoading(true);
-  setStatus("vd-login-status", "");
+  if (!loginError) setStatus("vd-login-status", "");
   setStatus("vd-communities-status", "");
   try {
     const data = await api("GET", "/api/viewer/me");
@@ -166,8 +174,27 @@ async function load() {
     else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
     setGlobalLoading(false);
+    if (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card") {
+      const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
+      destination.focus();
+    }
   }
 }
+
+$("vd-open-community")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const input = $("vd-community-name");
+  const slug = input.value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
+    input.setAttribute("aria-invalid", "true");
+    setStatus("vd-community-entry-status", "Enter a community name using letters, numbers and hyphens, such as atlas-community.", true);
+    input.focus();
+    return;
+  }
+  input.removeAttribute("aria-invalid");
+  setStatus("vd-community-entry-status", "");
+  window.location.href = new URL(`/${encodeURIComponent(slug)}/me`, window.location.origin).href;
+});
 
 $("vd-logout")?.addEventListener("click", async () => {
   const button = $("vd-logout");
@@ -176,6 +203,7 @@ $("vd-logout")?.addEventListener("click", async () => {
     await api("POST", "/api/viewer/logout");
     setStatus("vd-account-status", "");
     renderLoggedOut();
+    $("vd-login-card").focus();
   } catch (error) {
     setStatus("vd-account-status", errorText(error.message, "We couldn't sign you out. Try again."), true);
   } finally {
@@ -184,8 +212,17 @@ $("vd-logout")?.addEventListener("click", async () => {
 });
 
 $("vd-switch")?.addEventListener("click", async () => {
-  await api("POST", "/api/viewer/logout").catch(() => {});
-  location.href = "/me";
+  const button = $("vd-switch");
+  setLoading(button, true, "Signing out…");
+  try {
+    await api("POST", "/api/viewer/logout");
+    renderLoggedOut();
+    $("vd-login-kick").focus();
+  } catch (error) {
+    setStatus("vd-account-status", errorText(error.message, "We couldn't switch your login. Try again."), true);
+  } finally {
+    setLoading(button, false);
+  }
 });
 
 const LOGIN_ERROR_MESSAGES = Object.freeze({
@@ -198,9 +235,9 @@ const LOGIN_ERROR_MESSAGES = Object.freeze({
 });
 
 const url = new URL(window.location.href);
-if (url.searchParams.get("error")) {
-  const code = url.searchParams.get("error");
-  setStatus("vd-login-status", LOGIN_ERROR_MESSAGES[code] || "We couldn't complete sign-in. Try again.", true);
+const loginError = url.searchParams.get("error");
+if (loginError) {
+  setStatus("vd-login-status", LOGIN_ERROR_MESSAGES[loginError] || "We couldn't complete sign-in. Try again.", true);
   url.searchParams.delete("error");
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }

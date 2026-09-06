@@ -42,7 +42,9 @@ describe("new-shell auxiliary renderers", () => {
   it("renders legal and streamer pages in the site shell with honest empty states", async () => {
     const legal = await renderNewLegalPage(record.data, "privacy", opts);
     const profile = await renderNewStreamerProfile(record.data, opts);
-    expect(legal).toContain('class="yr-site"');
+    expect(legal).toContain('class="yr-site viewer-shell"');
+    expect(legal).toContain('aria-label="Viewer navigation"');
+    expect(legal).not.toContain('/assets/devin-system.css');
     expect(legal).toContain("Privacy Policy");
     expect(profile).toContain("No channel links yet.");
     expect(profile).toContain("No public leaderboards yet.");
@@ -332,9 +334,9 @@ describe("new-shell auxiliary renderers", () => {
       .slice(html.indexOf("<body"), html.indexOf("</body>"))
       .replace(/<[^>]*>/g, " ")
       .replace(/\s+/g, " ");
-    // Four jobs: the top bar identity, the home introduction heading, the
-    // narrow-width drawer identity, and the copyright line.
-    expect((visible.match(/Demo Board/g) || []).length).toBe(4);
+    // Three jobs: community context, home introduction, and copyright.
+    // The visible responsive rail no longer duplicates identity in a drawer.
+    expect((visible.match(/Demo Board/g) || []).length).toBe(3);
     expect(html).toContain("Tell us what works and what doesn't.");
     expect(html).not.toContain("Tell Demo Board what works");
   });

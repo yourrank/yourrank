@@ -129,21 +129,24 @@ export function parseSessionValue(raw: string): { userId: string; createdAt: num
 }
 
 export function cookieDomain(env: SessionEnv): string {
-  return env.SESSION_COOKIE_DOMAIN || COOKIE_DOMAIN;
+  if (env.SESSION_COOKIE_DOMAIN !== undefined) return env.SESSION_COOKIE_DOMAIN;
+  return COOKIE_DOMAIN;
 }
 
 /** Return a Set-Cookie header string that stores `token`. */
 export function cookieSet(token: string, env?: SessionEnv): string {
   const domain = env ? cookieDomain(env) : COOKIE_DOMAIN;
   const secure = env?.ENVIRONMENT === "development" ? "" : "Secure; ";
-  return `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; ${secure}SameSite=Lax; Domain=${domain}; Path=/; Max-Age=${SESSION_TTL_S}`;
+  const domainAttr = domain ? ` Domain=${domain};` : "";
+  return `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; ${secure}SameSite=Lax;${domainAttr} Path=/; Max-Age=${SESSION_TTL_S}`;
 }
 
 /** Return a Set-Cookie header string that clears the session. */
 export function cookieClear(env?: SessionEnv): string {
   const domain = env ? cookieDomain(env) : COOKIE_DOMAIN;
   const secure = env?.ENVIRONMENT === "development" ? "" : "Secure; ";
-  return `${COOKIE_NAME}=; HttpOnly; ${secure}SameSite=Lax; Domain=${domain}; Path=/; Max-Age=0`;
+  const domainAttr = domain ? ` Domain=${domain};` : "";
+  return `${COOKIE_NAME}=; HttpOnly; ${secure}SameSite=Lax;${domainAttr} Path=/; Max-Age=0`;
 }
 
 // ---------------------------------------------------------------------------

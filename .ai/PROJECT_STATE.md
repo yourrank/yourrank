@@ -39,6 +39,10 @@ Maintained to prevent architecture drift.
 
 ## Convergence Status
 
+### First roles / UX audit follow-up — 2026-09-06
+
+Local fixes now name Team site scope, unify Telegram/Settings search, preserve viewer community continuation, add an actionable empty membership entry and shared marketing policy links, and correct Reviews loading semantics. The unused monitoring factory was removed while active/gated/background features and identity boundaries remain. See [`docs/design/yourrank-report-one-fixes.md`](../docs/design/yourrank-report-one-fixes.md) for executed verification and limits: 2,179 test passes, 108 skips, no failures; production and real provider/role lifecycles are not certified by this local UI work.
+
 ### Route ownership/model — RESOLVED
 
 - `DASHBOARD_ROUTES` is the single editable current route-semantics manifest.
@@ -284,7 +288,7 @@ Community, People, and Insights are current navigation presentation labels only;
 - `apps/consumer` drains queue-backed analytics/conversion/notification work.
 - `apps/monitor` performs uptime checks.
 - Workers share Supabase/Postgres infrastructure through Hyperdrive and use Postgres-backed sessions.
-- `apps/web` remains the proxied marketing homepage only.
+- `apps/web` serves the proxied marketing routes enumerated by `MARKETING_PAGES` in `apps/leaderboard/src/index.js`, including homepage and marketing subpages; authenticated application routes remain Worker-owned.
 
 ## Current Identity and Scope Facts
 
@@ -306,7 +310,7 @@ Community, People, and Insights are current navigation presentation labels only;
 | Broader Activities consolidation beyond the free-drop adapter | Deferred; mixed Engagement and restricted Games remain contained legacy routes outside primary target navigation |
 | Three delivery transports remain | Intentional current state; ownership is already singular |
 | `board` and `siteId` both carry selected-site context | Separate parity-tested migration if changed |
-| `devin-system.css` still shapes authenticated page-body material | Accepted cascade debt; no competing `--ws-*` owner |
+| Workspace material migration | Authenticated workspace and bot dashboard chrome no longer load `devin-system.css`; non-workspace consumers retain it. Existing base CSS fallback and legacy class names remain. |
 | Legacy `v3-*`/`v4-*` names and raw-value ratchets | Existing debt; do not extend |
 | Legacy route aliases | Retained pending telemetry evidence |
 | Viewer/site membership expansion beyond the converged Viewer Account + existing `site_viewers` foundation | Wave J Participation and expanded Claims history are present; further expansion and Recognition remain deferred until proven safe linked evidence exists |
@@ -316,3 +320,15 @@ Community, People, and Insights are current navigation presentation labels only;
 | Claims expansion beyond reward redemptions | Deferred; other safe workflows do not yet expose a proven fulfillment lifecycle, and private fulfillment fields must be evidence-led |
 | Billing terms/providers/enums | Separate reconciliation required |
 | Restricted legacy route families | Operationally contained for owners where retained; excluded from target Home/navigation and target architecture work |
+
+## Dashboard structural redesign — 2026-09-05
+
+Home now has one setup action with a collapsed checklist; People empty-state nesting and Rewards setup hierarchy were simplified. The shared workspace uses the canonical mineral/slate/indigo tokens in `dashboard-v4.css`, with a compact mobile topbar, context-eligible command search, and keyboard-contained drawers. Route/account/site identity contracts are unchanged. The demo player-profile route now renders the canonical profile instead of returning 404.
+
+Live-browser evidence covers Home, empty People, Rewards setup, and the demo profile. The configured root regression run passed; credential-dependent integration skips remain skips. This is not a full-site or production verification. See `docs/design/yourrank-dashboard-redesign-verification.md` for evidence and remaining limits.
+
+## Viewer structural replacement — 2026-09-06
+
+The Channel guide replaces the rejected mixed viewer shell on global `/me` and supported creator public sections. Shared `viewer-shell.ts` / `viewer-shell.css` own navigation and material; stored template styling and devin are excluded there. Global Account remains a membership directory with login maintenance; community Membership owns its balance, claims, participation and free-code entry. Restricted Games remain on their existing shell; identities, route ownership and permissions are unchanged.
+
+Local synthetic desktop/mobile browser evidence verifies directory → membership → account return and successful sign-out focus recovery. Independent finish review disposition: ship. Build, lint, typecheck and final root regression passed; credential-dependent skips remain skips. Production, real OAuth and actual claim mutations are not verified; nothing was deployed. See `docs/design/yourrank-remaining-dashboard-redesign.md` for exact scope and evidence.

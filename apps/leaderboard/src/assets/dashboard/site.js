@@ -802,6 +802,8 @@ export function renderBoardStatus() {
     publishAction.className = `lb-publish-action${s.published ? " lb-publish-action--secondary" : ""}`;
     publishAction.title = s.published ? "Take this site offline" : "Make this site available to visitors";
     publishAction.setAttribute("aria-label", s.published ? "Unpublish site" : "Publish site");
+    publishAction.disabled = !s.published && !s.emailVerified;
+    if (publishAction.disabled) publishAction.title = "Confirm your email before publishing";
   }
   const shareWarning = $("sharePublishWarning");
   if (shareWarning) {

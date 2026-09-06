@@ -384,8 +384,9 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("My Community");
-    expect(html).toContain("Community membership");
-    expect(html).toContain("Sign in with Kick");
+    expect(html).toContain("Your place in TestStreamer's community");
+    expect(html).toContain("Join community");
+    expect(html).toContain("/api/viewer/auth/kick?");
   });
 
   it("shows controlled OAuth errors on creator-scoped My Community", async () => {
@@ -414,7 +415,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Credits");
-    expect(html).toContain('<span class="yr-vbal-num" data-credit-balance-num>500</span>'); // balance in the hero
+    expect(html).toContain('<strong data-credit-balance-num>500</strong>'); // compact membership balance
     expect(html).toContain("Shoutout"); // claim
     expect(html).toContain("Stream"); // ledger description
     expect(html).toContain("Claimed a code drop");
@@ -463,8 +464,9 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Alice");
-    expect(html).toContain('class="yr-top"');
-    expect(html).toContain('class="yr-drawer"');
+    expect(html).toContain('class="viewer-rail"');
+    expect(html).toContain('class="viewer-main"');
+    expect(html).not.toContain('class="yr-drawer"');
     expect(html).toContain("Leaderboard");
   });
 });

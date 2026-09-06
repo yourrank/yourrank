@@ -1,5 +1,6 @@
 // Account page entry point: profile, plan, postbacks, danger zone.
 import "./dashboard/help-drawer.js";
+import "./dashboard/command-palette.js";
 import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmModal } from "./dashboard/utils.js";
 import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
@@ -15,6 +16,8 @@ let _accountPopstate = null;
 let _unregisterRenderer = null;
 let _inviteModalRelease = null;
 let teamSiteId = "";
+let teamSiteName = "";
+let teamLoadVersion = 0;
 function setStatus(message, isError) {
   const el = statusEl();
   if (!el) return;
@@ -343,13 +346,25 @@ function renderTeam(data) {
   const invitesEl = $("teamInvitesList");
   if (!membersEl || !invitesEl) return;
 
-  if (data?.siteId) teamSiteId = data.siteId;
-
   if (!data || !data.ok) {
+    teamSiteId = "";
+    teamSiteName = "";
+    $("teamSiteName").textContent = "site unavailable";
+    $("btnOpenInviteModal").hidden = true;
+    $("teamPendingSection").hidden = true;
+    $("teamUpgradeLink").hidden = true;
+    $("teamPlanNotice").hidden = true;
+    $("teamReadOnlyNotice").hidden = true;
+    $("teamSeatUsage").textContent = "Operator seats unavailable";
+    $("teamSeatContext").textContent = "Reload to try again.";
     membersEl.innerHTML = `<p class="hint">${esc(data?.error || "Could not load team members.")}</p>`;
     invitesEl.innerHTML = `<p class="hint">Unavailable</p>`;
     return;
   }
+
+  teamSiteId = data.siteId;
+  teamSiteName = data.siteName || data.siteId;
+  $("teamSiteName").textContent = teamSiteName;
 
   const { members = [], invites = [], canManageTeam, currentRole, seats } = data;
   const openBtn = $("btnOpenInviteModal");
@@ -364,7 +379,7 @@ function renderTeam(data) {
   const limit = Math.max(1, Number(seats?.limit) || 1);
   const atLimit = used >= limit;
 
-  if (seatUsage) seatUsage.textContent = `${Math.min(used, limit)} of ${limit} operator seats active`;
+  if (seatUsage) seatUsage.textContent = `${used} of ${limit} account-wide operator seats used`;
   if (seatContext) {
     seatContext.textContent = plan === "team"
       ? "Pending invitations reserve a seat across the owner's sites."
@@ -435,11 +450,12 @@ function renderTeam(data) {
   if (canManageTeam) {
     document.querySelectorAll(".team-remove-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!await showConfirmModal("Remove team member", "They will lose access to this site. You can invite them again later.", "Remove member", true)) return;
+        const siteId = teamSiteId;
+        if (!await showConfirmModal("Remove team member", `They will lose access to ${teamSiteName}. You can invite them again later.`, "Remove member", true)) return;
         const targetUserId = btn.getAttribute("data-user-id");
         btn.disabled = true;
         btn.textContent = "Removing…";
-        const res = await jsonReq("POST", "/api/site/team/remove", { targetUserId, siteId: teamSiteId });
+        const res = await jsonReq("POST", "/api/site/team/remove", { targetUserId, siteId });
         if (res.ok) {
           setStatus("Member removed");
           loadTeam();
@@ -453,11 +469,12 @@ function renderTeam(data) {
 
     document.querySelectorAll(".team-revoke-invite-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        if (!await showConfirmModal("Revoke invitation", "This invite link will stop working. You can create a new one later.", "Revoke invite", true)) return;
+        const siteId = teamSiteId;
+        if (!await showConfirmModal("Revoke invitation", `This invite link for ${teamSiteName} will stop working. You can create a new one later.`, "Revoke invite", true)) return;
         const inviteId = btn.getAttribute("data-invite-id");
         btn.disabled = true;
         btn.textContent = "Revoking…";
-        const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId });
+        const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId, siteId });
         if (res.ok) {
           setStatus("Invitation revoked");
           loadTeam();
@@ -482,15 +499,20 @@ function renderTeam(data) {
 }
 
 async function loadTeam() {
-  const selectedSiteId = state.ACTIVE_SITE_ID
-    || new URLSearchParams(location.search).get("siteId")
+  const version = ++teamLoadVersion;
+  const selectedSiteId = new URLSearchParams(location.search).get("siteId")
+    || state.ACTIVE_SITE_ID
     || teamSiteId
     || "";
   const teamUrl = selectedSiteId
     ? `/api/site/team?siteId=${encodeURIComponent(selectedSiteId)}`
     : "/api/site/team";
-  const r = await jsonReq("GET", teamUrl);
-  renderTeam(r.ok ? r.data : { ok: false, error: r.data?.error || "Failed to load team" });
+  try {
+    const r = await jsonReq("GET", teamUrl);
+    if (version === teamLoadVersion) renderTeam(r.ok ? r.data : { ok: false, error: r.data?.error || "Failed to load team" });
+  } catch {
+    if (version === teamLoadVersion) renderTeam({ ok: false, error: "Could not load this site's team. Reload to try again." });
+  }
 }
 
 function wireTeam() {
@@ -516,6 +538,8 @@ function wireTeam() {
   };
 
   openBtn.addEventListener("click", async () => {
+    if (!teamSiteId) return;
+    $("inviteModalDescription").textContent = `Invite this person as a Moderator for ${teamSiteName}.`;
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     if (emailInput) emailInput.value = "";
@@ -610,6 +634,9 @@ export function enter() {
   init();
 }
 export function leave() {
+  teamLoadVersion++;
+  teamSiteId = "";
+  teamSiteName = "";
   // Remove the document-level popstate listener that wireUnifiedSettingsTabs
   // installed, so repeated enter/leave cycles do not stack duplicate handlers.
   if (_accountPopstate) {

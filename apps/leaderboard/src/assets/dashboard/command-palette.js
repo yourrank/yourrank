@@ -1,6 +1,7 @@
 // Global Command Palette (Ctrl+K / ⌘K) for Tier-1 Developer Experience
 import { $, copyToClipboard, showToast } from "./utils.js";
-import { state } from "./state.js";
+import { state, boardStatus } from "./state.js";
+import { commandAvailable, PRIMARY_COMMANDS } from "./command-context.js";
 import { requestDashboardRoute } from "./shell.js";
 
 const PALETTE_ICONS = {
@@ -20,8 +21,8 @@ const PALETTE_ICONS = {
 };
 
 const COMMANDS = [
-  { id: "act-save", title: "Save & publish standings", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("save")?.click() },
-  { id: "act-publish", title: "Toggle public site live / offline", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("publishAction")?.click() },
+  { id: "act-save", title: "Save changes", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("save")?.click() },
+  { id: "act-publish", title: "Publish site", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("publishAction")?.click() },
   { id: "act-obs-alerts", title: "Copy OBS stream alerts & sound chime URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
     const url = location.origin + "/overlay/alerts?site=" + (state.SLUG || "");
     await copyToClipboard(url);
@@ -71,6 +72,30 @@ let searchInput = null;
 let resultsList = null;
 let activeIndex = 0;
 let filteredCommands = [...COMMANDS];
+let releaseFocus = null;
+
+function availableCommands(query = "") {
+  const usable = (id) => {
+    const el = $(id);
+    return Boolean(el && !el.disabled && !el.closest("[hidden]") && el.getClientRects().length);
+  };
+  const status = boardStatus();
+  const context = {
+    canSave: state._dirty && usable("save"),
+    canPublish: usable("publishAction") && (status.published || status.emailVerified),
+    live: status.live,
+    siteSelected: Boolean(state.ACTIVE_SITE_ID),
+    sharePage: location.pathname.includes("/leaderboard/share"),
+    activitiesPage: location.pathname.includes("/activities"),
+    hasSupport: usable("openHelpDrawerBtn"),
+  };
+  return COMMANDS.filter((cmd) => commandAvailable(cmd.id, context))
+    .filter((cmd) => query
+      ? `${cmd.title} ${cmd.group} ${cmd.keywords || ""}`.toLowerCase().includes(query)
+      : PRIMARY_COMMANDS.has(cmd.id) || cmd.id === "act-save" || cmd.id === "act-publish")
+    .map((cmd) => cmd.id === "act-publish" ? { ...cmd, title: status.published ? "Unpublish site" : "Publish site" } : cmd)
+    .sort((a, b) => a.group.localeCompare(b.group));
+}
 
 function buildPalette() {
   if (paletteEl) return;
@@ -89,7 +114,7 @@ function buildPalette() {
   paletteEl.innerHTML = `
     <div class="yr-palette-search-wrap">
       <svg class="yr-palette-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <input type="text" id="yrPaletteInput" class="yr-palette-input" placeholder="Type a command or search..." autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="yrPaletteResults" aria-autocomplete="list" />
+      <input type="text" id="yrPaletteInput" class="yr-palette-input" aria-label="Search pages and actions" placeholder="Search pages and actions…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="yrPaletteResults" aria-autocomplete="list" />
       <span class="yr-palette-esc">ESC</span>
     </div>
     <div class="yr-palette-body">
@@ -116,31 +141,25 @@ function buildPalette() {
 
 function openPalette() {
   buildPalette();
-  filteredCommands = [...COMMANDS];
+  filteredCommands = availableCommands();
   activeIndex = 0;
   if (searchInput) searchInput.value = "";
   renderResults();
   backdropEl?.classList.add("is-open");
   paletteEl?.classList.add("is-open");
+  if (!releaseFocus && window.YRDialog) releaseFocus = window.YRDialog.trap(paletteEl, closePalette);
   setTimeout(() => searchInput?.focus(), 50);
 }
 
 function closePalette() {
   backdropEl?.classList.remove("is-open");
   paletteEl?.classList.remove("is-open");
+  if (releaseFocus) { const release = releaseFocus; releaseFocus = null; release(); }
 }
 
 function onSearchInput() {
   const query = (searchInput?.value || "").trim().toLowerCase();
-  if (!query) {
-    filteredCommands = [...COMMANDS];
-  } else {
-    filteredCommands = COMMANDS.filter((cmd) =>
-      cmd.title.toLowerCase().includes(query) ||
-      cmd.group.toLowerCase().includes(query) ||
-      (cmd.keywords || "").toLowerCase().includes(query)
-    );
-  }
+  filteredCommands = availableCommands(query);
   activeIndex = 0;
   renderResults();
 }
@@ -193,7 +212,7 @@ function renderResults() {
       <div class="yr-palette-item ${isSelected ? "is-selected" : ""}" id="${itemId}" role="option" aria-selected="${isSelected ? "true" : "false"}" data-index="${i}">
         <span class="yr-palette-item-icon">${cmd.icon}</span>
         <span class="yr-palette-item-title">${cmd.title}</span>
-        <span class="yr-palette-item-action">Jump →</span>
+        <span class="yr-palette-item-action">${cmd.group === "Navigation" ? "Open" : "Run"}</span>
       </div>
     `;
   });

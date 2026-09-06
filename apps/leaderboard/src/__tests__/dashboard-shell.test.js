@@ -134,7 +134,8 @@ describe("signed-in shell navigation", () => {
     expect(html).toContain('aria-controls="lbSide"');
     expect(html).toContain('class="lb-side-profile"');
     expect(html).toContain("Creator workspace");
-    expect(html).toContain("seed 562938e8");
+    expect(html).toContain('data-identity="creator-workspace"');
+    expect(html).not.toContain('data-identity="devin-reference"');
   });
 
   it("loads the authenticated v4 layer after shared primitives", () => {

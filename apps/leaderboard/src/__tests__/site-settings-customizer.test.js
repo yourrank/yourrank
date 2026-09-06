@@ -92,7 +92,8 @@ describe("markup: Site answers what viewers see", () => {
   it("keeps navigation, links and the public address on the same page", () => {
     expect(customize).toContain("<h2>Navigation</h2>");
     expect(customize).toContain('id="siteSectionRows"');
-    expect(customize).toContain("<h2>Links</h2>");
+    expect(customize).toContain("<summary>Channels and social links</summary>");
+    expect(customize).toMatch(/<details[^>]+id="siteLinksCard"/);
     expect(customize).toContain('id="socialsList"');
     expect(customize).toContain('id="sitePublicUrl"');
     expect(customize).toContain('id="sitePublicCopy"');
@@ -250,11 +251,11 @@ describe("markup: accent is one real control, not two fake colors", () => {
     expect(dashboardCss).toMatch(/\.v3-settings-field > \.v3-settings-muted,[\s\S]*?\.v3-settings-field > \.field-err \{\s*display: block;/);
   });
 
-  it("defaults the Site settings preview device from the dashboard breakpoint", () => {
-    // Only this mount opts in; the leaderboard editor preview keeps its
-    // desktop-first default.
+  it("defaults canonical previews from the dashboard breakpoint", () => {
+    // Site settings and the leaderboard editor both use the canonical preview
+    // behavior instead of opening a shrunken desktop frame on narrow screens.
     expect(customize).toContain('aria-label="Preview viewport" data-preview-default-device="auto"');
-    expect(html.match(/data-preview-default-device="auto"/g)).toHaveLength(1);
+    expect(html.match(/data-preview-default-device="auto"/g)).toHaveLength(2);
     expect(previewTabsJs).toContain('"(max-width: 899px)"');
     expect(previewTabsJs).toContain('tablist.dataset.previewDefaultDevice === "auto"');
   });

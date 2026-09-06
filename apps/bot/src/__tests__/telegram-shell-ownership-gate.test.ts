@@ -92,6 +92,10 @@ describe("Telegram shell: one canonical authenticated document", () => {
       expect(html.match(/<h1\b/g)).toHaveLength(1);
       expect(html.match(/<details[^>]*class="[^"]*\bgm-profile\b[^"]*"/g)).toHaveLength(1);
       expect(html).toContain('<script src="/assets/shell-nav.js" defer></script>');
+      expect(html.match(/id="topbarCmdTrigger"/g)).toHaveLength(1);
+      expect(html).toContain('<script src="/assets/dashboard/command-palette.js" type="module"></script>');
+      expect(html).toContain('Account · Telegram');
+      expect(html).not.toContain('Active site');
     }
   });
 

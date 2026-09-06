@@ -3,6 +3,7 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useEffect, useRef } from "react";
+import { PolicyLinks } from "../policy-links";
 
 const FOOTER_LINKS = [
   ["Sites", "/sites"],
@@ -10,7 +11,6 @@ const FOOTER_LINKS = [
   ["Credits & Shop", "/credits"],
   ["Pricing", "/pricing"],
   ["FAQ", "/faq"],
-  ["Contact", "/contact"],
 ] as const;
 
 const LOOP_WORDS = ["Publish", "Activate", "Reward", "Return"];
@@ -83,6 +83,7 @@ export function MotionFooter() {
         </div>
 
         <div className="relative z-10 border-t border-white/12 px-6 py-5">
+          <PolicyLinks />
           <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-xs text-white/48 sm:flex-row">
             <span>© YourRank · Entertainment and community engagement only.</span>
             <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">

@@ -3,7 +3,7 @@
 
 import { dashboardNavItems as sharedDashboardNavItems } from "@yourrank/shared/dashboard-nav";
 import { raw } from "hono/html";
-import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
+import { dashboardChromeHtml, workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
 import { navOwner } from "@yourrank/shared/dashboard-nav";
 
 export function dashboardNavItems() {
@@ -23,10 +23,6 @@ export function workspaceAccountTopbarHtml({ context, title = "", help = false }
     ? '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 2-3 4M12 18h.01"/></svg>'
     : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
   return `<div class="lb-topbar-hud"><div class="lb-account-hud"><span class="lb-hud-icon" aria-hidden="true">${icon}</span><div class="lb-hud-details"><span class="lb-board-select-lbl">${escapeHtml(context)}</span>${title ? `<span class="lb-account-title">${escapeHtml(title)}</span>` : ""}</div></div></div>`;
-}
-
-export function workspaceSearchHtml() {
-  return '<button class="lb-topbar-cmd" type="button" id="topbarCmdTrigger" aria-label="Search (⌘K or Ctrl+K)" title="Press ⌘K or Ctrl+K to search"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Search…</span><kbd>⌘K</kbd></button>';
 }
 
 function workspaceSiteContextHtml() {
@@ -65,7 +61,7 @@ export function DashboardShell({ activeNav = "home", boardContext = "full", foot
     sideLabel: "Dashboard features",
     rootId: shellId,
     rootHidden: initiallyHidden,
-    identity: "devin-reference",
+    identity: "creator-workspace",
     activePath: resolvedActivePath,
     user,
     dynamicIdentity: true,

@@ -180,7 +180,8 @@ describe("Wave E safe Activities foundation", () => {
     expect(PAGES.activities.Component).toBeTruthy();
     expect(activitiesConfig.canonical).toBe("https://yourrank.site/dashboard/activities");
     expect(activitiesConfig.styles).toContain("/assets/activities.css");
-    expect(activitiesContentHtml).toContain("Safe Activity boundary");
+    expect(activitiesContentHtml).toContain("No purchase or stake is required.");
+    expect(activitiesContentHtml.indexOf('class="act-list-panel"')).toBeLessThan(activitiesContentHtml.indexOf('class="act-automation"'));
     expect(activitiesContentHtml).toContain("Plan repeat work");
     expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);

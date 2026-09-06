@@ -10,8 +10,9 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
             <div><dt>Email</dt><dd id="accSummaryEmail">—</dd></div>
           </dl>
         </section>
-        <section class="account-settings-section" aria-labelledby="accountPasswordTitle">
-          <h2 id="accountPasswordTitle">Password</h2>
+        <details class="account-settings-disclosure" aria-labelledby="accountPasswordTitle">
+          <summary id="accountPasswordTitle">Change password</summary>
+          <div class="account-settings-disclosure-body">
           <p class="card-sub">Use a strong password you do not use elsewhere.</p>
           <div class="acc-form-wrap">
           <div class="field">
@@ -45,7 +46,8 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
             <span class="hint" id="accPasswordStatus" role="status" aria-live="polite"></span>
           </div>
           </div>
-        </section>
+          </div>
+        </details>
         <section class="account-settings-section acc-sessions-section" aria-labelledby="accountSessionsTitle">
           <div class="d-flex justify-between items-center mb-12 flex-wrap gap-8">
             <div>
@@ -216,6 +218,10 @@ const deleteAccountModal = `<div class="modal" id="deleteAccountModal" role="dia
 `;
 
 const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
+        <div class="account-related-setting">
+          <div><strong>Team for <span id="teamSiteName">loading site…</span></strong><p>Members and invitations below apply only to this site.</p></div>
+          <a class="btn btn--ghost" href="/dashboard/leaderboards">Change site</a>
+        </div>
         <div class="d-flex justify-between items-center mb-16 flex-wrap gap-12">
           <div>
             <h2 class="m-0">Team members</h2>
@@ -229,7 +235,7 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
 
         <div class="account-team-summary" aria-live="polite">
           <strong id="teamSeatUsage">Loading operator seats…</strong>
-          <span id="teamSeatContext">Seat usage is shared across the owner's sites.</span>
+          <span id="teamSeatContext">Account-wide seat usage across the owner's sites.</span>
         </div>
         <p class="account-team-notice" id="teamPlanNotice" hidden></p>
         <p class="account-team-notice" id="teamReadOnlyNotice" hidden>You can see who operates this site. Only the owner can invite or remove operators.</p>

@@ -9,14 +9,12 @@ export const activitiesContentHtml = `
     <header class="act-hero">
       <div class="act-hero__copy">
         <h1>Activities</h1>
-        <p>Give members simple ways to join in without a purchase or stake. This foundation starts with free code drops backed by real site membership.</p>
+        <p>Share a free code with your community. Track claims here, then plan your next drop.</p>
       </div>
       <button class="btn btn--accent act-create-toggle" id="act-create-toggle" type="button" aria-expanded="false" aria-controls="act-create-panel">Create drop</button>
     </header>
 
-    <section class="act-scope-note" aria-label="Activity availability">
-      <div><strong>Safe Activity boundary</strong><p>Only free, non-staked code drops appear here. Templates and schedules cannot target restricted event systems.</p></div>
-    </section>
+    <p class="act-scope-note">Code drops award free loyalty credits. No purchase or stake is required.</p>
 
     <section class="act-create-panel" id="act-create-panel" aria-labelledby="act-create-title" hidden>
       <div class="act-section-head">
@@ -34,6 +32,21 @@ export const activitiesContentHtml = `
       </form>
     </section>
 
+    <section class="act-list-panel" aria-labelledby="act-list-title">
+      <div class="act-section-head act-section-head--list">
+        <div><h2 id="act-list-title">Live and past Activities</h2><p>Manual and scheduled drops share the same viewer flow and history.</p></div>
+        <span class="act-count" id="act-count" aria-live="polite">—</span>
+      </div>
+      <div class="act-loading" id="act-loading" role="status" aria-live="polite"><span class="ui-loading__spinner" aria-hidden="true"></span><span>Loading activities…</span></div>
+      <div class="act-list" id="act-list" hidden></div>
+      <div class="act-empty" id="act-empty" hidden>
+        <h3>No code drops yet</h3>
+        <p>Launch a free code drop when you are ready. Claim progress will appear here.</p>
+        <button class="btn" id="act-empty-create" type="button">Create your first drop</button>
+      </div>
+      <div class="act-error" id="act-error" role="alert" hidden><strong>Activities could not load.</strong><p id="act-error-message">Try again.</p><button class="btn btn--sm" id="act-retry" type="button">Retry</button></div>
+    </section>
+
     <section class="act-automation" aria-labelledby="act-automation-title">
       <div class="act-section-head act-automation__head">
         <div><h2 id="act-automation-title">Plan repeat work</h2><p>Save the reward settings once, then choose an exact future time. Each run creates a normal free code drop with a new claim code.</p></div>
@@ -46,7 +59,7 @@ export const activitiesContentHtml = `
       </div>
       <div class="act-automation-grid">
         <section class="act-automation-pane" aria-labelledby="act-template-title">
-          <div class="act-pane-head"><div><h3 id="act-template-title">Templates</h3><p>Reusable settings only. Saving a template does not create an Activity.</p></div><button class="btn btn--sm" id="act-template-new" type="button">New template</button></div>
+          <div class="act-pane-head"><div><h3 id="act-template-title">Templates</h3><p>Save settings to use again. Templates do not launch a drop.</p></div><button class="btn btn--sm" id="act-template-new" type="button">New template</button></div>
           <form class="act-template-form" id="act-template-form" hidden>
             <input id="act-template-id" type="hidden">
             <label class="act-field"><span>Template name</span><input id="act-template-name" maxlength="80" placeholder="Stream break drop" required></label>
@@ -63,7 +76,7 @@ export const activitiesContentHtml = `
         </section>
 
         <section class="act-automation-pane" aria-labelledby="act-schedule-title">
-          <div class="act-pane-head"><div><h3 id="act-schedule-title">Schedules</h3><p>Times are stored as exact UTC instants and shown in your browser’s local time.</p></div><button class="btn btn--sm" id="act-schedule-new" type="button">Schedule</button></div>
+          <div class="act-pane-head"><div><h3 id="act-schedule-title">Schedules</h3><p>Upcoming runs, shown in your local time.</p></div><button class="btn btn--sm" id="act-schedule-new" type="button">Schedule</button></div>
           <form class="act-schedule-form" id="act-schedule-form" hidden>
             <input id="act-resume-id" type="hidden">
             <label class="act-field" id="act-schedule-template-field"><span>Template</span><select id="act-schedule-template" required></select></label>
@@ -78,20 +91,7 @@ export const activitiesContentHtml = `
       </div>
     </section>
 
-    <section class="act-list-panel" aria-labelledby="act-list-title">
-      <div class="act-section-head act-section-head--list">
-        <div><h2 id="act-list-title">Live and past Activities</h2><p>Manual and scheduled drops share the same viewer flow and history.</p></div>
-        <span class="act-count" id="act-count" aria-live="polite">—</span>
-      </div>
-      <div class="act-loading" id="act-loading" role="status" aria-live="polite"><span class="ui-loading__spinner" aria-hidden="true"></span><span>Loading activities…</span></div>
-      <div class="act-list" id="act-list" hidden></div>
-      <div class="act-empty" id="act-empty" hidden>
-        <h3>No safe activities yet</h3>
-        <p>Launch a free code drop when you are ready. Claim progress will appear here.</p>
-        <button class="btn btn--accent" id="act-empty-create" type="button">Create your first drop</button>
-      </div>
-      <div class="act-error" id="act-error" role="alert" hidden><strong>Activities could not load.</strong><p id="act-error-message">Try again.</p><button class="btn btn--sm" id="act-retry" type="button">Retry</button></div>
-    </section>
+
   </div>`;
 
 export function ActivitiesPage({ activePath, user, fragment } = {}) {

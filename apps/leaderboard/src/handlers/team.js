@@ -66,14 +66,14 @@ const privateResponse = (response) => {
 async function getTeamSiteByUser(env, userId, one) {
   // Same board the rest of the dashboard defaults to: the active one.
   const owned = await one(
-    `SELECT id FROM sites WHERE user_id=$1
+    `SELECT id, name, slug FROM sites WHERE user_id=$1
       ORDER BY CASE WHEN id=(SELECT active_site_id FROM users WHERE id=$1) THEN 0 ELSE 1 END, id ASC
       LIMIT 1`,
     [userId],
   );
   if (owned) return owned;
   return one(
-    `SELECT s.id
+    `SELECT s.id, s.name, s.slug
        FROM sites s
        JOIN site_members sm ON sm.site_id=s.id
        JOIN users owner ON owner.id=s.user_id
@@ -125,6 +125,7 @@ export async function handleTeamList(request, env, overrides) {
   return privateJson({
     ok: true,
     siteId: site.id,
+    siteName: site.name || site.slug || "",
     currentRole: role,
     canManageTeam: canRoleManageTeam(role),
     members: visibleMembers,

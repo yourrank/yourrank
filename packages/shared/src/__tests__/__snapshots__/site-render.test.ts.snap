@@ -13,27 +13,27 @@ exports[`shared public board renderer keeps the fixed fixture HTML stable 1`] = 
 <script nonce="fixed-nonce">document.querySelector('link[data-async]').onload=function(){this.media='all'};</script>
 <noscript><link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" /></noscript>
 <link rel="stylesheet" href="/assets/site-shell.css" />
-<link rel="stylesheet" href="/assets/devin-system.css" />
+<link rel="stylesheet" href="/assets/viewer-shell.css" />
 
 <style nonce="fixed-nonce" data-theme-tokens>.yr-site{--yr-accent:var(--yr-color-board-accent);--yr-accent-ink:#000000}</style>
 
-</head><body class="yr-site" data-template="cyber_arcade" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-currency="$" data-rank-by="wagered">
-<!-- PUBLIC-VIEWER-DIRECTION
-THESIS: A creator's own destination for one board, not a workspace and not a gaming dashboard.
-OWN-WORLD: Deep asphalt surfaces, fog-white type, one creator accent, orange warnings, mint success, 6–10px geometry, one shared foundation for every template.
-STORY: Whose site this is, what the board is doing, what this viewer has here, what they can get, where else to find the creator.
-FIRST VIEWPORT: Creator identity and sections in one compact bar, then the creator's own introduction and the live board.
+</head><body class="yr-site viewer-shell" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-currency="$" data-rank-by="wagered">
+<!--
+THESIS: A connected community guide, not isolated account pages or a credit-wallet dashboard.
+OWN-WORLD: Blue channel rail, ice-white content, navy Fira Sans, compact labelled controls, flat working records.
+STORY: Know whose community this is, move between its pages, follow personal claims, return to all communities.
+FIRST VIEWPORT: Persistent community navigation beside a reading surface. Membership identity and compact balance precede a full-width claims record; optional tasks follow.
+FORM: Channel guide, grounded candidate 6, direction seed c2610fb4. Native navigation and disclosures; no decorative entrance motion.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->
 <a class="yr-sr" href="#main-content">Skip to content</a>
-<header class="yr-top">
-<div class="yr-top-in">
-<a class="yr-id" href="https://example.test/board%20fixture"><span class="yr-mark" aria-hidden="true">A</span><span class="yr-id-txt"><span class="yr-id-name">Ampersand &amp; Board</span><span class="yr-id-sub">A &amp; B</span></span></a>
-<nav class="yr-tabs" aria-label="Sections"><a class="yr-tab" href="https://example.test/board%20fixture"><span>Home</span></a><a class="yr-tab is-on" href="https://example.test/board%20fixture/leaderboard" aria-current="page"><span>Leaderboard</span></a><a class="yr-tab" href="https://example.test/board%20fixture/shop"><span>Rewards</span></a><a class="yr-tab" href="https://example.test/board%20fixture/me"><span>My Community</span></a></nav>
-<div class="yr-top-r"><a class="yr-btn yr-btn--ghost yr-btn--sm" href="/me">Sign in</a><button class="yr-menu" id="yr-menu" type="button" hidden aria-label="Open sections" aria-controls="yr-side" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button></div>
-</div>
-</header>
-<main class="yr-main" id="main-content">
+<div class="viewer-layout"><aside class="viewer-rail" aria-label="Viewer navigation">
+<a class="viewer-brand" href="/me"><span><svg class="lb-brand-mark-svg" viewBox="30 30 516 640" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M530 48L529 46L524 42L518 42L516 43L513 46L510 47L508 49L501 53L497 57L483 66L480 69L460 82L446 93L436 99L432 103L428 105L425 108L414 115L403 124L389 133L381 140L371 146L360 155L349 162L345 166L338 170L334 174L324 180L320 184L313 188L299 199L292 203L289 206L288 206L274 216L271 216L269 214L265 212L252 202L242 196L238 192L235 191L232 188L228 186L221 180L211 174L204 168L198 165L195 162L191 160L181 152L178 151L168 143L165 142L162 139L161 139L158 136L147 129L144 126L131 118L127 114L126 114L121 110L118 109L111 103L92 91L89 88L79 82L76 79L73 78L59 68L52 68L50 69L46 74V191L47 192V195L50 201L54 205L63 210L66 213L79 221L82 224L85 225L87 227L91 229L98 235L126 253L129 256L132 257L134 259L141 263L144 266L160 276L163 279L166 280L169 283L172 284L175 287L176 287L178 289L191 297L194 300L201 304L204 307L211 311L216 316V318L218 322V365L221 369L223 369L224 370L228 370L229 369L231 369L233 367L240 363L247 357L270 342L277 336L306 317L309 314L319 308L322 305L335 297L339 293L355 283L365 275L371 272L374 269L385 262L389 258L392 257L394 255L398 253L401 250L402 250L408 245L418 239L421 236L431 230L435 226L442 222L452 214L453 214L455 212L465 206L468 203L472 201L475 198L482 194L485 191L496 184L503 178L506 177L512 172L522 166L527 161L530 154V48ZM450 266L446 264L441 264L435 267L432 270L426 273L417 280L402 289L395 295L392 296L383 303L380 304L371 311L370 311L365 315L362 316L359 319L353 322L350 325L340 331L337 334L325 341L322 344L303 356L300 359L291 364L287 368L284 369L282 371L275 375L272 378L271 378L263 384L260 385L254 390L244 396L241 399L240 399L235 403L232 404L221 414L218 420V505L221 509L223 510L228 510L232 508L234 506L274 480L277 477L280 476L282 474L289 470L292 467L298 464L304 459L305 459L316 451L319 450L321 448L328 444L331 441L332 441L343 433L346 432L364 419L367 418L370 415L383 407L389 402L392 401L394 399L401 395L404 392L420 382L423 379L433 373L439 368L445 365L448 362L451 357V355L453 351V272ZM388 449L380 449L378 451L375 452L369 457L337 478L334 481L331 482L329 484L322 488L319 491L316 492L314 494L304 500L301 503L291 509L288 512L276 519L273 522L257 532L248 539L245 540L238 546L235 547L233 549L226 553L223 556L223 557L219 562L219 564L218 565V652L220 655L222 656L225 656L226 657L227 656L231 655L244 645L247 644L249 642L262 634L265 631L287 617L291 613L294 612L296 610L303 606L306 603L322 593L325 590L335 584L338 581L351 573L358 567L359 567L364 563L367 562L374 556L377 555L379 553L383 551L389 545L393 536V455Z" fill="currentColor" fill-rule="evenodd"/></svg></span>YourRank</a>
+<div class="viewer-context"><a href="/board%20fixture">Ampersand &amp; Board</a><span>Community</span></div>
+<nav class="viewer-destinations" aria-label="Community pages"><a href="/board%20fixture">Home</a><a href="/board%20fixture/leaderboard" aria-current="page">Leaderboard</a><a href="/board%20fixture/shop">Rewards</a><a href="/board%20fixture/me">My Community</a></nav>
+<div class="viewer-rail-account"><a class="yr-btn yr-btn--sm" href="/board%20fixture/me">Sign in</a><a id="viewer-account-link" href="/me#vd-profile" hidden>Your account</a><a href="/contact">Help & contact</a></div>
+</aside>
+<main class="viewer-main" id="main-content">
 <section class="yr-lbh">
 <h1 class="yr-h1 yr-lbh-title">Standings</h1>
 <p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span></p>
@@ -68,12 +68,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My Community</a></nav>
 </footer>
 </main>
-<div class="yr-drawer" id="yr-side" aria-label="Ampersand &amp; Board menu" tabindex="-1">
-<div class="yr-drawer-head"><a class="yr-drawer-id" href="https://example.test/board%20fixture"><span class="yr-mark yr-mark--sm" aria-hidden="true">A</span>Ampersand &amp; Board</a><button class="yr-side-close" id="yr-side-close" type="button" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
-<nav class="yr-nav yr-noscroll" aria-label="Sections"><a class="yr-nav-a" href="https://example.test/board%20fixture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg> Home</a><a class="yr-nav-a is-on" href="https://example.test/board%20fixture/leaderboard" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3"/><path d="M7 5H4v2a3 3 0 0 0 3 3"/></svg> Leaderboard</a><a class="yr-nav-a" href="https://example.test/board%20fixture/shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 9h18l-1.5 11H4.5z"/><path d="M8 9V6a4 4 0 0 1 8 0v3"/></svg> Rewards</a><a class="yr-nav-a" href="https://example.test/board%20fixture/me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="6.5" rx="7" ry="3"/><path d="M5 6.5v11c0 1.7 3.1 3 7 3s7-1.3 7-3v-11"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg> My Community</a></nav>
-<div class="yr-drawer-foot"><a class="yr-user" href="https://example.test/board%20fixture/me"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My Community</span><span class="yr-user-sub">Sign in to join</span></span></span><span class="yr-user-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a></div>
 </div>
-<button class="yr-scrim" id="yr-scrim" type="button" aria-label="Close menu" hidden></button>
 <dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
 <h2 id="yr-feedback-title">Send feedback</h2>

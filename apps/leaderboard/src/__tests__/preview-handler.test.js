@@ -60,7 +60,7 @@ describe("handleDashboardPreview", () => {
     );
     const html = await res.text();
     expect(res.status).toBe(200);
-    expect(html).toContain('class="yr-site"');
+    expect(html).toContain('class="yr-site viewer-shell"');
     expect(html).toContain("Actual Board");
     expect(html).toContain("--yr-accent:#00ffd1");
     expect(html).toContain("Actual Player");
@@ -113,7 +113,7 @@ describe("handleDashboardPreview", () => {
     expect(editableHtml).toContain("cursor: text");
     expect(readOnlyHtml).not.toContain("yr_edit_request");
     expect(readOnlyHtml).not.toContain("cursor: text");
-    expect(readOnlyHtml).toContain('class="yr-site"');
+    expect(readOnlyHtml).toContain('class="yr-site viewer-shell"');
   });
 
   it("shows a picked logo before it is saved, and its removal too", async () => {

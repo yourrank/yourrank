@@ -28,6 +28,9 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>');
     expect(html).not.toContain('id="ovActiveGiveaway"');
     expect(html).not.toContain("Times shared");
+    expect(html).toContain('id="ovAttention"');
+    expect(html).toContain('id="ovHappeningNow"');
+    expect(html).toContain('id="ovComingNext"');
     expect(html).toContain('id="ovActivityList"');
     expect(html).toContain('id="ovTopPlayers"');
     expect(html).not.toContain('class="ov-summary"');
@@ -40,7 +43,8 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('href="/dashboard/rewards/redemptions"');
     // Home states both scope and condition beside its title, and groups only
     // the two useful site figures into one quiet summary instead of a KPI wall.
-    expect(html).toContain('class="ov-scope">Selected site: <strong id="ovSiteName"');
+    expect(html).toContain('class="ov-scope"><strong id="ovSiteName"');
+    expect(html).toContain('id="ovOperatorContext" hidden');
     expect(html).toContain('class="ov-status" id="ovStatus"');
     expect(html).toContain('class="ov-figures" id="ovFigures" aria-label="Selected site summary"');
     expect(html).not.toContain('id="ovKpiRow"');
@@ -54,6 +58,8 @@ describe("dashboard overview quick actions", () => {
     const setupKeys = [...setupDefinition.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
     expect(setupKeys).toEqual(["brand", "players", "publish"]);
     expect(setupDefinition).not.toContain('key: "kick"');
+    expect(setupDefinition).toContain('href: "/dashboard/site"');
+    expect(nextStepAction({ status: { published: false, emailVerified: true }, steps: {} })).toMatchObject({ label: "Name site", href: "/dashboard/site" });
     expect(html).not.toContain("Active giveaways");
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
     expect(overviewJs).toContain('pendingOrders === 1 ? "pending claim needs review." : "pending claims need review."');
@@ -62,10 +68,16 @@ describe("dashboard overview quick actions", () => {
     expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertAction"');
     expect(dashboardHtml()).toContain('id="ovConnectionAlert"');
     expect(dashboardHtml()).toContain('id="ovConnectionAlertAction"');
+    expect(dashboardHtml()).toContain('id="ovAttentionCount"');
+    expect(dashboardHtml()).toContain('role="region" aria-live="polite" aria-atomic="false" hidden');
     expect(overviewJs).toContain("state.CREDITS?.channel?.homeAttention === true");
     expect(overviewJs).toContain('connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection"');
     expect(overviewJs).toContain('buildDashboardPath("settings.connections", { board: state.ACTIVE_SITE_ID })');
     expect(overviewJs).toContain('buildDashboardPath("siteConnections.channel", { siteId: state.ACTIVE_SITE_ID })');
+    expect(overviewJs).toContain('activityHomeState(body?.activities)');
+    expect(overviewJs).toContain('Moderator for ${ownerName}');
+    expect(overviewJs).toContain('data-setup-state="${stateKey}"');
+    expect(overviewJs).toContain('"owner-action"');
     expect(html).toContain('id="ovSetupCount"');
   });
 

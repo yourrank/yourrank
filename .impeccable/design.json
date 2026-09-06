@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-17T23:57:55Z",
-  "title": "Design System: YourRank Connected Suite",
+  "generatedAt": "2026-09-06T00:00:00Z",
+  "title": "Design System: YourRank Community Workspace",
   "extensions": {
     "colorMeta": {
       "primary": {
@@ -228,6 +228,254 @@
           "color-mix(in srgb, #B42318 40%, white)",
           "color-mix(in srgb, #B42318 15%, white)"
         ]
+      },
+      "workspace-accent": {
+        "role": "primary",
+        "displayName": "workspace accent",
+        "canonical": "#4056b9",
+        "tonalRamp": [
+          "color-mix(in oklch, #4056b9 20%, black)",
+          "color-mix(in oklch, #4056b9 40%, black)",
+          "color-mix(in oklch, #4056b9 60%, black)",
+          "color-mix(in oklch, #4056b9 80%, black)",
+          "color-mix(in oklch, #4056b9 80%, white)",
+          "color-mix(in oklch, #4056b9 60%, white)",
+          "color-mix(in oklch, #4056b9 40%, white)",
+          "color-mix(in oklch, #4056b9 20%, white)"
+        ]
+      },
+      "workspace-accent-hover": {
+        "role": "primary",
+        "displayName": "workspace accent hover",
+        "canonical": "#304398",
+        "tonalRamp": [
+          "color-mix(in oklch, #304398 20%, black)",
+          "color-mix(in oklch, #304398 40%, black)",
+          "color-mix(in oklch, #304398 60%, black)",
+          "color-mix(in oklch, #304398 80%, black)",
+          "color-mix(in oklch, #304398 80%, white)",
+          "color-mix(in oklch, #304398 60%, white)",
+          "color-mix(in oklch, #304398 40%, white)",
+          "color-mix(in oklch, #304398 20%, white)"
+        ]
+      },
+      "workspace-accent-soft": {
+        "role": "primary",
+        "displayName": "workspace accent soft",
+        "canonical": "#edf0fc",
+        "tonalRamp": [
+          "color-mix(in oklch, #edf0fc 20%, black)",
+          "color-mix(in oklch, #edf0fc 40%, black)",
+          "color-mix(in oklch, #edf0fc 60%, black)",
+          "color-mix(in oklch, #edf0fc 80%, black)",
+          "color-mix(in oklch, #edf0fc 80%, white)",
+          "color-mix(in oklch, #edf0fc 60%, white)",
+          "color-mix(in oklch, #edf0fc 40%, white)",
+          "color-mix(in oklch, #edf0fc 20%, white)"
+        ]
+      },
+      "workspace-canvas": {
+        "role": "neutral",
+        "displayName": "workspace canvas",
+        "canonical": "#f5f7fa",
+        "tonalRamp": [
+          "color-mix(in oklch, #f5f7fa 20%, black)",
+          "color-mix(in oklch, #f5f7fa 40%, black)",
+          "color-mix(in oklch, #f5f7fa 60%, black)",
+          "color-mix(in oklch, #f5f7fa 80%, black)",
+          "color-mix(in oklch, #f5f7fa 80%, white)",
+          "color-mix(in oklch, #f5f7fa 60%, white)",
+          "color-mix(in oklch, #f5f7fa 40%, white)",
+          "color-mix(in oklch, #f5f7fa 20%, white)"
+        ]
+      },
+      "workspace-surface": {
+        "role": "neutral",
+        "displayName": "workspace surface",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "color-mix(in oklch, #ffffff 20%, black)",
+          "color-mix(in oklch, #ffffff 40%, black)",
+          "color-mix(in oklch, #ffffff 60%, black)",
+          "color-mix(in oklch, #ffffff 80%, black)",
+          "color-mix(in oklch, #ffffff 80%, white)",
+          "color-mix(in oklch, #ffffff 60%, white)",
+          "color-mix(in oklch, #ffffff 40%, white)",
+          "color-mix(in oklch, #ffffff 20%, white)"
+        ]
+      },
+      "workspace-surface-soft": {
+        "role": "neutral",
+        "displayName": "workspace surface soft",
+        "canonical": "#f0f3f8",
+        "tonalRamp": [
+          "color-mix(in oklch, #f0f3f8 20%, black)",
+          "color-mix(in oklch, #f0f3f8 40%, black)",
+          "color-mix(in oklch, #f0f3f8 60%, black)",
+          "color-mix(in oklch, #f0f3f8 80%, black)",
+          "color-mix(in oklch, #f0f3f8 80%, white)",
+          "color-mix(in oklch, #f0f3f8 60%, white)",
+          "color-mix(in oklch, #f0f3f8 40%, white)",
+          "color-mix(in oklch, #f0f3f8 20%, white)"
+        ]
+      },
+      "workspace-surface-strong": {
+        "role": "neutral",
+        "displayName": "workspace surface strong",
+        "canonical": "#e6ebf2",
+        "tonalRamp": [
+          "color-mix(in oklch, #e6ebf2 20%, black)",
+          "color-mix(in oklch, #e6ebf2 40%, black)",
+          "color-mix(in oklch, #e6ebf2 60%, black)",
+          "color-mix(in oklch, #e6ebf2 80%, black)",
+          "color-mix(in oklch, #e6ebf2 80%, white)",
+          "color-mix(in oklch, #e6ebf2 60%, white)",
+          "color-mix(in oklch, #e6ebf2 40%, white)",
+          "color-mix(in oklch, #e6ebf2 20%, white)"
+        ]
+      },
+      "workspace-text": {
+        "role": "neutral",
+        "displayName": "workspace text",
+        "canonical": "#202b3c",
+        "tonalRamp": [
+          "color-mix(in oklch, #202b3c 20%, black)",
+          "color-mix(in oklch, #202b3c 40%, black)",
+          "color-mix(in oklch, #202b3c 60%, black)",
+          "color-mix(in oklch, #202b3c 80%, black)",
+          "color-mix(in oklch, #202b3c 80%, white)",
+          "color-mix(in oklch, #202b3c 60%, white)",
+          "color-mix(in oklch, #202b3c 40%, white)",
+          "color-mix(in oklch, #202b3c 20%, white)"
+        ]
+      },
+      "workspace-text-soft": {
+        "role": "neutral",
+        "displayName": "workspace text soft",
+        "canonical": "#536176",
+        "tonalRamp": [
+          "color-mix(in oklch, #536176 20%, black)",
+          "color-mix(in oklch, #536176 40%, black)",
+          "color-mix(in oklch, #536176 60%, black)",
+          "color-mix(in oklch, #536176 80%, black)",
+          "color-mix(in oklch, #536176 80%, white)",
+          "color-mix(in oklch, #536176 60%, white)",
+          "color-mix(in oklch, #536176 40%, white)",
+          "color-mix(in oklch, #536176 20%, white)"
+        ]
+      },
+      "workspace-text-mute": {
+        "role": "neutral",
+        "displayName": "workspace text mute",
+        "canonical": "#637187",
+        "tonalRamp": [
+          "color-mix(in oklch, #637187 20%, black)",
+          "color-mix(in oklch, #637187 40%, black)",
+          "color-mix(in oklch, #637187 60%, black)",
+          "color-mix(in oklch, #637187 80%, black)",
+          "color-mix(in oklch, #637187 80%, white)",
+          "color-mix(in oklch, #637187 60%, white)",
+          "color-mix(in oklch, #637187 40%, white)",
+          "color-mix(in oklch, #637187 20%, white)"
+        ]
+      },
+      "workspace-chrome": {
+        "role": "neutral",
+        "displayName": "workspace chrome",
+        "canonical": "#edf1f7",
+        "tonalRamp": [
+          "color-mix(in oklch, #edf1f7 20%, black)",
+          "color-mix(in oklch, #edf1f7 40%, black)",
+          "color-mix(in oklch, #edf1f7 60%, black)",
+          "color-mix(in oklch, #edf1f7 80%, black)",
+          "color-mix(in oklch, #edf1f7 80%, white)",
+          "color-mix(in oklch, #edf1f7 60%, white)",
+          "color-mix(in oklch, #edf1f7 40%, white)",
+          "color-mix(in oklch, #edf1f7 20%, white)"
+        ]
+      },
+      "workspace-chrome-raised": {
+        "role": "neutral",
+        "displayName": "workspace chrome raised",
+        "canonical": "#dde5f0",
+        "tonalRamp": [
+          "color-mix(in oklch, #dde5f0 20%, black)",
+          "color-mix(in oklch, #dde5f0 40%, black)",
+          "color-mix(in oklch, #dde5f0 60%, black)",
+          "color-mix(in oklch, #dde5f0 80%, black)",
+          "color-mix(in oklch, #dde5f0 80%, white)",
+          "color-mix(in oklch, #dde5f0 60%, white)",
+          "color-mix(in oklch, #dde5f0 40%, white)",
+          "color-mix(in oklch, #dde5f0 20%, white)"
+        ]
+      },
+      "workspace-chrome-text": {
+        "role": "neutral",
+        "displayName": "workspace chrome text",
+        "canonical": "#243348",
+        "tonalRamp": [
+          "color-mix(in oklch, #243348 20%, black)",
+          "color-mix(in oklch, #243348 40%, black)",
+          "color-mix(in oklch, #243348 60%, black)",
+          "color-mix(in oklch, #243348 80%, black)",
+          "color-mix(in oklch, #243348 80%, white)",
+          "color-mix(in oklch, #243348 60%, white)",
+          "color-mix(in oklch, #243348 40%, white)",
+          "color-mix(in oklch, #243348 20%, white)"
+        ]
+      },
+      "workspace-chrome-line": {
+        "role": "neutral",
+        "displayName": "workspace chrome line",
+        "canonical": "#d7dfe9",
+        "tonalRamp": [
+          "color-mix(in oklch, #d7dfe9 20%, black)",
+          "color-mix(in oklch, #d7dfe9 40%, black)",
+          "color-mix(in oklch, #d7dfe9 60%, black)",
+          "color-mix(in oklch, #d7dfe9 80%, black)",
+          "color-mix(in oklch, #d7dfe9 80%, white)",
+          "color-mix(in oklch, #d7dfe9 60%, white)",
+          "color-mix(in oklch, #d7dfe9 40%, white)",
+          "color-mix(in oklch, #d7dfe9 20%, white)"
+        ]
+      },
+      "workspace-line": {
+        "role": "neutral",
+        "displayName": "workspace line",
+        "canonical": "rgba(20, 20, 12, 0.1)",
+        "tonalRamp": [
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 20%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 40%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 60%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 80%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 80%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 60%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 40%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.1) 20%, white)"
+        ]
+      },
+      "workspace-line-strong": {
+        "role": "neutral",
+        "displayName": "workspace line strong",
+        "canonical": "rgba(20, 20, 12, 0.16)",
+        "tonalRamp": [
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 20%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 40%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 60%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 80%, black)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 80%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 60%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 40%, white)",
+          "color-mix(in oklch, rgba(20, 20, 12, 0.16) 20%, white)"
+        ]
+      },
+      "viewer-action": {
+        "role": "primary",
+        "displayName": "Channel Blue"
+      },
+      "viewer-rail": {
+        "role": "neutral",
+        "displayName": "Pale Blue Guide"
       }
     },
     "typographyMeta": {
@@ -250,6 +498,34 @@
       "label": {
         "displayName": "Label / Mono",
         "purpose": "Real state, numbers, paths, timestamps, and compact metadata."
+      },
+      "workspace-page": {
+        "displayName": "Workspace page",
+        "purpose": "Authenticated workspace page in Fira Sans."
+      },
+      "workspace-section": {
+        "displayName": "Workspace section",
+        "purpose": "Authenticated workspace section in Fira Sans."
+      },
+      "workspace-card": {
+        "displayName": "Workspace card",
+        "purpose": "Authenticated workspace card in Fira Sans."
+      },
+      "workspace-body": {
+        "displayName": "Workspace body",
+        "purpose": "Authenticated workspace body in Fira Sans."
+      },
+      "workspace-meta": {
+        "displayName": "Workspace meta",
+        "purpose": "Authenticated workspace meta in Fira Sans."
+      },
+      "workspace-label": {
+        "displayName": "Workspace label",
+        "purpose": "Fira Code for real scope, state, and data."
+      },
+      "viewer-page": {
+        "displayName": "Viewer page",
+        "purpose": "Fira Sans page identity; not creator workspace or marketing typography."
       }
     },
     "shadows": [
@@ -262,6 +538,21 @@
         "name": "action-hover",
         "value": "0 4px 12px color-mix(in srgb, #2200FF 40%, transparent)",
         "purpose": "Brief interactive lift on shared primary actions."
+      },
+      {
+        "name": "workspace-rest",
+        "value": "none",
+        "purpose": "Resting authenticated modules remain flat."
+      },
+      {
+        "name": "workspace-overlay",
+        "value": "0 16px 48px rgba(18, 17, 17, 0.14)",
+        "purpose": "Temporary authenticated menus, drawers, and dialogs."
+      },
+      {
+        "name": "viewer-rest",
+        "value": "none",
+        "purpose": "Flat viewer records; boundaries and tonal shifts carry structure."
       }
     ],
     "motion": [
@@ -300,87 +591,160 @@
       {
         "name": "lg",
         "value": "1024px"
+      },
+      {
+        "name": "workspace-home-stack",
+        "value": "700px"
+      },
+      {
+        "name": "viewer-wrapping-header",
+        "value": "900px"
+      },
+      {
+        "name": "viewer-stacked-tools",
+        "value": "600px"
       }
     ]
   },
   "components": [
     {
-      "name": "Primary Button",
+      "name": "Public / marketing — Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The electric-violet action used for the clearest next step.",
+      "description": "Retained incumbent public/marketing reference. The electric-violet action used for the clearest next step.",
       "html": "<button class=\"ds-btn-primary\" type=\"button\">Start free</button>",
       "css": ".ds-btn-primary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; border:1px solid var(--devin-primary, #2200FF); border-radius:2px; background:var(--devin-primary, #2200FF); color:#FFFFFF; padding:12px 20px; font:500 14px/1.2 Inter, system-ui, sans-serif; cursor:pointer; transition:background-color 150ms ease-out, transform 150ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary:hover { background:var(--devin-primary-hover, #1B00CC); border-color:var(--devin-primary-hover, #1B00CC); } .ds-btn-primary:focus-visible { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; } .ds-btn-primary:active { transform:translateY(1px); }"
     },
     {
-      "name": "Dark Header Action",
+      "name": "Public / marketing — Dark Header Action",
       "kind": "button",
       "refersTo": "button-dark",
-      "description": "The persistent high-contrast entry action in compact marketing chrome.",
+      "description": "Retained incumbent public/marketing reference. The persistent high-contrast entry action in compact marketing chrome.",
       "html": "<a class=\"ds-btn-dark\" href=\"#\">Start free</a>",
       "css": ".ds-btn-dark { display:inline-flex; min-height:44px; align-items:center; justify-content:center; border-radius:2px; background:var(--devin-ink, #191919); color:var(--devin-surface, #FCFCFC); padding:12px 16px; font:500 14px/1.2 Inter, system-ui, sans-serif; text-decoration:none; transition:background-color 150ms ease-out; } .ds-btn-dark:hover { background:#000000; } .ds-btn-dark:focus-visible { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; } .ds-btn-dark:active { background:#121111; }"
     },
     {
-      "name": "Secondary Button",
+      "name": "Public / marketing — Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "A bordered alternative for exploration, cancellation, and non-primary actions.",
+      "description": "Retained incumbent public/marketing reference. A bordered alternative for exploration, cancellation, and non-primary actions.",
       "html": "<button class=\"ds-btn-secondary\" type=\"button\">Explore demo</button>",
       "css": ".ds-btn-secondary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; border:1px solid var(--devin-line, rgba(0,0,0,0.12)); border-radius:2px; background:var(--devin-bg, #FFFFFF); color:var(--devin-ink, #191919); padding:12px 20px; font:500 14px/1.2 Inter, system-ui, sans-serif; cursor:pointer; transition:background-color 150ms ease-out, border-color 150ms ease-out; } .ds-btn-secondary:hover { background:var(--devin-surface-2, #EFEFEF); border-color:rgba(0,0,0,0.28); } .ds-btn-secondary:focus-visible { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; } .ds-btn-secondary:active { background:#E5E5E5; }"
     },
     {
-      "name": "Text Field",
+      "name": "Public / marketing — Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "A labeled white field with a hairline boundary and violet focus.",
+      "description": "Retained incumbent public/marketing reference. A labeled white field with a hairline boundary and violet focus.",
       "html": "<label class=\"ds-field\"><span>Email</span><input type=\"email\" placeholder=\"you@example.com\"></label>",
       "css": ".ds-field { display:grid; gap:8px; color:var(--devin-ink, #191919); font:500 13px/1.3 Inter, system-ui, sans-serif; } .ds-field input { min-height:44px; border:1px solid var(--devin-line, rgba(0,0,0,0.12)); border-radius:6px; background:var(--devin-bg, #FFFFFF); color:var(--devin-ink, #191919); padding:12px 14px; font:400 15px/1.3 Inter, system-ui, sans-serif; box-shadow:none; } .ds-field input:hover { border-color:rgba(0,0,0,0.24); } .ds-field input:focus-visible { border-color:var(--devin-primary, #2200FF); outline:2px solid color-mix(in srgb, var(--devin-primary, #2200FF) 16%, transparent); outline-offset:0; }"
     },
     {
-      "name": "Surface Card",
+      "name": "Public / marketing — Surface Card",
       "kind": "card",
       "refersTo": "card",
-      "description": "A flat paper module that keeps truthful state and the next action together.",
+      "description": "Retained incumbent public/marketing reference. A flat paper module that keeps truthful state and the next action together.",
       "html": "<section class=\"ds-card\"><div class=\"ds-card-head\"><h3>Current site</h3><span>Published</span></div><p>Demo Community is live and ready to share.</p></section>",
       "css": ".ds-card { max-width:420px; border:1px solid var(--devin-line-soft, rgba(0,0,0,0.08)); border-radius:16px; background:var(--devin-surface, #FCFCFC); color:var(--devin-ink, #191919); padding:24px; box-shadow:none; font-family:Inter, system-ui, sans-serif; } .ds-card-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:12px; } .ds-card h3 { margin:0; font-size:20px; font-weight:500; letter-spacing:-0.02em; } .ds-card-head span { border-radius:200px; background:var(--devin-surface-2, #EFEFEF); padding:4px 8px; color:var(--devin-ink, #191919); font:600 11px/1.2 \"Geist Mono\", ui-monospace, monospace; } .ds-card p { margin:0; color:var(--devin-muted, #5C5C5C); font-size:15px; line-height:1.5; } .ds-card:focus-within { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; }"
     },
     {
-      "name": "Status Chip",
+      "name": "Public / marketing — Status Chip",
       "kind": "chip",
       "refersTo": "status-chip",
-      "description": "A compact text-plus-dot state indicator; color supplements the label.",
+      "description": "Retained incumbent public/marketing reference. A compact text-plus-dot state indicator; color supplements the label.",
       "html": "<span class=\"ds-status\" role=\"status\">Published</span>",
       "css": ".ds-status { display:inline-flex; align-items:center; gap:6px; min-height:32px; border:1px solid color-mix(in srgb, #1F8A68 28%, white); border-radius:200px; background:color-mix(in srgb, #1F8A68 9%, white); color:#176B52; padding:4px 10px; font:600 11px/1.2 \"Geist Mono\", ui-monospace, monospace; text-transform:uppercase; letter-spacing:0.04em; } .ds-status::before { content:\"\"; width:6px; height:6px; border-radius:50%; background:#1F8A68; } .ds-status:hover { border-color:#1F8A68; } .ds-status:focus-visible { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; }"
     },
     {
-      "name": "Marketing Navigation",
+      "name": "Public / marketing — Marketing Navigation",
       "kind": "nav",
-      "description": "Compact suite navigation with quiet links and a persistent dark entry action.",
+      "description": "Retained incumbent public/marketing reference. Compact suite navigation with quiet links and a persistent dark entry action.",
       "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><a class=\"ds-nav-brand\" href=\"#\">YourRank</a><div><a aria-current=\"page\" href=\"#\">Products</a><a href=\"#\">Pricing</a><a class=\"ds-nav-cta\" href=\"#\">Start free</a></div></nav>",
       "css": ".ds-nav { display:flex; min-height:72px; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid var(--devin-line-soft, rgba(0,0,0,0.08)); background:rgba(252,252,252,0.95); padding:12px 24px; font-family:Inter, system-ui, sans-serif; } .ds-nav a { color:var(--devin-muted, #5C5C5C); font-size:14px; text-decoration:none; } .ds-nav > div { display:flex; align-items:center; gap:24px; } .ds-nav .ds-nav-brand { color:var(--devin-ink, #191919); font-size:15px; font-weight:600; letter-spacing:-0.02em; } .ds-nav a:hover, .ds-nav a[aria-current=\"page\"] { color:var(--devin-ink, #191919); } .ds-nav .ds-nav-cta { display:inline-flex; min-height:44px; align-items:center; border-radius:2px; background:var(--devin-ink, #191919); color:var(--devin-surface, #FCFCFC); padding:8px 14px; } .ds-nav a:focus-visible { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; }"
     },
     {
-      "name": "Divided Data Surface",
+      "name": "Public / marketing — Divided Data Surface",
       "kind": "custom",
-      "description": "The recurring row pattern for standings, rewards, workflow steps, and operational data.",
+      "description": "Retained incumbent public/marketing reference. The recurring row pattern for standings, rewards, workflow steps, and operational data.",
       "html": "<div class=\"ds-data\"><div><span>01</span><strong>Alex</strong><code>9,500 pts</code></div><div><span>02</span><strong>Bree</strong><code>7,200 pts</code></div></div>",
       "css": ".ds-data { max-width:520px; border-top:1px solid var(--devin-line, rgba(0,0,0,0.12)); border-bottom:1px solid var(--devin-line, rgba(0,0,0,0.12)); background:var(--devin-bg, #FFFFFF); color:var(--devin-ink, #191919); font-family:Inter, system-ui, sans-serif; } .ds-data > div { display:grid; grid-template-columns:42px 1fr auto; align-items:center; gap:12px; min-height:52px; border-top:1px solid var(--devin-line-soft, rgba(0,0,0,0.08)); padding:12px 0; } .ds-data > div:first-child { border-top:0; } .ds-data span, .ds-data code { color:var(--devin-muted, #5C5C5C); font:500 12px/1.2 \"Geist Mono\", ui-monospace, monospace; } .ds-data strong { font-size:14px; font-weight:500; } .ds-data > div:hover { background:color-mix(in srgb, var(--devin-surface-2, #EFEFEF) 45%, transparent); } .ds-data > div:focus-within { outline:2px solid var(--devin-primary, #2200FF); outline-offset:2px; }"
+    },
+    {
+      "name": "Workspace primary action",
+      "kind": "button",
+      "refersTo": "workspace-button-primary",
+      "description": "Indigo primary action in the authenticated workspace.",
+      "html": "<button class=\"ds-ws-primary\" type=\"button\">Add players</button>",
+      "css": ".ds-ws-primary { min-height:40px; padding:0 12px; border:1px solid var(--ws-accent, #4056b9); border-radius:var(--ws-radius-sm, 8px); background:var(--ws-accent, #4056b9); color:var(--ws-accent-text, #fff); font:600 13px \"Fira Sans\", sans-serif; cursor:pointer; } .ds-ws-primary:hover { background:var(--ws-accent-hover, #304398); } .ds-ws-primary:focus-visible { outline:var(--ws-focus-width, 2px) solid var(--ws-focus, #4056b9); outline-offset:var(--ws-focus-offset, 3px);} .ds-ws-primary:active { transform:translateY(1px); } @media(max-width:700px) { .ds-ws-primary { min-height:44px; } }"
+    },
+    {
+      "name": "Workspace secondary action",
+      "kind": "button",
+      "refersTo": "workspace-button-secondary",
+      "description": "White bordered secondary action.",
+      "html": "<button class=\"ds-ws-secondary\" type=\"button\">Manage players</button>",
+      "css": ".ds-ws-secondary { min-height:40px; padding:0 12px; border:1px solid var(--ws-line-strong, rgba(20,20,12,.16)); border-radius:var(--ws-radius-sm, 8px); background:var(--ws-surface, #fff); color:var(--ws-text, #202b3c); font:500 13px \"Fira Sans\", sans-serif; cursor:pointer; } .ds-ws-secondary:hover { background:var(--ws-surface-soft, #f0f3f8); } .ds-ws-secondary:focus-visible { outline:var(--ws-focus-width, 2px) solid var(--ws-focus, #4056b9); outline-offset:var(--ws-focus-offset, 3px);} .ds-ws-secondary:active { transform:translateY(1px); } @media(max-width:700px) { .ds-ws-secondary { min-height:44px; } }"
+    },
+    {
+      "name": "Workspace field",
+      "kind": "input",
+      "refersTo": "workspace-input",
+      "description": "Labeled white field using workspace type, border, and focus.",
+      "html": "<label class=\"ds-ws-field\">Site name<input type=\"text\" value=\"Demo Board\"></label>",
+      "css": ".ds-ws-field { display:grid; gap:8px; color:var(--ws-text, #202b3c); font:500 13px \"Fira Sans\", sans-serif; } .ds-ws-field input { min-height:40px; padding:0 12px; border:1px solid var(--ws-line-strong, rgba(20,20,12,.16)); border-radius:var(--ws-radius-sm, 8px); background:var(--ws-surface, #fff); color:var(--ws-text, #202b3c); font:400 14px \"Fira Sans\", sans-serif; } .ds-ws-field input:hover { border-color:var(--ws-text-soft, #536176); } .ds-ws-field input:focus-visible { outline:var(--ws-focus-width, 2px) solid var(--ws-focus, #4056b9); outline-offset:var(--ws-focus-offset, 3px);}"
+    },
+    {
+      "name": "Workspace rail navigation",
+      "kind": "nav",
+      "description": "Light slate navigation with explicit current destination.",
+      "html": "<nav class=\"ds-ws-nav\" aria-label=\"Dashboard\"><a href=\"#home\" aria-current=\"page\">Home</a><a href=\"#sites\">Sites</a></nav>",
+      "css": ".ds-ws-nav { display:grid; gap:4px; width:208px; padding:12px; background:var(--ws-chrome, #edf1f7); font:500 13px \"Fira Sans\", sans-serif; } .ds-ws-nav a { display:flex; align-items:center; min-height:34px; padding:0 12px; border-radius:var(--ws-radius-sm, 8px); color:var(--ws-chrome-text, #243348); text-decoration:none; } .ds-ws-nav a:hover, .ds-ws-nav a[aria-current] { background:var(--ws-chrome-raised, #dde5f0); } .ds-ws-nav a[aria-current] { box-shadow:inset 2px 0 var(--ws-accent, #4056b9); } .ds-ws-nav a:focus-visible { outline:var(--ws-focus-width, 2px) solid var(--ws-focus, #4056b9); outline-offset:var(--ws-focus-offset, 3px);}"
+    },
+    {
+      "name": "Workspace module",
+      "kind": "card",
+      "refersTo": "workspace-module",
+      "description": "White, flat module for a coherent piece of work.",
+      "html": "<section class=\"ds-ws-module\"><h3>Get your community ready</h3><p>Add the players you want to rank.</p></section>",
+      "css": ".ds-ws-module { padding:24px; border:1px solid var(--ws-line, rgba(20,20,12,.1)); border-radius:var(--ws-radius, 14px); background:var(--ws-surface, #fff); color:var(--ws-text, #202b3c); box-shadow:none; font-family:\"Fira Sans\", sans-serif; } .ds-ws-module h3 { margin:0 0 8px; font-size:17px; line-height:24px; } .ds-ws-module p { margin:0; color:var(--ws-text-soft, #536176); font-size:15px; line-height:22.5px; }"
+    },
+    {
+      "name": "Workspace state chip",
+      "kind": "chip",
+      "description": "Readable textual state on a quiet neutral surface.",
+      "html": "<span class=\"ds-ws-chip\">Not live</span>",
+      "css": ".ds-ws-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:var(--ws-radius-sm, 8px); background:var(--ws-surface-strong, #e6ebf2); color:var(--ws-text-soft, #536176); font:600 11px/16px \"Fira Sans\", sans-serif; } .ds-ws-chip::before { content:\"\"; width:6px; height:6px; border-radius:50%; background:currentColor; }"
+    },
+    {
+      "name": "Viewer primary action",
+      "kind": "button",
+      "refersTo": "viewer-button-primary",
+      "description": "Scoped viewer action with visible keyboard focus.",
+      "html": "<button class=\"ds-viewer-action\">Log in with Kick</button>",
+      "css": ".ds-viewer-action{font:600 14px/1.4 \"Fira Sans\",sans-serif;min-height:44px;padding:10px 16px;background:#205acc;color:white;border:1px solid #205acc;border-radius:8px;cursor:pointer}.ds-viewer-action:hover{background:#1648ac}.ds-viewer-action:focus-visible{outline:2px solid #205acc;outline-offset:4px}.ds-viewer-action:active{background:#1648ac}"
+    },
+    {
+      "name": "Viewer navigation",
+      "kind": "nav",
+      "description": "Visible community guide; wraps at mobile, never becomes a drawer.",
+      "html": "<nav class=\"ds-viewer-guide\" aria-label=\"Community pages\"><a href=\"#home\">Home</a><a href=\"#membership\" aria-current=\"page\">My Community</a><a href=\"#account\">Your account</a></nav>",
+      "css": ".ds-viewer-guide{display:grid;gap:4px;padding:20px;background:#dce9ff;font:14px/1.5 \"Fira Sans\",sans-serif}.ds-viewer-guide a{display:flex;align-items:center;min-height:44px;padding:10px 12px;border-radius:8px;color:#142a48;text-decoration:none}.ds-viewer-guide a:hover{background:#c3d7fb}.ds-viewer-guide a[aria-current]{background:#205acc;color:white;font-weight:600}.ds-viewer-guide a:focus-visible{outline:2px solid #205acc;outline-offset:4px}@media(max-width:900px){.ds-viewer-guide{display:flex;flex-wrap:wrap}}"
     }
   ],
   "narrative": {
     "northStar": "The Quiet Control Field",
-    "overview": "YourRank uses one calm, high-contrast language to make a connected three-product suite immediately legible. The devin.ai reference supplies material discipline and hierarchy—near-white fields, black type, electric-violet actions, precise dividers, compact controls—while YourRank keeps its own identity, direct language, and product truth.\n\nThe system spans three distinct contexts without becoming three visual brands. Marketing explains and demonstrates Sites, Telegram, and Credits & Shop; the operator workspace places a black production rail around a light working field; public streamer sites keep a streamer-selected accent inside the same light material system. Transparent OBS overlays and isolated games remain intentional context-specific exceptions.\n\nThe product demonstration and the user's state carry each screen. Decoration stays quiet so the current state, the next action, and the relationship among the three peer products remain obvious.",
+    "overview": "The authenticated creator workspace uses a cool mineral canvas, white work surfaces, quiet slate navigation, indigo actions, Fira Sans interface text, and measured Fira Code data. It organizes community work around one next action and readable activity. This is the user-authorized replacement of the incumbent dashboard world, recorded from the canonical stylesheet and shared shell contract.\n\nThe viewer world is **Channel guide**, direction seed `c2610fb4`: a visible blue community rail beside a flat ice reading field, navy Fira Sans copy, compact labeled controls, and divided working records. The account directory connects separate memberships; each creator destination keeps its community identity and personal state visible. This is a code-led replacement authorized by the user, without an approved comp or quality-bar image.\n\nFrontmatter keys prefixed `workspace-` describe the creator workspace and `viewer-` describe the supported viewer shell. Unprefixed keys retain the incumbent marketing and legacy material record; they do not govern the viewer world. Marketing keeps its near-white, ink-black, electric-violet language and Inter/Geist Mono stacks. The retained North Star names that earlier record; Channel guide names only the viewer world. Transparent OBS overlays and restricted legacy Games surfaces retain their existing scope.\n\nThe product demonstration and the user's state carry each screen. Decoration stays quiet so the current state, the next action, and the selected account/site context remain obvious.",
     "keyCharacteristics": [
-      "Near-white reading fields, ink-black type, and electric-violet action cues.",
-      "A black production rail around light operator workspaces.",
+      "Cool mineral workspace fields, white modules, slate text, and indigo action cues.",
+      "A quiet light-slate rail and white context bar around the authenticated workspace.",
       "Hairline dividers and shared outer boundaries instead of nested card stacks.",
       "Compact identity, clear purpose, visible action, and readable state in the first viewport.",
-      "Sites, Telegram, and Credits & Shop presented as peer products under one account."
+      "One coherent creator workspace with explicit account and selected-site context."
     ],
     "rules": [
       {
         "name": "The Two Accent Rule",
-        "body": "Electric Violet belongs to YourRank actions and focus; the public `--yr-accent` belongs to the streamer's local identity. Do not replace one with the other.",
+        "body": "Public streamer identity remains separate from platform actions: the public `--yr-accent` belongs to the streamer, public/marketing actions use Electric Violet, and authenticated actions use the workspace indigo tokens.",
         "section": "colors"
       },
       {
@@ -404,14 +768,19 @@
         "section": "layout"
       },
       {
-        "name": "The One Suite Rule",
-        "body": "Global product switching, account, and help remain consistent; local site and bot context never disappears in the name of simplification.",
+        "name": "The One Workspace Rule",
+        "body": "Shell, account, help, and selected-site context remain consistent; simplification must not hide whether work is account-scoped or site-scoped.",
         "section": "layout"
       },
       {
         "name": "The Hairline Before Shadow Rule",
         "body": "Use boundaries and tonal layering for structure; add shadow only when a surface temporarily sits above the page or an action is responding to interaction.",
         "section": "elevation"
+      },
+      {
+        "name": "The One Identity Rule",
+        "body": "A bar chart, a lettered \"YR\" square, or any other locally drawn glyph is not the brand. Introducing brand geometry outside `brand-assets.ts` fails `apps/leaderboard/src/__tests__/brand-identity.test.js`.",
+        "section": "brand identity"
       },
       {
         "name": "The Restrained Geometry Rule",
@@ -425,18 +794,20 @@
       }
     ],
     "dos": [
-      "**Do** keep Sites, Telegram, and Credits & Shop visible as peer products under one account.",
+      "**Do** organize new target-facing work around Home, Community, Activities, People, Rewards, Insights, and Settings while preserving current route identity until migration is explicit.",
       "**Do** let real user data or clearly labeled synthetic product demonstrations carry the visual hierarchy.",
       "**Do** use shared outer boundaries, internal dividers, and readable state before introducing another container.",
       "**Do** preserve visible focus, semantic status announcements, reduced-motion behavior, and 44px touch targets where practical.",
-      "**Do** keep public streamer accent separate from YourRank's product-action violet."
+      "**Do** keep creator identity accents separate from scoped viewer and workspace action colors.",
+      "**Do** preserve the viewer's visible community guide, wrapping mobile navigation, and separate membership records."
     ],
     "donts": [
       "**Don't** introduce decorative gradients, glass effects, glow fields, or floating metric-card walls into normal product surfaces.",
       "**Don't** use semantic colors as decoration or communicate state by color alone.",
-      "**Don't** hide the primary action or product switcher when the layout collapses.",
+      "**Don't** hide the primary action or selected account/site context when the layout collapses.",
       "**Don't** turn mono labels, uppercase captions, or numbered markers into decoration; each must encode actual state, scope, sequence, or data.",
-      "**Don't** invent testimonials, customer logos, metrics, billing promises, or performance claims that the product evidence does not support."
+      "**Don't** invent testimonials, customer logos, metrics, billing promises, or performance claims that the product evidence does not support.",
+      "**Don't** apply viewer-world rules to the creator workspace, marketing, OBS overlays, or restricted legacy Games."
     ]
   }
 }

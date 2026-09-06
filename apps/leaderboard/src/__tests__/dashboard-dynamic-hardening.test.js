@@ -234,9 +234,9 @@ describe("account team scope", () => {
   });
 
   it("uses the rendered team siteId for every mutation and reload", () => {
-    expect(accountJs).toContain('if (data?.siteId) teamSiteId = data.siteId;');
-    expect(accountJs).toContain('"/api/site/team/remove", { targetUserId, siteId: teamSiteId }');
-    expect(accountJs).toContain('"/api/site/team/invite/revoke", { inviteId, siteId: teamSiteId }');
+    expect(accountJs).toContain('teamSiteId = data.siteId;');
+    expect(accountJs).toMatch(/const siteId = teamSiteId;[\s\S]*?showConfirmModal\("Remove team member"[\s\S]*?"\/api\/site\/team\/remove", \{ targetUserId, siteId \}/);
+    expect(accountJs).toMatch(/const siteId = teamSiteId;[\s\S]*?showConfirmModal\("Revoke invitation"[\s\S]*?"\/api\/site\/team\/invite\/revoke", \{ inviteId, siteId \}/);
     expect(accountJs).toContain('"/api/site/team/invite", { email, role: "moderator", siteId: teamSiteId }');
   });
 

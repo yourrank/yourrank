@@ -52,7 +52,7 @@ function setLoading(loading) {
   const queue = document.querySelector(".people-review-queue");
   if (region) region.hidden = !loading;
   if (queue) {
-    queue.toggleAttribute("aria-busy", loading);
+    queue.setAttribute("aria-busy", String(loading));
     queue.classList.toggle("is-loading", loading);
   }
 }

@@ -745,7 +745,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // SEC-108: Issue CSRF cookie on every page load so the JS client can
       // echo it back as X-CSRF-Token on API calls.
       const csrfToken = generateCsrfToken();
-      const csrfHeader = { "set-cookie": csrfCookie(csrfToken) };
+      const csrfHeader = { "set-cookie": csrfCookie(csrfToken, request) };
 
       // The staging apex (staging.yourrank.site) proxies marketing routes to its own
       // Web Worker so the cross-service journey is verifiable outside production.
@@ -1127,6 +1127,15 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         : "";
       if (demoSub && LEGAL_PAGES.has(demoSub)) {
         return redirectResponse(`${url.origin}/${demoSub}`, 302);
+      }
+      if (demoSub.startsWith("player/")) {
+        const data = demoLeaderboardData();
+        const profile = findProfilePlayer(data, demoSub.slice("player/".length));
+        if (!profile) return new Response(notFoundPage("demo", nonce), { status: 404, headers: HTML_N });
+        return new Response(await renderNewPlayerProfile(data, { ...profile.player, rank: profile.rank }, [], {
+          nonce, slug: "demo", plan: "pro", homeUrl: url.origin,
+          isCustomDomain: false, isDemo: true,
+        }), { headers: { ...HTML_N, "cache-control": "no-store" } });
       }
       if (method === "GET" && (path === "/demo" || DEMO_SECTIONS.has(demoSub))) {
         const demoSection = path === "/demo" ? "home" : demoSub;

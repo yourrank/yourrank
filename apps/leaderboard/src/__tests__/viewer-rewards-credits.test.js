@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
 
-const appCss = readFileSync(new URL("../assets/app.css", import.meta.url), "utf8");
+const appCss = readFileSync(new URL("../assets/viewer-shell.css", import.meta.url), "utf8");
 const shellCss = readFileSync(new URL("../assets/site-shell.css", import.meta.url), "utf8");
 const clientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/site-shell.js", import.meta.url), "utf8");
@@ -117,7 +117,7 @@ describe("a creator's Rewards page", () => {
     const html = await signedOut("shop");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Sign in from the header to use your credits.");
+    expect(html).toContain("Use the navigation to sign in and use your credits.");
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
   });
 
@@ -246,17 +246,14 @@ describe("the creator home credit state", () => {
 describe("a creator's My Community page", () => {
   it("explains the signed-out state without repeating the header sign-in action", async () => {
     const html = await signedOut("me");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(2);
-    expect(html).toContain('class="yr-vhead-aside"');
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).toContain('class="member-gate"');
     expect(html).toContain("Join community</a>");
     expect(html).toContain("intent=join");
     expect(html).toContain("site=demo-board");
-    expect(html).toContain('<section class="yr-vsec yr-vsec--narrow yr-credit-guide">');
-    expect(html).toContain('<h2 class="yr-sec-title">After you sign in</h2>');
-    expect(html).toContain("Community membership");
-    expect(html).toContain("Rewards and credits");
-    expect(html).toContain("Free code drops");
-    expect(html).toContain(">Claims<");
+    expect(html).toContain("follow your reward claims");
+    expect(html).toContain("Your credits stay with this community.");
+    expect(html).toContain("Back to my communities");
     expect(html).not.toContain("data-code-drop-claim");
     expect(html).not.toContain("yr-kpi");
   });
@@ -289,9 +286,11 @@ describe("a creator's My Community page", () => {
 
   it("keeps a signed-in zero balance and empty activity compact", async () => {
     const html = await zeroCredits();
-    expect(html).toContain('class="yr-vbal is-zero"');
-    expect(html).toContain('class="yr-vcols yr-vcols--empty"');
-    expect((html.match(/class="yr-empty /g) || []).length).toBe(3);
+    expect(html).toContain('class="member-balance" data-credit-balance="0"');
+    expect(html).toContain('class="member-tools"');
+    expect(html.indexOf('id="membership-claims"')).toBeLessThan(html.indexOf('id="membership-history"'));
+    expect((html.match(/class="member-empty"/g) || []).length).toBe(1);
+    expect((html.match(/class="member-history"/g) || []).length).toBe(2);
     expect(html).toContain("No participation history yet");
   });
 
@@ -303,7 +302,7 @@ describe("a creator's My Community page", () => {
       viewerData: { membershipStatus: "unavailable", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
       opts,
     });
-    expect(html).toContain("We couldn't load your community membership right now.");
+    expect(html).toContain("Your membership couldn't load");
     expect(html).not.toContain('class="yr-vbal');
     expect(html).not.toContain("No credit activity yet");
   });
@@ -316,10 +315,10 @@ describe("a creator's My Community page", () => {
       viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
       opts,
     });
-    expect(html).toContain("Signed in as <b>member</b>.");
-    expect(html).toContain("You haven&#39;t joined this community yet.");
+    expect(html).toContain("Signed in as <b>member</b>");
+    expect(html).toContain("You haven't joined this community yet.");
     expect(html).toContain('data-membership-join');
-    expect(html).toContain("Membership connects this Viewer Account");
+    expect(html).toContain("Join to keep your Rewards, free credits and Claims together here.");
     expect(html).not.toContain("We couldn&#39;t load your community membership");
     expect(html).not.toContain('class="yr-vbal');
     expect(html).not.toContain("Member since");
@@ -343,7 +342,7 @@ describe("a creator's My Community page", () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
-    expect(html).toContain("Your membership in");
+    expect(html).toContain('class="member-heading"');
     expect(html).not.toContain("Member since");
     expect(html).not.toContain("yr-gamer");
     expect(html).not.toContain("Credits / 7d");
@@ -362,11 +361,12 @@ describe("a creator's My Community page", () => {
 
   it("shows safe Participation as a bounded reverse-chronological membership record", async () => {
     const html = await credits();
-    expect(html).toContain('<h2 class="yr-sec-title">Participation</h2>');
+    expect(html).toContain('<summary>Participation <span>');
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain(">Claimed</span>");
     expect(html).toContain("Feb 3, 2024");
-    const participationHtml = html.match(/<section class="yr-vsec">[\s\S]*?<h2 class="yr-sec-title">Participation<\/h2>[\s\S]*?<\/section>/)?.[0] || "";
+    const participationHtml = html.match(/<details class="member-history"[^>]*><summary>Participation[\s\S]*?<\/details>/)?.[0] || "";
+    expect(participationHtml).toContain("Claimed a code drop");
     for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
       expect(participationHtml.toLowerCase()).not.toContain(banned);
     }
@@ -416,10 +416,11 @@ describe("a creator's My Community page", () => {
 describe("viewer row geometry", () => {
   it("lets the title keep a readable measure instead of stacking at one width", () => {
     expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }");
-    expect(appCss).toContain(".vd-card-main{flex:1 1 22ch;min-width:0}");
+    expect(appCss).toContain(".vd-card-main,.vd-profile-txt{min-width:0}");
+    expect(appCss).toContain("grid-template-columns:44px minmax(0,1fr) auto");
     // The 360px stacking workaround is gone: wrapping is the root behaviour.
     expect(appCss).not.toContain("@media (max-width:360px)");
-    expect(appCss).toContain(".vd-card-side{flex:0 1 auto;min-width:0;margin-left:auto;display:flex;flex-wrap:wrap");
+    expect(appCss).toContain(".vd-card-side{grid-column:2}");
   });
 });
 
@@ -438,18 +439,18 @@ describe("the global account page", () => {
     expect((page.match(/<h1\b/g) || []).length).toBe(1);
     expect(page).not.toContain("an-eyebrow");
     expect(page).not.toContain("an-title");
-    expect(page).toContain("One Viewer Account for every creator community you join.");
+    expect(page).toContain("Your rewards and claims stay with each community.");
   });
 
   it("keeps one identity row and one community membership list", () => {
-    expect(page).toContain('<main class="wrap cr-wrap vd-account-shell"');
+    expect(page).toContain('<main class="viewer-layout"');
     expect(page).toContain('id="vd-avatar"');
     expect(page).toContain('id="vd-avatar-fallback"');
     expect(page).toContain('id="vd-username"');
     expect(page).toContain('id="vd-identity"');
     expect(page).toContain('id="vd-logout"');
     expect(page).toContain('class="vd-profile-actions"');
-    expect(page).toContain(">Community memberships<");
+    expect(page).toContain(">Your memberships<");
     expect(page).toContain('id="vd-communities"');
     expect(page).not.toContain('id="vd-site-card"');
     expect(page).not.toContain('id="vd-back"');

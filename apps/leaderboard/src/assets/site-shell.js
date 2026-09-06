@@ -35,7 +35,8 @@
   var inertBackground = [];
   var drawerFocusables = function () {
     if (!side) return [];
-    return Array.prototype.slice.call(side.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+    return Array.prototype.slice.call(side.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter(function (el) { return el.getClientRects().length && !el.closest("[hidden], [inert]"); });
   };
 
   function closeSide() {
@@ -48,7 +49,7 @@
       menu.setAttribute("aria-expanded", "false");
       menu.setAttribute("aria-label", "Open sections");
     }
-    inertBackground.forEach(function (el) { el.inert = false; });
+    inertBackground.forEach(function (entry) { entry.el.inert = entry.inert; });
     inertBackground = [];
     document.body.style.overflow = bodyOverflow;
     var opener = sideOpener || menu;
@@ -57,7 +58,7 @@
   }
 
   function openSide() {
-    if (!side) return;
+    if (!side || side.hasAttribute("data-open")) return;
     sideOpener = document.activeElement && document.activeElement !== document.body ? document.activeElement : menu;
     bodyOverflow = document.body.style.overflow;
     side.setAttribute("data-open", "");
@@ -68,8 +69,15 @@
       menu.setAttribute("aria-expanded", "true");
       menu.setAttribute("aria-label", "Close sections");
     }
-    inertBackground = Array.prototype.slice.call(document.body.children).filter(function (el) { return el !== side && el !== scrim; });
-    inertBackground.forEach(function (el) { el.inert = true; });
+    var branch = side;
+    while (branch && branch !== document.body) {
+      Array.prototype.forEach.call(branch.parentElement.children, function (el) {
+        if (el === branch || el === scrim || /^(SCRIPT|STYLE|LINK)$/.test(el.tagName)) return;
+        inertBackground.push({ el: el, inert: el.inert });
+        el.inert = true;
+      });
+      branch = branch.parentElement;
+    }
     document.body.style.overflow = "hidden";
     var first = drawerFocusables()[0] || side;
     window.setTimeout(function () { first.focus(); }, 0);
@@ -89,7 +97,8 @@
     if (!focusables.length) { e.preventDefault(); side.focus(); return; }
     var first = focusables[0];
     var last = focusables[focusables.length - 1];
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === side)) { e.preventDefault(); last.focus(); }
+    if (!side.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
+    else if (e.shiftKey && (document.activeElement === first || document.activeElement === side)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 

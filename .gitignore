@@ -53,3 +53,5 @@ tailwind.config.js
 # impeccable-ignore-end
 __pycache__/
 .restore-drill/
+
+cookies*.txt
