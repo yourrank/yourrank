@@ -148,7 +148,7 @@ function renderCommunities(communities) {
           <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
         </div>
         <div class="vd-card-side">
-          <a class="btn btn--sm" href="${href}" aria-label="Open your membership in ${esc(name)}">Open membership</a>
+          <a class="btn btn--sm" href="${href}" aria-label="View my activity in ${esc(name)}">View my activity</a>
         </div>
       </article>`;
   }).join("");

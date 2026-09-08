@@ -20,6 +20,22 @@ const testEnv = {};
 
 const redirect = async (path) => handleRequest(request(path), testEnv, {});
 
+describe("viewer help routing", () => {
+  it("preserves viewer contact context through the redirect and Worker renderer", async () => {
+    const response = await redirect('/contact?audience=viewer&return=%2Fcreator%2Fshop');
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get('location'));
+    expect(location.pathname).toBe('/help/support');
+    expect(location.searchParams.get('audience')).toBe('viewer');
+    const help = await redirect(location.pathname + location.search);
+    expect(help.status).toBe(200);
+    const html = await help.text();
+    expect(html).toContain('class="viewer-rail"');
+    expect(html).toContain('href="/creator/shop"');
+    expect(html).not.toContain('href="/dashboard');
+  });
+});
+
 function stripComments(source) {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")

@@ -19,6 +19,8 @@ let sectionMounter = null;
 export function registerSectionMounter(fn) { sectionMounter = fn; }
 
 let navigationPending = false;
+const navigationGuards = new Map();
+export function registerNavigationGuard(key, guard) { navigationGuards.set(key, guard); }
 let lastRouteUrl = location.pathname + location.search;
 
 // Sections that render their own tab switches in place (analytics panels,
@@ -87,6 +89,7 @@ function saveDraftBeforeNavigation() {
 }
 
 async function allowNavigation() {
+  for (const guard of navigationGuards.values()) { if (!await guard()) return false; }
   if (!state._dirty) return true;
   const action = await chooseDirtyAction();
   if (action === "discard") { clearDirty(); return true; }
@@ -408,7 +411,7 @@ export function setupShell() {
     if (navigationPending) return;
     const destination = location.pathname + location.search;
     const route = currentRoute();
-    if (state._dirty) {
+    if (state._dirty || navigationGuards.size) {
       navigationPending = true;
       try {
         if (!await allowNavigation()) {

@@ -1,4 +1,4 @@
-import { viewerNavigation, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
+import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 import { leaderboardPageHtml } from "@yourrank/shared/page-shell";
 
 export const viewerDashboardPage = leaderboardPageHtml({
@@ -61,7 +61,7 @@ ${viewerNavigation()}
       <img id="vd-avatar" class="vd-avatar" alt="" hidden />
       <span id="vd-avatar-fallback" class="vd-avatar-fallback" aria-hidden="true">M</span>
       <div class="vd-profile-txt">
-        <h2>Your account</h2>
+        <h2>Viewer account</h2>
         <p class="vd-account-name" id="vd-username">Member</p>
         <p class="card-sub" id="vd-identity">Loading connected account…</p>
       </div>
@@ -77,7 +77,7 @@ ${viewerNavigation()}
   </section>
 
   </div>
-  <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a></nav>
+  <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="${viewerHelpHref().replaceAll('&', '&amp;')}">Contact support</a></nav>
 </div>
 `,
 });

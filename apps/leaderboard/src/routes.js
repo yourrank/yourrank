@@ -5,6 +5,8 @@
 // withHandler wraps every route in a safety-net try/catch so an unexpected
 // throw never kills the Worker invocation without a response.
 import { withHandler } from "./middleware/handler.js";
+import { handleRewardImage } from "./handlers/reward-images.js";
+import { handleEventLeaderboards } from "./handlers/event-leaderboards.js";
 
 import {
   handleSignup, handleLogin, handleLogout, handleMe, handleForgot, handleReset,
@@ -241,6 +243,7 @@ export const ROUTES = [
   
   // Site routes
   { path: "/api/site", method: "GET", handler: withHandler(handleGetSite) },
+  ...["GET", "POST", "DELETE"].map(method => ({ path: "/api/site/events", method, handler: withHandler(handleEventLeaderboards) })),
   { path: "/api/site", method: "PUT", handler: withHandler(handlePutSite) },
   { path: "/api/site/sections", method: "POST", handler: withHandler(handlePostSiteSections) },
   { path: "/api/site/games/settings", method: "GET", handler: withHandler(handleGetSiteGameSettings) },
@@ -373,6 +376,8 @@ export const ROUTES = [
   { path: "/api/credits/rewards", method: "POST", handler: withHandler(handleCreditsSaveReward) },
   { path: "/api/credits/rewards/:id", method: "DELETE", handler: withHandler(handleCreditsDeleteReward) },
   { path: "/api/credits/shop", method: "POST", handler: withHandler(handleCreditsSaveShopItem) },
+  { path: "/api/credits/shop/:id/image", method: "GET", handler: withHandler(handleRewardImage) },
+  { path: "/api/public/:slug/reward-images/:id", method: "GET", handler: withHandler(handleRewardImage) },
   { path: "/api/credits/shop/:id", method: "DELETE", handler: withHandler(handleCreditsDeleteShopItem) },
   { path: "/api/credits/redemptions/:id", method: "POST", handler: withHandler(handleCreditsUpdateRedemption) },
   { path: "/api/credits/analytics", method: "GET", handler: withHandler(handleCreditsAnalytics) },

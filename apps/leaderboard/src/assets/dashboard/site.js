@@ -1,6 +1,7 @@
 // Site editing: plan, branding/theme, save, archive, domain, overlay, notifications.
 import { $, esc, getCsrf, guardAuth, logError, timeZoneOffsetLabel, validateScheduleValues, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError } from "./utils.js";
 import { serializeWebhookUrl } from "./notifications.js";
+import { resolveViewerTemplate } from "@yourrank/shared/viewer-templates";
 import { state, boardStatus, markDirty, setState, subscribe } from "./state.js";
 import { renderEmpty, setMetricUnknown } from "./states.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./boards.js";
@@ -969,6 +970,9 @@ export function renderSavebarCopy() {
 }
 
 function updateThemeSelection() {
+  const template = resolveViewerTemplate(state.CURRENT_BRANDING?.template);
+  if ($("f_viewerTemplate")) $("f_viewerTemplate").value = template.value;
+  if ($("siteTemplateHint")) $("siteTemplateHint").textContent = template.description;
   if (state.CURRENT_BRANDING.accentA && $("c_a")) $("c_a").value = state.CURRENT_BRANDING.accentA;
   const font = $("f_font"); if (font) font.value = state.CURRENT_BRANDING.font || "Inter";
   renderColorPresets();
@@ -1027,9 +1031,26 @@ export function applyTheme(accentA, label, font = null) {
   markDirty();
 }
 
-// `template` is not a creator-facing choice: the public viewer is one coherent
-// system. The stored value still travels render → collect → save untouched so
-// legacy rows keep whatever the backend gave them.
+export function applyViewerTemplate(value) {
+  if (!state.ME || state.ME.plan === "free") return;
+  const template = resolveViewerTemplate(value);
+  if (template.value === resolveViewerTemplate(state.CURRENT_BRANDING?.template).value) return;
+  state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, template: template.value };
+  markDirty();
+  updateThemeSelection();
+}
+
+export function wireViewerTemplatePicker() {
+  $("f_viewerTemplate")?.addEventListener("input", event => event.stopPropagation());
+  $("f_viewerTemplate")?.addEventListener("change", event => {
+    event.stopPropagation();
+    applyViewerTemplate($("f_viewerTemplate").value);
+  });
+}
+wireViewerTemplatePicker();
+
+// Untouched legacy values still round-trip; changing the picker deliberately
+// selects one of the supported viewer presentations on the existing theme.
 export function renderBranding(br) {
   state.CURRENT_BRANDING = {
     template: br.template || "cyber_arcade",

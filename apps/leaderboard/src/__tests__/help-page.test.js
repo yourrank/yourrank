@@ -11,12 +11,12 @@ const contactJs = readFileSync(new URL("../assets/contact.js", import.meta.url),
 // chrome so Help is never an isolated universe with no route back. The user is
 // threaded through Component(renderOpts) and configFor(renderOpts), matching how
 // the Worker renders these pages.
-function render(pageKey, user, activePath = "/help/support") {
+function render(pageKey, user, activePath = "/help/support", viewerHelp = null) {
   const page = PAGES[pageKey];
-  const config = page.configFor({ user, activePath });
+  const config = page.configFor({ user, activePath, viewerHelp });
   const html = leaderboardPageHtml({
     ...config,
-    content: page.Component({ user, activePath }).toString(),
+    content: page.Component({ user, activePath, viewerHelp }).toString(),
   });
   return html.replace("<!--GM_NAV-->", user
     ? shellNavHtml({ activePath, user, accountHref: "/dashboard/settings" })
@@ -26,6 +26,19 @@ function render(pageKey, user, activePath = "/help/support") {
 const user = { display_name: "Streamer One", email: "streamer@example.com", plan: "pro" };
 
 describe("help pages", () => {
+  it("keeps viewer help in the viewer shell even with a creator session", () => {
+    for (const page of ["helpHub", "helpSupport", "helpFeedback"]) {
+      const html = render(page, user, "/help/support", { returnTo: "/creator/shop" });
+      expect(html).toContain('class="viewer-rail"');
+      expect(html).not.toContain('data-auth-workspace="true"');
+      expect(html).not.toContain('href="/dashboard');
+      expect(html).not.toContain('/assets/dashboard-v4.css');
+      expect(html).toContain('href="/creator/shop"');
+      expect(html).toContain('/help/feedback?audience=viewer&amp;return=%2Fcreator%2Fshop');
+      expect(html).not.toContain('href="/me" aria-current="page"');
+    }
+  });
+
   it("renders the creator help hub in both shells", () => {
     const signedIn = render("helpHub", user, "/help");
     const signedOut = render("helpHub", null, "/help");

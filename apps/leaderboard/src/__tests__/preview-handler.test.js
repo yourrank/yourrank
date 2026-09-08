@@ -116,6 +116,17 @@ describe("handleDashboardPreview", () => {
     expect(readOnlyHtml).toContain('class="yr-site viewer-shell"');
   });
 
+  it("edits only the creator name and tagline, never the leaderboard heading", async () => {
+    const home = await (await handleDashboardPreview(previewRequest("board=site-1&section=home&device=desktop", { brand: { name: "Northstar", tagline: "Our community" } }), {}, "nonce123", impls())).text();
+    expect(home).toContain('<span data-preview-field="f_name">Northstar</span>');
+    expect(home).toContain('data-preview-field="f_tagline">Our community</p>');
+    expect(home).not.toContain('yr_preview_update');
+    expect(home).not.toContain('.yr-hero-r');
+    const leaderboard = await (await handleDashboardPreview(previewRequest("board=site-1&section=leaderboard&device=desktop", {}), {}, "nonce123", impls())).text();
+    expect(leaderboard).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
+    expect(leaderboard).not.toContain('data-preview-field="f_name"');
+  });
+
   it("shows a picked logo before it is saved, and its removal too", async () => {
     const uri = "data:image/webp;base64,UklGRgAAAABXRUJQ";
     const html = async (branding) => (await handleDashboardPreview(

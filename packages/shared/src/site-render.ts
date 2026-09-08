@@ -1,6 +1,6 @@
 // @ts-nocheck
 // Multi-section, branded streamer site shell (Home, Leaderboard, Rewards, Games,
-// My Community).
+// My activity).
 //
 // The chrome is a creator destination, not a workspace: one compact top bar
 // carrying creator identity, the section links and the viewer's own controls,
@@ -20,15 +20,16 @@ import {
   safeUrl,
 } from "./public-render-helpers.js";
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
-import { viewerNavigation, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
+import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
+import { resolveViewerTemplate } from "./viewer-templates.js";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
 const SECTION_LABELS = {
   home: "Home",
   leaderboard: "Leaderboard",
-  shop: "Rewards",
+  shop: "Reward shop",
   games: "Games",
-  me: "My Community",
+  me: "My activity",
 };
 
 // C-10: Widened to accept 3-, 6-, and 8-digit hex values.
@@ -250,7 +251,7 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
   const name = esc(b.name || slug);
   const boardCreditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
   const accountHref = globalViewerAccountHref(isCustomDomain);
-  // The membership row only exists where the streamer kept My Community on;
+  // The membership row only exists where the streamer kept My activity on;
   // otherwise there is no local viewer destination on this site.
   // The bar's account shortcut is desktop-only, so the drawer carries the
   // viewer's global account destination at narrow widths as well as their
@@ -260,7 +261,7 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
     ? ""
     : viewer
       ? `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">${avatarHtml(viewer)}</span><span><span class="yr-user-name">${esc(viewerName(viewer))}</span><span class="yr-user-sub">${isMember ? `${formatNumber(balance)} credits in this community` : "Not joined yet"}</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`
-      : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My Community</span><span class="yr-user-sub">Sign in to join</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
+      : `<a class="yr-user" href="${boardCreditsHref}"><span class="yr-user-l"><span class="yr-ava">?</span><span><span class="yr-user-name">My activity</span><span class="yr-user-sub">Sign in to join</span></span></span><span class="yr-user-go" aria-hidden="true">${ICONS.arrow}</span></a>`;
   const foot = `${userRow}${acct}`;
 
   return `<div class="yr-drawer" id="yr-side" aria-label="${name} menu" tabindex="-1">
@@ -308,7 +309,7 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
   // drawer's account row — the same destination — carries it instead.
   const localAccount = isMember
     ? `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}" data-credit-balance="${Number(balance) || 0}" data-credit-balance-label="Credits in this community" aria-label="Credits in this community: ${formatNumber(balance)}"><span class="yr-bal-num" data-credit-balance-num>${formatNumber(balance)}</span><span class="yr-bal-unit">credits</span></a>`
-    : `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}">My Community</a>`;
+    : `<a class="yr-bal" href="${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}">My activity</a>`;
   const right = viewer
     ? `${localAccount}
 <a class="yr-account-link" href="${accountHref}" aria-label="My communities and Viewer Account"><span class="yr-ava">${avatarHtml(viewer)}</span><span class="yr-account-txt">My communities</span></a>`
@@ -424,7 +425,7 @@ ${aside}
  * words — a greyed-out button is not an explanation — and the cost is ordinary
  * text rather than a headline, because free credits are not a price tag.
  */
-function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, membershipHref = "" }) {
+function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, membershipHref = "", slug = "" }) {
   const cost = Number(item.cost) || 0;
   const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
   const inStock = stock === null || stock > 0;
@@ -453,10 +454,10 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, 
 
   // A configured reward image belongs to the creator, so it still shows — as a
   // small thumbnail in the row, not a 160px art panel per reward.
-  const image = item.image_url || item.image || item.imageUrl;
+  const image = item.has_image ? `/api/public/${encodeURIComponent(slug)}/reward-images/${encodeURIComponent(item.id)}` : item.image_url || item.image || item.imageUrl;
 
   return `<li class="yr-rwd">
-${image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="48" height="48" loading="lazy" />` : ""}
+${image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="480" height="320" loading="lazy" decoding="async" />` : `<div class="yr-rwd-art" aria-hidden="true">${ICONS.gift}</div>`}
 <div class="yr-rwd-main">
 <h3 class="yr-rwd-n">${esc(item.name)}</h3>
 ${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ""}
@@ -501,6 +502,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
   const viewerShell = section !== "games";
+  const viewerTemplate = resolveViewerTemplate(viewerShell && r.plan !== "free" ? br.template : undefined);
 
   const casino = String(b.casino || "").trim();
   const pool = String(b.prizePool || "").trim();
@@ -515,6 +517,9 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const isMember = membershipStatus === "member" && !!viewerOnSite;
   const balance = Number(viewerOnSite?.balance || 0);
   const kickUrl = (Array.isArray(data.socials) ? data.socials : []).find((s) => /kick/i.test(s?.type || s?.name || ""))?.url;
+  const socialLinks = data.sections?.socials === false ? [] : (Array.isArray(data.socials) ? data.socials : [])
+    .filter(s => s && s.enabled !== false && /^https?:\/\//i.test(String(s.url || "")))
+    .map(s => ({ label: s.name || s.brand || s.type || "Channel", href: String(s.url).trim() }));
 
   // Pages rendered through contentHtml (player, legal, archive, profile) own their
   // own URL, so they pass it in rather than canonicalising to the creator home.
@@ -576,10 +581,10 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
 
   const template = data.theme?.template || data.brand?.template || "cyber_arcade";
 
-  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}"${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}" data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
+  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
-${viewerShell ? `<div class="viewer-layout">${viewerNavigation({name:rawTitleBase,creatorMark:creatorMark(logoUrl,"yr-id-logo",36),signedIn:!!viewer,sessionControl:!viewer && section!=="me" ? signInLink(r,returnTo,"yr-btn",siteSectionHref("me",slug,isCustomDomain)) : "",homeHref:siteSectionHref("home",slug,isCustomDomain),accountHref:globalViewerAccountHref(isCustomDomain),links:sectionList(siteSections).map(key=>({label:SECTION_LABELS[key],href:siteSectionHref(key,slug,isCustomDomain),active:key===section}))})}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
+${viewerShell ? `<div class="viewer-layout">${viewerNavigation({name:rawTitleBase,socialLinks,creatorMark:creatorMark(logoUrl,"yr-id-logo",36),signedIn:!!viewer,sessionControl:!viewer && section!=="me" ? signInLink(r,returnTo,"yr-btn",siteSectionHref("me",slug,isCustomDomain)) : "",homeHref:siteSectionHref("home",slug,isCustomDomain),accountHref:globalViewerAccountHref(isCustomDomain),helpHref:viewerHelpHref(siteSectionHref(section || "home",slug,false),isCustomDomain ? "https://yourrank.site" : ""),links:sectionList(siteSections).map(key=>({label:SECTION_LABELS[key],href:siteSectionHref(key,slug,isCustomDomain),active:key===section}))})}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="${viewerShell ? "viewer-main" : "yr-main"}" id="main-content">
 ${mainInner}
 ${footer}
@@ -667,7 +672,7 @@ function homeMain(ctx) {
   const shopEnabled = siteSections.shop !== false;
   const boardEnabled = siteSections.leaderboard !== false;
   const meEnabled = siteSections.me !== false;
-  const socials = (Array.isArray(data.socials) ? data.socials : [])
+  const socials = (data.sections?.socials === false ? [] : Array.isArray(data.socials) ? data.socials : [])
     .filter((s) => s && s.enabled !== false && s.url)
     .map((s) => ({ label: s.name || s.brand || s.type || "Channel", href: safeUrl(s.url) }))
     .filter((s) => s.href !== "#");
@@ -685,7 +690,7 @@ function homeMain(ctx) {
   ].filter(Boolean).join("");
 
   const intro = `<section class="yr-intro">
-<div class="yr-intro-txt"><h1 class="yr-intro-name">Welcome to ${name}'s channel</h1>${b.tagline ? `<p class="yr-intro-sub">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub">Leaderboard and free-credit rewards.</p>`}</div>
+<div class="yr-intro-txt"><h1 class="yr-intro-name">Welcome to <span data-preview-field="f_name">${name}</span>'s channel</h1>${b.tagline ? `<p class="yr-intro-sub" data-preview-field="f_tagline">${esc(b.tagline)}</p>` : `<p class="yr-intro-sub" data-preview-field="f_tagline">Leaderboard and free-credit rewards.</p>`}</div>
 ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 </section>`;
 
@@ -717,24 +722,17 @@ ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "N
     ? `<section class="yr-vnote${balance === 0 ? " is-zero" : ""}">
 <p class="yr-vnote-bal"><span class="yr-vnote-num">${formatNumber(balance)}</span> <span class="yr-vnote-unit">credits on this site</span></p>
 <p class="yr-vnote-p">Free credits from ${name}'s channel-point rewards. No purchase, no cash value.</p>
-<div class="yr-vnote-acts">${shopEnabled && items.length ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">${balance > 0 ? "Spend credits" : "View rewards"}</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My Community ${ICONS.arrow}</a>` : ""}</div>
+<div class="yr-vnote-acts">${shopEnabled && items.length ? `<a class="yr-btn yr-btn--sm" href="${shopHref}">${balance > 0 ? "Spend credits" : "View rewards"}</a>` : ""}${meEnabled ? `<a class="yr-sec-link" href="${meHref}">My activity ${ICONS.arrow}</a>` : ""}</div>
 </section>`
     : "";
 
   const preview = items.slice().sort((x, z) => Number(x.cost) - Number(z.cost)).slice(0, 3);
   const rewardsSection = shopEnabled
     ? `<section class="yr-sec">
-${sectionHead("Rewards", preview.length ? `<a class="yr-sec-link" href="${shopHref}">View rewards ${ICONS.arrow}</a>` : "")}
+${sectionHead("Reward shop", `<a class="yr-sec-link" href="${shopHref}">Browse reward shop ${ICONS.arrow}</a>`)}
 ${preview.length
       ? `<ul class="yr-preview">${preview.map((item) => `<li class="yr-preview-row"><span class="yr-preview-n">${esc(item.name)}</span><span class="yr-preview-c">${formatNumber(Number(item.cost) || 0)} credits</span></li>`).join("")}</ul>`
       : emptyState(ICONS.gift, "No rewards yet", "Rewards will appear here once there are some to claim.")}
-</section>`
-    : "";
-
-  const linksSection = socials.length
-    ? `<section class="yr-sec">
-${sectionHead(`Find ${b.name || slug}`)}
-<div class="yr-chips">${socials.map((s) => `<a class="yr-chip" href="${s.href}" target="_blank" rel="noopener noreferrer">${esc(s.label)}<span class="yr-sr"> (opens in a new tab)</span></a>`).join("")}</div>
 </section>`
     : "";
 
@@ -748,14 +746,14 @@ ${sectionHead(`Find ${b.name || slug}`)}
   // and their balance first, then the board, then the rewards.
   return `<div class="yr-home-top${viewerNote ? "" : " yr-home-top--solo"}">${intro}${viewerNote}</div>
 ${boardSection || rewardsSection ? `<div class="yr-home-cols">${boardSection}${rewardsSection}</div>` : ""}
-${nothingYet}
-${linksSection}`;
+${nothingYet}`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
 
 function boardMain(ctx) {
-  const { data, b, slug, isCustomDomain, period, pool } = ctx;
+  const { r, data, b, slug, isCustomDomain, period, pool } = ctx;
+  const spotlight = r.plan !== "free" && resolveViewerTemplate(data.branding?.template).value === "spotlight";
   const currency = prizeCurrency(data);
   const hidePrizes = !!data.brand?.hidePrizeAmounts;
   const cd = formatLeaderboardTiming(data.scheduled ? data.startsAt : data.endsAt);
@@ -784,21 +782,26 @@ function boardMain(ctx) {
   ].filter(Boolean).join("");
 
   const introHtml = `<section class="yr-lbh">
-<h1 class="yr-h1 yr-lbh-title">${ended ? "Final standings" : scheduled ? "Standings open soon" : "Standings"}</h1>
+<h1 class="yr-h1 yr-lbh-title">${data.eventName ? esc(data.eventName) : ended ? "Final leaderboard" : scheduled ? "Leaderboard opens soon" : "Leaderboard"}</h1>
 <p class="yr-lbh-meta">${metaItems}</p>
 <p class="yr-lbh-note">${scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
 </section>`;
 
-  // One row per player: the top of the board is expressed through rank
-  // typography instead of a second, duplicate representation of the top three.
+  // A podium is a presentation of the original rows, never a second player
+  // list. Tied top ranks keep equal rows rather than arbitrarily choosing a winner.
+  const podium = spotlight && players.length >= 3 && players.every((p, i) =>
+    i < 3 ? Number(p.rank) === i + 1 : Number(p.rank) > 3);
   const rows = players.map((p, i) => {
     const rank = Number(p.rank) || i + 1;
     const prize = showPrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
-    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}">
+    const podiumSlot = podium && i < 3 ? ` data-podium-slot="${rank}"` : "";
+    const mark = spotlight ? `<span class="yr-player-mark" aria-hidden="true">${esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase())}</span>` : "";
+    const nameTag = data.eventId ? 'span' : 'a';
+    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}"${podiumSlot}>
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
-<a class="yr-srow-name" href="${playerHref(p.name)}">${esc(p.name)}</a>
-<span class="yr-srow-val"><span class="yr-sr">${wagerLabel}: </span>${esc(rankValue(p))}</span>
-${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span>${prize}</span>` : ""}
+<${nameTag} class="yr-srow-name"${data.eventId ? '' : ` href="${playerHref(p.name)}"`}>${mark}${spotlight ? `<span class="yr-player-name">${esc(p.name)}</span>` : esc(p.name)}</${nameTag}>
+<span class="yr-srow-val"><span class="${spotlight ? "yr-podium-label" : "yr-sr"}">${wagerLabel}: </span>${esc(rankValue(p))}</span>
+${prize ? `<span class="yr-srow-prize"><span class="${spotlight ? "yr-podium-label" : "yr-sr"}">${prizeLabel}: </span>${prize}</span>` : ""}
 </li>`;
   }).join("");
 
@@ -819,8 +822,10 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
     hasConfiguredPrizePool(pool) && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
   ].filter(Boolean).join("");
 
-  return `${introHtml}
-<div data-player-board>
+  const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
+  const switcher = events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '';
+  return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
+<div data-player-board${podium ? ` data-podium="${Math.min(players.length, 3)}"` : ""}>
 ${panel({
     title: "Standings",
     titleHidden: true,
@@ -845,7 +850,7 @@ function shopMain(ctx) {
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
   const head = viewerHead({
-    title: "Rewards",
+    title: "Reward shop",
     lede: viewer
       ? (isMember
         ? `Use your free credits from ${esc(b.name || slug)}'s channel-point rewards. ${esc(b.name || slug)} hands each reward over personally.`
@@ -853,7 +858,7 @@ function shopMain(ctx) {
       : `Browse rewards from ${esc(b.name || slug)}. Use the navigation to sign in and use your credits.`,
     balance: viewer && isMember ? balance : null,
     actions: viewer
-      ? (siteSections.me !== false ? `<a class="yr-sec-link" href="${creditsHref}">My Community ${ICONS.arrow}</a>` : "")
+      ? (siteSections.me !== false ? `<a class="yr-sec-link" href="${creditsHref}">My activity ${ICONS.arrow}</a>` : "")
       : "",
   });
 
@@ -863,7 +868,7 @@ function shopMain(ctx) {
 
   const list = items.length
     ? `<section class="yr-vsec">${sectionHead("All rewards", `<span class="yr-panel-meta">Cheapest first</span>`)}
-<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, signIn, membershipHref: creditsHref })).join("")}</ul></section>`
+<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, signIn, membershipHref: creditsHref, slug })).join("")}</ul></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const history = viewer && isMember
@@ -932,7 +937,7 @@ ${sectionHead("Available games", `<span class="yr-panel-meta">Server decided · 
 ${mount}`;
 }
 
-/* ── My Community ───────────────────────────────────────────────── */
+/* ── My activity ───────────────────────────────────────────────── */
 
 function meMain(ctx) {
   const { r, b, slug, viewer, viewerData, membershipStatus, balance, returnTo, isCustomDomain, siteSections, viewerAuthError } = ctx;
@@ -951,7 +956,7 @@ function meMain(ctx) {
   };
   const authError = viewerAuthError ? `<p class="yr-note yr-note--w" role="alert">${esc(authMessages[viewerAuthError] || "We couldn't complete sign-in. Try again.")}</p>` : "";
   const member = membershipStatus === "member" && !!viewerData?.viewerOnSite;
-  const heading = `<header class="member-heading"><div><h1>My Community</h1><p>${creator}${viewer ? ` · Signed in as <b>${esc(viewerName(viewer))}</b>` : ""}</p></div>${member ? `<div class="member-balance" data-credit-balance="${Number(balance) || 0}"><strong data-credit-balance-num>${formatNumber(balance)}</strong><span>free credits</span></div>` : ""}</header>`;
+  const heading = `<header class="member-heading"><div><h1>My activity</h1><p>${creator}${viewer ? ` · Signed in as <b>${esc(viewerName(viewer))}</b>` : ""}</p></div>${member ? `<div class="member-balance" data-credit-balance="${Number(balance) || 0}"><strong data-credit-balance-num>${formatNumber(balance)}</strong><span>free credits</span></div>` : ""}</header>`;
   if (!viewer) {
     const join = joinAuthButton(r, returnTo, slug);
     return `${heading}${authError}<section class="member-gate"><h2>Your place in ${creator}'s community</h2><p>Sign in to join, follow your reward claims and see your community activity. Your credits stay with this community.</p><div class="member-actions">${join || '<p role="status">Sign-in is not available for this community right now.</p>'}<a class="yr-sec-link" href="${accountHref}">Back to my communities</a></div></section>`;
@@ -977,7 +982,7 @@ ${blocked ? '<p class="yr-note yr-note--w" role="status">Claiming is currently u
 <div class="member-section-head"><h2 id="member-claims-title">Your claims</h2><p>${claims.length ? `${formatNumber(claims.length)} recent` : "Reward status, in one place"}</p></div>
 ${claims.length
   ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}`
-  : `<div class="member-empty"><div><h3>No claims yet</h3><p>When you claim a reward, you can follow its status here.</p></div>${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Explore rewards</a>` : ""}</div>`}
+  : `<div class="member-empty"><div><h3>No claims yet</h3><p>When you claim a reward, you can follow its status here.</p></div>${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Browse reward shop</a>` : ""}</div>`}
 </section>
 <div class="member-tools"><section class="member-section" id="membership-history" aria-labelledby="member-history-title"><div class="member-section-head"><h2 id="member-history-title">Your activity</h2></div>
 <details class="member-history"${ledger.length ? " open" : ""}><summary>Credit activity <span>${formatNumber(ledger.length)} recent</span></summary>${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<p>No credit activity yet. Use ${creator}'s channel-point rewards to earn credits.</p>`}</details>

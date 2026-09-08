@@ -2,6 +2,7 @@
 /** @jsxImportSource hono/jsx */
 
 import { raw } from "hono/html";
+import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { DashboardShell } from "./dashboard-shell.jsx";
 
 import { brandLoaderLogoSvg } from "@yourrank/shared/brand-assets";
@@ -106,6 +107,14 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
 <header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Setup</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
+<section class="card event-boards" id="eventBoards" data-egroup="setup" aria-labelledby="eventBoardsTitle">
+<h2 id="eventBoardsTitle">Event leaderboards</h2><p class="card-sub">Run Event A, Event B and more inside this site. Each has its own points. Viewers switch between published events on your Leaderboard page.</p>
+<div class="field"><label for="eventBoardSelect">Choose an event to edit</label><select id="eventBoardSelect"><option value="">Create event…</option></select></div>
+<form id="eventBoardForm"><div class="field"><label for="eventBoardName">Event name</label><input id="eventBoardName" required maxlength="80" placeholder="e.g. Community challenge" /></div>
+<div class="field"><label for="eventBoardPlayers">Players and points</label><textarea id="eventBoardPlayers" rows="5" placeholder={'Alex, 250\nSam, 180'} aria-describedby="eventPlayersHint"></textarea><span class="hint" id="eventPlayersHint">One player per line: name, points. Higher points rank first; tied points share a rank. These points are separate from viewer credits.</span></div>
+<label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this event on the public site</label>
+<div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save event</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete event</button></div>
+<p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form></section>
 <aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><a href="/dashboard/site" id="setupBrandLink">Edit site identity</a></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="score">Points / score</option><option value="wagered">Legacy amount</option></select><span class="hint">Players with the same value share a rank.</span></div>
@@ -383,8 +392,14 @@ function BoardSettingsSection({ active } = {}) {
           </div>
         </div>
         <div class="v3-settings-card" id="brandCard">
-          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
+          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your viewer template, logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
           <div id="brandBody">
+            <div class="v3-settings-field">
+              <label class="v3-settings-label" for="f_viewerTemplate">Viewer template</label>
+              <select id="f_viewerTemplate" aria-describedby="siteTemplateHint siteTemplateScope">{VIEWER_TEMPLATES.map(template => <option value={template.value}>{template.name}</option>)}</select>
+              <span class="v3-settings-muted" id="siteTemplateHint" role="status" aria-live="polite">{VIEWER_TEMPLATES[0].description}</span>
+              <span class="v3-settings-muted" id="siteTemplateScope">Applies to this site's viewer pages. Check the preview, then save your choice.</span>
+            </div>
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="logoFile">Logo</label>
               <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" hidden /><button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>
@@ -414,6 +429,7 @@ function BoardSettingsSection({ active } = {}) {
         </div>
         <details class="v3-settings-card v3-settings-disclosure" id="siteLinksCard">
           <summary>Channels and social links</summary>
+          <p class="form-help">Add each channel URL and turn it on, then publish your changes. Enabled links appear in the navigation on all viewer pages when Show Social Links is on in Appearance.</p>
           <div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the channels viewers should follow. Only the ones you switch on appear publicly.</p>
           <div class="socials-editor" id="socialsList"></div>
           </div>

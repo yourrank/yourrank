@@ -71,7 +71,7 @@ describe("public leaderboard standings", () => {
   it("opens with one leaderboard heading and a generic state line", async () => {
     const html = await render();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
-    expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Standings</h1>');
+    expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
     expect(html).toContain('<span class="yr-lbh-state is-live">Live</span>');
     expect(html).toContain("<span>Monthly leaderboard</span>");
     // The count belongs to the list it counts, stated once above the rows.
@@ -92,12 +92,12 @@ describe("public leaderboard standings", () => {
 
   it("labels an upcoming and an ended board without inventing data", async () => {
     const soon = await render("leaderboard", { data: { ...baseData, scheduled: true, startsAt: new Date(Date.now() + 864e5).toISOString() } });
-    expect(soon).toContain("Standings open soon");
+    expect(soon).toContain("Leaderboard opens soon");
     expect(soon).toContain('<span class="yr-lbh-state is-soon">Not started</span>');
     expect(soon).toContain("Starts in");
 
     const ended = await render("leaderboard", { data: { ...baseData, ended: true } });
-    expect(ended).toContain("Final standings");
+    expect(ended).toContain("Final leaderboard");
     expect(ended).toContain('<span class="yr-lbh-state is-ended">Ended</span>');
     expect(ended).not.toContain("Ends in");
   });
@@ -256,7 +256,8 @@ describe("public leaderboard standings", () => {
     expect(shell).toContain('setSearchStatus("Searching…")');
     expect(shell).toContain('setSearchStatus("Couldn’t search players.", true)');
     expect(shell).toContain("addRetry(searchStatus, function () { search.dispatchEvent(new Event(\"input\", { bubbles: true })); })");
-    expect(shell).toContain("if (rowsRoot && savedRowsHtml) rowsRoot.innerHTML = savedRowsHtml;");
+    expect(shell).toContain("rowsRoot.innerHTML = savedRowsHtml;");
+    expect(shell).toContain("if (!activeSearch) savedRowsHtml = rowsRoot.innerHTML;");
     expect(shell).toContain("updatePlayerCount(totalCount)");
     // A late response for an abandoned query can never repaint the list.
     expect(shell).toContain("if (searchController) searchController.abort();");

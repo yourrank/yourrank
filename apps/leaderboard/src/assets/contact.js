@@ -63,7 +63,8 @@ function applyContext() {
 
 applyContext();
 
-fetch("/api/auth/me")
+// A creator session must not prefill a form opened from a viewer page.
+if (params.get("audience") !== "viewer") fetch("/api/auth/me")
   .then((res) => res.ok ? res.json() : null)
   .then((body) => {
     if (!body?.user) return;

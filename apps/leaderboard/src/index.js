@@ -1,5 +1,6 @@
 import { destroySession, cookieClear, readToken, RESERVED, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
+import { resolveViewerHelp } from "@yourrank/shared/viewer-shell";
 import { withWorkerFetch } from "@yourrank/shared/with-worker";
 import { RateLimiter } from "@yourrank/shared/rate-limiter-do";
 import { LiveBoard } from "./live-board.js";
@@ -79,8 +80,10 @@ export function isCustomViewerAuthPath(method, path) {
   return method === "GET" && CUSTOM_VIEWER_AUTH_PATHS.has(path);
 }
 
-export function isCustomViewerApiPath(method, path) {
+export function isCustomViewerApiPath(method, path, customSlug = '') {
+  const publicRoute = /^\/api\/public\/([^/]+)\/(?:players|reward-images\/[a-f0-9-]+)$/.exec(path);
   return isCustomViewerAuthPath(method, path)
+    || (method === "GET" && !!customSlug && publicRoute?.[1] === customSlug)
     || (method === "POST" && (
       path === "/api/viewer/membership/join"
       || path === "/api/events/drops/claim"
@@ -470,7 +473,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // user's custom domain. If yes, serve their leaderboard at /.
       if (isCustomHost(host)) {
         const customSlug = await resolveCustomDomainImpl(env, host);
-        if (customSlug && !isCustomViewerApiPath(method, path)) {
+        if (customSlug && !isCustomViewerApiPath(method, path, customSlug)) {
           // Serve the leaderboard as if the path were /<slug>
           // Rewrite the URL path internally
           url.pathname = "/" + customSlug;
@@ -687,7 +690,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
 
       // --- helper for rendering strings or JSX pages ---
-      const renderHtmlPage = async (pageObj, { reqId, activePath, user, theme, accountHref, logoutAction, tab } = {}) => {
+      const renderHtmlPage = async (pageObj, { reqId, activePath, user, theme, accountHref, logoutAction, tab, viewerHelp } = {}) => {
         const navOpts = activePath && user ? { activePath, user, theme, accountHref: accountHref || "/dashboard/settings", logoutAction } : null;
         // Pages reachable signed-out (Help) still get a header — the anonymous
         // variant of the same shell rather than a separate marketing top bar.
@@ -709,13 +712,13 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         }
 
         if (pageObj.Component) {
-          let node = pageObj.Component({ reqId, activePath, user, tab });
+          let node = pageObj.Component({ reqId, activePath, user, tab, viewerHelp });
           if (node instanceof Promise) node = await node;
           const content = node.toString();
           // Pages that render in two shells (Help: workspace for a creator,
           // public site chrome for a visitor) resolve their document config
           // from the same render options as the content.
-          const pageConfig = pageObj.configFor ? pageObj.configFor({ user, activePath, tab }) : pageObj.config;
+          const pageConfig = pageObj.configFor ? pageObj.configFor({ user, activePath, tab, viewerHelp }) : pageObj.config;
           if (pageConfig) {
             const result = leaderboardPageHtml({ ...pageConfig, content }).replace("<!--GM_NAV-->", navHtml());
             return applyPlaceholders(result);
@@ -1059,7 +1062,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const redirectUrl = new URL("/help/support", url);
         const type = url.searchParams.get("type");
         if (type === "feedback") redirectUrl.pathname = "/help/feedback";
-        for (const key of ["area", "return"]) {
+        for (const key of ["area", "return", "audience"]) {
           const value = url.searchParams.get(key);
           if (value) redirectUrl.searchParams.set(key, value);
         }
@@ -1069,8 +1072,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return redirectResponse(new URL("/help", url), 302);
       }
       if (path === "/help") {
-        const helpUser = await currentUser(request, env).catch(() => null);
-        const helpHtml = await renderHtmlPage(PAGES.helpHub, { activePath: "/help", user: helpUser || undefined, theme: "dark" });
+        const viewerHelp = resolveViewerHelp(url);
+        const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
+        const helpHtml = await renderHtmlPage(PAGES.helpHub, { activePath: "/help", user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });
       }
       if (path.startsWith("/help/")) {
@@ -1078,8 +1082,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const map = { support: "helpSupport", feedback: "helpFeedback" };
         const pageKey = map[tab];
         if (!pageKey) return redirectResponse(new URL("/help/support", url), 302);
-        const helpUser = await currentUser(request, env).catch(() => null);
-        const helpHtml = await renderHtmlPage(PAGES[pageKey], { activePath: path, user: helpUser || undefined, theme: "dark" });
+        const viewerHelp = resolveViewerHelp(url);
+        const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
+        const helpHtml = await renderHtmlPage(PAGES[pageKey], { activePath: path, user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });
       }
       if (path === "/pricing.html") return redirectResponse(`${url.origin}/pricing`, 301);

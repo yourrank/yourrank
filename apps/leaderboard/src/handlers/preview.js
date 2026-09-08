@@ -124,7 +124,7 @@ ${gamesIslandHead()}
   });
 
   const previewMinWidth = device === "mobile" ? 390 : 1100;
-  const editableSelectors = ".yr-brand, .yr-h1, .yr-lede, .yr-hero-r .yr-big";
+  const editableSelectors = "[data-preview-field]";
   const editableCss = editable ? `
     ${editableSelectors} { cursor: text; transition: outline 0.15s ease, outline-offset 0.15s ease; }
     ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }` : "";
@@ -160,26 +160,23 @@ ${gamesIslandHead()}
           const finishEditing = () => {
             if (!el.isContentEditable) return;
             el.contentEditable = "false";
+            el.removeEventListener("keydown", onEditKey);
+            el.removeEventListener("blur", finishEditing);
             el.style.outline = "";
             el.style.outlineOffset = "";
             
             const newText = el.textContent.trim();
             if (newText !== originalText) {
-              let key = null;
-              let extra = null;
-              
-              if (el.matches(".yr-brand, .yr-h1")) key = "f_name";
-              else if (el.matches(".yr-lede")) key = "f_tagline";
-              else if (el.matches(".yr-hero-r .yr-big")) key = "f_pool";
+              const key = el.dataset.previewField;
               
               if (key) {
-                window.parent.postMessage({ type: "yr_edit_request", key, value: newText, extra }, window.location.origin);
+                window.parent.postMessage({ type: "yr_edit_request", key, value: newText }, window.location.origin);
               }
             }
           };
           
           el.addEventListener("blur", finishEditing, { once: true });
-          el.addEventListener("keydown", (evt) => {
+          const onEditKey = (evt) => {
             if (evt.key === "Enter") {
               evt.preventDefault();
               finishEditing();
@@ -187,20 +184,11 @@ ${gamesIslandHead()}
               el.textContent = originalText;
               finishEditing();
             }
-          });
+          };
+          el.addEventListener("keydown", onEditKey);
         }
       });
       
-      window.addEventListener("message", (e) => {
-        if (e.origin !== window.location.origin) return;
-        if (e.data?.type === "yr_preview_update" && typeof e.data?.html === "string") {
-          const parser = new DOMParser();
-          const newDoc = parser.parseFromString(e.data.html, "text/html");
-          document.body.innerHTML = newDoc.body.innerHTML;
-          // Note: any <style> changes in head can be updated here if needed,
-          // but replacing body is enough for live text/player edits.
-        }
-      });
     </script></body>`);
   }
 

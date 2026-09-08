@@ -67,18 +67,20 @@ describe("markup: Site answers what viewers see", () => {
     expect(customize).toContain('<label for="c_a" class="sr-only">Accent color</label>');
   });
 
-  it("offers no template marketplace, only the supported brand controls", () => {
-    // The public viewer is one coherent system; three radically different
-    // "templates" would promise products that do not exist.
+  it("offers the two supported viewer templates without reviving legacy designs", () => {
     for (const gone of ["templateSelectorGrid", "template-select-card", "data-template=", "Cyber Arcade", "Esports Arena", "Creator Glass", "glassmorphism"]) {
       expect(customize).not.toContain(gone);
     }
     expect(dashboardCss).not.toContain("template-select");
     expect(siteJs).not.toContain("templateSelectorGrid");
-    expect(customize).toContain("Your logo, accent color and text style.");
+    expect(customize).toContain("Your viewer template, logo, accent color and text style.");
     // The stored template value still rides through save for legacy rows.
     expect(siteJs).toContain('template: state.CURRENT_BRANDING?.template || "cyber_arcade"');
     expect(siteJs).toContain('template: br.template || "cyber_arcade"');
+    expect(customize).toContain('<label class="v3-settings-label" for="f_viewerTemplate">Viewer template</label>');
+    expect(customize).toContain('<option value="cyber_arcade">Channel guide</option>');
+    expect(customize).toContain('<option value="spotlight">Spotlight</option>');
+    expect(customize).toContain('id="siteTemplateHint" role="status" aria-live="polite"');
   });
 
   it("offers only fonts the public site can serve", () => {
@@ -107,8 +109,8 @@ describe("markup: Site answers what viewers see", () => {
   it("does not promote the contained Games route in the target public-section model", async () => {
     const { SITE_SECTION_ROWS } = await import("../assets/dashboard/site-sections.js");
     expect(SITE_SECTION_ROWS.map(([key, label]) => [key, label])).toEqual([
-      ["shop", "Shop"],
-      ["credits", "Rewards"],
+        ["shop", "Reward shop"],
+        ["credits", "My activity"],
     ]);
   });
 
@@ -542,6 +544,44 @@ function registerCollectForm({ font = "Inter" } = {}) {
 }
 
 function $id(id) { return elements.get(id); }
+
+describe("behavior: viewer template selection", () => {
+  beforeEach(() => {
+    elements.clear();
+    state.ME = { plan: "pro" };
+    state._dirty = false;
+    state.CURRENT_BRANDING = { template: "cyber_arcade", accentA: "#5b5bf5", font: "Inter" };
+    registerCollectForm();
+    register("f_viewerTemplate");
+    register("siteTemplateHint");
+  });
+
+  it("updates the draft, picker and save payload together, then switches back", () => {
+    site.applyViewerTemplate("spotlight");
+    expect(state._dirty).toBe(true);
+    expect($id("f_viewerTemplate").value).toBe("spotlight");
+    expect($id("siteTemplateHint").textContent).toContain("dark");
+    expect(site.collect().payload.branding.template).toBe("spotlight");
+    expect(state.CURRENT_BRANDING.accentA).toBe("#5b5bf5");
+    site.applyViewerTemplate("cyber_arcade");
+    expect(site.collect().payload.branding.template).toBe("cyber_arcade");
+  });
+
+  it("leaves legacy values untouched until a different appearance is chosen", () => {
+    state.CURRENT_BRANDING.template = "esports_pro";
+    site.applyViewerTemplate("cyber_arcade");
+    expect(state._dirty).toBe(false);
+    expect(site.collect().payload.branding.template).toBe("esports_pro");
+  });
+
+  it("does not change the template for a free account", () => {
+    state.ME = { plan: "free" };
+    site.applyViewerTemplate("spotlight");
+    expect(state.CURRENT_BRANDING.template).toBe("cyber_arcade");
+    expect(state._dirty).toBe(false);
+    expect(site.collect().payload.branding).toBeUndefined();
+  });
+});
 
 describe("behavior: the custom accent has one state truth", () => {
   // The picker's committed `change` is what the browser fires when a creator

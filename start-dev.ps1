@@ -1,4 +1,15 @@
-﻿Write-Host "Starting YourRank local development environment..." -ForegroundColor Cyan
+$pgBin = "$env:USERPROFILE\.local\pgsql\pgsql\bin"
+$pgData = "$env:USERPROFILE\.local\pgsql\data"
+$env:Path = "$pgBin;$env:Path"
+$env:PGPASSWORD = "postgres"
+
+# Check & start local Postgres if needed
+& "$pgBin\pg_isready.exe" -h 127.0.0.1 -p 5432 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Starting local PostgreSQL..." -ForegroundColor Yellow
+  Start-Process -FilePath "$pgBin\postgres.exe" -ArgumentList @("-D", "`"$pgData`"") -WindowStyle Hidden
+  Start-Sleep -Seconds 3
+}
 
 $env:CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE = "postgresql://postgres:postgres@localhost:5432/yourrank"
 $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/yourrank"

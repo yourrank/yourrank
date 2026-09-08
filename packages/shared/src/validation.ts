@@ -420,6 +420,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
 
   handleCreditsSaveShopItem: z
     .object({
+      imageData: z.string().max(245792).nullable().optional(),
       id: z.string().uuid().optional().or(z.literal("").optional()),
       name: z.string().trim().min(1).max(100),
       description: z.string().trim().max(500).optional().or(z.literal("").optional()),

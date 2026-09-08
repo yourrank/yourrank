@@ -24,6 +24,8 @@ import { hasSiteCapability } from "@yourrank/shared/team";
 import { routeContext } from "../middleware/handler.js";
 import { creatorExpansionRestriction } from "@yourrank/shared/plan-usage";
 import { deriveKickConnectionHealth } from "../connection-health.js";
+import { validateRewardImage } from "@yourrank/shared/reward-image";
+import { removeRewardImage } from "../reward-media.js";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
 const creditsCreateRewardDefaults = {
@@ -268,9 +270,9 @@ export async function handleCreditsStatus(request, env) {
     ),
     query(
       // Defensive ceiling above the highest current plan's active-item limit.
-      `SELECT id, name, description, cost, stock, active
+      `SELECT id, name, description, cost, stock, active, (image_key IS NOT NULL) AS has_image
          FROM shop_items
-        WHERE site_id=$1 ORDER BY created_at DESC LIMIT 1024`,
+        WHERE site_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1024`,
       [site.id]
     ),
     query(
@@ -689,6 +691,11 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
   const cost = Number(body?.cost || 0);
   const stock = body?.stock === null || body?.stock === undefined ? null : Number(body.stock);
   const active = body?.active !== false;
+  let imageData;
+  if (body?.imageData !== undefined) {
+    try { imageData = validateRewardImage(body.imageData); } catch (err) { return bad(err.message); }
+  }
+  if (imageData && !env.REWARD_IMAGES) return bad('Picture uploads are temporarily unavailable. Save without a new picture or try again later.', 503);
 
   if (!name) return bad("Item name is required");
   if (!Number.isFinite(cost) || cost <= 0) return bad("Cost must be a positive number");
@@ -708,6 +715,8 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
 
   const plan = await effectiveSitePlan(site, user, deps.one);
   const limit = CREDITS_SHOP_LIMITS[plan];
+  let previousImageKey;
+  let imageKey = null;
 
   const txResult = await deps.withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
@@ -721,52 +730,75 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
       return { error: `Shop item limit reached for the ${plan} plan. Upgrade to add more.`, status: 403 };
     }
 
+    if (id && imageData !== undefined) {
+      const current = await tx.one('SELECT image_key FROM shop_items WHERE id=$1 AND site_id=$2 AND deleted_at IS NULL FOR UPDATE', [id, site.id]);
+      if (!current) return { error: 'shop item not found', status: 404 };
+      previousImageKey = current.image_key;
+    }
+    if (imageData) {
+      imageKey = `reward-images/${site.id}/${crypto.randomUUID()}.webp`;
+      const bytes = Uint8Array.from(atob(imageData.slice(23)), c => c.charCodeAt(0));
+      try {
+        const uploaded = await env.REWARD_IMAGES.put(imageKey, bytes, { httpMetadata: { contentType: 'image/webp' } });
+        if (!uploaded) throw new Error('Upload not stored');
+      } catch {
+        return { error: 'Could not upload the picture. Your reward was not changed. Try again.', status: 503 };
+      }
+    }
+
     if (id) {
       const rows = await tx.unsafe(
         `UPDATE shop_items
-            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now()
-          WHERE id=$6 AND site_id=$7
+            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now(),
+                image_key=CASE WHEN $8 THEN $9 ELSE image_key END
+          WHERE id=$6 AND site_id=$7 AND deleted_at IS NULL
           RETURNING id`,
-        [name, description, cost, stock, active, id, site.id]
+        [name, description, cost, stock, active, id, site.id, imageData !== undefined, imageKey]
       );
       if (!rows || rows.length === 0) return { error: "shop item not found", status: 404 };
       return { id: rows[0].id };
     }
 
     const rows = await tx.unsafe(
-      `INSERT INTO shop_items (site_id, name, description, cost, stock, active)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO shop_items (site_id, name, description, cost, stock, active, image_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [site.id, name, description, cost, stock, active]
+      [site.id, name, description, cost, stock, active, imageKey]
     );
     return { id: rows[0].id };
   });
 
-  if (txResult.error) return bad(txResult.error, txResult.status);
+  if (txResult.error) {
+    if (imageKey) await removeRewardImage(env, imageKey, site.id);
+    return bad(txResult.error, txResult.status);
+  }
+  if (previousImageKey) await removeRewardImage(env, previousImageKey, site.id);
   return ok({ id: txResult.id });
 }
 
-export async function handleCreditsDeleteShopItem(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleCreditsDeleteShopItem(request, env, deps = creditsCreateRewardDefaults) {
+  const { user, res } = await deps.requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
-  const site = await getSite(env, user, url);
+  const siteId = url.searchParams.get('siteId');
+  const site = siteId ? await deps.getBoardById(env, user.id, siteId) : await deps.getByUser(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageRewards");
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageRewards");
   if (authorization.res) return authorization.res;
-  if (!(await rateLimit(env, `credits:shop-del:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await deps.rateLimit(env, `credits:shop-del:${user.id}`, 20, 60)).ok) return bad("Too many requests.", 429);
 
   const id = routeContext(request).slug || url.pathname.split("/").pop();
   if (!id) return bad("missing item id");
 
-  const rows = await exec(
+  const rows = await deps.exec(
     `UPDATE shop_items
-        SET active=false, updated_at=now()
+        SET active=false, deleted_at=COALESCE(deleted_at, now()), updated_at=now()
       WHERE id=$1 AND site_id=$2
-      RETURNING id`,
+      RETURNING id, image_key`,
     [id, site.id]
   );
   if (!rows || rows.length === 0) return bad("shop item not found", 404);
+  await removeRewardImage(env, rows[0].image_key, site.id);
   return ok({ id: rows[0].id });
 }
 
@@ -975,7 +1007,7 @@ export async function handlePublicCredits(request, env, deps = {}) {
 
   const shopItems = await queryImpl(
     // Defensive ceiling above the highest current plan's active-item limit.
-    `SELECT id, name, description, cost, stock, active
+    `SELECT id, name, description, cost, stock, active, (image_key IS NOT NULL) AS has_image
        FROM shop_items
       WHERE site_id=$1 AND active=true
       ORDER BY cost ASC

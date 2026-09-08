@@ -37,6 +37,7 @@ export function routeContext(request) {
   const ctx = request?.routeContext;
   return {
     slug: ctx?.slug,
+    id: ctx?.id,
     waitUntil: typeof ctx?.waitUntil === "function" ? ctx.waitUntil : NOOP_WAIT_UNTIL,
   };
 }

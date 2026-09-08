@@ -38,7 +38,7 @@ for (const route of ROUTES) {
   apiApp[method](route.path, async (c) => {
     const { request, env, ctx, meta } = c.env.workerContext;
     const slug = c.req.param("slug") || c.req.param("id");
-    const routeCtx = { slug, waitUntil: (p) => ctx.waitUntil(p) };
+    const routeCtx = { slug, id: c.req.param("id"), waitUntil: (p) => ctx.waitUntil(p) };
     return await route.handler(request, env, routeCtx, meta);
   });
 }

@@ -1,11 +1,10 @@
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
 import { dashboardNavItems, workspaceAccountTopbarHtml } from "./dashboard-shell.jsx";
 import { workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
+import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 
-// Help center pages: a creator-facing hub plus Support and Feedback forms.
-// A signed-in streamer keeps the workspace chrome (rail, topbar, account menu).
-// A visitor gets the public site chrome instead of the workspace rail, so Help
-// is never an isolated navigation universe with no way back to the site.
+// Explicit viewer navigation keeps the viewer shell even with a creator cookie.
+// Otherwise creators keep their workspace and visitors get the public shell.
 const TABS = [
   { key: "help", label: "Overview", href: "/help" },
   { key: "support", label: "Support", href: "/help/support" },
@@ -18,19 +17,20 @@ function esc(value) {
 
 // The rail owns section roots; Support and Feedback are page subnavigation, so
 // the visitor shell renders them as tabs under the page title.
-function subnavHtml(active, workspace = false) {
+function subnavHtml(active, workspace = false, viewerHelp = null) {
   const navClass = workspace ? "v3-tabs help-workspace-subnav" : "help-subnav";
   const linkClass = workspace ? "v3-tab" : "help-subnav-link";
   const links = TABS.map((tab) => {
     const isActive = tab.key === active;
-    return `<a class="${linkClass}${isActive ? " is-on" : ""}" href="${tab.href}"${isActive ? ' aria-current="page"' : ""}>${tab.label}</a>`;
+    const href = viewerHelp ? (tab.key === "help" ? `/help?${new URLSearchParams({ audience: "viewer", return: viewerHelp.returnTo })}` : viewerHelpHref(viewerHelp.returnTo, "", tab.key)) : tab.href;
+    return `<a class="${linkClass}${isActive ? " is-on" : ""}" href="${esc(href)}"${isActive ? ' aria-current="page"' : ""}>${tab.label}</a>`;
   }).join("");
   return workspace
     ? `<nav class="${navClass}" aria-label="Help &amp; feedback">${links}</nav>`
     : `<nav class="${navClass}" aria-label="Help &amp; feedback">${links}</nav>`;
 }
 
-function contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder }) {
+function contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder, includeReturn = true }) {
   return `<form id="contactForm" class="card"><h2>Send us a message</h2>
         <div class="field"><label for="c_name">Name</label><input id="c_name" name="name" type="text" autocomplete="name" required maxlength="120" /></div>
         <div class="field"><label for="c_email">Email</label><input id="c_email" name="email" type="email" autocomplete="email" required maxlength="254" /></div>
@@ -42,7 +42,7 @@ function contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder }) {
         <button class="btn btn--accent w-full" type="submit" id="c_submit">Send message</button>
         <p class="hint text-accent" id="c_success" hidden>Message received. We'll reply by email.</p>
       </form>
-      <p class="hint mt-18" id="c_back_wrap" hidden><a id="c_back" href="/">← Back</a></p>
+      ${includeReturn ? '<p class="hint mt-18" id="c_back_wrap" hidden><a id="c_back" href="/">← Back</a></p>' : ''}
       <p class="hint mt-24">You can also email <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a> directly.</p>`;
 }
 
@@ -147,8 +147,26 @@ const PUBLIC_OVERRIDES = {
   wide: false,
 };
 
-function helpContent({ active, h1, intro, kind, subjectPlaceholder, messagePlaceholder, user, activePath }) {
-  const form = contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder });
+function viewerHelpContent({ active, title, intro, body, viewerHelp }) {
+  return `${viewerNavigation({ accountActive: false, helpActive: true, helpHref: viewerHelpHref(viewerHelp.returnTo) })}
+<div class="viewer-main viewer-help">
+<a class="yr-sec-link" href="${esc(viewerHelp.returnTo)}">Back to ${viewerHelp.returnTo === "/me" ? "my communities" : "community page"}</a>
+<header class="vd-head"><h1 class="vd-h1" id="contactTitle">${esc(title)}</h1><p class="vd-sub" id="contactIntro">${esc(intro)}</p></header>
+${subnavHtml(active, false, viewerHelp)}${body}</div>`;
+}
+
+const VIEWER_OVERRIDES = {
+  styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
+  bodyClass: "yr-site viewer-shell viewer-help-page",
+  mainClass: "viewer-layout",
+  nav: false, footer: false, wide: false,
+  designContract: VIEWER_DESIGN_CONTRACT,
+  scripts: ['<script src="/assets/contact.js?v=1" type="module"></script>'],
+};
+
+function helpContent({ active, h1, intro, kind, subjectPlaceholder, messagePlaceholder, user, activePath, viewerHelp }) {
+  const form = contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder, includeReturn: !viewerHelp });
+  if (viewerHelp) return viewerHelpContent({ active, title: h1, intro, body: `<div class="viewer-help-form">${form}</div>`, viewerHelp });
   if (!user) {
     return publicHelp({
       active,
@@ -187,12 +205,16 @@ function helpPage(opts) {
   };
   return {
     config,
-    configFor: ({ user } = {}) => (user ? config : { ...config, ...PUBLIC_OVERRIDES }),
+    configFor: ({ user, viewerHelp } = {}) => (viewerHelp ? { ...config, ...VIEWER_OVERRIDES } : user ? config : { ...config, ...PUBLIC_OVERRIDES }),
     Component: (renderOpts) => helpContent({ ...opts, ...renderOpts }),
   };
 }
 
-function helpHubContent({ user, activePath }) {
+function helpHubContent({ user, activePath, viewerHelp }) {
+  if (viewerHelp) return viewerHelpContent({
+    active: "help", title: "Viewer help", intro: "Find your rewards, credits, and community activity.", viewerHelp,
+    body: `<section class="yr-prose"><h2>Finding your way</h2><p><b>Reward shop</b> lists what a creator offers for free credits. <b>My activity</b> shows your credits, reward claims, and participation in that community.</p><p><a href="/me">My communities</a> lists the communities you have joined. Your rewards and credits stay separate in each one.</p><h2>Need help with a reward?</h2><p>The creator handles their community rewards. Use the channel links on their community home page to contact them.</p><p>For account or website problems, choose Support above. Choose Feedback to share an idea.</p></section>`,
+  });
   const sections = hubSectionsHtml();
   if (!user) {
     return publicHelp({
@@ -232,7 +254,7 @@ const helpHubConfig = {
 
 export const helpHubPage = {
   config: helpHubConfig,
-  configFor: ({ user } = {}) => (user ? helpHubConfig : { ...helpHubConfig, ...PUBLIC_OVERRIDES }),
+  configFor: ({ user, viewerHelp } = {}) => (viewerHelp ? { ...helpHubConfig, ...VIEWER_OVERRIDES, scripts: [] } : user ? helpHubConfig : { ...helpHubConfig, ...PUBLIC_OVERRIDES }),
   Component: (renderOpts) => helpHubContent(renderOpts),
 };
 

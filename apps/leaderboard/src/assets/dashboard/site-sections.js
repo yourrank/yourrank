@@ -9,8 +9,8 @@ import { state } from "./state.js";
 import { refreshDesignPreview } from "./site.js";
 
 export const SITE_SECTION_ROWS = [
-  ["shop", "Shop", "Let members browse and redeem your shop items.", "Turning off removes Shop from navigation and disables the /shop URL."],
-  ["credits", "Rewards", "Let members see their balance and order history.", "Turning off removes Rewards from navigation and disables the /credits URL."],
+  ["shop", "Reward shop", "Let viewers browse and claim rewards.", "Turning off hides this page from navigation and disables its public link."],
+  ["credits", "My activity", "Let members see their credits, claims and participation.", "Turning off hides this page from navigation and disables its public link."],
 ];
 
 /** Current persisted public-section flags; legacy Games remains preserved but is not promoted here. */
