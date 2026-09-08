@@ -46,7 +46,12 @@ const server = createServer(async (req, res) => {
     const count = Number(url.searchParams.get('count') || 100);
     res.setHeader('content-type', 'text/html');
     res.end(await renderSite({ r: { slug: 'creator', plan: 'pro', data: { ...data, players: players.slice(0, count), playerCount: count === 100 ? 300 : count } }, section: 'leaderboard', opts: { slug: 'creator', homeUrl: origin, nonce: 'n' } }));
-  } catch (error) { res.statusCode = 500; res.end(String(error)); }
+  } catch (error) {
+    console.error('verify-viewer-audit server error:', error);
+    res.statusCode = 500;
+    res.setHeader('content-type', 'text/plain; charset=utf-8');
+    res.end('Internal Server Error');
+  }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 origin = `http://127.0.0.1:${server.address().port}`;
