@@ -11,13 +11,34 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 -->`;
 
 type Destination = { label: string; href: string; active?: boolean };
-export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountHref = '/me', links = [], creatorMark = '', sessionControl = '', signedIn = false }: {
-  name?: string; homeHref?: string; accountHref?: string; links?: Destination[]; creatorMark?: string; sessionControl?: string; signedIn?: boolean;
+export function viewerHelpHref(returnTo = '/me', origin = '', tab = 'support'): string {
+  return `${origin}/help/${tab}?${new URLSearchParams({ audience: 'viewer', return: returnTo })}`;
+}
+
+/** Explicit navigation context wins over a separate creator login cookie. */
+export function resolveViewerHelp(url: URL): { returnTo: string } | null {
+  if (url.searchParams.get('audience') !== 'viewer') return null;
+  const value = url.searchParams.get('return') || '/me';
+  try {
+    const target = new URL(value, url.origin);
+    // Keep the return link on viewer pages and on this origin; never treat it
+    // as authorization or accept an arbitrary external redirect destination.
+    if (target.origin === url.origin && (target.pathname === '/me' || /^\/[a-z0-9][a-z0-9_-]*(?:\/(?:me|shop|leaderboard|contact))?$/.test(target.pathname)) &&
+        !/^\/(?:dashboard|admin|auth|api|help|login|logout)(?:\/|$)/.test(target.pathname)) {
+      return { returnTo: target.pathname + target.hash };
+    }
+  } catch { /* Invalid continuation falls back to the viewer index. */ }
+  return { returnTo: '/me' };
+}
+
+export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountHref = '/me', links = [], socialLinks = [], creatorMark = '', sessionControl = '', signedIn = false, helpHref, accountActive = true, helpActive = false }: {
+  name?: string; homeHref?: string; accountHref?: string; links?: Destination[]; socialLinks?: Destination[]; creatorMark?: string; sessionControl?: string; signedIn?: boolean; helpHref?: string; accountActive?: boolean; helpActive?: boolean;
 } = {}): string {
   return `<aside class="viewer-rail" aria-label="Viewer navigation">
-<a class="viewer-brand" href="${esc(accountHref)}"><span>${brandMarkSvg()}</span>YourRank</a>
+<a class="viewer-brand" href="${esc(links.length ? homeHref : accountHref)}"><span>${brandMarkSvg()}</span>YourRank</a>
 ${links.length ? `<div class="viewer-context">${creatorMark}<a href="${esc(homeHref)}">${esc(name)}</a><span>Community</span></div>` : ''}
-<nav class="viewer-destinations" aria-label="${links.length ? 'Community pages' : 'Viewer pages'}">${(links.length ? links : [{ label: 'My communities', href: accountHref, active: true }]).map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${esc(link.label)}</a>`).join('')}</nav>
-<div class="viewer-rail-account">${sessionControl}${links.length && signedIn ? `<a href="${esc(accountHref)}">All communities</a>` : ''}<a id="viewer-account-link" href="${esc(accountHref)}#vd-profile"${signedIn ? '' : ' hidden'}>Your account</a><a href="${esc(accountHref.startsWith('https:') ? new URL(accountHref).origin : '')}/contact">Help & contact</a></div>
+<nav class="viewer-destinations" aria-label="${links.length ? 'Community pages' : 'Viewer pages'}">${(links.length ? links : [{ label: 'My communities', href: accountHref, active: accountActive }]).map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${esc(link.label)}</a>`).join('')}</nav>
+<div class="viewer-rail-account">${sessionControl}${links.length && signedIn ? `<a href="${esc(accountHref)}">My communities</a>` : ''}<a id="viewer-account-link" href="${esc(accountHref)}#vd-profile"${signedIn ? '' : ' hidden'}>Viewer account</a><a href="${esc(helpHref || viewerHelpHref('/me', accountHref.startsWith('https:') ? new URL(accountHref).origin : ''))}"${helpActive ? ' aria-current="page"' : ''}>Help &amp; contact</a></div>
+${socialLinks.length ? `<nav class="viewer-channels" aria-label="${esc(name)} channels">${socialLinks.map(link => `<a href="${esc(link.href)}" target="_blank" rel="noopener noreferrer">${esc(link.label)}<span class="yr-sr"> (opens in a new tab)</span></a>`).join('')}</nav>` : ''}
 </aside>`;
 }

@@ -167,7 +167,7 @@ describe("handleCreditsSaveShopItem", () => {
     expect(body.id).toBe("item-1");
     const insert = db.calls.find((c) => c.method === "unsafe" && /INSERT INTO shop_items/.test(c.sql));
     expect(insert).toBeDefined();
-    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true]);
+    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true, null]);
   });
 
   it("rejects a price of 0", async () => {

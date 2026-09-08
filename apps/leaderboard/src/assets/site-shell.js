@@ -145,6 +145,8 @@
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
   var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
   var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";
+  var spotlight = document.body.dataset.viewerTemplate === "spotlight";
+  var eventId = document.body.dataset.eventId || "";
   var money = function (v) { return currency + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); };
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]); }); };
   var representations = function () {
@@ -169,16 +171,21 @@
     var name = esc(String(p.name || "").toLowerCase());
     var value = esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.wagered));
     var prize = !hidePrizes && p.prize ? esc(money(p.prize)) : "";
+    var identity = spotlight
+      ? '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>'
+      : esc(p.name);
+    var labelClass = spotlight ? "yr-podium-label" : "yr-sr";
     return '<li class="yr-srow' + (rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : "") +
       '" data-player-name="' + name + '" data-position="' + rank + '">' +
       '<span class="yr-srow-rank"><span class="yr-sr">Rank </span>' + rank + "</span>" +
-      '<a class="yr-srow-name" href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + esc(p.name) + "</a>" +
-      '<span class="yr-srow-val"><span class="yr-sr">' + esc(valueLabel) + ': </span>' + value + "</span>" +
-      (prize ? '<span class="yr-srow-prize"><span class="yr-sr">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
+      (eventId ? '<span class="yr-srow-name">' + identity + '</span>' : '<a class="yr-srow-name" href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + identity + "</a>") +
+      '<span class="yr-srow-val"><span class="' + labelClass + '">' + esc(valueLabel) + ': </span>' + value + "</span>" +
+      (prize ? '<span class="yr-srow-prize"><span class="' + labelClass + '">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
       "</li>";
   };
   var fetchPage = function (offset, q, signal) {
     var params = new URLSearchParams({ limit: "100", offset: String(offset) });
+    if (eventId) params.set("event", eventId);
     if (q) params.set("search", q);
     return fetch("/api/public/" + encodeURIComponent(slug) + "/players?" + params.toString(), signal ? { signal: signal } : undefined).then(function (res) {
       if (!res.ok) throw new Error("request failed");
@@ -218,12 +225,14 @@
     if (html) rowsRoot.insertAdjacentHTML("beforeend", html);
     loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
     if (!activeSearch && Number(page.total)) totalCount = Number(page.total);
+    if (!activeSearch) savedRowsHtml = rowsRoot.innerHTML;
     if (loadMore) loadMore.hidden = !page.hasMore;
     return added;
   };
   if (search && rowsRoot && playerBoard) {
     search.addEventListener("input", function () {
       var q = search.value.trim().toLowerCase();
+      if (playerBoard.hasAttribute("data-podium")) playerBoard.classList.toggle("is-searching", !!q);
       activeSearch = q;
       searchOffset = 0;
       searchRequest += 1;
@@ -232,6 +241,14 @@
       if (searchController) searchController.abort();
       searchController = null;
       clearTimeout(searchTimer);
+      if (loadMore) {
+        loadMore.disabled = false;
+        loadMore.textContent = loadMoreLabel;
+      }
+      if (loadMoreStatus) loadMoreStatus.textContent = "";
+      rowsRoot.innerHTML = savedRowsHtml;
+      loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
+      if (loadMore) loadMore.hidden = loadedCount >= totalCount;
       var shown = 0;
       representations().forEach(function (representation) {
         var hit = !q || representation.dataset.playerName.indexOf(q) !== -1;
@@ -239,8 +256,8 @@
         if (hit) shown += 1;
       });
       if (!q) {
-        // Clearing the field restores exactly the standings the server sent.
-        if (rowsRoot && savedRowsHtml) rowsRoot.innerHTML = savedRowsHtml;
+        // Restore all unfiltered pages already loaded, including podium slots.
+        rowsRoot.innerHTML = savedRowsHtml;
         representations().forEach(function (representation) { representation.hidden = false; });
         loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
         updatePlayerCount(totalCount);
@@ -254,6 +271,7 @@
         setSearchStatus(plural(visiblePlayerCount()) + " match “" + q + "”.");
         return;
       }
+      if (loadMore) loadMore.hidden = true;
       searchTimer = window.setTimeout(function () {
         setSearchStatus("Searching…");
         searchController = typeof AbortController === "function" ? new AbortController() : null;

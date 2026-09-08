@@ -7,7 +7,7 @@ const VIEWER_PARTICIPATION_LIMIT = 25;
 export async function getShopItems(siteId, queryImpl = query) {
   return queryImpl(
     // Defensive ceiling above the highest current plan's active-item limit.
-    "SELECT id, name, description, cost, stock, active FROM shop_items WHERE site_id=$1 AND active=true ORDER BY name ASC LIMIT 1024",
+    "SELECT id, name, description, cost, stock, active, (image_key IS NOT NULL) AS has_image FROM shop_items WHERE site_id=$1 AND active=true AND deleted_at IS NULL ORDER BY name ASC LIMIT 1024",
     [siteId]
   ) || [];
 }

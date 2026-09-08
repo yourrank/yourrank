@@ -119,8 +119,8 @@ export async function handlePublicPlayers(request, env, deps = {}) {
       "SELECT max(updated_at) AS m, count(*)::int AS c FROM players WHERE site_id=$1",
       [r.id]
     );
-    const maxTs = version?.m ? new Date(version.m).toISOString() : "0";
-    const etag = `W/"${slug}-${maxTs}-${version?.c || 0}-l${limit}-o${offset}-q${encodeURIComponent(search)}"`;
+    const maxTs = r.data.eventUpdatedAt ? new Date(r.data.eventUpdatedAt).toISOString() : version?.m ? new Date(version.m).toISOString() : "0";
+    const etag = `W/"${slug}${r.data.eventId ? `-${r.data.eventId}` : ''}-${maxTs}-${version?.c || 0}-l${limit}-o${offset}-q${encodeURIComponent(search)}"`;
     const ifNoneMatch = request.headers.get("if-none-match");
     if (ifNoneMatch === etag) {
       return new Response(null, { status: 304, headers: { "cache-control": "public, max-age=10", etag, ...rateLimitHeaders(effectiveRl) } });

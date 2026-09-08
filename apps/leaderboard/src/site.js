@@ -1,6 +1,8 @@
 // Site + players data helpers for the Worker.
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
 import { fromJsonb } from "@yourrank/shared/jsonb";
+import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
+import { rankEventPlayers } from "@yourrank/shared/event-leaderboards";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { detectTop3Changes, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
 import { RESERVED, slugify, hashPassword } from "./auth.js";
@@ -352,7 +354,7 @@ function parsePrizes(rawPrizes) {
 }
 
 
-export const VALID_TEMPLATES = ["cyber_arcade", "esports_pro", "creator_glass", "classic"];
+export const VALID_TEMPLATES = [...VIEWER_TEMPLATES.map(template => template.value), "esports_pro", "creator_glass", "classic"];
 
 function parseTheme(site) {
   const raw = fromJsonb(site.theme_json);
@@ -491,6 +493,18 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
   };
 }
 
+// Documents recover to the main board; a stale pagination request must never
+// append main-board players to an event that the viewer is still looking at.
+export async function resolvePublicEvent(requestUrl, siteId, readEvent = one) {
+  const eventId = requestUrl?.searchParams.get('event');
+  const isPlayerApi = /^\/api\/public\/[^/]+\/players$/.test(requestUrl?.pathname || '');
+  if (!eventId || (!requestUrl.pathname.endsWith('/leaderboard') && !isPlayerApi)) return {};
+  const event = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(eventId)
+    ? await readEvent('SELECT id, name, players, updated_at FROM app_private.site_event_leaderboards WHERE id=$1 AND site_id=$2 AND published=true', [eventId, siteId])
+    : null;
+  return { event, unavailable: !event, notFound: !event && isPlayerApi };
+}
+
 export async function getPublicSite(env, slug, request = null, playerOptions = null) {
     const site = playerOptions?.fresh
       ? await one(`SELECT ${SITE_COLUMNS}, now() AS _fresh FROM sites WHERE slug=$1`, [slug])
@@ -529,6 +543,26 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
     ]);
     const data = publicShape(site, players, archives, !!site.has_logo, playerCount);
     if (boundedPlayers) data.playerMatchCount = playerMatchCount;
+    data.eventBoards = await query('SELECT id, name FROM app_private.site_event_leaderboards WHERE site_id=$1 AND published=true ORDER BY created_at, id', [site.id]);
+    const requestUrl = request ? new URL(request.url) : null;
+    const selection = await resolvePublicEvent(requestUrl, site.id);
+    if (selection.notFound) return null;
+    if (selection.unavailable) data.eventUnavailable = true;
+    if (selection.event) {
+      const event = selection.event;
+      const allPlayers = rankEventPlayers(fromJsonb(event.players) || []);
+      const search = String(playerOptions?.search || '').trim().toLowerCase();
+      const matching = search ? allPlayers.filter(p => p.name.toLowerCase().includes(search)) : allPlayers;
+      data.players = boundedPlayers ? matching.slice(Number(playerOptions.offset) || 0, (Number(playerOptions.offset) || 0) + Number(playerOptions.limit)) : matching;
+      data.playerCount = allPlayers.length;
+      data.playerMatchCount = matching.length;
+      data.rankBy = 'score';
+      data.eventId = event.id;
+      data.eventName = event.name;
+      data.eventUpdatedAt = event.updated_at;
+      data.brand = { ...data.brand, period: event.name, hidePrizeAmounts: true, prizePool: '' };
+      data.endsAt = null; data.startsAt = null; data.scheduled = false; data.ended = false;
+    }
     return {
       id: site.id,
       userId: site.user_id,

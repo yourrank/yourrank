@@ -95,6 +95,11 @@ DEMO_USER_EMAIL = "demo@yourrank.site"
 binding = "MARKETING"
 service = "yourrank-web"
 
+# Provision these private buckets before deploying; no r2.dev/public access.
+[[r2_buckets]]
+binding = "REWARD_IMAGES"
+bucket_name = "yourrank-reward-images"
+
 # --- Secrets (set via `wrangler secret put <NAME>`), NOT stored here: ---
 #   DATABASE_URL            (fallback if Hyperdrive isn't bound)
 #   NOWPAYMENTS_API_KEY
@@ -181,6 +186,10 @@ binding = "EVENTS_QUEUE"
 [[env.staging.services]]
 binding = "MARKETING"
 service = "yourrank-web-staging"
+
+[[env.staging.r2_buckets]]
+binding = "REWARD_IMAGES"
+bucket_name = "yourrank-reward-images-staging"
 
 # Staging Hyperdrive — points to a dedicated staging Supabase DB.
 # TODO: Replace placeholder with actual staging Hyperdrive ID before flipping staging infra.

@@ -1,5 +1,6 @@
 import { formatMoney, prizeCurrency, renderSite } from "@yourrank/shared/site-render";
 import { safeUrl } from "@yourrank/shared/public-render-helpers";
+import { viewerHelpHref } from "@yourrank/shared/viewer-shell";
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -77,8 +78,9 @@ export function renderNewLegalPage(data, page, opts) {
   // measure — the public shell resets paragraph margins, so this body was one
   // undifferentiated block of text on every legal page.
   const name = esc(r.data.brand?.name || r.slug);
+  const supportLink = `<p><a class="yr-sec-link" href="${esc(viewerHelpHref(`/${encodeURIComponent(r.slug)}/contact`, opts.isCustomDomain ? "https://yourrank.site" : ""))}">Contact YourRank support</a></p>`;
   const content = `<header class="yr-vhead"><span class="yr-cue">Information</span><h1 class="yr-h1">${esc(title)}</h1><p class="yr-vhead-lede">${name} · public information and policies.</p></header><section class="yr-vsec" aria-labelledby="yr-legal-body"><h2 class="yr-sr" id="yr-legal-body">${esc(title)}</h2><div class="yr-prose">${legalBody(r.data, page)}</div></section><section class="yr-vsec" aria-labelledby="yr-legal-help"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-legal-help">Need help?</h2></div><p class="yr-note">Go back to the leaderboard, or reach ${name} through the channel links on their profile.</p></section>`;
-  return shell({ r, ...opts, contentHtml: content, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
+  return shell({ r, ...opts, contentHtml: content + supportLink, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
 }
 
 export function renderNewPlayerProfile(data, player, history, opts) {

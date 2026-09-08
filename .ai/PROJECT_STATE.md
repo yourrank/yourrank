@@ -2,6 +2,24 @@
 
 Maintained to prevent architecture drift.
 
+## Local viewer and reward improvements — 2026-09-08
+
+**Audit correction, 2026-09-08:** Active reward media now uses private R2 and
+`shop_items.image_key`; the unshipped Postgres-base64 addition was removed.
+`20260908000300_reward_image_keys.sql` and private `REWARD_IMAGES` bindings must
+be provisioned/applied before deployment. Old local experimental image bytes are
+preserved but require re-upload. Event-document fallback, search pagination,
+incomplete podiums and in-canvas editing were repaired; creator rows show picture
+thumbnails. Root tests passed 2,215 with 108 skips; lint/typecheck, fixture-browser
+regressions and real local R2 round trips passed. No database changes or remote
+deployment occurred in this correction. Exact finding dispositions and limits:
+`docs/design/audit-findings-verification.md`. The earlier evidence below is
+historical and does not verify the new storage deployment.
+
+Uncommitted implementation adds reward picture optimization and separate lazy media endpoints, persistent reward deletion with claims retained, full-width Site settings, readable Appearance labels, shared channel links, community-local logo navigation, and clearer Insights presentation. Event leaderboards are independently saved/published points lists (up to 20 per site), with a public switcher; they do not merge Membership, Player or reward identities.
+
+Additive migrations `20260908000100_reward_images.sql` and `20260908000200_site_event_leaderboards.sql` add nullable shop image/deletion fields and a backend-only `app_private.site_event_leaderboards` table. Local PostgreSQL was updated; remote databases were not. The existing private schema denies anon/authenticated usage, and the Worker group receives explicit table permissions. Runtime verification covered event creation/switching/search isolation, preserved Spotlight logo navigation, a 960×629 approximately 24 KB upload and public image delivery, reward deletion, channel preview, Site width and Appearance contrast. The constituent regression suites passed 2,211 tests with 108 skips and zero failures; lint and typecheck passed. A fresh independent static review found no material blocker. Full evidence and limits are in `docs/design/community-rewards-verification.md`. Nothing was committed or deployed.
+
 **Evidence baseline:** Release-readiness audit branched from `main` at `fc0fd1ca7fa4e639a1ee30a2cea23b4c3f9c29fc` (Wave K merged)
 
 **Last reconciled:** 2026-09-01
@@ -38,6 +56,16 @@ Maintained to prevent architecture drift.
 | Runtime/deployment description | `ARCHITECTURE.md` plus Worker configuration |
 
 ## Convergence Status
+
+### Optional viewer template — 2026-09-07
+
+Site → Public site → Brand now offers Channel guide (existing default) and optional Spotlight, using the existing Pro Brand gate, `theme_json.template` storage, and canonical public renderer. A shared catalogue owns supported choices; legacy values keep their current appearance unless deliberately changed. Following the owner's visual correction, Spotlight uses horizontal navigation and a dark geometric podium: rank 1 in the center, rank 2 left, rank 3 right, then compact standings. The podium presents the original player rows once; tied top ranks retain equal compact rows. Search uses compact rows and clearing restores the original standings. Two-character player monograms reflect the public data's lack of an avatar field; no Viewer Account identity mapping was added. Games, global account/help presentation, ranking logic, and claim behavior are unchanged.
+
+Verification evidence is local and synthetic. Desktop/mobile display, long names, local and server-search/clear, and pagination were exercised for the podium correction. Fetched long-name rows retained monograms and a 60px mobile row, clearing restored three podium places, and pagination added the seventh player once. Earlier template-selection checks covered shop and membership readability, switching live preview, saving to a memory-backed fixture, reloading the selected choice, and returning to the default. Lint, typecheck, builds, the full Leaderboard suite, and shared tests passed; after the final dynamic-row/focus adjustments, the build, lint, and 61 focused renderer/viewer tests passed again. Independent source/contrast review marked both material findings resolved; independent screenshot review was not available. Production deployment, real authenticated sessions, and database-backed template persistence were not exercised.
+
+### Viewer navigation clarification — 2026-09-07
+
+Viewer-origin help links now carry explicit viewer context through Contact, Support, Feedback, and their return navigation, independently of creator login cookies. The existing viewer shell also serves viewer help; creator help retains its workspace. Public navigation now uses Reward shop, My activity, My communities, and Viewer account, with stable URLs and unchanged account/membership boundaries. Home links to an enabled shop even when empty, and the leaderboard heading matches its navigation label. Local browser checks covered demo Home → Support → Feedback/Overview → return, Reward shop, and My activity, including 390px mobile layout. Verification: 2,184 tests passed, 108 skipped, zero failures across the repository suites; lint, typecheck, and asset build passed. Real authenticated customer sessions, production deployment, and support-message delivery were not exercised.
 
 ### First roles / UX audit follow-up — 2026-09-06
 

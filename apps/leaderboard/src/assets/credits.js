@@ -7,6 +7,7 @@ import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from ".
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
+import { optimizeRewardImage } from "./reward-image.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,7 +72,7 @@ function setStatus(id, msg, error = false) {
   statusClearTimers.delete(id);
   el.textContent = msg;
   el.className = error ? "status error" : "status";
-  if (!error) {
+  if (!error && id !== "cr-shop-image-status") {
     const timer = setTimeout(() => {
       if (statusClearTimers.get(id) !== timer) return;
       statusClearTimers.delete(id);
@@ -290,6 +291,7 @@ function renderShopCards(items) {
     const stock = i.stock === null ? "Unlimited" : `${i.stock} left`;
     return `<article class="cr-shop-row${i.active ? "" : " is-inactive"}">
       <div class="cr-shop-row-main">
+        ${i.has_image ? `<img class="cr-shop-thumbnail" src="${esc(sitePath(`/api/credits/shop/${encodeURIComponent(i.id)}/image`))}" alt="Picture for ${esc(i.name)}" width="60" height="40" loading="lazy" decoding="async" />` : ''}
         <button class="cr-shop-row-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button>
         <p>${esc(i.description || "No description")}</p>
       </div>
@@ -303,7 +305,7 @@ function renderShopCards(items) {
       </label>
       <div class="cr-shop-row-actions">
         <button class="btn btn--sm" type="button" data-edit-shop="${esc(i.id)}">Edit</button>
-        <button class="btn btn--sm btn--danger" type="button" data-del-shop="${esc(i.id)}">Disable</button>
+        <button class="btn btn--sm btn--danger" type="button" data-del-shop="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">Delete</button>
       </div>
     </article>`;
   }).join("");
@@ -547,9 +549,9 @@ async function delReward(id, trigger) {
   catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function delShop(id, trigger) {
-  if (!await showConfirmModal("Disable item", "Disable this item? It will no longer be available, but past claims stay in credit activity.", "Disable", true)) return;
-  setLoading(trigger, true, "Disabling…");
-  try { await api("DELETE", sitePath(`/api/credits/shop/${encodeURIComponent(id)}`)); await load(); }
+  if (!await showConfirmModal("Delete reward", "Remove this reward from your shop? Existing claims and their history will be kept. This cannot be undone.", "Delete reward", true)) return;
+  setLoading(trigger, true, "Deleting…");
+  try { await api("DELETE", sitePath(`/api/credits/shop/${encodeURIComponent(id)}`)); if (!$("cr-shop-drawer").hidden) closeShop(); await load(); }
   catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function toggleBlock(id, blocked, trigger) {
@@ -616,13 +618,29 @@ function mountListControls(root, toolbar, foot) {
   controls.remove();
 }
 let drawerTrigger;
+let rewardImageDraft;
+let rewardImageVersion = 0;
+let rewardImageProcessing = false;
 function openShop(item, trigger) {
+  rewardImageDraft = undefined;
+  rewardImageVersion++;
+  rewardImageProcessing = false;
+  if ($("cr-shop-submit")) $("cr-shop-submit").disabled = false;
+  setStatus("cr-shop-image-status", "JPG, PNG or WebP up to 12 MB. Automatically resized to 960 pixels and compressed under 180 KB.");
+  if ($("cr-shop-image")) $("cr-shop-image").value = "";
+  const imagePreview = $("cr-shop-image-preview");
+  if (imagePreview) {
+    imagePreview.hidden = !item?.has_image;
+    if (item?.has_image) imagePreview.src = sitePath(`/api/credits/shop/${encodeURIComponent(item.id)}/image`);
+    else imagePreview.removeAttribute("src");
+  }
+  if ($("cr-shop-image-remove")) $("cr-shop-image-remove").hidden = !item?.has_image;
   drawerTrigger = trigger || $("cr-shop-new");
   $("cr-shop")?.classList.add("has-drawer");
   $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-active").checked = item?.active !== false; 
   $("cr-shop-name").focus(); 
 }
-function closeShop() { $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
+function closeShop() { rewardImageVersion++; rewardImageProcessing = false; $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
 function openTip(viewerId, username) {
   const drawer = $("cr-tip-drawer");
   if (!drawer) return;
@@ -1035,9 +1053,38 @@ function wireActions() {
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
 
   $("cr-shop-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
+    e.preventDefault(); if (rewardImageProcessing) return; const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
+    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked, imageData: rewardImageDraft }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
     catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
+  });
+  $("cr-shop-image")?.addEventListener("change", async () => {
+    const version = ++rewardImageVersion;
+    const file = $("cr-shop-image").files?.[0];
+    if (!file) return;
+    rewardImageProcessing = true;
+    $("cr-shop-submit").disabled = true;
+    setStatus("cr-shop-image-status", "Optimizing picture…");
+    try {
+      const result = await optimizeRewardImage(file);
+      if (version !== rewardImageVersion) return;
+      rewardImageDraft = result.data;
+      $("cr-shop-image-preview").src = result.data;
+      $("cr-shop-image-preview").hidden = false;
+      $("cr-shop-image-remove").hidden = false;
+      setStatus("cr-shop-image-status", `Ready: ${Math.ceil(result.bytes / 1024)} KB WebP. Save the item to apply.`);
+    } catch (err) { if (version === rewardImageVersion) setStatus("cr-shop-image-status", err.message || "Could not read that image.", true); }
+    finally { if (version === rewardImageVersion) { rewardImageProcessing = false; $("cr-shop-submit").disabled = false; } }
+  });
+  $("cr-shop-image-remove")?.addEventListener("click", () => {
+    rewardImageVersion++;
+    rewardImageDraft = null;
+    rewardImageProcessing = false;
+    $("cr-shop-image").value = "";
+    $("cr-shop-image-preview").hidden = true;
+    $("cr-shop-image-preview").removeAttribute("src");
+    $("cr-shop-image-remove").hidden = true;
+    $("cr-shop-submit").disabled = false;
+    setStatus("cr-shop-image-status", "Picture removed. Save the item to apply.");
   });
   $("cr-tip-close")?.addEventListener("click", closeTip);
   $("cr-tip-cancel")?.addEventListener("click", closeTip);

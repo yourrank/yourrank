@@ -6,6 +6,7 @@ import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dash
 import { clearSession } from "./dashboard/session.js";
 import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.js";
 import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderSections, renderSocials, wirePublishAction } from "./dashboard/site.js";
+import { loadEventLeaderboards } from "./dashboard/event-leaderboards.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
 import { initPerformance } from "./dashboard/performance.js";
 import { setupSettingsScreen } from "./dashboard/account.js";
@@ -224,6 +225,7 @@ async function init() {
     renderArchives(p.archives || []);
     renderSocials();
     renderSections();
+    loadEventLeaderboards();
     renderEmbedShare();
     const iframe = $("designPreview");
     if (iframe) iframe.addEventListener("load", fitDesignPreview);
@@ -324,24 +326,16 @@ async function init() {
   }
 
   if (hasEditor) window.addEventListener("message", (e) => {
+    if (e.origin !== location.origin || ![...document.querySelectorAll('[data-preview-mount] iframe')].some(frame => frame.contentWindow === e.source)) return;
     if (e.data?.type === "yr_edit_request") {
-      const { key, value, extra } = e.data;
-      if (value !== undefined) {
+      const { key, value } = e.data;
+      if (!["f_name", "f_tagline"].includes(key)) return;
+      if (typeof value === "string") {
         // Brand fields: update the form input directly
         const el = document.getElementById(key);
         if (el) {
           el.value = value;
-          el.dispatchEvent(new Event("input"));
-        } else if (key === "player_name" && extra) {
-          // Find the player row by name and update
-          const rows = [...$("rows").children];
-          const row = rows.find(tr => tr.querySelector(".p-name")?.value.trim() === extra);
-          if (row) { row.querySelector(".p-name").value = value; markDirty(); }
-        } else if (key === "player_wager" && extra) {
-          // Find the player row by name and update wager
-          const rows = [...$("rows").children];
-          const row = rows.find(tr => tr.querySelector(".p-name")?.value.trim() === extra);
-          if (row) { row.querySelector(".p-wager").value = value.replace(/[^0-9.]/g, ""); markDirty(); }
+          el.dispatchEvent(new Event("input", { bubbles: true }));
         }
       } else {
         // Fallback: scroll to and focus the relevant field in the settings panel
