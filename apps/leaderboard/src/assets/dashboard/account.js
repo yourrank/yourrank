@@ -4,6 +4,7 @@ import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
+import { openSiteFeedback } from "./feedback.js";
 import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress, syncSettingsSaveBar } from "./site.js";
 
 async function jsonPost(path, body) {
@@ -272,6 +273,7 @@ function wireSettingsTabs(initialTab = "customize") {
     // The preview only renders while its section is on screen, so entering the
     // tab that owns it is what asks for the first render.
     if (key === "customize") refreshDesignPreview();
+    if (key === "feedback") openSiteFeedback();
   };
   // A pointer from one panel to another moves to that panel instead of asking
   // the creator to find the tab themselves.

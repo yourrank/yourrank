@@ -154,7 +154,10 @@
 .act-state--cancelled { background: var(--ws-surface-strong); color: var(--ws-text-soft); }
 .act-state--attention { background: var(--ws-warning-soft); color: var(--ws-warning); }
 
-.act-automation__head { align-items: center; }
+.act-automation__head { align-items: center; cursor: pointer; }
+.act-automation__head::after { content: "+"; color: var(--ws-accent); font-size: var(--ws-type-section-size); }
+.act-automation[open] > .act-automation__head::after { content: "−"; }
+.act-automation:not([open]) > .act-automation__head { margin-bottom: 0; }
 .act-automation__head h2 { font-size: var(--ws-type-section-size); line-height: var(--ws-type-section-leading); }
 .act-automation__head p,
 .act-pane-head p,

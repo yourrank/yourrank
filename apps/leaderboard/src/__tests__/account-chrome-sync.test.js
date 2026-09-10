@@ -7,6 +7,7 @@ const accountJs = readFileSync(new URL("../assets/account.js", import.meta.url),
 const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
 
 function installShellGlobals() {
+  const events = [];
   const heading = { textContent: "" };
   const crumb = { innerHTML: "", remove: () => {} };
   const bento = {
@@ -40,6 +41,7 @@ function installShellGlobals() {
     },
     getElementById: () => null,
     addEventListener() {},
+    dispatchEvent(event) { events.push(event); return true; },
   };
   globalThis.location = {
     pathname: "/dashboard/settings/account",
@@ -52,7 +54,7 @@ function installShellGlobals() {
     removeEventListener() {},
   };
   globalThis.history = { replaceState() {}, pushState() {} };
-  return { heading, bento, crumb, rail };
+  return { heading, bento, crumb, rail, events };
 }
 
 describe("account settings chrome synchronization", () => {
@@ -66,7 +68,7 @@ describe("account settings chrome synchronization", () => {
   });
 
   it("synchronizes the H1, breadcrumbs, title, and active rail for settings tabs", async () => {
-    const { heading, bento, rail } = installShellGlobals();
+    const { heading, bento, rail, events } = installShellGlobals();
     const { syncRouteChrome } = await import("../assets/dashboard/shell.js");
     for (const [tab, label] of [["account", "Account"], ["team", "Team"], ["plan", "Billing"]]) {
       syncRouteChrome("settings", tab);
@@ -76,6 +78,8 @@ describe("account settings chrome synchronization", () => {
       expect(bento.crumb.innerHTML, tab).toContain(`>${chrome.crumbs.at(-1).label}</span>`);
       expect(document.title, tab).toBe(chrome.documentTitle);
       expect(rail[0].classList.values.has("is-on"), tab).toBe(true);
+      expect(events.at(-1).type).toBe("yr:dashboard-drawer-close");
+      expect(events.at(-1).detail.returnFocus).toBe(false);
     }
   });
 

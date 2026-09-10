@@ -2,7 +2,18 @@
 //  YourRank — Unified Help & Support Drawer + Quick Feedback Modal
 // ============================================================================
 
+import '../dialog.js';
+
 (function () {
+  function supportContext() {
+    const path = location.pathname;
+    if (path.includes('/settings/billing')) return 'billing';
+    if (path.includes('/analytics')) return 'analytics';
+    if (path.includes('/telegram')) return 'bot';
+    if (path.includes('/leaderboard')) return 'leaderboard';
+    return 'dashboard';
+  }
+
   function getCsrf() {
     const m = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
     return m ? decodeURIComponent(m[1]) : "";
@@ -10,12 +21,14 @@
 
   let drawerEl = null;
   let backdropEl = null;
+  let layerEl = null;
+  let releaseTrap = null;
   let activeTab = "guides";
   let userCache = null;
 
   function ensureUser() {
     if (userCache) return Promise.resolve(userCache);
-    return fetch("/api/auth/me")
+    return fetch("/api/auth/me", { signal: AbortSignal.timeout(10000) })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         userCache = data?.user || { email: "", displayName: "" };
@@ -27,11 +40,15 @@
   function createDrawer() {
     if (drawerEl) return;
 
+    layerEl = document.createElement('div');
+    layerEl.id = 'yrHelpLayer';
+    document.body.appendChild(layerEl);
+
     backdropEl = document.createElement("div");
     backdropEl.id = "yrHelpBackdrop";
     backdropEl.className = "yr-help-backdrop";
     backdropEl.hidden = true;
-    document.body.appendChild(backdropEl);
+    layerEl.appendChild(backdropEl);
 
     drawerEl = document.createElement("div");
     drawerEl.id = "yrHelpDrawer";
@@ -48,7 +65,7 @@
             <span class="yr-help-icon" aria-hidden="true">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
-            <strong>Help &amp; Feedback</strong>
+            <strong>YourRank help</strong>
           </div>
           <button type="button" class="yr-help-close" id="yrHelpClose" aria-label="Close drawer">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -160,7 +177,7 @@
           <form id="yrSupportForm" class="yr-help-form">
             <div class="yr-context-badge">
               <span class="yr-context-dot">●</span>
-              <span id="yrSupportContext">Diagnostics &amp; site context auto-attached</span>
+              <span id="yrSupportContext">Checking your account email…</span>
             </div>
             <div class="field">
               <label for="yr_support_subject">Subject <span class="text-danger">*</span></label>
@@ -176,14 +193,14 @@
             <div class="err" id="yr_support_err" role="alert" aria-live="assertive"></div>
             <div class="yr-form-success" id="yr_support_success" hidden>
               <div class="yr-success-check">✓</div>
-              <strong>Support ticket sent!</strong>
-              <p>We'll reply to your account email shortly.</p>
+              <strong>Message received by YourRank</strong>
+              <p>Any reply will go to your account email.</p>
             </div>
             <div class="d-flex gap-8 items-center mt-sm">
-              <button type="submit" class="btn btn--accent grow" id="yr_support_submit">Send Support Ticket 🚀</button>
+              <button type="submit" class="btn btn--accent grow" id="yr_support_submit">Send support message</button>
               <button type="button" class="btn btn--ghost" data-action="closeDrawer">Cancel</button>
             </div>
-            <p class="hint ta-c mt-8">⚡ Average response time: <strong>&lt; 2 hours</strong></p>
+            <p class="hint ta-c mt-8">Contact the YourRank team about your account or the platform.</p>
           </form>
         </div>
 
@@ -227,18 +244,18 @@
                 <label for="yr_feedback_message">Your Feedback <span class="text-danger">*</span></label>
                 <span class="yr-char-count text-xs muted" id="yrFeedbackCount">0 / 4000</span>
               </div>
-              <textarea id="yr_feedback_message" name="message" rows="5" placeholder="Share an idea, feedback, or feature request..." required minlength="5" maxlength="4000"></textarea>
+              <textarea id="yr_feedback_message" name="message" rows="5" placeholder="Share an idea, feedback, or feature request..." required minlength="10" maxlength="4000"></textarea>
             </div>
 
             <div class="err" id="yr_feedback_err" role="alert" aria-live="assertive"></div>
             <div class="yr-form-success" id="yr_feedback_success" hidden>
               <div class="yr-success-check">🎉</div>
               <strong>Thanks for your feedback!</strong>
-              <p>Every suggestion directly shapes future YourRank updates.</p>
+              <p>Your suggestion is in the YourRank team’s inbox.</p>
             </div>
             
             <div class="d-flex gap-8 items-center mt-sm">
-              <button type="submit" class="btn btn--accent grow" id="yr_feedback_submit">Send Feedback ✨</button>
+              <button type="submit" class="btn btn--accent grow" id="yr_feedback_submit">Send feedback</button>
               <button type="button" class="btn btn--ghost" data-action="closeDrawer">Cancel</button>
             </div>
 
@@ -251,7 +268,7 @@
       </div>
     `;
 
-    document.body.appendChild(drawerEl);
+    layerEl.appendChild(drawerEl);
     bindDrawerEvents();
   }
 
@@ -338,43 +355,54 @@
       if (err) err.textContent = "";
       if (success) success.hidden = true;
 
+      if (submitBtn.disabled) return;
+      submitBtn.disabled = true;
       const user = await ensureUser();
+      if (!user.email) {
+        if (err) err.textContent = "Could not read your account email. Sign in again before sending.";
+        submitBtn.disabled = false;
+        return;
+      }
       const subject = drawerEl.querySelector("#yr_support_subject")?.value || "";
       const message = drawerEl.querySelector("#yr_support_message")?.value || "";
 
       submitBtn.disabled = true;
-      submitBtn.textContent = "Sending ticket...";
+      submitBtn.textContent = "Sending message…";
 
       try {
         const res = await fetch("/api/contact", {
           method: "POST",
+          signal: AbortSignal.timeout(10000),
           headers: {
             "content-type": "application/json",
             "x-csrf-token": getCsrf(),
           },
           body: JSON.stringify({
             name: user.displayName || user.email || "Creator",
-            email: user.email || "support-request@yourrank.site",
+            email: user.email,
             kind: "support",
             subject,
             message,
-            context: location.pathname + location.search,
+            context: supportContext(),
           }),
         });
         const body = await res.json().catch(() => ({}));
-        if (res.ok) {
+        if (res.ok && body.ok) {
           if (success) success.hidden = false;
-          supportForm.reset();
-          if (supportCountEl) supportCountEl.textContent = "0 / 4000";
-          setTimeout(() => close(), 2500);
+          const unchanged = drawerEl.querySelector('#yr_support_subject').value === subject && drawerEl.querySelector('#yr_support_message').value === message;
+          if (unchanged) {
+            supportForm.reset();
+            if (supportCountEl) supportCountEl.textContent = "0 / 4000";
+          }
+          if (success) success.querySelector('p').textContent = unchanged ? 'Any reply will go to your account email.' : 'The earlier message was received. Your newer edits are still here and have not been sent.';
         } else {
-          if (err) err.textContent = body.error || "Failed to send ticket. Please try again.";
+          if (err) err.textContent = body.error || "Could not send message. Please try again.";
         }
       } catch (e) {
         if (err) err.textContent = "Network error. Please check your connection.";
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Send Support Ticket 🚀";
+        submitBtn.textContent = "Send support message";
       }
     });
 
@@ -388,7 +416,14 @@
       if (err) err.textContent = "";
       if (success) success.hidden = true;
 
+      if (submitBtn.disabled) return;
+      submitBtn.disabled = true;
       const user = await ensureUser();
+      if (!user.email) {
+        if (err) err.textContent = "Could not read your account email. Sign in again before sending.";
+        submitBtn.disabled = false;
+        return;
+      }
       const selectedCat = drawerEl.querySelector('input[name="kind_cat"]:checked')?.value || "idea";
       const message = drawerEl.querySelector("#yr_feedback_message")?.value || "";
 
@@ -398,25 +433,29 @@
       try {
         const res = await fetch("/api/contact", {
           method: "POST",
+          signal: AbortSignal.timeout(10000),
           headers: {
             "content-type": "application/json",
             "x-csrf-token": getCsrf(),
           },
           body: JSON.stringify({
             name: user.displayName || user.email || "Creator",
-            email: user.email || "feedback@yourrank.site",
+            email: user.email,
             kind: "feedback",
             subject: `[${selectedCat.toUpperCase()}] Creator Feedback`,
             message,
-            context: location.pathname + location.search,
+            context: supportContext(),
           }),
         });
         const body = await res.json().catch(() => ({}));
-        if (res.ok) {
+        if (res.ok && body.ok) {
           if (success) success.hidden = false;
-          feedbackForm.reset();
-          if (feedbackCountEl) feedbackCountEl.textContent = "0 / 4000";
-          setTimeout(() => close(), 2500);
+          const unchanged = drawerEl.querySelector('#yr_feedback_message').value === message && drawerEl.querySelector('input[name="kind_cat"]:checked')?.value === selectedCat;
+          if (unchanged) {
+            feedbackForm.reset();
+            if (feedbackCountEl) feedbackCountEl.textContent = "0 / 4000";
+          }
+          if (success) success.querySelector('p').textContent = unchanged ? 'Your suggestion is in the YourRank team’s inbox.' : 'The earlier suggestion was received. Your newer edits are still here and have not been sent.';
         } else {
           if (err) err.textContent = body.error || "Failed to submit feedback. Please try again.";
         }
@@ -424,16 +463,10 @@
         if (err) err.textContent = "Network error. Please check your connection.";
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = "Send Feedback ✨";
+        submitBtn.textContent = "Send feedback";
       }
     });
 
-    // Keydown escape listener
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && drawerEl && !drawerEl.hidden) {
-        close();
-      }
-    });
   }
 
   function switchTab(tabName) {
@@ -465,32 +498,36 @@
     });
   }
 
-  function open(tab) {
+  function open(tab, trigger = document.activeElement) {
     createDrawer();
     ensureUser().then((u) => {
       const email = u?.email || "creator";
       const fbCtx = drawerEl?.querySelector("#yrFeedbackContext");
       if (fbCtx) fbCtx.textContent = `Submitting as: ${email}`;
       const spCtx = drawerEl?.querySelector("#yrSupportContext");
-      if (spCtx) spCtx.textContent = `Account: ${email} • Diagnostics auto-attached`;
+      if (spCtx) spCtx.textContent = `Replies go to: ${email}`;
     });
     switchTab(tab || "guides");
+    if (releaseTrap) return;
+    // Profile links live inside a menu that closes on click. Restore to its
+    // visible summary instead of a now-hidden link when the drawer closes.
+    const returnFocus = trigger?.closest?.('.gm-profile')?.querySelector('.gm-profile-trigger') || trigger;
+    returnFocus?.focus();
     backdropEl.hidden = false;
     drawerEl.hidden = false;
-    setTimeout(() => {
-      backdropEl.classList.add("is-open");
-      drawerEl.classList.add("is-open");
-    }, 10);
+    backdropEl.classList.add("is-open");
+    drawerEl.classList.add("is-open");
+    releaseTrap = window.YRDialog.trap(layerEl, close);
   }
 
   function close() {
     if (!drawerEl || drawerEl.hidden) return;
     backdropEl.classList.remove("is-open");
     drawerEl.classList.remove("is-open");
-    setTimeout(() => {
-      backdropEl.hidden = true;
-      drawerEl.hidden = true;
-    }, 200);
+    backdropEl.hidden = true;
+    drawerEl.hidden = true;
+    releaseTrap?.();
+    releaseTrap = null;
   }
 
   // Global listeners for buttons linking to help or feedback
@@ -506,7 +543,7 @@
     const isSupport = trigger.hasAttribute("data-open-support") || href.includes("/help/support");
 
     e.preventDefault();
-    open(isFeedback ? "feedback" : isSupport ? "support" : "guides");
+    open(isFeedback ? "feedback" : isSupport ? "support" : "guides", trigger);
   });
 
   window.YRHelpDrawer = { open, close, switchTab };

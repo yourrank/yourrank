@@ -9,7 +9,7 @@ describe("platform legal copy truth", () => {
     const responsible = applyLegalIdentity(responsiblePage, {});
     const copy = `${terms}\n${responsible}`;
 
-    expect(copy).toContain("Recurring card checkout for Pro and Team is not available yet.");
+    expect(copy).toContain("When enabled in Billing, Pro and Team subscriptions are processed by Polar.");
     expect(copy).toContain("Community credits have no cash value.");
     expect(copy).not.toMatch(/sign up or deposit|cryptocurrency|blockchain/i);
   });

@@ -79,6 +79,23 @@ export function renderOverviewSummary() {
   const isModerator = activeBoard?.userRole === "moderator";
   const ownerName = activeBoard?.ownerName || "the site owner";
   if ($("ovSiteName")) $("ovSiteName").textContent = siteName;
+  const siteInitial = $("ovSiteInitial");
+  const siteLogo = $("ovSiteLogo");
+  const editorLogo = $("logoPreview");
+  if (siteInitial) siteInitial.textContent = [...siteName][0]?.toUpperCase() || "Y";
+  if (siteLogo) {
+    const source = editorLogo && !editorLogo.hidden ? editorLogo.src : "";
+    siteLogo.hidden = !source;
+    if (siteInitial) siteInitial.hidden = !!source;
+    if (source && siteLogo.src !== source) siteLogo.src = source;
+    if (!siteLogo._fallbackWired) {
+      siteLogo._fallbackWired = true;
+      siteLogo.addEventListener("error", () => {
+        siteLogo.hidden = true;
+        if (siteInitial) siteInitial.hidden = false;
+      });
+    }
+  }
   const operatorContext = $("ovOperatorContext");
   if (operatorContext) {
     operatorContext.hidden = !isModerator;

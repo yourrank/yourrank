@@ -30,6 +30,7 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
     THEME_SAVING: false,
     LOGO: undefined, // undefined = unchanged, null = remove, string = new data URI
     _dirty: false,
+    DRAFT_REVISION: 0,
     pageReqId: requestId ?? (document.querySelector('meta[name="request-id"]')?.content || ""),
   };
   const listeners = new Set();
@@ -68,6 +69,7 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
    * on every edit, not just the first, so it is separate from the `_dirty` flip.
    */
   function markDirty() {
+    state.DRAFT_REVISION += 1;
     setState({ _dirty: true });
     notify(["draft"]);
   }

@@ -140,7 +140,8 @@ describe("authenticated dashboard v4 contract", () => {
     expect(baseTopbar).toContain("box-sizing: border-box");
     expect(baseTopbar).toContain("background: var(--ws-surface)");
     expect(baseTopbar).not.toMatch(/\b(?:top|left|right|width|margin|box-sizing)\s*:[^;]*!important/);
-    const narrowStart = css.indexOf("@media (max-width: 700px) {");
+    // Pricing has its own 700px rules; inspect the shell's responsive block.
+    const narrowStart = css.indexOf("@media (max-width: 700px) {", css.indexOf("/* Tablet and mobile */"));
     const narrowEnd = css.indexOf("\n@media", narrowStart + 1);
     const narrowShell = css.slice(narrowStart, narrowEnd < 0 ? undefined : narrowEnd);
     expect(narrowShell).toContain("--ws-topbar-h: 64px");

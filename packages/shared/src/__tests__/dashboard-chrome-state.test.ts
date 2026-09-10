@@ -9,6 +9,7 @@ import {
 import {
   DASHBOARD_ROUTES,
   resolveDashboardPath,
+  resolveDashboardLocation,
   routeById,
 } from "../dashboard-routes.js";
 
@@ -45,6 +46,7 @@ describe("dashboard chrome state — full route coverage", () => {
         if (crumb.href) {
           // Every linked crumb resolves in the canonical route model.
           expect(resolveDashboardPath(crumb.href), `${route.id} → ${crumb.href}`).toBeDefined();
+          expect(resolveDashboardLocation(crumb.href)?.route.id, `${route.id} must not link itself`).not.toBe(route.id);
         }
       }
       if (crumbs.length > 0) {
@@ -89,7 +91,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     // section-level.
     const root = dashboardChromeState("board");
     expect(root.crumbs).toEqual([
-      { label: "Leaderboard", href: "/dashboard/leaderboard" },
+      { label: "Leaderboard" },
       { label: "Setup" },
     ]);
     expect(root.documentTitle).toBe("Leaderboard · YourRank");
@@ -121,7 +123,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(channel.navKey).toBe("site");
     expect(channel.crumbs).toEqual([
       { label: "Site", href: "/dashboard/site" },
-      { label: "Connections", href: "/dashboard/site/connections" },
+      { label: "Connections" },
       { label: "Kick connection" },
     ]);
     expect(channel.documentTitle).toBe("Kick connection · Site · YourRank");
@@ -136,7 +138,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
 
     const viewers = dashboardChromeState("audience.viewers");
     expect(viewers.crumbs).toEqual([
-      { label: "People", href: "/dashboard/audience/members" },
+      { label: "People" },
       { label: "Members" },
     ]);
     expect(viewers.documentTitle).toBe("Members · People · YourRank");
@@ -152,7 +154,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     ]);
     expect(plan.documentTitle).toBe("Settings · YourRank");
     expect(dashboardChromeState("settings.account").crumbs).toEqual([
-      { label: "Settings", href: "/dashboard/settings" },
+      { label: "Settings" },
       { label: "Account" },
     ]);
   });
@@ -162,7 +164,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(overview.navKey).toBe("telegram");
     expect(overview.h1).toBe("Overview");
     expect(overview.crumbs).toEqual([
-      { label: "Telegram", href: "/dashboard/telegram" },
+      { label: "Telegram" },
       { label: "Overview" },
     ]);
     const bots = dashboardChromeState("telegram.bots");

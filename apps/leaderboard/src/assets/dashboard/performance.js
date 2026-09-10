@@ -52,6 +52,8 @@ function wireTabs() {
 
 function showTab(tab) {
   const active = SECTIONS.performance.tabs.includes(tab) ? tab : defaultTab("performance");
+  const title = $("perfTitle");
+  if (title) title.textContent = chromeStateFor("performance", active).tabLabel;
   document.querySelectorAll("[data-perf-tab]").forEach((node) => {
     const selected = node.dataset.perfTab === active;
     node.classList.toggle("is-on", selected);
@@ -140,6 +142,15 @@ function renderInsights(data) {
   setInsightValue("insightsParticipants", data.participation?.participants, availability.participation !== false);
   setInsightValue("insightsRepeatParticipants", data.participation?.repeatParticipants, availability.participation !== false);
   setInsightValue("insightsActiveDrops", data.participation?.activeCodeDrops, availability.participation !== false);
+  const repeatVisual = $("insightsRepeatVisual");
+  if (repeatVisual) {
+    const participants = Number(data.participation?.participants) || 0;
+    const repeat = Number(data.participation?.repeatParticipants) || 0;
+    const percent = participants ? Math.min(100, Math.round(repeat / participants * 100)) : 0;
+    repeatVisual.innerHTML = availability.participation === false ? '<p>Participation data unavailable</p>' : participants
+      ? `<div class="insights-repeat-label"><strong>${percent}%</strong><span>claimed more than one drop</span></div><meter min="0" max="100" value="${percent}" aria-label="Repeat participants" aria-valuetext="${repeat} of ${participants} participants"></meter>`
+      : '<p>No participation yet</p><span>Once members claim a code drop, their participation will appear here.</span><a href="/dashboard/activities">Open Activities</a>';
+  }
   setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted, availability.rewards !== false);
   setInsightValue("insightsClaimsCompleted", data.rewards?.claimsCompleted, availability.rewards !== false);
   setInsightValue("insightsPendingReviews", data.operations?.pendingReviews, availability.pendingReviews !== false);
@@ -160,6 +171,8 @@ function renderInsights(data) {
 function renderInsightsLoading() {
   const host = $("insightsQuestions");
   if (host) host.setAttribute("aria-busy", "true");
+  const repeatVisual = $("insightsRepeatVisual");
+  if (repeatVisual) repeatVisual.innerHTML = '<p>Loading participation…</p>';
   ["insightsNewMembers", "insightsReturningMembers", "insightsParticipants", "insightsRepeatParticipants", "insightsActiveDrops", "insightsClaimsSubmitted", "insightsClaimsCompleted", "insightsPendingReviews", "insightsPendingClaims"].forEach((id) => setMetricLoading($(id)));
   ["insightsCommunityStatus", "insightsParticipationStatus", "insightsRewardsStatus"].forEach((id) => { const node = $(id); if (node) node.hidden = true; });
   const topReward = $("insightsTopReward");

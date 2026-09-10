@@ -1,9 +1,8 @@
-// Billing Phase 2A: entitlement grants, payment history, and account usage.
-// Recurring checkout is intentionally absent until a provider is operationally
-// available to the project's legal/deployment entity.
+// Entitlement grants, payment history, and account usage. Polar recurring
+// billing is owned by handlers/polar-billing.js and enabled by configuration.
 import { json, bad, ok, requireUser } from "./auth.js";
 import { one, query, withTransaction } from "@yourrank/shared/db";
-import { logAudit } from "@yourrank/shared/audit";
+
 import {
   PLAN_LIMITS as _PL,
   BOARD_LIMITS as _BL,
@@ -20,6 +19,7 @@ import {
   isPlanTier,
 } from "@yourrank/shared/plans";
 import { reconcileAccountActiveViewerUsage } from "@yourrank/shared/plan-usage";
+import { getPolarBillingStatus } from "./handlers/polar-billing.js";
 
 export const PLAN_LIMITS = _PL;
 export const BOARD_LIMITS = _BL;
@@ -120,15 +120,15 @@ export async function handleAccountUsage(request, env) {
     const sites = await query("SELECT id FROM sites WHERE user_id=$1", [user.id]);
     const siteIds = (sites || []).map((site) => site.id);
     const activeSite = await one(
-      `SELECT id FROM sites WHERE user_id=$1
+      `SELECT id, name FROM sites WHERE user_id=$1
         ORDER BY CASE WHEN id=(SELECT active_site_id FROM users WHERE id=$1) THEN 0 ELSE 1 END,
                  board_order ASC, id ASC
         LIMIT 1`,
       [user.id],
     );
     const [playerCount, creditsUsage, activeViewers] = await Promise.all([
-      siteIds.length
-        ? one("SELECT count(*)::int AS count FROM players WHERE site_id = ANY($1)", [siteIds])
+      activeSite
+        ? one("SELECT count(*)::int AS count FROM players WHERE site_id=$1", [activeSite.id])
         : { count: 0 },
       activeSite ? getSiteCreditsUsage(activeSite.id) : null,
       reconcileAccountActiveViewerUsage(user.id),
@@ -136,7 +136,9 @@ export async function handleAccountUsage(request, env) {
 
     return ok({
       plan,
+      planExpiresAt: user.plan_expires_at,
       pricing: _PRICING,
+      site: activeSite ? { id: activeSite.id, name: activeSite.name } : null,
       activeViewers: activeViewers ? {
         ...activeViewers,
         upgradeAllowance: plan === "free" ? _AVL.pro : null,
@@ -158,10 +160,7 @@ export async function handleAccountUsage(request, env) {
         rewardMappings: _CRL[plan],
         shopItems: _CSL[plan],
       },
-      billing: {
-        recurringCheckoutAvailable: false,
-        message: "Recurring card billing is not available yet.",
-      },
+      billing: await getPolarBillingStatus(env, user.id),
     });
   } catch (error) {
     console.error("[handleAccountUsage] failed:", error);
@@ -202,19 +201,4 @@ async function getSiteCreditsUsage(siteId) {
     pendingRedemptions: pendingRedemptions?.count || 0,
     redemptionsPer30Days: redemptions30d?.count || 0,
   };
-}
-
-/** A removed purchase endpoint must remain unmistakably unavailable if called by stale clients. */
-export async function handleBillingUnavailable(request, env) {
-  const { user, res } = await requireUser(request, env);
-  if (res) return res;
-  await logAudit({
-    actorId: user.id,
-    action: "billing_unavailable",
-    entityType: "billing",
-    entityId: "recurring_checkout",
-    request,
-    details: { reason: "provider_unavailable" },
-  }).catch(() => {});
-  return bad("Recurring card billing is not available yet.", 503);
 }

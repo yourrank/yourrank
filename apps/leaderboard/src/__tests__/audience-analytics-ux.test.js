@@ -66,13 +66,13 @@ describe("Analytics bodies", () => {
       user: { display_name: "Test operator", plan: "pro" },
       activePath: "/dashboard/analytics/activity",
     }).toString();
-    expect(html).toContain("Is the community returning?");
-    expect(html).toContain("How are code drops being used?");
-    expect(html).toContain("How are rewards being used?");
-    expect(html).toContain("What needs attention?");
+    expect(html).toContain("Your community");
+    expect(html).toContain("Code-drop participation");
+    expect(html).toContain("Reward claims");
+    expect(html).toContain("Needs attention");
     expect(html).toMatch(/class="v3-insight-band"[^>]*hidden/);
     expect(html).not.toContain('class="v3-kpi-grid"');
-    expect(html).toContain("Code-drop claims from the selected site in this UTC window");
+    expect(html).toContain("See whether members come back for another drop");
     expect(html).toContain("Claims completed");
     expect(html).not.toContain("Claims fulfilled");
     expect(html).toContain("Public site visits");

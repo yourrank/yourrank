@@ -340,7 +340,9 @@ globalThis.Image = class {
 };
 
 const site = await import("../assets/dashboard/site.js");
-const { setState, state } = await import("../assets/dashboard/state.js");
+const { setState, state, markDirty } = await import("../assets/dashboard/state.js");
+const { renderSiteSelector } = await import("../assets/dashboard/site-selector.js");
+const { requestBillingRedirect } = await import("../assets/dashboard/shell.js");
 
 function register(id) {
   const element = new FakeElement();
@@ -381,6 +383,23 @@ describe("behavior: save state is honest about unsaved changes", () => {
     expect(saveText.textContent).toContain("Navigation switches save immediately.");
   });
 
+  it("returns a failed result immediately on validation without sending a request", async () => {
+    const button = register("save");
+    const status = register("status");
+    setState({ _dirty: true });
+    let requests = 0;
+    const result = await site.saveEditorDraft({
+      button,
+      collectImpl: () => ({ payload: {}, invalid: [{ label: "Score", message: "Enter a valid score." }] }),
+      fetchImpl: async () => { requests++; throw new Error("validation must run before the request"); },
+    });
+    expect(result).toBe(false);
+    expect(requests).toBe(0);
+    expect(state._dirty).toBe(true);
+    expect(status.textContent).toBe("Enter a valid score.");
+    expect(button.disabled).toBe(false);
+  });
+
   it("saves once when both save actions are pressed together", async () => {
     register("publishAction");
     const editorSave = register("save");
@@ -418,18 +437,69 @@ describe("behavior: save state is honest about unsaved changes", () => {
     const status = register("status");
     setState({ _dirty: true });
 
-    await site.saveEditorDraft({
+    const result = await site.saveEditorDraft({
       collectImpl,
       fetchImpl: async () => new Response(JSON.stringify({ ok: false, error: "Database unavailable" }), { status: 500, headers: { "content-type": "application/json" } }),
       button: settingsSave,
     });
 
+    expect(result).toBe(false);
     expect(status.textContent).toBe("Database unavailable");
     expect(state._dirty).toBe(true);
     expect(settingsSave.disabled).toBe(false);
     expect(editorSave.disabled).toBe(false);
     // A failed save leaves the draft dirty, so the bar stays up and enabled.
     expect(settingsSaveBar.hidden).toBe(false);
+  });
+
+  it("keeps edits made during a save unsaved and prevents navigation from abandoning them", async () => {
+    const button = register("save");
+    const status = register("status");
+    const settingsSave = register("settingsSave");
+    register("settingsSaveBar");
+    markDirty();
+    const result = await site.saveEditorDraft({
+      button, collectImpl,
+      fetchImpl: async () => {
+        // A user edits again after the outgoing payload has been captured.
+        markDirty();
+        return Response.json({ ok: true, updatedAt: "saved-version" });
+      },
+    });
+    expect(result).toBe(false);
+    expect(state._dirty).toBe(true);
+    expect(state.SITE_UPDATED_AT).toBe("saved-version");
+    expect(settingsSave.disabled).toBe(false);
+    expect(status.textContent).toContain("newer changes are still unsaved");
+    expect(await site.saveEditorDraft({ button, collectImpl, fetchImpl: async () => Response.json({ ok: true }) })).toBe(true);
+    expect(state._dirty).toBe(false);
+  });
+
+  it("keeps the committed site label while a switch is pending or cancelled without dirtying the editor", () => {
+    const select = new FakeElement();
+    let requested, propagationStopped = false;
+    renderSiteSelector({ select, sites: [{ id: "site-1", name: "First" }, { id: "site-2", name: "Second" }], activeId: "site-1", onSelect: (id) => { requested = id; return false; } });
+    select.value = "site-2";
+    select.onchange({ stopPropagation() { propagationStopped = true; } });
+    expect(requested).toBe("site-2");
+    expect(select.value).toBe("site-1");
+    expect(propagationStopped).toBe(true);
+  });
+
+  it("only leaves the workspace for a validated Polar destination", async () => {
+    const previous = location.assign;
+    const destinations = [];
+    location.assign = (url) => destinations.push(url);
+    try {
+      for (const url of ["https://evil.invalid", "https://polar.sh.evil.invalid", "https://user@polar.sh", "https://polar.sh:9443", "http://polar.sh"]) {
+        await expect(requestBillingRedirect(url)).rejects.toThrow("Invalid billing destination.");
+      }
+      expect(destinations).toEqual([]);
+      expect(await requestBillingRedirect("https://sandbox.polar.sh/checkout/test")).toBe(true);
+      expect(destinations).toEqual(["https://sandbox.polar.sh/checkout/test"]);
+    } finally {
+      location.assign = previous;
+    }
   });
 
   it("shows the public address on the copy and open actions", () => {
@@ -544,6 +614,118 @@ function registerCollectForm({ font = "Inter" } = {}) {
 }
 
 function $id(id) { return elements.get(id); }
+
+it("preserves editor scores in the Home player summary", async () => {
+  elements.clear();
+  const rows = register("rows");
+  const row = new FakeElement();
+  row.querySelector = (selector) => ({ value: ({ ".p-name": "Alex", ".p-score": "9500", ".p-wager": "0", ".p-prize": "0" })[selector] });
+  rows.children = [row];
+  const { currentPlayers } = await import("../assets/dashboard/utils.js");
+  expect(currentPlayers()).toEqual([{ name: "Alex", score: 9500, wagered: 0, prize: 0 }]);
+  elements.clear();
+});
+
+describe("behavior: preview request lifecycle", () => {
+  let mount, frame, status, error, visible, requests;
+  let originalQuery, originalCreate;
+  beforeEach(() => {
+    elements.clear();
+    registerCollectForm();
+    state.ACTIVE_SITE_ID = "site-1";
+    state.PLAYERS = [];
+    visible = false;
+    requests = 0;
+    status = new FakeElement();
+    status.textContent = "Preparing preview…";
+    error = new FakeElement();
+    error.hidden = true;
+    const makeFrame = () => {
+      const node = new FakeElement();
+      node.attributes = [];
+      node.contentWindow = { location: { href: "about:blank" } };
+      node.contentDocument = { querySelector: () => null };
+      node.replaceWith = (next) => { frame = next; };
+      return node;
+    };
+    frame = makeFrame();
+    mount = new FakeElement();
+    mount.dataset.previewTarget = "sitePreview";
+    mount.closest = () => null;
+    mount.getClientRects = () => visible ? [{}] : [];
+    mount.querySelector = (selector) => ({ iframe: frame, "[data-preview-status]": status, "[data-preview-error]": error })[selector] || null;
+    originalQuery = document.querySelectorAll;
+    originalCreate = document.createElement;
+    document.querySelectorAll = (selector) => selector === "[data-preview-mount]" ? [mount] : [];
+    document.createElement = (tag) => {
+      if (tag === "iframe") return makeFrame();
+      const node = new FakeElement();
+      if (tag === "form") {
+        const input = new FakeElement();
+        node.querySelector = () => input;
+        node.submit = () => { requests++; };
+      }
+      return node;
+    };
+  });
+  afterEach(() => {
+    clearTimeout(mount._yrPreview?.timeout);
+    clearTimeout(mount._yrPreview?.watchdog);
+    document.querySelectorAll = originalQuery;
+    document.createElement = originalCreate;
+  });
+
+  it("does no hidden work, but Refresh works on the first visible visit", async () => {
+    site.updateDesignPreview();
+    expect(requests).toBe(0);
+    visible = true;
+    mount.listeners.click[0]({ target: { closest: () => ({}) } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(requests).toBe(1);
+    expect(status.textContent).toBe("Updating preview…");
+  });
+
+  it("never calls blank or error documents synced and accepts the real renderer", async () => {
+    visible = true;
+    site.updateDesignPreview();
+    await new Promise((resolve) => setTimeout(resolve, 330));
+    expect(requests).toBe(1);
+    frame.listeners.load[0]();
+    expect(status.textContent).toBe("Updating preview…");
+    frame.contentWindow.location.href = "http://localhost/login";
+    frame.listeners.load[0]();
+    expect(error.hidden).toBe(false);
+    expect(status.textContent).toBe("Preview could not be loaded");
+    mount.listeners.click[0]({ target: { closest: () => ({}) } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    frame.contentWindow.location.href = "http://localhost/dashboard/preview";
+    frame.contentDocument.querySelector = () => ({ content: "true" });
+    frame.listeners.load[0]();
+    expect(status.textContent).toBe("Preview ready");
+    expect(error.hidden).toBe(true);
+  });
+
+  it("cancels deferred work when the creator leaves before it runs", async () => {
+    visible = true;
+    site.updateDesignPreview();
+    visible = false;
+    await new Promise((resolve) => setTimeout(resolve, 330));
+    expect(requests).toBe(0);
+  });
+
+  it("ignores an older frame finishing while newer changes await preview", async () => {
+    visible = true;
+    site.updateDesignPreview();
+    await new Promise((resolve) => setTimeout(resolve, 330));
+    const previous = frame;
+    site.updateDesignPreview();
+    previous.contentWindow.location.href = "http://localhost/dashboard/preview";
+    previous.contentDocument.querySelector = () => ({ content: "true" });
+    previous.listeners.load[0]();
+    expect(status.textContent).toBe("Updating preview…");
+    expect(mount._yrPreview.syncedAt).toBeNull();
+  });
+});
 
 describe("behavior: viewer template selection", () => {
   beforeEach(() => {

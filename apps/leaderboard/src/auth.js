@@ -247,6 +247,9 @@ export async function handleAccountDelete(request, env) {
       }
 
       await withTransaction(async (tx) => {
+        await tx.one("SELECT id FROM users WHERE id=$1 FOR UPDATE", [user.id]);
+        const { assertPolarDeletionAllowed } = await import("./polar.js");
+        await assertPolarDeletionAllowed(tx, env, user.id);
         // Tables without ON DELETE CASCADE FKs to sites need explicit cleanup.
         const sites = await tx.query("SELECT id FROM sites WHERE user_id=$1", [user.id]);
         const siteIds = sites.map((s) => s.id);
@@ -274,6 +277,7 @@ export async function handleAccountDelete(request, env) {
         "Set-Cookie": cookieClear(env)
       });
   } catch (e) {
+    if (e?.code === "BILLING_ACTIVE") return bad(e.message, 409);
     console.error("account delete failed:", String(e?.message || e));
     return bad("Account deletion failed. Please try again.", 500);
   }

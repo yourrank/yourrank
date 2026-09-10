@@ -182,7 +182,8 @@ describe("Wave E safe Activities foundation", () => {
     expect(activitiesConfig.styles).toContain("/assets/activities.css");
     expect(activitiesContentHtml).toContain("No purchase or stake is required.");
     expect(activitiesContentHtml.indexOf('class="act-list-panel"')).toBeLessThan(activitiesContentHtml.indexOf('class="act-automation"'));
-    expect(activitiesContentHtml).toContain("Plan repeat work");
+    expect(activitiesContentHtml).toContain("Templates and schedules");
+    expect(activitiesContentHtml).toContain('<details class="act-automation" id="act-automation"');
     expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);
 

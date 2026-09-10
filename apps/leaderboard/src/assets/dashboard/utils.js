@@ -323,6 +323,7 @@ export function currentPlayers() {
     name: tr.querySelector(".p-name").value.trim(),
     wagered: parseAmount(tr.querySelector(".p-wager").value),
     prize: parseAmount(tr.querySelector(".p-prize").value),
+    score: parseAmount(tr.querySelector(".p-score")?.value || ""),
   })).filter((p) => p.name);
 }
 

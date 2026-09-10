@@ -17,8 +17,12 @@ export function renderSiteSelector({ select, sites = [], activeId = "", onSelect
   manage.textContent = "Manage all sites…";
   select.appendChild(manage);
   select.disabled = false;
-  select.onchange = () => {
+  select.onchange = (event) => {
+    // Context selection is navigation, not an editor change. Keep showing the
+    // committed site until the guarded navigation succeeds and renders it.
+    event?.stopPropagation();
     const id = select.value;
+    select.value = String(activeId);
     if (id === MANAGE_SITES_VALUE) {
       // The entry point routes through the SPA inside the persistent shell
       // and falls back to a document load on standalone pages.

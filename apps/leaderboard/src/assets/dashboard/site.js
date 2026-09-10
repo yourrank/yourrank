@@ -10,8 +10,9 @@ import { renderPerformance, renderPerformanceLoading } from "./performance.js";
 import { clearPlayersDraft, collectPlayers, commitDraftMutation, renderPlayers, renumber, toggleEmpty } from "./players.js";
 import { requestPublicationChange } from "./publication.js";
 import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from "./request.js";
-import { currentRoute, requestDashboardRoute } from "./shell.js";
+import { currentRoute, requestDashboardRoute, requestBillingRedirect } from "./shell.js";
 import { activeViewerUsageMarkup } from "./plan-usage.js";
+import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 
 export const DEFAULT_SECTIONS = {
   hero: true,
@@ -93,12 +94,15 @@ export function isPro() {
   return plan === "pro" || plan === "team";
 }
 
+let billingInterval = "monthly";
+let billingInfo = null;
+let billingBusy = false;
 function planDefs() {
-  return [
-    { key: "free", name: "Free", price: 0, priceStr: "$0", period: "", note: "forever", features: ["100 active viewers", "1 site", "50 players", "3 reward mappings", "5 shop items", "30 days of history"] },
-    { key: "pro", name: "Pro", price: 24, priceStr: "$24", period: "/month", note: "Recommended", features: ["2,500 active viewers", "3 sites", "1,000 players per site", "Custom domain", "Stronger branding", "12 months of history"] },
-    { key: "team", name: "Team", price: 69, priceStr: "$69", period: "/month", note: "", features: ["10,000 active viewers", "10 sites", "5 operator seats", "Roles and permissions", "5,000 players per site", "24 months of history"] },
-  ];
+  return PLAN_ORDER.map((key) => ({ key, ...PLAN_META[key],
+    priceStr: `$${billingInterval === "annual" ? PLAN_PRICING[key].effectiveAnnualMonthlyUsd : PLAN_PRICING[key].monthlyUsd}`,
+    period: key === "free" ? "forever" : "/month",
+    note: key === "free" ? "No card needed" : billingInterval === "annual" ? `$${PLAN_PRICING[key].annualUsd} billed annually` : "Billed monthly",
+  }));
 }
 
 let startingTrial = false;
@@ -123,9 +127,28 @@ async function startTrial(btn) {
 
 export async function checkout(planOrBtn, btnRef) {
   const btn = typeof planOrBtn === "object" ? planOrBtn : btnRef;
-  if (btn) btn.disabled = true;
-  const status = $("status");
-  if (status) status.textContent = "Recurring card billing is not available yet. Paid access will only start after verified provider confirmation.";
+  const plan = typeof planOrBtn === "string" ? planOrBtn : btn?.dataset.plan || "pro";
+  await openBilling("checkout", btn, { plan, interval: billingInterval });
+}
+
+async function openBilling(action, btn, body = {}) {
+  if (billingBusy) return;
+  billingBusy = true;
+  const label = btn?.textContent;
+  const status = $("billingStatus") || $("status");
+  if (btn) { btn.disabled = true; btn.textContent = "Opening Polar…"; }
+  if (status) status.textContent = "Connecting to Polar…";
+  try {
+    const { body: result } = await fetchDashboardJson(`/api/billing/${action}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(body) });
+    await requestBillingRedirect(result.url);
+  } catch (error) {
+    const message = error.message || "Could not open billing. Try again.";
+    if (status) status.textContent = message;
+    showToast(message, "error");
+  } finally {
+    billingBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 }
 
 async function loadPendingPayment() {
@@ -139,12 +162,13 @@ async function loadPendingPayment() {
 function renderPlanCard(p, isCurrent, isLower, cta, accent) {
   const classes = ["plan-card"];
   if (isCurrent) classes.push("plan-card--current");
-  if (p.note === "Most popular") classes.push("plan-card--popular");
-  const disabled = isCurrent || isLower ? "disabled" : "";
-  const note = p.note ? `<span class="plan-card-note">${esc(p.note)}</span>` : "";
-  const list = p.features.map((f) => `<li>${esc(f)}</li>`).join("");
+  if (p.highlight) classes.push("plan-card--popular");
+  const available = billingInfo?.options?.[p.key]?.[billingInterval];
+  const disabled = isCurrent || isLower || !available || billingInfo?.hasSubscription ? "disabled" : "";
+  const note = p.highlight ? '<span class="plan-card-note">Recommended</span>' : "";
+  const list = p.features.map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
   const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" ${disabled}>${esc(cta)}</button>`;
-  return `<div class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div></div><ul class="plan-card-features">${list}</ul>${ctaEl}</div>`;
+  return `<article class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><p class="plan-card-sub">${esc(p.positioning)}</p><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div><p class="plan-card-sub">${esc(p.note)}</p></div>${ctaEl}<ul class="plan-card-features">${list}</ul></article>`;
 }
 
 export function renderPlan() {
@@ -162,7 +186,7 @@ export function renderPlan() {
 
   const banner = $("planBanner");
   if (banner) {
-    if (plan !== "free" && expiry && Number(expiry) > 0) {
+    if (plan !== "free" && !billingInfo?.hasSubscription && expiry && Number(expiry) > 0) {
       const days = Math.floor((Number(expiry) - Date.now()) / 86_400_000);
       if (days < 0) {
         banner.hidden = false;
@@ -193,7 +217,7 @@ export function renderPlan() {
       } else if (isLower) {
         cta = "Included";
       } else {
-        cta = p.key === "free" ? "Current" : `Start ${p.name}`;
+        cta = billingInfo?.hasSubscription ? "Manage in Polar" : billingInfo?.options?.[p.key]?.[billingInterval] ? `Get ${p.name}` : "Checkout coming soon";
         accent = p.key === "pro";
       }
       return renderPlanCard(p, isCurrent, isLower, cta, accent && !isCurrent);
@@ -206,6 +230,20 @@ export function renderPlan() {
       grid._wired = true;
     }
   }
+
+  document.querySelectorAll('input[name="billingInterval"]').forEach((input) => {
+    if (input._wired) return;
+    input._wired = true;
+    input.checked = input.value === billingInterval;
+    input.addEventListener("change", () => { billingInterval = input.value; renderPlan(); });
+  });
+  const portal = $("billingPortal");
+  if (portal) {
+    portal.hidden = !billingInfo?.portalAvailable;
+    if (!portal._wired) { portal._wired = true; portal.addEventListener("click", () => openBilling("portal", portal)); }
+  }
+  const refresh = $("refreshPlanUsage");
+  if (refresh && !refresh._wired) { refresh._wired = true; refresh.addEventListener("click", loadPlanUsage); }
 
   const trialEl = $("planTrial");
   if (trialEl) {
@@ -262,28 +300,33 @@ export async function loadPlanUsage() {
   const wrap = $("planUsage");
   if (!wrap) return;
   setState({ USAGE_STATUS: "loading" });
+  const refresh = $("refreshPlanUsage");
+  if (refresh) refresh.disabled = true;
   try {
-    const res = await fetch("/api/account/usage", { credentials: "include" }).then(guardAuth);
-    const d = await res.json();
-    if (!res.ok || !d.ok) { setState({ USAGE_STATUS: "error" }); wrap.innerHTML = `<p class="hint hint--error">Could not load usage.</p>`; return; }
+    const { body: d } = await fetchDashboardJson("/api/account/usage", { credentials: "include" });
     setState({ USAGE_STATUS: "ready" });
+    billingInfo = d.billing;
+    setState({ ME: { ...state.ME, plan: d.plan, planExpiresAt: d.planExpiresAt } });
+    const pendingReturn = new URLSearchParams(location.search).get("billing") === "return" && !d.billing?.hasSubscription;
+    if ($("billingStatus")) $("billingStatus").textContent = pendingReturn ? "Waiting for payment confirmation. Refresh usage in a moment to check your plan." : d.billing?.message || "";
+    renderPlan();
     const rows = [];
-    rows.push({ label: "Sites", product: "Leaderboard", used: d.leaderboard.sites.used, limit: d.leaderboard.sites.limit });
-    rows.push({ label: "Players", product: "Leaderboard", used: d.leaderboard.players.used, limit: d.leaderboard.players.limit });
+    rows.push({ label: "Sites", product: "Across your account", used: d.leaderboard.sites.used, limit: d.leaderboard.sites.limit });
+    rows.push({ label: "Players", product: d.site?.name || "Active site", used: d.leaderboard.players.used, limit: d.leaderboard.players.limit });
     if (d.credits) {
       rows.push({ label: "Ways to earn", product: "Credits", used: d.credits.rewardMappings.used, limit: d.credits.rewardMappings.limit });
       rows.push({ label: "Shop items", product: "Credits", used: d.credits.shopItems.used, limit: d.credits.shopItems.limit });
       rows.push({ label: "Pending orders", product: "Credits", used: d.credits.pendingRedemptions.used, limit: d.credits.pendingRedemptions.limit });
       rows.push({ label: "Orders / 30 days", product: "Credits", used: d.credits.redemptionsPer30Days.used, limit: d.credits.redemptionsPer30Days.limit });
     }
-    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} / ${Number(r.limit).toLocaleString()}</span></div>`).join("")}</div>`;
-    if (d.billing && !d.billing.recurringCheckoutAvailable) {
-      wrap.insertAdjacentHTML("beforeend", `<p class="hint">${esc(d.billing.message)}</p>`);
-    }
+    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<p class="usage-scope">Site limits below apply to <strong>${esc(d.site?.name || "your active site")}</strong>. Each site has its own allowance.</p><div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product === "Credits" ? d.site?.name || "Active site" : r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} <small>/ ${Number(r.limit).toLocaleString()}</small></span><meter min="0" max="${Number(r.limit)}" value="${Math.min(Number(r.used), Number(r.limit))}" aria-label="${esc(r.label)} usage" aria-valuetext="${Number(r.used)} of ${Number(r.limit)} used"></meter></div>`).join("")}</div>`;
   } catch (err) {
     setState({ USAGE_STATUS: "error" });
     logError("loadPlanUsage", err);
     if (wrap) wrap.innerHTML = `<p class="hint hint--error">Could not load usage.</p>`;
+    if ($("billingStatus")) $("billingStatus").textContent = "Could not load billing. Refresh usage to try again.";
+  } finally {
+    if (refresh) refresh.disabled = false;
   }
 }
 
@@ -529,11 +572,12 @@ function previewParts(mount) {
 /** Don't waste CPU/network rendering a preview whose section isn't on screen. */
 function previewVisible(mount) {
   const section = mount.closest("section[data-page]");
-  return !section || section.classList.contains("is-on");
+  return (!section || section.classList.contains("is-on")) &&
+    !mount.closest("[hidden]") && mount.getClientRects().length > 0;
 }
 
 function previewLocalState(mount) {
-  if (!mount._yrPreview) mount._yrPreview = { timeout: null, watchdog: null, form: null, syncedAt: null };
+  if (!mount._yrPreview) mount._yrPreview = { timeout: null, watchdog: null, form: null, syncedAt: null, revision: 0 };
   return mount._yrPreview;
 }
 
@@ -542,8 +586,10 @@ function setPreviewSyncStatus(mount, phase) {
   const local = previewLocalState(mount);
   if (status) {
     status.textContent = phase === "syncing"
-      ? mount.dataset.previewLabelSyncing || "SYNCING"
-      : mount.dataset.previewLabelSynced || "SYNCED";
+      ? mount.dataset.previewLabelSyncing || "Updating preview…"
+      : phase === "synced" ? mount.dataset.previewLabelSynced || "Preview ready"
+        : phase === "invalid" ? "Fix the highlighted fields to update preview"
+          : "Preview could not be loaded";
     status.classList.toggle("is-syncing", phase === "syncing");
   }
   if (time) {
@@ -561,6 +607,7 @@ function setPreviewSyncStatus(mount, phase) {
 function resetPreviewFrame(mount) {
   const current = previewParts(mount).iframe;
   if (!current) return null;
+  const revision = previewLocalState(mount).revision;
   const fresh = document.createElement("iframe");
   for (const attr of current.attributes) {
     if (attr.name !== "src") fresh.setAttribute(attr.name, attr.value);
@@ -571,9 +618,20 @@ function resetPreviewFrame(mount) {
     // draft submission lands. Treating that as synced would clear the watchdog
     // and claim the stale preview matches the draft, so only the render's own
     // navigation counts.
-    const loaded = fresh.contentWindow?.location?.href;
-    if (!loaded || loaded === "about:blank") return;
+    if (previewParts(mount).iframe !== fresh || local.revision !== revision) return;
+    let ready = false;
+    try {
+      const loaded = fresh.contentWindow?.location?.href;
+      if (!loaded || loaded === "about:blank") return;
+      ready = !!fresh.contentDocument?.querySelector('meta[name="yr-preview-ready"]');
+    } catch { /* A redirected/cross-origin document is not a successful preview. */ }
     clearTimeout(local.watchdog);
+    const { error } = previewParts(mount);
+    if (error) error.hidden = ready;
+    if (!ready) {
+      setPreviewSyncStatus(mount, "error");
+      return;
+    }
     local.syncedAt = Date.now();
     setPreviewSyncStatus(mount, "synced");
     fitPreviewMount(mount);
@@ -594,17 +652,24 @@ function wirePreviewMount(mount) {
 }
 
 function renderPreviewMount(mount, { immediate = false } = {}) {
-  const { iframe } = previewParts(mount);
-  if (!iframe || !state.ACTIVE_SITE_ID || !previewVisible(mount)) return;
   wirePreviewMount(mount);
   const local = previewLocalState(mount);
-  // Debounce so typing doesn't repeatedly re-render the same draft.
+  local.revision++;
   clearTimeout(local.timeout);
+  clearTimeout(local.watchdog);
+  const { iframe } = previewParts(mount);
+  if (!iframe || !state.ACTIVE_SITE_ID || !previewVisible(mount)) return;
+  setPreviewSyncStatus(mount, "syncing");
+  // Debounce so typing doesn't repeatedly re-render the same draft.
   local.timeout = setTimeout(() => {
+    if (!previewVisible(mount)) return;
     const { error, device } = previewParts(mount);
     try {
       const { payload: draft, invalid } = collect({ reportPlayerErrors: false });
-      if (invalid.length) return;
+      if (invalid.length) {
+        setPreviewSyncStatus(mount, "invalid");
+        return;
+      }
       const params = { board: state.ACTIVE_SITE_ID, device: device?.dataset.device || "desktop" };
       if (mount.dataset.previewSection) params.section = mount.dataset.previewSection;
       // Site settings previews what viewers see, so the editor's
@@ -634,10 +699,12 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
       clearTimeout(local.watchdog);
       local.watchdog = setTimeout(() => {
         if (error) error.hidden = false;
+        setPreviewSyncStatus(mount, "error");
       }, PREVIEW_TIMEOUT_MS);
     } catch (e) {
       logError("preview-submit", e);
       if (error) error.hidden = false;
+      setPreviewSyncStatus(mount, "error");
     }
   }, immediate ? 0 : PREVIEW_DEBOUNCE_MS);
 }
@@ -1894,7 +1961,7 @@ export function syncSettingsSaveBar() {
 
 export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {}) {
   const btn = button || $("save"), status = $("status"), publishAction = $("publishAction");
-  if (_saving) return;
+  if (_saving) return false;
   const { payload, invalid } = collectImpl();
   if (invalid.length) {
     const first = invalid[0];
@@ -1908,9 +1975,10 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     status.setAttribute("role", "alert");
     setSaveStatusText(message);
     first.input?.focus();
-    return;
+    return false;
   }
   _saving = true;
+  const savingRevision = state.DRAFT_REVISION;
   for (const other of saveButtons()) other.disabled = true;
   setSaveStatusText("Saving your changes…");
   btn.disabled = true; btn.textContent = "Saving…"; status.textContent = "";
@@ -1919,6 +1987,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   if (publishAction) { publishAction.disabled = true; publishAction.setAttribute("aria-busy", "true"); }
   const limitEl = $("limitMsg"); if (limitEl) limitEl.textContent = "";
   let justPublished = false;
+  let saved = false;
   try {
     // AUDIT-B5: raw fetch had no timeout — a hung connection left the button
     // at "Saving…" forever. Run the save through the shared timeout wrapper.
@@ -1933,13 +2002,16 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
       body: JSON.stringify(payload),
     }, { fetchFn: fetchImpl, timeoutMs: 20_000 });
     justPublished = !!payload.published && !state.PUBLISHED;
+    const newerChanges = state.DRAFT_REVISION !== savingRevision;
     if (Array.isArray(payload.players)) state.SAMPLE_PLAYERS = false;
     state.SAVED_PLAYERS = Array.isArray(payload.players) ? payload.players.map((player) => ({ ...player })) : [];
-    clearPlayersDraft();
+    if (!newerChanges) clearPlayersDraft();
     const restoredNotice = $("playersDraftNotice");
-    if (restoredNotice) restoredNotice.hidden = true;
-    setState({ _dirty: false, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "wagered" ? "wagered" : "score" });
-    status.textContent = justPublished && !boardStatus().emailVerified
+    if (restoredNotice && !newerChanges) restoredNotice.hidden = true;
+    setState({ _dirty: newerChanges, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "wagered" ? "wagered" : "score" });
+    status.textContent = newerChanges
+      ? "Saved the earlier changes. Your newer changes are still unsaved — save again before leaving."
+      : justPublished && !boardStatus().emailVerified
       ? "Published — Your leaderboard will open to visitors after you confirm your email."
       : "Saved";
     status.hidden = false;
@@ -1972,6 +2044,8 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     }
     // Close the 2-click loop: refresh the live preview so the edit shows immediately.
     updateDesignPreview();
+    // Navigation may continue only if the current draft was actually saved.
+    saved = !newerChanges;
   } catch (err) {
     logError("save", err);
     // The draft is intentionally NOT cleared on any failure — say so.
@@ -2005,6 +2079,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   if (justPublished || savedMsg === "Saved") {
     setTimeout(() => { if (status.textContent === savedMsg) status.textContent = ""; }, 6000);
   }
+  return saved;
 }
 
 $("save")?.addEventListener("click", () => { saveEditorDraft(); });

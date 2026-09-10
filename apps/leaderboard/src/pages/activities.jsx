@@ -34,7 +34,7 @@ export const activitiesContentHtml = `
 
     <section class="act-list-panel" aria-labelledby="act-list-title">
       <div class="act-section-head act-section-head--list">
-        <div><h2 id="act-list-title">Live and past Activities</h2><p>Manual and scheduled drops share the same viewer flow and history.</p></div>
+        <div><h2 id="act-list-title">Live and past Activities</h2></div>
         <span class="act-count" id="act-count" aria-live="polite">—</span>
       </div>
       <div class="act-loading" id="act-loading" role="status" aria-live="polite"><span class="ui-loading__spinner" aria-hidden="true"></span><span>Loading activities…</span></div>
@@ -47,11 +47,11 @@ export const activitiesContentHtml = `
       <div class="act-error" id="act-error" role="alert" hidden><strong>Activities could not load.</strong><p id="act-error-message">Try again.</p><button class="btn btn--sm" id="act-retry" type="button">Retry</button></div>
     </section>
 
-    <section class="act-automation" aria-labelledby="act-automation-title">
-      <div class="act-section-head act-automation__head">
-        <div><h2 id="act-automation-title">Plan repeat work</h2><p>Save the reward settings once, then choose an exact future time. Each run creates a normal free code drop with a new claim code.</p></div>
+    <details class="act-automation" id="act-automation" aria-labelledby="act-automation-title">
+      <summary class="act-section-head act-automation__head">
+        <div><h2 id="act-automation-title">Templates and schedules</h2><p>Reuse drop settings and choose when to run them.</p></div>
         <span class="act-entitlement" id="act-entitlement">Checking plan…</span>
-      </div>
+      </summary>
       <div class="act-automation-gate" id="act-automation-gate" role="status" hidden>
         <strong>Automation is available on Pro and Team.</strong>
         <p>Manual code drops stay available on Free. Existing templates and schedules remain visible.</p>
@@ -89,7 +89,7 @@ export const activitiesContentHtml = `
           <div class="act-pane-empty" id="act-schedule-empty"><strong>Nothing scheduled</strong><p>Create a template, then choose when it should run.</p></div>
         </section>
       </div>
-    </section>
+    </details>
 
 
   </div>`;

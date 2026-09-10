@@ -142,6 +142,11 @@ if (!window.__yrSpaShell) {
 
   function renderAutomation(next) {
     automation = next || { templates: [], schedules: [], entitlement: { canAutomate: false } };
+    const disclosure = $("act-automation");
+    if (disclosure && !disclosure.dataset.initialized) {
+      disclosure.open = Boolean(automation.templates?.length || automation.schedules?.length);
+      disclosure.dataset.initialized = "true";
+    }
     const canAutomate = automation.entitlement?.canAutomate === true;
     const entitlement = $("act-entitlement");
     if (entitlement) {

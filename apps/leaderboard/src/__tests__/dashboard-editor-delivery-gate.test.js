@@ -203,7 +203,7 @@ describe("client: editor step semantics come from the manifest", () => {
         tabLabel: "",
         documentTitle: "Leaderboard · YourRank",
         crumbs: [
-          { label: "Leaderboard", href: BOARD_PATH },
+          { label: "Leaderboard" },
           { label: "Setup" },
         ],
       },
