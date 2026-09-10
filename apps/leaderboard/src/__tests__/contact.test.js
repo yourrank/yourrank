@@ -31,6 +31,15 @@ describe("handleContact", () => {
     expect(mockExec).toHaveBeenCalled();
   });
 
+  it("acknowledges durable receipt even when the inbox email notification throws", async () => {
+    const res = await handleContactImpl(postReq({ name: 'Test', email: 'test@example.com', message: 'Please help with my site.' }), mockEnv, {
+      exec: mockExec, rateLimit, sendEmail: async () => { throw new Error('notification unavailable'); },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).message).toContain('YourRank received');
+    expect(mockExec).toHaveBeenCalledTimes(1);
+  });
+
   it("labels contextual feedback for the admin support inbox", async () => {
     const res = await handleContact(postReq({
       name: "Test",

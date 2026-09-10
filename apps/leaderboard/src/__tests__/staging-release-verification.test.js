@@ -32,7 +32,8 @@ const STAGING_HYPERDRIVE = "0123456789abcdef0123456789abcdef";
 
 const readRepoConfig = (path) => rootFile(path);
 const readRendered = async (path) => {
-  const source = await rootFile(path);
+  // Mutation fixtures below address whole TOML lines on both Windows and CI.
+  const source = (await rootFile(path)).replace(/\r\n/g, "\n");
   return source.includes(STAGING_HYPERDRIVE_PLACEHOLDER) ? renderStagingHyperdrive(source, STAGING_HYPERDRIVE, path) : source;
 };
 
@@ -127,7 +128,8 @@ describe("F-012 staging release verification", () => {
 
   it("fails preflight when a required staging binding is missing or drifts", async () => {
     const leaderboard = await readRendered("apps/leaderboard/wrangler.toml");
-    const withoutHyperdrive = leaderboard.replace(/\[\[env\.staging\.hyperdrive\]\]\n(?:.*\n)*?id = "[0-9a-f]{32}"\n/, "");
+    const withoutHyperdrive = leaderboard.replace(/\[\[env\.staging\.hyperdrive\]\]\r?\n(?:.*\r?\n)*?id = "[0-9a-f]{32}"\r?\n/, "");
+    expect(withoutHyperdrive).not.toBe(leaderboard);
     expect(checkStagingConfig(worker("leaderboard"), withoutHyperdrive).join("\n")).toContain("expected exactly one [[env.staging.hyperdrive]]");
     const withDirectDb = leaderboard.replace("[env.staging.vars]", '[env.staging.vars]\nlocalConnectionString = "postgres://x"');
     expect(checkStagingConfig(worker("leaderboard"), withDirectDb).join("\n")).toContain("direct database connection string");

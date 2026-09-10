@@ -27,7 +27,7 @@ const overviewAnalytics = analytics
   .replace(">Claims<", ">Claims submitted<")
   .replace(">Pending<", ">Needs attention<")
   .replace(">Member balance<", ">Credits held<");
-const overview = `${onboarding}<section class="cr-redemptions-wrap" id="cr-redemptions-wrap">${orderSummary}</section>${overviewAnalytics}`;
+const overview = `${onboarding}<section class="cr-redemptions-wrap" id="cr-redemptions-wrap">${orderSummary}</section><details class="cr-detail-panel" id="cr-overview-metrics" open><summary>Reward activity <span id="cr-overview-activity-state">Loading activity…</span></summary>${overviewAnalytics}</details>`;
 const shopMarkup = shop
   .replace("+ Create shop item", "Create item")
   .replace("Shown on your public shop card to guide members.", "Shown to members in your public shop.")
@@ -38,7 +38,7 @@ const history = `<section class="v3-table-card" id="cr-history"><div class="v3-s
 const channelSecondary = `<section class="v3-table-card cr-channel-secondary"><div class="cr-usage-panel"><h2>Plan usage</h2><div id="cr-usage" class="cr-usage-grid"></div></div><div class="cr-auth-panel"><h2>Member login settings</h2><form id="cr-viewer-auth-form"><div class="cr-auth-options"><label class="cr-auth-option"><input type="checkbox" id="cr-viewer-auth-kick" name="kick" checked /><span>Allow “Log in with Kick”</span></label><label class="cr-auth-option"><input type="checkbox" id="cr-viewer-auth-discord" name="discord" checked /><span>Allow “Log in with Discord”</span></label></div><p class="hint">Public username lookup and claiming is not available. Members must sign in with Kick or Discord.</p><div><button class="btn" type="submit" id="cr-viewer-auth-submit">Save settings</button><p class="status" id="cr-viewer-auth-status" role="status" aria-live="polite"></p></div></form></div></section>`;
 
 const creditRulesPage = (tab) => page(tab, "Ways to earn", "Choose how members earn Credits from your Kick rewards.", mappingMarkup);
-export const channelPage = page("channel", "Kick connection", "Link your Kick channel so channel-point rewards become credits.", `${channel}${channelSecondary}`);
+export const channelPage = page("channel", "Kick connection", "Manage the connection for your selected site.", `${channel}<details class="cr-detail-panel"><summary>Usage and member login</summary>${channelSecondary}</details>`);
 export const overviewPage = page("overview", "Overview", "See how your rewards are doing and what to set up next.", overview);
 export const rulesPage = creditRulesPage("rules");
 export const shopPage = page("shop", "Shop", "Manage what members can claim with Credits.", shopMarkup);

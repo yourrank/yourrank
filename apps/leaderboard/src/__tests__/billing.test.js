@@ -53,11 +53,15 @@ describe("canonical Free / Pro / Team model", () => {
   });
 
   test("dashboard plan cards stay contract-tested against canonical prices", () => {
-    for (const tier of PLAN_TIERS) {
-      const pricing = PLAN_PRICING[tier];
-      expect(dashboardPlanSource).toContain(
-        `key: "${tier}", name: "${PLAN_META[tier].name}", price: ${pricing.monthlyUsd}, priceStr: "$${pricing.monthlyUsd}"`,
-      );
+    const source = dashboardPlanSource.match(/function planDefs\(\) \{([\s\S]*?)\n\}/)[1];
+    const getPlans = new Function("PLAN_ORDER", "PLAN_META", "PLAN_PRICING", "billingInterval", source);
+    for (const interval of ["monthly", "annual"]) {
+      const cards = getPlans(PLAN_TIERS, PLAN_META, PLAN_PRICING, interval);
+      for (const [index, tier] of PLAN_TIERS.entries()) {
+        expect(cards[index].name).toBe(PLAN_META[tier].name);
+        expect(cards[index].features).toEqual(PLAN_META[tier].features);
+        expect(cards[index].priceStr).toBe(`$${PLAN_PRICING[tier][interval === "monthly" ? "monthlyUsd" : "effectiveAnnualMonthlyUsd"]}`);
+      }
     }
   });
 });

@@ -67,25 +67,23 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
 const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         <section class="account-settings-section" aria-labelledby="currentPlanTitle">
           <h2 id="currentPlanTitle">Current plan</h2>
-          <p class="card-sub">Your current entitlement and the limits available to this account.</p>
+          <p class="card-sub">One plan for all your sites.</p>
         <div class="plan-summary" id="planSummary"></div>
         <div class="plan-banner" id="planBanner" role="status" aria-live="polite" hidden></div>
+        <div class="billing-actions"><button class="btn" id="billingPortal" type="button" hidden>Manage subscription</button><p class="hint" id="billingStatus" role="status" aria-live="polite">Checking billing availability…</p></div>
+        </section>
+
+        <section class="account-settings-section billing-plans" aria-labelledby="comparePlansTitle">
+        <div class="billing-section-head"><div><h2 id="comparePlansTitle">A plan for your community</h2><p class="card-sub">Start small. Add capacity as your community grows.</p></div><fieldset class="billing-interval"><legend class="sr-only">Billing interval</legend><label><input type="radio" name="billingInterval" value="monthly" checked />Monthly</label><label><input type="radio" name="billingInterval" value="annual" />Annual <span>2 months free</span></label></fieldset></div>
+        <div class="plan-grid" id="planGrid"></div>
+        <div class="plan-trial" id="planTrial" hidden><p class="hint">Not ready to pay? Try every Pro feature free for 7 days.</p><button class="btn btn--accent" id="trialBtn" type="button">Start free Pro trial</button><p class="status" id="trialStatus" role="status" aria-live="polite"></p></div>
+        <p class="hint" id="planHint">Prices in USD. Taxes, if applicable, are shown at checkout.</p>
         </section>
 
         <section class="account-settings-section" aria-labelledby="planUsageTitle">
-        <h2 id="planUsageTitle">Usage</h2>
-        <p class="card-sub">Your current use across YourRank products.</p>
-        <div class="plan-usage" id="planUsage"><p class="hint">Loading usage…</p></div>
+        <div class="billing-section-head"><div><h2 id="planUsageTitle">Usage</h2><p class="card-sub">See your capacity and what is included.</p></div><button class="btn btn--sm" id="refreshPlanUsage" type="button">Refresh usage</button></div>
+        <div class="plan-usage" id="planUsage" aria-live="polite"><p class="hint">Loading usage…</p></div>
         </section>
-
-        <details class="account-settings-disclosure">
-        <summary>Compare plans</summary>
-        <div class="account-settings-disclosure-body">
-        <div class="plan-grid" id="planGrid"></div>
-        <div class="plan-trial" id="planTrial" hidden><p class="hint">Not ready to pay? Try every Pro feature free for 7 days.</p><button class="btn btn--accent" id="trialBtn" type="button">Start free Pro trial</button><p class="status" id="trialStatus" role="status" aria-live="polite"></p></div>
-        <p class="hint" id="planHint">Recurring checkout is not available yet. Choosing a paid plan will not charge your account or activate paid access.</p>
-        </div>
-        </details>
 
         <details class="account-settings-disclosure" id="planReferral">
           <summary>Earn free Pro days</summary>
@@ -99,7 +97,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
 
         <section class="account-settings-section" id="historyCard" hidden aria-labelledby="paymentHistoryTitle">
           <h2 id="paymentHistoryTitle">Payment history</h2>
-          <p class="card-sub">Your past payments and receipts.</p>
+          <p class="card-sub">Your payment records. Download invoices from Manage subscription.</p>
           <div class="admin-table-wrap"><table class="admin-table" id="historyTable"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
           <div class="empty" id="historyEmpty" hidden>No payments yet. Completed payments and receipts will appear here after you upgrade.</div>
         </section>
@@ -187,17 +185,20 @@ const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
 
 const dataWidget = `<div class="lb-widget lb-widget--full" id="data">
           <section class="account-settings-section account-data-export" aria-labelledby="accountExportTitle">
+            <svg class="data-export-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 11v7m-3-3 3 3 3-3"/></svg>
             <h2 id="accountExportTitle">Export your data</h2>
-            <p class="card-sub">Download a copy of your settings, players, shop items, and analytics.</p>
+            <p class="card-sub">Keep a copy of the community you have built.</p>
+            <ul class="data-export-includes"><li>Account &amp; site settings</li><li>Leaderboard players</li><li>Shop items</li><li>Analytics</li></ul>
+            <p class="hint">Generate your export, then download it when it is ready. Your sites stay available while it is prepared.</p>
             <div class="d-flex gap-8 items-center flex-wrap">
               <button class="btn btn--accent" id="accExportData" type="button">Generate export</button>
               <span class="hint" id="accExportStatus" role="status" aria-live="polite"></span>
             </div>
           </section>
           <section class="account-settings-section account-danger-zone" aria-labelledby="accountDangerTitle">
-            <h2 id="accountDangerTitle">Danger zone</h2>
-            <h3>Delete account</h3>
+            <div><h2 id="accountDangerTitle">Delete account</h2>
             <p class="card-sub">Permanently delete your creator account and all of its sites. This cannot be undone.</p>
+            <p class="hint">Download an export first if you want to keep your records.</p></div>
             <button class="btn btn--danger" id="deleteAccountBtn" type="button">Delete account</button>
           </section>
         </div>`;

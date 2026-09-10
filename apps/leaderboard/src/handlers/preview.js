@@ -128,7 +128,7 @@ ${gamesIslandHead()}
   const editableCss = editable ? `
     ${editableSelectors} { cursor: text; transition: outline 0.15s ease, outline-offset 0.15s ease; }
     ${editableSelectors.split(", ").map(s => s + ":hover").join(", ")} { outline: 2px dashed rgba(91,91,245,0.4); outline-offset: 3px; border-radius: 4px; }` : "";
-  html = html.replace("</head>", `<style nonce="${nonce}">
+  html = html.replace("</head>", `<meta name="yr-preview-ready" content="true"><style nonce="${nonce}">
     html, body { min-width: ${previewMinWidth}px; overflow: hidden; }${editableCss}
   </style></head>`);
 

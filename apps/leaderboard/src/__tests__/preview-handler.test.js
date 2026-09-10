@@ -48,6 +48,7 @@ describe("handleDashboardPreview", () => {
       { currentUserImpl: (...args) => mockCurrentUser(...args), getUserSiteByIdImpl: (...args) => mockGetUserSiteById(...args) },
     );
     expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('name="yr-preview-ready"');
     expect(mockGetUserSiteById).toHaveBeenCalledWith({}, "user-1", "other-site", "pro");
   });
 
@@ -60,6 +61,7 @@ describe("handleDashboardPreview", () => {
     );
     const html = await res.text();
     expect(res.status).toBe(200);
+    expect(html).toContain('<meta name="yr-preview-ready" content="true">');
     expect(html).toContain('class="yr-site viewer-shell"');
     expect(html).toContain("Actual Board");
     expect(html).toContain("--yr-accent:#00ffd1");

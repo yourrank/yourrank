@@ -62,7 +62,8 @@ export async function handleContact(request, env, deps = {}) {
   }
 
   const supportEmail = env.SUPPORT_EMAIL || "contact@yourrank.site";
-  await sendEmailImpl(env, {
+  try {
+    const delivery = await sendEmailImpl(env, {
     to: supportEmail,
     subject: `[YourRank] ${storedSubject} from ${name}`,
     text: `Name: ${name}\nEmail: ${email}\nSubject: ${storedSubject}\n\n${message}`,
@@ -70,9 +71,14 @@ export async function handleContact(request, env, deps = {}) {
 <p><b>Email:</b> ${esc(email)}</p>
 <p><b>Subject:</b> ${esc(storedSubject)}</p>
 <pre style="white-space:pre-wrap">${esc(message)}</pre>`,
-  });
+    });
+    if (delivery?.sent === false) console.warn('[contact] message stored; inbox email notification unavailable');
+  } catch {
+    // Durable receipt already succeeded. Asking for a retry would duplicate the message.
+    console.warn('[contact] message stored; inbox email notification failed');
+  }
 
-  return json({ ok: true, message: "Message received. We'll reply by email." }, 200, rateLimitHeaders(rl));
+  return json({ ok: true, message: "YourRank received your message. Any reply will go to the email you provided." }, 200, rateLimitHeaders(rl));
 }
 
 async function hashIp(ip) {

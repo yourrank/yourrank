@@ -100,7 +100,7 @@ export function onboardingEmail(day: 0 | 3 | 7, user: OnboardingOptions) {
 
   // day === 7
   const subject = "YourRank Pro: custom domain, OBS overlay + free trial";
-  const text = `Hi ${name},\n\nYou've been using YourRank for a week. Pro adds:\n\n- Custom domain\n- Up to 3 sites\n- OBS overlay\n- Up to 1,000 players per site\n\nYou can start a one-time 7-day Pro trial. Recurring checkout is not available yet.\n\n${billing}\n\nYourRank team`;
+  const text = `Hi ${name},\n\nYou've been using YourRank for a week. Pro adds:\n\n- Custom domain\n- Up to 3 sites\n- OBS overlay\n- Up to 1,000 players per site\n\nYou can start a one-time 7-day Pro trial. Check Billing for paid checkout availability.\n\n${billing}\n\nYourRank team`;
   const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
 <h2 style="margin:0 0 12px">Ready to upgrade, ${name}?</h2>
 <p style="color:#555;line-height:1.5">You've been using YourRank for a week. Pro unlocks:</p>
@@ -111,7 +111,7 @@ export function onboardingEmail(day: 0 | 3 | 7, user: OnboardingOptions) {
   <li>Up to 1,000 players per site</li>
 </ul>
 <p style="margin:24px 0"><a href="${billing}" style="background:#5b5bf5;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:600">Start free Pro trial</a></p>
-<p style="color:#999;font-size:13px">Recurring checkout is not available yet. Paid access only starts after verified provider confirmation.</p></div>`;
+<p style="color:#999;font-size:13px">Check Billing for paid checkout availability. Paid access only starts after verified provider confirmation.</p></div>`;
   return { subject, html, text };
 }
 

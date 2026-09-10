@@ -46,6 +46,7 @@ export const CSRF_EXEMPT = new Set([
   "/api/postback",
   "/api/csp-report",
   "/webhooks/kick",
+  "/api/billing/webhook/polar", // Authenticated by Polar's signed raw payload.
   // Unauthenticated auth endpoints: callers do not have a CSRF cookie yet.
   "/api/auth/login",
   "/api/auth/signup",

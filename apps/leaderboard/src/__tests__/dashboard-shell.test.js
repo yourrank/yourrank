@@ -275,7 +275,8 @@ describe("signed-in shell navigation", () => {
     expect(claims).toContain('<span aria-current="page">Claims</span>');
 
     const settings = renderPage(UnifiedSettingsPage);
-    expect(settings).toContain('<a href="/dashboard/settings">Settings</a>');
+    expect(settings).toContain('>Settings</span>');
+    expect(settings).not.toContain('<a href="/dashboard/settings">Settings</a>');
     expect(settings).toContain('<span aria-current="page">Account</span>');
   });
 

@@ -458,7 +458,7 @@ disclosed (a details panel, a secondary tab, an "Advanced" group) rather than pr
 
 ### Typography roles
 
-Six roles, each a token pair. A raw `font-size` in a workspace rule is drift.
+Six standard roles, each a token pair, plus a restrained community identity role on Home. A raw `font-size` in a workspace rule is drift.
 
 | Role | Token | Value | Used for |
 | --- | --- | --- | --- |
@@ -468,6 +468,11 @@ Six roles, each a token pair. A raw `font-size` in a workspace rule is drift.
 | Body | `--ws-type-body-size` / `-leading` | 15 / 22.5px | Interface and explanatory copy |
 | Meta | `--ws-type-meta-size` / `-leading` | 13 / 18px | Supporting state, compact UI text |
 | Label | `--ws-type-label-size` / `-leading` | 11 / 16px | Uppercase mono labels that encode real scope or state |
+| Community identity | `--ws-type-identity-size` | 36px maximum, 1.15 leading | The selected site's real name on Home; scales down to the page-title size |
+
+Home gives the selected community's name and existing logo the focal position. When there is no logo, a name initial provides the same stable space without inventing artwork. The Home H1 uses the meta role as an orientation label. Status remains adjacent; launch readiness is compact and the checklist stays in a disclosure. Templates and schedules in Activities are collapsed for an unused workflow and open initially when saved work exists. These changes preserve the mineral palette and existing YourRank identity.
+
+Rewards keeps the next setup action and claim counts visible; detailed activity metrics start collapsed when the loaded period has no activity and remain available through a disclosure. Connections prioritizes the connection action and groups usage/member-login controls behind a secondary disclosure. Errors remain visible rather than being disguised as empty activity.
 
 Families are `--ws-sans` (Fira Sans) and `--ws-mono` (Fira Code). Numbers and data may take the mono family where it improves
 scanning; mono is never decoration.
@@ -575,6 +580,8 @@ Leaderboard Setup includes independently saved event standings: name, players an
 - **Do** preserve visible focus, semantic status announcements, reduced-motion behavior, and 44px touch targets where practical.
 - **Do** keep creator identity accents separate from scoped viewer and workspace action colors.
 - **Do** preserve the viewer's visible community guide, wrapping mobile navigation, and separate membership records.
+
+Billing uses the owner-supplied pricing-card composition inside the mineral workspace: Free/Pro/Team columns, one recommended Pro border, aligned price/interval/CTA, checkmarked feature lists, and a labelled monthly/annual control. Prices and feature copy come from the shared plan catalog. Usage uses actual capacity meters with explicit account/site scope. Data gives export the primary surface and isolates account deletion. Insights uses a two-column community/rewards and participation composition with current operations spanning beneath it; it stacks with consistent insets on mobile. Expandable secondary panels use a visible surface, border, keyboard focus, and a directional chevron rather than unmarked text. These extend the existing Fira/mineral tokens; they do not create another theme.
 
 ### Don't:
 

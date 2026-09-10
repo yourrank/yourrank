@@ -642,32 +642,7 @@ table.ref-table td{padding:8px 8px;border-bottom:1px solid var(--line);color:var
 .plan-opt--current .plan-opt-btn{color:var(--ink-mute);border-color:var(--line-2);background:transparent;pointer-events:none}
 .plan-opt--disabled{opacity:.5;pointer-events:none}
 
-/* --- dashboard plan picker --- */
-.plan-summary{margin-bottom:14px;padding:12px 14px;border:1px solid var(--line-2);border-radius:10px;background:var(--panel-2)}
-.plan-summary-row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px}
-.plan-summary-row + .plan-summary-row{margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
-.plan-summary-label{color:var(--ink-soft)}
-.plan-summary-value{font-weight:600;color:var(--accent)}
-.plan-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:14px}
-.plan-card{position:relative;display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line-2);border-radius:12px;background:var(--panel-2);transition:border-color .15s,box-shadow .15s}
-.plan-card:hover{border-color:var(--ink-mute)}
-.plan-card--current{border-color:var(--accent);background:var(--panel);box-shadow:0 0 0 1px var(--accent)}
-.plan-card--popular{border-color:var(--accent)}
-.plan-card--popular::before{content:"Most popular";position:absolute;top:-9px;left:12px;background:var(--accent);color:var(--accent-ink);font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:99px}
-.plan-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.plan-card-name{font-weight:700;font-size:15px}
-.plan-card-note{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-top:2px}
-.plan-card-price{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--ink)}
-.plan-card-price span{font-size:12px;font-weight:400;color:var(--ink-mute)}
-.plan-card-features{list-style:none;margin:0;padding:0;font-size:12px;color:var(--ink-soft);flex:1}
-.plan-card-features li{padding:3px 0 3px 16px;position:relative}
-.plan-card-features li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.7}
-.plan-card-cta{margin-top:auto}
-.plan-card-cta:disabled{opacity:.5;cursor:not-allowed;background:transparent;color:var(--ink-mute);border-color:var(--line-2)}
-.plan-trial{margin-top:14px;padding:14px;border:1px dashed var(--line-2);border-radius:10px;background:var(--panel-2)}
-.plan-trial .status{font-size:13px;color:var(--yr-color-danger-text);margin-top:8px;min-height:18px}
-@media(max-width:640px){.plan-grid{grid-template-columns:1fr 1fr}.plan-card-price{font-size:18px}}
-@media(max-width:400px){.plan-grid{grid-template-columns:1fr}}
+
 
 .pw-wrap{position:relative}.pw-wrap input{padding-right:42px}
 .pw-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ink-mute);cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;min-width:var(--tap,44px);min-height:var(--tap,44px)}

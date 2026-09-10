@@ -464,13 +464,26 @@ async function loadAnalytics() {
   try {
     const data = await api("GET", sitePath(`/api/credits/analytics?days=${days}`));
     state.analytics = data; renderAnalytics(); setStatus("cr-analytics-status", "");
-  } catch { setStatus("cr-analytics-status", "Analytics are temporarily unavailable.", true); }
+  } catch {
+    setStatus("cr-analytics-status", "Analytics are temporarily unavailable.", true);
+    const panel = $("cr-overview-metrics");
+    if (panel) panel.open = true;
+    const summary = $("cr-overview-activity-state");
+    if (summary) summary.textContent = "Could not load activity";
+  }
 }
 function renderAnalytics() {
   const a = state.analytics; if (!a) return;
   const s = a.summary || {};
   const hasActivity = (a.topItems || []).length > 0 || (a.creditsByDay || []).length > 0 ||
     [s.periodEarned, s.periodSpent, s.redemptionsTotal, s.redemptionsPending, s.viewerBalance].some((value) => Number(value) > 0);
+  const panel = $("cr-overview-metrics");
+  if (panel && !panel.dataset.initialized) {
+    panel.open = hasActivity;
+    panel.dataset.initialized = "true";
+  }
+  const activitySummary = $("cr-overview-activity-state");
+  if (activitySummary) activitySummary.textContent = hasActivity ? "Credits and claims" : "No credit activity in this period · View metrics";
   if (hasActivity) {
     $("cr-stat-earned").innerHTML = `${s.periodEarned ?? 0} <small class="kpi-sub">All time: ${s.allTimeEarned ?? 0}</small>`;
     $("cr-stat-spent").innerHTML = `${s.periodSpent ?? 0} <small class="kpi-sub">All time: ${s.allTimeSpent ?? 0}</small>`;

@@ -217,7 +217,10 @@ export function dashboardChromeState(id: DashboardRouteId): DashboardChromeState
     section: route.section,
     tab: route.tab || "",
     canonicalPath: route.canonicalPath,
-    crumbs: crumbsFor(route),
+    crumbs: crumbsFor(route).map((crumb) => {
+      const destination = crumb.href ? resolveDashboardLocation(crumb.href) : undefined;
+      return destination?.route.id === route.id ? { label: crumb.label } : crumb;
+    }),
     tabLabel: TAB_LABELS[route.id] || "",
     documentTitle: documentTitleFor(route),
     h1: route.section === "telegram" ? (TAB_LABELS[route.id] as string) : null,

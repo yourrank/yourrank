@@ -43,6 +43,11 @@ const ROUTES = [
 ];
 
 describe("dashboard single-document navigation", () => {
+  it("never gives Insights the heading of the opening editor tab", () => {
+    const html = dashboardHtml("/dashboard/leaderboard/players");
+    expect(html).toContain('<h1 id="perfTitle">Overview</h1>');
+    expect(dashboardHtml("/dashboard/analytics/referrals")).toContain('<h1 id="perfTitle">Traffic sources</h1>');
+  });
   it("ships every section on every dashboard route", () => {
     for (const [path] of ROUTES) {
       const present = sections(dashboardHtml(path)).map((s) => s.page);
@@ -97,6 +102,14 @@ describe("dashboard single-document navigation", () => {
     // naming the section the operator came from.
     expect(shellJs).toContain("function renderCrumbs(page, tab)");
     expect(shellJs).toContain("renderCrumbs(page, scrollHash);");
+  });
+
+  it("closes the mobile drawer for fragment routes and core routes alike", () => {
+    const fragmentChrome = shellJs.slice(shellJs.indexOf("export function syncRouteChrome"), shellJs.indexOf("export async function requestDashboardRoute"));
+    const coreChrome = shellJs.slice(shellJs.indexOf("export function navTo"), shellJs.indexOf("export function scrollToHash"));
+    expect(fragmentChrome).toContain("closeDashboardDrawer();");
+    expect(coreChrome).toContain("closeDashboardDrawer();");
+    expect(shellJs).toContain('new CustomEvent("yr:dashboard-drawer-close", { detail: { returnFocus: false } })');
   });
 
   it("keeps browser back and forward inside the app", () => {

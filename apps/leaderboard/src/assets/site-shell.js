@@ -678,6 +678,7 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var btn = form.querySelector('button[type="submit"]');
+      if (btn.disabled) return;
       var message = form.message.value.trim();
       if (message.length < 10) {
         if (statusEl) statusEl.textContent = "Please write at least 10 characters.";
@@ -687,6 +688,7 @@
       btn.textContent = "Sending…";
       fetch("/api/feedback", {
         method: "POST",
+        signal: AbortSignal.timeout(10000),
         credentials: "same-origin",
         headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
         body: JSON.stringify({ slug: form.slug.value, message: message }),
@@ -694,9 +696,8 @@
         .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
         .then(function (r) {
           if (r.ok && r.data.ok) {
-            if (statusEl) statusEl.textContent = "Thanks — your feedback was sent.";
-            form.message.value = "";
-            setTimeout(function () { dialog.close(); }, 1200);
+            if (statusEl) statusEl.textContent = "Your feedback was sent to the site owner.";
+            if (form.message.value.trim() === message) form.message.value = "";
           } else {
             if (statusEl) statusEl.textContent = r.data.error || "Could not send feedback. Try again.";
           }
@@ -704,7 +705,7 @@
           btn.textContent = "Send";
         })
         .catch(function () {
-          if (statusEl) statusEl.textContent = "Network error. Please try again.";
+          if (statusEl) statusEl.textContent = "Could not confirm delivery. Your message is still here; check your connection before trying again.";
           btn.disabled = false;
           btn.textContent = "Send";
         });

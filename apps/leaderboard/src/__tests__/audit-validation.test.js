@@ -58,7 +58,7 @@ mock.module(dbUrlTs, () => ({ ...realDb, ...dbMock() }));
 mock.module(sessUrl, sessMock);
 mock.module(sessUrlTs, sessMock);
 
-const { handleBillingUnavailable } = await import("../billing.js");
+const { handlePolarCheckout } = await import("../handlers/polar-billing.js");
 // NOTE: this file relies on mock isolation — it must be run in its own
 // process (scripts/test.mjs runs each leaderboard test file individually for
 // exactly this reason). Running `bun test` over the whole directory lets
@@ -81,27 +81,27 @@ function checkoutReq(plan) {
   return new Request("https://test.com/api/billing/checkout", {
     method: "POST",
     headers: { cookie: "yr_session=tok", "content-type": "application/json" },
-    body: JSON.stringify({ plan }),
+    body: JSON.stringify({ plan, interval: "monthly" }),
   });
 }
 
-describe("retired checkout endpoint", () => {
+describe("unconfigured checkout endpoint", () => {
   beforeEach(() => { mockOne.mockReset(); mockQuery.mockReset(); mockExec.mockReset(); });
 
   it("does not process a browser-selected plan while the provider is unavailable", async () => {
     mockOne.mockResolvedValue(USER_ROW); // currentUser → loadUser
-    const res = await handleBillingUnavailable(checkoutReq("team"), mockEnv());
+    const res = await handlePolarCheckout(checkoutReq("team"), mockEnv());
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/not available yet/i);
+    expect(body.error).toMatch(/coming soon/i);
     expect(mockExec.mock.calls.some(([sql]) => String(sql).includes("UPDATE users") || String(sql).includes("INSERT INTO payments"))).toBe(false);
   });
 
   it("does not grant a removed or unknown tier", async () => {
     mockOne.mockResolvedValue(USER_ROW);
-    const res = await handleBillingUnavailable(checkoutReq("lifetime"), mockEnv());
-    expect(res.status).toBe(503);
+    const res = await handlePolarCheckout(checkoutReq("lifetime"), mockEnv());
+    expect(res.status).toBe(400);
     expect(mockExec.mock.calls.some(([sql]) => String(sql).includes("UPDATE users") || String(sql).includes("INSERT INTO payments"))).toBe(false);
   });
 });

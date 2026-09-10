@@ -337,7 +337,8 @@ describe("new-shell auxiliary renderers", () => {
     // Three jobs: community context, home introduction, and copyright.
     // The visible responsive rail no longer duplicates identity in a drawer.
     expect((visible.match(/Demo Board/g) || []).length).toBe(3);
-    expect(html).toContain("Tell us what works and what doesn't.");
+    expect(html).toContain("Send a suggestion to this site's owner.");
+    expect(html).toContain("There is no personal reply here.");
     expect(html).not.toContain("Tell Demo Board what works");
   });
 });

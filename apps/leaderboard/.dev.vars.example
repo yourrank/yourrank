@@ -8,6 +8,17 @@ CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://postgres:p
 # Fallback if Hyperdrive is removed or not bound:
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/yourrank
 
+# Polar: fill locally; see docs/POLAR_BILLING_SETUP.md. Never commit real secrets.
+POLAR_SERVER=sandbox
+POLAR_ORGANIZATION_ID=
+POLAR_ACCESS_TOKEN=
+POLAR_WEBHOOK_SECRET=
+POLAR_PRODUCT_PRO_MONTHLY=
+POLAR_PRODUCT_PRO_ANNUAL=
+POLAR_PRODUCT_TEAM_MONTHLY=
+POLAR_PRODUCT_TEAM_ANNUAL=
+PUBLIC_BASE_URL=http://localhost:8791
+
 # Optional secrets (leave blank to disable the feature):
 NOWPAYMENTS_API_KEY=
 NOWPAYMENTS_IPN_SECRET=

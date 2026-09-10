@@ -47,7 +47,7 @@ import {
 } from "./handlers/account.js";
 import { handleInsights } from "./handlers/insights.js";
 import { handleContact } from "./handlers/contact.js";
-import { handleFeedback } from "./handlers/feedback.js";
+import { handleFeedback, handleSiteFeedback } from "./handlers/feedback.js";
 import { handleCspReport } from "./handlers/csp-report.js";
 import { handleLog } from "./handlers/log.js";
 import { handleScores } from "./handlers/scores.js";
@@ -199,7 +199,8 @@ import {
   handleViewerExportDownload,
 } from "./handlers/viewer-export.js";
 import { handleApiDocs, handleOpenApiJson } from "./handlers/docs.js";
-import { handleBillingUnavailable, handleUserPayments, handleAccountUsage } from "./billing.js";
+import { handleUserPayments, handleAccountUsage } from "./billing.js";
+import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook } from "./handlers/polar-billing.js";
 import {
   handleOverview, handleUsers, handleLeads, handlePayments, handleAction,
   handleSupportMessages, handleSupportReply, handleAudit,
@@ -285,6 +286,8 @@ export const ROUTES = [
   { path: "/api/lead", method: "POST", handler: withHandler(handleLead) },
   { path: "/api/contact", method: "POST", handler: withHandler(handleContact) },
   { path: "/api/feedback", method: "POST", handler: withHandler(handleFeedback) },
+  { path: "/api/site/feedback", method: "GET", handler: withHandler(handleSiteFeedback) },
+  { path: "/api/site/feedback", method: "PATCH", handler: withHandler(handleSiteFeedback) },
   { path: "/api/track/copy", method: "POST", handler: withHandler(handleTrackCopy) },
   { path: "/api/track/scroll", method: "POST", handler: withHandler(handleTrackScroll) },
   { path: "/api/scores", method: "POST", handler: withHandler(handleScores) },
@@ -449,7 +452,9 @@ export const ROUTES = [
   { path: "/api/referrals", method: "GET", handler: withHandler(handleReferrals) },
 
   // Billing routes
-  { path: "/api/billing/checkout", method: "POST", handler: withHandler(handleBillingUnavailable) },
+  { path: "/api/billing/checkout", method: "POST", handler: withHandler(handlePolarCheckout) },
+  { path: "/api/billing/portal", method: "POST", handler: withHandler(handlePolarPortal) },
+  { path: "/api/billing/webhook/polar", method: "POST", handler: withHandler(handlePolarWebhook) },
   { path: "/api/billing/trial", method: "POST", handler: withHandler(handleTrial) },
   { path: "/api/account/payments", method: "GET", handler: withHandler(handleUserPayments) },
   { path: "/api/account/usage", method: "GET", handler: withHandler(handleAccountUsage) },

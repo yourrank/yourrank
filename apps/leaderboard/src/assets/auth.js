@@ -154,7 +154,7 @@ if (mode === "signup" && PLAN_NAMES[planParam]) {
   if (banner) {
     banner.hidden = false;
     const isPaid = planParam !== "free";
-    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? " Recurring checkout is not available yet; creating an account does not activate or charge for this plan." : " You can review plan limits anytime from the dashboard."}`;
+    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? " Review availability and complete payment from Billing after signing in. Creating an account does not activate or charge for this plan." : " You can review plan limits anytime from the dashboard."}`;
   }
 }
 if (mode === "login" || mode === "signup") {

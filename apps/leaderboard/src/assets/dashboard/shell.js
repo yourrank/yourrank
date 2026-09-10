@@ -4,10 +4,9 @@
 // between in-place tab rendering, SPA section switches, dynamic fragment
 // loads and full document (cross-worker) navigation, and it alone mutates
 // history for dashboard routes.
-import { $ } from "./utils.js";
-import { clearDirty, state, subscribe } from "./state.js";
+import { state } from "./state.js";
 import { renderOverviewSummary } from "./overview.js";
-import { fitDesignPreview, loadStats, refreshDesignPreview } from "./site.js";
+import { discardEditorChanges, fitDesignPreview, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
 import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
 import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
@@ -67,34 +66,34 @@ async function chooseDirtyAction() {
   });
 }
 
-function saveDraftBeforeNavigation() {
-  return new Promise((resolve) => {
-    if (!state._dirty) { resolve(true); return; }
-    let done = false;
-    const finish = (ok) => {
-      if (done) return;
-      done = true;
-      unsubscribe?.();
-      clearTimeout(timer);
-      resolve(ok);
-    };
-    const unsubscribe = subscribe((keys) => {
-      if (keys.includes("_dirty") && !state._dirty) finish(true);
-    });
-    const timer = setTimeout(() => finish(false), 15000);
-    const save = $("save");
-    if (!save || save.disabled) { finish(false); return; }
-    save.click();
-  });
-}
-
 async function allowNavigation() {
   for (const guard of navigationGuards.values()) { if (!await guard()) return false; }
   if (!state._dirty) return true;
   const action = await chooseDirtyAction();
-  if (action === "discard") { clearDirty(); return true; }
-  if (action === "save") return saveDraftBeforeNavigation();
+  if (action === "discard") return "discard";
+  // Validation and request failures settle the save immediately. Watching the
+  // dirty flag instead left all navigation locked after a failed save.
+  if (action === "save") return saveEditorDraft();
   return false;
+}
+
+/** Provider checkout leaves the workspace through the same unsaved-work guard. */
+export async function requestBillingRedirect(url) {
+  const target = new URL(url);
+  if (target.protocol !== "https:" || target.username || target.password || !["polar.sh", "sandbox.polar.sh"].includes(target.host)) {
+    throw new Error("Invalid billing destination.");
+  }
+  if (navigationPending) return false;
+  navigationPending = true;
+  try {
+    const permission = await allowNavigation();
+    if (!permission) return false;
+    if (permission === "discard") discardEditorChanges({ reload: () => location.assign(target.href) });
+    else location.assign(target.href);
+    return true;
+  } finally {
+    navigationPending = false;
+  }
 }
 
 
@@ -135,6 +134,7 @@ function routeCrumbs(page, tab) {
 }
 
 export function syncRouteChrome(page, tab = "") {
+  closeDashboardDrawer();
   const resolvedTab = tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page));
   const chrome = chromeStateFor(page, resolvedTab, { exact: true });
   setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
@@ -150,10 +150,17 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
   const sameUrl = destination === location.pathname + location.search;
   // Same URL is a no-op unless the caller explicitly asks to re-run it (e.g.
   // re-opening the reward edit form for another id via ?edit=).
-  if (sameUrl && !force) return true;
+  if (sameUrl && !force) { closeDashboardDrawer(); return true; }
   navigationPending = true;
   try {
-    if (!await allowNavigation()) return false;
+    const permission = await allowNavigation();
+    if (!permission) return false;
+    if (permission === "discard") {
+      // Discard resets every field, including fields mounted in hidden sections.
+      // Re-enter the requested document from saved data, just like editor Discard.
+      discardEditorChanges({ reload: () => { location.href = destination; } });
+      return true;
+    }
 
     // In-place tab switch: the destination section is already rendered and
     // owns a registered renderer (analytics tabs, settings panels). The
@@ -208,6 +215,10 @@ export async function requestDashboardRoute(page, tab = "", { replace = false, q
     navigationPending = false;
   }
 }
+function closeDashboardDrawer() {
+  document.dispatchEvent(new CustomEvent("yr:dashboard-drawer-close", { detail: { returnFocus: false } }));
+}
+
 function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -244,12 +255,13 @@ function renderCrumbs(page, tab) {
     existing?.remove();
     return;
   }
-  const head = crumbs[0];
-  const leaf = crumbs[crumbs.length - 1];
   const nav = existing || document.createElement("nav");
   nav.className = "v3-crumbs";
   nav.setAttribute("aria-label", "Breadcrumb");
-  nav.innerHTML = `<a href="${head.href}">${head.label}</a><span class="v3-crumb-sep" aria-hidden="true">/</span><span aria-current="page">${leaf.label}</span>`;
+  nav.innerHTML = crumbs.map((crumb, index) => crumb.href
+    ? `<a href="${crumb.href}">${crumb.label}</a>`
+    : `<span${index === crumbs.length - 1 ? ' aria-current="page"' : ""}>${crumb.label}</span>`
+  ).join('<span class="v3-crumb-sep" aria-hidden="true">/</span>');
   if (!existing) bento.prepend(nav);
 }
 
@@ -270,14 +282,14 @@ export function navTo(page, hash = "") {
   document.querySelectorAll(".lb-page").forEach((p) => p.classList.toggle("is-on", p.dataset.page === page));
   // shell-nav.js owns drawer state. This request lets navigation close it
   // without duplicating drawer behavior in the SPA runtime.
-  document.dispatchEvent(new CustomEvent("yr:dashboard-drawer-close", { detail: { returnFocus: false } }));
+  closeDashboardDrawer();
   renderCrumbs(page, scrollHash);
   if (page === "home") renderOverviewSummary();
   if (page === "home" || page === "performance") loadStats();
   // Re-render and re-fit the live preview whenever the Editor becomes visible
   // (updateDesignPreview() no-ops while the section is hidden, so navigating in
   // has to ask for it again).
-  if (page === "board") setTimeout(refreshDesignPreview, 0);
+  if (page === "board" || page === "site") setTimeout(refreshDesignPreview, 0);
   document.title = dashboardTitle({ page, tab: scrollHash });
 
   // Sync editor sub-tabs when navigating directly to a sub-group.
@@ -286,7 +298,8 @@ export function navTo(page, hash = "") {
     if (tabs && tabs._show) tabs._show(scrollHash);
   }
 
-  scrollToHash(scrollHash);
+  // A settings tab is a route, not an anchor: keep its heading and tabs visible.
+  scrollToHash(page === "site" ? location.hash.slice(1) : scrollHash);
 }
 
 export function scrollToHash(hash) {
@@ -414,8 +427,13 @@ export function setupShell() {
     if (state._dirty || navigationGuards.size) {
       navigationPending = true;
       try {
-        if (!await allowNavigation()) {
+        const permission = await allowNavigation();
+        if (!permission) {
           history.pushState(history.state || {}, "", lastRouteUrl);
+          return;
+        }
+        if (permission === "discard") {
+          discardEditorChanges();
           return;
         }
       } finally {
