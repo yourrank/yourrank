@@ -25,7 +25,7 @@
   "dependencies": {
     "@preact/signals": "2.10.1",
     "@yourrank/shared": "workspace:*",
-    "hono": "^4.13.0",
+    "hono": "^4.13.5",
     "postgres": "^3.4.9",
     "preact": "10.29.7",
     "toucan-js": "^4.0.0",
