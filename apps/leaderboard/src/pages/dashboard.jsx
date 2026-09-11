@@ -34,7 +34,7 @@ export const BOARD_TABS = DASHBOARD_SECTIONS.board.tabs.map((tab) => [
 ]);
 
 function LeaderboardTabs({ active }) {
-  return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="Leaderboard pages">
+  return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="My board sections">
     {BOARD_TABS.map(([key, label, href]) => (
       <a class={"editor-step v3-tab" + (key === active ? " is-active is-on" : "")} href={href} data-egroup={key} aria-current={key === active ? "page" : undefined}>{label}</a>
     ))}
@@ -115,7 +115,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this event on the public site</label>
 <div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save event</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete event</button></div>
 <p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form></section>
-<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><a href="/dashboard/site" id="setupBrandLink">Edit site identity</a></aside>
+<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><a href="/dashboard/site" id="setupBrandLink">Edit site identity</a></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="score">Points / score</option><option value="wagered">Amount</option></select><span class="hint">Players with the same value share a rank.</span></div>
 <div class="field"><label for="f_pool">Award or prize pool (optional)</label><input id="f_pool" placeholder="Optional" /></div>
@@ -317,7 +317,7 @@ function AnalyticsSection({ active, activeHash = "activity" } = {}) {
 <div class="v3-analytics-page">
   <header class="v3-head"><h1 id="perfTitle">{chromeStateFor("performance", activeHash, { exact: true })?.tabLabel || chromeStateFor("performance", "activity").tabLabel}</h1><p class="v3-head-sub">Community growth, participation and rewards.</p></header>
   <div class="v3-analytics-scope"><span id="perfScope"><b id="perfBoardName">Active site</b><span aria-hidden="true"> · </span><span id="perfSelectedRange" hidden={activeHash === "referrals"}>Last <span id="perfRangeLabel">30</span> days · UTC</span><span id="perfSourcesRange" hidden={activeHash !== "referrals"}>Last 30 days · UTC</span></span><div id="perfRangeFilter" class="v3-range-filter" role="group" aria-label="Date range" hidden={activeHash === "referrals"}><button class="v3-range-btn" type="button" data-range="7">7 days</button><button class="v3-range-btn is-active" type="button" data-range="30">30 days</button></div></div>
-  <nav class="v3-tabs" aria-label="Insights pages">
+  <nav class="v3-tabs" aria-label="Stats pages">
     <a class={"v3-tab" + (activeHash === "activity" ? " is-on" : "")} href="/dashboard/analytics/activity" data-perf-tab="activity" aria-current={activeHash === "activity" ? "page" : undefined}>Overview</a>
     <a class={"v3-tab" + (activeHash === "referrals" ? " is-on" : "")} href="/dashboard/analytics/referrals" data-perf-tab="referrals" aria-current={activeHash === "referrals" ? "page" : undefined}>Traffic sources</a>
     <a class={"v3-tab" + (activeHash === "events" ? " is-on" : "")} href="/dashboard/analytics/events" data-perf-tab="events" aria-current={activeHash === "events" ? "page" : undefined}>Public site activity</a>
@@ -356,7 +356,7 @@ function BoardSettingsSection({ active } = {}) {
 <div class="v3-settings">
   <header class="v3-head v3-head--row">
     <div>
-      <h1>Site</h1>
+      <h1>Site pages</h1>
       <p class="v3-head-sub" id="settingsSubline">Manage the public identity and pages viewers see for the selected site. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
     </div>
     <a class="btn btn--sm" id="sitePublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public site ↗</a>
@@ -565,7 +565,7 @@ function BoardSettingsSection({ active } = {}) {
 function BoardsSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="boards">
- <header class="v3-head v3-head--row"><div><h1>Sites</h1><p class="v3-head-sub">Manage the public sites in your account and choose which one you are working on.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create a site">Create site</button></header>
+ <header class="v3-head v3-head--row"><div><h1>All sites</h1><p class="v3-head-sub">Manage the public sites in your account and choose which one you are working on.</p></div><button class="btn btn--sm btn--accent" id="newBoard" type="button" title="Create a site">Create site</button></header>
  <div class="board-upsell" id="boardLimitUpsell" role="status" hidden><div><b id="boardLimitTitle">Need another site?</b><p class="hint" id="boardLimitText"></p></div><a class="btn btn--sm btn--accent" id="boardLimitCta" href="/dashboard/settings">Upgrade plan</a></div>
  <div class="lb-board-form" id="newBoardForm" hidden><div class="field field-flex"><label for="nb_name">Site name</label><input id="nb_name" placeholder="Summer Race 2026" aria-describedby="nb_err" /></div><div class="field field-flex"><label for="nb_slug">Public link</label><input id="nb_slug" placeholder="summer-race-2026" aria-describedby="nb_err" /><span class="hint">We’ll create yourrank.site/this-link.</span></div><details class="editor-more lb-board-form-more"><summary>Optional sponsor details</summary><div class="grid2"><div class="field field-flex"><label for="nb_casino">Partner or sponsor</label><input id="nb_casino" placeholder="Your brand or sponsor" /></div><div class="field field-flex"><label for="nb_code">Promo code</label><input id="nb_code" placeholder="Optional" /></div></div></details><div class="lb-board-form-actions"><button class="btn btn--sm btn--accent" id="nb_create" type="button">Create site</button><button class="btn btn--sm btn--ghost" id="nb_cancel" type="button">Cancel</button><div class="hint w-full" id="nb_err" role="alert" aria-live="assertive"></div></div></div>
  <div class="sites-list">
@@ -630,8 +630,8 @@ export function DashboardNotFoundContent({ user } = {}) {
           <h2>Try one of these destinations</h2>
           <nav class="v3-tabs" aria-label="Dashboard destinations">
             <a class="v3-tab is-on" href="/dashboard">Home</a>
-            <a class="v3-tab" href="/dashboard/leaderboard/setup">Leaderboard</a>
-            <a class="v3-tab" href="/dashboard/leaderboards">Sites</a>
+            <a class="v3-tab" href="/dashboard/leaderboard/setup">My board</a>
+            <a class="v3-tab" href="/dashboard/leaderboards">All sites</a>
             <a class="v3-tab" href="/dashboard/settings/account">Account</a>
           </nav>
         </div>

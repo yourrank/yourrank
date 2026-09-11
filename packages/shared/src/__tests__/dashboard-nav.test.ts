@@ -44,13 +44,10 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     // Behavior pin: the exact hrefs shipped before the derivation.
     expect(Object.fromEntries(flatten(dashboardNavItems()).map((i) => [i.key, i.href]))).toEqual({
       home: routeById("home").canonicalPath,
-      sites: routeById("boards").canonicalPath,
       board: routeById("board").canonicalPath,
-      activities: routeById("activities.overview").canonicalPath,
-      redemptions: routeById("rewards.overview").canonicalPath,
       audience: routeById("audience.viewers").canonicalPath,
+      engage: routeById("activities.overview").canonicalPath,
       performance: routeById("performance").canonicalPath,
-      site: routeById("site").canonicalPath,
       telegram: routeById("telegram").canonicalPath,
       settings: "/dashboard/settings",
     });
@@ -61,26 +58,26 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     for (const [key, owner] of Object.entries(NAV_OWNER_MAP)) {
       expect(navKeys.has(owner), `${key} → ${owner}`).toBe(true);
     }
-    // Route ownership remains available for direct legacy URLs even though
-    // those owners are intentionally absent from the rendered primary rail.
+    // Route ownership remains available for direct legacy URLs even where an
+    // owner is intentionally absent from the rendered primary rail (games).
     expect(NAV_OWNER_MAP).toEqual({
       board: "board", leaderboard: "board",
-      activities: "activities",
+      activities: "engage",
       engage: "engage", giveaways: "engage", raffles: "engage",
       predictions: "engage", drops: "engage", tournaments: "engage",
       games: "games",
       activity: "performance", referrals: "performance", performance: "performance",
-      redemptions: "redemptions", overview: "redemptions", shop: "redemptions",
-      rules: "redemptions", rewards: "redemptions", history: "redemptions",
-      channel: "site", siteConnections: "site",
+      redemptions: "engage", overview: "engage", shop: "engage",
+      rules: "engage", rewards: "engage", history: "engage",
+      channel: "board", siteConnections: "board",
       members: "audience", reviews: "audience", audience: "audience", viewers: "audience",
-      boards: "sites",
-      site: "site",
+      boards: "board",
+      site: "board",
       settings: "settings", account: "settings", team: "settings",
       plan: "settings", connections: "settings", data: "settings",
       integrations: "settings", billing: "settings",
     });
-    expect(navOwner("channel")).toBe("site");
+    expect(navOwner("channel")).toBe("board");
     expect(navOwner("unknown-name")).toBe("unknown-name");
     expect(navOwner(null)).toBe("home");
   });

@@ -14,7 +14,7 @@ function installShellGlobals() {
     querySelector: () => null,
     prepend(node) { this.crumb = node; },
   };
-  const rail = ["settings", "redemptions"].map((nav) => ({
+  const rail = ["settings", "engage"].map((nav) => ({
     dataset: { nav },
     classList: { values: new Set(), toggle(name, on) { if (on) this.values.add(name); else this.values.delete(name); } },
     setAttribute() {},

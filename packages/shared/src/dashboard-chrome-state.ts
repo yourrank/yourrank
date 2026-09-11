@@ -64,16 +64,16 @@ export const DEFAULT_DASHBOARD_TITLE = "Dashboard · YourRank";
 /** Section display titles (crumb heads + document-title section wording). */
 export const DASHBOARD_SECTION_TITLES = {
   home: "Home",
-  board: "Leaderboard",
-  boards: "Sites",
+  board: "My board",
+  boards: "All sites",
   games: "Games",
-  performance: "Insights",
-  site: "Site",
-  activities: "Activities",
+  performance: "Stats",
+  site: "Site pages",
+  activities: "Engage",
   rewards: "Rewards",
-  siteConnections: "Site",
-  giveaways: "Engagement",
-  audience: "People",
+  siteConnections: "Site pages",
+  giveaways: "Engage",
+  audience: "Members",
   settings: "Settings",
   telegram: "Telegram",
 } as const satisfies Readonly<Record<string, string>>;
@@ -190,7 +190,9 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
   }
   const head = sectionCrumbHead(route.section);
   const leaf = crumbLabel(route);
-  if (!head || !leaf) return head ? [head] : [];
+  // A leaf that repeats the head (e.g. the Members tab inside Members)
+  // collapses into the single-entry trail, which renders no crumb.
+  if (!head || !leaf || leaf === head.label) return head ? [head] : [];
   return [head, { label: leaf }];
 }
 
@@ -200,7 +202,8 @@ function documentTitleFor(route: DashboardRouteDef): string {
     return `${sectionTitle} · YourRank`;
   }
   if (TAB_TITLED_SECTIONS.has(route.section)) {
-    return `${TAB_LABELS[route.id]} · ${sectionTitle} · YourRank`;
+    const tab = TAB_LABELS[route.id];
+    return `${tab === sectionTitle ? "" : `${tab} · `}${sectionTitle} · YourRank`;
   }
   // Core SPA sections: the tab appears in the title only when the route
   // addresses one (section roots are titled at the section level).

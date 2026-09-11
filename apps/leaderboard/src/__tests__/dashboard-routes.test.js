@@ -14,10 +14,9 @@ describe("dashboard routes", () => {
   });
 
   it("resolves the Sites rail key to the boards listing, not Home", () => {
-    // The "Sites" nav item is keyed `sites` (its nav-owner name) but addresses
-    // the `boards` section. If `sites` does not alias to `boards`, the sidebar
-    // click handler resolves it to "" and dashboardPath falls back to
-    // /dashboard — so clicking Sites reboots to Home instead of the listing.
+    // The legacy `sites` nav-owner spelling still addresses the `boards`
+    // section (site management moved into the My board workspace, but direct
+    // /dashboard/leaderboards links keep working).
     expect(resolveSection("sites")).toBe("boards");
     expect(dashboardPath("sites")).toBe("/dashboard/leaderboards");
     expect(parseDashboardPath("/dashboard/leaderboards")).toEqual({ page: "boards", tab: "" });
@@ -43,8 +42,8 @@ describe("dashboard routes", () => {
 
   it("derives document titles from the canonical route table", () => {
     expect(dashboardTitleForPath("/dashboard")).toBe("Home · YourRank");
-    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Players · Leaderboard · YourRank");
-    expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · Leaderboard · YourRank");
+    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Players · My board · YourRank");
+    expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · My board · YourRank");
     expect(dashboardTitleForPath("/dashboard/games")).toBe("Games · YourRank");
   });
 

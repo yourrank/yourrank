@@ -21,7 +21,7 @@ const customize = html.slice(
 
 describe("markup: Site answers what viewers see", () => {
   it("titles the section for the public site and offers the real thing", () => {
-    expect(html).toContain("<h1>Site</h1>");
+    expect(html).toContain("<h1>Site pages</h1>");
     expect(html).toContain("Manage the public identity and pages viewers see for the selected site.");
     expect(html).toContain('data-settings-tab="customize">Public site</button>');
     expect(html).toMatch(/id="sitePublicSiteAction"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);

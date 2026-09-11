@@ -51,11 +51,11 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
 }
 
 describe("manifest: site settings delivery identity", () => {
-  it("declares /dashboard/site as an spa-section owned by the site rail key", () => {
+  it("declares /dashboard/site as an spa-section owned by the My board rail key", () => {
     const site = routeById("site");
     expect(site.canonicalPath).toBe("/dashboard/site");
     expect(site.delivery).toBe("spa-section");
-    expect(site.navKey).toBe("site");
+    expect(site.navKey).toBe("board");
   });
 
   it("keeps Connections a separate fragment route, not a second Site settings delivery", () => {
@@ -113,7 +113,7 @@ describe("client: site settings is a core SPA section, not a second delivery pat
   it("computes site settings chrome from the canonical chrome-state owner", () => {
     const chrome = chromeStateFor("site");
     expect(chrome.canonicalPath).toBe("/dashboard/site");
-    expect(chrome.navKey).toBe("site");
+    expect(chrome.navKey).toBe("board");
     expect(chrome.documentTitle).toContain("Site");
   });
 });
@@ -124,7 +124,7 @@ describe("markup: one Site settings body", () => {
     const html = DashboardContent({ user, activePath: "/dashboard/site" }).toString();
     expect(html.match(/data-page="site"/g)).toHaveLength(1);
     expect(html).toContain('<section class="lb-page is-on" data-page="site">');
-    expect(html.match(/<h1>Site<\/h1>/g)).toHaveLength(1);
+    expect(html.match(/<h1>Site pages<\/h1>/g)).toHaveLength(1);
     expect(html.match(/id="settingsSubline"/g)).toHaveLength(1);
 
     const homeHtml = DashboardContent({ user, activePath: "/dashboard" }).toString();
