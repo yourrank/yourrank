@@ -35,7 +35,7 @@ export function initQuickActions() {
       player: `/dashboard/leaderboard/players${sid ? `?board=${encodeURIComponent(sid)}` : ""}`,
       drop: `/dashboard/activities${sid ? `?siteId=${encodeURIComponent(sid)}` : ""}`,
       reward: `/dashboard/rewards/shop?new=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`,
-      invite: "/dashboard/settings/team?invite=1",
+      invite: `/dashboard/settings/team?invite=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`,
     };
     menu.querySelectorAll("a[data-new]").forEach((a) => { a.href = dest[a.dataset.new] || "#"; });
   };
