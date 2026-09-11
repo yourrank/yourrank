@@ -83,7 +83,8 @@ describe("Account settings creator UX", () => {
     const html = UnifiedSettingsPage({ fragment: true, tab: "team" }).toString();
     expect(html).toContain('id="teamSeatUsage"');
     expect(html).toContain('id="teamUpgradeLink"');
-    expect(html).toContain("Owner and Moderator permissions");
+    expect(html).toContain("<summary>Compare roles</summary>");
+    expect(html).toContain('class="team-role-compare"');
     expect(html).not.toContain('id="inviteRole"');
     expect(html).not.toContain(">Manager<");
     expect(accountJs).toContain('role: "moderator"');

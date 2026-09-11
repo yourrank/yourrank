@@ -248,11 +248,51 @@ export function renderPlan() {
   const planNames = { free: "Free", pro: "Pro", team: "Team" };
   const currentName = planNames[plan] || plan;
   const expiry = state.ME.planExpiresAt;
-  const until = expiry && Number(expiry) > 0 ? `Active until ${new Date(Number(expiry)).toLocaleDateString()}` : "";
+  const expiresMs = expiry && Number(expiry) > 0 ? Number(expiry) : null;
+  const expiryDate = expiresMs ? new Date(expiresMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+  const subStatus = String(state.ME.subscriptionStatus || "").toLowerCase();
+  const hasSubscription = Boolean(billingInfo?.hasSubscription);
+  const planExpired = expiresMs != null && expiresMs <= Date.now();
+
+  // Status chip + date line, instead of a bare "Active until …" string.
+  let chipLabel = null, chipClass = "v3-chip--fulfilled", dateLine = "";
+  if (plan === "free") {
+    chipLabel = "Free";
+    chipClass = "";
+    dateLine = "No paid features. Upgrade to add capacity.";
+  } else if (isTrial) {
+    chipLabel = "Trial";
+    chipClass = "v3-chip--pending";
+    dateLine = expiryDate ? `Trial ends ${expiryDate}.` : "";
+  } else if (subStatus === "canceled" || subStatus === "cancelled") {
+    chipLabel = "Cancels";
+    chipClass = "v3-chip--pending";
+    dateLine = expiryDate ? `Access ends ${expiryDate}.` : "";
+  } else if (subStatus === "past_due") {
+    chipLabel = "Past due";
+    chipClass = "v3-chip--cancelled";
+    dateLine = "A payment failed — update billing in the portal to keep access.";
+  } else if (planExpired) {
+    chipLabel = "Expired";
+    chipClass = "v3-chip--cancelled";
+    dateLine = expiryDate ? `Ended ${expiryDate}.` : "";
+  } else if (plan !== "free") {
+    chipLabel = "Active";
+    dateLine = expiryDate
+      ? (hasSubscription ? `Renews ${expiryDate}.` : `Access until ${expiryDate}.`)
+      : "";
+  }
 
   const summary = $("planSummary");
   if (summary) {
-    summary.innerHTML = `<div class="plan-summary-row"><span class="plan-summary-label">Current plan</span><span class="plan-summary-value">${esc(currentName)}${isTrial ? " (Trial)" : ""}</span></div>${until ? `<div class="plan-summary-row"><span class="plan-summary-label">Expires</span><span class="plan-summary-value">${esc(until)}</span></div>` : ""}`;
+    summary.innerHTML = `
+      <div class="plan-status">
+        <div class="plan-status-head">
+          <span class="plan-status-name">${esc(currentName)}</span>
+          ${chipLabel ? `<span class="v3-chip ${chipClass}">${esc(chipLabel)}</span>` : ""}
+        </div>
+        ${dateLine ? `<p class="plan-status-meta">${esc(dateLine)}</p>` : ""}
+      </div>`;
   }
 
   const banner = $("planBanner");
@@ -2062,7 +2102,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   const savingRevision = state.DRAFT_REVISION;
   for (const other of saveButtons()) other.disabled = true;
   setSaveStatusText("Saving your changes…");
-  btn.disabled = true; btn.textContent = "Saving…";
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
   if (status) { status.textContent = ""; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); }
   if (publishAction) { publishAction.disabled = true; publishAction.setAttribute("aria-busy", "true"); }
   const limitEl = $("limitMsg"); if (limitEl) limitEl.textContent = "";
@@ -2149,7 +2189,7 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   }
   _saving = false;
   for (const other of saveButtons()) other.disabled = false;
-  btn.disabled = false; btn.textContent = "Save changes";
+  if (btn) { btn.disabled = false; btn.textContent = "Save changes"; }
   // A clean draft has nothing to save, so the settings save button goes quiet
   // again instead of inviting a second identical request.
   const settingsSave = $("settingsSave");

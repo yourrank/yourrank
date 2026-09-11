@@ -361,8 +361,14 @@ async function init() {
       }
     }
   });
-  $("dash").addEventListener("input", markDirty);
-  $("dash").addEventListener("change", markDirty);
+  // Only edits inside the static site-editor sections flag unsaved work.
+  // #lbDynamic fragments (Members, Rewards, …) and the shell chrome (site
+  // switcher, rail controls) own their persistence separately — a member
+  // selection checkbox or list filter must not trip the unsaved-changes guard.
+  const DIRTY_EXEMPT = "#lbDynamic, .lb-topbar, .lb-side, [data-no-dirty]";
+  const markEditorDirty = (e) => { if (!e.target?.closest?.(DIRTY_EXEMPT)) markDirty(); };
+  $("dash").addEventListener("input", markEditorDirty);
+  $("dash").addEventListener("change", markEditorDirty);
 
   // Keyboard shortcut system (Hook at dashboard mount)
   document.addEventListener("keydown", (e) => {

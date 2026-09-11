@@ -33,8 +33,8 @@ export function deriveKickConnectionHealth({
   if (missingAuthorization) {
     return {
       status: "needs_attention",
-      label: "Needs attention",
-      detail: "Reconnect Kick to keep active reward grants working.",
+      label: "Reconnect required",
+      detail: "Kick revoked or invalidated the saved authorization. Reconnect Kick to keep active reward grants working.",
       needsAttention: true,
       homeAttention: activeDependency,
       reason: "authorization_missing",
@@ -65,8 +65,8 @@ export function deriveKickConnectionHealth({
     }
     return {
       status: "needs_attention",
-      label: "Needs attention",
-      detail: "Reconnect Kick to keep active reward grants working.",
+      label: "Authorization expired",
+      detail: "The saved Kick authorization expired and no refresh credential is stored. Reconnect Kick to keep active reward grants working.",
       needsAttention: true,
       homeAttention: activeDependency,
       reason: "authorization_expired",

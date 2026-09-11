@@ -56,6 +56,7 @@ const EXCEPTIONS = {
   "dashboard/account.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "session expired: redirect to login" },
     { match: 'location.href = "/dashboard";', reason: "post-board-deletion reset: the current context no longer exists" },
+    { match: 'location.href = "/api/account/export";', reason: "full-document GET to a file download endpoint: the SPA router cannot stream a download" },
   ],
   "dashboard/account-delete-modal.js": [
     { match: 'location.href = "/";', reason: "post-account-deletion: the session and dashboard no longer exist" },

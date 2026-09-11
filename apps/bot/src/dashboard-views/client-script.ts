@@ -185,6 +185,7 @@ let submitting = false;
 const page = document.body.dataset.page || 'overview';
 let __lastBots = [];
 let __offers = [];
+let __editingOfferId = null;
 let __planInfo = null;
 let __maxBots = Infinity;
 let __maxOffers = Infinity;
@@ -433,13 +434,38 @@ function offerRow(o){
       }).join('<br>')
     : '—';
   const lastActivity = o.last_activity_at ? fmtTime(o.last_activity_at) : '—';
+  if (o.id === __editingOfferId) return offerEditRow(o);
   return '<td><b>'+esc(o.casino)+'</b><br><span class="muted">'+esc(o.label)+'</span></td>'+
   '<td>'+(o.slug?'<span class="copy" data-action="copyLink" data-slug="'+esc(o.slug)+'" title="Copy share link">'+esc('/r/'+o.slug)+'</span> <button class="ghost btn--xs" data-action="copyLink" data-slug="'+esc(o.slug)+'" type="button" aria-label="Copy share link">Copy</button>':'–')+'</td>'+
   '<td>'+esc(String(o.clicks))+'</td><td>'+esc(String(o.unique_clicks))+'</td>'+
   '<td>'+esc(ctr)+'%</td><td>'+esc(cr)+'%</td><td>'+esc(String(o.conversions||0))+'</td>'+
   '<td>'+revenue+'</td><td>'+esc(lastActivity)+'</td>'+
   '<td class="'+(o.is_active?'ok':'off')+'">'+(o.is_active?'active':'off')+'</td>'+
-  '<td><button class="ghost" data-action="toggleOffer" data-id="'+esc(o.id)+'" data-active="'+(!o.is_active)+'">'+(o.is_active?'Disable':'Enable')+'</button></td>';
+  '<td><button class="ghost" data-action="editOffer" data-id="'+esc(o.id)+'" type="button">Edit</button> '+
+  '<button class="ghost" data-action="toggleOffer" data-id="'+esc(o.id)+'" data-active="'+(!o.is_active)+'">'+(o.is_active?'Disable':'Enable')+'</button></td>';
+}
+// In-row editor: one row at a time, same fields as the create form. The offer
+// id (and so its tracked link + stats) is untouched by the update.
+function offerEditRow(o){
+  const fld = function(id, label, value, opts){
+    opts = opts || {};
+    return '<div class="offer-form-field'+(opts.wide?' offer-edit-wide':'')+'">'+
+      '<label class="text-sm font-600" for="'+id+'">'+label+'</label>'+
+      '<input class="v3-input w-full" id="'+id+'"'+(opts.type?' type="'+opts.type+'"':'')+' value="'+esc(value || '')+'"></div>';
+  };
+  return '<td colspan="11"><div class="offer-edit">'+
+    '<div class="offer-edit-grid">'+
+      fld('eCasino','Brand or partner',o.casino)+
+      fld('eLabel','Offer name',o.label)+
+      fld('eUrl','Partner link',o.referral_url,{wide:true,type:'url'})+
+      fld('eCode','Promo code <span class="muted font-400">(optional)</span>',o.promo_code)+
+      fld('eBonus','Extra message <span class="muted font-400">(optional)</span>',o.bonus_text)+
+    '</div>'+
+    '<div class="offer-edit-actions">'+
+      '<button class="btn btn--accent btn--sm" data-action="saveOfferEdit" data-id="'+esc(o.id)+'" type="button">Save offer</button>'+
+      '<button class="btn btn--sm" data-action="cancelOfferEdit" type="button">Cancel</button>'+
+      '<span class="muted text-sm offer-edit-note">The tracked link and its stats are kept.</span>'+
+    '</div></div></td>';
 }
 function formatBroadcastDate(value){
   if (!value) return '—';
@@ -651,6 +677,33 @@ async function toggleOffer(target){
   renderOffers();
   restoreBtn(target);
 }
+function editOffer(target){
+  __editingOfferId = target.dataset.id;
+  renderOffers();
+  const f = $('eLabel'); if (f) f.focus();
+}
+function cancelOfferEdit(){
+  __editingOfferId = null;
+  renderOffers();
+}
+async function saveOfferEdit(target){
+  ['eCasino','eLabel','eUrl','eCode','eBonus'].forEach(id => clearFieldErr(id));
+  const body = { casino:$('eCasino').value.trim(), label:$('eLabel').value.trim(), referral_url:$('eUrl').value.trim(),
+                 promo_code:$('eCode').value.trim()||undefined, bonus_text:$('eBonus').value.trim()||undefined };
+  if (!body.casino) { setFieldErr('eCasino','Enter a brand or partner name'); return; }
+  if (!body.label) { setFieldErr('eLabel','Enter an offer name'); return; }
+  if (!body.referral_url) { setFieldErr('eUrl','Enter a partner link'); return; }
+  if (!body.referral_url.startsWith('http://') && !body.referral_url.startsWith('https://')) { setFieldErr('eUrl','URL must start with http:// or https://'); return; }
+  setLoading(target, 'Saving…');
+  const r = await api('/offers/'+target.dataset.id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  if (r.error) { restoreBtn(target); return setFieldErr('eLabel', r.error); }
+  const o = __offers.find(x => x.id === target.dataset.id);
+  if (o) { o.casino = body.casino; o.label = body.label; o.referral_url = body.referral_url; o.promo_code = body.promo_code || ''; o.bonus_text = body.bonus_text || ''; }
+  __editingOfferId = null;
+  renderOffers();
+  restoreBtn(target);
+  toast('Offer updated');
+}
 function updateOfferPreview(){
   const casino = ($('oCasino')?.value || '').trim();
   const label = ($('oLabel')?.value || '').trim();
@@ -681,6 +734,7 @@ async function createOffer(btn){
   ['oCasino','oLabel','oUrl','oCode','oBonus'].forEach(id => clearFieldErr(id));
   const body = { casino:$('oCasino').value.trim(), label:$('oLabel').value.trim(), referral_url:$('oUrl').value.trim(),
                  promo_code:$('oCode').value.trim()||undefined, bonus_text:$('oBonus').value.trim()||undefined };
+  if (!body.casino) { setFieldErr('oCasino','Enter a brand or partner name'); return; }
   if (!body.label) { setFieldErr('oLabel','Enter an offer label'); return; }
   if (!body.referral_url) { setFieldErr('oUrl','Enter a referral URL'); return; }
   if (!body.referral_url.startsWith('http://') && !body.referral_url.startsWith('https://')) { setFieldErr('oUrl','URL must start with http:// or https://'); return; }
@@ -1441,6 +1495,7 @@ async function handleAction(e) {
     || action === 'sendBroadcast' || action === 'openBroadcastPreview' || action === 'closeBroadcastPreview'
     || action === 'selectBroadcastWhen' || action === 'viewBroadcast' || action === 'closeBroadcastDetail'
     || action === 'viewCommand' || action === 'closeCommandPreview'
+    || action === 'editOffer' || action === 'cancelOfferEdit'
     || action === 'wizardNext' || action === 'wizardPrev';
   if (!NO_LOADING) setLoading(target);
   try {
@@ -1474,6 +1529,9 @@ async function handleAction(e) {
     else if (action === 'copyLink') { e.preventDefault(); await copyLink(target); }
     else if (action === 'copyCreatedOffer') { e.preventDefault(); await copyCreatedOffer(target); }
     else if (action === 'toggleOffer') { e.preventDefault(); await toggleOffer(target); }
+    else if (action === 'editOffer') { e.preventDefault(); editOffer(target); }
+    else if (action === 'cancelOfferEdit') { e.preventDefault(); cancelOfferEdit(); }
+    else if (action === 'saveOfferEdit') { e.preventDefault(); await saveOfferEdit(target); }
     else if (action === 'toggleCommand') { e.preventDefault(); await toggleCommand(target); }
     else if (action === 'deleteCommand') { e.preventDefault(); await deleteCommand(target); }
     else if (action === 'viewCommand') { e.preventDefault(); openCommandPreview(target.dataset.id); }

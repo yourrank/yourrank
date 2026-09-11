@@ -227,30 +227,30 @@ const deleteAccountModal = `<div class="modal" id="deleteAccountModal" role="dia
 `;
 
 const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
-        <div class="account-related-setting">
-          <div><strong>Team for <span id="teamSiteName">loading site…</span></strong><p>Members and invitations below apply only to this site.</p></div>
-          <a class="btn btn--ghost" href="/dashboard/leaderboards">Change site</a>
-        </div>
-        <div class="d-flex justify-between items-center mb-16 flex-wrap gap-12">
-          <div>
-            <h2 class="m-0">Team members</h2>
-            <p class="card-sub m-0 mt-2">Invite trusted people to help manage the selected site without sharing your login.</p>
+        <div class="team-head">
+          <div class="team-head-main">
+            <h2 class="m-0">Team</h2>
+            <p class="card-sub m-0 mt-2">People who can operate <strong id="teamSiteName">loading site…</strong> — invited, never sharing your login.</p>
           </div>
-          <button class="btn btn--accent" id="btnOpenInviteModal" type="button" hidden>
-            Invite member
-          </button>
-          <a class="btn btn--accent" id="teamUpgradeLink" href="/dashboard/settings/billing" hidden>Upgrade to Team</a>
+          <div class="team-head-actions">
+            <a class="btn btn--ghost" href="/dashboard/leaderboards">Change site</a>
+            <button class="btn btn--accent" id="btnOpenInviteModal" type="button" hidden>Invite member</button>
+            <a class="btn btn--accent" id="teamUpgradeLink" href="/dashboard/settings/billing" hidden>Upgrade to Team</a>
+          </div>
         </div>
 
-        <div class="account-team-summary" aria-live="polite">
-          <strong id="teamSeatUsage">Loading operator seats…</strong>
-          <span id="teamSeatContext">Account-wide seat usage across the owner's sites.</span>
+        <div class="team-seat-strip" aria-live="polite">
+          <span class="v3-chip v3-chip--pro" id="teamPlanChip">Plan</span>
+          <div class="team-seat-meter" aria-hidden="true"><i id="teamSeatBar"></i></div>
+          <div class="team-seat-copy">
+            <strong id="teamSeatUsage">Loading operator seats…</strong>
+            <span id="teamSeatContext">Account-wide seat usage across the owner's sites.</span>
+          </div>
         </div>
         <p class="account-team-notice" id="teamPlanNotice" hidden></p>
         <p class="account-team-notice" id="teamReadOnlyNotice" hidden>You can see who operates this site. Only the owner can invite or remove operators.</p>
 
         <div class="acc-team-section">
-          <h3 class="m-0 mb-8">Current team</h3>
           <div id="teamMembersList">
             <p class="hint">Loading team members…</p>
           </div>
@@ -264,16 +264,19 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
         </div>
 
         <details class="account-settings-disclosure acc-team-roles-guide">
-          <summary>Owner and Moderator permissions</summary>
-          <div class="account-settings-disclosure-body account-role-list">
-            <div>
-              <strong>Owner</strong>
-              <p>Manages Team access, billing, account security, site settings, and connections.</p>
-            </div>
-            <div>
-              <strong>Moderator</strong>
-              <p>Can operate Members, Reviews, Claims, safe Activities, Rewards, and read operational insights for this site. Cannot manage Team, billing, account security, site settings, connections, or manual credit adjustments.</p>
-            </div>
+          <summary>Compare roles</summary>
+          <div class="account-settings-disclosure-body">
+            <table class="team-role-compare">
+              <thead><tr><th scope="col">Capability</th><th scope="col">Owner</th><th scope="col">Moderator</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Members, reviews &amp; claims</th><td class="team-role-yes">Yes</td><td class="team-role-yes">Yes</td></tr>
+                <tr><th scope="row">Activities, rewards &amp; shop</th><td class="team-role-yes">Yes</td><td class="team-role-yes">Yes</td></tr>
+                <tr><th scope="row">Operational insights</th><td class="team-role-yes">Yes</td><td>Read-only</td></tr>
+                <tr><th scope="row">Site settings &amp; connections</th><td class="team-role-yes">Yes</td><td class="team-role-no">No</td></tr>
+                <tr><th scope="row">Team, billing &amp; security</th><td class="team-role-yes">Yes</td><td class="team-role-no">No</td></tr>
+                <tr><th scope="row">Manual credit adjustments</th><td class="team-role-yes">Yes</td><td class="team-role-no">No</td></tr>
+              </tbody>
+            </table>
           </div>
         </details>
       </div>

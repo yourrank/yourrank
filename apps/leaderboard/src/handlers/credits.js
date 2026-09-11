@@ -172,7 +172,15 @@ const kickReconnectRequired = () => json({
 }, 409);
 
 function isDefinitiveKickAuthorizationFailure(error) {
-  return /\b401\b|invalid_grant|unauthorized|refresh token not available/i.test(String(error?.message || error));
+  const message = String(error?.message || error);
+  // Only a provider-verified rejection may wipe stored credentials: an
+  // explicit 401 status, the OAuth invalid_grant marker, or the local "no
+  // refresh token" sentinel. Transient Kick errors and 403 scope bodies that
+  // merely contain the word "unauthorized" must keep the connection so the
+  // next operation can retry.
+  return /\b401\b/.test(message)
+    || /invalid_grant/i.test(message)
+    || /refresh token not available/i.test(message);
 }
 
 async function clearInvalidKickAuthorization(deps, userId, reason) {

@@ -122,6 +122,7 @@ const loadUser = (env, uid) =>
               (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at,
               referral_code,
               active_site_id,
+              has_trial,
               kick_user_id, kick_username, kick_linked_at
          FROM users WHERE id=$1`,
       [uid]

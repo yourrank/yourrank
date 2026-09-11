@@ -3,7 +3,7 @@
   display: grid;
   gap: 22px;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1440px;
 }
 
 .act-hero {
@@ -77,7 +77,7 @@
 
 .act-form {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(140px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: end;
 }
@@ -88,14 +88,14 @@
 .act-field input,
 .act-field select {
   width: 100%;
-  min-height: 42px;
+  min-height: var(--ws-control-h, 40px);
   padding: 9px 11px;
   border: 1px solid var(--ws-line-strong);
   border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface-soft);
+  background: var(--ws-surface);
   color: var(--ws-text);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .act-field input:focus,

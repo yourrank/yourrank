@@ -149,7 +149,7 @@ function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt 
   if (linked) linked.textContent = linkedAt ? fmtDate(linkedAt) : "—";
   const chip = $("cr-channel-chip");
   if (chip) {
-    chip.textContent = !connected ? "● Not connected" : needsAttention ? "● Needs attention" : "● Authorized";
+    chip.textContent = `● ${!connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Authorized")}`;
     chip.classList.toggle("v3-chip--fulfilled", connected && !needsAttention);
     chip.classList.toggle("v3-chip--pending", needsAttention);
     chip.classList.toggle("v3-chip--cancelled", !connected);
@@ -160,7 +160,7 @@ function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt 
 // Called when the API reports kick_reconnect_required: the streamer just
 // learned the connection is broken mid-action, so surface the fix inline.
 function markKickNeedsAttention() {
-  state.channel = { ...state.channel, status: "needs_attention", statusLabel: "Needs attention", detail: "Reconnect Kick to keep active reward grants working.", needsAttention: true, homeAttention: true };
+  state.channel = { ...state.channel, status: "needs_attention", statusLabel: "Reconnect required", detail: "Kick revoked the saved authorization. Reconnect Kick to keep active reward grants working.", needsAttention: true, homeAttention: true };
   renderChannelHealth({ connected: true, ...state.channel });
 }
 export function applyOAuthContext() {

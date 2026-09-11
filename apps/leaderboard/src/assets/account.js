@@ -448,10 +448,16 @@ function renderTeam(data) {
   const limit = Math.max(1, Number(seats?.limit) || 1);
   const atLimit = used >= limit;
 
-  if (seatUsage) seatUsage.textContent = `${used} of ${limit} account-wide operator seats used`;
+  const planChip = $("teamPlanChip");
+  if (planChip) planChip.textContent = { free: "Free", pro: "Pro", team: "Team" }[plan] || plan;
+  const seatBar = $("teamSeatBar");
+  if (seatBar?.style) seatBar.style.width = `${Math.min(100, Math.round((used / limit) * 100))}%`;
+  if (seatUsage) seatUsage.textContent = `${used} of ${limit} operator seats`;
   if (seatContext) {
     seatContext.textContent = plan === "team"
-      ? "Pending invitations reserve a seat across the owner's sites."
+      ? atLimit
+        ? "All seats in use — remove a member or revoke an invite to free one."
+        : "Pending invitations reserve a seat across the owner's sites."
       : "Free and Pro include the owner only; saved Moderator access is paused.";
   }
   if (planNotice) {
@@ -459,13 +465,20 @@ function renderTeam(data) {
     planNotice.textContent = plan === "team" ? "" : "Additional operators require Team. Existing Moderator records are preserved and regain access when Team returns.";
   }
   if (readOnlyNotice) readOnlyNotice.hidden = currentRole !== "moderator";
-  if (pendingSection) pendingSection.hidden = !canManageTeam;
+  if (pendingSection) pendingSection.hidden = !canManageTeam || invites.length === 0;
   if (upgradeLink) upgradeLink.hidden = !(canManageTeam && plan !== "team");
   if (openBtn) {
     openBtn.hidden = !canManageTeam || plan !== "team";
     openBtn.disabled = atLimit;
     openBtn.textContent = atLimit ? "Seats full" : "Invite member";
   }
+
+  const roleBadge = (role) =>
+    `<span class="v3-chip team-badge team-badge--${role === "owner" ? "owner" : "mod"}">${role === "owner" ? "Owner" : "Moderator"}</span>`;
+  const stateBadge = (paused) =>
+    paused
+      ? `<span class="v3-chip v3-chip--pending">Access paused</span>`
+      : `<span class="v3-chip v3-chip--fulfilled">Active</span>`;
 
   if (members.length === 0) {
     membersEl.innerHTML = `<div class="empty"><strong>No team members yet</strong><p>Invite someone when you are ready to share site management.</p></div>`;
@@ -480,12 +493,15 @@ function renderTeam(data) {
                 <strong>${esc(displayName)}</strong>
                 <span>${esc(member.email)} · Joined ${fmtDateTime(member.createdAt)}</span>
               </div>
+              <div class="account-team-badges">
+                ${roleBadge(member.role)}
+                ${member.role === "owner" ? stateBadge(false) : stateBadge(member.accessStatus === "paused")}
+              </div>
               ${canManageTeam && member.role !== "owner" ? `
                 <div class="account-team-actions">
-                  <span class="account-team-role">Moderator · ${member.accessStatus === "paused" ? "Access paused" : "Active"}</span>
                   <button class="btn btn--sm btn--ghost team-remove-btn" data-user-id="${esc(member.userId)}" type="button">Remove</button>
                 </div>
-              ` : `<span class="account-team-role">${member.role === "owner" ? "Owner · Active" : `Moderator · ${member.accessStatus === "paused" ? "Access paused" : "Active"}`}</span>`}
+              ` : ""}
             </div>
           `;
         }).join("")}
@@ -493,16 +509,18 @@ function renderTeam(data) {
     `;
   }
 
-  if (invites.length === 0) {
-    invitesEl.innerHTML = `<p class="hint">No pending invitations.</p>`;
-  } else {
+  if (invites.length > 0) {
     invitesEl.innerHTML = `
       <div class="account-team-list">
         ${invites.map((invite) => `
           <div class="account-team-row">
             <div class="account-team-person">
               <strong>${esc(invite.email)}</strong>
-              <span>Moderator · Pending · Expires ${fmtDateTime(invite.expiresAt)}</span>
+              <span>Expires ${fmtDateTime(invite.expiresAt)}</span>
+            </div>
+            <div class="account-team-badges">
+              ${roleBadge("moderator")}
+              <span class="v3-chip v3-chip--pending">Pending</span>
             </div>
             <div class="account-team-actions">
               ${invite.inviteUrl
