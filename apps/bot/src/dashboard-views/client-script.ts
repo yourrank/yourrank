@@ -662,7 +662,7 @@ function renderPostbackStatus(pb){
   if (!pb || pb.error) { els.forEach(el => { el.textContent = 'Could not load extra results status. Try again.'; }); return; }
   const html = pb.active
     ? '<span class="badge ok">Extra results connected</span> Sign-ups and revenue updates can appear here.'
-    : '<span class="badge off">Extra results not connected</span> Connect your partner results in Account → Connected apps to see sign-ups and revenue.';
+    : '<span class="badge off">Extra results not connected</span> Connect your partner results in Settings → Connections to see sign-ups and revenue.';
   els.forEach(el => { el.innerHTML = html; });
 }
 

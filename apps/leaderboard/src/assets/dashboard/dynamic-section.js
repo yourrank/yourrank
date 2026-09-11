@@ -217,6 +217,10 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     // which also covers panels the boot module re-renders later on.
     container.innerHTML = data.html;
 
+    // A section swap is a page change: return to the top of the content
+    // instead of keeping the previous page's scroll offset.
+    window.scrollTo(0, 0);
+
     // Update the document title.
     document.title = data.title || dynamicTitle(page, tab);
 
