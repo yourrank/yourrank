@@ -883,7 +883,7 @@
 }
 
 .gw-modal-content {
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   width: 100%;
   max-width: 580px;
   max-height: 90vh;
@@ -977,7 +977,7 @@
 
 /* Dedicated Winner Live Chat Feed (Anti-Spam Isolation) */
 .gw-winner-chat-card {
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   border: 1px solid var(--ws-line, var(--ws-line));
   border-radius: var(--ws-radius-sm);
   padding: 12px;
@@ -1058,7 +1058,7 @@
 
 .gw-modal-footer {
   padding: 12px 20px;
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   border-top: 1px solid var(--ws-line, var(--ws-line));
   display: flex;
   align-items: center;
@@ -1968,7 +1968,7 @@
   transition: all 120ms ease;
 }
 .gw-chip:hover {
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   border-color: var(--ws-accent, var(--ws-accent));
   color: var(--ws-accent, var(--ws-accent));
 }
@@ -1988,7 +1988,7 @@
   max-width: 440px;
   height: min(100%, 100dvh);
   max-height: 100dvh;
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   box-shadow: var(--ws-shadow-overlay);
   display: flex;
   flex-direction: column;
@@ -2027,7 +2027,7 @@
   flex: 0 0 auto;
   padding: 16px 24px;
   border-top: 1px solid var(--ws-line, var(--ws-line));
-  background: #ffffff;
+  background: var(--ws-surface, #ffffff);
   box-shadow: 0 -4px 12px rgba(18, 17, 17, 0.06);
   display: flex;
   justify-content: flex-end;

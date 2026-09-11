@@ -14,7 +14,7 @@ import {
 } from "./handlers/auth.js";
 import {
   handleChangePassword, handleListSessions, handleRevokeOtherSessions,
-  handleCreateExportJob, handleExportJobStatus, handleExportJobDownload
+  handleCreateExportJob, handleExportData, handleExportJobStatus, handleExportJobDownload
 } from "./handlers/security.js";
 import {
   handleTelegramLink, handleTelegramUnlink, handleTelegramStatus
@@ -233,6 +233,10 @@ export const ROUTES = [
   { path: "/api/auth/sessions/revoke-others", method: "POST", handler: withHandler(handleRevokeOtherSessions) },
 
   // Data export
+  // GET streams the export inline — it needs no R2/queue, so it is the
+  // fallback every deployment can serve when the async job pipeline is not
+  // configured.
+  { path: "/api/account/export", method: "GET", handler: withHandler(handleExportData) },
   { path: "/api/account/export", method: "POST", handler: withHandler(handleCreateExportJob) },
   { path: "/api/account/export/:id/status", method: "GET", handler: withHandler(handleExportJobStatus) },
   { path: "/api/account/export/:id/download", method: "GET", handler: withHandler(handleExportJobDownload) },

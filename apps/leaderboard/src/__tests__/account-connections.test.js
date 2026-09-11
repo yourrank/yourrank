@@ -83,9 +83,9 @@ describe("Settings connection inventory", () => {
     const discord = body.connections.find(({ id }) => id === "discord-site:site-1");
     const telegram = body.connections.find(({ id }) => id === "telegram-site:site-1");
 
-    expect(accountKick).toEqual(expect.objectContaining({ status: "needs_attention", statusLabel: "Needs attention" }));
+    expect(accountKick).toEqual(expect.objectContaining({ status: "needs_attention", statusLabel: "Reconnect required" }));
     expect(accountKick.action.label).toBe("Reconnect");
-    expect(kick).toEqual(expect.objectContaining({ status: "needs_attention", statusLabel: "Needs attention" }));
+    expect(kick).toEqual(expect.objectContaining({ status: "needs_attention", statusLabel: "Reconnect required" }));
     expect(kick.action).toEqual({ label: "Reconnect", href: "/auth/kick?siteId=site-1" });
     expect(discord).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));
     expect(telegram).toEqual(expect.objectContaining({ status: "not_configured", statusLabel: "Not configured" }));

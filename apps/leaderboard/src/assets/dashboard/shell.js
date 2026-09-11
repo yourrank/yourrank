@@ -5,6 +5,7 @@
 // loads and full document (cross-worker) navigation, and it alone mutates
 // history for dashboard routes.
 import { state } from "./state.js";
+import { logError, showToast } from "./utils.js";
 import { renderOverviewSummary } from "./overview.js";
 import { discardEditorChanges, fitDesignPreview, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
 import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
@@ -62,19 +63,52 @@ async function chooseDirtyAction() {
         return discard;
       },
     });
-    modal.el.querySelector(".dirty-discard")?.addEventListener("click", () => modal.close("discard"));
+    const discard = modal.el.querySelector(".dirty-discard");
+    // Put Discard on the actions row and move focus back to Save — the dialog
+    // focuses the extra element by default, which left Enter one press away
+    // from throwing the draft out.
+    if (discard) {
+      modal.el.querySelector(".modal-actions")?.prepend(discard);
+      discard.addEventListener("click", () => modal.close("discard"));
+      modal.el.querySelector(".modal-actions .btn--accent")?.focus();
+    }
   });
 }
 
 async function allowNavigation() {
   for (const guard of navigationGuards.values()) { if (!await guard()) return false; }
   if (!state._dirty) return true;
-  const action = await chooseDirtyAction();
+  const action = await chooseDirtyAction().catch((error) => {
+    logError("dirty-modal", error);
+    return "cancel";
+  });
   if (action === "discard") return "discard";
   // Validation and request failures settle the save immediately. Watching the
   // dirty flag instead left all navigation locked after a failed save.
-  if (action === "save") return saveEditorDraft();
+  if (action === "save") {
+    try {
+      const saved = await saveEditorDraft();
+      if (!saved) revealFirstInvalidField();
+      return saved;
+    } catch (error) {
+      logError("dirty-save", error);
+      showToast("Couldn't save your changes. They are still here — try again.", "error");
+      return false;
+    }
+  }
   return false;
+}
+
+// A failed save can point at a field in a section that is not on screen; bring
+// that section up so the validation message is visible instead of leaving the
+// modal reopening with no explanation.
+function revealFirstInvalidField() {
+  const input = document.querySelector('.lb-page:not(.is-on) [data-touched="1"]');
+  if (!input) return;
+  const page = input.closest(".lb-page")?.dataset.page;
+  if (!page) return;
+  navTo(page, "");
+  input.focus({ preventScroll: false });
 }
 
 /** Provider checkout leaves the workspace through the same unsaved-work guard. */

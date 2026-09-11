@@ -126,14 +126,23 @@ function wireChangePassword() {
       return;
     }
     setStatus(status, "Saving…", false);
-    const result = await jsonPost("/api/auth/change-password", { currentPassword: current, password });
-    if (result.ok) {
-      setStatus(status, result.data.message || "Password updated.", false);
-      $("accCurrentPassword").value = "";
-      $("accNewPassword").value = "";
-      loadSessions();
-    } else {
-      setStatus(status, result.data?.message || "Update failed.", true);
+    save.disabled = true;
+    try {
+      const result = await jsonPost("/api/auth/change-password", { currentPassword: current, password });
+      if (result.ok) {
+        setStatus(status, result.data.message || "Password updated.", false);
+        $("accCurrentPassword").value = "";
+        $("accNewPassword").value = "";
+        loadSessions();
+      } else {
+        setStatus(status, result.data?.error || result.data?.message || "Update failed.", true);
+        if (result.status === 401) $("accCurrentPassword")?.focus();
+      }
+    } catch (error) {
+      logError("changePassword", error);
+      setStatus(status, "Could not update the password. Check your connection and try again.", true);
+    } finally {
+      save.disabled = false;
     }
   });
 }
@@ -226,10 +235,18 @@ function wireExport() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        const message = data?.error || data?.message;
+        // The async pipeline needs the ACCOUNT_EXPORTS bucket + queue; when a
+        // deployment lacks them the worker streams the same export inline at
+        // GET /api/account/export instead, so the control still works.
+        if (data?.code === "export_not_configured") {
+          setStatus(status, "Preparing your export…", false);
+          location.href = "/api/account/export";
+          btn.disabled = false;
+          return;
+        }
         renderJob({
-          status: data?.code === "export_not_configured" ? "unavailable" : "failed",
-          message,
+          status: "failed",
+          message: data?.error || data?.message,
         });
         return;
       }

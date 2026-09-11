@@ -3,7 +3,7 @@
 
 import { Hono } from "hono";
 import { config } from "./config.js";
-import { one, query, exec } from "@yourrank/shared/db";
+import { one, query, exec, withTransaction } from "@yourrank/shared/db";
 import { encryptToken, decryptToken, newLinkSlug, newWebhookSecret } from "@yourrank/shared/crypto";
 import {
   POSTBACK_SUNSET,
@@ -157,7 +157,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
             AND owner_offer.owner_id = $1
           GROUP BY sl.offer_id
        )
-       SELECT o.id, o.label, ca.name AS casino, o.promo_code, o.bonus_text,
+       SELECT o.id, o.label, ca.name AS casino, o.promo_code, o.bonus_text, o.referral_url,
               o.is_active, o.priority, sl.slug,
               (coalesce(lc.clicks, 0) + coalesce(tc.clicks, 0))::int               AS clicks,
               (coalesce(lc.unique_clicks, 0) + coalesce(tc.unique_clicks, 0))::int AS unique_clicks,
@@ -227,6 +227,32 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       [is_active, c.req.param("id"), c.get("uid")]
     );
     return row ? c.json(row) : c.json({ error: "not found" }, 404);
+  });
+
+  // Full edit of an offer's content fields. Short links, clicks and
+  // conversions all key off the offer id, so editing preserves tracking data.
+  api.put("/offers/:id", async (c) => {
+    const b = await validatedBody(c, offerCreateSchema);
+    if (b instanceof Response) return b;
+    try {
+      const parsed = new URL(b.referral_url);
+      if (!/^https?:$/.test(parsed.protocol)) return c.json({ error: "referral_url must use http or https" }, 400);
+    } catch { return c.json({ error: "referral_url must be a valid URL" }, 400); }
+    const uid = c.get("uid");
+    const updated = await withTransaction(async (tx) => {
+      const slug = b.casino.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const casinoRow = (await tx.one<{ id: string }>(
+        `INSERT INTO casinos (slug, name, is_global, created_by) VALUES ($1, $2, false, $3)
+         ON CONFLICT (slug) DO UPDATE SET name = casinos.name RETURNING id`,
+        [slug, b.casino, uid]
+      ))!;
+      return tx.one<{ id: string }>(
+        `UPDATE offers SET casino_id = $1, label = $2, referral_url = $3, promo_code = $4, bonus_text = $5, updated_at = now()
+         WHERE id = $6 AND owner_id = $7 RETURNING id`,
+        [casinoRow.id, b.label, b.referral_url, b.promo_code ?? null, b.bonus_text ?? null, c.req.param("id"), uid]
+      );
+    });
+    return updated ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
   });
 
   api.get("/stats/daily", async (c) => {

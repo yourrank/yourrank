@@ -10,12 +10,12 @@ export function offersPanel(publicBaseUrl: string): string {
       <div class="d-flex flex-col gap-12 offer-create-form" id="offerCreateForm">
         <div class="d-flex gap-12 flex-wrap">
           <div class="flex-1 offer-form-field">
-            <label class="text-sm font-600" for="oCasino">Brand or casino <span class="muted font-400">(optional)</span></label>
-            <input class="v3-input w-full" id="oCasino" placeholder="e.g. Stake">
+            <label class="text-sm font-600" for="oCasino">Brand or partner</label>
+            <input class="v3-input w-full" id="oCasino" placeholder="e.g. Acme VPN">
           </div>
           <div class="flex-1 offer-form-field">
             <label class="text-sm font-600" for="oLabel">Offer name</label>
-            <input class="v3-input w-full" id="oLabel" placeholder="e.g. 200% deposit bonus">
+            <input class="v3-input w-full" id="oLabel" placeholder="e.g. 30% off your first month">
           </div>
         </div>
 
@@ -27,10 +27,10 @@ export function offersPanel(publicBaseUrl: string): string {
         <div class="d-flex gap-12 flex-wrap">
           <div class="flex-1 offer-form-field">
             <label class="text-sm font-600" for="oCode">Promo code <span class="muted font-400">(optional)</span></label>
-            <input class="v3-input w-full" id="oCode" placeholder="e.g. MORAD">
+            <input class="v3-input w-full" id="oCode" placeholder="e.g. SAVE10">
           </div>
           <div class="flex-1 offer-form-field">
-            <label class="text-sm font-600" for="oBonus">Bonus message <span class="muted font-400">(optional)</span></label>
+            <label class="text-sm font-600" for="oBonus">Extra message <span class="muted font-400">(optional)</span></label>
             <input class="v3-input w-full" id="oBonus" placeholder="Shown with the offer in your bot">
           </div>
         </div>
@@ -75,7 +75,7 @@ export function offersPanel(publicBaseUrl: string): string {
             <div><dt class="font-600 d-inline">Visit rate:</dt> <dd class="d-inline muted m-0">People reached divided by total visits.</dd></div>
             <div><dt class="font-600 d-inline">Sign-up rate:</dt> <dd class="d-inline muted m-0">People who signed up divided by people reached.</dd></div>
             <div><dt class="font-600 d-inline">Sign-ups:</dt> <dd class="d-inline muted m-0">People reported as signing up after visiting this offer.</dd></div>
-            <div><dt class="font-600 d-inline">Revenue:</dt> <dd class="d-inline muted m-0">Amounts reported through deposit or partner conversion tracking, shown separately by currency. This is not verified receipt.</dd></div>
+            <div><dt class="font-600 d-inline">Revenue:</dt> <dd class="d-inline muted m-0">Amounts reported through partner conversion tracking, shown separately by currency. This is not verified receipt.</dd></div>
             <div><dt class="font-600 d-inline">Last activity:</dt> <dd class="d-inline muted m-0">Most recent retained click or reported conversion.</dd></div>
           </dl>
         </div>

@@ -44,3 +44,18 @@ knowledge:
       # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .dev.vars.
       # Run supabase db push for new migrations before deploying.
       # Set SUPPORT_EMAIL and MAIL_FROM in Cloudflare secrets before launch.
+  - name: dashboard-dev
+    contents: |
+      # Postgres: docker compose up -d; psql via
+      #   docker exec -i yourrank-postgres-1 psql -U postgres -d yourrank
+      # Leaderboard dashboard: (cd apps/leaderboard && wrangler dev --port 8787)
+      # Bot dashboard — apps/bot/.dev.vars is NOT read when wrangler is launched
+      # from the repo root with -c, so export the vars inline:
+      #   export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://postgres:postgres@localhost:5432/yourrank"
+      #   export DATABASE_URL="$CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"
+      #   ./node_modules/.bin/wrangler dev -c apps/bot/wrangler.toml --port 8788
+      # The bot worker does not serve /assets/* locally; for screenshots route
+      # /assets/** to localhost:8787.
+      # Static assets are served from src/assets_bundled.js — after editing
+      # anything under apps/leaderboard/src/assets/, regenerate it:
+      #   (cd apps/leaderboard && node -e "import('./build-assets.js').then(m=>m.writeAssetBundle())")
