@@ -232,6 +232,7 @@ const LOGIN_ERROR_MESSAGES = Object.freeze({
   access_denied: "Sign-in was cancelled.",
   kick_auth_failed: "We couldn't complete Kick sign-in. Try again.",
   discord_auth_failed: "We couldn't complete Discord sign-in. Try again.",
+  signin_unavailable: "Sign-in isn't available on this site right now. Try again later.",
 });
 
 const url = new URL(window.location.href);

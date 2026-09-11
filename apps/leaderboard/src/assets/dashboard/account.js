@@ -239,9 +239,29 @@ function wireExport() {
         // deployment lacks them the worker streams the same export inline at
         // GET /api/account/export instead, so the control still works.
         if (data?.code === "export_not_configured") {
-          setStatus(status, "Preparing your export…", false);
-          location.href = "/api/account/export";
-          btn.disabled = false;
+          // Fetch the stream in-page so a JSON error (e.g. rate limit) renders
+          // inline instead of navigating the tab to a raw JSON response.
+          try {
+            const res2 = await fetch("/api/account/export", { credentials: "include" });
+            if (!res2.ok) {
+              const err = await res2.json().catch(() => ({}));
+              renderJob({ status: "failed", message: err?.error || err?.message || "Export failed." });
+              return;
+            }
+            const blob = await res2.blob();
+            const a = document.createElement("a");
+            const cd = res2.headers.get("content-disposition") || "";
+            const m = cd.match(/filename="?([^";]+)"?/i);
+            a.href = URL.createObjectURL(blob);
+            a.download = m ? m[1] : "yourrank-export.json";
+            a.click();
+            URL.revokeObjectURL(a.href);
+            setStatus(status, "Your export is downloading — check your downloads folder.", false);
+            btn.disabled = false;
+          } catch (e2) {
+            logError("exportInline", e2);
+            renderJob({ status: "failed", message: "Export failed." });
+          }
           return;
         }
         renderJob({
@@ -345,7 +365,7 @@ function wireSettingsDanger() {
   });
   const del = $("settingsDeleteBoard");
   if (del) del.addEventListener("click", async () => {
-    if (!await showConfirmModal("Delete board", "Delete this board and all of its data? This cannot be undone.", "Delete board", true)) return;
+    if (!await showConfirmModal("Delete site", "Delete this site and all of its data? This cannot be undone.", "Delete site", true)) return;
     try {
       const res = await fetch("/api/site", { method: "DELETE", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify({ siteId: state.ACTIVE_SITE_ID }) });
       const data = await res.json().catch(() => ({}));

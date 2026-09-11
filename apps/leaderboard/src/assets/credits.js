@@ -1361,7 +1361,10 @@ function renderActivity() {
   if (!activityEvents.length) {
     list.innerHTML = "";
     if (empty) {
-      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: "This member has signed in but has not earned or spent credits yet. Try another member or activity type." });
+      const memberFilter = $("cr-history-username")?.value.trim();
+      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: memberFilter
+        ? "This member has not earned or spent credits yet. Try another member or activity type."
+        : "No credit activity matches the current filters. Try another member or activity type." });
       empty.hidden = false;
     }
   } else {

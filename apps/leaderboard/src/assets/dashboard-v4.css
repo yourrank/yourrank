@@ -95,7 +95,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --ws-accent-hover: var(--wsd-accent-hover, #304398);
   --ws-accent-soft: var(--wsd-accent-soft, #edf0fc);
   --ws-accent-line: rgb(var(--ws-accent-rgb) / 0.28);
-  --ws-accent-text: #ffffff;
+  --ws-accent-text: var(--wsd-accent-text, #ffffff);
   --ws-accent-on-chrome: #304398;
   --ws-success: #1f8a68;
   --ws-success-soft: var(--wsd-success-soft, #eaf7f2);
@@ -202,6 +202,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --wsd-chrome-text-soft: rgb(168 179 196);
   --wsd-chrome-card: rgb(26 33 48);
   --wsd-accent-rgb: 123 150 255;
+  --wsd-accent-text: rgb(14 21 38);
   --wsd-accent-hover: rgb(147 169 255);
   --wsd-accent-soft: rgb(123 150 255 / 0.14);
   --wsd-success-soft: rgb(74 222 128 / 0.12);

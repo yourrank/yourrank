@@ -187,7 +187,13 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
   const state = `${KICK_VIEWER_STATE_PREFIX}${randomState()}`;
   await storeOAuthStateImpl("kick", state, { provider: "kick", flow: "viewer", codeVerifier, returnTo, origin, redirectUri, ...joinState });
 
-  const authorizeURL = buildKickViewerAuthorizeURLImpl(env, state, codeChallenge, undefined, redirectUri);
+  let authorizeURL;
+  try {
+    authorizeURL = buildKickViewerAuthorizeURLImpl(env, state, codeChallenge, undefined, redirectUri);
+  } catch {
+    // Missing OAuth credentials: fail visibly on the site, not as a raw 500.
+    return errorRedirect("signin_unavailable", origin);
+  }
   return redirect(authorizeURL);
 }
 
@@ -376,7 +382,12 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   const state = randomState();
   await storeOAuthStateImpl("discord", state, { provider: "discord", flow: "viewer", returnTo, origin, redirectUri, ...joinState });
 
-  const authorizeURL = buildDiscordAuthorizeURLImpl(env, state, undefined, redirectUri);
+  let authorizeURL;
+  try {
+    authorizeURL = buildDiscordAuthorizeURLImpl(env, state, undefined, redirectUri);
+  } catch {
+    return errorRedirect("signin_unavailable", origin);
+  }
   return redirect(authorizeURL);
 }
 

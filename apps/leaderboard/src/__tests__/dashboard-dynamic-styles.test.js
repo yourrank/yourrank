@@ -100,6 +100,7 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
     __yrBoot: { signal() {}, fail() {} },
     addEventListener() {},
     removeEventListener() {},
+    scrollTo() {},
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
   };
 

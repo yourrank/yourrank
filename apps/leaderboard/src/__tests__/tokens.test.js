@@ -212,9 +212,14 @@ describe("design tokens", () => {
 
   it("keeps v4 primary action ink legible", () => {
     const ink = declared(sources.dashboard, "--ws-accent-text");
-    expect(ink).toBe("#ffffff");
+    // Light mode keeps white ink on the dark cobalt accent; dark mode swaps
+    // to dark ink on the light periwinkle accent.
+    expect(ink).toBe("var(--wsd-accent-text, #ffffff)");
     expect(sources.dashboard).toMatch(/\.btn--accent,[\s\S]*?color:\s*var\(--ws-accent-text\)/);
-    expect(contrastRatio(V4_ACCENT, ink)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(V4_ACCENT, "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    const darkInk = declared(sources.dashboard, "--wsd-accent-text");
+    expect(darkInk).toBe("rgb(14 21 38)");
+    expect(contrastRatio("#7b96ff", "#0e1526")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("keeps the public viewer accent on a separate per-board axis", () => {
