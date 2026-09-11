@@ -239,7 +239,7 @@ function wireExport() {
         // deployment lacks them the worker streams the same export inline at
         // GET /api/account/export instead, so the control still works.
         if (data?.code === "export_not_configured") {
-          setStatus(status, "Preparing your export…", false);
+          setStatus(status, "Your export is downloading — check your downloads folder.", false);
           location.href = "/api/account/export";
           btn.disabled = false;
           return;

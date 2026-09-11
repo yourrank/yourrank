@@ -359,7 +359,7 @@ subscribe((keys) => {
 export function playerRow(p = { name: "", wagered: "", prize: "", score: "", hands: "", netProfit: "", winRate: "", change: "" }) {
   const tr = document.createElement("tr");
   const rowId = `player-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  tr.innerHTML = `<td class="sel" data-label="Select"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" /></td>
+  tr.innerHTML = `<td class="sel" data-label="Select"><input type="checkbox" class="row-sel" title="Select" aria-label="Select player" data-no-dirty /></td>
     <td class="rank" data-label="Rank"></td>
     <td class="player-name" data-label="Player"><input class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}" maxlength="160" value="${esc(p.name)}" aria-describedby="${rowId}-name-counter ${rowId}-name-warning"><span class="player-name-counter" id="${rowId}-name-counter" hidden aria-live="polite"></span><span class="field-err" data-field-error="p-name" hidden role="alert" aria-live="polite"></span><span class="field-warn" data-field-warning="p-name" id="${rowId}-name-warning" hidden role="status" aria-live="polite"></span></td>
     <td class="num col-legacy" data-label="Amount"><input class="p-wager" data-field="p-wager" aria-label="Amount for ${esc(p.name || "player")}" inputmode="decimal" placeholder="0" value="${esc(p.wagered)}" aria-describedby="${rowId}-wager-error"><span class="field-err" data-field-error="p-wager" id="${rowId}-wager-error" hidden role="alert" aria-live="polite"></span></td>
