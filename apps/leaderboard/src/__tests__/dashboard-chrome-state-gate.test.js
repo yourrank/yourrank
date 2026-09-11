@@ -110,8 +110,8 @@ describe("chrome-state one-owner gate (runtime)", () => {
     expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Overview · Stats · YourRank");
     expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Traffic sources · Stats · YourRank");
     expect(dashboardTitle(null)).toBe("Dashboard · YourRank");
-    expect(dynamicTitle("rewards", "history")).toBe("Activity · Rewards · YourRank");
-    expect(dynamicTitle("rewards")).toBe("Overview · Rewards · YourRank");
+    expect(dynamicTitle("rewards", "history")).toBe("Credit activity · Engage · YourRank");
+    expect(dynamicTitle("rewards")).toBe("Rewards · Engage · YourRank");
     expect(dynamicTitle("siteConnections", "channel")).toBe("Kick connection · Site pages · YourRank");
     expect(dynamicTitle("audience", "viewers")).toBe("Members · YourRank");
     expect(dynamicTitle("settings", "team")).toBe("Settings · YourRank");

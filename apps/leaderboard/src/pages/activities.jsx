@@ -2,10 +2,12 @@
 /** @jsxImportSource hono/jsx */
 
 import { DashboardShell } from "./dashboard-shell.jsx";
+import { engageTabsHtml } from "./engage-tabs.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
 export const activitiesContentHtml = `
   <div class="act-workspace-content">
+    ${engageTabsHtml("activities")}
     <header class="act-hero">
       <div class="act-hero__copy">
         <h1>Activities</h1>

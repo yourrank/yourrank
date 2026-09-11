@@ -70,7 +70,7 @@ export const DASHBOARD_SECTION_TITLES = {
   performance: "Stats",
   site: "Site pages",
   activities: "Engage",
-  rewards: "Rewards",
+  rewards: "Engage",
   siteConnections: "Site pages",
   giveaways: "Engage",
   audience: "Members",
@@ -91,11 +91,11 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "performance.referrals": "Traffic sources",
   "performance.events": "Public site activity",
   "activities.overview": "Overview",
-  "rewards.overview": "Overview",
+  "rewards.overview": "Rewards",
   "rewards.shop": "Shop",
   "rewards.rules": "Ways to earn",
   "rewards.redemptions": "Claims",
-  "rewards.history": "Activity",
+  "rewards.history": "Credit activity",
   "siteConnections.channel": "Kick connection",
   "giveaways.chat": "Giveaways",
   "giveaways.raffles": "Raffles",
@@ -135,11 +135,10 @@ function sectionCrumbHead(section: string): DashboardCrumb | undefined {
     case "activities":
       return { label: DASHBOARD_SECTION_TITLES.activities, href: routeById("activities.overview").canonicalPath };
     case "rewards":
-      return { label: DASHBOARD_SECTION_TITLES.rewards, href: routeById("rewards.overview").canonicalPath };
     case "giveaways":
-      // The Engagement crumb links the section's bare entry address, a
-      // registered legacy alias of its first tab.
-      return { label: DASHBOARD_SECTION_TITLES.giveaways, href: dashboardAliasPath("/dashboard/giveaways", "giveaways.chat") };
+      // Rewards and Giveaways are surfaces of the Engage workspace: the section
+      // crumb links the workspace root, same as the rail item.
+      return { label: DASHBOARD_SECTION_TITLES[section], href: routeById("activities.overview").canonicalPath };
     case "audience":
       return { label: DASHBOARD_SECTION_TITLES.audience, href: routeById("audience.viewers").canonicalPath };
     case "settings":
