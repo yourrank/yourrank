@@ -76,7 +76,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "All sites" }]);
     expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site pages" }]);
     expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Engage" }]);
-    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Rewards" }]);
+    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Engage" }]);
   });
 
   it("pins the leaderboard editor chrome", () => {
@@ -114,10 +114,10 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(history.navKey).toBe("engage");
     expect(history.canonicalPath).toBe("/dashboard/rewards/activity");
     expect(history.crumbs).toEqual([
-      { label: "Rewards", href: "/dashboard/rewards" },
-      { label: "Activity" },
+      { label: "Engage", href: "/dashboard/activities" },
+      { label: "Credit activity" },
     ]);
-    expect(history.documentTitle).toBe("Activity · Rewards · YourRank");
+    expect(history.documentTitle).toBe("Credit activity · Engage · YourRank");
 
     const channel = dashboardChromeState("siteConnections.channel");
     expect(channel.navKey).toBe("board");
@@ -131,7 +131,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     const preds = dashboardChromeState("giveaways.preds");
     expect(preds.navKey).toBe("engage");
     expect(preds.crumbs).toEqual([
-      { label: "Engage", href: "/dashboard/giveaways" },
+      { label: "Engage", href: "/dashboard/activities" },
       { label: "Predictions" },
     ]);
     expect(preds.documentTitle).toBe("Engage · YourRank");

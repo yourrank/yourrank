@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { appHtml } from "../../../bot/src/dashboard-views/app.ts";
 import { pageLinks } from "../../../bot/src/dashboard-views/shell.ts";
+import { DASHBOARD_ROUTES } from "@yourrank/shared/dashboard-routes";
 import { PAGES } from "../pages.jsx";
 import { BOARD_TABS, ANALYTICS_TABS } from "../pages/dashboard.jsx";
 import { GIVEAWAY_TABS } from "../pages/giveaway-pages.js";
@@ -16,6 +17,7 @@ const PERMITTED_DEFAULT_TAB_ROOTS = new Map([
   ["/dashboard/telegram", "Telegram Overview is the section-root back-link owned by the sidebar."],
   ["/dashboard/rewards", "Rewards Overview is the section root and the default tab."],
   ["/dashboard/audience/members", "People Members is the section root and the default tab."],
+  ["/dashboard/activities", "Engage Activities repeats the rail destination inside the workspace tab strip."],
 ]);
 
 function linksIn(markup, { excludeContextualActions = false } = {}) {
@@ -109,6 +111,22 @@ function normalizedPath(path) {
   return String(path || "").split("?")[0].replace(/\/+$/, "") || "/";
 }
 
+const ROUTE_OWNER_BY_PATH = new Map(
+  DASHBOARD_ROUTES.map((route) => [normalizedPath(route.canonicalPath), route.navKey]),
+);
+
+// Chrome ownership is judged per rail item (navKey): activities, rewards and
+// giveaways are surfaces of the one Engage workspace, so links among them are
+// intra-workspace even though they are distinct route sections.
+function dashboardNavKeyForPath(path) {
+  const normalized = normalizedPath(path);
+  if (ROUTE_OWNER_BY_PATH.has(normalized)) return ROUTE_OWNER_BY_PATH.get(normalized);
+  const section = dashboardSectionForPath(path);
+  if (section === "account") return "settings";
+  const match = DASHBOARD_ROUTES.find((route) => route.section === section);
+  return match?.navKey || "";
+}
+
 function dashboardSectionForPath(path) {
   const normalized = normalizedPath(path);
   const section = Object.entries(SECTIONS)
@@ -178,7 +196,7 @@ function deriveRenderableRoutes() {
       routes.push({ ...route, hasSubnav: true, hasBreadcrumbs: true });
     }
   }
-  routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: false, hasBreadcrumbs: false });
+  routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: true, hasBreadcrumbs: false });
   for (const tab of PEOPLE_TABS) {
     // The Members tab repeats its "Members" section head and collapses to a
     // single-entry trail, which renders no crumb; Reviews keeps the trail.
@@ -267,12 +285,12 @@ function ownershipViolations(markup, activePath) {
   const sidebarSubnav = [...new Set(regions.subnav.filter((href) =>
     sidebarHrefs.has(href) && !PERMITTED_DEFAULT_TAB_ROOTS.has(href)
   ))];
-  const pageSection = dashboardSectionForPath(activePath);
+  const pageOwner = dashboardNavKeyForPath(activePath);
   const foreignSubnav = [...new Map(
     subnavItems(subnavMarkup)
       .filter(({ href }) => href)
-      .map(({ href }) => [href, { href, section: dashboardSectionForPath(href) }])
-      .filter(([, entry]) => entry.section && entry.section !== pageSection)
+      .map(({ href }) => [href, { href, owner: dashboardNavKeyForPath(href) }])
+      .filter(([, entry]) => entry.owner && entry.owner !== pageOwner)
   ).values()];
   const labelCounts = new Map();
   for (const { label } of subnavItems(subnavMarkup)) {
@@ -403,8 +421,8 @@ describe("dashboard chrome ownership", () => {
     `;
     const violations = ownershipViolations(markup, "/dashboard/site");
     expect(violations.foreignSubnav).toEqual([
-      { href: "/dashboard/settings/account", section: "account" },
-      { href: "/dashboard/settings/team", section: "account" },
+      { href: "/dashboard/settings/account", owner: "settings" },
+      { href: "/dashboard/settings/team", owner: "settings" },
     ]);
     expect(violations.duplicateSubnavLabels).toEqual([
       { label: "Account", count: 3 },
@@ -427,5 +445,30 @@ describe("dashboard chrome ownership", () => {
     expect(violations.sidebarSubnav).toEqual([]);
     expect(violations.foreignSubnav).toEqual([]);
     expect(violations.duplicateSubnavLabels).toEqual([]);
+  });
+
+  it("gives the Engage workspace one shared tab strip across its surfaces", () => {
+    const strip = (html) => region(html, /<nav\b[^>]*class="[^"]*engage-tabs/, "nav");
+    const marks = (html) =>
+      [...strip(html).matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
+        .map((match) => ({ href: match[1], label: match[2], current: match[0].includes('aria-current="page"') }));
+
+    const activities = PAGES.activities.Component({ user }).toString();
+    expect(marks(activities).find((t) => t.current)?.href).toBe("/dashboard/activities");
+
+    const shop = PAGES.rewardsShop.Component({ user }).toString();
+    const shopTabs = marks(shop);
+    expect(shopTabs.map((t) => t.label)).toEqual([
+      "Activities", "Rewards", "Shop", "Ways to earn", "Claims", "Credit activity", "Giveaways",
+    ]);
+    expect(shopTabs.find((t) => t.current)?.href).toBe("/dashboard/rewards/shop");
+
+    const giveaways = PAGES.giveaways.Component({ user }).toString();
+    expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways");
+
+    // The Kick channel connection belongs to the Site pages workspace, so the
+    // Engage strip must not appear there.
+    const channel = PAGES.rewardsChannel.Component({ user }).toString();
+    expect(strip(channel)).toBe("");
   });
 });

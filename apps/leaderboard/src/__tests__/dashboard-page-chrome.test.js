@@ -116,7 +116,13 @@ describe("authenticated page chrome", () => {
     const engage = renderGiveawaysContentHtml("raffles");
     expect((engage.match(/<h1\b/g) || []).length).toBe(1);
     expect(engage).toContain('class="v3-head v3-head--row"');
-    expect((engage.match(/aria-current="page"/g) || []).length).toBe(1);
+    // The Engage workspace strip and the giveaway tab row each mark exactly
+    // one current destination.
+    const engageStrips = [...engage.matchAll(/<(nav|div)\b[^>]*v3-tabs[^"]*"[^>]*>[\s\S]*?<\/\1>/g)];
+    expect(engageStrips.length).toBe(2);
+    for (const strip of engageStrips) {
+      expect((strip[0].match(/aria-current="page"/g) || []).length).toBe(1);
+    }
   });
 
   it("keeps breadcrumbs quiet and truncatable rather than a second navigation", () => {

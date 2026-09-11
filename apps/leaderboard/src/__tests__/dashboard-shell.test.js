@@ -275,7 +275,7 @@ describe("signed-in shell navigation", () => {
     expect(reviews).toContain('>Members</a>');
 
     const claims = renderPage(RewardsRedemptionsPage);
-    expect(claims).toContain('<a href="/dashboard/rewards">Rewards</a>');
+    expect(claims).toContain('<a href="/dashboard/activities">Engage</a>');
     expect(claims).toContain('<span aria-current="page">Claims</span>');
 
     const settings = renderPage(UnifiedSettingsPage);
