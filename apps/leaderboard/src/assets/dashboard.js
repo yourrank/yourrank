@@ -13,6 +13,7 @@ import { initPerformance } from "./dashboard/performance.js";
 import { initOverlayDesigner } from "./dashboard/overlay-designer.js";
 import { setupSettingsScreen } from "./dashboard/account.js";
 import { initGames } from "./dashboard/games.js";
+import { initQuickActions, setQuickActionsSite } from "./dashboard/quick-actions.js";
 import { updateProfileMenu } from "./dashboard/profile-menu.js";
 import {
   DashboardRequestError,
@@ -158,6 +159,8 @@ async function init() {
   state.RANK_BY = p.data?.rankBy === "wagered" ? "wagered" : "score";
   state.ONBOARDING = p.onboarding || {};
   state.SAMPLE_PLAYERS = Boolean(p.data?.samplePlayers);
+  setQuickActionsSite({ id: state.ACTIVE_SITE_ID, slug: state.SLUG, published: state.PUBLISHED && state.ME.emailVerified !== false });
+  initQuickActions();
 
   if (hasEditor) renderEditorTimestamps();
   renderBoardSwitcher();

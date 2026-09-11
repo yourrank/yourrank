@@ -41,7 +41,7 @@ describe('Team client scope and recovery', () => {
     const client = setup();
     client.renderTeam(team('alpha', 'Atlas Community', 'moderator'));
     expect(client.$('teamSiteName').textContent).toBe('Atlas Community');
-    expect(client.$('teamSeatUsage').textContent).toBe('3 of 5 operator seats');
+    expect(client.$('teamSeatUsage').textContent).toBe('3 of 5 team seats');
     expect(client.$('teamReadOnlyNotice').hidden).toBe(false);
     expect(client.$('btnOpenInviteModal').hidden).toBe(true);
     expect(client.$('teamPendingSection').hidden).toBe(true);

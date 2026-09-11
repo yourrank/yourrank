@@ -23,7 +23,13 @@ function dashboardHtml(activePath) {
 }
 
 function hrefs(html) {
-  return [...html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]);
+  // Anchors marked data-chrome-contextual-action are topbar actions that happen
+  // to link somewhere (e.g. the "+ New" menu), not destinations competing with
+  // the rail — the chrome-ownership gate applies the same exclusion.
+  return [...html.matchAll(/<a\b[^>]*>/g)]
+    .filter((match) => !/data-chrome-contextual-action(?:="[^"]*")?/.test(match[0]))
+    .map((match) => match[0].match(/\bhref="([^"]+)"/)?.[1])
+    .filter(Boolean);
 }
 
 function shellArea(html, tag, endTag) {

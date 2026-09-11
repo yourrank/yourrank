@@ -17,7 +17,7 @@ const SETTINGS_DESCRIPTIONS = {
   account: "Your profile, password, and signed-in devices.",
   team: "People who can help manage the selected site.",
   plan: "Your current plan, usage, and payment history.",
-  connections: "Accounts and services connected to YourRank.",
+  connections: "Sign-in accounts and delivery settings for your account. The Kick channel that powers a site's rewards is managed per site.",
   data: "Export your account data or permanently close your account.",
 };
 

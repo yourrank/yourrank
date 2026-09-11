@@ -179,7 +179,7 @@ const postbacksWidget = `<details class="lb-widget lb-widget--full account-setti
 
 const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
         <h2>Connections</h2>
-        <p class="card-sub">Account identities and per-site delivery settings. Configured means YourRank has saved the setup; use each service's test action to verify delivery.</p>
+        <p class="card-sub">Accounts linked to you, plus delivery settings shared by your sites. Each site's own Kick channel lives under Site → Connections. Configured means the setup is saved; use each service's test action to verify delivery.</p>
         <div id="connectedAccounts"><p class="hint">Loading…</p></div>
       </div>`;
 
@@ -243,7 +243,7 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
           <span class="v3-chip v3-chip--pro" id="teamPlanChip">Plan</span>
           <div class="team-seat-meter" aria-hidden="true"><i id="teamSeatBar"></i></div>
           <div class="team-seat-copy">
-            <strong id="teamSeatUsage">Loading operator seats…</strong>
+            <strong id="teamSeatUsage">Loading team seats…</strong>
             <span id="teamSeatContext">Account-wide seat usage across the owner's sites.</span>
           </div>
         </div>

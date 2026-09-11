@@ -48,7 +48,7 @@ describe("neutral site creation", () => {
 
     expect(state).toContain('RANK_BY: "score"');
     expect(dashboard.indexOf('<option value="score">Points / score</option>'))
-      .toBeLessThan(dashboard.indexOf('<option value="wagered">Legacy amount</option>'));
+      .toBeLessThan(dashboard.indexOf('<option value="wagered">Amount</option>'));
     expect(dashboard).toContain('id="qa_score"');
     expect(dashboard).toContain("For a normal leaderboard, use <strong>Name</strong> and <strong>Score</strong>");
     expect(players).toContain('const scoreMode = state.RANK_BY !== "wagered"');

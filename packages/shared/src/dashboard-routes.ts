@@ -413,6 +413,8 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   edit: [{ classification: "one-shot-action", context: "Rewards → Ways to earn", where: "credits.js prefillEditFromQuery: opens one mapping editor; consumed on load, not navigation identity." }],
   viewer: [{ classification: "one-shot-action", context: "Rewards → Activity", where: "credits.js history tab: prefills the history username filter once." }],
   member: [{ classification: "one-shot-action", context: "People → Members", where: "credits.js openMemberFromQuery: opens one existing member drawer from a review; consumed on load, not navigation identity." }],
+  new: [{ classification: "one-shot-action", context: "Rewards → Shop", where: "Topbar + New → New shop item; credits.js enter() opens the shop drawer once and scrubs the parameter." }],
+  invite: [{ classification: "one-shot-action", context: "Settings → Team", where: "Topbar + New → Invite member; account.js init() opens the invite modal once and scrubs the parameter." }],
   kick_connected: [{ classification: "one-shot-action", context: "dashboard documents after Kick OAuth", where: "credits.js OAuth return banner; deleted from the URL after display." }],
   error: [
     { classification: "one-shot-action", context: "dashboard documents after OAuth", where: "credits.js OAuth error banner; deleted from the URL after display." },

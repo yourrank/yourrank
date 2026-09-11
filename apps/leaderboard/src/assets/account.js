@@ -452,7 +452,7 @@ function renderTeam(data) {
   if (planChip) planChip.textContent = { free: "Free", pro: "Pro", team: "Team" }[plan] || plan;
   const seatBar = $("teamSeatBar");
   if (seatBar?.style) seatBar.style.width = `${Math.min(100, Math.round((used / limit) * 100))}%`;
-  if (seatUsage) seatUsage.textContent = `${used} of ${limit} operator seats`;
+  if (seatUsage) seatUsage.textContent = `${used} of ${limit} team seats`;
   if (seatContext) {
     seatContext.textContent = plan === "team"
       ? atLimit
@@ -701,6 +701,14 @@ async function init() {
   wireAccount();
   wireTeam();
   await loadTeam();
+  // Topbar "+ New > Invite member" lands here with ?invite=1 — open the
+  // invite modal directly once the team context is loaded.
+  const inviteParams = new URLSearchParams(location.search);
+  if (inviteParams.get("invite") === "1") {
+    inviteParams.delete("invite");
+    history.replaceState({}, "", `${location.pathname}${inviteParams.size ? `?${inviteParams}` : ""}${location.hash}`);
+    $("btnOpenInviteModal")?.click();
+  }
   renderPlan();
   loadPlanUsage();
   renderReferrals();
