@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   ACTIVE_VIEWER_LIMITS,
   BOARD_LIMITS,
@@ -117,9 +118,9 @@ export function PricingPlans() {
                       </li>
                     ))}
                   </ul>
-                  <a href={`/signup?plan=${tier}&interval=${interval}`} data-magnetic className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
+                  <Link href={`/signup?plan=${tier}&interval=${interval}`} data-magnetic className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
                     {plan.cta}
-                  </a>
+                  </Link>
                 </article>
               );
             })}

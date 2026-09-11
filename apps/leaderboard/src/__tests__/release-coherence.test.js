@@ -11,7 +11,9 @@ import {
   versionTag,
 } from "../../../../scripts/release-recovery-state.mjs";
 
-const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
+// Normalize CRLF (Windows autocrlf checkouts) so raw-content assertions match the LF repo text.
+const rootFile = (path) =>
+  readFile(new URL(`../../../../${path}`, import.meta.url), "utf8").then((s) => s.replace(/\r\n/g, "\n"));
 
 const OLD_SHA = "d36b6253230e6dad3a535feacc02845e0463f52b";
 const NEW_SHA = "5fdcc1d005db05105b7ec645972eb6799af97d69";

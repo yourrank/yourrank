@@ -1,4 +1,13 @@
 // overlay page
+// Canvas mode: when the URL carries x/y (the overlay designer composes these),
+// the page renders as a full 1920×1080-style stream canvas and the widget is
+// positioned inside it, so one browser source covers the whole scene.
+const clampNum = (v, min, max, dflt) => {
+  if (v === null || v === "") return dflt;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+};
+
 export const overlayPage = (data, opts = {}) => {
   const b = data.brand || {};
   const br = data.branding || {};
@@ -20,6 +29,17 @@ export const overlayPage = (data, opts = {}) => {
   const accentB = (br.accentB && /^#[0-9a-fA-F]{6}$/.test(br.accentB)) ? br.accentB : "#35c211";
   const dataJson = JSON.stringify({ players, endsAt, rankBy }).replace(/</g, "\\u003c");
   const isTicker = opts.layout === "ticker" || opts.layout === "bar";
+  const canvas = opts.canvas === true;
+  const cx = clampNum(opts.x, 0, 100, 50);
+  const cy = clampNum(opts.y, 0, 100, 50);
+  const cs = clampNum(opts.scale, 0.5, 2, 1);
+  // Canvas positioning rides in a second style tag so it always wins over the
+  // base geometry above without duplicating every widget rule.
+  const canvasCss = canvas ? `
+html,body{width:100vw;height:100vh;}
+${isTicker
+    ? `.ov-ticker-bar{position:fixed;left:0;top:${cy}%;transform:translateY(-50%);}`
+    : `.ov-wrap{position:fixed;left:${cx}%;top:${cy}%;transform:translate(-50%,-50%) scale(${cs});transform-origin:center center;}`}` : "";
   const tickerRows = players.map((p, i) => `<div class="ov-ticker-item" data-name="${esc(p.name)}"><span class="ov-medal">${medal(i)}</span><span class="ov-name">${esc(p.name)}</span><span class="ov-wager">${fmtMetric(p)}</span></div>`).join("");
 
   return `<!DOCTYPE html>
@@ -77,6 +97,7 @@ html,body{${isTicker ? "width:100%;height:52px;" : "width:320px;"}overflow:hidde
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
 </style>
+${canvasCss ? `<style nonce="${opts.nonce || ""}">${canvasCss}</style>` : ""}
 </head><body>
 ${isTicker ? `
 <div class="ov-ticker-bar">

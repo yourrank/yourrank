@@ -168,7 +168,7 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
   // topbar, site selector) stays visible and stable.
   const container = $("lbDynamic");
   if (!container) return false;
-  showLocalLoading(container);
+  showLocalLoading(container, page);
 
   // Hide all SPA sections; show the dynamic content region.
   hideSpaSections();
@@ -295,8 +295,46 @@ export function leaveDynamicSection() {
 }
 
 /** Show a local loading skeleton inside the content region. */
-function showLocalLoading(container) {
-  container.innerHTML = `<div class="lb-dynamic-loading" role="status" aria-live="polite" aria-busy="true"><div class="ui-loading__spinner" aria-hidden="true"></div><span class="sr-only">Loading…</span></div>`;
+function showLocalLoading(container, page = "") {
+  // DEF-06: Structured skeleton instead of bare spinner to prevent CLS.
+  // Geometry mirrors the incoming fragment: cards for Rewards/Giveaways,
+  // form fields for Settings, table rows elsewhere (Activities, Audience).
+  let body;
+  if (page === "rewards" || page === "giveaways" || page === "siteConnections") {
+    body = `<div class="lb-skel-cards">
+      ${[1,2,3,4,5,6].map(() => `<div class="lb-skel-card">
+        <div class="skeleton v3-skel v3-skel--badge"></div>
+        <div class="skeleton v3-skel v3-skel--text" style="width:70%"></div>
+        <div class="skeleton v3-skel v3-skel--text v3-skel--short"></div>
+        <div class="skeleton v3-skel v3-skel--btn"></div>
+      </div>`).join("")}
+    </div>`;
+  } else if (page === "settings" || page === "account") {
+    body = `<div class="lb-skel-form">
+      ${[1,2,3,4].map(() => `<div class="lb-skel-field">
+        <div class="skeleton v3-skel v3-skel--label"></div>
+        <div class="skeleton v3-skel v3-skel--input"></div>
+      </div>`).join("")}
+      <div class="skeleton v3-skel v3-skel--btn"></div>
+    </div>`;
+  } else {
+    body = `<div class="lb-skel-rows">
+      ${[1,2,3,4,5].map(() => `<div class="lb-skel-row">
+        <div class="skeleton v3-skel v3-skel--avatar"></div>
+        <div class="skeleton v3-skel v3-skel--text" style="flex:1"></div>
+        <div class="skeleton v3-skel v3-skel--text v3-skel--short"></div>
+        <div class="skeleton v3-skel v3-skel--btn"></div>
+      </div>`).join("")}
+    </div>`;
+  }
+  container.innerHTML = `<div class="lb-dynamic-loading" role="status" aria-live="polite" aria-busy="true">
+    <div class="lb-skel-header">
+      <div class="skeleton v3-skel v3-skel--title"></div>
+      <div class="skeleton v3-skel v3-skel--btn"></div>
+    </div>
+    ${body}
+    <span class="sr-only">Loading…</span>
+  </div>`;
 }
 
 /**

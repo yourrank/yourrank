@@ -34,18 +34,92 @@ export function logError(context, err, extra = {}) {
   }
 }
 
-export function showToast(message, type = "error") {
-  const el = document.getElementById("status");
-  if (!el) return;
-  el.textContent = message;
-  el.className = "toast"; // reset classes
-  if (type) el.classList.add(`toast--${type}`);
-  el.hidden = false;
-  // Automatically hide after 4 seconds
-  clearTimeout(el._toastTimeout);
-  el._toastTimeout = setTimeout(() => {
-    el.hidden = true;
-  }, 4000);
+// DEF-07: Stacked toast queue — each notification gets its own element and
+// dismiss timer. Sequential toasts no longer obliterate each other.
+// Default type changed from "error" to "info" so success calls without a
+// second argument no longer render red.
+let _toastContainer = null;
+
+function getToastContainer() {
+  if (_toastContainer && document.contains(_toastContainer)) return _toastContainer;
+  // Reuse an existing container if one was injected by the HTML template.
+  _toastContainer = document.getElementById("yrToastContainer");
+  if (!_toastContainer) {
+    _toastContainer = document.createElement("div");
+    _toastContainer.id = "yrToastContainer";
+    _toastContainer.setAttribute("role", "region");
+    _toastContainer.setAttribute("aria-label", "Notifications");
+    _toastContainer.setAttribute("aria-live", "polite");
+    _toastContainer.setAttribute("aria-atomic", "false");
+    Object.assign(_toastContainer.style, {
+      position: "fixed",
+      bottom: "1.25rem",
+      right: "1.25rem",
+      zIndex: "9999",
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.5rem",
+      maxWidth: "20rem",
+      pointerEvents: "none",
+    });
+    document.body.appendChild(_toastContainer);
+  }
+  return _toastContainer;
+}
+
+export function showToast(message, type = "info", action = null) {
+  const container = getToastContainer();
+  // Keep queue to 5 visible toasts max — remove oldest if exceeded.
+  while (container.children.length >= 5) {
+    container.firstElementChild?.remove();
+  }
+  const item = document.createElement("div");
+  item.className = `toast toast--${type}`;
+  item.setAttribute("role", "status");
+  // The base .toast class is position:fixed for the legacy single-element
+  // sink; stacked toasts must participate in the container's flex layout.
+  Object.assign(item.style, {
+    position: "static",
+    width: "100%",
+    boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    pointerEvents: "auto",
+  });
+  const text = document.createElement("span");
+  text.style.minWidth = "0";
+  text.style.flex = "1";
+  text.textContent = message;
+  item.appendChild(text);
+
+  // DEF-07: Optional inline action ("Undo", "View") inside the toast.
+  let actionBtn = null;
+  if (action?.label && typeof action.onClick === "function") {
+    actionBtn = document.createElement("button");
+    actionBtn.type = "button";
+    actionBtn.textContent = action.label;
+    actionBtn.style.cssText = "background:none;border:1px solid currentColor;border-radius:4px;cursor:pointer;padding:0.15rem 0.5rem;font-size:0.8125rem;color:inherit;opacity:0.9;flex-shrink:0;";
+    actionBtn.addEventListener("click", () => { clearTimeout(timer); item.remove(); action.onClick(); });
+    item.appendChild(actionBtn);
+  }
+
+  // Close button for manual dismissal.
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.setAttribute("aria-label", "Dismiss notification");
+  closeBtn.textContent = "×";
+  closeBtn.style.cssText = "background:none;border:none;cursor:pointer;margin-left:0.25rem;opacity:0.6;font-size:1rem;line-height:1;flex-shrink:0;";
+  closeBtn.addEventListener("click", () => { clearTimeout(timer); item.remove(); });
+  item.appendChild(closeBtn);
+
+  container.appendChild(item);
+
+  // Auto-dismiss after 4 s (7 s when an action needs time to be reached).
+  // Pause on hover.
+  let timer = setTimeout(() => item.remove(), actionBtn ? 7000 : 4000);
+  item.addEventListener("mouseenter", () => clearTimeout(timer));
+  item.addEventListener("mouseleave", () => { timer = setTimeout(() => item.remove(), 2000); });
 }
 
 /**

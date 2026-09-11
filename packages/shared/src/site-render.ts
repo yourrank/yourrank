@@ -18,6 +18,7 @@ import {
   renderLegalSidebar,
   esc,
   safeUrl,
+  formatWaitSeconds,
 } from "./public-render-helpers.js";
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
 import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
@@ -430,6 +431,8 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, 
   const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
   const inStock = stock === null || stock > 0;
   const short = viewer ? Math.max(0, cost - balance) : 0;
+  // Server-computed snapshot of this member's per-item cooldown (seconds).
+  const cooldownRemaining = Math.max(0, Math.ceil(Number(item.cooldownRemaining) || 0));
 
   let state = "";
   let action;
@@ -441,6 +444,10 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, 
   } else if (blocked) {
     state = "Claiming disabled on this site";
     action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
+  } else if (cooldownRemaining > 0) {
+    // Stated in words with the actual wait, so the greyed control explains itself.
+    state = `Ready in ${formatWaitSeconds(cooldownRemaining)}`;
+    action = `<span class="yr-act yr-act--off" role="note">On cooldown</span>`;
   } else if (!inStock) {
     // The control already says it in words, so the row does not say it twice.
     action = `<span class="yr-act yr-act--off" role="note">Out of stock</span>`;

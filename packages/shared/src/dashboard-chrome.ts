@@ -22,6 +22,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 const MENU_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const COLLAPSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+const SUN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>';
 
 export interface NavLinkItem {
   key: string;
@@ -203,12 +204,14 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
     : "";
   return `<div class="v3-dash" id="${esc(rootId)}" data-auth-workspace="true"${rootIdentity} data-shell-drawer="shared"${rootHidden}>
 ${DESIGN_CONTRACT}
-<div class="toast" id="status" role="status" aria-live="polite"></div>
+<a href="#main-content" class="sr-only skip-link">Skip to main content</a>
+<div id="yrToastContainer" role="region" aria-label="Notifications" aria-live="polite" aria-atomic="false" style="position:fixed;bottom:1.25rem;right:1.25rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:20rem;pointer-events:none"></div>
 <div class="lb-shell">
 <aside class="lb-side" id="lbSide" aria-label="${esc(sideLabel)}">
 <div class="lb-side-brandrow">
 <a class="lb-side-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-side-brandcopy"><b>YourRank</b><small>Creator workspace</small></span></a>
 ${collapse}
+<button class="lb-side-theme" type="button" aria-label="Switch to dark theme" aria-pressed="false" data-toggle-theme>${SUN_ICON}</button>
 <button class="lb-side-close" type="button" aria-label="Close navigation" data-close-side="true">${CLOSE_ICON}</button>
 </div>
 ${head}

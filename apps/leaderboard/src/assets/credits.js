@@ -42,6 +42,12 @@ let state = {}; // local credits page state (not dashboard/state.js)
 let viewerCtrl, redemptionCtrl, rewardCtrl;
 let activeSiteId = "";
 let pendingOAuthFeedback = null;
+// P3-5: selected member ids for the Audience bulk toolbar. Selection survives
+// re-renders and pagination; it is cleared on site change or explicit clear.
+const memberSelection = new Set();
+// The per-viewer manual adjustment endpoint is rate limited to 30 requests /
+// 60 s per user, so one bulk apply may not exceed this many members.
+const BULK_AWARD_MAX = 25;
 const statusClearTimers = new Map();
 let activityEvents = [];
 let activityCursor = null;
@@ -242,7 +248,9 @@ function renderViewerRow(v) {
   const activity = lastActiveAt
     ? `<b title="Last active: ${esc(fmtDate(lastActiveAt))}">Active ${esc(relative(lastActiveAt))}</b>`
     : "<b>No activity yet</b>";
-  return `<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked on this site</span>' : ""}</span></div></td><td data-label="Membership"><div class="cr-member-activity">${activity}</div></td><td data-label="Account connection"><div class="cr-member-platforms">${platformHtml}</div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.totalEarned) || 0} · Spent ${Number(v.totalSpent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row"><button class="btn btn--sm" type="button" data-member-detail="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">View member</button></div></td>`;
+  // P3-5: multi-select checkbox feeds the bulk toolbar (award credits, CSV).
+  const selectCell = `<td class="cr-member-select-col" data-label="Select"><input type="checkbox" data-member-select="${esc(v.id)}" aria-label="Select ${esc(uname)}" ${memberSelection.has(v.id) ? "checked" : ""} /></td>`;
+  return `${selectCell}<td data-label="Member"><div class="cr-viewer-identity">${avatar}<span class="cr-member-name"><b>${esc(uname)}</b>${v.blocked ? '<span class="v3-chip v3-chip--cancelled">Blocked on this site</span>' : ""}</span></div></td><td data-label="Membership"><div class="cr-member-activity">${activity}</div></td><td data-label="Account connection"><div class="cr-member-platforms">${platformHtml}</div></td><td data-label="Credits"><div class="cr-member-credits"><b>${Number(v.balance) || 0} Credits</b><span>Earned ${Number(v.totalEarned) || 0} · Spent ${Number(v.totalSpent) || 0}</span></div></td><td data-label="Actions" class="ta-r cr-member-actions"><div class="cr-member-action-row"><button class="btn btn--sm" type="button" data-member-detail="${esc(v.id)}" aria-controls="cr-member-history-drawer" aria-expanded="false">View member</button></div></td>`;
 }
 async function loadMemberHistoryDialog() {
   if (!window.YRDialog) await import("./dialog.js");
@@ -650,7 +658,7 @@ function openShop(item, trigger) {
   if ($("cr-shop-image-remove")) $("cr-shop-image-remove").hidden = !item?.has_image;
   drawerTrigger = trigger || $("cr-shop-new");
   $("cr-shop")?.classList.add("has-drawer");
-  $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-active").checked = item?.active !== false; 
+  $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-cooldown").value = String(Number(item?.cooldown_seconds) || 0); $("cr-shop-active").checked = item?.active !== false;
   $("cr-shop-name").focus(); 
 }
 function closeShop() { rewardImageVersion++; rewardImageProcessing = false; $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
@@ -1009,7 +1017,9 @@ async function load() {
   setGlobalLoading(true);
   try {
     const shell = await loadBoardShell();
-    activeSiteId = shell.activeSiteId;
+    const nextSiteId = shell.activeSiteId;
+    if (nextSiteId !== activeSiteId) { memberSelection.clear(); updateBulkBar(); }
+    activeSiteId = nextSiteId;
     updateKickAuthLinks();
     state = tab() === "viewers"
       ? await api("GET", sitePath("/api/people/members"))
@@ -1039,9 +1049,114 @@ async function load() {
     throw err;
   } finally { setGlobalLoading(false); }
 }
+// P3-5: Audience bulk operations ---------------------------------------------
+function updateBulkBar() {
+  const bar = $("cr-member-bulk-bar");
+  if (!bar) return;
+  const count = memberSelection.size;
+  bar.hidden = count === 0;
+  const label = $("cr-bulk-count");
+  if (label) label.textContent = `${count} selected${count > BULK_AWARD_MAX ? ` — bulk award is capped at ${BULK_AWARD_MAX} per apply` : ""}`;
+  const awardBtn = $("cr-bulk-award");
+  if (awardBtn) awardBtn.disabled = count === 0 || count > BULK_AWARD_MAX;
+}
+
+function clearMemberSelection() {
+  memberSelection.clear();
+  document.querySelectorAll("[data-member-select]").forEach((box) => { box.checked = false; });
+  const selectAll = $("cr-member-select-all");
+  if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+  updateBulkBar();
+}
+
+function exportMembersCsv(rows) {
+  const header = ["name", "credits", "total_earned", "total_spent", "blocked", "last_active_at"];
+  const lines = rows.map((v) => [
+    memberIdentity(v),
+    String(Number(v.balance) || 0),
+    String(Number(v.totalEarned) || 0),
+    String(Number(v.totalSpent) || 0),
+    v.blocked ? "yes" : "no",
+    v.lastSeenAt || v.lastCreditAt || "",
+  ].map((value) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)).join(","));
+  const blob = new Blob(["\uFEFF" + header.join(",") + "\n" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `members-${activeSiteId || "export"}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function bulkAwardMembers() {
+  const amount = Math.floor(Number($("cr-bulk-amount")?.value));
+  const reason = $("cr-bulk-reason")?.value.trim();
+  const statusEl = $("cr-viewer-status");
+  if (!Number.isFinite(amount) || amount <= 0) { setStatus("cr-viewer-status", "Enter a positive credit amount.", true); return; }
+  if (!reason) { setStatus("cr-viewer-status", "An audit note is required for bulk credit awards.", true); return; }
+  const ids = [...memberSelection];
+  if (!ids.length) return;
+  if (ids.length > BULK_AWARD_MAX) { setStatus("cr-viewer-status", `Bulk award is capped at ${BULK_AWARD_MAX} members per apply.`, true); return; }
+  const awardBtn = $("cr-bulk-award");
+  if (awardBtn) awardBtn.disabled = true;
+  setStatus("cr-viewer-status", `Awarding ${amount} credits to ${ids.length} member${ids.length === 1 ? "" : "s"}…`);
+  let ok = 0; const failed = [];
+  // Sequential by design: one shared ledger write at a time keeps the 30/60s
+  // adjustment rate limit intact and surfaces per-member errors clearly.
+  for (const id of ids) {
+    try {
+      await api("POST", sitePath(`/api/credits/viewers/${encodeURIComponent(id)}/balance`), { delta: amount, reason });
+      ok++;
+    } catch (err) {
+      logError("bulk-award-member", err);
+      failed.push(id);
+      if (err?.code === "RATE_LIMITED" || err?.status === 429) break;
+    }
+  }
+  memberSelection.clear();
+  failed.forEach((id) => memberSelection.add(id));
+  updateBulkBar();
+  if (awardBtn) awardBtn.disabled = false;
+  if (!failed.length) {
+    setStatus("cr-viewer-status", `Awarded ${amount} credits to ${ok} member${ok === 1 ? "" : "s"}.`);
+    clearMemberSelection();
+  } else {
+    setStatus("cr-viewer-status", `Awarded ${ok} of ${ids.length}. ${ids.length - ok} remaining — rate limit reached or an error occurred; retry the selected members.`, true);
+  }
+  await load().catch(() => {});
+}
+
 function wireActions() {
   if (wired) return;
   wired = true;
+  // P3-5: member multi-select + bulk toolbar.
+  $("cr-viewer-list")?.addEventListener("change", (e) => {
+    const box = e.target.closest("[data-member-select]");
+    if (!box) return;
+    if (box.checked) memberSelection.add(box.dataset.memberSelect);
+    else memberSelection.delete(box.dataset.memberSelect);
+    updateBulkBar();
+  });
+  $("cr-member-select-all")?.addEventListener("change", (e) => {
+    const boxes = [...document.querySelectorAll("[data-member-select]")];
+    boxes.forEach((box) => {
+      box.checked = e.target.checked;
+      if (box.checked) memberSelection.add(box.dataset.memberSelect);
+      else memberSelection.delete(box.dataset.memberSelect);
+    });
+    updateBulkBar();
+  });
+  $("cr-bulk-award")?.addEventListener("click", () => { bulkAwardMembers().catch((err) => { logError("bulk-award", err); setStatus("cr-viewer-status", err.message || "Bulk award failed.", true); }); });
+  $("cr-bulk-export")?.addEventListener("click", () => {
+    const rows = memberSelection.size
+      ? (state.members || []).filter((v) => memberSelection.has(v.id))
+      : (state.members || []);
+    if (!rows.length) { setStatus("cr-viewer-status", "Nothing to export yet.", true); return; }
+    exportMembersCsv(rows);
+  });
+  $("cr-bulk-clear")?.addEventListener("click", () => clearMemberSelection());
   wireAutosave("cr-channel-form", "channel"); wireAutosave("cr-reward-form", "reward"); wireAutosave("cr-reward-create-form", "reward-create"); wireAutosave("cr-shop-form", "shop"); wireAutosave("cr-viewer-auth-form", "viewer-auth"); wireAutosave("cr-history-form", "history");
   $("cr-channel-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); const btn = e.submitter || $("cr-channel-submit"); setLoading(btn, true, "Saving…");
@@ -1067,7 +1182,7 @@ function wireActions() {
 
   $("cr-shop-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); if (rewardImageProcessing) return; const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), active: $("cr-shop-active").checked, imageData: rewardImageDraft }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
+    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), cooldownSeconds: Number($("cr-shop-cooldown").value) || 0, active: $("cr-shop-active").checked, imageData: rewardImageDraft }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
     catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-shop-image")?.addEventListener("change", async () => {
@@ -1139,6 +1254,15 @@ function wireActions() {
     }
 
     setLoading(btn, true, "Sending…");
+    // P3-6: optimistic balance update — reflect the award instantly, roll back
+    // if the server rejects it. The authoritative reload follows success.
+    const member = (state.members || []).find((m) => m.id === viewerId);
+    const previousBalance = member ? Number(member.balance) || 0 : null;
+    if (member) {
+      member.balance = previousBalance + amount;
+      member.totalEarned = (Number(member.totalEarned) || 0) + amount;
+      render();
+    }
     try {
       const endpoint = sitePath(`/api/credits/viewers/${encodeURIComponent(viewerId)}/balance`);
       await api("POST", endpoint, { delta: amount, reason });
@@ -1148,7 +1272,12 @@ function wireActions() {
         load();
       }, 900);
     } catch (err) {
-      setStatus("cr-tip-status", err.message, true);
+      if (member) {
+        member.balance = previousBalance;
+        member.totalEarned = (Number(member.totalEarned) || 0) - amount;
+        render();
+      }
+      setStatus("cr-tip-status", `${err.message} — the balance was restored.`, true);
     } finally {
       setLoading(btn, false);
     }

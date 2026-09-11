@@ -1,7 +1,7 @@
 // Account page entry point: profile, plan, postbacks, danger zone.
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
-import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmModal } from "./dashboard/utils.js";
+import { $, esc, getCsrf, logError, copyToClipboard, flashButton, showConfirmModal, showToast } from "./dashboard/utils.js";
 import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
@@ -20,7 +20,12 @@ let teamSiteName = "";
 let teamLoadVersion = 0;
 function setStatus(message, isError) {
   const el = statusEl();
-  if (!el) return;
+  if (!el) {
+    // DEF-08: The chrome no longer renders the single #status element, so
+    // route account feedback through the stacked toast queue instead.
+    if (message) showToast(message, isError ? "error" : "success");
+    return;
+  }
   el.textContent = message;
   el.className = isError ? "toast toast--error" : "toast toast--success";
   el.hidden = false;
@@ -299,14 +304,28 @@ function renderConnectedAccounts(data) {
   if (!data || data.error) { wrap.innerHTML = `<p class="error">Could not load connected accounts.</p>`; return; }
 
   const connections = Array.isArray(data.connections) ? data.connections : [];
+  // DEF-14: capabilities are returned by the API alongside connections so we
+  // can gate privileged actions client-side without exposing the button to
+  // users who will receive a 403 when they click it. Deny by default: the
+  // capability must be explicitly true (absent key on a cached or partial
+  // response must not unlock privileged UI).
+  const canManageConnections = (data.capabilities || {}).canRoleManageConnections === true;
+
   wrap.innerHTML = `<div class="account-connection-list">${connections.map((connection) => {
     const warning = connection.status === "needs_attention";
     const muted = ["not_connected", "not_configured", "paused"].includes(connection.status);
-    const action = connection.action?.kind === "disconnect_telegram"
-      ? `<button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">${esc(connection.action.label)}</button>`
-      : connection.action?.kind === "disconnect_kick"
+    let action;
+    if (connection.action?.kind === "disconnect_telegram") {
+      action = `<button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">${esc(connection.action.label)}</button>`;
+    } else if (connection.action?.kind === "disconnect_kick") {
+      // DEF-14: Only render the Kick Disconnect button for users with the
+      // canRoleManageConnections capability. Moderators see a read-only label.
+      action = canManageConnections
         ? `<button class="btn btn--sm btn--ghost" type="button" data-kick-disconnect="${esc(connection.action.siteId)}">${esc(connection.action.label)}</button>`
-      : `<a class="btn btn--sm ${warning ? "btn--accent" : "btn--ghost"}" href="${esc(connection.action?.href || "#")}">${esc(connection.action?.label || "Manage")}</a>`;
+        : `<span class="account-connection-readonly">Connected by site owner</span>`;
+    } else {
+      action = `<a class="btn btn--sm ${warning ? "btn--accent" : "btn--ghost"}" href="${esc(connection.action?.href || "#")}">${esc(connection.action?.label || "Manage")}</a>`;
+    }
     return `<div class="account-connection-row">
       <div><strong>${esc(connection.provider)}</strong><span class="account-connection-scope">${esc(connection.scope)}${connection.selectedSite ? " · Selected site" : ""}</span><p>${esc(connection.detail)}</p></div>
       <span class="account-connection-status${warning ? " is-warning" : muted ? " is-muted" : ""}">${esc(connection.statusLabel)}</span>
@@ -334,11 +353,61 @@ function renderConnectedAccounts(data) {
   }));
 }
 
+// P3-4: Integration Health card — statuses from the connections payload plus
+// real "Send test" triggers against the saved per-site delivery settings.
+// Delivery metrics are not recorded server-side yet, so the card reports that
+// honestly instead of showing empty charts.
+function renderIntegrationHealth(data) {
+  const wrap = $("integrationHealthBody");
+  if (!wrap) return;
+  if (!data || data.error) { wrap.innerHTML = `<p class="error">Could not load integration health.</p>`; return; }
+
+  const health = data.integrationHealth || {};
+  const connections = Array.isArray(data.connections) ? data.connections : [];
+  const siteRows = connections
+    .filter((c) => c.id?.startsWith("discord-site:") || c.id?.startsWith("telegram-site:"))
+    .map((c) => {
+      const siteId = c.id.split(":")[1];
+      const channel = c.id.startsWith("discord-site:") ? "discord" : "telegram";
+      const testable = c.status === "configured" || c.status === "enabled";
+      return `<div class="account-connection-row">
+        <div><strong>${esc(c.provider)}</strong><span class="account-connection-scope">${esc(c.scope)}</span><p>${esc(c.detail)}</p></div>
+        <span class="account-connection-status${c.status === "configured" || c.status === "enabled" ? "" : " is-muted"}">${esc(c.statusLabel)}</span>
+        ${testable ? `<button class="btn btn--sm btn--ghost" type="button" data-integration-test="${channel}" data-site-id="${esc(siteId)}">Send test</button><span class="hint" data-integration-status="${channel}-${esc(siteId)}" role="status" aria-live="polite"></span>` : ""}
+      </div>`;
+    }).join("");
+
+  const kickIngest = health.kickIngest?.configured ? "Configured" : "Not configured";
+  const kickIngestClass = health.kickIngest?.configured ? "" : " is-warning";
+  const telemetry = health.deliveryTelemetry;
+
+  wrap.innerHTML = `<div class="account-connection-list">
+      <div class="account-connection-row">
+        <div><strong>Kick reward ingest</strong><span class="account-connection-scope">Platform</span><p>The signed webhook endpoint that receives Kick channel reward events.</p></div>
+        <span class="account-connection-status${kickIngestClass}">${esc(kickIngest)}</span>
+      </div>
+      ${siteRows}
+    </div>
+    <p class="hint">${telemetry && !telemetry.available ? esc(telemetry.reason || "Delivery telemetry is not recorded yet.") : ""}</p>`;
+
+  wrap.querySelectorAll("[data-integration-test]").forEach((button) => button.addEventListener("click", async () => {
+    const channel = button.dataset.integrationTest;
+    const siteId = button.dataset.siteId;
+    const statusEl = wrap.querySelector(`[data-integration-status="${channel}-${siteId}"]`);
+    button.disabled = true;
+    if (statusEl) statusEl.textContent = "Sending…";
+    const r = await jsonReq("POST", "/api/site/notify/test", { channel, siteId });
+    if (statusEl) statusEl.textContent = r.ok && r.data?.ok ? (r.data.message || "Test sent.") : (r.data?.error || "Test failed.");
+    button.disabled = false;
+  }));
+}
+
 async function loadConnectedAccounts() {
   const board = new URLSearchParams(location.search).get("board");
   const query = board ? `?board=${encodeURIComponent(board)}` : "";
   const r = await jsonReq("GET", `/api/account/connected-accounts${query}`);
   renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" });
+  renderIntegrationHealth(r.ok ? r.data : { error: r.data?.error || "failed" });
 }
 
 function renderTeam(data) {

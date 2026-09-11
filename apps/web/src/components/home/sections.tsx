@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 
 const PROOF_ITEMS = [
@@ -141,9 +143,9 @@ export function ComparisonSection() {
                 </li>
               ))}
             </ul>
-            <a href="/signup" data-magnetic className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-[2px] bg-devin-primary px-5 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
+            <Link href="/signup" data-magnetic className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-[2px] bg-devin-primary px-5 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
               Get started <ArrowIcon />
-            </a>
+            </Link>
           </div>
 
           <div className="bg-[#191919] p-7 sm:p-9">
@@ -183,9 +185,9 @@ export function PricingSnapshot() {
               Choose the operating room you need now. Upgrade when the audience or workflow grows.
             </p>
           </div>
-          <a href="/pricing" className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-devin-ink underline decoration-devin-line underline-offset-4 hover:decoration-devin-primary sm:self-auto">
+          <Link href="/pricing" className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-devin-ink underline decoration-devin-line underline-offset-4 hover:decoration-devin-primary sm:self-auto">
             Compare every limit <ArrowIcon />
-          </a>
+          </Link>
         </div>
 
         <div className="mt-14 grid gap-px overflow-hidden rounded-[16px] border border-devin-line bg-devin-line lg:grid-cols-3">
@@ -210,9 +212,9 @@ export function PricingSnapshot() {
                     </li>
                   ))}
                 </ul>
-                <a href={href} data-magnetic className={`mt-7 inline-flex min-h-11 items-center justify-center rounded-[2px] px-4 text-sm font-medium transition-colors ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
+                <Link href={href} data-magnetic className={`mt-7 inline-flex min-h-11 items-center justify-center rounded-[2px] px-4 text-sm font-medium transition-colors ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
                   {plan.cta}
-                </a>
+                </Link>
               </article>
             );
           })}

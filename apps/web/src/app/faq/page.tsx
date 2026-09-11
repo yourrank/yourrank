@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "@/components/home/magnetic-cursor";
 import { MarketingShell } from "@/components/site-shell";
@@ -63,7 +64,7 @@ export default function FaqPage() {
             </h1>
             <p className="mt-5 text-lg leading-relaxed text-devin-ink-soft">
               Quick answers about the YourRank suite. Can&apos;t find what you need?{" "}
-              <a href="/help/support" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Contact support</a>.
+              <Link href="/help/support" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Contact support</Link>.
             </p>
           </div>
         </section>
@@ -83,8 +84,8 @@ export default function FaqPage() {
               </div>
             ))}
             <div className="mt-14 flex flex-wrap items-center gap-4">
-              <a href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</a>
-              <a href="/pricing" className="text-sm text-devin-ink-soft underline-offset-4 hover:text-devin-ink hover:underline">See pricing &rarr;</a>
+              <Link href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</Link>
+              <Link href="/pricing" className="text-sm text-devin-ink-soft underline-offset-4 hover:text-devin-ink hover:underline">See pricing &rarr;</Link>
             </div>
           </div>
         </section>

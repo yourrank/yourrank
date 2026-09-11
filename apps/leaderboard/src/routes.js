@@ -23,7 +23,7 @@ import {
   handleStats, handleHeatmap, handleTrackCopy, handleTrackScroll, handleGetSite, handleListBoards,
   handleCreateBoard, handleDuplicateBoard, handleArchive, handleArchiveDelete, handleRestoreArchive, handlePutSite,
   handleFinishSetup, handlePutTheme, handleDeleteSite, handleSetActive, handleNotifyTest, handleDomainVerify, handleExportStats,
-  handleExportPlayers, handlePostSiteSections, handleGetSiteGameSettings, handlePostSiteGameSettings
+  handleExportPlayers, handleSiteAuditLog, handlePostSiteSections, handleGetSiteGameSettings, handlePostSiteGameSettings
 } from "./handlers/sites.js";
 import {
   handleTeamList,
@@ -262,6 +262,7 @@ export const ROUTES = [
   { path: "/api/site/active", method: "POST", handler: withHandler(handleSetActive) },
   { path: "/api/site/stats/export", method: "GET", handler: withHandler(handleExportStats) },
   { path: "/api/site/players/export", method: "GET", handler: withHandler(handleExportPlayers) },
+  { path: "/api/site/audit", method: "GET", handler: withHandler(handleSiteAuditLog) },
   { path: "/api/site/stats", method: "GET", handler: withHandler(handleStats) },
   { path: "/api/site/stats/heatmap", method: "GET", handler: withHandler(handleHeatmap) },
   { path: "/api/site/notify/test", method: "POST", handler: withHandler(handleNotifyTest) },

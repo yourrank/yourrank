@@ -31,7 +31,9 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
     LOGO: undefined, // undefined = unchanged, null = remove, string = new data URI
     _dirty: false,
     DRAFT_REVISION: 0,
-    pageReqId: requestId ?? (document.querySelector('meta[name="request-id"]')?.content || ""),
+    // Guarded so the module stays importable outside a browser (bun test);
+    // in the dashboard the meta tag is part of the served document.
+    pageReqId: requestId ?? (typeof document !== "undefined" ? document.querySelector('meta[name="request-id"]')?.content || "" : ""),
   };
   const listeners = new Set();
 

@@ -1,5 +1,5 @@
 // Dashboard entry point. Coordinates data loading and initial render across modules.
-import { $, esc, fromLocalInput, getViewerTimeZone, logError, timeZoneLabel, toLocalInput } from "./dashboard/utils.js";
+import { $, esc, fromLocalInput, getViewerTimeZone, logError, showToast, timeZoneLabel, toLocalInput } from "./dashboard/utils.js";
 import { markDirty, setState, state, subscribe } from "./dashboard/state.js";
 import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, setupShell } from "./dashboard/shell.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
@@ -8,7 +8,9 @@ import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.j
 import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderSections, renderSocials, wirePublishAction } from "./dashboard/site.js";
 import { loadEventLeaderboards } from "./dashboard/event-leaderboards.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
+import { maybeAutoStartTour } from "./dashboard/tour.js";
 import { initPerformance } from "./dashboard/performance.js";
+import { initOverlayDesigner } from "./dashboard/overlay-designer.js";
 import { setupSettingsScreen } from "./dashboard/account.js";
 import { initGames } from "./dashboard/games.js";
 import { updateProfileMenu } from "./dashboard/profile-menu.js";
@@ -283,6 +285,7 @@ async function init() {
   registerSectionMounter((page) => {
     if (page === "games") initGames();
     if (page === "performance") initPerformance();
+    if (page === "board") initOverlayDesigner();
   });
   // Keep every feature visible. Manage sites is useful even with one site because
   // it is also where the operator creates the next one.
@@ -301,14 +304,24 @@ async function init() {
   // section mounter above), so boot only pays for the section being shown.
   if (hasSection("home") || hasBoardSettings) loadCreditsStatus();
   if (hasSection("home")) {
-    loadOverviewLiveData().catch((err) => {
-      logError("overview/live", err);
-      try {
-        renderOverviewSummary();
-      } catch (renderErr) {
-        logError("overview/render", renderErr);
-      }
-    });
+    loadOverviewLiveData()
+      .catch((err) => {
+        logError("overview/live", err);
+        try {
+          renderOverviewSummary();
+        } catch (renderErr) {
+          logError("overview/render", renderErr);
+        }
+      })
+      // P4-1: the tour spotlights live overview cards, so it waits for the
+      // first render before deciding which steps still apply.
+      .finally(() => {
+        try {
+          maybeAutoStartTour();
+        } catch (err) {
+          logError("tour/start", err);
+        }
+      });
   }
   if (hasBoardSettings) {
     setupSettingsScreen(p, urlParams.get("tab") || "customize");
@@ -362,7 +375,7 @@ async function init() {
   });
 
   if (urlParams.get("upgraded")) {
-    $("status").textContent = "Paid access changes only after confirmation from a verified billing provider.";
+    showToast("Paid access changes only after confirmation from a verified billing provider.", "info");
   }
 }
 

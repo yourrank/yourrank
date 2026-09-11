@@ -11,7 +11,9 @@ import {
 } from "../../../../scripts/check-migration-compatibility.mjs";
 import { buildRecoveryPlan } from "../../../../scripts/release-recovery-state.mjs";
 
-const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
+// Normalize CRLF (Windows autocrlf checkouts) so raw-content assertions match the LF repo text.
+const rootFile = (path) =>
+  readFile(new URL(`../../../../${path}`, import.meta.url), "utf8").then((s) => s.replace(/\r\n/g, "\n"));
 
 const EXPAND = "-- yourrank:migration-phase: expand\n";
 const RELEASE_SHA = "5fdcc1d005db05105b7ec645972eb6799af97d69";

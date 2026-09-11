@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "@/components/home/magnetic-cursor";
 import { MarketingShell } from "@/components/site-shell";
@@ -67,7 +68,7 @@ export default function AboutPage() {
               ))}
             </div>
             <div className="mt-10 flex flex-wrap items-center gap-4">
-              <a href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</a>
+              <Link href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</Link>
               <a href="/demo" className="text-sm text-devin-ink-soft underline-offset-4 hover:text-devin-ink hover:underline">Explore the demo &rarr;</a>
             </div>
           </div>

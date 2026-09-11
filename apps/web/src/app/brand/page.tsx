@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "@/components/home/magnetic-cursor";
 import { MarketingShell } from "@/components/site-shell";
@@ -112,7 +113,7 @@ export default function BrandPage() {
             <p className="mt-6 max-w-2xl leading-relaxed text-devin-ink-soft">
               Typography is <span className="font-medium text-devin-ink">Inter</span> for interface and headings, with a
               monospace face for labels and data. Questions about usage?{" "}
-              <a href="/contact" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Contact us</a>.
+              <Link href="/contact" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Contact us</Link>.
             </p>
           </div>
         </section>

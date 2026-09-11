@@ -33,10 +33,69 @@ export const DEFAULT_SECTIONS = {
 const PLAN_ORDER = ["free", "pro", "team"];
 let obsSlug = "";
 
+// P4-3: alert sound presets shared with the overlay page (handlers/overlays.js).
+// The same Web Audio recipes play here so "Test sound" previews exactly what
+// the OBS browser source will stream.
+export const ALERT_SOUND_PRESETS = ["chime", "ding", "fanfare", "none"];
+
+export function readAlertSoundConfig() {
+  const presets = new Set(ALERT_SOUND_PRESETS);
+  const pick = (el, min, max, dflt) => {
+    const n = Number(el?.value);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+  };
+  const requested = String($("ovAlertSound")?.value || "chime").toLowerCase();
+  return {
+    sound: presets.has(requested) ? requested : "chime",
+    vol: pick($("ovAlertVol"), 0, 100, 30),
+    gap: pick($("ovAlertGap"), 0, 300, 0),
+  };
+}
+
+export function playAlertPreset(preset, volume) {
+  if (preset === "none" || typeof window === "undefined") return;
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    const master = ctx.createGain();
+    master.gain.value = Math.max(0, Math.min(1, volume / 100)) * 0.85;
+    master.connect(ctx.destination);
+    const tone = (type, freqs, endAt) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      freqs.forEach((f) => osc.frequency.setValueAtTime(f.value, now + (f.at || 0)));
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + endAt);
+      osc.connect(gain);
+      gain.connect(master);
+      osc.start(now);
+      osc.stop(now + endAt);
+    };
+    if (preset === "ding") {
+      tone("sine", [{ value: 1318.5 }], 0.5);
+    } else if (preset === "fanfare") {
+      tone("square", [{ value: 523.25 }, { value: 659.25, at: 0.12 }, { value: 783.99, at: 0.24 }], 0.7);
+      tone("triangle", [{ value: 1046.5 }, { value: 1318.5, at: 0.3 }], 0.9);
+    } else {
+      tone("sine", [{ value: 523.25 }, { value: 659.25, at: 0.1 }, { value: 783.99, at: 0.2 }, { value: 1046.5, at: 0.3 }], 0.8);
+    }
+  } catch {
+    /* audio unavailable — the copy flow still works */
+  }
+}
+
 async function wireObsTools() {
   const buttons = [
     ["ov-btn-copy-pred-hud", (slug) => `${location.origin}/overlay/prediction?site=${slug}`, "OBS Live Prediction HUD URL copied to clipboard!"],
-    ["ov-btn-copy-alerts", (slug) => `${location.origin}/overlay/alerts?site=${slug}`, "OBS Stream Alerts & Chimes URL copied to clipboard!"],
+    ["ov-btn-copy-alerts", (slug) => {
+      const cfg = readAlertSoundConfig();
+      const params = new URLSearchParams({ site: slug, sound: cfg.sound, vol: String(cfg.vol), gap: String(cfg.gap) });
+      return `${location.origin}/overlay/alerts?${params.toString()}`;
+    }, "OBS Stream Alerts & Chimes URL copied to clipboard!"],
     ["ov-btn-copy-ticker", (slug) => `${location.origin}/${slug}/overlay?layout=ticker`, "OBS Leaderboard Ticker URL copied to clipboard!"],
   ];
   if (!buttons.some(([id]) => $(id))) return;
@@ -86,6 +145,18 @@ async function wireObsTools() {
       if (copied) showToast(message, "success");
     });
   });
+  const testBtn = $("ovAlertTest");
+  if (testBtn && !testBtn._wired) {
+    testBtn._wired = true;
+    testBtn.addEventListener("click", () => {
+      const cfg = readAlertSoundConfig();
+      if (cfg.sound === "none") {
+        showToast("Silent is selected — the overlay will show cards without sound.");
+        return;
+      }
+      playAlertPreset(cfg.sound, cfg.vol);
+    });
+  }
 }
 const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false };
 
@@ -1819,7 +1890,7 @@ export function renderArchives(list) {
               toggleEmpty();
             }, `Restored ${d.players || a.players} players from "${a.label}". Save to publish.`);
           }
-        } else $("status").textContent = d.error || "Couldn't restore that.";
+        } else showToast(d.error || "Couldn't restore that.", "error");
       } finally {
         btn.disabled = false;
         btn.textContent = orig;
@@ -1839,9 +1910,9 @@ export function renderArchives(list) {
         if (res.ok && d.ok) {
           row.remove();
           if (!$("archList").children.length) renderEmpty($("archEmpty"), { icon: "archive", title: "No closed periods yet", body: "Close the current period when you want to preserve its final standings." });
-          $("status").textContent = "Archive deleted.";
+          showToast("Archive deleted.", "success");
         }
-        else $("status").textContent = d.error || "Couldn't delete that.";
+        else showToast(d.error || "Couldn't delete that.", "error");
       } finally {
         if (document.body.contains(btn)) {
           btn.disabled = false;
@@ -1861,7 +1932,12 @@ export async function closeOutPeriod({
   confirmImpl = showConfirmModal,
 } = {}) {
   const btn = $("a_go"), status = $("status");
-  if (![...$("rows").children].length) { status.textContent = "The board is empty — nothing to close out."; return; }
+  // DEF-08: fall back to the toast stack when the host chrome has no #status.
+  const setStatusText = (message, type = "info") => {
+    if (status) { status.textContent = message; status.hidden = false; }
+    else if (message) showToast(message, type);
+  };
+  if (![...$("rows").children].length) { setStatusText("The board is empty — nothing to close out.", "info"); return; }
   const clear = $("a_clear").value;
   const warn = clear === "players" ? "save the current board as past winners, then CLEAR the player list" : clear === "wagers" ? "save the current board as past winners, then reset every wager to 0" : "save the current board as past winners";
   if (!await confirmImpl("Close out period", `This will ${warn}. Continue?`, "Close out", true)) return;
@@ -1870,7 +1946,7 @@ export async function closeOutPeriod({
     const { payload: savePayload, invalid } = collectImpl();
     if (invalid.length) {
       const first = invalid[0];
-      $("status").textContent = `Fix the invalid ${first.label.toLowerCase()} before closing out.`;
+      showToast(`Fix the invalid ${first.label.toLowerCase()} before closing out.`, "error");
       first.input?.focus();
       btn.disabled = false;
       btn.textContent = "Close out period";
@@ -1898,15 +1974,14 @@ export async function closeOutPeriod({
         renderArchives(p.archives || []);
       }, `"${d.label}" closed out. Save to publish.`);
       $("a_label").value = "";
-      status.textContent = `"${d.label}" closed out — it's on your page now.`;
+      setStatusText(`"${d.label}" closed out — it's on your page now.`, "success");
     } else {
       throw new DashboardRequestError(p?.error || "Couldn't refresh the board after closing out.", { code: "SERVER" });
     }
   } catch (err) {
     logError("archive", err);
-    status.setAttribute("role", "alert");
-    status.setAttribute("aria-live", "assertive");
-    status.textContent = closeOutErrorMessage(err);
+    if (status) { status.setAttribute("role", "alert"); status.setAttribute("aria-live", "assertive"); }
+    setStatusText(closeOutErrorMessage(err), "error");
   }
   btn.disabled = false; btn.textContent = "Close out period";
 }
@@ -1961,6 +2036,13 @@ export function syncSettingsSaveBar() {
 
 export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect, button } = {}) {
   const btn = button || $("save"), status = $("status"), publishAction = $("publishAction");
+  // DEF-08: The chrome replaced the single #status element with the stacked
+  // toast queue. Keep writing to #status when a host page still provides it
+  // (tests, worker documents) and fall back to toasts otherwise.
+  const setStatusText = (message, type = "info") => {
+    if (status) { status.textContent = message; status.hidden = false; }
+    else if (message) showToast(message, type);
+  };
   if (_saving) return false;
   const { payload, invalid } = collectImpl();
   if (invalid.length) {
@@ -1970,9 +2052,8 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     }
     collectImpl();
     const message = first.message || `Fix the invalid ${first.label.toLowerCase()} before saving.`;
-    status.textContent = message;
-    status.hidden = false;
-    status.setAttribute("role", "alert");
+    if (status) status.setAttribute("role", "alert");
+    setStatusText(message, "error");
     setSaveStatusText(message);
     first.input?.focus();
     return false;
@@ -1981,13 +2062,13 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   const savingRevision = state.DRAFT_REVISION;
   for (const other of saveButtons()) other.disabled = true;
   setSaveStatusText("Saving your changes…");
-  btn.disabled = true; btn.textContent = "Saving…"; status.textContent = "";
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
+  btn.disabled = true; btn.textContent = "Saving…";
+  if (status) { status.textContent = ""; status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite"); }
   if (publishAction) { publishAction.disabled = true; publishAction.setAttribute("aria-busy", "true"); }
   const limitEl = $("limitMsg"); if (limitEl) limitEl.textContent = "";
   let justPublished = false;
   let saved = false;
+  let saveMessage = "";
   try {
     // AUDIT-B5: raw fetch had no timeout — a hung connection left the button
     // at "Saving…" forever. Run the save through the shared timeout wrapper.
@@ -2009,12 +2090,13 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
     const restoredNotice = $("playersDraftNotice");
     if (restoredNotice && !newerChanges) restoredNotice.hidden = true;
     setState({ _dirty: newerChanges, PUBLISHED: !!payload.published, RANK_BY: payload.rankBy === "wagered" ? "wagered" : "score" });
-    status.textContent = newerChanges
+    const savedMessage = newerChanges
       ? "Saved the earlier changes. Your newer changes are still unsaved — save again before leaving."
       : justPublished && !boardStatus().emailVerified
       ? "Published — Your leaderboard will open to visitors after you confirm your email."
       : "Saved";
-    status.hidden = false;
+    setStatusText(savedMessage, "success");
+    saveMessage = savedMessage;
     if (d.updatedAt) setState({ SITE_UPDATED_AT: d.updatedAt });
     if (d.publishedAt) setState({ PUBLISHED_AT: d.publishedAt });
     const saveBtn = $("save"); if (saveBtn) saveBtn.textContent = "Save changes";
@@ -2049,22 +2131,21 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   } catch (err) {
     logError("save", err);
     // The draft is intentionally NOT cleared on any failure — say so.
-    status.setAttribute("role", "alert");
-    status.setAttribute("aria-live", "assertive");
     if (err?.code === "AUTH") {
-      status.textContent = "Your session ended — your changes are still here. Sign in again in a new tab, then retry.";
+      saveMessage = "Your session ended — your changes are still here. Sign in again in a new tab, then retry.";
     } else if (err?.code === "FORBIDDEN") {
-      status.textContent = err.message || "You don't have access to do that.";
+      saveMessage = err.message || "You don't have access to do that.";
     } else if (err?.code === "concurrency_conflict" || err?.status === 409) {
-      status.textContent = "Another session saved this leaderboard. Your draft is still here — reload to review their version, or save again after reconciling.";
+      saveMessage = "Another session saved this leaderboard. Your draft is still here — reload to review their version, or save again after reconciling.";
     } else if (err?.code === "TIMEOUT") {
-      status.textContent = "Saving timed out. Your changes are still here — try again.";
+      saveMessage = "Saving timed out. Your changes are still here — try again.";
     } else if (err?.code === "NETWORK") {
-      status.textContent = "Couldn't save. Your changes are still here — try again.";
+      saveMessage = "Couldn't save. Your changes are still here — try again.";
     } else {
-      status.textContent = err?.message || "Couldn't save. Your changes are still here — try again.";
+      saveMessage = err?.message || "Couldn't save. Your changes are still here — try again.";
     }
-    status.hidden = false;
+    if (status) { status.setAttribute("role", "alert"); status.setAttribute("aria-live", "assertive"); }
+    setStatusText(saveMessage, "error");
   }
   _saving = false;
   for (const other of saveButtons()) other.disabled = false;
@@ -2074,10 +2155,13 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
   const settingsSave = $("settingsSave");
   if (settingsSave) settingsSave.disabled = !state._dirty;
   if (publishAction) { publishAction.disabled = false; publishAction.removeAttribute("aria-busy"); }
-  setSaveStatusText(status.textContent);
-  const savedMsg = status.textContent;
-  if (justPublished || savedMsg === "Saved") {
-    setTimeout(() => { if (status.textContent === savedMsg) status.textContent = ""; }, 6000);
+  const finalStatusMessage = status ? status.textContent : (saved ? "Saved" : saveMessage);
+  setSaveStatusText(finalStatusMessage);
+  if (status) {
+    const savedMsg = status.textContent;
+    if (justPublished || savedMsg === "Saved") {
+      setTimeout(() => { if (status.textContent === savedMsg) status.textContent = ""; }, 6000);
+    }
   }
   return saved;
 }

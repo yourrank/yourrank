@@ -183,6 +183,14 @@ const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
         <div id="connectedAccounts"><p class="hint">Loading…</p></div>
       </div>`;
 
+// P3-4: Integration health — live delivery checks for the webhooks and bots
+// this account relies on, rendered from the connected-accounts payload.
+const integrationHealthWidget = `<div class="lb-widget lb-widget--full" id="integrationHealth">
+        <h2>Integration health</h2>
+        <p class="card-sub">Live checks for the webhooks and bots this account relies on. Sending a test uses each site's saved delivery settings.</p>
+        <div id="integrationHealthBody"><p class="hint">Loading…</p></div>
+      </div>`;
+
 const dataWidget = `<div class="lb-widget lb-widget--full" id="data">
           <section class="account-settings-section account-data-export" aria-labelledby="accountExportTitle">
             <svg class="data-export-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 11v7m-3-3 3 3 3-3"/></svg>
@@ -304,5 +312,6 @@ export const settingsWidgets = {
   plan: planWidget,
   postbacks: postbacksWidget,
   connected: connectedWidget,
+  integrationHealth: integrationHealthWidget,
   data: dataWidget + deleteAccountModal,
 };

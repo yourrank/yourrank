@@ -12,7 +12,9 @@ import {
   versionSpecs,
 } from "../../../../scripts/release-recovery-state.mjs";
 
-const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
+// Normalize CRLF (Windows autocrlf checkouts) so raw-content assertions match the LF repo text.
+const rootFile = (path) =>
+  readFile(new URL(`../../../../${path}`, import.meta.url), "utf8").then((s) => s.replace(/\r\n/g, "\n"));
 
 const releaseState = ({ migrations = ["20260907000000"], leaderboard = "lb-old", bot = "bot-old", consumer = "consumer-old", monitor = "monitor-old", web = "web-old" } = {}) => ({
   schemaVersion: 1,

@@ -26,7 +26,9 @@ import {
   releaseEnvironment,
 } from "../../../../scripts/release-recovery-state.mjs";
 
-const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
+// Normalize CRLF (Windows autocrlf checkouts) so raw-content assertions match the LF repo text.
+const rootFile = (path) =>
+  readFile(new URL(`../../../../${path}`, import.meta.url), "utf8").then((s) => s.replace(/\r\n/g, "\n"));
 
 const STAGING_HYPERDRIVE = "0123456789abcdef0123456789abcdef";
 

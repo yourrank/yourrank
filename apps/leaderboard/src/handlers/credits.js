@@ -270,7 +270,7 @@ export async function handleCreditsStatus(request, env) {
     ),
     query(
       // Defensive ceiling above the highest current plan's active-item limit.
-      `SELECT id, name, description, cost, stock, active, (image_key IS NOT NULL) AS has_image
+      `SELECT id, name, description, cost, stock, active, cooldown_seconds, (image_key IS NOT NULL) AS has_image
          FROM shop_items
         WHERE site_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1024`,
       [site.id]
@@ -691,6 +691,11 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
   const cost = Number(body?.cost || 0);
   const stock = body?.stock === null || body?.stock === undefined ? null : Number(body.stock);
   const active = body?.active !== false;
+  // Per-member claim cooldown in seconds (0 = none). Capped at 7 days.
+  const cooldownSeconds = Math.floor(Number(body?.cooldownSeconds ?? 0));
+  if (!Number.isFinite(cooldownSeconds) || cooldownSeconds < 0 || cooldownSeconds > 604800) {
+    return bad("Cooldown must be between 0 seconds and 7 days");
+  }
   let imageData;
   if (body?.imageData !== undefined) {
     try { imageData = validateRewardImage(body.imageData); } catch (err) { return bad(err.message); }
@@ -749,21 +754,21 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
     if (id) {
       const rows = await tx.unsafe(
         `UPDATE shop_items
-            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, updated_at=now(),
-                image_key=CASE WHEN $8 THEN $9 ELSE image_key END
-          WHERE id=$6 AND site_id=$7 AND deleted_at IS NULL
+            SET name=$1, description=$2, cost=$3, stock=$4, active=$5, cooldown_seconds=$6, updated_at=now(),
+                image_key=CASE WHEN $9 THEN $10 ELSE image_key END
+          WHERE id=$7 AND site_id=$8 AND deleted_at IS NULL
           RETURNING id`,
-        [name, description, cost, stock, active, id, site.id, imageData !== undefined, imageKey]
+        [name, description, cost, stock, active, cooldownSeconds, id, site.id, imageData !== undefined, imageKey]
       );
       if (!rows || rows.length === 0) return { error: "shop item not found", status: 404 };
       return { id: rows[0].id };
     }
 
     const rows = await tx.unsafe(
-      `INSERT INTO shop_items (site_id, name, description, cost, stock, active, image_key)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO shop_items (site_id, name, description, cost, stock, active, cooldown_seconds, image_key)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
-      [site.id, name, description, cost, stock, active, imageKey]
+      [site.id, name, description, cost, stock, active, cooldownSeconds, imageKey]
     );
     return { id: rows[0].id };
   });

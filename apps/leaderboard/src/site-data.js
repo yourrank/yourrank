@@ -7,7 +7,7 @@ const VIEWER_PARTICIPATION_LIMIT = 25;
 export async function getShopItems(siteId, queryImpl = query) {
   return queryImpl(
     // Defensive ceiling above the highest current plan's active-item limit.
-    "SELECT id, name, description, cost, stock, active, (image_key IS NOT NULL) AS has_image FROM shop_items WHERE site_id=$1 AND active=true AND deleted_at IS NULL ORDER BY name ASC LIMIT 1024",
+    "SELECT id, name, description, cost, stock, active, cooldown_seconds, (image_key IS NOT NULL) AS has_image FROM shop_items WHERE site_id=$1 AND active=true AND deleted_at IS NULL ORDER BY name ASC LIMIT 1024",
     [siteId]
   ) || [];
 }
@@ -130,6 +130,34 @@ export async function getViewerSiteData(
       : Promise.resolve({ participation: [], limit: VIEWER_PARTICIPATION_LIMIT, truncated: false }),
   ]);
 
+  // Per-item cooldown snapshot: how long this member must still wait before
+  // claiming each cooled-down item again. Cancelled claims are refunded and
+  // never count toward a cooldown.
+  let shopItemsWithCooldown = shop ? shopItems : [];
+  if (shop && shopItemsWithCooldown.some((item) => Number(item.cooldown_seconds) > 0)) {
+    try {
+      const lastClaims = await queryImpl(
+        `SELECT shop_item_id, max(created_at) AS last_at
+           FROM redemptions
+          WHERE site_viewer_id=$1 AND status != 'cancelled'
+          GROUP BY shop_item_id`,
+        [viewerOnSite.id]
+      );
+      const lastByItem = new Map((lastClaims || []).map((row) => [row.shop_item_id, row.last_at]));
+      shopItemsWithCooldown = shopItemsWithCooldown.map((item) => {
+        const cooldown = Number(item.cooldown_seconds) || 0;
+        if (cooldown <= 0) return item;
+        const lastAt = lastByItem.get(item.id);
+        const remaining = lastAt
+          ? Math.ceil(cooldown - (Date.now() - Date.parse(lastAt)) / 1000)
+          : 0;
+        return { ...item, cooldownRemaining: Math.max(0, remaining) };
+      });
+    } catch (err) {
+      console.error("[site-data] cooldown lookup failed:", err?.message || err);
+    }
+  }
+
   return {
     membershipStatus: "member",
     viewerOnSite: {
@@ -140,7 +168,7 @@ export async function getViewerSiteData(
       total_spent: viewerOnSite.total_spent,
       last_seen_at: viewerOnSite.last_seen_at,
     },
-    shopItems: shop ? shopItems : [],
+    shopItems: shopItemsWithCooldown,
     claims: claimResult.claims || [],
     claimsLimit: claimResult.limit,
     claimsTruncated: !!claimResult.truncated,

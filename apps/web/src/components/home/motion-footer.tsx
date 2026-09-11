@@ -3,6 +3,7 @@
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { PolicyLinks } from "../policy-links";
 
 const FOOTER_LINKS = [
@@ -72,9 +73,9 @@ export function MotionFooter() {
             Build the place your viewers return to.
           </h2>
           <div ref={actionsRef} className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <a href="/signup" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-6 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
+            <Link href="/signup" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-6 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
               Get started
-            </a>
+            </Link>
             <a href="/demo" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] border border-white/24 px-6 text-sm font-medium text-white transition-colors hover:border-white/55">
               Explore the live demo
             </a>
@@ -88,7 +89,7 @@ export function MotionFooter() {
             <span>© YourRank · Entertainment and community engagement only.</span>
             <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               {FOOTER_LINKS.map(([label, href]) => (
-                <a key={label} href={href} className="inline-flex min-h-11 items-center transition-colors hover:text-white">{label}</a>
+                <Link key={label} href={href} className="inline-flex min-h-11 items-center transition-colors hover:text-white">{label}</Link>
               ))}
             </nav>
           </div>

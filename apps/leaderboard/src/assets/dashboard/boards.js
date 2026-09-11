@@ -1,9 +1,10 @@
 // Board switcher, creation, duplication, deletion, and the board list page.
-import { $, esc, getCsrf, guardAuth, logError, slugify, showConfirmModal } from "./utils.js";
+import { $, esc, getCsrf, guardAuth, logError, showToast, slugify, showConfirmModal } from "./utils.js";
 import { state } from "./state.js";
 import { requestDashboardRoute } from "./shell.js";
 import { renderSiteSelector } from "./site-selector.js";
 import { renderEmpty } from "./states.js";
+import { effectiveBoardRole } from "./role-preview.js";
 
 export function renderBoardSwitcher() {
   const newBtn = $("newBoard");
@@ -163,11 +164,11 @@ export async function deleteBoard(siteId) {
       renderBoardSwitcher();
       renderBoardSelect();
       renderBoardsPage();
-      $("status").textContent = "Site deleted.";
+      showToast("Site deleted.", "success");
     } else {
-      $("status").textContent = d.error || "Could not delete the site.";
+      showToast(d.error || "Could not delete the site.", "error");
     }
-  } catch (err) { logError("delete-board", err); $("status").textContent = "Network error."; }
+  } catch (err) { logError("delete-board", err); showToast("Network error.", "error"); }
 }
 
 export async function setActiveBoard(siteId) {
@@ -183,11 +184,11 @@ export async function setActiveBoard(siteId) {
       state.ACTIVE_SITE_ID = siteId;
       renderBoardSwitcher();
       renderBoardSelect();
-      $("status").textContent = "Current site updated.";
+      showToast("Current site updated.", "success");
     } else {
-      $("status").textContent = d.error || "Could not change the current site.";
+      showToast(d.error || "Could not change the current site.", "error");
     }
-  } catch (err) { logError("set-active-board", err); $("status").textContent = "Network error."; }
+  } catch (err) { logError("set-active-board", err); showToast("Network error.", "error"); }
 }
 
 export function openNewBoardForm() {
@@ -212,9 +213,9 @@ export async function duplicateBoard(siteId) {
     } else if (d.code === "board_limit") {
       showBoardLimitUpsell();
     } else {
-      $("status").textContent = d.error || "Could not duplicate the site.";
+      showToast(d.error || "Could not duplicate the site.", "error");
     }
-  } catch (err) { logError("duplicate-board", err); $("status").textContent = "Network error."; }
+  } catch (err) { logError("duplicate-board", err); showToast("Network error.", "error"); }
 }
 
 export function renderBoardSelect() {
@@ -273,7 +274,7 @@ export function renderBoardsPage() {
       // out of the way.
       tr.dataset.search = [b.name, b.slug, b.casino, b.code].filter(Boolean).join(" ").toLowerCase();
       tr.classList.toggle("is-current", isActive);
-      tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}"${isActive ? ' aria-current="true"' : ""}>${esc(b.name)}</a>${isActive ? '<span class="site-current">Current site</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a></span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r" data-label="Actions"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button" aria-label="Manage ${esc(b.name)}">Manage</button><details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details></div></td>`;
+      tr.innerHTML = `<td data-label="Site"><a class="site-name" href="/dashboard?board=${encodeURIComponent(b.id)}"${isActive ? ' aria-current="true"' : ""}>${esc(b.name)}</a>${isActive ? '<span class="site-current">Current site</span>' : ''}<span class="site-meta"><a class="site-slug mono" href="/${esc(b.slug)}" target="_blank" rel="noopener">/${esc(b.slug)}</a></span></td><td data-label="Status"><span class="site-state" data-state="${b.published ? "published" : "draft"}">${statusText}</span></td><td data-label="Players">${b.players || 0}</td><td class="ta-r" data-label="Actions"><div class="site-row-actions"><button class="btn btn--xs btn--ghost" data-action="edit" type="button" aria-label="Manage ${esc(b.name)}">Manage</button>${effectiveBoardRole(b) === "owner" ? `<details class="site-row-menu"><summary class="btn btn--xs btn--ghost" title="More actions" aria-label="More actions for ${esc(b.name)}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></summary><div class="site-row-menu-body"><button data-action="dup" type="button">Duplicate</button><button data-action="del" type="button">Delete</button></div></details>` : ""}</div></td>`;
       tr.querySelector(".site-name")?.addEventListener("click", (e) => {
         e.preventDefault();
         requestDashboardRoute("home", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true });
@@ -281,6 +282,7 @@ export function renderBoardsPage() {
       // "Edit" now has an address to go to, so it opens the editor rather than
       // whichever section the smart landing picks.
       tr.querySelector('[data-action="edit"]')?.addEventListener("click", () => { requestDashboardRoute("board", "", { query: `board=${encodeURIComponent(b.id)}`, reload: true }); });
+      // DEF-02: Destructive actions only rendered for owners — these listeners are no-ops for moderators.
       tr.querySelector('[data-action="dup"]')?.addEventListener("click", () => { closeRowMenus(body); duplicateBoard(b.id); });
       tr.querySelector('[data-action="del"]')?.addEventListener("click", () => { closeRowMenus(body); deleteBoard(b.id); });
       // Only one row menu stays open at a time.

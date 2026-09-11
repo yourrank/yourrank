@@ -37,3 +37,15 @@ export function renderLegalSidebar(data, legalHref) {
     .map((x) => `\n            <a href="${legalHref(x.k)}">${x.l}</a>`)
     .join("");
 }
+
+/** Human-readable remaining wait for reward cooldowns: "45m", "2h 5m", "3d 4h". */
+export function formatWaitSeconds(seconds) {
+  const total = Math.max(0, Math.ceil(Number(seconds) || 0));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+  if (hours > 0) return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${total}s`;
+}

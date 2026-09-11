@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { MagneticCursor } from "./home/magnetic-cursor";
 import { MarketingShell } from "./site-shell";
 
@@ -198,7 +200,7 @@ export function ProductPage({ content }: { content: ProductPageContent }) {
             <div className="border-t border-devin-ink pt-5">
               <p className="text-lg leading-relaxed text-devin-ink-soft">{content.intro}</p>
               <div className="mt-7 flex flex-wrap gap-3">
-                <a href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Start free</a>
+                <Link href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Start free</Link>
                 <a href="/demo" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] border border-devin-line px-5 py-3 text-sm font-medium transition-colors hover:border-devin-ink/40">Explore demo</a>
               </div>
             </div>
@@ -238,7 +240,7 @@ export function ProductPage({ content }: { content: ProductPageContent }) {
             <h2 className="text-3xl font-medium tracking-[-0.02em]">Explore the connected suite.</h2>
             <div className="mt-8 grid border-y border-devin-line sm:grid-cols-2 lg:grid-cols-4">
               {PEERS.map((peer) => (
-                <a
+                <Link
                   key={peer.kind}
                   href={peer.href}
                   data-magnetic
@@ -246,7 +248,7 @@ export function ProductPage({ content }: { content: ProductPageContent }) {
                   className={`group flex items-center justify-between border-b border-devin-line px-5 py-6 text-lg font-medium transition-colors last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 ${peer.kind === content.kind ? 'bg-devin-secondary/40' : 'hover:bg-devin-secondary/25'}`}
                 >
                   {peer.label}<span className="text-devin-primary transition-transform group-hover:translate-x-1">→</span>
-                </a>
+                </Link>
               ))}
             </div>
           </div>

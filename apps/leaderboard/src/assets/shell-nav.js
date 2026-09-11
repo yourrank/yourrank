@@ -1,6 +1,45 @@
 // Shared authenticated-shell behaviour: account menu, persisted desktop rail,
 // and the mobile drawer used by string-rendered Help pages.
 (function () {
+  // Workspace theme: honor the saved toggle choice, otherwise the OS
+  // preference (prefers-color-scheme parity). html[data-ws-theme] drives the
+  // dark token contract in dashboard-v4.css.
+  var themeKey = "yr-ws-theme";
+  var themeQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function resolveTheme() {
+    var stored = null;
+    try { stored = localStorage.getItem(themeKey); } catch (error) {}
+    if (stored === "light" || stored === "dark") return stored;
+    return themeQuery && themeQuery.matches ? "dark" : "light";
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-ws-theme", theme);
+    document.querySelectorAll("[data-toggle-theme]").forEach(function (button) {
+      var dark = theme === "dark";
+      button.setAttribute("aria-pressed", dark ? "true" : "false");
+      button.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+      button.title = dark ? "Switch to light theme" : "Switch to dark theme";
+    });
+  }
+
+  applyTheme(resolveTheme());
+  if (themeQuery && typeof themeQuery.addEventListener === "function") {
+    themeQuery.addEventListener("change", function () {
+      var stored = null;
+      try { stored = localStorage.getItem(themeKey); } catch (error) {}
+      if (stored !== "light" && stored !== "dark") applyTheme(resolveTheme());
+    });
+  }
+  document.querySelectorAll("[data-toggle-theme]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var next = resolveTheme() === "dark" ? "light" : "dark";
+      try { localStorage.setItem(themeKey, next); } catch (error) {}
+      applyTheme(next);
+    });
+  });
+
   var menus = document.querySelectorAll("details.gm-profile");
   var collapseKey = "yr-side-collapsed";
 
