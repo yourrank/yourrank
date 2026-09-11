@@ -952,6 +952,83 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   background: var(--ws-danger-soft);
   color: var(--ws-danger);
 }
+/* Quick actions — Copy link reads as a quiet sibling; "+ New" is the one
+   creator-shaped affordance: it surfaces the small create flows without a
+   navigation first. The menu is a plain anchored surface card. */
+.v3-dash[data-auth-workspace] .lb-availability .lb-copy-link {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: transparent;
+  color: var(--ws-text-soft);
+  font: 600 13px/1 var(--ws-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .lb-availability .lb-copy-link:hover {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] .lb-new {
+  position: relative;
+  order: 2;
+}
+.v3-dash[data-auth-workspace] .lb-new-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: 600 13px/1 var(--ws-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .lb-new-btn:hover,
+.v3-dash[data-auth-workspace] .lb-new-btn[aria-expanded="true"] {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] .lb-new-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-md);
+  background: var(--ws-surface);
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.18);
+  display: flex;
+  flex-direction: column;
+}
+.v3-dash[data-auth-workspace] .lb-new-menu > * {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: var(--ws-radius-sm);
+  background: transparent;
+  color: var(--ws-text);
+  font: 500 13px/1.2 var(--ws-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.v3-dash[data-auth-workspace] .lb-new-menu > *:hover {
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
 .v3-dash[data-auth-workspace] .lb-topbar-cmd {
   display: flex;
   align-items: center;
@@ -4455,6 +4532,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-board-new { width: 38px; min-width: 38px; height: 38px; }
   .v3-dash[data-auth-workspace] .lb-topbar-actions,
   .v3-dash[data-auth-workspace] .lb-availability { gap: 6px; }
+  .v3-dash[data-auth-workspace] .lb-copy-link { display: none; }
+  .v3-dash[data-auth-workspace] .lb-new-btn { min-height: 44px; padding-inline: 10px; }
   .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 10px; }
   .v3-dash[data-auth-workspace] .lb-publish-action { min-height: 44px; padding-inline: 9px; font-size: 11px; }
   .v3-dash[data-auth-workspace] .lb-board-select { min-height: 44px; }

@@ -1423,7 +1423,17 @@ export function enter() {
   shopSearch = "";
   shopSort = "cost";
   wireActions();
-  load().then(() => window.__yrBoot?.signal()).catch(() => {});
+  load().then(() => {
+    // Topbar "+ New > New shop item" lands here with ?new=1 — open the drawer
+    // directly instead of forcing a second click.
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") === "1" && tab() === "shop") {
+      params.delete("new");
+      history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
+      openShop();
+    }
+    window.__yrBoot?.signal();
+  }).catch(() => {});
 }
 
 export function leave() {
