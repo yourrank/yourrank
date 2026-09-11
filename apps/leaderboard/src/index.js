@@ -1209,9 +1209,19 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
         const layout = url.searchParams.get("layout") || "card";
+        // Canvas mode: x/y/scale place the widget inside a full stream canvas.
+        // The overlay designer composes these; clamped server-side too.
+        const clampNum = (v, min, max, dflt) => { if (v === null || v === "") return dflt; const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt; };
+        const overlayOpts = { slug, nonce, layout };
+        if (url.searchParams.has("x") || url.searchParams.has("y")) {
+          overlayOpts.canvas = true;
+          overlayOpts.x = clampNum(url.searchParams.get("x"), 0, 100, 50);
+          overlayOpts.y = clampNum(url.searchParams.get("y"), 0, 100, 50);
+          overlayOpts.scale = clampNum(url.searchParams.get("scale"), 0.5, 2, 1);
+        }
         // Demo overlay: use hardcoded data (no DB)
         if (slug === "demo") {
-          const overlayHtml = PAGES.overlay(demoLeaderboardData(), { slug: "demo", nonce, layout });
+          const overlayHtml = PAGES.overlay(demoLeaderboardData(), { ...overlayOpts, slug: "demo" });
           return new Response(overlayHtml, { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
         if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
@@ -1230,7 +1240,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
 </body></html>`;
           return new Response(upsell, { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
-        const overlayHtml = PAGES.overlay(r.data, { slug, nonce, layout });
+        const overlayHtml = PAGES.overlay(r.data, overlayOpts);
         return new Response(overlayHtml, { headers: { ...HTML_N, "cache-control": "no-store" } });
       }
 

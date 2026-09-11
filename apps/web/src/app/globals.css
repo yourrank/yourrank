@@ -77,12 +77,9 @@ a { text-underline-offset: 4px; }
   border: 1px solid #2200FF;
 }
 
-html[data-yr-cursor="active"] body,
-html[data-yr-cursor="active"] a,
-html[data-yr-cursor="active"] button,
-html[data-yr-cursor="active"] [data-magnetic] {
-  cursor: none;
-}
+/* DEF-11: cursor:none removed — it suppressed the native OS hardware pointer
+   and introduced a 240ms GSAP lag on every click target. The magnetic dot now
+   acts as a trailing accent effect only; the real cursor remains visible. */
 
 html[data-yr-cursor="active"] input,
 html[data-yr-cursor="active"] textarea,

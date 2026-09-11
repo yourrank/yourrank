@@ -31,7 +31,9 @@ describe("Team API Handlers", () => {
     expect(page).toContain('<script src="/assets/invite.js" defer></script>');
     expect(page).not.toContain("<script dangerouslySetInnerHTML");
     expect(script).toContain('"x-csrf-token": getCsrf()');
-    expect(script).toContain('window.location.assign("/dashboard")');
+    // DEF-03: invite acceptance preserves the invited board context.
+    expect(script).toContain('"/dashboard?board=" + encodeURIComponent(data.siteId)');
+    expect(script).toContain("window.location.assign(dest)");
   });
 
   it("allows a moderator to read the team list but blocks every mutation", async () => {

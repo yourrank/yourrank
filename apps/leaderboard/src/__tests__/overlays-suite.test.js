@@ -42,7 +42,7 @@ describe("OBS Live Overlays Suite", () => {
     expect(res.headers.get("Content-Type")).toContain("text/html");
     const html = await res.text();
     expect(html).toContain("Stream Alerts &amp; Sounds");
-    expect(html).toContain("playAlertChime");
+    expect(html).toContain("playAlertSound");
     expect(html).toContain("alert-container");
   });
 

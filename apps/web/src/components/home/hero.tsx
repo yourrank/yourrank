@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { DEVIN_EASE } from "./reveal";
 
 const ROTATING_WORDS = ["regulars", "fans", "subscribers", "superfans"];
@@ -105,9 +106,9 @@ export function Hero() {
           transition={{ duration: 0.7, delay: 0.46, ease: DEVIN_EASE }}
           className="mt-7 flex flex-wrap items-center justify-center gap-3 sm:mt-9"
         >
-          <a href="/signup" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-6 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
+          <Link href="/signup" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-6 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">
             Get started
-          </a>
+          </Link>
           <a href="/demo" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] border border-devin-line bg-white px-6 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40">
             Explore the live demo
           </a>

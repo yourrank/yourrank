@@ -94,6 +94,8 @@ describe("F-039/F-044 certification gate cannot silently pass", () => {
     expect(runGate(["health", "prod"]).status).toBe(1);
   });
 
+  // Nine sequential Node spawns; slow Windows checkouts need more than the
+  // 5s default, CI does not weaken any assertion.
   it("health mode certifies only the expected non-superuser member of yourrank_app", () => {
     const good = { db: true, db_identity: { expected: true, superuser: false, bypassrls: false, app_member: true } };
     expect(runGate(["health", "staging"], { HEALTH_BODY: JSON.stringify(good) }).status).toBe(0);
@@ -110,7 +112,7 @@ describe("F-039/F-044 certification gate cannot silently pass", () => {
     expect(runGate(["health", "staging"], { HEALTH_BODY: JSON.stringify({ db: true }) }).status).toBe(1);
     expect(runGate(["health", "staging"], { HEALTH_BODY: "" }).status).toBe(1);
     expect(runGate(["health", "staging"], { HEALTH_BODY: "not json" }).status).toBe(1);
-  });
+  }, 30000);
 
   it("production identity is an explicit, documented PENDING warning until the Hyperdrive switch", async () => {
     const config = JSON.parse(await rootFile("release/db-identity.json"));

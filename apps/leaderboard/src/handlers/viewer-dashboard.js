@@ -7,6 +7,7 @@ import { requireViewer } from "./viewer-auth.js";
 import { bad, json, ok } from "../auth.js";
 import { decryptCredential } from "@yourrank/shared/crypto";
 import { buildRedemptionEmbed, sendDiscordWebhook } from "@yourrank/shared/notifications";
+import { formatWaitSeconds } from "@yourrank/shared/public-render-helpers";
 import {
   CREDITS_PENDING_REDEMPTIONS_LIMITS,
   CREDITS_REDEMPTIONS_PER_30D_LIMITS,
@@ -26,6 +27,15 @@ const privateViewerJson = (data) => json(
 
 function isUniqueViolation(error) {
   return error?.code === "23505" || /unique constraint|unique violation|duplicate key/i.test(error?.message || "");
+}
+
+/** Seconds left on a per-item cooldown, or 0 when the item is claimable again. */
+export function cooldownRemainingSeconds(lastAt, cooldownSeconds, nowMs = Date.now()) {
+  const cooldown = Number(cooldownSeconds) || 0;
+  if (cooldown <= 0 || !lastAt) return 0;
+  const last = Date.parse(lastAt);
+  if (!Number.isFinite(last)) return 0;
+  return Math.max(0, Math.ceil(cooldown - (nowMs - last) / 1000));
 }
 
 export async function handleViewerMe(request, env, deps = {}) {
@@ -200,11 +210,29 @@ export async function handleViewerRedeem(request, env, deps = {}) {
       if (viewerRow.blocked) return { error: "viewer blocked", status: 400 };
 
       const item = await tx.one(
-        "SELECT id, name, cost, stock FROM shop_items WHERE id=$1 AND site_id=$2 AND active=true FOR UPDATE",
+        "SELECT id, name, cost, stock, cooldown_seconds FROM shop_items WHERE id=$1 AND site_id=$2 AND active=true FOR UPDATE",
         [shopItemId, r.id]
       );
       if (!item) return { error: "item not found", status: 400 };
       if (item.stock !== null && item.stock <= 0) return { error: "out of stock", status: 400 };
+
+      // Per-item cooldown precedes the balance check so a waiting member is
+      // never charged. Cancelled claims are refunded and never count.
+      if (Number(item.cooldown_seconds) > 0) {
+        const lastRow = await tx.one(
+          `SELECT max(created_at) AS last_at
+             FROM redemptions
+            WHERE shop_item_id=$1 AND site_viewer_id=$2 AND status != 'cancelled'`,
+          [item.id, viewerRow.id]
+        );
+        const remaining = cooldownRemainingSeconds(lastRow?.last_at, item.cooldown_seconds);
+        if (remaining > 0) {
+          return {
+            error: `You can claim this item again in ${formatWaitSeconds(remaining)}.`,
+            status: 429,
+          };
+        }
+      }
 
       // Atomic conditional update: the WHERE clauses make concurrent redemptions
       // race-safe and ensure balance can never go negative or stock below zero.

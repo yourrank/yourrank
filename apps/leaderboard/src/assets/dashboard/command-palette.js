@@ -3,6 +3,7 @@ import { $, copyToClipboard, showToast } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { commandAvailable, PRIMARY_COMMANDS } from "./command-context.js";
 import { requestDashboardRoute } from "./shell.js";
+import { startTour, stopTour } from "./tour.js";
 
 const PALETTE_ICONS = {
   overview: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>`,
@@ -63,7 +64,8 @@ const COMMANDS = [
   { id: "nav-site-settings", title: "Site settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
   { id: "nav-kick-connection", title: "Kick connection", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "kick channel connection site settings connect", action: () => requestDashboardRoute("siteConnections", "channel", { query: "" }) },
   { id: "nav-plan", title: "Billing", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "plans billing", action: () => requestDashboardRoute("settings", "plan", { query: "" }) },
-  { id: "act-support", title: "Help & support drawer", group: "Support", icon: PALETTE_ICONS.help, action: () => $("openHelpDrawerBtn")?.click() }
+  { id: "act-support", title: "Help & support drawer", group: "Support", icon: PALETTE_ICONS.help, action: () => $("openHelpDrawerBtn")?.click() },
+  { id: "act-tour", title: "Restart the product tour", group: "Support", icon: PALETTE_ICONS.help, action: () => { stopTour(); startTour({ force: true }); } }
 ];
 
 let paletteEl = null;

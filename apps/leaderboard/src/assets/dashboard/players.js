@@ -1,5 +1,5 @@
 // Player table, CSV/paste import, and row management.
-import { $, esc, logError, parseAmount, showConfirmModal } from "./utils.js";
+import { $, esc, logError, parseAmount, showConfirmModal, showToast } from "./utils.js";
 import { state, markDirty, subscribe, clearDirty } from "./state.js";
 
 export const PLAYER_NAME_LIMIT = 80;
@@ -213,7 +213,8 @@ export function validateQuickAddValues({ name = "", wagered = "", prize = "", sc
   if (!wager.ok) errors.push({ field: "wagered", message: wager.message });
   const prizeValue = parsePlayerNumber(prize);
   if (!prizeValue.ok) errors.push({ field: "prize", message: prizeValue.message });
-  const scoreValue = parsePlayerNumber(score);
+  // DEF-24: Allow negative scores — custom game formats can have deductions.
+  const scoreValue = parsePlayerNumber(score, { signed: true });
   if (!scoreValue.ok) errors.push({ field: "score", message: scoreValue.message });
   return { ok: errors.length === 0, errors, wagered: wager.value, prize: prizeValue.value, score: scoreValue.value };
 }
@@ -921,7 +922,7 @@ $("importText")?.addEventListener("input", () => {
 $("importApply")?.addEventListener("click", () => {
   const result = parseImportText($("importText").value, "paste");
   if (!result.rows.length) {
-    $("status").textContent = result.errors.length ? result.errors[0] : "No players to import.";
+    showToast(result.errors.length ? result.errors[0] : "No players to import.", "info");
     return;
   }
   const replace = $("importReplace").checked;
@@ -953,7 +954,7 @@ $("importApply")?.addEventListener("click", () => {
   $("importPreview").textContent = "0 players detected";
   $("importApply").disabled = true;
   $("importPanel").hidden = true;
-  $("status").textContent = formatImportSummary(result, parsed.length, result.rows.length - parsed.length + (result.errors.length ? `${result.errors.length} invalid` : ""), cut) + " — hit Save to publish.";
+  showToast(formatImportSummary(result, parsed.length, result.rows.length - parsed.length + (result.errors.length ? `${result.errors.length} invalid` : ""), cut) + " — hit Save to publish.", "info");
 });
 
 $("csvImportBtn")?.addEventListener("click", () => { closeMenus(false); $("csvFileInput").click(); });
@@ -961,17 +962,17 @@ $("csvImportBtn")?.addEventListener("click", () => { closeMenus(false); $("csvFi
 $("csvFileInput")?.addEventListener("change", () => {
   const f = $("csvFileInput").files[0];
   if (!f) return;
-  if (f.size > 2 * 1024 * 1024) { $("status").textContent = "CSV too large. Keep it under 2 MB."; $("csvFileInput").value = ""; return; }
+  if (f.size > 2 * 1024 * 1024) { showToast("CSV too large. Keep it under 2 MB.", "error"); $("csvFileInput").value = ""; return; }
   const reader = new FileReader();
   reader.onload = () => {
     const result = parseImportText(reader.result, "csv");
-    if (!result.rows.length) { $("status").textContent = "No players found. Use headers such as name and score; historical amount and prize columns remain optional."; return; }
+    if (!result.rows.length) { showToast("No players found. Use headers such as name and score; historical amount and prize columns remain optional.", "error"); return; }
     $("importPanel").hidden = false;
     $("importText").value = result.rows.map((p) => [p.name, p.wagered, p.prize, p.score ?? "", p.hands ?? "", p.netProfit ?? "", p.winRate ?? "", p.change ?? ""].join("\t")).join("\n");
     $("importText").dispatchEvent(new Event("input"));
-    $("status").textContent = `CSV loaded: ${result.rows.length} valid player${result.rows.length === 1 ? "" : "s"}${result.errors.length ? `, ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}` : ""}. Review and click "Add to table".`;
+    showToast(`CSV loaded: ${result.rows.length} valid player${result.rows.length === 1 ? "" : "s"}${result.errors.length ? `, ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}` : ""}. Review and click "Add to table".`, "success");
   };
-  reader.onerror = () => { $("status").textContent = "Couldn't read that file."; };
+  reader.onerror = () => { showToast("Couldn't read that file.", "error"); };
   reader.readAsText(f);
   $("csvFileInput").value = "";
 });
@@ -996,7 +997,7 @@ $("csvExportBtn")?.addEventListener("click", async () => {
     const res = await fetch(apiUrl, { credentials: "include" });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
-      $("status").textContent = d.error || "Could not export players.";
+      showToast(d.error || "Could not export players.", "error");
       return;
     }
     const blob = await res.blob();
@@ -1009,10 +1010,10 @@ $("csvExportBtn")?.addEventListener("click", async () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    $("status").textContent = "Players exported.";
+    showToast("Players exported.", "success");
   } catch (err) {
     logError("csvExport", err);
-    $("status").textContent = "Network error.";
+    showToast("Network error.", "error");
   }
 });
 

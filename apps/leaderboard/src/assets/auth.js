@@ -184,6 +184,8 @@ form.addEventListener("submit", async (e) => {
     clearAllFieldErrors();
     let firstInvalid = null;
     if ((mode === "login" || mode === "signup") && !EMAIL_RE.test(payload.email || "")) { setFieldError("email", "Enter a valid email address"); firstInvalid = firstInvalid || "email"; }
+    // DEF-18: Validate empty password on login client-side to avoid a pointless network round-trip.
+    if (mode === "login" && !(payload.password || "")) { setFieldError("password", "Enter your password"); firstInvalid = firstInvalid || "password"; }
     if ((mode === "signup" || mode === "reset")) {
       const passwordError = passwordRuleMessage(payload.password || "");
       if (passwordError) { setFieldError("password", passwordError); firstInvalid = firstInvalid || "password"; }
@@ -192,7 +194,7 @@ form.addEventListener("submit", async (e) => {
     if (mode === "signup" && !(payload.slug || "").trim()) { setFieldError("slug", "Enter a page URL"); firstInvalid = firstInvalid || "slug"; }
     if (firstInvalid) {
       const el = document.getElementById(firstInvalid);
-      if (el) el.focus();
+      if (el) { el.setAttribute("aria-invalid", "true"); el.focus(); }
       submit.disabled = false; submit.textContent = orig;
       return;
     }

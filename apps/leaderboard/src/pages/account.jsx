@@ -46,7 +46,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
           {settingsPanel("account", settingsWidgets.account, active)}
           {settingsPanel("team", settingsWidgets.team, active)}
           {settingsPanel("plan", settingsWidgets.plan, active)}
-          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.postbacks}<div class="account-related-setting"><div><strong>Kick rewards for the selected site</strong><p>The channel connection that powers rewards is managed separately for each site.</p></div><a class="btn btn--ghost" href="/dashboard/site/connections">Manage site connection</a></div>`, active)}
+          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.integrationHealth}${settingsWidgets.postbacks}<div class="account-related-setting"><div><strong>Kick rewards for the selected site</strong><p>The channel connection that powers rewards is managed separately for each site.</p></div><a class="btn btn--ghost" href="/dashboard/site/connections">Manage site connection</a></div>`, active)}
           {settingsPanel("data", `${settingsWidgets.data}<div class="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a class="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div>`, active)}
         </div>
         <div class="account-settings-help">
@@ -66,7 +66,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
 
 const settingsConfigBase = {
   styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"],
-  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=3" defer></script>'],
+  scripts: ['<script src="/assets/account.js?v=3" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'],
   nav: false,
   footer: false,
   wide: true,

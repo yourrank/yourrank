@@ -235,11 +235,28 @@ if (!window.__yrSpaShell) {
 
   async function deleteTemplate(id) {
     const template = automation.templates?.find((item) => item.id === id);
-    if (!template || !confirm(`Delete “${template.name}”? Existing schedules keep their saved snapshot.`)) return;
+    if (!template) return;
+    // DEF-09: Use accessible YRDialog confirm instead of native confirm().
+    const confirmed = window.YRDialog?.confirm
+      ? await window.YRDialog.confirm({
+          title: `Delete "${template.name}"?`,
+          body: "Existing schedules keep their saved snapshot.",
+          confirmText: "Delete",
+          danger: true,
+        })
+      : window.confirm(`Delete "${template.name}"? Existing schedules keep their saved snapshot.`);
+    if (!confirmed) return;
+    // P3-6: optimistic removal — drop the row immediately, restore it if the
+    // server rejects the delete. The authoritative reload follows success.
+    const snapshot = automation.templates.slice();
+    automation.templates = automation.templates.filter((item) => item.id !== id);
+    renderAutomation({ ...automation });
     try {
       await api(sitePath("/api/activities/templates/delete", activeSiteId), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ siteId: activeSiteId, templateId: id }) });
       await loadActivities();
     } catch (error) {
+      automation.templates = snapshot;
+      renderAutomation({ ...automation });
       setStatus("act-template-status", error?.message || "The template could not be deleted.", true);
       if ($("act-template-form")) $("act-template-form").hidden = false;
     }
@@ -286,11 +303,28 @@ if (!window.__yrSpaShell) {
 
   async function cancelSchedule(id) {
     const schedule = automation.schedules?.find((item) => item.id === id);
-    if (!schedule || !confirm(`Cancel “${schedule.templateName}”? No future Activity will be created from this schedule.`)) return;
+    if (!schedule) return;
+    // DEF-09: Use accessible YRDialog confirm instead of native confirm().
+    const confirmed = window.YRDialog?.confirm
+      ? await window.YRDialog.confirm({
+          title: `Cancel "${schedule.templateName}"?`,
+          body: "No future Activity will be created from this schedule.",
+          confirmText: "Cancel Schedule",
+          danger: true,
+        })
+      : window.confirm(`Cancel "${schedule.templateName}"? No future Activity will be created from this schedule.`);
+    if (!confirmed) return;
+    // P3-6: optimistic removal — mark the schedule cancelled immediately,
+    // restore it if the server rejects. The authoritative reload follows.
+    const snapshot = automation.schedules.slice();
+    automation.schedules = automation.schedules.filter((item) => item.id !== id);
+    renderAutomation({ ...automation });
     try {
       await api(sitePath("/api/activities/schedules/cancel", activeSiteId), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ siteId: activeSiteId, scheduleId: id }) });
       await loadActivities();
     } catch (error) {
+      automation.schedules = snapshot;
+      renderAutomation({ ...automation });
       setStatus("act-schedule-status", error?.message || "The schedule could not be cancelled.", true);
       if ($("act-schedule-form")) $("act-schedule-form").hidden = false;
     }

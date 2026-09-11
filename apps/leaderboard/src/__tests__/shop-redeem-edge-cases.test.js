@@ -167,7 +167,8 @@ describe("handleCreditsSaveShopItem", () => {
     expect(body.id).toBe("item-1");
     const insert = db.calls.find((c) => c.method === "unsafe" && /INSERT INTO shop_items/.test(c.sql));
     expect(insert).toBeDefined();
-    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true, null]);
+    // New items default to no claim cooldown (cooldownSeconds: 0).
+    expect(insert.params).toEqual(["site-1", "Sticker", "A sticker", 100, 5, true, 0, null]);
   });
 
   it("rejects a price of 0", async () => {
@@ -253,7 +254,8 @@ describe("handleCreditsSaveShopItem", () => {
     expect(update).toBeDefined();
     expect(update.params[2]).toBe(250);
     expect(update.params[3]).toBe(9);
-    expect(update.params[6]).toBe("site-1"); // tenant-scoped update
+    expect(update.params[6]).toBe("item-1");
+    expect(update.params[7]).toBe("site-1"); // tenant-scoped update
   });
 
   it("rejects creating an item past the plan shop limit", async () => {

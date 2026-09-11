@@ -1,10 +1,11 @@
 // Account settings: password, sessions, data export.
-import { $, getCsrf, logError, showConfirmModal } from "./utils.js";
+import { $, esc, getCsrf, logError, showConfirmModal, showToast } from "./utils.js";
 import { loginRedirectPath } from "./request.js";
 import { markDirty, setState, state } from "./state.js";
 import { renderEmpty, setBlockLoading } from "./states.js";
 import { initSiteSections } from "./site-sections.js";
 import { openSiteFeedback } from "./feedback.js";
+import { effectiveBoardRole, isRolePreviewActive, startRolePreview } from "./role-preview.js";
 import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress, syncSettingsSaveBar } from "./site.js";
 
 async function jsonPost(path, body) {
@@ -273,6 +274,7 @@ function wireSettingsTabs(initialTab = "customize") {
     // The preview only renders while its section is on screen, so entering the
     // tab that owns it is what asks for the first render.
     if (key === "customize") refreshDesignPreview();
+    if (key === "tools") loadModeratorAudit();
     if (key === "feedback") openSiteFeedback();
   };
   // A pointer from one panel to another moves to that panel instead of asking
@@ -292,7 +294,25 @@ function wireSettingsTabs(initialTab = "customize") {
   select(initialTab);
 }
 
+function settingsActiveBoard() {
+  return state.BOARDS?.find((entry) => entry.id === state.ACTIVE_SITE_ID) || null;
+}
+
+// DEF-14: Danger zone actions are owner-only. Deny by default — moderators
+// (and any board without an explicit owner role) never see these buttons;
+// the API still enforces authorization server-side.
+// P4-4: the view-as-moderator preview hides them (and the moderator-activity
+// audit) for real owners too.
+function syncDangerCardVisibility() {
+  const ownerOnly = effectiveBoardRole(settingsActiveBoard()) !== "owner";
+  const dangerCard = $("settingsDangerCard");
+  if (dangerCard) dangerCard.hidden = ownerOnly;
+  const modActivityCard = $("moderatorActivityCard");
+  if (modActivityCard) modActivityCard.hidden = ownerOnly;
+}
+
 function wireSettingsDanger() {
+  syncDangerCardVisibility();
   const reset = $("settingsResetData");
   if (reset) reset.addEventListener("click", async () => {
     if (!await showConfirmModal("Reset leaderboard data", "Archive this period and clear all players? This cannot be undone.", "Reset data", true)) return;
@@ -302,8 +322,9 @@ function wireSettingsDanger() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || "Reset failed");
       if (status) { status.textContent = "Leaderboard data reset."; status.hidden = false; }
+      else showToast("Leaderboard data reset.", "success");
       location.reload();
-    } catch (err) { logError("settings-reset", err); if (status) { status.textContent = err.message; status.hidden = false; } }
+    } catch (err) { logError("settings-reset", err); if (status) { status.textContent = err.message; status.hidden = false; } else showToast(err.message, "error"); }
   });
   const del = $("settingsDeleteBoard");
   if (del) del.addEventListener("click", async () => {
@@ -313,8 +334,60 @@ function wireSettingsDanger() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || "Delete failed");
       location.href = "/dashboard";
-    } catch (err) { logError("settings-delete-board", err); const status = $("status"); if (status) { status.textContent = err.message; status.hidden = false; } }
+    } catch (err) { logError("settings-delete-board", err); const status = $("status"); if (status) { status.textContent = err.message; status.hidden = false; } else showToast(err.message, "error"); }
   });
+}
+
+// P4-4: "View dashboard as moderator" — an owner-only, session-only cosmetic
+// preview. Server-side permissions are unchanged (see role-preview.js).
+function syncRolePreviewControls() {
+  syncDangerCardVisibility();
+  const button = $("settingsRolePreview");
+  if (button) button.hidden = settingsActiveBoard()?.userRole !== "owner" || isRolePreviewActive();
+}
+
+function wireRolePreview() {
+  const button = $("settingsRolePreview");
+  if (!button) return;
+  syncRolePreviewControls();
+  button.addEventListener("click", () => {
+    if (!startRolePreview(settingsActiveBoard()?.userRole)) return;
+    syncRolePreviewControls();
+  });
+  // The banner's "Exit preview" dispatches this; owner controls come back.
+  window.addEventListener("yr:role-preview-changed", syncRolePreviewControls);
+}
+
+let moderatorAuditLoaded = false;
+
+// P4-4: owner-only trail of moderator standings edits. The server rejects
+// non-owners; the card is hidden for everyone else.
+async function loadModeratorAudit() {
+  const list = $("modAuditList");
+  if (!list || moderatorAuditLoaded) return;
+  const board = settingsActiveBoard();
+  if (!board || board.userRole !== "owner" || !state.ACTIVE_SITE_ID) return;
+  moderatorAuditLoaded = true;
+  try {
+    const res = await fetch(`/api/site/audit?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}`, { credentials: "include" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Could not load moderator activity.");
+    if (!data.entries?.length) {
+      list.innerHTML = '<p class="v3-settings-muted">No moderator score edits recorded yet.</p>';
+      return;
+    }
+    list.innerHTML = data.entries.map((entry) => {
+      const when = entry.at ? new Date(entry.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
+      const what = entry.playerCount == null
+        ? "Standings settings updated"
+        : `${entry.playerCount} player score${entry.playerCount === 1 ? "" : "s"} saved`;
+      return `<div class="v3-settings-row"><div><b>${esc(entry.actorEmail || "Unknown operator")}</b><p>${what}</p></div><span class="v3-settings-muted">${when}</span></div>`;
+    }).join("");
+  } catch (err) {
+    moderatorAuditLoaded = false;
+    logError("mod-audit", err);
+    list.innerHTML = '<p class="v3-settings-muted">Could not load moderator activity.</p>';
+  }
 }
 
 function wireSettingsBoardAccess() {
@@ -364,6 +437,7 @@ export function setupSettingsScreen(sitePayload, initialTab = "customize") {
   renderSitePublicAddress();
   wireSettingsTabs(initialTab);
   wireSettingsDanger();
+  wireRolePreview();
   wireSettingsBoardAccess();
   keepIndependentSettingsActionsOutOfDraft();
   wireSettingsWebhook(sitePayload);

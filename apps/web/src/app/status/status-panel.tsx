@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
 type HealthResponse = {
   status?: string;
@@ -86,9 +87,20 @@ export function StatusPanel() {
             {overall === "unknown" && "Checking systems…"}
           </p>
         </div>
-        <p className="font-mono text-xs text-devin-ink-soft">
-          {checkedAt ? `Live check · as of ${checkedAt}` : "Running live check…"}
-        </p>
+        <div className="flex items-center gap-3">
+          {/* DEF-20: Manual refresh trigger — no need to wait 60s during an incident */}
+          <p className="font-mono text-xs text-devin-ink-soft">
+            {checkedAt ? `Live check · as of ${checkedAt}` : "Running live check…"}
+          </p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="font-mono text-xs text-devin-primary underline underline-offset-4 hover:opacity-80"
+            aria-label="Refresh status now"
+          >
+            Refresh now
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 rounded-[16px] border border-devin-line bg-white px-6">
@@ -100,7 +112,7 @@ export function StatusPanel() {
       <p className="mt-6 text-sm leading-relaxed text-devin-ink-soft">
         This page runs a live health check against production when you open it and refreshes every minute — it shows
         current status, not a historical uptime record. Seeing a problem we don&apos;t?{" "}
-        <a href="/help/support" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Tell us</a>.
+        <Link href="/help/support" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">Tell us</Link>.
       </p>
     </div>
   );

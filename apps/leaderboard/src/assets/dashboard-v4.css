@@ -70,45 +70,48 @@ body:has(.v3-dash[data-auth-workspace]) > main > .yr-workspace-loader.is-error .
 
 body:has(.v3-dash[data-auth-workspace]),
 .v3-dash[data-auth-workspace] {
-  /* == ws-token-contract:start — the one definition of every --ws-* token. See DESIGN.md. == */
-  --ws-canvas: #f5f7fa;
-  --ws-surface: #ffffff;
-  --ws-surface-soft: #f0f3f8;
-  --ws-surface-strong: #e6ebf2;
-  --ws-text: #202b3c;
-  --ws-text-soft: #536176;
-  --ws-text-mute: #637187;
-  --ws-line: rgba(20, 20, 12, 0.1);
-  --ws-line-strong: rgba(20, 20, 12, 0.16);
-  --ws-chrome: #edf1f7;
-  --ws-chrome-raised: #dde5f0;
-  --ws-chrome-line: #d7dfe9;
-  --ws-chrome-line-strong: #b9c7d8;
-  --ws-chrome-text: #243348;
-  --ws-chrome-text-soft: #536176;
-  --ws-chrome-card: #e5ebf3;
+  /* == ws-token-contract:start — the one definition of every --ws-* token. See DESIGN.md. ==
+     Neutral surfaces, text, lines, and soft status tints read through the
+     --wsd-* theme layer (see ws-dark-contract below) with the light values as
+     fallbacks, so light mode stays exactly these literals when no theme is set. */
+  --ws-canvas: var(--wsd-canvas, #f5f7fa);
+  --ws-surface: var(--wsd-surface, #ffffff);
+  --ws-surface-soft: var(--wsd-surface-soft, #f0f3f8);
+  --ws-surface-strong: var(--wsd-surface-strong, #e6ebf2);
+  --ws-text: var(--wsd-text, #202b3c);
+  --ws-text-soft: var(--wsd-text-soft, #536176);
+  --ws-text-mute: var(--wsd-text-mute, #637187);
+  --ws-line: var(--wsd-line, rgba(20, 20, 12, 0.1));
+  --ws-line-strong: var(--wsd-line-strong, rgba(20, 20, 12, 0.16));
+  --ws-chrome: var(--wsd-chrome, #edf1f7);
+  --ws-chrome-raised: var(--wsd-chrome-raised, #dde5f0);
+  --ws-chrome-line: var(--wsd-chrome-line, #d7dfe9);
+  --ws-chrome-line-strong: var(--wsd-chrome-line-strong, #b9c7d8);
+  --ws-chrome-text: var(--wsd-chrome-text, #243348);
+  --ws-chrome-text-soft: var(--wsd-chrome-text-soft, #536176);
+  --ws-chrome-card: var(--wsd-chrome-card, #e5ebf3);
   --ws-accent: #4056b9;
-  --ws-accent-rgb: 64 86 185;
-  --ws-accent-hover: #304398;
-  --ws-accent-soft: #edf0fc;
+  --ws-accent-rgb: var(--wsd-accent-rgb, 64 86 185);
+  --ws-accent-hover: var(--wsd-accent-hover, #304398);
+  --ws-accent-soft: var(--wsd-accent-soft, #edf0fc);
   --ws-accent-line: rgb(var(--ws-accent-rgb) / 0.28);
   --ws-accent-text: #ffffff;
   --ws-accent-on-chrome: #304398;
   --ws-success: #1f8a68;
-  --ws-success-soft: #eaf7f2;
-  --ws-success-text: #166a50;
-  --ws-success-line: #b7e1d2;
+  --ws-success-soft: var(--wsd-success-soft, #eaf7f2);
+  --ws-success-text: var(--wsd-success-text, #166a50);
+  --ws-success-line: var(--wsd-success-line, #b7e1d2);
   --ws-warning: #b76a12;
-  --ws-warning-soft: #fff6e8;
-  --ws-warning-text: #8d4f0c;
-  --ws-warning-fill: #fef3c7;
+  --ws-warning-soft: var(--wsd-warning-soft, #fff6e8);
+  --ws-warning-text: var(--wsd-warning-text, #8d4f0c);
+  --ws-warning-fill: var(--wsd-warning-fill, #fef3c7);
   --ws-danger: #b42318;
-  --ws-danger-soft: #fff0ee;
-  --ws-danger-line: rgb(180 35 24 / 0.28);
-  --ws-danger-text: #9b1c13;
-  --ws-danger-line-soft: #efb8b3;
-  --ws-info: #1d4ed8;
-  --ws-info-soft: #dbeafe;
+  --ws-danger-soft: var(--wsd-danger-soft, #fff0ee);
+  --ws-danger-line: var(--wsd-danger-line, rgb(180 35 24 / 0.28));
+  --ws-danger-text: var(--wsd-danger-text, #9b1c13);
+  --ws-danger-line-soft: var(--wsd-danger-line-soft, #efb8b3);
+  --ws-info: var(--wsd-info, #1d4ed8);
+  --ws-info-soft: var(--wsd-info-soft, #dbeafe);
   --ws-focus: var(--ws-accent);
   --ws-focus-width: 2px;
   --ws-focus-offset: 3px;
@@ -173,6 +176,48 @@ body:has(.v3-dash[data-auth-workspace]),
   --yr-mono: var(--ws-mono);
   /* == ws-primitive-bridge:end == */
 }
+
+/* == ws-dark-contract:start — dark parity for the workspace token contract.
+   shell-nav.js sets html[data-ws-theme] from the saved toggle choice or the OS
+   preference (prefers-color-scheme: dark). Only --wsd-* theme-layer variables
+   are defined here — the --ws-* contract keeps exactly one definition per
+   token, and values use rgb() form so no hex literals are added outside the
+   contract block. Accent, action ink, and status hues stay literal above. == */
+:root[data-ws-theme="dark"] {
+  --wsd-canvas: rgb(15 20 32);
+  --wsd-surface: rgb(22 28 42);
+  --wsd-surface-soft: rgb(26 33 48);
+  --wsd-surface-strong: rgb(33 42 61);
+  --wsd-text: rgb(232 236 244);
+  --wsd-text-soft: rgb(168 179 196);
+  --wsd-text-mute: rgb(139 151 169);
+  --wsd-line: rgb(232 236 244 / 0.12);
+  --wsd-line-strong: rgb(232 236 244 / 0.2);
+  --wsd-chrome: rgb(19 24 38);
+  --wsd-chrome-raised: rgb(27 34 51);
+  --wsd-chrome-line: rgb(38 48 74);
+  --wsd-chrome-line-strong: rgb(55 67 95);
+  --wsd-chrome-text: rgb(232 236 244);
+  --wsd-chrome-text-soft: rgb(168 179 196);
+  --wsd-chrome-card: rgb(26 33 48);
+  --wsd-accent-rgb: 123 150 255;
+  --wsd-accent-hover: rgb(147 169 255);
+  --wsd-accent-soft: rgb(123 150 255 / 0.14);
+  --wsd-success-soft: rgb(74 222 128 / 0.12);
+  --wsd-success-text: rgb(134 239 172);
+  --wsd-success-line: rgb(74 222 128 / 0.32);
+  --wsd-warning-soft: rgb(251 191 36 / 0.12);
+  --wsd-warning-text: rgb(252 211 77);
+  --wsd-warning-fill: rgb(69 52 17);
+  --wsd-danger-soft: rgb(248 113 113 / 0.12);
+  --wsd-danger-line: rgb(248 113 113 / 0.34);
+  --wsd-danger-text: rgb(252 165 165);
+  --wsd-danger-line-soft: rgb(248 113 113 / 0.22);
+  --wsd-info: rgb(147 197 253);
+  --wsd-info-soft: rgb(147 197 253 / 0.14);
+  color-scheme: dark;
+}
+/* == ws-dark-contract:end == */
 
 .v3-dash[data-auth-workspace] {
   min-height: 100vh;
@@ -344,6 +389,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-side-brandcopy small { margin-top: 4px; color: var(--ws-chrome-text-soft); font-size: 12px; letter-spacing: 0; text-transform: none; }
 
 .v3-dash[data-auth-workspace] .lb-side-collapse,
+.v3-dash[data-auth-workspace] .lb-side-theme,
 .v3-dash[data-auth-workspace] .lb-side-close,
 .v3-dash[data-auth-workspace] .lb-topbar-menu {
   display: inline-grid;
@@ -360,8 +406,10 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 .v3-dash[data-auth-workspace] .lb-side-collapse:hover,
+.v3-dash[data-auth-workspace] .lb-side-theme:hover,
 .v3-dash[data-auth-workspace] .lb-side-close:hover { border-color: var(--ws-chrome-line); background: var(--ws-chrome-raised); color: var(--ws-chrome-text); }
 .v3-dash[data-auth-workspace] .lb-side-collapse svg,
+.v3-dash[data-auth-workspace] .lb-side-theme svg,
 .v3-dash[data-auth-workspace] .lb-side-close svg,
 .v3-dash[data-auth-workspace] .lb-topbar-menu svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .v3-dash[data-auth-workspace] .lb-side-close { display: none; position: static; }
@@ -597,6 +645,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   .v3-dash[data-auth-workspace] .lb-nav,
   .v3-dash[data-auth-workspace] .lb-side-close,
   .v3-dash[data-auth-workspace] .lb-side-collapse,
+  .v3-dash[data-auth-workspace] .lb-side-theme,
   .v3-dash[data-auth-workspace] .lb-topbar-menu {
     min-height: var(--ws-control-h-touch);
   }
@@ -4994,6 +5043,35 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   margin: 0;
   line-height: 1.4;
 }
+.ov-alert-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ov-alert-config label {
+  display: grid;
+  gap: 3px;
+  font-size: var(--ws-type-label-size);
+  color: var(--ws-text-mute);
+}
+.ov-alert-config select,
+.ov-alert-config input {
+  font: inherit;
+  font-size: var(--ws-type-label-size);
+  color: var(--ws-text);
+  background: var(--ws-surface);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  padding: 4px 6px;
+}
+.ov-alert-config input { width: 64px; }
+.ov-alert-config select:focus-visible,
+.ov-alert-config input:focus-visible {
+  outline: var(--ws-focus-width, 2px) solid var(--ws-focus);
+  outline-offset: var(--ws-focus-offset, 2px);
+}
 
 @media (prefers-reduced-motion: reduce) {
   .yr-workspace-loader *,
@@ -5560,6 +5638,38 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-skel-heatmap { display: block; grid-column: 1 / -1; width: 100%; height: 180px;
 }
 
+/* DEF-06: dynamic-section loading skeleton geometry (shimmer comes from .skeleton) */
+.v3-dash[data-auth-workspace] .lb-skel-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px;
+}
+.v3-dash[data-auth-workspace] .lb-skel-rows { display: flex; flex-direction: column; gap: 10px;
+}
+.v3-dash[data-auth-workspace] .lb-skel-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-sm); background: var(--ws-surface);
+}
+.v3-dash[data-auth-workspace] .v3-skel--title { width: 10rem; height: 1.2rem;
+}
+.v3-dash[data-auth-workspace] .v3-skel--btn { width: 6rem; height: 2rem; border-radius: var(--ws-radius-sm);
+}
+.v3-dash[data-auth-workspace] .v3-skel--avatar { width: 2rem; height: 2rem; min-width: 2rem; border-radius: 999px;
+}
+.v3-dash[data-auth-workspace] .v3-skel--text { height: 0.9rem;
+}
+.v3-dash[data-auth-workspace] .v3-skel--short { width: 5rem; flex-shrink: 0;
+}
+.v3-dash[data-auth-workspace] .lb-skel-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 12px;
+}
+.v3-dash[data-auth-workspace] .lb-skel-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-sm); background: var(--ws-surface);
+}
+.v3-dash[data-auth-workspace] .v3-skel--badge { width: 2.25rem; height: 1.25rem; border-radius: 999px;
+}
+.v3-dash[data-auth-workspace] .lb-skel-form { display: flex; flex-direction: column; gap: 16px; max-width: 34rem;
+}
+.v3-dash[data-auth-workspace] .lb-skel-field { display: flex; flex-direction: column; gap: 6px;
+}
+.v3-dash[data-auth-workspace] .v3-skel--label { width: 6rem; height: 0.8rem;
+}
+.v3-dash[data-auth-workspace] .v3-skel--input { width: 100%; height: 2.4rem; border-radius: var(--ws-radius-sm);
+}
+
 .v3-dash[data-auth-workspace] .heatmap > .v3-empty { grid-column: 1 / -1; min-height: 180px; padding: 32px 16px;
 }
 
@@ -6086,6 +6196,22 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] .cr-list-toolbar .list-search { max-width: 240px;
+}
+
+/* P3-5: member multi-select bulk toolbar */
+.v3-dash[data-auth-workspace] .cr-bulk-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--ws-accent-line); background: var(--ws-accent-soft);
+}
+.v3-dash[data-auth-workspace] .cr-bulk-count { font-weight: 600; font-size: 0.8125rem; color: var(--ws-text);
+}
+.v3-dash[data-auth-workspace] .cr-bulk-field { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--ws-text-soft);
+}
+.v3-dash[data-auth-workspace] .cr-bulk-field input { width: 7rem; padding: 6px 8px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-sm); background: var(--ws-surface); color: var(--ws-text); font: inherit;
+}
+.v3-dash[data-auth-workspace] .cr-bulk-field--grow input { width: 14rem;
+}
+.v3-dash[data-auth-workspace] .cr-member-select-col { width: 2.5rem; text-align: center;
+}
+.v3-dash[data-auth-workspace] .cr-member-select-col input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--ws-accent); cursor: pointer;
 }
 
 .v3-dash[data-auth-workspace] .cr-shop-cards {
@@ -9139,3 +9265,208 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     width: 100%;
   }
 }
+
+/* == tour:start — P4-1 creator onboarding tour. A non-blocking spotlight:
+   the ring dims the rest of the page with a huge box-shadow but never
+   captures pointer events, so the dashboard stays explorable mid-tour. */
+.yr-tour-spot {
+  position: fixed;
+  z-index: 180;
+  pointer-events: none;
+  border-radius: var(--ws-radius);
+  box-shadow: 0 0 0 2px var(--ws-accent), 0 0 0 5000px rgba(13, 17, 26, 0.5);
+  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease, opacity 0.25s ease;
+}
+
+.yr-tour-bubble {
+  position: fixed;
+  z-index: 181;
+  width: min(360px, calc(100vw - 24px));
+  padding: var(--ws-space-4);
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius);
+  background: var(--ws-surface-strong);
+  color: var(--ws-text);
+  box-shadow: var(--ws-shadow-overlay);
+  transition: left 0.25s ease, top 0.25s ease;
+}
+
+.yr-tour-bubble h2 {
+  margin: 0 0 var(--ws-space-2);
+  font-size: var(--ws-type-card-size);
+  line-height: var(--ws-type-card-leading);
+}
+
+.yr-tour-bubble p {
+  margin: 0;
+  color: var(--ws-text-mute);
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+}
+
+.yr-tour-progress {
+  margin: 0 0 var(--ws-space-2) !important;
+  font-size: var(--ws-type-label-size);
+  color: var(--ws-text-soft) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.yr-tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-3);
+  margin-top: var(--ws-space-4);
+}
+
+.yr-tour-skip {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ws-text-mute);
+  font: inherit;
+  font-size: var(--ws-type-label-size);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.yr-tour-skip:hover { color: var(--ws-text); }
+
+.yr-tour-nav { display: inline-flex; align-items: center; gap: var(--ws-space-2); }
+
+.yr-tour-back {
+  border: 1px solid var(--ws-line);
+  background: none;
+  border-radius: var(--ws-radius-sm);
+  color: var(--ws-text);
+  font: inherit;
+  font-size: var(--ws-type-label-size);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.yr-tour-back:hover { border-color: var(--ws-line-strong); }
+
+.yr-tour-bubble :focus-visible {
+  outline: var(--ws-focus-width, 2px) solid var(--ws-focus);
+  outline-offset: var(--ws-focus-offset, 2px);
+}
+
+@media (max-width: 640px) {
+  .yr-tour-bubble { left: 12px !important; right: 12px; width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yr-tour-spot,
+  .yr-tour-bubble { transition: none; }
+}
+/* == tour:end */
+
+/* == overlay-designer:start — P4-2 WYSIWYG overlay designer. The canvas is a
+   16:9 stand-in for the 1920×1080 stream scene; the live iframe fills it and
+   the draggable handle rides above the frame to compose x/y/scale. */
+.overlay-designer {
+  display: grid;
+  gap: var(--ws-space-4);
+}
+
+.od-canvas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  overflow: hidden;
+  background:
+    repeating-conic-gradient(var(--ws-surface-soft) 0% 25%, var(--ws-surface) 0% 50%) 50% / 24px 24px;
+}
+
+.od-canvas iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.od-handle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--ws-accent);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-chrome-raised);
+  color: var(--ws-chrome-text);
+  font: inherit;
+  font-size: var(--ws-type-label-size);
+  font-weight: 600;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.od-handle:active { cursor: grabbing; }
+
+.od-handle:focus-visible {
+  outline: var(--ws-focus-width, 2px) solid var(--ws-focus);
+  outline-offset: var(--ws-focus-offset, 2px);
+}
+
+.od-handle.is-ticker {
+  /* The ticker bar spans the canvas width: the handle rides the full row. */
+  left: 50%;
+  width: calc(100% - 24px);
+  justify-content: center;
+  border-style: dashed;
+}
+
+.od-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ws-space-3);
+}
+
+.od-controls .field {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.od-controls .od-num input { max-width: 84px; }
+
+.od-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-2);
+  margin-left: auto;
+}
+/* == overlay-designer:end */
+
+/* == role-preview:start */
+/* P4-4: view-as-moderator preview banner. Appended to <body> by
+   role-preview.js, so it sits outside the shell grid and is fixed instead. */
+.yr-role-preview-banner {
+  position: fixed;
+  top: calc(var(--ws-topbar-h) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(92vw, 560px);
+  padding: 10px 14px;
+  border: 1px solid var(--ws-accent-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+/* == role-preview:end */

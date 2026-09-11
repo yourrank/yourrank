@@ -272,6 +272,20 @@ export async function handleOverlayAlertsPage(request, env, deps = {}) {
   const site = await one("SELECT id, name, slug FROM sites WHERE slug=$1 OR id::text=$1", [siteSlug]);
   if (!site) return new Response("Site not found", { status: 404 });
 
+  // Alert sound configuration rides in the URL (the dashboard composes the
+  // alert link), validated server-side: chime presets, 0-100 volume, and an
+  // optional quiet period between alert sounds to stop sound spam.
+  const SOUND_PRESETS = new Set(["chime", "ding", "fanfare", "none"]);
+  const requestedSound = (url.searchParams.get("sound") || "chime").toLowerCase();
+  const sound = SOUND_PRESETS.has(requestedSound) ? requestedSound : "chime";
+  const clampNum = (v, min, max, dflt) => {
+    if (v === null || v === "") return dflt;
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
+  };
+  const vol = clampNum(url.searchParams.get("vol"), 0, 100, 30);
+  const gap = clampNum(url.searchParams.get("gap"), 0, 300, 0);
+
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -344,7 +358,9 @@ export async function handleOverlayAlertsPage(request, env, deps = {}) {
   <div id="alert-container"></div>
   <script>
     const siteSlug = ${JSON.stringify(site.slug)};
+    const soundConfig = { preset: ${JSON.stringify(sound)}, volume: ${vol}, gapMs: ${Math.round(gap * 1000)} };
     let lastAlertId = null;
+    let lastSoundAt = 0;
 
     function esc(s) {
       return String(s || '').replace(/[&<>"']/g, function(c) {
@@ -352,34 +368,52 @@ export async function handleOverlayAlertsPage(request, env, deps = {}) {
       });
     }
 
-    // Web Audio Synthesizer Chime for alerts
-    function playAlertChime() {
+    // Web Audio synthesized alert sounds. Preset + volume + quiet period come
+    // from the composed overlay URL (soundConfig), so OBS sources stay
+    // self-contained and no audio files ship with the page.
+    function playAlertSound() {
+      if (soundConfig.preset === 'none') return;
+      var nowMs = Date.now();
+      if (soundConfig.gapMs > 0 && nowMs - lastSoundAt < soundConfig.gapMs) return;
+      lastSoundAt = nowMs;
       try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) return;
-        const ctx = new AudioContext();
-        const now = ctx.currentTime;
-        
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523.25, now); // C5
-        osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-        osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
-        osc.frequency.setValueAtTime(1046.50, now + 0.3); // C6
-        
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-        
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 0.8);
+        var ctx = new AudioContext();
+        var now = ctx.currentTime;
+        var master = ctx.createGain();
+        master.gain.value = Math.max(0, Math.min(1, soundConfig.volume / 100)) * 0.85;
+        master.connect(ctx.destination);
+
+        var tone = function(type, freqs, endAt) {
+          var osc = ctx.createOscillator();
+          var gain = ctx.createGain();
+          osc.type = type;
+          freqs.forEach(function(f) {
+            osc.frequency.setValueAtTime(f.value, now + (f.at || 0));
+          });
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.35, now + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + endAt);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(now);
+          osc.stop(now + endAt);
+        };
+
+        if (soundConfig.preset === 'ding') {
+          tone('sine', [{ value: 1318.5 }], 0.5);
+        } else if (soundConfig.preset === 'fanfare') {
+          tone('square', [{ value: 523.25 }, { value: 659.25, at: 0.12 }, { value: 783.99, at: 0.24 }], 0.7);
+          tone('triangle', [{ value: 1046.5 }, { value: 1318.5, at: 0.3 }], 0.9);
+        } else {
+          tone('sine', [{ value: 523.25 }, { value: 659.25, at: 0.1 }, { value: 783.99, at: 0.2 }, { value: 1046.5, at: 0.3 }], 0.8);
+        }
       } catch(e) {}
     }
 
     function showAlert(title, user, desc, icon) {
-      playAlertChime();
+      playAlertSound();
       const container = document.getElementById('alert-container');
       container.innerHTML = \`
         <div class="alert-box">

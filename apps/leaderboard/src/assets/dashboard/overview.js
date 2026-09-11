@@ -3,6 +3,7 @@ import { $, esc, currentPlayers } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
 import { activityHomeState, automationHomeState, nextStepAction, visitsMetricState } from "./overview-state.js";
+import { effectiveBoardRole } from "./role-preview.js";
 import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 import { fetchDashboardJson } from "./request.js";
 
@@ -76,7 +77,7 @@ export function renderOverviewSummary() {
   const steps = computeSetupSteps();
   const activeBoard = state.BOARDS.find((board) => board.id === state.ACTIVE_SITE_ID);
   const siteName = $("f_name")?.value.trim() || activeBoard?.name || state.SLUG || "Selected site";
-  const isModerator = activeBoard?.userRole === "moderator";
+  const isModerator = effectiveBoardRole(activeBoard) === "moderator";
   const ownerName = activeBoard?.ownerName || "the site owner";
   if ($("ovSiteName")) $("ovSiteName").textContent = siteName;
   const siteInitial = $("ovSiteInitial");

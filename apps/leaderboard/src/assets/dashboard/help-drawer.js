@@ -96,6 +96,17 @@ import '../dialog.js';
           </div>
 
           <div class="yr-help-guides-list" id="yrHelpGuidesList">
+            <div class="yr-guide-card" data-keywords="tour walkthrough onboarding replay start here first time">
+              <div class="yr-guide-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+              </div>
+              <div class="yr-guide-info">
+                <strong>Product tour</strong>
+                <p>A two-minute walkthrough of the launch checklist, scoring, OBS overlays and the Kick connection.</p>
+                <button type="button" class="yr-guide-link yr-tour-replay">Replay the tour →</button>
+              </div>
+            </div>
+
             <div class="yr-guide-card" data-keywords="what is leaderboard setup create players rank points share publish">
               <div class="yr-guide-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-2.34"/><path d="M14 14.66V17c0 .55.45 1 1 1h2c.55 0 1-.45 1-1v-2.34"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
@@ -341,8 +352,16 @@ import '../dialog.js';
     });
 
     // Guide links click (close drawer so they can navigate smoothly)
-    drawerEl.querySelectorAll(".yr-guide-link").forEach((link) => {
+    drawerEl.querySelectorAll(".yr-guide-link:not(.yr-tour-replay)").forEach((link) => {
       link.addEventListener("click", () => close());
+    });
+
+    // P4-1: replay the onboarding tour from help. The drawer is modal, so it
+    // closes first and the spotlight tour takes over. Dynamic import keeps
+    // this module loadable outside the module graph (see help-drawer.test.js).
+    drawerEl.querySelector(".yr-tour-replay")?.addEventListener("click", () => {
+      close();
+      import("./tour.js").then(({ startTour }) => startTour({ force: true }));
     });
 
     // Support Form submit

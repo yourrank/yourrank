@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "../../components/home/magnetic-cursor";
 import { MarketingShell } from "../../components/site-shell";
@@ -50,9 +51,9 @@ export default function PricingPage() {
             <div className="mx-auto max-w-6xl">
               <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                 <h2 className="text-3xl font-medium tracking-[-0.02em] text-devin-ink sm:text-4xl">Billing questions.</h2>
-                <a href="/faq" className="text-sm font-medium text-devin-ink underline decoration-devin-line underline-offset-4 hover:decoration-devin-primary">
+                <Link href="/faq" className="text-sm font-medium text-devin-ink underline decoration-devin-line underline-offset-4 hover:decoration-devin-primary">
                   Read the product FAQ
-                </a>
+                </Link>
               </div>
               <dl className="mt-10 border-t border-devin-line">
                 {BILLING_FAQ.map((item) => (
@@ -63,9 +64,9 @@ export default function PricingPage() {
                 ))}
               </dl>
               <div className="mt-14 flex justify-center">
-                <a href="/signup?plan=free" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-7 py-3.5 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary">
+                <Link href="/signup?plan=free" data-magnetic className="inline-flex min-h-12 items-center rounded-[2px] bg-devin-primary px-7 py-3.5 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary">
                   Start free
-                </a>
+                </Link>
               </div>
             </div>
           </section>

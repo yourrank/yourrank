@@ -298,5 +298,21 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
     });
   }
 
-  return json({ ok: true, connections, selectedSiteId: selectedSiteId || null }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
+  // DEF-14: The client gates privileged connection actions on this map.
+  // This endpoint only lists sites the user owns, so the owner-level
+  // capability set applies to every row rendered from it.
+  // P3-4: Integration-health facts the Account page card renders. The Kick
+  // ingest webhook is platform-level; delivery telemetry (last ping, 24h
+  // success rate) is not recorded yet, and the card says so instead of
+  // inventing numbers.
+  return json({
+    ok: true,
+    connections,
+    capabilities: { canRoleManageConnections: true },
+    selectedSiteId: selectedSiteId || null,
+    integrationHealth: {
+      kickIngest: { configured: Boolean(env.KICK_WEBHOOK_PUBLIC_KEY) },
+      deliveryTelemetry: { available: false, reason: "Delivery telemetry is not recorded yet." },
+    },
+  }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }

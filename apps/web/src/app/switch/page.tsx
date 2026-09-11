@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "@/components/home/magnetic-cursor";
 import { MarketingShell } from "@/components/site-shell";
@@ -67,7 +68,7 @@ export default function SwitchPage() {
               YourRank replaces that stack with one connected suite &mdash; and keeps everything your community already earned.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Start free</a>
+              <Link href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Start free</Link>
               <a href="/demo" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] border border-devin-line px-5 py-3 text-sm font-medium transition-colors hover:border-devin-ink/40">Explore demo</a>
             </div>
           </div>
@@ -111,8 +112,8 @@ export default function SwitchPage() {
               ))}
             </div>
             <div className="mt-14 flex flex-wrap items-center gap-4 border-t border-devin-line pt-8">
-              <a href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</a>
-              <a href="/pricing" className="text-sm text-devin-ink-soft underline-offset-4 hover:text-devin-ink hover:underline">See plans &amp; limits &rarr;</a>
+              <Link href="/signup" data-magnetic className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover">Create your free page</Link>
+              <Link href="/pricing" className="text-sm text-devin-ink-soft underline-offset-4 hover:text-devin-ink hover:underline">See plans &amp; limits &rarr;</Link>
             </div>
           </div>
         </section>

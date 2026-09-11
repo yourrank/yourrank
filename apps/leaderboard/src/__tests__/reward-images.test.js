@@ -44,7 +44,7 @@ it('persists only an object key, and leaves rewards unchanged when storage is un
   let storedKey;
   const env = { REWARD_IMAGES: { put: async (key, bytes, options) => { storedKey = key; expect(bytes).toBeInstanceOf(Uint8Array); expect(options.httpMetadata.contentType).toBe('image/webp'); return {}; } } };
   expect((await handleCreditsSaveShopItem(save(), env, shopDeps(writes))).status).toBe(200);
-  expect(writes[1].params[8]).toBe(storedKey);
+  expect(writes[1].params[9]).toBe(storedKey);
   expect(writes[1].params).not.toContain(imageData);
   expect(storedKey).toStartWith('reward-images/site-a/');
 });
@@ -71,7 +71,7 @@ it('ordinary edits preserve pictures; explicit removal clears them and deleted i
     const writes = [];
     const response = await handleCreditsSaveShopItem(new Request('https://test.com/api/credits/shop?siteId=site-a', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, name: 'Song', cost: 100, imageData }) }), {}, shopDeps(writes));
     expect(response.status).toBe(200);
-    expect(writes[1].params.slice(7)).toEqual([imageData !== undefined, null]);
+    expect(writes[1].params.slice(8)).toEqual([imageData !== undefined, null]);
     expect(writes[1].sql).toContain('deleted_at IS NULL');
   }
 });

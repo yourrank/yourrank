@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll } from "framer-motion";
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { DEVIN_EASE } from "./reveal";
 
 type ProductKind = "sites" | "telegram" | "credits";
@@ -192,12 +193,12 @@ export function StickyProductStory() {
                     {product.kind === "sites" ? "Sites" : product.kind === "telegram" ? "Telegram" : "Credits & Shop"}. {product.title}
                   </h3>
                   <p className="mt-5 max-w-lg text-base leading-relaxed text-devin-ink-soft">{product.description}</p>
-                  <a href={product.href} data-magnetic className="mt-7 inline-flex min-h-11 items-center rounded-[2px] border border-devin-line bg-white px-4 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40">
+                  <Link href={product.href} data-magnetic className="mt-7 inline-flex min-h-11 items-center rounded-[2px] border border-devin-line bg-white px-4 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40">
                     {product.action}
                     <svg aria-hidden="true" viewBox="0 0 16 16" className="ml-2 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
                       <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                  </a>
+                  </Link>
                   <div className="mt-8 h-[390px] lg:hidden">
                     <ProductVisual kind={product.kind} />
                   </div>

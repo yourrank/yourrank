@@ -11,7 +11,7 @@ import { decryptToken, decryptCredential } from "@yourrank/shared/crypto";
 import { PLATFORM_HOST } from "../constants.js";
 import { invalidateCustomDomain } from "../middleware/custom-domain.js";
 import { notifyLiveBoard } from "../live-board-config.js";
-import { requireSiteCapability } from "../site-authorization.js";
+import { requireSiteCapability, requireSiteOwner } from "../site-authorization.js";
 import { routeContext } from "../middleware/handler.js";
 
 function csvCell(value) {
@@ -367,14 +367,85 @@ export async function handlePutSite(request, env, {
   const payload = await readJson(request);
   if (!payload) return bad("Invalid request");
   const site = payload.siteId ? await getBoardById(env, user.id, payload.siteId) : await getByUser(env, user.id);
+  let moderatorEdit = null;
   if (site) {
-    const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageSiteSettings");
+    // DEF-01: Branch capability check based on what the payload modifies.
+    // Score/standings-only mutations (players, rankBy, period timing) are a
+    // board management operation that moderators are permitted to perform.
+    // Changes to site identity (slug, domain, branding, billing settings)
+    // require the restricted canRoleManageSiteSettings capability.
+    const BOARD_ONLY_KEYS = new Set(["players", "rankBy", "startsAt", "endsAt", "siteId"]);
+    const payloadKeys = Object.keys(payload || {});
+    const isBoardOnlyMutation = payloadKeys.length > 0 && payloadKeys.every((k) => BOARD_ONLY_KEYS.has(k));
+    const requiredCapability = isBoardOnlyMutation ? "canRoleManageBoard" : "canRoleManageSiteSettings";
+    const authorization = await requireSiteCapabilityImpl(user, site, requiredCapability);
     if (authorization.res) return authorization.res;
+    moderatorEdit = { isBoardOnlyMutation, role: authorization.role };
   }
   const r = await saveSite(env, user, payload, payload.siteId || null, request);
+  if (!r.error && moderatorEdit?.isBoardOnlyMutation && moderatorEdit.role === "moderator") {
+    // P4-4: owners audit what moderators changed on the standings. Summary
+    // only — sanitized details keep the row small and secrets out.
+    await logAudit({
+      actorId: user.id,
+      action: "board_score_edit",
+      entityType: "site",
+      entityId: site.id,
+      details: {
+        slug: site.slug,
+        rankBy: payload.rankBy ?? null,
+        startsAt: payload.startsAt ?? null,
+        endsAt: payload.endsAt ?? null,
+        playerCount: Array.isArray(payload.players) ? payload.players.length : null,
+      },
+      request,
+    });
+  }
   return r.error
     ? json({ ok: false, error: r.error, code: r.code || "save_failed", currentUpdatedAt: r.currentUpdatedAt }, r.code === "concurrency_conflict" ? 409 : 400)
     : json({ ok: true, updatedAt: r.updatedAt, publishedAt: r.publishedAt, slug: r.slug, siteId: r.siteId });
+}
+
+// GET /api/site/audit?siteId= — owner-only moderator score-edit trail.
+export async function handleSiteAuditLog(request, env, {
+  requireUserImpl = requireUser,
+  rateLimitImpl = rateLimit,
+  getBoardByIdImpl = getBoardById,
+  requireSiteOwnerImpl = requireSiteOwner,
+  queryImpl = query,
+} = {}) {
+  const { user, res } = await requireUserImpl(request, env);
+  if (res) return res;
+  if (user.status === "suspended") return bad("This account is suspended.", 403);
+  if (!(await rateLimitImpl(env, `site-audit:${user.id}`, 30, 60)).ok) return bad("Too many requests. Try again shortly.", 429);
+  const url = new URL(request.url);
+  const siteId = url.searchParams.get("siteId");
+  const site = siteId ? await getBoardByIdImpl(env, user.id, siteId) : await getByUser(env, user.id);
+  const authorization = await requireSiteOwnerImpl(user, site);
+  if (authorization.res) return authorization.res;
+  const rows = (await queryImpl(
+    `SELECT a.created_at, a.details, a.actor_id, u.email AS actor_email
+       FROM audit_log a
+       LEFT JOIN users u ON u.id = a.actor_id
+      WHERE a.entity_type = 'site' AND a.entity_id = $1 AND a.action = 'board_score_edit'
+      ORDER BY a.created_at DESC
+      LIMIT 50`,
+    [site.id]
+  )) || [];
+  return json({
+    ok: true,
+    entries: rows.map((raw) => {
+      const details = fromJsonb(raw.details) || {};
+      return {
+        at: raw.created_at ? new Date(raw.created_at).toISOString() : null,
+        actorEmail: raw.actor_email || null,
+        actorId: raw.actor_id || null,
+        playerCount: details.playerCount ?? null,
+        rankBy: details.rankBy ?? null,
+        endsAt: details.endsAt ?? null,
+      };
+    }),
+  });
 }
 
 // POST /api/site/finish — mark the wizard-created board as finished.
