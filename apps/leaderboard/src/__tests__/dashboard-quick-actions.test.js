@@ -301,21 +301,20 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('data-nav="board"');
     expect(html).toContain('data-nav="settings"');
     expect(html).toContain('lb-side-group');
-    // Community groups only the existing public-identity surfaces. Account-
-    // scoped and transitional destinations remain explicit top-level links.
-    expect(html).toContain("lb-nav-group");
-    expect(html).toContain(">Community</div>");
+    // The rail is flat and task-worded — no grouping labels.
+    expect(html).not.toContain("lb-nav-group");
+    expect(html).not.toContain(">Community</div>");
     expect(html).not.toContain(">Current site</div>");
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
     expect(html).toContain('>Home</a>');
     for (const label of [
-      "Site", "Leaderboard", "People", "Rewards", "Insights", "Telegram", "Settings",
+      "My board", "Members", "Engage", "Stats", "Telegram", "Settings",
     ]) expect(html).toContain(`>${label}</a>`);
-    for (const label of ["Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
+    for (const label of ["Sites", "Site", "Leaderboard", "People", "Rewards", "Insights", "Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
       expect(html).not.toContain(`>${label}</a>`);
     }
     expect(html).not.toContain(">Integrations</a>");
-    expect(html).toContain(">Sites</a>");
+    expect(html).not.toContain(">All sites</a>");
     expect(html).not.toContain('>Help</a>');
   });
 

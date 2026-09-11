@@ -180,7 +180,9 @@ function deriveRenderableRoutes() {
   }
   routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: false, hasBreadcrumbs: false });
   for (const tab of PEOPLE_TABS) {
-    routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: true });
+    // The Members tab repeats its "Members" section head and collapses to a
+    // single-entry trail, which renders no crumb; Reviews keeps the trail.
+    routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: tab.key !== "viewers" });
   }
   // The Kick connection lives under Site settings → Connections: it renders the
   // channel content without the Rewards subnav, owned by the Site settings rail.
