@@ -2196,7 +2196,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
    Deeper numbers live in Insights, not here. */
 .v3-dash[data-auth-workspace] [data-page="home"] { display: flex; flex-direction: column; gap: var(--ws-space-7); width: 100%; max-width: 1120px; margin: 0 auto; }
 .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) #verifyBanner,
-.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability { display: none; }
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-status,
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-publish-action,
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-live-link { display: none; }
 .v3-dash[data-auth-workspace] .ov-setup-details { border-top: 1px solid var(--ws-line); }
 .v3-dash[data-auth-workspace] .ov-setup-details > summary { padding: 14px 24px; cursor: pointer; font-size: 13px; color: var(--ws-text-soft); }
 .v3-dash[data-auth-workspace] .ov-setup-details .ov-setup-count { float: right; }
