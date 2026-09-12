@@ -162,7 +162,9 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
   currentController = controller;
 
   const path = dynamicPath(page, tab);
-  const fullUrl = path + (query || "");
+  // Callers pass `query` in either form — a `location.search` string ("?a=1")
+  // or a bare "a=1" pair — so normalize before joining it onto the path.
+  const fullUrl = path + (query ? (String(query).startsWith("?") ? query : `?${query}`) : "");
 
   // Show local loading state inside the content region — the shell (rail,
   // topbar, site selector) stays visible and stable.

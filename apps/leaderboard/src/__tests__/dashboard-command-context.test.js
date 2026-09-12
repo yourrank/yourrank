@@ -17,4 +17,12 @@ describe("contextual workspace commands", () => {
     expect(commandAvailable("nav-history", {})).toBe(true);
     expect(PRIMARY_COMMANDS.has("nav-history")).toBe(false);
   });
+  it("gates site tasks on a selected site and link copy on a live site", () => {
+    expect(commandAvailable("task-site-add-player", { siteSelected: false })).toBe(false);
+    expect(commandAvailable("task-site-add-player", { siteSelected: true })).toBe(true);
+    expect(commandAvailable("task-site-invite", { siteSelected: false })).toBe(false);
+    expect(commandAvailable("task-copy-link", { live: false })).toBe(false);
+    expect(commandAvailable("task-copy-link", { live: true })).toBe(true);
+    expect(commandAvailable("task-new-site", {})).toBe(true);
+  });
 });

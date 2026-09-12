@@ -7,6 +7,9 @@ export function commandAvailable(id, context) {
   if (id.startsWith("act-obs-")) return context.sharePage && context.live;
   if (id === "act-export-drops") return context.activitiesPage && context.siteSelected;
   if (id === "act-support") return context.hasSupport;
+  // Task commands that act on the selected site need one selected.
+  if (id.startsWith("task-site-")) return context.siteSelected;
+  if (id === "task-copy-link") return context.live;
   return true;
 }
 

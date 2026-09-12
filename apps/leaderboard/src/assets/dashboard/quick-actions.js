@@ -64,7 +64,7 @@ export function initQuickActions() {
   }
 }
 
-function openNewSite() {
+export function openNewSite() {
   const overlay = document.createElement("div");
   overlay.className = "modal";
   overlay.setAttribute("role", "dialog");

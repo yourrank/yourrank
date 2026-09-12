@@ -2256,6 +2256,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .ov-setup-count { color: var(--ws-text-soft); font: 600 13px var(--ws-sans); white-space: nowrap; }
 .v3-dash[data-auth-workspace] .ov-setup-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ws-line); }
 .v3-dash[data-auth-workspace] .ov-setup-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px; padding: 7px 18px; border-top: 1px solid var(--ws-line); background: var(--ws-surface, #ffffff); color: var(--ws-text); text-decoration: none; }
+button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
 .v3-dash[data-auth-workspace] .ov-setup-row:first-child { border-top: 0; }
 .v3-dash[data-auth-workspace] .ov-setup-row:hover { background: var(--ws-accent-soft); }
 .v3-dash[data-auth-workspace] .ov-setup-row:focus-visible { outline-offset: -3px; }

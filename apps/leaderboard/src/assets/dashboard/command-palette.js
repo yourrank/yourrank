@@ -3,6 +3,7 @@ import { $, copyToClipboard, showToast } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { commandAvailable, PRIMARY_COMMANDS } from "./command-context.js";
 import { requestDashboardRoute } from "./shell.js";
+import { openNewSite } from "./quick-actions.js";
 import { startTour, stopTour } from "./tour.js";
 
 const PALETTE_ICONS = {
@@ -59,6 +60,17 @@ const COMMANDS = [
   // Telegram lives on the bot Worker: the entry point resolves it through the
   // manifest and decides the required full document navigation.
   { id: "nav-telegram", title: "Telegram", group: "Navigation", icon: PALETTE_ICONS.bot, keywords: "bot console", action: () => requestDashboardRoute("telegram", "", { query: "" }) },
+  { id: "task-site-add-player", title: "Add player", group: "Tasks", icon: PALETTE_ICONS.leaderboard, keywords: "new player leaderboard row score", action: () => requestDashboardRoute("board", "players", { query: joinQuery(taskSiteQuery("board")) }) },
+  { id: "task-site-activity", title: "Create an activity", group: "Tasks", icon: PALETTE_ICONS.rewards, keywords: "new drop activity engage", action: () => requestDashboardRoute("activities", "overview", { query: joinQuery(taskSiteQuery("siteId")) }) },
+  { id: "task-site-shop-item", title: "New shop item", group: "Tasks", icon: PALETTE_ICONS.rewards, keywords: "reward shop item create sell", action: () => requestDashboardRoute("rewards", "shop", { query: joinQuery("new=1", taskSiteQuery("siteId")) }) },
+  { id: "task-site-invite", title: "Invite teammate", group: "Tasks", icon: PALETTE_ICONS.leaderboard, keywords: "invite member team seat", action: () => requestDashboardRoute("settings", "team", { query: joinQuery("invite=1", taskSiteQuery("siteId")) }) },
+  { id: "task-copy-link", title: "Copy live site link", group: "Tasks", icon: PALETTE_ICONS.copy, keywords: "copy link share url live", action: async () => {
+    const slug = state.SLUG || "";
+    if (!slug) return;
+    const ok = await copyToClipboard(`${location.origin}/${slug}`);
+    showToast(ok ? "Link copied — share it with your viewers." : "Copy failed — open the live site and copy the URL.", ok ? "success" : "error");
+  }},
+  { id: "task-new-site", title: "New site", group: "Tasks", icon: PALETTE_ICONS.overview, keywords: "create site board community", action: () => openNewSite() },
   { id: "nav-boards", title: "All sites", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "sites boards all sites", action: () => requestDashboardRoute("boards", "", { query: "" }) },
   { id: "nav-settings", title: "Settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "settings account team billing connections data", action: () => requestDashboardRoute("settings", "account", { query: "" }) },
   { id: "nav-site-settings", title: "Site pages", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site pages settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
@@ -67,6 +79,18 @@ const COMMANDS = [
   { id: "act-support", title: "Help & support drawer", group: "Support", icon: PALETTE_ICONS.help, action: () => $("openHelpDrawerBtn")?.click() },
   { id: "act-tour", title: "Restart the product tour", group: "Support", icon: PALETTE_ICONS.help, action: () => { stopTour(); startTour({ force: true }); } }
 ];
+
+// Task commands carry the selected site along the same way the topbar
+// "+ New" menu does — board workspace reads `board`, everywhere else `siteId`.
+function taskSiteQuery(param) {
+  const params = new URLSearchParams(location.search);
+  const sid = params.get("siteId") || params.get("board") || state.ACTIVE_SITE_ID || "";
+  return sid ? `${param}=${encodeURIComponent(sid)}` : "";
+}
+function joinQuery(...parts) {
+  const joined = parts.filter(Boolean).join("&");
+  return joined ? `?${joined}` : "";
+}
 
 let paletteEl = null;
 let backdropEl = null;
