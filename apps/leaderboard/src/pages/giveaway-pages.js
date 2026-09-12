@@ -649,6 +649,7 @@ ${tabs}
           <p>Create a limited claim code to reward viewers in chat.</p>
         </div>
       </div>
+      <div class="gw-pager" id="cd-active-pager" hidden></div>
     </section>
 
     <section class="v3-table-card gw-card gw-card--table">
@@ -675,6 +676,7 @@ ${tabs}
           </tbody>
         </table>
       </div>
+      <div class="gw-pager" id="cd-past-pager" hidden></div>
     </section>
   </div>
 </div>

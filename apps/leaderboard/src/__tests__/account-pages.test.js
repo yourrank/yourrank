@@ -131,7 +131,7 @@ describe("settings panels", () => {
     }
     // Site-level settings are a separate destination, not an account tab.
     expect(html).toContain('href="/dashboard/site"');
-    expect(html).toContain("Earn free Pro days");
+    expect(html).toContain("Invite streamers, earn Pro");
     expect(html).toContain('href="/dashboard/site?tab=danger"');
     expect(html).not.toContain('data-settings-tab="board"');
     expect(html).not.toContain("/account/profile");
@@ -174,8 +174,8 @@ describe("settings panels", () => {
     const sources = PAGES.dashboard.Component({ activePath: "/dashboard/analytics/referrals", user: { email: "a@b.c" } }).toString();
     const plan = await UnifiedSettingsPage({ activePath: "/dashboard/settings/billing", tab: "plan", user: { email: "a@b.c" } }).toString();
     expect(sources).toContain('id="perf-referrers"');
-    expect(sources).not.toContain("Earn free Pro days");
-    expect(plan).toContain("Earn free Pro days");
+    expect(sources).not.toContain("Invite streamers, earn Pro");
+    expect(plan).toContain("Invite streamers, earn Pro");
     expect(plan).toContain('id="refLink"');
     const site = PAGES.dashboard.Component({ activePath: "/dashboard/site", user: { email: "a@b.c" } }).toString();
     expect(site).toContain(">Advanced<");

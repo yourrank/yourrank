@@ -26,6 +26,7 @@ const one = defaultOne;
 const exec = defaultExec;
 
 const REFERRAL_REWARD_DAYS = 31;
+const REFERRAL_FRIEND_DAYS = 7;
 const REFERRAL_MAX_EXTENSION_DAYS = 365;
 const VERIFICATION_TTL_HOURS = 24;
 
@@ -77,6 +78,13 @@ async function applyReferralReward(referrerId, referredId) {
     await tx.unsafe(
       "UPDATE users SET plan=$1, plan_expires_at=to_timestamp($2 / 1000.0), updated_at=now() WHERE id=$3",
       [newPlan, newExpiry, referrerId]
+    );
+    // Double-sided reward: the invited streamer gets a free Pro week that
+    // stands in for the self-serve trial (has_trial prevents a second week).
+    const friendExpiry = now + REFERRAL_FRIEND_DAYS * 86400000;
+    await tx.unsafe(
+      "UPDATE users SET plan='pro', plan_expires_at=to_timestamp($2 / 1000.0), has_trial=TRUE, updated_at=now() WHERE id=$1",
+      [referredId, friendExpiry]
     );
   });
 }

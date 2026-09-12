@@ -1,4 +1,4 @@
-import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
+import { $, esc, logError, showLoadError, clearLoadError, paginate, wirePager } from "./utils.js";
 import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricUnknown, setMetricValue, setRowsLoading } from "./states.js";
 import { chromeStateFor, defaultTab, parseDashboardPath, SECTIONS } from "./routes.js";
@@ -287,15 +287,29 @@ function renderChart(days, hasAnyData = false) {
   clearLoadError($("statsEmpty"), false);
 }
 
+// The day rows grow forever inside a collapsed card; keep the last fetch here
+// so the numbered pager can re-render a slice without refetching.
+const activityView = { days: [], hasAnyData: false, page: 1 };
+const ACTIVITY_PER_PAGE = 10;
+
 function renderActivity(days, hasAnyData = false) {
+  activityView.days = days || [];
+  activityView.hasAnyData = hasAnyData;
+  renderActivityPage();
+}
+
+function renderActivityPage() {
   const body = $("perfActivityBody");
   if (!body) return;
+  const { days, hasAnyData } = activityView;
   const hasData = days.some((day) => Number(day.views) || Number(day.clicks) || Number(day.copies));
   const table = body.closest("table");
   const empty = $("perfActivityEmpty");
+  const pagerHost = $("perfActivityPager");
   if (!hasData) {
     body.innerHTML = "";
     if (table) table.hidden = true;
+    if (pagerHost) { pagerHost.innerHTML = ""; pagerHost.hidden = true; }
     renderEmpty(empty, {
       kind: "empty",
       title: hasAnyData ? "No daily visits in this range" : "No daily visits yet",
@@ -307,11 +321,15 @@ function renderActivity(days, hasAnyData = false) {
   if (table) table.hidden = false;
   clearLoadError(empty, false);
   body.removeAttribute("aria-busy");
-  body.innerHTML = [...days].reverse().map((day) => {
+  const newest = [...days].reverse();
+  const { items, page, totalPages } = paginate(newest, activityView.page, ACTIVITY_PER_PAGE);
+  activityView.page = page;
+  body.innerHTML = items.map((day) => {
     const views = Number(day.views) || 0;
     const clicks = Number(day.clicks) || 0;
     return `<tr><td data-label="Date" title="${esc(day.day || "")}">${esc(formatDay(day.day))}</td><td data-label="Visits" class="num">${views}</td><td data-label="Link clicks" class="num">${clicks}</td><td data-label="Link shares" class="num">${Number(day.copies) || 0}</td><td data-label="Click rate" class="num">${views ? (clicks / views * 100).toFixed(1) : "0.0"}%</td></tr>`;
   }).join("");
+  wirePager(pagerHost, { page, totalPages, onPage: (n) => { activityView.page = n; renderActivityPage(); } });
 }
 
 function renderEvents(days, hasAnyData = false) {
@@ -415,6 +433,9 @@ function renderReferrers(referrers) {
 
 export function renderPerformanceLoading() {
   ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfKpiCtr", "perfTotalViews"].forEach((id) => setMetricLoading($(id)));
+  activityView.page = 1;
+  const activityPager = $("perfActivityPager");
+  if (activityPager) { activityPager.innerHTML = ""; activityPager.hidden = true; }
   setRowsLoading($("perfActivityBody"), { cols: 5, rows: 4 });
   const events = $("eventsList");
   if (events) {

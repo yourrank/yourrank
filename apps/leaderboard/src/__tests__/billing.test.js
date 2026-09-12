@@ -89,8 +89,9 @@ describe("empty-database commercial migration", () => {
 });
 
 describe("canonical entitlement resolver", () => {
-  test("requires a future expiry for paid grants", () => {
-    expect(effectivePlan({ plan: "pro", plan_expires_at: null }, NOW)).toBe("free");
+  test("requires a future expiry for paid grants when an expiry is set", () => {
+    // NULL expiry on a paid plan = non-expiring grant (admin/manual grant).
+    expect(effectivePlan({ plan: "pro", plan_expires_at: null }, NOW)).toBe("pro");
     expect(effectivePlan({ plan: "team", plan_expires_at: NOW }, NOW)).toBe("free");
     expect(effectivePlan({ plan: "team", plan_expires_at: NOW + 1 }, NOW)).toBe("team");
   });

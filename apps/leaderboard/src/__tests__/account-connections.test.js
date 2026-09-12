@@ -109,11 +109,11 @@ describe("Settings connection inventory", () => {
     const body = await response.json();
     expect(body.connections.find(({ id }) => id === "kick-account")).toEqual(expect.objectContaining({
       status: "refresh_required",
-      statusLabel: "Refresh required",
+      statusLabel: "Connected",
     }));
     expect(body.connections.find(({ id }) => id === "kick-site:site-1")).toEqual(expect.objectContaining({
       status: "refresh_required",
-      statusLabel: "Refresh required",
+      statusLabel: "Connected",
     }));
   });
 

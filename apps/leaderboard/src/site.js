@@ -236,7 +236,7 @@ const getByUser = async (env, uid, {
            AND sm.role='moderator'
            AND lower(owner.plan)='team'
            AND owner.status IS DISTINCT FROM 'suspended'
-           AND owner.plan_expires_at > now()
+           AND (owner.plan_expires_at IS NULL OR owner.plan_expires_at > now())
       )
       ORDER BY id ASC LIMIT 1`,
     [uid],

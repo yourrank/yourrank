@@ -81,7 +81,7 @@ async function getTeamSiteByUser(env, userId, one) {
         AND sm.role='moderator'
         AND lower(owner.plan)='team'
         AND owner.status IS DISTINCT FROM 'suspended'
-        AND owner.plan_expires_at > now()
+        AND (owner.plan_expires_at IS NULL OR owner.plan_expires_at > now())
       ORDER BY sm.created_at ASC, s.id ASC
       LIMIT 1`,
     [userId],

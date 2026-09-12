@@ -2,7 +2,7 @@ import { loadBoardShell, sitePath } from "./dashboard/board-shell.js";
 import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js";
 import { clearSession } from "./dashboard/session.js";
 import { inlineStateHtml, renderInlineState } from "./dashboard/states.js";
-import { showConfirmModal } from "./dashboard/utils.js";
+import { showConfirmModal, paginate, wirePager } from "./dashboard/utils.js";
 import { computeTrustScore, connectKickChat } from "./chat-entry.js";
 
 // Client-side script for Live Chat Keyword Listener & Giveaways
@@ -1353,19 +1353,37 @@ if (!window.__yrSpaShell) {
     }
   }
 
+  // Fresh data reload resets both pagers — a dropped/expired drop could leave a
+  // stale page pointing past the new end otherwise.
+  const dropPages = { active: 1, past: 1 };
+  let dropData = { active: [], past: [] };
+
   function renderCodeDrops(drops) {
     const activeList = $("cd-active-list");
     const pastList = $("cd-past-list");
     if (!activeList || !pastList) return;
 
-    const active = drops.filter((d) => d.status === "active");
-    const past = drops.filter((d) => d.status !== "active");
+    dropData.active = drops.filter((d) => d.status === "active");
+    dropData.past = drops.filter((d) => d.status !== "active");
+    dropPages.active = 1;
+    dropPages.past = 1;
+    renderActiveDrops();
+    renderPastDrops();
+  }
 
+  function renderActiveDrops() {
+    const activeList = $("cd-active-list");
+    const pagerHost = $("cd-active-pager");
+    const active = dropData.active;
     if (active.length === 0) {
       activeList.innerHTML = `
         ${inlineStateHtml({ kind: "empty", title: "No active drops", body: "Create a limited claim code to reward viewers in chat." })}`;
-    } else {
-      activeList.innerHTML = active.map((d) => {
+      if (pagerHost) { pagerHost.innerHTML = ""; pagerHost.hidden = true; }
+      return;
+    }
+    const { items, page, totalPages } = paginate(active, dropPages.active, 6);
+    dropPages.active = page;
+    activeList.innerHTML = items.map((d) => {
         const pct = Math.min(100, Math.round(((d.claimed_count || 0) / (d.max_claims || 1)) * 100));
         const remaining = Math.max(0, (d.max_claims || 0) - (d.claimed_count || 0));
         return `
@@ -1400,12 +1418,22 @@ if (!window.__yrSpaShell) {
           flashButtonLabel(btn, "Copied", 1500);
         });
       });
-    }
+    wirePager(pagerHost, { page, totalPages, onPage: (n) => { dropPages.active = n; renderActiveDrops(); } });
+  }
 
+  function renderPastDrops() {
+    const pastList = $("cd-past-list");
+    const pagerHost = $("cd-past-pager");
+    const past = dropData.past;
+    const active = dropData.active;
     if (past.length === 0) {
       pastList.innerHTML = `<tr><td colspan="5">${inlineStateHtml({ kind: "empty", title: active.length === 0 ? "No drops created yet" : "No past drops yet", body: active.length === 0 ? "Create a drop to reward active viewers with a limited-claim code." : "Active drops are shown above. Past exhausted/expired drops will appear here." })}</td></tr>`;
-    } else {
-      pastList.innerHTML = past.map((d) => `
+      if (pagerHost) { pagerHost.innerHTML = ""; pagerHost.hidden = true; }
+      return;
+    }
+    const { items, page, totalPages } = paginate(past, dropPages.past, 10);
+    dropPages.past = page;
+    pastList.innerHTML = items.map((d) => `
         <tr>
           <td data-label="Code"><code class="gw-event-code">${esc(d.code)}</code></td>
           <td data-label="Reward">+${d.points_reward} Credits</td>
@@ -1414,7 +1442,7 @@ if (!window.__yrSpaShell) {
           <td data-label="Created">${new Date(d.created_at).toLocaleString()}</td>
         </tr>
       `).join("");
-    }
+    wirePager(pagerHost, { page, totalPages, onPage: (n) => { dropPages.past = n; renderPastDrops(); } });
   }
 
   async function handleCreateDropSubmit(e) {

@@ -1486,6 +1486,17 @@
   margin-top: 18px;
 }
 
+.gw-pager {
+  padding: 4px 0 14px;
+}
+.gw-pager .list-pagination {
+  margin-left: 0;
+  justify-content: flex-end;
+}
+.gw-card--table .gw-pager {
+  padding: 0 18px 14px;
+}
+
 .gw-event-row {
   display: grid;
   grid-template-columns: minmax(180px, 1.4fr) minmax(280px, 1fr) auto;
