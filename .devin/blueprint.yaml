@@ -41,7 +41,11 @@ knowledge:
   - name: notes
     contents: |
       # Local wrangler dev needs Node 22, `docker compose up -d`, and
-      # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in .dev.vars.
+      # CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE EXPORTED in the
+      # wrangler process env — apps/leaderboard/.dev.vars exists but the
+      # hyperdrive binding check ignores it (verified 2026-09-11). Export it:
+      #   export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$(grep '^CLOUDFLARE_HYPERDRIVE' apps/leaderboard/.dev.vars | cut -d= -f2-)"
+      # Do NOT `source .dev.vars` wholesale — the unquoted MAIL_FROM line breaks it.
       # Run supabase db push for new migrations before deploying.
       # Set SUPPORT_EMAIL and MAIL_FROM in Cloudflare secrets before launch.
   - name: dashboard-dev
