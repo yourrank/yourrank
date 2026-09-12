@@ -110,14 +110,14 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
   });
 
   it("pins the fragment sections' chrome", () => {
-    const history = dashboardChromeState("rewards.history");
-    expect(history.navKey).toBe("engage");
-    expect(history.canonicalPath).toBe("/dashboard/rewards/activity");
+    const history = dashboardChromeState("audience.activity");
+    expect(history.navKey).toBe("audience");
+    expect(history.canonicalPath).toBe("/dashboard/audience/activity");
     expect(history.crumbs).toEqual([
-      { label: "Engage", href: "/dashboard/activities" },
-      { label: "Credit activity" },
+      { label: "Members", href: "/dashboard/audience/members" },
+      { label: "Activity" },
     ]);
-    expect(history.documentTitle).toBe("Credit activity · Engage · YourRank");
+    expect(history.documentTitle).toBe("Activity · Members · YourRank");
 
     const channel = dashboardChromeState("siteConnections.channel");
     expect(channel.navKey).toBe("board");
@@ -196,7 +196,7 @@ describe("dashboard chrome state — location resolution", () => {
     expect(dashboardChromeStateForLocation("/dashboard/settings", "?plan")?.routeId).toBe("settings.plan");
     expect(dashboardChromeStateForLocation("/dashboard", "?nav=games")?.routeId).toBe("games");
     expect(dashboardChromeStateForLocation("/dashboard/leaderboard/players/")?.routeId).toBe("board.players");
-    expect(dashboardChromeStateForLocation("/dashboard/rewards/activity")?.routeId).toBe("rewards.history");
+    expect(dashboardChromeStateForLocation("/dashboard/rewards/activity")?.routeId).toBe("audience.activity");
     expect(dashboardChromeStateForLocation("/pricing")).toBeUndefined();
   });
 

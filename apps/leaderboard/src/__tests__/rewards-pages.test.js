@@ -5,7 +5,6 @@ import {
   RewardsRulesPage,
   RewardsShopPage,
   RewardsRedemptionsPage,
-  RewardsHistoryPage,
 } from "../pages/rewards.jsx";
 import { AudienceMembersPage } from "../pages/audience.jsx";
 import { readFileSync } from "node:fs";
@@ -14,7 +13,6 @@ import {
   rewardsRulesConfig,
   rewardsShopConfig,
   rewardsRedemptionsConfig,
-  rewardsHistoryConfig,
 } from "../pages/rewards.jsx";
 
 const pages = [
@@ -23,7 +21,6 @@ const pages = [
   ["rules", RewardsRulesPage],
   ["shop", RewardsShopPage],
   ["redemptions", RewardsRedemptionsPage],
-  ["history", RewardsHistoryPage],
   // Members live under Audience now; the credits client still hydrates it via
   // the historical "viewers" tab marker.
   ["viewers", AudienceMembersPage],
@@ -43,7 +40,7 @@ describe("server-rendered rewards pages", () => {
   }
 
   it("groups every rewards destination under the Engage workspace", () => {
-    for (const config of [rewardsOverviewConfig, rewardsRulesConfig, rewardsShopConfig, rewardsRedemptionsConfig, rewardsHistoryConfig]) {
+    for (const config of [rewardsOverviewConfig, rewardsRulesConfig, rewardsShopConfig, rewardsRedemptionsConfig]) {
       expect(config.title).toContain("· Engage ·");
     }
   });

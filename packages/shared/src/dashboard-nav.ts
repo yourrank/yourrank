@@ -76,7 +76,8 @@ const NAV_OWNER_ROUTES = {
   shop: "rewards.shop",
   rules: "rewards.rules",
   rewards: "rewards.overview",
-  history: "rewards.history",
+  // Old rewards activity paths land on Members → Activity.
+  history: "audience.activity",
   // The Kick connection belongs to the selected site: the channel link is
   // stored on the site row, so its rail owner is the My board workspace,
   // not Engage.

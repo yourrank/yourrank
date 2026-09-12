@@ -7,6 +7,7 @@ import { initSiteSections } from "./site-sections.js";
 import { openSiteFeedback } from "./feedback.js";
 import { effectiveBoardRole, isRolePreviewActive, startRolePreview } from "./role-preview.js";
 import { cleanSaveStatusText, refreshDesignPreview, renderSitePublicAddress, syncSettingsSaveBar } from "./site.js";
+import { expandTabsLegacy } from "./shell.js";
 
 async function jsonPost(path, body) {
   const res = await fetch(path, {
@@ -303,6 +304,8 @@ function wireSettingsTabs(initialTab = "customize") {
       tab.tabIndex = active ? 0 : -1;
       if (active && focus) tab.focus();
     });
+    const activeTab = tabs.find((tab) => tab.dataset.settingsTab === key);
+    if (activeTab?.hidden) expandTabsLegacy(activeTab);
     panels.forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== key; });
     // The save bar answers "is there anything unsaved?", not "which tab am I
     // on" — a clean draft shows no bar on any tab.

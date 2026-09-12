@@ -7,20 +7,18 @@ import {
   rulesPage,
   shopPage,
   redemptionsPage,
-  historyPage,
 } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { EngageTabs } from "./engage-tabs.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
-const PAGES = { channel: channelPage, overview: overviewPage, rules: rulesPage, shop: shopPage, redemptions: redemptionsPage, history: historyPage };
+const PAGES = { channel: channelPage, overview: overviewPage, rules: rulesPage, shop: shopPage, redemptions: redemptionsPage };
 
 export const REWARDS_TABS = [
   { key: "overview", label: "Overview", href: "/dashboard/rewards" },
   { key: "shop", label: "Shop", href: "/dashboard/rewards/shop" },
   { key: "rules", label: "Ways to earn", href: "/dashboard/rewards/rules" },
   { key: "redemptions", label: "Claims", href: "/dashboard/rewards/redemptions" },
-  { key: "history", label: "Activity", href: "/dashboard/rewards/activity" },
 ];
 
 function RewardsContent({ tab, subnav = true }) {
@@ -59,8 +57,6 @@ export function RewardsOverviewPage({ user, fragment } = {}) { return <RewardsPa
 export function RewardsRulesPage({ user, fragment } = {}) { return <RewardsPage tab="rules" user={user} fragment={fragment} />; }
 export function RewardsShopPage({ user, fragment } = {}) { return <RewardsPage tab="shop" user={user} fragment={fragment} />; }
 export function RewardsRedemptionsPage({ user, fragment } = {}) { return <RewardsPage tab="redemptions" user={user} fragment={fragment} />; }
-export function RewardsActivityPage({ user, fragment } = {}) { return <RewardsPage tab="history" user={user} fragment={fragment} />; }
-export function RewardsHistoryPage({ user, fragment } = {}) { return <RewardsActivityPage user={user} fragment={fragment} />; }
 
 const rewardsConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css"], scripts: ['<script src="/assets/credits.js?v=4" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
 export const rewardsChannelConfig = { ...rewardsConfigBase, title: chromeStateFor("siteConnections", "channel").documentTitle, canonical: "https://yourrank.site/dashboard/site/connections" };
@@ -68,11 +64,9 @@ export const rewardsOverviewConfig = { ...rewardsConfigBase, title: chromeStateF
 export const rewardsRulesConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "rules").documentTitle, canonical: "https://yourrank.site/dashboard/rewards/rules" };
 export const rewardsShopConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "shop").documentTitle, canonical: "https://yourrank.site/dashboard/rewards/shop" };
 export const rewardsRedemptionsConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "redemptions").documentTitle, canonical: "https://yourrank.site/dashboard/rewards/redemptions" };
-export const rewardsHistoryConfig = { ...rewardsConfigBase, title: chromeStateFor("rewards", "history").documentTitle, canonical: "https://yourrank.site/dashboard/rewards/activity" };
 
 export const rewardsChannelPage = { config: rewardsChannelConfig, Component: RewardsChannelPage };
 export const rewardsOverviewPage = { config: rewardsOverviewConfig, Component: RewardsOverviewPage };
 export const rewardsRulesPage = { config: rewardsRulesConfig, Component: RewardsRulesPage };
 export const rewardsShopPage = { config: rewardsShopConfig, Component: RewardsShopPage };
 export const rewardsRedemptionsPage = { config: rewardsRedemptionsConfig, Component: RewardsRedemptionsPage };
-export const rewardsHistoryPage = { config: rewardsHistoryConfig, Component: RewardsHistoryPage };

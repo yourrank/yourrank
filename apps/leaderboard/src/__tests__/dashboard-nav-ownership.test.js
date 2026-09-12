@@ -174,7 +174,7 @@ describe("dashboard navigation ownership", () => {
       ["overview", "engage"],
       ["rules", "engage"],
       ["shop", "engage"],
-      ["history", "engage"],
+      ["history", "audience"],
       ["engage", "engage"],
       ["giveaways", "engage"],
       ["raffles", "engage"],

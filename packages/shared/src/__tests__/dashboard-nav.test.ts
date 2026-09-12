@@ -68,7 +68,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       games: "games",
       activity: "performance", referrals: "performance", performance: "performance",
       redemptions: "engage", overview: "engage", shop: "engage",
-      rules: "engage", rewards: "engage", history: "engage",
+      rules: "engage", rewards: "engage", history: "audience",
       channel: "board", siteConnections: "board",
       members: "audience", reviews: "audience", audience: "audience", viewers: "audience",
       boards: "board",

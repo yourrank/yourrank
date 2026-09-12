@@ -2,7 +2,7 @@ import { $, esc, logError, showLoadError, clearLoadError } from "./utils.js";
 import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricUnknown, setMetricValue, setRowsLoading } from "./states.js";
 import { chromeStateFor, defaultTab, parseDashboardPath, SECTIONS } from "./routes.js";
-import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
+import { expandTabsLegacy, registerRouteRenderer, requestDashboardRoute } from "./shell.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 let insightsRequestKey = "";
@@ -60,6 +60,8 @@ function showTab(tab) {
     if (selected) node.setAttribute("aria-current", "page");
     else node.removeAttribute("aria-current");
   });
+  const activeNode = document.querySelector(`[data-perf-tab="${active}"]`);
+  if (activeNode?.hidden) expandTabsLegacy(activeNode);
   const panels = { activity: ["perf-activity", "perf-heatmap"], referrals: ["perf-referrals", "perf-referrers"], events: ["perf-events"] };
   Object.entries(panels).forEach(([name, ids]) => ids.forEach((id) => { const node = $(id); if (node) node.hidden = name !== active; }));
   const selectedRange = $("perfSelectedRange");

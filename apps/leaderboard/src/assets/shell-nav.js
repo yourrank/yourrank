@@ -61,6 +61,21 @@
     menus.forEach(function (details) {
       if (details.open && !details.contains(event.target)) closeProfile(details);
     });
+    // More/Less overflow toggle on .v3-tabs strips (giveaways, stats, site
+    // sections). Classic script so it binds on every document — the SPA
+    // equivalent lives in setTabsMore (dashboard/shell.js); both write the
+    // same aria-expanded/hidden state the server renders.
+    var more = event.target && event.target.closest ? event.target.closest("[data-tabs-more]") : null;
+    if (more) {
+      event.preventDefault();
+      var strip = more.closest(".v3-tabs");
+      if (strip) {
+        var expanded = more.getAttribute("aria-expanded") !== "true";
+        more.setAttribute("aria-expanded", String(expanded));
+        more.textContent = expanded ? "Less" : "More";
+        strip.querySelectorAll("[data-tabs-legacy]").forEach(function (el) { el.hidden = !expanded; });
+      }
+    }
     document.querySelectorAll(".lb-ws-switcher").forEach(function (switcher) {
       var menu = switcher.querySelector(".lb-ws-menu");
       var card = switcher.querySelector(".lb-ws-card");

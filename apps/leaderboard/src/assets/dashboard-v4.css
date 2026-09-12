@@ -2186,6 +2186,24 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .editor-step:focus-visible {
   outline-offset: -2px;
 }
+/* "More" reveals long-tail tabs in place — no dropdown, the strips scroll
+   horizontally and would clip an absolutely-positioned menu. */
+.v3-dash[data-auth-workspace] .v3-tab[data-tabs-more]::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+}
+.v3-dash[data-auth-workspace] .v3-tab[data-tabs-more][aria-expanded="true"]::after {
+  transform: rotate(-135deg) translateY(-1px);
+}
+.v3-dash[data-auth-workspace] .v3-tab[data-tabs-legacy] {
+  color: var(--ws-text-faint, var(--ws-text-soft)) !important;
+}
 
 /* Home: one calm operational column, read top to bottom.
    1. Page head — site, operator role, state and one primary action.

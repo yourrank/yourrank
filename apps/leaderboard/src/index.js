@@ -171,7 +171,6 @@ export function resolveFragment(targetPath) {
     if (tab === "shop") return { pageKey: "rewardsShop", tab: "shop" };
     if (tab === "rules") return { pageKey: "rewardsRules", tab: "rules" };
     if (tab === "redemptions") return { pageKey: "rewardsRedemptions", tab: "redemptions" };
-    if (tab === "activity") return { pageKey: "rewardsHistory", tab: "history" };
     return null;
   }
   // Site settings → Connections (the Kick connection's canonical home).
@@ -979,7 +978,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path.startsWith("/dashboard/rewards/")) {
         const tab = path.slice("/dashboard/rewards/".length).split("?")[0];
-        if (tab === "activity") return renderDashboardPage("rewardsHistory", "rewards_render_failed");
         const map = { rules: "rewardsRules", shop: "rewardsShop", redemptions: "rewardsRedemptions" };
         const pageKey = map[tab];
         if (!pageKey) return redirectResponse(new URL("/dashboard/rewards", url), 302);

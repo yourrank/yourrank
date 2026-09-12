@@ -10,7 +10,6 @@ export const ENGAGE_TABS = [
   { key: "shop", label: "Shop", href: "/dashboard/rewards/shop" },
   { key: "rules", label: "Ways to earn", href: "/dashboard/rewards/rules" },
   { key: "redemptions", label: "Claims", href: "/dashboard/rewards/redemptions" },
-  { key: "history", label: "Credit activity", href: "/dashboard/rewards/activity" },
   { key: "giveaways", label: "Giveaways", href: "/dashboard/giveaways" },
 ];
 
