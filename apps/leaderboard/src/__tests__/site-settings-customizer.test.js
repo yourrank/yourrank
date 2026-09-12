@@ -396,7 +396,7 @@ describe("behavior: save state is honest about unsaved changes", () => {
     expect(result).toBe(false);
     expect(requests).toBe(0);
     expect(state._dirty).toBe(true);
-    expect(status.textContent).toBe("Enter a valid score.");
+    expect(status.textContent).toBe("Score: enter a valid score.");
     expect(button.disabled).toBe(false);
   });
 

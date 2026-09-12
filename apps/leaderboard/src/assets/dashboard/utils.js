@@ -69,6 +69,11 @@ function getToastContainer() {
 
 export function showToast(message, type = "info", action = null) {
   const container = getToastContainer();
+  // The same notification firing again (e.g. Publish clicked repeatedly with
+  // an invalid field) must not pile up identical copies — one is enough.
+  for (const existing of container.children) {
+    if (existing.firstElementChild?.textContent === message) return;
+  }
   // Keep queue to 5 visible toasts max — remove oldest if exceeded.
   while (container.children.length >= 5) {
     container.firstElementChild?.remove();

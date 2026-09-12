@@ -2096,7 +2096,11 @@ export async function saveEditorDraft({ fetchImpl = fetch, collectImpl = collect
       if (entry.input) entry.input.dataset.touched = "1";
     }
     collectImpl();
-    const message = first.message || `Fix the invalid ${first.label.toLowerCase()} before saving.`;
+    // The field may live on another tab, so the toast has to name it —
+    // "Period end: choose a date…" tells the creator where to look.
+    const message = first.message
+      ? `${first.label}: ${first.message.charAt(0).toLowerCase()}${first.message.slice(1)}`
+      : `Fix the invalid ${first.label.toLowerCase()} before saving.`;
     if (status) status.setAttribute("role", "alert");
     setStatusText(message, "error");
     setSaveStatusText(message);
