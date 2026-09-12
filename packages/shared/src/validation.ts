@@ -429,6 +429,8 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
         (val) => (val === "" || val === null || val === undefined ? null : Number(val)),
         z.union([z.number().int().min(0).max(1e9), z.literal(null)]).optional()
       ),
+      // Per-member claim cooldown in seconds (0 = none, cap 7 days)
+      cooldownSeconds: z.number().int().min(0).max(604800).optional(),
       active: z.boolean().optional(),
     })
     .strict(),
