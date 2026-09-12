@@ -249,6 +249,12 @@ jobs:
         working-directory: packages/shared
         run: bun run build
 
+      # The bundle is gitignored and generated: the N-1 verifier imports
+      # current-Worker modules (static-assets.js) that require it on disk.
+      - name: Build leaderboard assets
+        working-directory: apps/leaderboard
+        run: node build.js
+
       - name: Semantic N-1 upgrade and rollback compatibility
         env:
           N1_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test

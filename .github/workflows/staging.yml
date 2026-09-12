@@ -159,6 +159,11 @@ jobs:
           bun install --cwd .n1/leaderboard --frozen-lockfile --ignore-scripts
           bun run --cwd .n1/leaderboard/packages/shared build
           bun run --cwd packages/shared build
+      # The bundle is gitignored and generated: the N-1 verifier imports
+      # current-Worker modules (static-assets.js) that require it on disk.
+      - name: Build leaderboard assets
+        working-directory: apps/leaderboard
+        run: node build.js
       - name: Verify N-1 Workers against the expanded schema
         env:
           N1_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_n1_test

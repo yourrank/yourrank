@@ -19,7 +19,8 @@
     "dev": "wrangler dev",
     "test": "node ../../scripts/test-leaderboard.mjs",
     "lint": "eslint src/ --ext .js",
-    "typecheck:games": "tsc -p tsconfig.games.json --noEmit"
+    "typecheck:games": "tsc -p tsconfig.games.json --noEmit",
+    "predev": "node build.js"
   },
   "type": "module",
   "dependencies": {
