@@ -565,3 +565,47 @@ export class ListController {
     this.nextBtn.disabled = this.page >= this.totalPages || this.totalPages === 0;
   }
 }
+
+// Lightweight numbered pager for lists that render their own markup — same
+// Previous/Next + page-number pattern as the .list-pagination controls.
+export function paginate(items, page, perPage) {
+  const totalPages = Math.max(1, Math.ceil((items?.length || 0) / perPage));
+  const current = Math.min(Math.max(1, page || 1), totalPages);
+  return {
+    items: (items || []).slice((current - 1) * perPage, current * perPage),
+    page: current,
+    totalPages,
+  };
+}
+
+const PAGE_NEIGHBOURS = 1;
+export function pagerHtml(page, totalPages) {
+  if (totalPages <= 1) return "";
+  const pages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - page) <= PAGE_NEIGHBOURS) pages.push(i);
+  }
+  let html = `<div class="list-pagination" role="group" aria-label="Pagination"><button class="btn btn--sm" type="button" data-pager-prev${page <= 1 ? " disabled" : ""}>Previous</button>`;
+  let prev = 0;
+  for (const n of pages) {
+    if (n - prev > 1) html += `<span class="list-page-gap" aria-hidden="true">…</span>`;
+    html += `<button class="btn btn--sm list-page-num${n === page ? " is-current" : ""}" type="button" data-pager-num="${n}"${n === page ? ' aria-current="page"' : ""}>${n}</button>`;
+    prev = n;
+  }
+  html += `<button class="btn btn--sm" type="button" data-pager-next${page >= totalPages ? " disabled" : ""}>Next</button></div>`;
+  return html;
+}
+
+// Render the numbered pager into host and wire its buttons; onPage(n) should
+// update the caller's page state and re-render the list.
+export function wirePager(host, { page, totalPages, onPage }) {
+  if (!host) return;
+  host.innerHTML = pagerHtml(page, totalPages);
+  host.hidden = totalPages <= 1;
+  if (totalPages <= 1) return;
+  host.querySelectorAll("[data-pager-num]").forEach((btn) => {
+    btn.addEventListener("click", () => onPage(Number(btn.dataset.pagerNum)));
+  });
+  host.querySelector("[data-pager-prev]")?.addEventListener("click", () => onPage(page - 1));
+  host.querySelector("[data-pager-next]")?.addEventListener("click", () => onPage(page + 1));
+}

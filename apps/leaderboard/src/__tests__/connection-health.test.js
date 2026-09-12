@@ -35,7 +35,7 @@ describe("Kick connection health", () => {
       now: NOW,
     })).toEqual(expect.objectContaining({
       status: "refresh_required",
-      label: "Refresh required",
+      label: "Connected",
       needsAttention: false,
       homeAttention: false,
     }));

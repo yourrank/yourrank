@@ -2219,7 +2219,7 @@ html[data-ui-mode="simple"] .v3-dash .v3-tabs [data-tabs-more][aria-expanded="fa
    4. A quiet two-figure summary.
    5. Recent activity and top players.
    Deeper numbers live in Insights, not here. */
-.v3-dash[data-auth-workspace] [data-page="home"] { display: flex; flex-direction: column; gap: var(--ws-space-7); width: 100%; max-width: 1120px; margin: 0 auto; }
+.v3-dash[data-auth-workspace] [data-page="home"] { display: flex; flex-direction: column; gap: var(--ws-space-7); width: 100%; max-width: 1440px; margin: 0 auto; }
 .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) #verifyBanner,
 .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-status,
 .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-publish-action,

@@ -24,6 +24,10 @@ export async function renderReferrals() {
     }
     setState({ REFERRALS_STATUS: "ready" });
     linkEl.value = d.link;
+    // Stats only earn their space once they report something — a 0/0/$0 row is
+    // advertising that nobody has joined, which is worse than showing nothing.
+    const stats = $("refStats");
+    if (stats) stats.hidden = !(Number(d.count) > 0);
     if (d.count == null) setMetricUnknown($("refCount")); else setMetricValue($("refCount"), d.count);
     if (d.totalDays == null) setMetricUnknown($("refDays")); else setMetricValue($("refDays"), d.totalDays);
     if (d.savedUsd == null) setMetricUnknown($("refSaved")); else setMetricValue($("refSaved"), `$${d.savedUsd}`);

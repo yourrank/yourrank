@@ -54,10 +54,14 @@ export function deriveKickConnectionHealth({
 
   if (expiresAt <= now) {
     if (hasRefreshToken) {
+      // Self-healing: the access token expired but the refresh credential is
+      // saved, so the next Kick operation renews it transparently. This is a
+      // normal OAuth lifecycle state, not something the owner must act on —
+      // the label reads like a plain connection.
       return {
         status: "refresh_required",
-        label: "Refresh required",
-        detail: "The saved access token has expired. YourRank will try the saved refresh authorization when the next Kick operation runs.",
+        label: "Connected",
+        detail: "Kick access renews itself automatically.",
         needsAttention: false,
         homeAttention: false,
         reason: "refresh_required",
