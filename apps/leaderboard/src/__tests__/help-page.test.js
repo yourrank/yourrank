@@ -78,7 +78,7 @@ describe("help pages", () => {
     expect(signedOut).toContain('aria-current="page"');
     for (const href of [
       "/dashboard/leaderboard",
-      "/dashboard/rewards",
+      "/dashboard/activities",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
@@ -158,6 +158,6 @@ describe("help pages", () => {
     expect(html).toContain('href="/help/support?area=help');
     expect(html).not.toContain('data-nav="help"');
     expect(html).toContain('data-nav="settings"');
-    expect(html).toContain('data-nav="redemptions"');
+    expect(html).toContain('data-nav="engage"');
   });
 });

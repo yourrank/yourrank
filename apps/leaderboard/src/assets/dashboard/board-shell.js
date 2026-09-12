@@ -2,6 +2,7 @@ import { updateProfileMenu } from "./profile-menu.js";
 import { getMe, getSites, handleAuthError } from "./session.js";
 import { currentRoute, requestDashboardRoute } from "./shell.js";
 import { renderSiteSelector } from "./site-selector.js";
+import { initQuickActions, setQuickActionsSite } from "./quick-actions.js";
 import { state } from "./state.js";
 
 const $ = (id) => document.getElementById(id);
@@ -79,6 +80,8 @@ export async function loadBoardShell() {
   });
   const board = list.find((b) => String(b.id || b.siteId) === String(current)) || list[0] || {};
   const live = Boolean(board.published) && user.emailVerified !== false;
+  setQuickActionsSite({ ...board, published: live });
+  initQuickActions();
   const pendingVerification = Boolean(board.published) && user.emailVerified === false;
   const status = $("lbTopbarStatus");
   if (status) {

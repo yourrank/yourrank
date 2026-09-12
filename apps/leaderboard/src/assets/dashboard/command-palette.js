@@ -3,6 +3,7 @@ import { $, copyToClipboard, showToast } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { commandAvailable, PRIMARY_COMMANDS } from "./command-context.js";
 import { requestDashboardRoute } from "./shell.js";
+import { openNewSite } from "./quick-actions.js";
 import { startTour, stopTour } from "./tour.js";
 
 const PALETTE_ICONS = {
@@ -46,27 +47,50 @@ const COMMANDS = [
     window.open("/" + (state.SLUG || ""), "_blank");
   }},
   { id: "nav-home", title: "Home", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "overview run-sheet", action: () => requestDashboardRoute("home") },
-  { id: "nav-board", title: "Leaderboard", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings", action: () => requestDashboardRoute("board", "players") },
+  { id: "nav-board", title: "My board", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings board", action: () => requestDashboardRoute("board", "players") },
   { id: "nav-setup", title: "Setup", group: "Navigation", icon: PALETTE_ICONS.details, keywords: "site details schedule", action: () => requestDashboardRoute("board", "setup") },
   { id: "nav-players", title: "Players", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings", action: () => requestDashboardRoute("board", "players") },
   { id: "nav-design", title: "Appearance", group: "Navigation", icon: PALETTE_ICONS.design, keywords: "theme styling live preview", action: () => requestDashboardRoute("board", "design") },
   { id: "nav-share", title: "Share", group: "Navigation", icon: PALETTE_ICONS.share, action: () => requestDashboardRoute("board", "share") },
   { id: "nav-history", title: "History", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "history", action: () => requestDashboardRoute("board", "history") },
-  { id: "nav-activities", title: "Activities", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "activities free drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
-  { id: "nav-analytics", title: "Insights", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
+  { id: "nav-activities", title: "Engage", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage activities free drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
+  { id: "nav-analytics", title: "Stats", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "stats insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
   { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop claims ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
-  { id: "nav-members", title: "People", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
+  { id: "nav-members", title: "Members", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
   // Telegram lives on the bot Worker: the entry point resolves it through the
   // manifest and decides the required full document navigation.
   { id: "nav-telegram", title: "Telegram", group: "Navigation", icon: PALETTE_ICONS.bot, keywords: "bot console", action: () => requestDashboardRoute("telegram", "", { query: "" }) },
-  { id: "nav-boards", title: "Sites", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "sites boards", action: () => requestDashboardRoute("boards", "", { query: "" }) },
+  { id: "task-site-add-player", title: "Add player", group: "Tasks", icon: PALETTE_ICONS.leaderboard, keywords: "new player leaderboard row score", action: () => requestDashboardRoute("board", "players", { query: joinQuery(taskSiteQuery("board")) }) },
+  { id: "task-site-activity", title: "Create an activity", group: "Tasks", icon: PALETTE_ICONS.rewards, keywords: "new drop activity engage", action: () => requestDashboardRoute("activities", "overview", { query: joinQuery(taskSiteQuery("siteId")) }) },
+  { id: "task-site-shop-item", title: "New shop item", group: "Tasks", icon: PALETTE_ICONS.rewards, keywords: "reward shop item create sell", action: () => requestDashboardRoute("rewards", "shop", { query: joinQuery("new=1", taskSiteQuery("siteId")) }) },
+  { id: "task-site-invite", title: "Invite teammate", group: "Tasks", icon: PALETTE_ICONS.leaderboard, keywords: "invite member team seat", action: () => requestDashboardRoute("settings", "team", { query: joinQuery("invite=1", taskSiteQuery("siteId")) }) },
+  { id: "task-copy-link", title: "Copy live site link", group: "Tasks", icon: PALETTE_ICONS.copy, keywords: "copy link share url live", action: async () => {
+    const slug = state.SLUG || "";
+    if (!slug) return;
+    const ok = await copyToClipboard(`${location.origin}/${slug}`);
+    showToast(ok ? "Link copied — share it with your viewers." : "Copy failed — open the live site and copy the URL.", ok ? "success" : "error");
+  }},
+  { id: "task-new-site", title: "New site", group: "Tasks", icon: PALETTE_ICONS.overview, keywords: "create site board community", action: () => openNewSite() },
+  { id: "nav-boards", title: "All sites", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "sites boards all sites", action: () => requestDashboardRoute("boards", "", { query: "" }) },
   { id: "nav-settings", title: "Settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "settings account team billing connections data", action: () => requestDashboardRoute("settings", "account", { query: "" }) },
-  { id: "nav-site-settings", title: "Site settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
+  { id: "nav-site-settings", title: "Site pages", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site pages settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
   { id: "nav-kick-connection", title: "Kick connection", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "kick channel connection site settings connect", action: () => requestDashboardRoute("siteConnections", "channel", { query: "" }) },
   { id: "nav-plan", title: "Billing", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "plans billing", action: () => requestDashboardRoute("settings", "plan", { query: "" }) },
   { id: "act-support", title: "Help & support drawer", group: "Support", icon: PALETTE_ICONS.help, action: () => $("openHelpDrawerBtn")?.click() },
   { id: "act-tour", title: "Restart the product tour", group: "Support", icon: PALETTE_ICONS.help, action: () => { stopTour(); startTour({ force: true }); } }
 ];
+
+// Task commands carry the selected site along the same way the topbar
+// "+ New" menu does — board workspace reads `board`, everywhere else `siteId`.
+function taskSiteQuery(param) {
+  const params = new URLSearchParams(location.search);
+  const sid = params.get("siteId") || params.get("board") || state.ACTIVE_SITE_ID || "";
+  return sid ? `${param}=${encodeURIComponent(sid)}` : "";
+}
+function joinQuery(...parts) {
+  const joined = parts.filter(Boolean).join("&");
+  return joined ? `?${joined}` : "";
+}
 
 let paletteEl = null;
 let backdropEl = null;

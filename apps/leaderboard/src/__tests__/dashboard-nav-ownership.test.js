@@ -23,7 +23,13 @@ function dashboardHtml(activePath) {
 }
 
 function hrefs(html) {
-  return [...html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]);
+  // Anchors marked data-chrome-contextual-action are topbar actions that happen
+  // to link somewhere (e.g. the "+ New" menu), not destinations competing with
+  // the rail — the chrome-ownership gate applies the same exclusion.
+  return [...html.matchAll(/<a\b[^>]*>/g)]
+    .filter((match) => !/data-chrome-contextual-action(?:="[^"]*")?/.test(match[0]))
+    .map((match) => match[0].match(/\bhref="([^"]+)"/)?.[1])
+    .filter(Boolean);
 }
 
 function shellArea(html, tag, endTag) {
@@ -37,57 +43,33 @@ function flattenNav(items) {
 }
 
 describe("dashboard navigation ownership", () => {
-  it("groups existing public-identity surfaces under Community without changing scope", () => {
+  it("organizes the rail by creator intent without changing route scope", () => {
     const items = dashboardNavItems();
     const groups = items.filter((item) => "kind" in item && item.kind === "group");
     const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
 
-    // Community is a presentation group, not a route or persisted entity.
-    expect(groups.length).toBe(1);
-    expect(groups[0].key).toBe("community");
-    expect(groups[0].label).toBe("Community");
-
-    const communityKeys = groups[0].children.map((child) => child.key);
-    const topLevelKeys = topLevel.map((item) => item.key);
-    expect(communityKeys).toEqual(["site", "board"]);
-
-    // Sites manages the creator's whole collection, so it stays account-level
-    // and discoverable while the selector is absent from account-only pages.
-    expect(communityKeys).not.toContain("sites");
-    expect(topLevelKeys).toContain("sites");
-
-    // Telegram operations remain owner-scoped and directly discoverable.
-    expect(communityKeys).not.toContain("telegram");
-    expect(topLevelKeys).toContain("telegram");
-
-    // Settings remains creator-global.
-    expect(communityKeys).not.toContain("settings");
-    expect(topLevelKeys).toContain("settings");
-
-    // Safe Activities is a real site-scoped destination, separate from the
-    // mixed legacy Engagement surface.
-    expect(communityKeys).not.toContain("activities");
-    expect(topLevelKeys).toContain("activities");
+    // The rail is flat and task-worded: one My board workspace (leaderboard
+    // editor + site pages + the all-sites list, all owned by the "board"
+    // navKey), Members for the audience, Engage for activities/rewards/
+    // giveaways, Stats for analytics. Site management is reached through the
+    // topbar site selector's "Manage all sites…" entry, not a rail item.
+    expect(groups.length).toBe(0);
+    expect(topLevel.map((item) => item.key)).toEqual([
+      "home", "board", "audience", "engage", "performance", "telegram", "settings",
+    ]);
 
     // Restricted legacy destinations remain routable for owners but are not
     // promoted as target product navigation.
-    expect(communityKeys).not.toContain("engage");
-    expect(communityKeys).not.toContain("games");
-    expect(topLevelKeys).not.toContain("engage");
+    const topLevelKeys = topLevel.map((item) => item.key);
     expect(topLevelKeys).not.toContain("games");
-
-    // Home stays the dashboard entry, followed by the account-scoped Sites
-    // collection, before the selected-site Community group.
-    expect(communityKeys).not.toContain("home");
-    expect(topLevelKeys[0]).toBe("home");
-    expect(topLevelKeys[1]).toBe("sites");
+    expect(topLevelKeys).not.toContain("sites");
   });
 
   it("keeps the route owner map consistent with the scope grouping", () => {
     // Route ownership is independent of visual grouping: every route still
     // resolves to exactly one rendered rail key.
     const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
-    const containedLegacyOwners = new Set(["engage", "games"]);
+    const containedLegacyOwners = new Set(["games"]);
     for (const route of Object.keys(NAV_OWNER_MAP)) {
       const owner = navOwner(route);
       expect(keys.has(owner) || containedLegacyOwners.has(owner)).toBe(true);
@@ -95,11 +77,11 @@ describe("dashboard navigation ownership", () => {
     for (const item of flattenNav(dashboardNavItems())) {
       expect(keys.has(item.key)).toBe(true);
     }
-    // Kick channel management stays owned by Site settings (Phase 4).
-    expect(navOwner("channel")).toBe("site");
-    expect(navOwner("siteConnections")).toBe("site");
-    // Sites routes still resolve to the Sites rail owner.
-    expect(navOwner("boards")).toBe("sites");
+    // Kick channel management stays owned by the My board workspace.
+    expect(navOwner("channel")).toBe("board");
+    expect(navOwner("siteConnections")).toBe("board");
+    // The all-sites list also resolves to the My board owner.
+    expect(navOwner("boards")).toBe("board");
   });
 
   it("keeps every rendered destination owned by one shell area", () => {
@@ -150,11 +132,11 @@ describe("dashboard navigation ownership", () => {
     };
     for (const path of ["/dashboard", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards"]) {
       const board = boardSection(dashboardHtml(path));
-      expect(board.markup).toContain('aria-label="Leaderboard pages"');
+      expect(board.markup).toContain('aria-label="My board sections"');
       expect(board.active).toBe(false);
     }
     const onRoute = boardSection(dashboardHtml("/dashboard/leaderboard/setup"));
-    expect(onRoute.markup).toContain('aria-label="Leaderboard pages"');
+    expect(onRoute.markup).toContain('aria-label="My board sections"');
     expect(onRoute.active).toBe(true);
   });
 
@@ -177,26 +159,30 @@ describe("dashboard navigation ownership", () => {
 
   it("maps target routes to one visible key and keeps restricted legacy owners unrendered", () => {
     const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
-    const items = Object.fromEntries(flattenNav(dashboardNavItems()).map((item) => [item.key, item]));
-    expect(items.sites.icon).not.toBe(items.site.icon);
     for (const [route, owner] of [
       ["home", "home"],
       ["board", "board"],
-      ["activities", "activities"],
+      ["activities", "engage"],
       ["performance", "performance"],
       ["telegram", "telegram"],
-      ["boards", "sites"],
+      ["boards", "board"],
       ["settings", "settings"],
       ["account", "settings"],
       ["connections", "settings"],
       ["integrations", "settings"],
-      ["redemptions", "redemptions"],
-      ["overview", "redemptions"],
-      ["rules", "redemptions"],
-      ["shop", "redemptions"],
-      ["history", "redemptions"],
-      ["channel", "site"],
-      ["siteConnections", "site"],
+      ["redemptions", "engage"],
+      ["overview", "engage"],
+      ["rules", "engage"],
+      ["shop", "engage"],
+      ["history", "engage"],
+      ["engage", "engage"],
+      ["giveaways", "engage"],
+      ["raffles", "engage"],
+      ["predictions", "engage"],
+      ["drops", "engage"],
+      ["tournaments", "engage"],
+      ["channel", "board"],
+      ["siteConnections", "board"],
       ["members", "audience"],
       ["audience", "audience"],
       ["viewers", "audience"],
@@ -205,7 +191,8 @@ describe("dashboard navigation ownership", () => {
       expect(mapActiveNav(route)).toBe(navOwner(route));
       expect(keys.has(NAV_OWNER_MAP[route] || route)).toBe(true);
     }
-    for (const [route, owner] of [["games", "games"], ["engage", "engage"], ["giveaways", "engage"], ["raffles", "engage"], ["predictions", "engage"], ["drops", "engage"], ["tournaments", "engage"]]) {
+    // Games remains routable but has no rendered rail owner.
+    for (const [route, owner] of [["games", "games"]]) {
       expect(navOwner(route)).toBe(owner);
       expect(mapActiveNav(route)).toBe(owner);
       expect(keys.has(owner)).toBe(false);
@@ -213,8 +200,8 @@ describe("dashboard navigation ownership", () => {
     for (const path of ["/dashboard", "/dashboard/activities", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
     }
-    expect(dashboardHtml("/dashboard/leaderboards")).toContain('data-nav="sites"');
-    expect(dashboardHtml("/dashboard/site")).toContain('data-nav="site"');
+    expect(dashboardHtml("/dashboard/leaderboards")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
+    expect(dashboardHtml("/dashboard/site")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
   });
 
   it("uses one shared active-navigation map in server and client code", () => {

@@ -44,11 +44,13 @@ const EXCEPTIONS = {
   ],
   "account.js": [
     { match: 'location.href = "/login"; return;', reason: "no session on a standalone settings document: redirect to login" },
+    { match: "history.replaceState({}, \"\", `${location.pathname}${inviteParams.size ? `?${inviteParams}` : \"\"}${location.hash}`);", reason: "one-shot ?invite=1 param scrub after opening the invite modal: same document, no navigation" },
   ],
   "credits.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
     { match: 'if (error?.code === "AUTH") location.href = loginRedirectPath(location);', reason: "session expired mid-request: redirect to login" },
     { match: "history.replaceState({}, \"\", `${clean.pathname}${clean.search}${clean.hash}`);", reason: "one-shot OAuth feedback param scrub: same document, no navigation" },
+    { match: "history.replaceState({}, \"\", `${location.pathname}${params.size ? `?${params}` : \"\"}${location.hash}`);", reason: "one-shot ?new=1 param scrub after opening the shop drawer: same document, no navigation" },
   ],
   "giveaways.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
@@ -56,7 +58,6 @@ const EXCEPTIONS = {
   "dashboard/account.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "session expired: redirect to login" },
     { match: 'location.href = "/dashboard";', reason: "post-board-deletion reset: the current context no longer exists" },
-    { match: 'location.href = "/api/account/export";', reason: "full-document GET to a file download endpoint: the SPA router cannot stream a download" },
   ],
   "dashboard/account-delete-modal.js": [
     { match: 'location.href = "/";', reason: "post-account-deletion: the session and dashboard no longer exist" },

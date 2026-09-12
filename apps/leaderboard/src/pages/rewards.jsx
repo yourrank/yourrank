@@ -10,6 +10,7 @@ import {
   historyPage,
 } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
+import { EngageTabs } from "./engage-tabs.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
 const PAGES = { channel: channelPage, overview: overviewPage, rules: rulesPage, shop: shopPage, redemptions: redemptionsPage, history: historyPage };
@@ -22,27 +23,11 @@ export const REWARDS_TABS = [
   { key: "history", label: "Activity", href: "/dashboard/rewards/activity" },
 ];
 
-function SubTabs({ tab }) {
-  const tabs = REWARDS_TABS;
-  return (
-    <nav class="v3-tabs" aria-label="Rewards pages">
-      {tabs.map((t) => (
-        <a
-          class={"v3-tab" + (t.key === tab ? " is-on" : "")}
-          href={t.href}
-          aria-current={t.key === tab ? "page" : undefined}
-        >
-          {t.label}
-        </a>
-      ))}
-    </nav>
-  );
-}
-
 function RewardsContent({ tab, subnav = true }) {
   const body = PAGES[tab] || overviewPage;
+  const engageKey = tab === "overview" ? "rewards" : tab;
   return <div class="cr-workspace-content">
-    {subnav ? <SubTabs tab={tab} /> : null}
+    {subnav ? <EngageTabs active={engageKey} /> : null}
     <div id="cr-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner"></div><span class="sr-only">Loading rewards…</span></div>
     <div id="cr-app" data-cr-tab={tab} hidden dangerouslySetInnerHTML={{ __html: body }}></div>
     <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading your rewards dashboard…</p></div>

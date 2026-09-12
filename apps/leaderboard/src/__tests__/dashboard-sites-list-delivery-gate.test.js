@@ -72,7 +72,7 @@ describe("manifest: Sites-list delivery identity", () => {
       id: "boards",
       canonicalPath: BOARDS_PATH,
       section: "boards",
-      navKey: "sites",
+      navKey: "board",
       owner: "leaderboard",
       delivery: "spa-section",
       scope: "account",
@@ -143,16 +143,16 @@ describe("client: Sites list is a core SPA section, not a second delivery path",
     }
   });
 
-  it("computes the canonical Sites-list chrome state", () => {
+  it("computes the canonical All-sites-list chrome state", () => {
     expect(chromeStateFor("boards", "")).toEqual({
       routeId: "boards",
-      navKey: "sites",
+      navKey: "board",
       section: "boards",
       tab: "",
       canonicalPath: BOARDS_PATH,
-      crumbs: [{ label: "Sites" }],
+      crumbs: [{ label: "All sites" }],
       tabLabel: "",
-      documentTitle: "Sites · YourRank",
+      documentTitle: "All sites · YourRank",
       h1: null,
     });
   });

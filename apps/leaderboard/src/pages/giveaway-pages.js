@@ -1,7 +1,9 @@
 // Markup for Giveaways & Community Events Hub (Chat Giveaways, Ticket Raffles, Flash Code Drops)
 
+import { engageTabsHtml } from "./engage-tabs.jsx";
+
 export const GIVEAWAY_TABS = [
-  ["chat", "Giveaways"],
+  ["chat", "Chat giveaways"],
   ["raffles", "Raffles"],
   ["drops", "Drops"],
   ["preds", "Predictions"],
@@ -253,6 +255,7 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   const tabs = GIVEAWAY_TABS.map(([tab, label]) => `
   <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}>${label}</a>`).join("");
   const html = `
+${engageTabsHtml("giveaways")}
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
     <h1>${activeLabel}</h1>

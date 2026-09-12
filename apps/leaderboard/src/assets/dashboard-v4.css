@@ -95,7 +95,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --ws-accent-hover: var(--wsd-accent-hover, #304398);
   --ws-accent-soft: var(--wsd-accent-soft, #edf0fc);
   --ws-accent-line: rgb(var(--ws-accent-rgb) / 0.28);
-  --ws-accent-text: #ffffff;
+  --ws-accent-text: var(--wsd-accent-text, #ffffff);
   --ws-accent-on-chrome: #304398;
   --ws-success: #1f8a68;
   --ws-success-soft: var(--wsd-success-soft, #eaf7f2);
@@ -202,6 +202,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --wsd-chrome-text-soft: rgb(168 179 196);
   --wsd-chrome-card: rgb(26 33 48);
   --wsd-accent-rgb: 123 150 255;
+  --wsd-accent-text: rgb(14 21 38);
   --wsd-accent-hover: rgb(147 169 255);
   --wsd-accent-soft: rgb(123 150 255 / 0.14);
   --wsd-success-soft: rgb(74 222 128 / 0.12);
@@ -950,6 +951,83 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   border-color: var(--ws-danger-line);
   background: var(--ws-danger-soft);
   color: var(--ws-danger);
+}
+/* Quick actions — Copy link reads as a quiet sibling; "+ New" is the one
+   creator-shaped affordance: it surfaces the small create flows without a
+   navigation first. The menu is a plain anchored surface card. */
+.v3-dash[data-auth-workspace] .lb-availability .lb-copy-link {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: transparent;
+  color: var(--ws-text-soft);
+  font: 600 13px/1 var(--ws-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .lb-availability .lb-copy-link:hover {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] .lb-new {
+  position: relative;
+  order: 2;
+}
+.v3-dash[data-auth-workspace] .lb-new-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: 600 13px/1 var(--ws-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .lb-new-btn:hover,
+.v3-dash[data-auth-workspace] .lb-new-btn[aria-expanded="true"] {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] .lb-new-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-md);
+  background: var(--ws-surface);
+  box-shadow: 0 12px 32px rgb(15 23 42 / 0.18);
+  display: flex;
+  flex-direction: column;
+}
+.v3-dash[data-auth-workspace] .lb-new-menu > * {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: var(--ws-radius-sm);
+  background: transparent;
+  color: var(--ws-text);
+  font: 500 13px/1.2 var(--ws-sans);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.v3-dash[data-auth-workspace] .lb-new-menu > *:hover {
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
 }
 .v3-dash[data-auth-workspace] .lb-topbar-cmd {
   display: flex;
@@ -2118,7 +2196,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
    Deeper numbers live in Insights, not here. */
 .v3-dash[data-auth-workspace] [data-page="home"] { display: flex; flex-direction: column; gap: var(--ws-space-7); width: 100%; max-width: 1120px; margin: 0 auto; }
 .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) #verifyBanner,
-.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability { display: none; }
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-status,
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-publish-action,
+.v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-availability .lb-live-link { display: none; }
 .v3-dash[data-auth-workspace] .ov-setup-details { border-top: 1px solid var(--ws-line); }
 .v3-dash[data-auth-workspace] .ov-setup-details > summary { padding: 14px 24px; cursor: pointer; font-size: 13px; color: var(--ws-text-soft); }
 .v3-dash[data-auth-workspace] .ov-setup-details .ov-setup-count { float: right; }
@@ -2176,6 +2256,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .ov-setup-count { color: var(--ws-text-soft); font: 600 13px var(--ws-sans); white-space: nowrap; }
 .v3-dash[data-auth-workspace] .ov-setup-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ws-line); }
 .v3-dash[data-auth-workspace] .ov-setup-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px; padding: 7px 18px; border-top: 1px solid var(--ws-line); background: var(--ws-surface, #ffffff); color: var(--ws-text); text-decoration: none; }
+button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; }
 .v3-dash[data-auth-workspace] .ov-setup-row:first-child { border-top: 0; }
 .v3-dash[data-auth-workspace] .ov-setup-row:hover { background: var(--ws-accent-soft); }
 .v3-dash[data-auth-workspace] .ov-setup-row:focus-visible { outline-offset: -3px; }
@@ -4454,6 +4535,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-board-new { width: 38px; min-width: 38px; height: 38px; }
   .v3-dash[data-auth-workspace] .lb-topbar-actions,
   .v3-dash[data-auth-workspace] .lb-availability { gap: 6px; }
+  .v3-dash[data-auth-workspace] .lb-copy-link { display: none; }
+  .v3-dash[data-auth-workspace] .lb-new-btn { min-height: 44px; padding-inline: 10px; }
   .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 10px; }
   .v3-dash[data-auth-workspace] .lb-publish-action { min-height: 44px; padding-inline: 9px; font-size: 11px; }
   .v3-dash[data-auth-workspace] .lb-board-select { min-height: 44px; }

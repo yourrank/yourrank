@@ -73,36 +73,36 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("home").crumbs).toEqual([]);
     // Single-entry trails render nothing (crumbsHtml contract).
     expect(dashboardChromeState("games").crumbs).toEqual([{ label: "Games" }]);
-    expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "Sites" }]);
-    expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site" }]);
-    expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Activities" }]);
-    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Rewards" }]);
+    expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "All sites" }]);
+    expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site pages" }]);
+    expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Engage" }]);
+    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Engage" }]);
   });
 
   it("pins the leaderboard editor chrome", () => {
     const players = dashboardChromeState("board.players");
     expect(players.navKey).toBe("board");
     expect(players.crumbs).toEqual([
-      { label: "Leaderboard", href: "/dashboard/leaderboard" },
+      { label: "My board", href: "/dashboard/leaderboard" },
       { label: "Players" },
     ]);
-    expect(players.documentTitle).toBe("Players · Leaderboard · YourRank");
+    expect(players.documentTitle).toBe("Players · My board · YourRank");
     // The board root opens on Setup; its crumb says so, its title stays
     // section-level.
     const root = dashboardChromeState("board");
     expect(root.crumbs).toEqual([
-      { label: "Leaderboard" },
+      { label: "My board" },
       { label: "Setup" },
     ]);
-    expect(root.documentTitle).toBe("Leaderboard · YourRank");
+    expect(root.documentTitle).toBe("My board · YourRank");
   });
 
-  it("pins the customer-facing Insights detail labels", () => {
+  it("pins the customer-facing Stats detail labels", () => {
     const referrals = dashboardChromeState("performance.referrals");
     expect(referrals.tabLabel).toBe("Traffic sources");
-    expect(referrals.documentTitle).toBe("Traffic sources · Insights · YourRank");
+    expect(referrals.documentTitle).toBe("Traffic sources · Stats · YourRank");
     expect(referrals.crumbs).toEqual([
-      { label: "Insights", href: "/dashboard/analytics" },
+      { label: "Stats", href: "/dashboard/analytics" },
       { label: "Traffic sources" },
     ]);
     expect(dashboardChromeState("performance.activity").tabLabel).toBe("Overview");
@@ -111,37 +111,38 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
 
   it("pins the fragment sections' chrome", () => {
     const history = dashboardChromeState("rewards.history");
-    expect(history.navKey).toBe("redemptions");
+    expect(history.navKey).toBe("engage");
     expect(history.canonicalPath).toBe("/dashboard/rewards/activity");
     expect(history.crumbs).toEqual([
-      { label: "Rewards", href: "/dashboard/rewards" },
-      { label: "Activity" },
+      { label: "Engage", href: "/dashboard/activities" },
+      { label: "Credit activity" },
     ]);
-    expect(history.documentTitle).toBe("Activity · Rewards · YourRank");
+    expect(history.documentTitle).toBe("Credit activity · Engage · YourRank");
 
     const channel = dashboardChromeState("siteConnections.channel");
-    expect(channel.navKey).toBe("site");
+    expect(channel.navKey).toBe("board");
     expect(channel.crumbs).toEqual([
-      { label: "Site", href: "/dashboard/site" },
+      { label: "Site pages", href: "/dashboard/site" },
       { label: "Connections" },
       { label: "Kick connection" },
     ]);
-    expect(channel.documentTitle).toBe("Kick connection · Site · YourRank");
+    expect(channel.documentTitle).toBe("Kick connection · Site pages · YourRank");
 
     const preds = dashboardChromeState("giveaways.preds");
     expect(preds.navKey).toBe("engage");
     expect(preds.crumbs).toEqual([
-      { label: "Engagement", href: "/dashboard/giveaways" },
+      { label: "Engage", href: "/dashboard/activities" },
       { label: "Predictions" },
     ]);
-    expect(preds.documentTitle).toBe("Engagement · YourRank");
+    expect(preds.documentTitle).toBe("Engage · YourRank");
 
+    // The Members tab inside the Members section collapses to a single
+    // crumb entry (which renders no trail) and a section-level title.
     const viewers = dashboardChromeState("audience.viewers");
     expect(viewers.crumbs).toEqual([
-      { label: "People" },
       { label: "Members" },
     ]);
-    expect(viewers.documentTitle).toBe("Members · People · YourRank");
+    expect(viewers.documentTitle).toBe("Members · YourRank");
   });
 
   it("pins the account settings chrome", () => {
@@ -179,11 +180,11 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
   it("pins section-level document titles", () => {
     expect(dashboardChromeState("home").documentTitle).toBe("Home · YourRank");
     expect(dashboardChromeState("games").documentTitle).toBe("Games · YourRank");
-    expect(dashboardChromeState("boards").documentTitle).toBe("Sites · YourRank");
-    expect(dashboardChromeState("site").documentTitle).toBe("Site · YourRank");
-    expect(dashboardChromeState("activities.overview").documentTitle).toBe("Activities · YourRank");
+    expect(dashboardChromeState("boards").documentTitle).toBe("All sites · YourRank");
+    expect(dashboardChromeState("site").documentTitle).toBe("Site pages · YourRank");
+    expect(dashboardChromeState("activities.overview").documentTitle).toBe("Engage · YourRank");
     expect(dashboardChromeState("settings.team").documentTitle).toBe("Settings · YourRank");
-    expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engagement · YourRank");
+    expect(dashboardChromeState("giveaways.raffles").documentTitle).toBe("Engage · YourRank");
     expect(dashboardChromeState("telegram.broadcasts").documentTitle).toBe("Telegram · YourRank");
     expect(DEFAULT_DASHBOARD_TITLE).toBe("Dashboard · YourRank");
   });

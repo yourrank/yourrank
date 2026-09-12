@@ -64,16 +64,16 @@ export const DEFAULT_DASHBOARD_TITLE = "Dashboard · YourRank";
 /** Section display titles (crumb heads + document-title section wording). */
 export const DASHBOARD_SECTION_TITLES = {
   home: "Home",
-  board: "Leaderboard",
-  boards: "Sites",
+  board: "My board",
+  boards: "All sites",
   games: "Games",
-  performance: "Insights",
-  site: "Site",
-  activities: "Activities",
-  rewards: "Rewards",
-  siteConnections: "Site",
-  giveaways: "Engagement",
-  audience: "People",
+  performance: "Stats",
+  site: "Site pages",
+  activities: "Engage",
+  rewards: "Engage",
+  siteConnections: "Site pages",
+  giveaways: "Engage",
+  audience: "Members",
   settings: "Settings",
   telegram: "Telegram",
 } as const satisfies Readonly<Record<string, string>>;
@@ -91,11 +91,11 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "performance.referrals": "Traffic sources",
   "performance.events": "Public site activity",
   "activities.overview": "Overview",
-  "rewards.overview": "Overview",
+  "rewards.overview": "Rewards",
   "rewards.shop": "Shop",
   "rewards.rules": "Ways to earn",
   "rewards.redemptions": "Claims",
-  "rewards.history": "Activity",
+  "rewards.history": "Credit activity",
   "siteConnections.channel": "Kick connection",
   "giveaways.chat": "Giveaways",
   "giveaways.raffles": "Raffles",
@@ -135,11 +135,10 @@ function sectionCrumbHead(section: string): DashboardCrumb | undefined {
     case "activities":
       return { label: DASHBOARD_SECTION_TITLES.activities, href: routeById("activities.overview").canonicalPath };
     case "rewards":
-      return { label: DASHBOARD_SECTION_TITLES.rewards, href: routeById("rewards.overview").canonicalPath };
     case "giveaways":
-      // The Engagement crumb links the section's bare entry address, a
-      // registered legacy alias of its first tab.
-      return { label: DASHBOARD_SECTION_TITLES.giveaways, href: dashboardAliasPath("/dashboard/giveaways", "giveaways.chat") };
+      // Rewards and Giveaways are surfaces of the Engage workspace: the section
+      // crumb links the workspace root, same as the rail item.
+      return { label: DASHBOARD_SECTION_TITLES[section], href: routeById("activities.overview").canonicalPath };
     case "audience":
       return { label: DASHBOARD_SECTION_TITLES.audience, href: routeById("audience.viewers").canonicalPath };
     case "settings":
@@ -190,7 +189,9 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
   }
   const head = sectionCrumbHead(route.section);
   const leaf = crumbLabel(route);
-  if (!head || !leaf) return head ? [head] : [];
+  // A leaf that repeats the head (e.g. the Members tab inside Members)
+  // collapses into the single-entry trail, which renders no crumb.
+  if (!head || !leaf || leaf === head.label) return head ? [head] : [];
   return [head, { label: leaf }];
 }
 
@@ -200,7 +201,8 @@ function documentTitleFor(route: DashboardRouteDef): string {
     return `${sectionTitle} · YourRank`;
   }
   if (TAB_TITLED_SECTIONS.has(route.section)) {
-    return `${TAB_LABELS[route.id]} · ${sectionTitle} · YourRank`;
+    const tab = TAB_LABELS[route.id];
+    return `${tab === sectionTitle ? "" : `${tab} · `}${sectionTitle} · YourRank`;
   }
   // Core SPA sections: the tab appears in the title only when the route
   // addresses one (section roots are titled at the section level).

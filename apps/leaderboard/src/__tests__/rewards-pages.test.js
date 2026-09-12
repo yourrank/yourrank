@@ -42,9 +42,9 @@ describe("server-rendered rewards pages", () => {
     });
   }
 
-  it("uses Rewards as the canonical group for every operator destination", () => {
+  it("groups every rewards destination under the Engage workspace", () => {
     for (const config of [rewardsOverviewConfig, rewardsRulesConfig, rewardsShopConfig, rewardsRedemptionsConfig, rewardsHistoryConfig]) {
-      expect(config.title).toContain("· Rewards ·");
+      expect(config.title).toContain("· Engage ·");
     }
   });
 

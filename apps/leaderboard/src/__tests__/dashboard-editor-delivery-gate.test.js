@@ -201,9 +201,9 @@ describe("client: editor step semantics come from the manifest", () => {
         tab: "",
         canonicalPath: BOARD_PATH,
         tabLabel: "",
-        documentTitle: "Leaderboard · YourRank",
+        documentTitle: "My board · YourRank",
         crumbs: [
-          { label: "Leaderboard" },
+          { label: "My board" },
           { label: "Setup" },
         ],
       },
@@ -212,9 +212,9 @@ describe("client: editor step semantics come from the manifest", () => {
         tab,
         canonicalPath: `${BOARD_PATH}/${tab}`,
         tabLabel: BOARD_LABELS[tab],
-        documentTitle: `${BOARD_LABELS[tab]} · Leaderboard · YourRank`,
+        documentTitle: `${BOARD_LABELS[tab]} · My board · YourRank`,
         crumbs: [
-          { label: "Leaderboard", href: BOARD_PATH },
+          { label: "My board", href: BOARD_PATH },
           { label: BOARD_LABELS[tab] },
         ],
       })),

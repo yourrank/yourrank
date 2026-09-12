@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { RewardsChannelPage, RewardsHistoryPage, RewardsRedemptionsPage } from "../pages/rewards.jsx";
-import { AudienceMembersPage } from "../pages/audience.jsx";
+import { AudienceMembersPage, AudienceReviewsPage } from "../pages/audience.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { PAGES } from "../pages.jsx";
 
@@ -101,10 +101,10 @@ describe("signed-in shell navigation", () => {
     const html = renderPage(AudienceMembersPage);
     for (const href of [
       "/dashboard/leaderboard",
-      "/dashboard/rewards",
+      "/dashboard/activities",
       "/dashboard/telegram",
       "/dashboard/analytics",
-      "/dashboard/site",
+      "/dashboard/audience/members",
       "/dashboard/settings",
     ]) {
       expect(html).toContain(`href="${href}"`);
@@ -118,7 +118,7 @@ describe("signed-in shell navigation", () => {
 
   it("marks the open rewards surface as current", () => {
     const html = renderPage(RewardsRedemptionsPage);
-    expect(html).toMatch(/data-nav="redemptions"[^>]*aria-current="page"/);
+    expect(html).toMatch(/data-nav="engage"[^>]*aria-current="page"/);
     expect((html.match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
   });
 
@@ -220,24 +220,25 @@ describe("signed-in shell navigation", () => {
     expect(html).toContain('data-product-link="credits"');
   });
 
-  it("keeps secondary site and help actions accessible without rail duplication", () => {
+  it("keeps the My board workspace and help actions accessible without rail duplication", () => {
     const html = renderPage(AudienceMembersPage);
-    expect(html).toContain('data-nav="site"');
-    expect(html).toMatch(/href="\/dashboard\/site"[^>]*data-nav="site"/);
+    expect(html).toContain('data-nav="board"');
+    expect(html).toMatch(/href="\/dashboard\/leaderboard"[^>]*data-nav="board"/);
     expect(html).toContain('href="/help/support?area=credits');
     expect(html).toContain("Help &amp; feedback");
     expect(html).not.toContain('data-nav="boards"');
+    expect(html).not.toContain('data-nav="site"');
     expect(html).not.toContain('data-nav="help"');
   });
 
   it("uses plain-language navigation labels", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design", user }).toString();
     expect(html).toContain(">Appearance</a>");
-    expect(html).toContain(">Leaderboard</a>");
-    expect(html).toContain(">People</a>");
-    expect(html).toContain(">Rewards</a>");
+    expect(html).toContain(">My board</a>");
+    expect(html).toContain(">Members</a>");
+    expect(html).toContain(">Engage</a>");
     expect(html).toContain(">Telegram</a>");
-    expect(html).toContain(">Insights</a>");
+    expect(html).toContain(">Stats</a>");
     expect(html).toContain(">Settings</a>");
     expect(html).toContain("Help &amp; feedback</a>");
     expect(html).toContain('data-nav="settings"');
@@ -248,7 +249,7 @@ describe("signed-in shell navigation", () => {
     for (const href of [
       "/dashboard",
       "/dashboard/leaderboard",
-      "/dashboard/rewards",
+      "/dashboard/activities",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
@@ -265,13 +266,16 @@ describe("signed-in shell navigation", () => {
   });
 
   it("puts a breadcrumb trail on every leaf page", () => {
+    // The Members tab repeats its section head, so it collapses to a
+    // single crumb entry — and single-entry trails render no breadcrumb.
     const members = renderPage(AudienceMembersPage);
-    expect(members).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
-    expect(members).toContain('>People</span>');
-    expect(members).toContain('<span aria-current="page">Members</span>');
+    expect(members).not.toContain('class="v3-crumbs"');
+    const reviews = renderPage(AudienceReviewsPage);
+    expect(reviews).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
+    expect(reviews).toContain('>Members</a>');
 
     const claims = renderPage(RewardsRedemptionsPage);
-    expect(claims).toContain('<a href="/dashboard/rewards">Rewards</a>');
+    expect(claims).toContain('<a href="/dashboard/activities">Engage</a>');
     expect(claims).toContain('<span aria-current="page">Claims</span>');
 
     const settings = renderPage(UnifiedSettingsPage);
@@ -282,7 +286,7 @@ describe("signed-in shell navigation", () => {
 
   it("trails dashboard sections and editor steps from the route", () => {
     const editor = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design" }).toString();
-    expect(editor).toContain('<a href="/dashboard/leaderboard">Leaderboard</a>');
+    expect(editor).toContain('<a href="/dashboard/leaderboard">My board</a>');
     expect(editor).toContain('<span aria-current="page">Appearance</span>');
     expect(editor).toContain('href="/dashboard/leaderboard/design" data-egroup="design"');
 
@@ -298,14 +302,14 @@ describe("signed-in shell navigation", () => {
     for (const path of ["/dashboard/leaderboard/design", "/dashboard/analytics/activity"]) {
       expect(PAGES.dashboard.Component({ activePath: path }).toString()).toContain('class="v3-crumbs"');
     }
-    for (const render of [RewardsChannelPage, AudienceMembersPage, RewardsHistoryPage]) {
+    for (const render of [RewardsChannelPage, AudienceReviewsPage, RewardsHistoryPage]) {
       expect(render().toString()).toContain('class="v3-crumbs"');
     }
   });
 
   it("marks exactly one visible editor feature as current", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/players", user }).toString();
-    expect(html).toContain('href="/dashboard/leaderboard" data-nav="board" aria-current="page"');
+    expect(html).toMatch(/href="\/dashboard\/leaderboard" data-nav="board"[^>]*aria-current="page"/);
     expect((html.match(/data-nav="board"[^>]*aria-current="page"/g) || []).length).toBe(1);
   });
 

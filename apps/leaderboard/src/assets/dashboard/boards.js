@@ -90,7 +90,7 @@ function boardLimitOffer() {
   if (plan === "pro") {
     return {
       title: `You've reached ${limit} sites`,
-      text: "Team supports up to 10 independent sites and 5 operator seats.",
+      text: "Team supports up to 10 independent sites and 5 team seats.",
       cta: "View Team plan",
       href: "/dashboard/settings",
     };

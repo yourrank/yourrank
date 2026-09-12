@@ -31,7 +31,7 @@ function workspaceSiteContextHtml() {
 
 function workspaceAvailabilityHtml(boardContext) {
   if (boardContext === "none") return "";
-  return `<div class="lb-availability"><span class="lb-status" id="lbTopbarStatus">Checking</span><span class="lb-status lb-status--draft-changes" id="lbTopbarDraft" hidden="">Draft changes</span>${boardContext === "full"
+  return `<div class="lb-availability"><span class="lb-status" id="lbTopbarStatus">Checking</span><span class="lb-status lb-status--draft-changes" id="lbTopbarDraft" hidden="">Draft changes</span><button class="lb-copy-link" id="copySiteLink" type="button" hidden>Copy link</button><div class="lb-new"><button class="lb-new-btn" id="newActionBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="newActionMenu">+ New</button><div class="lb-new-menu" id="newActionMenu" role="menu" hidden><button type="button" role="menuitem" data-new="site">New site</button><a role="menuitem" data-new="player" data-chrome-contextual-action="true" href="/dashboard/leaderboard/players">Add player</a><a role="menuitem" data-new="drop" data-chrome-contextual-action="true" href="/dashboard/activities">New drop</a><a role="menuitem" data-new="reward" data-chrome-contextual-action="true" href="/dashboard/rewards/shop">New shop item</a><a role="menuitem" data-new="invite" data-chrome-contextual-action="true" href="/dashboard/settings/team">Invite member</a></div></div>${boardContext === "full"
     ? '<input type="checkbox" id="pubToggle" hidden="" tabindex="-1" aria-hidden="true"/><button class="lb-publish-action" id="publishAction" type="button"><span id="lbPublishLabel">Publish site</span></button><a class="lb-live-link" id="liveLink" href="#" hidden="">View site ↗</a>'
     : ""}</div>`;
 }

@@ -31,7 +31,7 @@ describe("board-limit upsell", () => {
 
   it("offers Pro, Team, or support according to the current plan", () => {
     expect(boardsJs).toContain("Pro unlocks up to 3 independent sites.");
-    expect(boardsJs).toContain("Team supports up to 10 independent sites and 5 operator seats.");
+    expect(boardsJs).toContain("Team supports up to 10 independent sites and 5 team seats.");
     expect(boardsJs).toContain('cta: "Contact support"');
   });
 });

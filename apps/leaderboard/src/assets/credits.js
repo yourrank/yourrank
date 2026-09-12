@@ -1361,7 +1361,10 @@ function renderActivity() {
   if (!activityEvents.length) {
     list.innerHTML = "";
     if (empty) {
-      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: "This member has signed in but has not earned or spent credits yet. Try another member or activity type." });
+      const memberFilter = $("cr-history-username")?.value.trim();
+      empty.innerHTML = inlineStateHtml({ kind: "empty", title: "No credit activity found", body: memberFilter
+        ? "This member has not earned or spent credits yet. Try another member or activity type."
+        : "No credit activity matches the current filters. Try another member or activity type." });
       empty.hidden = false;
     }
   } else {
@@ -1386,9 +1389,20 @@ function renderHistory(data) {
     empty.hidden = boards.length > 0;
   }
 }
+// Topbar "+ New > New shop item" lands here with ?new=1 — open the drawer
+// directly once data is loaded instead of forcing a second click.
+function maybeAutoOpenFromQuery() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("new") === "1" && tab() === "shop") {
+    params.delete("new");
+    history.replaceState({}, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
+    openShop();
+  }
+}
+
 if ($("cr-app") && !window.__yrSpaShell) {
   wireActions();
-  load().then(() => window.__yrBoot?.signal()).catch(() => {});
+  load().then(() => { maybeAutoOpenFromQuery(); window.__yrBoot?.signal(); }).catch(() => {});
 }
 
 // ---- Persistent-shell lifecycle ----
@@ -1420,7 +1434,7 @@ export function enter() {
   shopSearch = "";
   shopSort = "cost";
   wireActions();
-  load().then(() => window.__yrBoot?.signal()).catch(() => {});
+  load().then(() => { maybeAutoOpenFromQuery(); window.__yrBoot?.signal(); }).catch(() => {});
 }
 
 export function leave() {

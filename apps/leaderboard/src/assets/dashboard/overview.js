@@ -1,5 +1,5 @@
 // Overview page summary tiles / top players / setup checklist.
-import { $, esc, currentPlayers } from "./utils.js";
+import { $, esc, currentPlayers, getCsrf, logError, showToast } from "./utils.js";
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
 import { activityHomeState, automationHomeState, nextStepAction, visitsMetricState } from "./overview-state.js";
@@ -9,6 +9,7 @@ import { fetchDashboardJson } from "./request.js";
 
 let automationHome = { comingNext: null, needsAttention: [] };
 let activityHome = { open: [], totalOpen: 0 };
+let teamHome = { pendingInvites: 0 };
 
 function formatOverviewDate(value) {
   const date = new Date(value);
@@ -57,15 +58,96 @@ function wirePublicationLink(link) {
   });
 }
 
+function wireBrandAction(link) {
+  if (!link || link._brandWired) return;
+  link._brandWired = true;
+  link.addEventListener("click", (event) => {
+    if (link.dataset.brandAction !== "true") return;
+    event.preventDefault();
+    openBrandModal();
+  });
+}
+
+// The brand checklist step completes where it is: the name is the only field
+// the launch checklist needs, so naming the site never requires a page trip.
+export function openBrandModal() {
+  const overlay = document.createElement("div");
+  overlay.className = "modal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "brandNameTitle");
+  overlay.innerHTML = `<div class="modal-card" role="document">
+    <h3 id="brandNameTitle">Name your site</h3>
+    <p>This is the name visitors see on your public page.</p>
+    <div class="field"><label for="brandNameInput">Site name</label><input id="brandNameInput" maxlength="80" autocomplete="off" placeholder="Summer Race 2026" /></div>
+    <div class="modal-actions"><button class="btn btn--sm btn--ghost" data-brand="cancel" type="button">Cancel</button><button class="btn btn--sm btn--accent" data-brand="save" type="button">Save name</button></div>
+    <p class="status" id="brandNameErr" role="alert" aria-live="assertive"></p>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.documentElement.classList.add("yr-modal-open");
+  const release = window.YRDialog ? window.YRDialog.trap(overlay, close) : null;
+  const input = overlay.querySelector("#brandNameInput");
+  const err = overlay.querySelector("#brandNameErr");
+  const save = overlay.querySelector('[data-brand="save"]');
+  input.value = $("f_name")?.value.trim() || "";
+  function close() {
+    release?.();
+    overlay.remove();
+    document.documentElement.classList.remove("yr-modal-open");
+  }
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('[data-brand="cancel"]').addEventListener("click", close);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save.click(); } });
+  save.addEventListener("click", async () => {
+    const name = input.value.trim();
+    if (!name) { err.textContent = "Enter a site name."; input.focus(); return; }
+    err.textContent = "Saving…";
+    save.disabled = true;
+    try {
+      const { body } = await fetchDashboardJson("/api/site", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+        body: JSON.stringify({ siteId: state.ACTIVE_SITE_ID || undefined, name }),
+      });
+      if (body?.ok) {
+        const nameField = $("f_name");
+        if (nameField) nameField.value = name;
+        state.ONBOARDING = { ...(state.ONBOARDING || {}), brand: true };
+        close();
+        showToast("Site named.", "success");
+        renderOverviewSummary();
+      } else {
+        err.textContent = body?.error || "Couldn't save the name.";
+        save.disabled = false;
+      }
+    } catch (e) {
+      logError("brand-modal-save", e);
+      err.textContent = e?.message || "Couldn't save the name.";
+      save.disabled = false;
+    }
+  });
+  setTimeout(() => input.focus(), 30);
+}
+
 export async function loadOverviewLiveData() {
   if (state.ACTIVE_SITE_ID) {
     const params = new URLSearchParams({ siteId: state.ACTIVE_SITE_ID });
-    const { body } = await fetchDashboardJson(`/api/activities?${params.toString()}`, { credentials: "same-origin" });
+    const [activitiesResult, teamResult] = await Promise.all([
+      fetchDashboardJson(`/api/activities?${params.toString()}`, { credentials: "same-origin" }),
+      fetchDashboardJson(`/api/site/team?${params.toString()}`, { credentials: "same-origin" }).catch((err) => {
+        logError("overview-team", err);
+        return null;
+      }),
+    ]);
+    const { body } = activitiesResult;
     automationHome = automationHomeState(body?.automation);
     activityHome = activityHomeState(body?.activities);
+    teamHome = { pendingInvites: (teamResult?.body?.invites || []).length };
   } else {
     automationHome = { comingNext: null, needsAttention: [] };
     activityHome = { open: [], totalOpen: 0 };
+    teamHome = { pendingInvites: 0 };
   }
   renderOverviewSummary();
 }
@@ -111,7 +193,8 @@ export function renderOverviewSummary() {
   const pendingOrders = Number(state.CREDITS?.usage?.pendingRedemptions || 0);
   const connectionAttention = state.CREDITS?.channel?.homeAttention === true;
   const automationAttentionCount = automationHome.needsAttention?.length || 0;
-  const hasOperationalAttention = pendingOrders > 0 || connectionAttention || automationAttentionCount > 0;
+  const pendingInvites = teamHome.pendingInvites || 0;
+  const hasOperationalAttention = pendingOrders > 0 || connectionAttention || automationAttentionCount > 0 || pendingInvites > 0;
   const headSub = $("ovHeadSub");
   if (headSub) headSub.textContent = status.live && hasOperationalAttention ? "Your community is running. Here’s what needs you." : status.live ? "You’re up to date. Here’s your community’s latest." : "Your community at a glance.";
   const showSetup = !done || pendingVerification;
@@ -155,6 +238,9 @@ export function renderOverviewSummary() {
     setupAction.textContent = verificationIsNext ? "Confirm email" : actionStep?.action || "Continue setup";
     setupAction.dataset.publicationAction = publicationIsNext ? "true" : "false";
     if (publicationIsNext) wirePublicationLink(setupAction);
+    const brandIsNext = !verificationIsNext && actionStep?.key === "brand";
+    setupAction.dataset.brandAction = brandIsNext ? "true" : "false";
+    if (brandIsNext) wireBrandAction(setupAction);
   }
   const setupList = $("ovSetupList");
   if (setupList) {
@@ -169,11 +255,17 @@ export function renderOverviewSummary() {
       const description = ownerOnly && !complete ? `${ownerName} manages the site name and public identity.` : step.description;
       const content = `<span class="ov-step-icon${complete ? " is-done" : ""}" aria-hidden="true">${complete ? "✓" : ""}</span><span class="ov-step-body"><b>${step.label}</b><span class="hint">${esc(description)}</span></span><span class="ov-step-status${complete ? " is-done" : ""}" aria-hidden="true">${stateLabel}</span><span class="sr-only">${stateLabel}</span>`;
       if (ownerOnly) return `<li><span class="${rowClass}" data-setup-step="${step.key}" data-setup-state="${stateKey}">${content}</span></li>`;
+      if (step.key === "brand") {
+        return `<li><button type="button" class="${rowClass}" data-setup-step="${step.key}" data-setup-state="${stateKey}" data-brand-action="true">${content}</button></li>`;
+      }
       const href = step.key === "publish" ? (needsVerification ? "/verify-email" : "#publish") : step.href;
       const publicationAttribute = step.key === "publish" && !needsVerification ? ' data-publication-action="true"' : "";
       return `<li><a class="${rowClass}" href="${href}" data-setup-step="${step.key}" data-setup-state="${stateKey}"${publicationAttribute}>${content}</a></li>`;
     }).join("");
     setupList.querySelectorAll("[data-publication-action='true']").forEach(wirePublicationLink);
+    setupList.querySelectorAll("[data-brand-action='true']").forEach((btn) => {
+      if (!btn._brandWired) { btn._brandWired = true; btn.addEventListener("click", openBrandModal); }
+    });
   }
   const number = (value) => value == null ? "—" : Number(value).toLocaleString("en-US");
   setMetricValue($("ovPlayersCount"), number(players.length));
@@ -222,7 +314,16 @@ export function renderOverviewSummary() {
     if ($("ovAutomationAlertDetail")) $("ovAutomationAlertDetail").textContent = remaining ? `${firstDetail} ${remaining} more ${remaining === 1 ? "schedule needs" : "schedules need"} review.` : firstDetail;
     if ($("ovAutomationAlertAction")) $("ovAutomationAlertAction").href = activitiesHref;
   }
-  const attentionCount = pendingOrders + Number(connectionAttention) + automationAttentionCount;
+  const invitesAlert = $("ovInvitesAlert");
+  if (invitesAlert) invitesAlert.hidden = pendingInvites <= 0;
+  if (pendingInvites > 0) {
+    if ($("ovInvitesAlertCount")) $("ovInvitesAlertCount").textContent = number(pendingInvites);
+    const invitesLabel = $("ovInvitesAlertLabel");
+    if (invitesLabel) invitesLabel.textContent = pendingInvites === 1 ? "pending invite is waiting for a teammate to accept." : "pending invites are waiting for teammates to accept.";
+    const invitesAction = $("ovInvitesAlertAction");
+    if (invitesAction) invitesAction.href = `/dashboard/settings/team${state.ACTIVE_SITE_ID ? `?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : ""}`;
+  }
+  const attentionCount = pendingOrders + Number(connectionAttention) + automationAttentionCount + pendingInvites;
   const attentionSection = $("ovAttention");
   if (attentionSection) attentionSection.hidden = attentionCount === 0;
   if ($("ovAttentionCount")) $("ovAttentionCount").textContent = `${number(attentionCount)} ${attentionCount === 1 ? "item" : "items"}`;

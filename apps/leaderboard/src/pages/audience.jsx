@@ -5,18 +5,19 @@ import { membersPage } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
-// People is the creator-facing area. Members (who earn and spend credits) are managed
-// here; site visitors (anonymous traffic) already have their canonical view
-// under Insights, so the page links there as an action instead of duplicating
-// the view or adding a tab that teleports to another product area.
-const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Insights.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Insights</a></aside>`;
+// Members is the creator-facing audience area. Members (who earn and spend
+// credits) are managed here; site visitors (anonymous traffic) already have
+// their canonical view under Stats, so the page links there as an action
+// instead of duplicating the view or adding a tab that teleports to another
+// product area.
+const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Stats.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Stats</a></aside>`;
 export const PEOPLE_TABS = [
   { key: "viewers", label: "Members", href: "/dashboard/audience/members" },
   { key: "reviews", label: "Reviews", href: "/dashboard/audience/reviews" },
 ];
 
 function PeopleTabs({ tab }) {
-  return <nav class="v3-tabs" aria-label="People pages">
+  return <nav class="v3-tabs" aria-label="Members pages">
     {PEOPLE_TABS.map((item) => <a
       class={"v3-tab" + (item.key === tab ? " is-on" : "")}
       href={item.href}
