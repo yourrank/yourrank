@@ -183,6 +183,7 @@ const ROUTE_DEFS = [
   { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "audience.activity", canonicalPath: "/dashboard/audience/activity", section: "audience", tab: "activity", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.reviews", canonicalPath: "/dashboard/audience/reviews", section: "audience", tab: "reviews", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "settings.account", canonicalPath: "/dashboard/settings/account", section: "settings", tab: "account", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.team", canonicalPath: "/dashboard/settings/team", section: "settings", tab: "team", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
@@ -254,11 +255,10 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   // giveaways
   { path: "/dashboard/giveaways", routeId: "giveaways.chat", kind: "redirect", status: 302, search: "preserve" },
   { path: "/dashboard/giveaways/preds", routeId: "giveaways.preds", kind: "redirect", status: 301, search: "preserve" },
-  // audience (members moved out of Rewards; activity moved into Rewards)
+  // audience (members moved out of Rewards; activity lives on the Audience tab)
   { path: "/dashboard/audience", routeId: "audience.viewers", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/audience/viewers", routeId: "audience.viewers", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/rewards/viewers", routeId: "audience.viewers", kind: "redirect", status: 301, search: "preserve" },
-  { path: "/dashboard/audience/activity", routeId: "rewards.history", kind: "redirect", status: 301, search: "preserve" },
   // account settings (root serves the account tab without redirecting)
   { path: "/dashboard/settings", routeId: "settings.account", kind: "rewrite" },
   { path: "/dashboard/manage", routeId: "settings.account", kind: "redirect", status: 302, search: "preserve", redirectTo: "/dashboard/settings" },

@@ -89,6 +89,7 @@ describe("routes.js source gate", () => {
     });
     expect(DYNAMIC_SECTIONS.audience.tabPaths).toEqual({
       viewers: "/dashboard/audience/members",
+      activity: "/dashboard/audience/activity",
       reviews: "/dashboard/audience/reviews",
     });
     expect(DYNAMIC_SECTIONS.siteConnections.tabPaths).toEqual({ channel: "/dashboard/site/connections" });
