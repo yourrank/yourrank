@@ -279,7 +279,7 @@ describe("dashboard navigation ownership", () => {
     expect(siteSource).toContain("JOIN users owner ON owner.id=delegated.user_id");
     expect(siteSource).toContain("AND sm.role='moderator'");
     expect(siteSource).toContain("AND lower(owner.plan)='team'");
-    expect(siteSource).toContain("AND owner.plan_expires_at > now()");
+    expect(siteSource).toContain("AND (owner.plan_expires_at IS NULL OR owner.plan_expires_at > now())");
     expect(siteSource).toContain("ORDER BY id ASC LIMIT 1");
     expect(siteSource).toContain("u.plan::text AS owner_plan");
     expect(siteSource).toContain("u.status::text AS owner_status");

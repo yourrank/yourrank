@@ -245,13 +245,15 @@ export interface PlanUser {
   plan_expires_at?: number | string | Date | null;
 }
 
-/** Paid grants require a non-null, future expiry. Free never requires one. */
+/** A paid plan with a past expiry falls back to free. NULL expiry on a paid
+    plan is a non-expiring grant — how admin/manual grants (e.g. a Supabase
+    table edit) work. Free never requires one. */
 export function effectivePlan(user: PlanUser | null | undefined, nowMs = Date.now()): PlanTier {
   if (!user || user.status === "suspended") return "free";
   const plan = String(user.plan || "free").toLowerCase();
   if (plan === "free") return "free";
   if (!isPlanTier(plan)) return "free";
-  if (user.plan_expires_at == null) return "free";
+  if (user.plan_expires_at == null) return plan;
   const expiresAt = user.plan_expires_at instanceof Date
     ? user.plan_expires_at.getTime()
     : typeof user.plan_expires_at === "string"

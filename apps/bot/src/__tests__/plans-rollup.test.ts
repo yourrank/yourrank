@@ -92,9 +92,9 @@ describe("effectivePlan", () => {
     expect(effectivePlan(user)).toBe("pro");
   });
 
-  it("returns 'free' when expiry is null (anti-exploit: null = expired)", () => {
+  it("returns the plan when expiry is null (non-expiring admin grant)", () => {
     const user = { plan: "team", plan_expires_at: null };
-    expect(effectivePlan(user)).toBe("free");
+    expect(effectivePlan(user)).toBe("team");
   });
 
   it("returns plan name for far-future expiry", () => {

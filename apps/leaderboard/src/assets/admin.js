@@ -129,10 +129,10 @@ async function loadUsers(page) {
   $("usersEmpty").hidden = rows.length > 0;
   $("usersBody").innerHTML = rows.map((u) => {
     const plan = String(u.plan || "free").toLowerCase();
-    const paid = ["pro", "team"].includes(plan) && u.plan_expires_at && Number(u.plan_expires_at) > Date.now();
+    const paid = ["pro", "team"].includes(plan) && (u.plan_expires_at == null || Number(u.plan_expires_at) > Date.now());
     let planTxt = "free";
     if (paid) {
-      planTxt = plan + " · until " + when(u.plan_expires_at);
+      planTxt = plan + (u.plan_expires_at ? " · until " + when(u.plan_expires_at) : " · no expiry");
     }
     const totp = u.totp_enabled ? (u.totp_locked_until ? "locked" : "on") : "off";
     const reasonAttr = u.suspension_reason ? ` title="Reason: ${esc(u.suspension_reason)}"` : "";
