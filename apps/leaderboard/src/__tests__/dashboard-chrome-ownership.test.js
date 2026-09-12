@@ -242,7 +242,7 @@ function renderRoute(route) {
     return page.Component({ activePath: route.path, user }).toString();
   }
   if (route.render === "people") {
-    const page = route.tab === "reviews" ? PAGES.audienceReviews : PAGES.audienceMembers;
+    const page = route.tab === "reviews" ? PAGES.audienceReviews : route.tab === "activity" ? PAGES.audienceActivity : PAGES.audienceMembers;
     return page.Component({ activePath: route.path, user }).toString();
   }
   if (route.render === "telegram") {

@@ -264,7 +264,8 @@ async function enterReviews() {
 }
 
 export async function enter() {
-  if ($("cr-app")?.dataset.crTab === "viewers") return enterMembers();
+  const crTab = $("cr-app")?.dataset.crTab;
+  if (crTab === "viewers" || crTab === "history") return enterMembers();
   if ($("people-reviews-app")) return enterReviews();
 }
 

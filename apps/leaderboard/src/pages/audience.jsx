@@ -1,7 +1,7 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
-import { membersPage } from "./credits-pages.js";
+import { membersPage, memberActivityPage } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
 
@@ -13,6 +13,7 @@ import { chromeStateFor } from "../assets/dashboard/routes.js";
 const VISITOR_ANALYTICS_CARD = `<aside class="cr-audience-note"><div><h2>Looking for visitor trends?</h2><p>Anonymous visits and traffic sources live in Stats.</p></div><a class="btn btn--sm" href="/dashboard/analytics">Open Stats</a></aside>`;
 export const PEOPLE_TABS = [
   { key: "viewers", label: "Members", href: "/dashboard/audience/members" },
+  { key: "activity", label: "Activity", href: "/dashboard/audience/activity" },
   { key: "reviews", label: "Reviews", href: "/dashboard/audience/reviews" },
 ];
 
@@ -59,7 +60,7 @@ const MEMBER_HISTORY_DRAWER = `
         </dl>
       </section>
       <section class="cr-member-detail-section" aria-labelledby="cr-member-activity-heading">
-        <div class="cr-member-history-section-head"><h3 id="cr-member-activity-heading">Recent credit activity</h3></div>
+        <div class="cr-member-history-section-head"><h3 id="cr-member-activity-heading">Recent credit activity</h3><a class="btn btn--sm btn--ghost" id="cr-member-history-activity-all" href="/dashboard/audience/activity" hidden>Open full activity</a></div>
         <p class="status" id="cr-member-history-status" role="status" aria-live="polite"></p>
         <ol class="cr-member-history-list" id="cr-member-history-list" aria-live="polite"></ol>
         <div class="v3-empty" id="cr-member-history-empty" hidden></div>
@@ -80,6 +81,20 @@ export function AudienceMembersPage({ activePath, user, fragment } = {}) {
     <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading your members…</p></div>
   </div>;
   const chrome = chromeStateFor("audience", "viewers");
+  if (fragment) return content;
+  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
+    {content}
+  </DashboardShell>;
+}
+
+export function AudienceActivityPage({ activePath, user, fragment } = {}) {
+  const content = <div class="cr-workspace-content">
+    <PeopleTabs tab="activity" />
+    <div id="cr-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner"></div><span class="sr-only">Loading activity…</span></div>
+    <div id="cr-app" data-cr-tab="history" hidden dangerouslySetInnerHTML={{ __html: memberActivityPage }}></div>
+    <div id="cr-empty" class="empty cr-loading-state" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><p>Loading member activity…</p></div>
+  </div>;
+  const chrome = chromeStateFor("audience", "activity");
   if (fragment) return content;
   return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
     {content}
@@ -138,6 +153,11 @@ const audienceConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css"
 export const audienceMembersPage = {
   config: { ...audienceConfigBase, title: chromeStateFor("audience", "viewers").documentTitle, canonical: "https://yourrank.site/dashboard/audience/members" },
   Component: AudienceMembersPage,
+};
+
+export const audienceActivityPage = {
+  config: { ...audienceConfigBase, title: chromeStateFor("audience", "activity").documentTitle, canonical: "https://yourrank.site/dashboard/audience/activity" },
+  Component: AudienceActivityPage,
 };
 
 export const audienceReviewsPage = {

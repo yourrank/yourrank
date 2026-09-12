@@ -692,16 +692,17 @@ function previewLocalState(mount) {
   return mount._yrPreview;
 }
 
-function setPreviewSyncStatus(mount, phase) {
+function setPreviewSyncStatus(mount, phase, detail = "") {
   const { status, time } = previewParts(mount);
   const local = previewLocalState(mount);
   if (status) {
     status.textContent = phase === "syncing"
       ? mount.dataset.previewLabelSyncing || "Updating preview…"
       : phase === "synced" ? mount.dataset.previewLabelSynced || "Preview ready"
-        : phase === "invalid" ? "Fix the highlighted fields to update preview"
+        : phase === "invalid" ? `Fix the highlighted fields${detail ? ` — ${detail}` : ""} before saving`
           : "Preview could not be loaded";
     status.classList.toggle("is-syncing", phase === "syncing");
+    status.classList.toggle("is-invalid", phase === "invalid");
   }
   if (time) {
     const seconds = local.syncedAt ? Math.max(0, Math.floor((Date.now() - local.syncedAt) / 1000)) : null;
@@ -744,7 +745,10 @@ function resetPreviewFrame(mount) {
       return;
     }
     local.syncedAt = Date.now();
-    setPreviewSyncStatus(mount, "synced");
+    // The draft may render while fields still fail validation — the frame
+    // shows what was sent, the chip keeps reporting what blocks saving.
+    const lastInvalid = local.lastInvalid || [];
+    setPreviewSyncStatus(mount, lastInvalid.length ? "invalid" : "synced", lastInvalid[0]?.label || "");
     fitPreviewMount(mount);
   });
   current.replaceWith(fresh);
@@ -777,10 +781,10 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
     const { error, device } = previewParts(mount);
     try {
       const { payload: draft, invalid } = collect({ reportPlayerErrors: false });
-      if (invalid.length) {
-        setPreviewSyncStatus(mount, "invalid");
-        return;
-      }
+      // Render even when fields fail validation: a blank frame tells the
+      // creator nothing, while the draft render plus the invalid chip shows
+      // both what they have and what still needs fixing before saving.
+      local.lastInvalid = invalid;
       const params = { board: state.ACTIVE_SITE_ID, device: device?.dataset.device || "desktop" };
       if (mount.dataset.previewSection) params.section = mount.dataset.previewSection;
       // Site settings previews what viewers see, so the editor's
@@ -804,6 +808,7 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
       local.form.action = "/dashboard/preview?" + new URLSearchParams(params).toString();
       local.form.querySelector("input[name='draft']").value = JSON.stringify(draft);
       setPreviewSyncStatus(mount, "syncing");
+      if (invalid.length) setPreviewSyncStatus(mount, "invalid", invalid[0]?.label || "");
       if (!resetPreviewFrame(mount)) return;
       local.form.submit();
       if (error) error.hidden = true;

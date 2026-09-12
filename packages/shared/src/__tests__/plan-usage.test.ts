@@ -34,7 +34,9 @@ function usageDependencies({
     exec: async (sql: string, params: unknown[] = []) => {
       calls.push({ kind: "exec", sql, params });
       if (sql.includes("RETURNING active_viewer_grace_started_at")) {
-        return [{ active_viewer_grace_started_at: "2026-08-29T12:00:00.000Z" }];
+        // The SQL sets grace start to now(); returning a fixed historical date
+        // makes the test expire once the real grace window elapses.
+        return [{ active_viewer_grace_started_at: new Date().toISOString() }];
       }
       return [];
     },
