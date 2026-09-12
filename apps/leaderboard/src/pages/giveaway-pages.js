@@ -252,8 +252,16 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
     preds: "Engage your viewers with live chat giveaways, Credit ticket raffles, and flash drop claim codes.",
     tournaments: "Open chat signups, review the entry list, and seed a tournament.",
   }[active] || "Engage viewers with live community events.";
-  const tabs = GIVEAWAY_TABS.map(([tab, label]) => `
-  <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}>${label}</a>`).join("");
+  // Primary mechanics stay visible; restricted-legacy surfaces (ticket raffles,
+  // predictions, tournaments) still route but sit behind the More toggle so a
+  // streamer sees "chat" and "drops" first.
+  const LEGACY_TABS = new Set(["raffles", "preds", "tournaments"]);
+  const legacyActive = LEGACY_TABS.has(active);
+  const tabLink = ([tab, label]) => `
+  <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}${LEGACY_TABS.has(tab) ? ` data-tabs-legacy${legacyActive ? "" : " hidden"}` : ""}>${label}</a>`;
+  const tabs = GIVEAWAY_TABS.filter(([tab]) => !LEGACY_TABS.has(tab)).map(tabLink).join("")
+    + `<button class="v3-tab" id="tab-btn-gw-more" type="button" data-tabs-more aria-expanded="${legacyActive ? "true" : "false"}">More</button>`
+    + GIVEAWAY_TABS.filter(([tab]) => LEGACY_TABS.has(tab)).map(tabLink).join("");
   const html = `
 ${engageTabsHtml("giveaways")}
 <div class="v3-head v3-head--row">
@@ -312,7 +320,7 @@ ${tabs}
             <span class="hint">Viewers who type this in chat will be entered into the giveaway.</span>
           </div>
 
-          <details class="cr-advanced gw-setup-advanced">
+          <details class="cr-advanced gw-setup-advanced" data-ui-advanced>
             <summary>
               <span>Fair play &amp; entry options</span>
               <span class="gw-advanced-summary-state">

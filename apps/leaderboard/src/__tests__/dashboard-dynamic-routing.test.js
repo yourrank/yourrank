@@ -29,7 +29,6 @@ const EXPECTED = {
       shop: "rewardsShop",
       rules: "rewardsRules",
       redemptions: "rewardsRedemptions",
-      history: "rewardsHistory",
     },
   },
   // The Kick connection is stored on the site row (sites.kick_channel_*), so
@@ -122,10 +121,8 @@ describe("dynamic section routing parity", () => {
 
   it("maps the URL aliases to their internal tab keys", () => {
     expect(parseDynamicPath("/dashboard/giveaways/predictions").tab).toBe("preds");
-    expect(parseDynamicPath("/dashboard/rewards/activity").tab).toBe("history");
     expect(parseDynamicPath("/dashboard/settings/billing").tab).toBe("plan");
     expect(resolveFragment("/dashboard/giveaways/predictions")).toEqual({ pageKey: "giveaways", tab: "preds" });
-    expect(resolveFragment("/dashboard/rewards/activity")).toEqual({ pageKey: "rewardsHistory", tab: "history" });
     expect(resolveFragment("/dashboard/settings/billing")).toEqual({ pageKey: "settingsUnified", tab: "plan" });
   });
 

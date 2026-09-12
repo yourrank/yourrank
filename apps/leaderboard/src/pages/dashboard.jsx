@@ -33,11 +33,18 @@ export const BOARD_TABS = DASHBOARD_SECTIONS.board.tabs.map((tab) => [
   dashboardPath("board", tab),
 ]);
 
+const BOARD_LEGACY_TABS = new Set(["history"]);
+
 function LeaderboardTabs({ active }) {
+  const legacyActive = BOARD_LEGACY_TABS.has(active);
+  const tabLink = ([key, label, href]) => {
+    const legacy = BOARD_LEGACY_TABS.has(key);
+    return <a class={"editor-step v3-tab" + (key === active ? " is-active is-on" : "")} href={href} data-egroup={key} data-tabs-legacy={legacy ? true : undefined} hidden={legacy && !legacyActive ? true : undefined} aria-current={key === active ? "page" : undefined}>{label}</a>;
+  };
   return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="My board sections">
-    {BOARD_TABS.map(([key, label, href]) => (
-      <a class={"editor-step v3-tab" + (key === active ? " is-active is-on" : "")} href={href} data-egroup={key} aria-current={key === active ? "page" : undefined}>{label}</a>
-    ))}
+    {BOARD_TABS.flatMap((tab) => BOARD_LEGACY_TABS.has(tab[0])
+      ? [<button class="v3-tab" type="button" data-tabs-more aria-expanded={legacyActive ? "true" : "false"}>More</button>, tabLink(tab)]
+      : [tabLink(tab)])}
   </nav>;
 }
 
@@ -320,8 +327,9 @@ function AnalyticsSection({ active, activeHash = "activity" } = {}) {
   <div class="v3-analytics-scope"><span id="perfScope"><b id="perfBoardName">Active site</b><span aria-hidden="true"> · </span><span id="perfSelectedRange" hidden={activeHash === "referrals"}>Last <span id="perfRangeLabel">30</span> days · UTC</span><span id="perfSourcesRange" hidden={activeHash !== "referrals"}>Last 30 days · UTC</span></span><div id="perfRangeFilter" class="v3-range-filter" role="group" aria-label="Date range" hidden={activeHash === "referrals"}><button class="v3-range-btn" type="button" data-range="7">7 days</button><button class="v3-range-btn is-active" type="button" data-range="30">30 days</button></div></div>
   <nav class="v3-tabs" aria-label="Stats pages">
     <a class={"v3-tab" + (activeHash === "activity" ? " is-on" : "")} href="/dashboard/analytics/activity" data-perf-tab="activity" aria-current={activeHash === "activity" ? "page" : undefined}>Overview</a>
-    <a class={"v3-tab" + (activeHash === "referrals" ? " is-on" : "")} href="/dashboard/analytics/referrals" data-perf-tab="referrals" aria-current={activeHash === "referrals" ? "page" : undefined}>Traffic sources</a>
-    <a class={"v3-tab" + (activeHash === "events" ? " is-on" : "")} href="/dashboard/analytics/events" data-perf-tab="events" aria-current={activeHash === "events" ? "page" : undefined}>Public site activity</a>
+    <button class="v3-tab" type="button" data-tabs-more aria-expanded={activeHash === "referrals" || activeHash === "events" ? "true" : "false"}>More</button>
+    <a class={"v3-tab" + (activeHash === "referrals" ? " is-on" : "")} href="/dashboard/analytics/referrals" data-perf-tab="referrals" data-tabs-legacy hidden={activeHash !== "referrals" && activeHash !== "events" ? true : undefined} aria-current={activeHash === "referrals" ? "page" : undefined}>Traffic sources</a>
+    <a class={"v3-tab" + (activeHash === "events" ? " is-on" : "")} href="/dashboard/analytics/events" data-perf-tab="events" data-tabs-legacy hidden={activeHash !== "referrals" && activeHash !== "events" ? true : undefined} aria-current={activeHash === "events" ? "page" : undefined}>Public site activity</a>
   </nav>
   <dl class="v3-insight-band" data-perf-summary aria-label="Visitor summary" hidden>
     <div><dt>Site visits</dt><dd><strong id="perfKpiViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></strong><span class="v3-insight-change" id="perfKpiViewsDelta"></span></dd></div>
@@ -365,10 +373,11 @@ function BoardSettingsSection({ active } = {}) {
   <div class="v3-tabs" role="tablist" aria-label="Site sections">
     <button class="v3-tab is-on" id="settingsTabCustomize" type="button" role="tab" aria-selected="true" aria-controls="settingsPanelCustomize" data-settings-tab="customize">Public site</button>
     <button class="v3-tab" id="settingsTabFeedback" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelFeedback" data-settings-tab="feedback">Feedback</button>
-    <button class="v3-tab" id="settingsTabNotifications" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelNotifications" data-settings-tab="notifications">Notifications</button>
-    <button class="v3-tab" id="settingsTabDomain" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDomain" data-settings-tab="domain">Domain</button>
-    <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools">Advanced</button>
-    <button class="v3-tab" id="settingsTabDanger" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDanger" data-settings-tab="danger">Danger zone</button>
+    <button class="v3-tab" id="settingsTabMore" type="button" data-tabs-more aria-expanded="false">More</button>
+    <button class="v3-tab" id="settingsTabNotifications" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelNotifications" data-settings-tab="notifications" data-tabs-legacy hidden>Notifications</button>
+    <button class="v3-tab" id="settingsTabDomain" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDomain" data-settings-tab="domain" data-tabs-legacy hidden>Domain</button>
+    <button class="v3-tab" id="settingsTabTools" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelTools" data-settings-tab="tools" data-tabs-legacy hidden>Advanced</button>
+    <button class="v3-tab" id="settingsTabDanger" type="button" role="tab" aria-selected="false" aria-controls="settingsPanelDanger" data-settings-tab="danger" data-tabs-legacy hidden>Danger zone</button>
   </div>
   <div class="v3-settings-save" id="settingsSaveBar" hidden>
     <p id="settingsSaveText">Use Save changes after updating these settings.</p>
@@ -458,10 +467,10 @@ function BoardSettingsSection({ active } = {}) {
             </div>
           </div>
           <p class="v3-settings-status" id="sitePublicCopyStatus" role="status" aria-live="polite"></p>
-          <div class="v3-settings-row"><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
+          <div class="v3-settings-row" data-ui-advanced><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
         </div>
         <div class="v3-settings-card"><div class="v3-settings-card-head"><div><h2>Viewer access</h2><p>Publication and the optional site password stay with the leaderboard editor.</p></div></div><div class="v3-settings-row"><div><b>Visibility and password</b><p>Choose whether anyone with the link can view this site or a password is required.</p></div><a class="v3-set-btn v3-set-btn--outline" id="settingsBoardAccessLink" href="/dashboard/leaderboard/setup">Manage access</a></div></div>
-        <details class="v3-settings-card v3-settings-disclosure"><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
+        <details class="v3-settings-card v3-settings-disclosure" data-ui-advanced><summary>Legal pages</summary><div class="v3-settings-disclosure-body"><p class="v3-settings-muted">Add the legal links shown in your public site footer.</p><div class="v3-settings-legal"><div id="legalList"></div><div id="legalFooterPreview" class="v3-settings-muted"></div></div></div></details>
       </div>
     </div>
   </section>

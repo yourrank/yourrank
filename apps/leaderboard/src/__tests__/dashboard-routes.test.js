@@ -84,7 +84,8 @@ describe("dashboard routes", () => {
     for (const [legacy, canonical] of [
       ["/dashboard/audience/viewers", "/dashboard/audience/members"],
       ["/dashboard/rewards/viewers", "/dashboard/audience/members"],
-      ["/dashboard/rewards/history", "/dashboard/rewards/activity"],
+      ["/dashboard/rewards/history", "/dashboard/audience/activity"],
+      ["/dashboard/rewards/activity", "/dashboard/audience/activity"],
       ["/dashboard/settings/board", "/dashboard/site"],
       ["/dashboard/rewards/channel", "/dashboard/site/connections"],
       ["/dashboard/settings/integrations", "/dashboard/site/connections"],

@@ -366,6 +366,8 @@ export function setupEditorTabs() {
     const controls = document.querySelector(".design-controls");
     const buttons = [...tabs.querySelectorAll(".editor-step")];
     function show(group) {
+      const chosen = buttons.find((b) => b.dataset.egroup === group);
+      if (chosen?.hasAttribute("data-tabs-legacy") && chosen.hidden) expandTabsLegacy(tabs);
       buttons.forEach((b) => {
         const on = b.dataset.egroup === group;
         b.classList.toggle("is-active", on);
@@ -409,6 +411,23 @@ export function setupEditorTabs() {
     const initialGroup = currentRoute().tab || location.hash.replace("#", "") || defaultTab("board");
     show(buttons.find((b) => b.dataset.egroup === initialGroup)?.dataset.egroup || defaultTab("board"));
   }
+
+// "More" keeps long-tail tabs out of the default strip: the legacy items are
+// plain `[data-tabs-legacy]` siblings of a `[data-tabs-more]` toggle inside the
+// same .v3-tabs nav, revealed in place (no dropdown — the strips scroll
+// horizontally, which would clip an absolutely-positioned menu).
+export function setTabsMore(more, expanded) {
+  const strip = more.closest(".v3-tabs");
+  if (!strip) return;
+  more.setAttribute("aria-expanded", String(expanded));
+  more.textContent = expanded ? "Less" : "More";
+  strip.querySelectorAll("[data-tabs-legacy]").forEach((el) => { el.hidden = !expanded; });
+}
+
+export function expandTabsLegacy(node) {
+  const more = node.closest(".v3-tabs")?.querySelector("[data-tabs-more]");
+  if (more) setTabsMore(more, true);
+}
 
 export function setupShell() {
   if (setupShell._done) return;

@@ -25,6 +25,36 @@
   }
 
   applyTheme(resolveTheme());
+
+  // Interface density: "simple" (default) hides surfaces marked
+  // data-ui-advanced and collapsed More-toggles; "advanced" shows the full
+  // chrome. Stored per browser, applied to <html data-ui-mode>.
+  var modeKey = "yr-ui-mode";
+  function resolveUiMode() {
+    var stored = null;
+    try { stored = localStorage.getItem(modeKey); } catch (error) {}
+    return stored === "advanced" ? "advanced" : "simple";
+  }
+  function applyUiMode(mode) {
+    document.documentElement.setAttribute("data-ui-mode", mode);
+    document.querySelectorAll("[data-toggle-ui-mode]").forEach(function (button) {
+      var advanced = mode === "advanced";
+      button.setAttribute("aria-pressed", advanced ? "true" : "false");
+      button.querySelectorAll("[data-ui-mode-state]").forEach(function (state) {
+        state.textContent = advanced ? "On" : "Off";
+      });
+    });
+  }
+  applyUiMode(resolveUiMode());
+  document.addEventListener("click", function (event) {
+    var toggle = event.target && event.target.closest ? event.target.closest("[data-toggle-ui-mode]") : null;
+    if (!toggle) return;
+    event.preventDefault();
+    var next = resolveUiMode() === "advanced" ? "simple" : "advanced";
+    try { localStorage.setItem(modeKey, next); } catch (error) {}
+    applyUiMode(next);
+  });
+
   if (themeQuery && typeof themeQuery.addEventListener === "function") {
     themeQuery.addEventListener("change", function () {
       var stored = null;
@@ -61,6 +91,21 @@
     menus.forEach(function (details) {
       if (details.open && !details.contains(event.target)) closeProfile(details);
     });
+    // More/Less overflow toggle on .v3-tabs strips (giveaways, stats, site
+    // sections). Classic script so it binds on every document — the SPA
+    // equivalent lives in setTabsMore (dashboard/shell.js); both write the
+    // same aria-expanded/hidden state the server renders.
+    var more = event.target && event.target.closest ? event.target.closest("[data-tabs-more]") : null;
+    if (more) {
+      event.preventDefault();
+      var strip = more.closest(".v3-tabs");
+      if (strip) {
+        var expanded = more.getAttribute("aria-expanded") !== "true";
+        more.setAttribute("aria-expanded", String(expanded));
+        more.textContent = expanded ? "Less" : "More";
+        strip.querySelectorAll("[data-tabs-legacy]").forEach(function (el) { el.hidden = !expanded; });
+      }
+    }
     document.querySelectorAll(".lb-ws-switcher").forEach(function (switcher) {
       var menu = switcher.querySelector(".lb-ws-menu");
       var card = switcher.querySelector(".lb-ws-card");

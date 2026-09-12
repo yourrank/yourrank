@@ -175,7 +175,6 @@ const ROUTE_DEFS = [
   { id: "rewards.shop", canonicalPath: "/dashboard/rewards/shop", section: "rewards", tab: "shop", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.rules", canonicalPath: "/dashboard/rewards/rules", section: "rewards", tab: "rules", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.redemptions", canonicalPath: "/dashboard/rewards/redemptions", section: "rewards", tab: "redemptions", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "rewards.history", canonicalPath: "/dashboard/rewards/activity", section: "rewards", tab: "history", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "board", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
@@ -248,7 +247,10 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   { path: "/dashboard/rewards/overview", routeId: "rewards.overview", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/rewards/maps", routeId: "rewards.rules", kind: "redirect", status: 302, search: "preserve" },
   { path: "/dashboard/rewards/rewards", routeId: "rewards.rules", kind: "redirect", status: 302, search: "preserve" },
-  { path: "/dashboard/rewards/history", routeId: "rewards.history", kind: "redirect", status: 301, search: "preserve" },
+  // Member credit activity has one home — Members → Activity. Both old rewards
+  // paths land there.
+  { path: "/dashboard/rewards/history", routeId: "audience.activity", kind: "redirect", status: 301, search: "preserve" },
+  { path: "/dashboard/rewards/activity", routeId: "audience.activity", kind: "redirect", status: 301, search: "preserve" },
   // Kick connection (moved Rewards → Site settings)
   { path: "/dashboard/rewards/channel", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/settings/integrations", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },

@@ -49,7 +49,7 @@ export const activitiesContentHtml = `
       <div class="act-error" id="act-error" role="alert" hidden><strong>Activities could not load.</strong><p id="act-error-message">Try again.</p><button class="btn btn--sm" id="act-retry" type="button">Retry</button></div>
     </section>
 
-    <details class="act-automation" id="act-automation" aria-labelledby="act-automation-title">
+    <details class="act-automation" id="act-automation" data-ui-advanced aria-labelledby="act-automation-title">
       <summary class="act-section-head act-automation__head">
         <div><h2 id="act-automation-title">Templates and schedules</h2><p>Reuse drop settings and choose when to run them.</p></div>
         <span class="act-entitlement" id="act-entitlement">Checking plan…</span>

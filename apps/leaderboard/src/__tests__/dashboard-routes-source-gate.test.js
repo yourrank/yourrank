@@ -71,7 +71,6 @@ describe("routes.js source gate", () => {
       shop: "/dashboard/rewards/shop",
       rules: "/dashboard/rewards/rules",
       redemptions: "/dashboard/rewards/redemptions",
-      history: "/dashboard/rewards/activity",
     });
     expect(DYNAMIC_SECTIONS.settings.tabPaths).toEqual({
       account: "/dashboard/settings/account",
@@ -128,8 +127,10 @@ describe("routes.js source gate", () => {
 
     expect(parseDynamicPath("/dashboard/rewards")).toEqual({ page: "rewards", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/activities")).toEqual({ page: "activities", tab: "overview", dynamic: true });
-    expect(parseDynamicPath("/dashboard/rewards/activity")).toEqual({ page: "rewards", tab: "history", dynamic: true });
-    expect(parseDynamicPath("/dashboard/rewards/history")).toEqual({ page: "rewards", tab: "history", dynamic: true });
+    // Member credit activity consolidated under Members → Activity; the old
+    // rewards paths are manifest redirects, not SPA routes.
+    expect(parseDynamicPath("/dashboard/rewards/activity")).toBeNull();
+    expect(parseDynamicPath("/dashboard/rewards/history")).toBeNull();
     expect(parseDynamicPath("/dashboard/rewards/maps")).toBeNull();
     expect(parseDynamicPath("/dashboard/giveaways")).toEqual({ page: "giveaways", tab: "chat", dynamic: true });
     expect(parseDynamicPath("/dashboard/giveaways/preds")).toEqual({ page: "giveaways", tab: "preds", dynamic: true });
@@ -139,7 +140,7 @@ describe("routes.js source gate", () => {
     expect(parseDynamicPath("/dashboard/site/connections")).toEqual({ page: "siteConnections", tab: "channel", dynamic: true });
     expect(parseDynamicPath("/dashboard/site")).toBeNull();
 
-    expect(dynamicPath("rewards", "history")).toBe("/dashboard/rewards/activity");
+    expect(dynamicPath("rewards", "redemptions")).toBe("/dashboard/rewards/redemptions");
     expect(dynamicPath("activities", "overview")).toBe("/dashboard/activities");
     expect(dynamicPath("settings", "plan")).toBe("/dashboard/settings/billing");
 

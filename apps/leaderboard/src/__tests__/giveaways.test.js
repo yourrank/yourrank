@@ -133,7 +133,7 @@ describe("Giveaway Chatroom Handler", () => {
   });
 
   it("keeps setup defaults behind the fair-play disclosure", () => {
-    expect(giveawaysHtml).toContain('<details class="cr-advanced gw-setup-advanced">');
+    expect(giveawaysHtml).toContain('<details class="cr-advanced gw-setup-advanced" data-ui-advanced>');
     expect(giveawaysHtml).toContain('id="gw-shield-status"');
     expect(giveawaysHtml).toContain('id="gw-opt-unique" checked');
     expect(giveawaysHtml).toContain('id="gw-opt-antialt" checked');

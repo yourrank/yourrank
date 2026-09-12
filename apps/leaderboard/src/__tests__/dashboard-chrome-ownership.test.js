@@ -321,7 +321,6 @@ describe("dashboard chrome ownership", () => {
   it("marks each Rewards route's tab active inside the Rewards subnavigation", () => {
     for (const [path, href, tab] of [
       ["/dashboard/rewards", "/dashboard/rewards", "overview"],
-      ["/dashboard/rewards/activity", "/dashboard/rewards/activity", "history"],
     ]) {
       const markup = renderRoute({ path, render: "rewards", tab, hasSubnav: true, hasBreadcrumbs: true });
       expect(markup).toContain(`href="${href}"`);
@@ -459,7 +458,7 @@ describe("dashboard chrome ownership", () => {
     const shop = PAGES.rewardsShop.Component({ user }).toString();
     const shopTabs = marks(shop);
     expect(shopTabs.map((t) => t.label)).toEqual([
-      "Activities", "Rewards", "Shop", "Ways to earn", "Claims", "Credit activity", "Giveaways",
+      "Activities", "Rewards", "Shop", "Ways to earn", "Claims", "Giveaways",
     ]);
     expect(shopTabs.find((t) => t.current)?.href).toBe("/dashboard/rewards/shop");
 

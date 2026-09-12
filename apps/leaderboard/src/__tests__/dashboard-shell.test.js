@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { RewardsChannelPage, RewardsHistoryPage, RewardsRedemptionsPage } from "../pages/rewards.jsx";
-import { AudienceMembersPage, AudienceReviewsPage } from "../pages/audience.jsx";
+import { RewardsChannelPage, RewardsRedemptionsPage } from "../pages/rewards.jsx";
+import { AudienceActivityPage, AudienceMembersPage, AudienceReviewsPage } from "../pages/audience.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { PAGES } from "../pages.jsx";
 
@@ -302,7 +302,7 @@ describe("signed-in shell navigation", () => {
     for (const path of ["/dashboard/leaderboard/design", "/dashboard/analytics/activity"]) {
       expect(PAGES.dashboard.Component({ activePath: path }).toString()).toContain('class="v3-crumbs"');
     }
-    for (const render of [RewardsChannelPage, AudienceReviewsPage, RewardsHistoryPage]) {
+    for (const render of [RewardsChannelPage, AudienceReviewsPage, AudienceActivityPage]) {
       expect(render().toString()).toContain('class="v3-crumbs"');
     }
   });

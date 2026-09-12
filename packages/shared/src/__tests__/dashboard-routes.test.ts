@@ -56,7 +56,7 @@ describe("dashboard route manifest invariants", () => {
     // if these ever equal the last path segment, identity has been coupled
     // to the URL and canonical-path renames would break stable ids.
     for (const [id, path] of [
-      ["rewards.history", "/dashboard/rewards/activity"],
+      ["activities.overview", "/dashboard/activities"],
       ["settings.plan", "/dashboard/settings/billing"],
       ["giveaways.preds", "/dashboard/giveaways/predictions"],
       ["audience.viewers", "/dashboard/audience/members"],
