@@ -320,7 +320,7 @@ ${tabs}
             <span class="hint">Viewers who type this in chat will be entered into the giveaway.</span>
           </div>
 
-          <details class="cr-advanced gw-setup-advanced">
+          <details class="cr-advanced gw-setup-advanced" data-ui-advanced>
             <summary>
               <span>Fair play &amp; entry options</span>
               <span class="gw-advanced-summary-state">

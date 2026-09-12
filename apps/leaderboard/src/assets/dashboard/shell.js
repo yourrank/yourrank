@@ -366,6 +366,8 @@ export function setupEditorTabs() {
     const controls = document.querySelector(".design-controls");
     const buttons = [...tabs.querySelectorAll(".editor-step")];
     function show(group) {
+      const chosen = buttons.find((b) => b.dataset.egroup === group);
+      if (chosen?.hasAttribute("data-tabs-legacy") && chosen.hidden) expandTabsLegacy(tabs);
       buttons.forEach((b) => {
         const on = b.dataset.egroup === group;
         b.classList.toggle("is-active", on);

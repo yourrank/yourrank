@@ -84,6 +84,9 @@ body[data-wide] .gm-shell-inner{max-width:none}
 .gm-profile[open] .gm-profile-chevron{transform:rotate(180deg);}
 .gm-profile-menu{position:absolute;right:0;left:auto;top:calc(100% + 10px);min-width:190px;width:max-content;max-width:calc(100vw - 40px);background:var(--gm-panel);border:1px solid var(--gm-line-2);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:2px;box-shadow:var(--gm-shadow-lg);z-index:200;}
 .gm-profile-link{font-family:var(--gm-sans);font-size:13px;color:var(--gm-ink-soft);text-decoration:none;padding:8px 10px;border-radius:7px;white-space:nowrap;display:flex;align-items:center;gap:10px;}
+.gm-profile-link--button{background:none;border:0;cursor:pointer;width:100%;text-align:left;}
+.gm-mode-state{margin-left:auto;font-family:var(--gm-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--gm-ink-soft);border:1px solid var(--gm-line-2);border-radius:99px;padding:2px 7px;}
+.gm-profile-link--button[aria-pressed="true"] .gm-mode-state{color:var(--gm-accent);border-color:var(--gm-accent);}
 .gm-profile-ic{display:inline-flex;align-items:center;justify-content:center;width:18px;font-size:13px;flex:0 0 auto;}
 .gm-profile-link:hover{color:var(--gm-ink);background:var(--gm-line);}
 .gm-profile-link--accent{color:var(--gm-accent);}

@@ -2204,6 +2204,13 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-tab[data-tabs-legacy] {
   color: var(--ws-text-faint, var(--ws-text-soft)) !important;
 }
+/* Simple density (html[data-ui-mode="simple"], the default): blocks marked
+   data-ui-advanced are removed from view, and collapsed More-toggles hide so
+   each strip shows only its primary tabs. A strip already expanded (deep
+   link to a legacy tab, or More pressed before switching modes) stays
+   reachable — the toggle and its items remain visible. */
+html[data-ui-mode="simple"] .v3-dash [data-ui-advanced] { display: none !important; }
+html[data-ui-mode="simple"] .v3-dash .v3-tabs [data-tabs-more][aria-expanded="false"] { display: none; }
 
 /* Home: one calm operational column, read top to bottom.
    1. Page head — site, operator role, state and one primary action.

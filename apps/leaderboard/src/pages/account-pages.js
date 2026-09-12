@@ -48,7 +48,7 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
           </div>
           </div>
         </details>
-        <section class="account-settings-section acc-sessions-section" aria-labelledby="accountSessionsTitle">
+        <section class="account-settings-section acc-sessions-section" data-ui-advanced aria-labelledby="accountSessionsTitle">
           <div class="d-flex justify-between items-center mb-12 flex-wrap gap-8">
             <div>
               <h2 class="m-0" id="accountSessionsTitle">Signed-in devices</h2>
@@ -103,7 +103,7 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         </section>
       </div>`;
 
-const postbacksWidget = `<details class="lb-widget lb-widget--full account-settings-disclosure" id="postbacks">
+const postbacksWidget = `<details class="lb-widget lb-widget--full account-settings-disclosure" id="postbacks" data-ui-advanced>
         <summary>Sponsor score updates</summary>
         <div class="account-settings-disclosure-body">
         <p class="card-sub">Connect a sponsor so confirmed activity can update player scores automatically.</p>
@@ -185,7 +185,7 @@ const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
 
 // P3-4: Integration health — live delivery checks for the webhooks and bots
 // this account relies on, rendered from the connected-accounts payload.
-const integrationHealthWidget = `<div class="lb-widget lb-widget--full" id="integrationHealth">
+const integrationHealthWidget = `<div class="lb-widget lb-widget--full" id="integrationHealth" data-ui-advanced>
         <h2>Integration health</h2>
         <p class="card-sub">Live checks for the webhooks and bots this account relies on. Sending a test uses each site's saved delivery settings.</p>
         <div id="integrationHealthBody"><p class="hint">Loading…</p></div>
