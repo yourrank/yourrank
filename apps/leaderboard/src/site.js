@@ -970,6 +970,17 @@ export async function saveSite(env, user, payload, siteId, request = null) {
   if (requestedEndsAt && !Number.isFinite(new Date(requestedEndsAt).getTime())) {
     return { error: "End date must be a valid date and time.", code: "invalid_ends_at" };
   }
+  // Same plausibility bound the editor applies client-side: a mistyped year
+  // (2222) must not reach the row, where it would block every later save.
+  // Only enforced on values the client actually sent — an omitted field keeps
+  // its stored value, which must never make an unrelated save fail.
+  const plausibleMs = Math.round(10 * 365.25 * 24 * 60 * 60 * 1000);
+  if (payload.startsAt !== undefined && requestedStartsAt && Math.abs(new Date(requestedStartsAt).getTime() - Date.now()) > plausibleMs) {
+    return { error: "Start date must be within 10 years of today.", code: "invalid_starts_at" };
+  }
+  if (payload.endsAt !== undefined && requestedEndsAt && Math.abs(new Date(requestedEndsAt).getTime() - Date.now()) > plausibleMs) {
+    return { error: "End date must be within 10 years of today.", code: "invalid_ends_at" };
+  }
   if (requestedStartsAt && requestedEndsAt && new Date(requestedStartsAt) >= new Date(requestedEndsAt)) {
     return { error: "End date must be after the start date.", code: "invalid_schedule" };
   }
