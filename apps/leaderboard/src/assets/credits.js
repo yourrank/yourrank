@@ -231,6 +231,21 @@ function viewerIdentity(v) {
 function memberIdentity(v) {
   return v.displayName || "Unnamed member";
 }
+// Deep link into Members → Activity pre-filtered to one member. The feed's
+// `viewer` param matches a Kick or Discord username (handlers/credits.js), so
+// members with neither linked username get no link.
+function memberActivityHref(member) {
+  const name = (member?.kick_username || member?.discord_username || member?.displayName || "").trim();
+  if (!name || name === "Unnamed member") return "";
+  return `/dashboard/audience/activity?${new URLSearchParams({ viewer: name })}`;
+}
+function setMemberActivityLink(member) {
+  const link = $("cr-member-history-activity-all");
+  if (!link) return;
+  const href = memberActivityHref(member);
+  link.hidden = !href;
+  if (href) link.href = href;
+}
 function memberPlatforms(v) {
   return (v.linkedIdentities || []).map((identity) => identity.provider).filter(Boolean);
 }
@@ -662,11 +677,17 @@ function openShop(item, trigger) {
   $("cr-shop-name").focus(); 
 }
 function closeShop() { rewardImageVersion++; rewardImageProcessing = false; $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
-function openTip(viewerId, username) {
+let tipRelease;
+async function openTip(viewerId, username) {
   const drawer = $("cr-tip-drawer");
+  const backdrop = $("cr-tip-backdrop");
   if (!drawer) return;
+  const dialog = await loadMemberHistoryDialog();
+  tipRelease?.();
   drawer.hidden = false;
-  $("cr-viewers")?.classList.add("has-drawer");
+  if (backdrop) backdrop.hidden = false;
+  document.documentElement.classList.add("yr-modal-open");
+  tipRelease = dialog.trap(drawer, closeTip);
   $("cr-tip-viewer-id").value = viewerId || "";
   $("cr-tip-username").value = username || "";
   $("cr-tip-amount").value = "100";
@@ -677,8 +698,12 @@ function openTip(viewerId, username) {
 function closeTip() {
   const drawer = $("cr-tip-drawer");
   if (!drawer) return;
+  const backdrop = $("cr-tip-backdrop");
   drawer.hidden = true;
-  $("cr-viewers")?.classList.remove("has-drawer");
+  if (backdrop) backdrop.hidden = true;
+  document.documentElement.classList.remove("yr-modal-open");
+  tipRelease?.();
+  tipRelease = undefined;
 }
 function closeMemberHistory() {
   memberHistoryRequest++;
@@ -743,6 +768,7 @@ function renderMemberDetail(data) {
   $("cr-member-history-earned").textContent = Number(member.totalEarned) || 0;
   $("cr-member-history-spent").textContent = Number(member.totalSpent) || 0;
 
+  setMemberActivityLink(member);
   const connections = member.linkedIdentities || [];
   $("cr-member-history-connections").innerHTML = connections.length
     ? connections.map((identity) => `<span class="v3-chip v3-chip--fulfilled">${esc(identity.provider)} sign-in verified</span>`).join("")
@@ -820,6 +846,7 @@ async function openMemberHistory(viewer, trigger) {
   memberHistoryTrigger.setAttribute("aria-expanded", "true");
   $("cr-member-history-title").textContent = memberIdentity(viewer);
   $("cr-member-history-site").textContent = `Member in ${state.site?.name || "the selected site"}`;
+  setMemberActivityLink(viewer);
   $("cr-member-history-balance").textContent = `${Number(viewer.balance) || 0} Credits`;
   $("cr-member-history-earned").textContent = Number(viewer.totalEarned) || 0;
   $("cr-member-history-spent").textContent = Number(viewer.totalSpent) || 0;
@@ -1216,6 +1243,7 @@ function wireActions() {
   });
   $("cr-tip-close")?.addEventListener("click", closeTip);
   $("cr-tip-cancel")?.addEventListener("click", closeTip);
+  $("cr-tip-backdrop")?.addEventListener("click", closeTip);
   $("cr-member-history-close")?.addEventListener("click", closeMemberHistory);
   $("cr-member-history-backdrop")?.addEventListener("click", closeMemberHistory);
   $("cr-claim-detail-close")?.addEventListener("click", closeClaimDetail);
@@ -1429,6 +1457,7 @@ export function enter() {
   memberHistoryRelease = undefined;
   memberHistoryTrigger = undefined;
   memberHistoryRequest = 0;
+  tipRelease = undefined;
   memberQueryOpened = false;
   shopItemsView = [];
   shopSearch = "";
@@ -1438,6 +1467,7 @@ export function enter() {
 }
 
 export function leave() {
+  closeTip();
   closeMemberHistory();
   // Clear all status toast timers so they don't fire into a detached DOM.
   for (const timer of statusClearTimers.values()) clearTimeout(timer);

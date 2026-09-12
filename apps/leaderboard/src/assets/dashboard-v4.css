@@ -2361,6 +2361,22 @@ button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left:
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+/* The sync chip carries sentences, not tags — wrap and de-shout it. */
+.v3-dash[data-auth-workspace] .preview-sync {
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  line-height: 1.35;
+  max-width: 300px;
+}
+.v3-dash[data-auth-workspace] .preview-sync.is-invalid {
+  border-color: var(--ws-warning-line);
+  background: var(--ws-warning-fill);
+  color: var(--ws-warning-text);
 }
 .v3-dash[data-auth-workspace] .preview-sync-strip {
   display: flex;
@@ -6069,8 +6085,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 auto;
-  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-tabs {
@@ -6619,18 +6635,46 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 
 .v3-dash[data-auth-workspace] #cr-tip-drawer {
-  position: fixed;
-  top: var(--ws-topbar-h, 64px);
-  right: 0;
-  bottom: 0;
   width: min(440px, 100vw);
-  z-index: 130;
-  overflow-y: auto;
-  border-radius: 0;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  box-shadow: var(--ws-shadow-overlay, 0 16px 48px rgba(18, 17, 17, 0.14));
+}
+
+.v3-dash[data-auth-workspace] .cr-tip-form {
+  display: contents;
+}
+
+.v3-dash[data-auth-workspace] .cr-tip-foot {
+  border-top: 1px solid var(--ws-line);
+  padding: var(--ws-space-4, 16px) var(--ws-space-5, 20px);
+  background: var(--ws-surface, #ffffff);
+}
+
+.v3-dash[data-auth-workspace] .cr-tip-foot .cr-drawer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@keyframes crDrawerSlideIn {
+  from { transform: translateX(28px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes crDrawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-drawer:not([hidden]) {
+  animation: crDrawerSlideIn 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.v3-dash[data-auth-workspace] .cr-member-history-backdrop:not([hidden]) {
+  animation: crDrawerFadeIn 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-dash[data-auth-workspace] .cr-member-history-drawer:not([hidden]),
+  .v3-dash[data-auth-workspace] .cr-member-history-backdrop:not([hidden]) { animation: none; }
 }
 
 .v3-dash[data-auth-workspace] .cr-drawer-head h2 { margin: 0; font-size: var(--ws-type-section-size); line-height: var(--ws-type-section-leading);
