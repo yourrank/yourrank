@@ -9149,7 +9149,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   font-size: 12px;
 }
 
-.v3-dash[data-auth-workspace] .v3-owner-note a {
+.v3-dash[data-auth-workspace] .v3-owner-note a,
+.v3-dash[data-auth-workspace] .v3-owner-note .btn {
   flex: 0 0 auto;
   color: var(--ws-accent);
   font-size: 12.5px;
@@ -9160,6 +9161,12 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-owner-note a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* The identity action is a real button, so it reads as the primary move
+   instead of the quiet text link it replaced. */
+.v3-dash[data-auth-workspace] .v3-owner-note .btn--accent {
+  color: #fff;
 }
 
 .v3-dash[data-auth-workspace] details.editor-more--standalone {
@@ -9338,6 +9345,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   }
 
   .v3-dash[data-auth-workspace] .v3-owner-note a,
+  .v3-dash[data-auth-workspace] .v3-owner-note .btn,
   .v3-dash[data-auth-workspace] .appearance-owner-row .btn {
     min-height: 40px;
   }

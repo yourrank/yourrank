@@ -123,7 +123,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this event on the public site</label>
 <div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save event</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete event</button></div>
 <p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form></section>
-<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><a href="/dashboard/site" id="setupBrandLink">Edit site identity</a></aside>
+<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="setupBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="score">Points / score</option><option value="wagered">Amount</option></select><span class="hint">Players with the same value share a rank.</span></div>
 <div class="field"><label for="f_pool">Award or prize pool (optional)</label><input id="f_pool" placeholder="Optional" /></div>
@@ -186,7 +186,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 <div class="v3-bulkbar" id="bulkActions" role="toolbar" aria-label="Bulk actions" hidden><span class="v3-bulkbar-mark" aria-hidden="true"></span><span id="bulkCount" role="status" aria-live="polite" aria-atomic="true">0 players selected</span><span class="v3-bulkbar-sep" aria-hidden="true"></span><button class="v3-btn v3-btn--dark" id="bulkClearWager" type="button">Reset scores to zero</button><button class="v3-btn v3-btn--danger" id="bulkDelete" type="button">Remove selected players</button></div>
 </div>
-<aside class="v3-owner-note" data-egroup="design" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and social links apply across every public page.</span></div><a href="/dashboard/site">Edit site identity</a></aside>
+<aside class="v3-owner-note" data-egroup="design" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and social links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
 <div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Players</a></div>
 <div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
@@ -256,7 +256,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 </div>
 <div class="preview-sync-strip"><span><i aria-hidden="true"></i> Draft preview</span><small id="previewSyncTime" data-preview-time>Last updated —</small></div>
-<div class="preview-frame" id="previewFrame" data-preview-frame><div class="preview-stage" id="previewStage" data-preview-stage><iframe id="designPreview" name="designPreview" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" data-preview-error role="status" aria-live="polite" hidden><p>Preview could not load. <button class="btn btn--sm" id="previewRetry" type="button" data-preview-retry>Retry</button></p></div></div>
+<div class="preview-frame" id="previewFrame" data-preview-frame><div class="preview-stage" id="previewStage" data-preview-stage><iframe id="designPreview" name="designPreview" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" data-preview-error role="status" aria-live="polite" hidden><p><span data-preview-error-message>Preview could not load. Retry to try again.</span> <button class="btn btn--sm" id="previewRetry" type="button" data-preview-retry>Retry</button></p></div></div>
 <a class="preview-live-link" id="previewLiveLink" href="#" target="_blank" rel="noopener noreferrer">Open live page ↗</a>
 </div>
 </div>
@@ -395,7 +395,7 @@ function BoardSettingsSection({ active } = {}) {
             </div>
           </div>
           <div class="preview-sync-strip"><span><i aria-hidden="true"></i> PREVIEW MODE</span><small id="sitePreviewStatus" data-preview-status role="status" aria-live="polite">Preparing preview…</small></div>
-          <div class="preview-frame" id="sitePreviewFrame" data-preview-frame><div class="preview-stage" id="sitePreviewStage" data-preview-stage><iframe id="sitePreview" name="sitePreview" loading="eager" title="Public site preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="sitePreviewError" data-preview-error role="status" aria-live="polite" hidden><p>Preview could not load. <button class="btn btn--sm" type="button" data-preview-retry>Try again</button></p></div></div>
+          <div class="preview-frame" id="sitePreviewFrame" data-preview-frame><div class="preview-stage" id="sitePreviewStage" data-preview-stage><iframe id="sitePreview" name="sitePreview" loading="eager" title="Public site preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="sitePreviewError" data-preview-error role="status" aria-live="polite" hidden><p><span data-preview-error-message>Preview could not load. Retry to try again.</span> <button class="btn btn--sm" type="button" data-preview-retry>Try again</button></p></div></div>
         </div>
       </div>
       <div class="v3-customize-controls">

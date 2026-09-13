@@ -444,6 +444,10 @@ export async function loadPlanUsage() {
 export function collect({ reportPlayerErrors = true } = {}) {
   const playerResult = collectPlayers({ reportErrors: reportPlayerErrors });
   const scheduleResult = scheduleInvalid({ reportErrors: reportPlayerErrors });
+  // Normalize on the way out as well as on the way in: the payload must ship a
+  // strict boolean per block, never `undefined`, whatever shape the draft
+  // arrived in.
+  collectSections();
   const players = playerResult.players;
   const brandName = $("f_name").value.trim();
   const out = {
@@ -464,7 +468,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     whyStats: state.EXTRA.whyStats,
     rules: state.EXTRA.rules,
     socials: state.EXTRA.socials,
-    sections: state.EXTRA.sections,
+    sections: normalizeSections(state.EXTRA.sections),
     playerFields: state.EXTRA.playerFields,
     players,
     legal: {
@@ -560,12 +564,31 @@ function isTouched(input) {
   return input?.dataset.touched === "1";
 }
 
+// The countdown block is the only surface that presents the schedule. When a
+// creator turns it off in Page design the dates are no longer public, so a
+// stale or sentinel value left in the inputs must not block an unrelated save
+// or preview.
+//
+// State is the source of truth: the per-toggle handler writes
+// `state.EXTRA.sections.countdown` before this ever runs, and `renderSections()`
+// normalizes it. The DOM read survives only as a freshness check for a rendered
+// toggle the handler could not have seen (a programmatic check).
+function countdownBlockEnabled() {
+  const stored = normalizeSections(state.EXTRA?.sections).countdown;
+  const row = $("sectionsList")?.querySelector('[data-section="countdown"] .section-toggle');
+  return row ? row.checked : stored;
+}
+
 function scheduleInvalid({ reportErrors = true } = {}) {
   const startsInput = $("f_starts");
   const endsInput = $("f_ends");
+  // With the countdown off, the schedule is inert: report no schedule errors so
+  // layout-only interactions (which run the whole collect()) never surface a
+  // date toast. Values still round-trip through `startsAt`/`endsAt` below.
   const result = validateScheduleValues({
     startsValue: startsInput?.value || "",
     endsValue: endsInput?.value || "",
+    enforcePlausibleRange: countdownBlockEnabled(),
   });
   const byField = { starts: startsInput, ends: endsInput };
   const invalid = result.invalid.map((entry) => ({ ...entry, input: byField[entry.field] })).filter((entry) => entry.input);
@@ -711,6 +734,82 @@ function setPreviewSyncStatus(mount, phase, detail = "") {
 }
 
 /**
+ * The reason strings a failed preview can show. The frame loads through a form
+ * submission, so the client cannot read the response status directly — every
+ * cause is diagnosed from the loaded document instead. Each reason names what
+ * the creator can actually do about it.
+ */
+const PREVIEW_FAILURE_COPY = {
+  session: "Your session expired. Refresh the page to sign back in, then retry the preview.",
+  board: "This board could not be previewed. Check that it still exists, then retry.",
+  server: "The preview renderer hit an error. Retry, and contact support if it keeps happening.",
+  timeout: "The preview took too long to load. Retry, or check your connection.",
+  unknown: "Preview could not load. Retry to try again.",
+};
+
+/**
+ * The single failure path: name the cause, log it with enough detail to debug,
+ * and paint the fallback. The watchdog, the `load` diagnosis and the submit
+ * catch all route through here so no failure is silent and none reports a
+ * different story from the others.
+ */
+function failPreview(mount, reason, detail = {}) {
+  const local = previewLocalState(mount);
+  clearTimeout(local.watchdog);
+  const { error } = previewParts(mount);
+  const copy = PREVIEW_FAILURE_COPY[reason] || PREVIEW_FAILURE_COPY.unknown;
+  if (error) {
+    error.hidden = false;
+    const message = error.querySelector("[data-preview-error-message]");
+    if (message) message.textContent = copy;
+  }
+  setPreviewSyncStatus(mount, "error");
+  logError(`preview-${reason}`, new Error(copy), {
+    mount: mount.dataset.previewMount || "",
+    section: mount.dataset.previewSection || "",
+    revision: local.revision,
+    ...detail,
+  });
+}
+
+/**
+ * Decide what a loaded preview document actually is. A frame that carries the
+ * ready meta rendered the draft; anything else is a failure, and the document
+ * usually says which one. Reading `contentDocument` is safe because the preview
+ * iframes are same-origin (`allow-same-origin`), but a cross-origin navigation
+ * — a login redirect, or a custom-domain bounce — throws, which is itself the
+ * session answer.
+ *
+ * Exported so the reason mapping can be pinned by tests without a live iframe.
+ */
+export function diagnosePreviewDocument(frame) {
+  let doc = null;
+  try {
+    doc = frame.contentDocument;
+  } catch {
+    return { ok: false, reason: "session", detail: { diagnosis: "cross-origin-redirect" } };
+  }
+  if (!doc) return { ok: false, reason: "session", detail: { diagnosis: "unreadable-document" } };
+  if (doc.querySelector('meta[name="yr-preview-ready"]')) return { ok: true };
+
+  const text = (doc.body?.textContent || "").trim();
+  const title = (doc.title || "").trim();
+  // The endpoint answers these two as plain text, so the body IS the reason.
+  if (/^board required$/i.test(text)) {
+    return { ok: false, reason: "board", detail: { diagnosis: "board-required", status: 400 } };
+  }
+  if (/^not found$/i.test(text)) {
+    return { ok: false, reason: "board", detail: { diagnosis: "site-not-found", status: 404 } };
+  }
+  // A login page means the session lapsed between boot and the render.
+  const looksLikeLogin = /sign in|log in|login/i.test(title) || doc.querySelector('form[action*="/login"], input[name="password"]');
+  if (looksLikeLogin) {
+    return { ok: false, reason: "session", detail: { diagnosis: "login-document", title } };
+  }
+  return { ok: false, reason: "server", detail: { diagnosis: "missing-ready-meta", title, bodyPrefix: text.slice(0, 160) } };
+}
+
+/**
  * Replace a preview frame with a fresh one. A form submission into an
  * existing frame appends an entry to the joint session history, which both
  * pollutes Back and truncates the forward stack, so every render targets a
@@ -731,19 +830,27 @@ function resetPreviewFrame(mount) {
     // and claim the stale preview matches the draft, so only the render's own
     // navigation counts.
     if (previewParts(mount).iframe !== fresh || local.revision !== revision) return;
-    let ready = false;
+    let loaded = "";
     try {
-      const loaded = fresh.contentWindow?.location?.href;
-      if (!loaded || loaded === "about:blank") return;
-      ready = !!fresh.contentDocument?.querySelector('meta[name="yr-preview-ready"]');
-    } catch { /* A redirected/cross-origin document is not a successful preview. */ }
-    clearTimeout(local.watchdog);
-    const { error } = previewParts(mount);
-    if (error) error.hidden = ready;
-    if (!ready) {
-      setPreviewSyncStatus(mount, "error");
+      loaded = fresh.contentWindow?.location?.href || "";
+    } catch { /* A cross-origin document resolves below, not here. */ }
+    // Still the initial about:blank — the real navigation has not landed yet.
+    if (!loaded || loaded === "about:blank") {
+      if (!loaded) return;
+      try {
+        if (!fresh.contentDocument?.querySelector('meta[name="yr-preview-ready"]')) return;
+      } catch { return; }
+    }
+    // Diagnose on arrival rather than waiting out the watchdog: a 400/404/500
+    // document is a finished answer, and the creator should hear it at once.
+    const verdict = diagnosePreviewDocument(fresh);
+    if (!verdict.ok) {
+      failPreview(mount, verdict.reason, verdict.detail);
       return;
     }
+    clearTimeout(local.watchdog);
+    const { error } = previewParts(mount);
+    if (error) error.hidden = true;
     local.syncedAt = Date.now();
     // The draft may render while fields still fail validation — the frame
     // shows what was sent, the chip keeps reporting what blocks saving.
@@ -762,6 +869,10 @@ function wirePreviewMount(mount) {
     if (!event.target.closest("[data-preview-retry]")) return;
     const { error } = previewParts(mount);
     if (error) error.hidden = true;
+    // Clear the previous reason so a failed retry cannot leave a stale message
+    // behind, and a fresh failure can paint its own.
+    const message = error?.querySelector("[data-preview-error-message]");
+    if (message) message.textContent = "Retrying the preview…";
     renderPreviewMount(mount, { immediate: true });
   });
 }
@@ -773,7 +884,16 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
   clearTimeout(local.timeout);
   clearTimeout(local.watchdog);
   const { iframe } = previewParts(mount);
-  if (!iframe || !state.ACTIVE_SITE_ID || !previewVisible(mount)) return;
+  if (!iframe) return;
+  // A section that is scrolled away or hidden does no work and says nothing —
+  // it is not a failure, so it must not paint an error.
+  if (!previewVisible(mount)) return;
+  // No active site is a real, explainable state: the preview has no board to
+  // render. Say so instead of leaving the chip on "Updating preview…" forever.
+  if (!state.ACTIVE_SITE_ID) {
+    failPreview(mount, "board", { diagnosis: "no-active-site" });
+    return;
+  }
   setPreviewSyncStatus(mount, "syncing");
   // Debounce so typing doesn't repeatedly re-render the same draft.
   local.timeout = setTimeout(() => {
@@ -813,14 +933,11 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
       local.form.submit();
       if (error) error.hidden = true;
       clearTimeout(local.watchdog);
-      local.watchdog = setTimeout(() => {
-        if (error) error.hidden = false;
-        setPreviewSyncStatus(mount, "error");
-      }, PREVIEW_TIMEOUT_MS);
+      // The `load` handler diagnoses a finished error document; this watchdog is
+      // only for a frame that never settles at all (a hung request).
+      local.watchdog = setTimeout(() => failPreview(mount, "timeout", { afterMs: PREVIEW_TIMEOUT_MS }), PREVIEW_TIMEOUT_MS);
     } catch (e) {
-      logError("preview-submit", e);
-      if (error) error.hidden = false;
-      setPreviewSyncStatus(mount, "error");
+      failPreview(mount, "server", { diagnosis: "collect-or-submit-threw", message: e?.message || String(e) });
     }
   }, immediate ? 0 : PREVIEW_DEBOUNCE_MS);
 }
@@ -1451,38 +1568,91 @@ const SECTIONS_CATALOG = [
   { key: "poweredBy", label: "Show 'Powered by YourRank' badge" },
 ];
 
+const SECTION_KEYS = SECTIONS_CATALOG.map((s) => s.key);
+
+/**
+ * The one read path for block visibility, kept in lockstep with the server's
+ * `normalizeSections` in `src/site.js` (pinned by sections-toggles.test.js).
+ * Every key is coerced to a strict boolean against its default with `!== false`:
+ * only an explicit `false` turns a block off, so a legacy row, a `null` from a
+ * partial save, or an absent key can never reach the payload as `undefined`.
+ *
+ * The non-catalog keys a stored row may still carry (`hero`, `top3`, `search`,
+ * `partner`, `pastWinners`, `cta`) are deliberately preserved so a save from
+ * this editor never drops a flag it does not render. `DEFAULT_SECTIONS` already
+ * carries every catalog key, so merging it in is what guarantees the catalog is
+ * always covered.
+ */
+export function normalizeSections(raw) {
+  const merged = { ...DEFAULT_SECTIONS, ...(raw && typeof raw === "object" ? raw : {}) };
+  const out = {};
+  for (const key of Object.keys(merged)) out[key] = merged[key] !== false;
+  return out;
+}
+
+/**
+ * The one write path for block visibility. Called by the toggle handler with
+ * the key that changed, so the value lands in state before any re-render reads
+ * it back. `markDirty()` is what enables "Publish changes" — without it the
+ * toggle would update the draft while the save action stayed disabled.
+ */
+function setSectionValue(key, checked) {
+  if (!SECTION_KEYS.includes(key)) return;
+  state.EXTRA.sections = { ...normalizeSections(state.EXTRA.sections), [key]: checked === true };
+  markDirty();
+}
+
+/**
+ * Keep the draft in step with the DOM for any path that did not go through a
+ * toggle handler (a programmatic check, an autofill). This is a fallback, not
+ * the primary write path: it only ever widens a value to `false` when a rendered
+ * toggle is genuinely unchecked, and it never runs when the list is absent.
+ */
 function collectSections() {
   const list = $("sectionsList");
   if (!list) return;
-  const sections = {};
+  const sections = normalizeSections(state.EXTRA.sections);
+  let changed = false;
   for (const row of list.querySelectorAll("[data-section]")) {
     const key = row.dataset.section;
+    if (!SECTION_KEYS.includes(key)) continue;
     const checked = row.querySelector(".section-toggle")?.checked ?? true;
-    sections[key] = checked;
+    if (sections[key] !== checked) {
+      sections[key] = checked;
+      changed = true;
+    }
   }
-  state.EXTRA.sections = { ...(state.EXTRA.sections || DEFAULT_SECTIONS), ...sections };
+  state.EXTRA.sections = sections;
+  if (changed) markDirty();
+}
+
+// A toggle is bound per input, not delegated on the list: one click runs one
+// handler, writes state first, then marks the draft dirty. Binding to the list
+// ran the collector twice per click (`input` + `change`) with no dirty mark.
+// The key is read from the toggle's own data attribute, not the enclosing row.
+function bindSectionToggle(input) {
+  input.addEventListener("change", () => {
+    setSectionValue(input.dataset.sectionToggle, input.checked === true);
+  });
 }
 
 export function renderSections() {
   const list = $("sectionsList");
   const body = $("sectionsBody");
   const lock = $("sectionsLock");
-  if (list) {
-    list.innerHTML = "";
-    list.removeEventListener("input", collectSections);
-    list.removeEventListener("change", collectSections);
-  }
+  // Normalize before the plan gate so a free plan still holds a fully-shaped
+  // sections object — the tabs that do not render the list must not be the
+  // reason a later upgrade ships a half-filled payload.
+  state.EXTRA.sections = normalizeSections(state.EXTRA.sections);
   if (body) body.hidden = !isPro();
   if (lock) lock.hidden = isPro();
   if (!list || !isPro()) return;
-  const current = { ...DEFAULT_SECTIONS, ...(state.EXTRA?.sections || {}) };
+  const current = state.EXTRA.sections;
   list.innerHTML = SECTIONS_CATALOG.map((s) => `<div class="section-row" data-section="${esc(s.key)}">
 <span class="section-name">${esc(s.label)}</span>
-<label class="switch" title="Show on public page"><input type="checkbox" class="section-toggle" ${current[s.key] !== false ? "checked" : ""} /><span class="switch-track"></span></label>
+<label class="switch" title="Show on public page"><input type="checkbox" class="section-toggle" data-section-toggle="${esc(s.key)}" role="switch" aria-label="${esc(s.label)}"${current[s.key] ? " checked" : ""} /><span class="switch-track"></span></label>
 </div>`).join("");
-  list.addEventListener("input", collectSections);
-  list.addEventListener("change", collectSections);
-  collectSections();
+  for (const input of list.querySelectorAll("[data-section-toggle]")) bindSectionToggle(input);
 }
 
 export function renderLegal() {
@@ -1561,6 +1731,104 @@ export function renderSitePublicAddress() {
       // Colour and a flashing label are not a message: say what happened.
       if (copyStatus) copyStatus.textContent = copied ? `Copied ${url} to your clipboard.` : "Could not copy the link. Select it and copy manually.";
     });
+  }
+}
+
+// Identity is edited where it is referenced, not by leaving the page. The old
+// "Edit site identity" text link was an <a href="/dashboard/site">: even though
+// the shell intercepts it, the cross-section request ran through
+// allowNavigation(), so a dirty draft raised the "Unsaved changes" modal and a
+// clean one swapped the visible section — a page-trip feel for what is a
+// two-field edit. The action below opens the same name/tagline fields in an
+// inline dialog and persists them directly, so nothing navigates and the
+// creator's unsaved work in the surrounding editor is left untouched.
+export function openSiteIdentityModal() {
+  if ($("siteIdentityModal")) return;
+  const nameValue = $("f_name")?.value.trim() || "";
+  const taglineValue = $("f_tagline")?.value.trim() || "";
+  const overlay = document.createElement("div");
+  overlay.className = "modal";
+  overlay.id = "siteIdentityModal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "siteIdentityTitle");
+  overlay.innerHTML = `<div class="modal-card" role="document">
+    <h3 id="siteIdentityTitle">Edit site identity</h3>
+    <p>This is the name and tagline visitors see at the top of every public page.</p>
+    <div class="field"><label for="identityName">Site name</label><input id="identityName" maxlength="80" autocomplete="off" placeholder="Summer Race 2026" /></div>
+    <div class="field"><label for="identityTagline">Tagline <span class="hint">Optional</span></label><input id="identityTagline" maxlength="120" autocomplete="off" placeholder="Stream community leaderboard" /></div>
+    <div class="modal-actions"><button class="btn btn--sm btn--ghost" data-identity="cancel" type="button">Cancel</button><button class="btn btn--sm btn--accent" data-identity="save" type="button">Save identity</button></div>
+    <p class="status" id="siteIdentityErr" role="alert" aria-live="assertive"></p>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.documentElement.classList.add("yr-modal-open");
+  const release = window.YRDialog ? window.YRDialog.trap(overlay, close) : null;
+  const nameInput = overlay.querySelector("#identityName");
+  const taglineInput = overlay.querySelector("#identityTagline");
+  const err = overlay.querySelector("#siteIdentityErr");
+  const save = overlay.querySelector('[data-identity="save"]');
+  nameInput.value = nameValue;
+  taglineInput.value = taglineValue;
+  function close() {
+    release?.();
+    overlay.remove();
+    document.documentElement.classList.remove("yr-modal-open");
+  }
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('[data-identity="cancel"]').addEventListener("click", close);
+  for (const input of [nameInput, taglineInput]) {
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save.click(); } });
+  }
+  save.addEventListener("click", async () => {
+    const name = nameInput.value.trim();
+    const tagline = taglineInput.value.trim();
+    if (!name) { err.textContent = "Enter a site name."; nameInput.focus(); return; }
+    err.textContent = "Saving…";
+    save.disabled = true;
+    try {
+      const { body } = await fetchDashboardJson("/api/site", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+        body: JSON.stringify({
+          siteId: state.ACTIVE_SITE_ID || undefined,
+          name,
+          brand: { name, tagline },
+        }),
+      });
+      if (body?.ok) {
+        // Mirror the saved values into the editor fields so the Settings →
+        // Public site card and the live preview agree without a reload.
+        const nameField = $("f_name");
+        const taglineField = $("f_tagline");
+        if (nameField) nameField.value = name;
+        if (taglineField) taglineField.value = tagline;
+        state.ONBOARDING = { ...(state.ONBOARDING || {}), brand: true };
+        close();
+        showToast("Site identity saved.", "success");
+        renderOverviewSummary();
+        refreshDesignPreview();
+      } else {
+        err.textContent = body?.error || "Couldn't save the identity.";
+        save.disabled = false;
+      }
+    } catch (e) {
+      logError("site-identity-save", e);
+      err.textContent = e?.message || "Couldn't save the identity.";
+      save.disabled = false;
+    }
+  });
+}
+
+// The owner-note action is a button, so no routing is involved: clicking it
+// never reaches requestDashboardRoute/allowNavigation and therefore never
+// raises the unsaved-changes guard. Wiring is idempotent because the sections
+// this note lives in re-render on navigation.
+export function wireSiteIdentityActions() {
+  for (const button of document.querySelectorAll("[data-identity-edit]")) {
+    if (button._identityWired) continue;
+    button._identityWired = true;
+    button.addEventListener("click", () => openSiteIdentityModal());
   }
 }
 

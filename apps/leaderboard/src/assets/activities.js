@@ -1,6 +1,16 @@
 import { loadBoardShell, preserveSiteContextLinks, sitePath } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
 import { clearSession } from "./dashboard/session.js";
+import {
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZE_OPTIONS,
+  clampPage,
+  normalizePageSize,
+  pageCount,
+  pageSlice,
+  pageWindow,
+  rangeLabel,
+} from "./pagination.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -13,6 +23,14 @@ let lifecycleToken = 0;
 let automation = { templates: [], schedules: [], entitlement: { canAutomate: false } };
 let _activitiesEnter = null;
 let _activitiesLeave = null;
+
+// Pagination state for the "Live and past Activities" list. `items` holds the
+// whole dataset returned by the API (which caps at 50 rows server-side), so
+// paging is a pure client concern and never costs a round trip. `pageSize` is a
+// deliberate user preference and survives reloads; `page` is reset to 1 whenever
+// the dataset changes so a new/shortened list can never strand the viewer on a
+// page that no longer exists.
+const activityPaging = { items: [], page: 1, pageSize: DEFAULT_PAGE_SIZE };
 
 export function enter() { _activitiesEnter?.(); }
 export function leave() { _activitiesLeave?.(); }
@@ -68,37 +86,134 @@ if (!window.__yrSpaShell) {
     }
   }
 
-  function renderActivities(activities) {
+  // Markup for one activity row. Pulled out of renderActivities so row-level
+  // rendering has exactly one definition.
+  function activityRowHtml(activity) {
+    const claimed = Number(activity.progress?.claimed) || 0;
+    const capacity = Number(activity.progress?.capacity) || 0;
+    const credits = Number(activity.reward?.creditsPerClaim) || 0;
+    const state = activity.state === "open" ? "open" : "completed";
+    return `<article class="act-row">
+      <div class="act-row__title"><strong>${esc(activity.title)}</strong><span>Free ${esc(activity.typeLabel || "Activity")} · Created ${esc(formatDate(activity.createdAt))}</span></div>
+      <div class="act-row__fact act-row__reward"><span>Member reward</span><strong>${credits.toLocaleString()} credits</strong></div>
+      <div class="act-row__fact act-row__progress"><span>Claims</span><strong>${claimed.toLocaleString()} of ${capacity.toLocaleString()}</strong></div>
+      <div class="act-row__fact act-row__end"><span>Ends</span><strong>${esc(formatDate(activity.endsAt))}</strong></div>
+      <span class="act-state act-state--${state}">${esc(activity.stateLabel)}</span>
+    </article>`;
+  }
+
+  // The "Per page" selector. Options come from PAGE_SIZE_OPTIONS; the current
+  // value is applied after building the markup so a mid-session change is not
+  // lost when the pager re-renders. Built once, then only reconciled.
+  function renderPageSizeOptions() {
+    const select = $("act-pager-size");
+    if (!select) return;
+    if (!select.options.length) {
+      select.innerHTML = PAGE_SIZE_OPTIONS
+        .map((size) => `<option value="${size}">${size}</option>`)
+        .join("");
+    }
+    select.value = String(activityPaging.pageSize);
+    select.setAttribute("aria-label", "Activities per page");
+  }
+
+  // Page-number buttons plus any elision markers. Each button is a real focusable
+  // control carrying its target page in `data-pager-page`, so navigation works
+  // from the keyboard and is picked up by the delegated handler in wire().
+  function renderPageNumbers(totalPages) {
+    const holder = $("act-pager-pages");
+    if (!holder) return;
+    holder.innerHTML = pageWindow(activityPaging.page, totalPages)
+      .map((entry) => {
+        if (entry === "gap") return '<li class="act-pager__gap" aria-hidden="true">…</li>';
+        const current = entry === activityPaging.page;
+        return `<li><button class="act-pager__page${current ? " is-current" : ""}" type="button" data-pager-page="${entry}"${current ? ' aria-current="page"' : ""} aria-label="Page ${entry}">${entry}</button></li>`;
+      })
+      .join("");
+  }
+
+  // Repaint only the pager bar. Called on its own when the page changes so a
+  // page click does not touch the list markup the viewer is already reading.
+  function renderPager() {
+    const pager = $("act-pager");
+    if (!pager) return;
+    const total = activityPaging.items.length;
+    const totalPages = pageCount(total, activityPaging.pageSize);
+    activityPaging.page = clampPage(activityPaging.page, total, activityPaging.pageSize);
+
+    pager.hidden = total === 0;
+    if (total === 0) return;
+
+    const range = $("act-pager-range");
+    if (range) range.textContent = rangeLabel(total, activityPaging.page, activityPaging.pageSize);
+
+    renderPageSizeOptions();
+    renderPageNumbers(totalPages);
+
+    // Previous/Next are disabled at the ends rather than hidden, so the control
+    // bar keeps a stable width and the affordance stays discoverable.
+    const previous = $("act-pager-prev");
+    const next = $("act-pager-next");
+    if (previous) previous.disabled = activityPaging.page <= 1;
+    if (next) next.disabled = activityPaging.page >= totalPages;
+  }
+
+  // Repaint only the visible rows for the current page.
+  function renderActivityRows() {
     const list = $("act-list");
+    if (!list) return;
+    if (!activityPaging.items.length) {
+      list.hidden = true;
+      list.replaceChildren();
+      return;
+    }
+    list.hidden = false;
+    list.innerHTML = pageSlice(activityPaging.items, activityPaging.page, activityPaging.pageSize)
+      .map(activityRowHtml)
+      .join("");
+  }
+
+  function renderActivities(activities) {
     const empty = $("act-empty");
     const loading = $("act-loading");
     const error = $("act-error");
     const count = $("act-count");
-    if (!list || !empty || !loading || !error || !count) return;
+    if (!empty || !loading || !error || !count) return;
     loading.hidden = true;
     error.hidden = true;
-    count.textContent = String(activities.length);
-    if (!activities.length) {
-      list.hidden = true;
-      list.replaceChildren();
-      empty.hidden = false;
-      return;
+
+    const next = Array.isArray(activities) ? activities : [];
+    // A fresh dataset invalidates the current page: the viewer expects to land
+    // on the start of the new list, and any previous page may now be out of range.
+    activityPaging.items = next;
+    activityPaging.page = 1;
+
+    count.textContent = String(next.length);
+    empty.hidden = next.length > 0;
+
+    renderActivityRows();
+    renderPager();
+  }
+
+  // Move to `target`, clamped to the available range. Returns true only when the
+  // page actually changed, so callers can skip redundant repaints.
+  function goToPage(target) {
+    const total = activityPaging.items.length;
+    const next = clampPage(target, total, activityPaging.pageSize);
+    if (next === activityPaging.page) return false;
+    activityPaging.page = next;
+    return true;
+  }
+
+  // Re-slice a single page: rows + pager only. Scrolls the panel back into view
+  // on short viewports where the controls sit below the fold.
+  function repaintActivities() {
+    renderActivityRows();
+    renderPager();
+    const panel = $("act-list");
+    if (panel && typeof panel.scrollIntoView === "function" && document.documentElement?.scrollHeight > window.innerHeight) {
+      panel.scrollIntoView({ block: "nearest" });
     }
-    empty.hidden = true;
-    list.hidden = false;
-    list.innerHTML = activities.map((activity) => {
-      const claimed = Number(activity.progress?.claimed) || 0;
-      const capacity = Number(activity.progress?.capacity) || 0;
-      const credits = Number(activity.reward?.creditsPerClaim) || 0;
-      const state = activity.state === "open" ? "open" : "completed";
-      return `<article class="act-row">
-        <div class="act-row__title"><strong>${esc(activity.title)}</strong><span>Free ${esc(activity.typeLabel || "Activity")} · Created ${esc(formatDate(activity.createdAt))}</span></div>
-        <div class="act-row__fact act-row__reward"><span>Member reward</span><strong>${credits.toLocaleString()} credits</strong></div>
-        <div class="act-row__fact act-row__progress"><span>Claims</span><strong>${claimed.toLocaleString()} of ${capacity.toLocaleString()}</strong></div>
-        <div class="act-row__fact act-row__end"><span>Ends</span><strong>${esc(formatDate(activity.endsAt))}</strong></div>
-        <span class="act-state act-state--${state}">${esc(activity.stateLabel)}</span>
-      </article>`;
-    }).join("");
   }
 
   function renderTemplates() {
@@ -164,6 +279,7 @@ if (!window.__yrSpaShell) {
     $("act-loading")?.setAttribute("hidden", "");
     $("act-list")?.setAttribute("hidden", "");
     $("act-empty")?.setAttribute("hidden", "");
+    $("act-pager")?.setAttribute("hidden", "");
     if ($("act-error")) $("act-error").hidden = false;
     if ($("act-error-message")) $("act-error-message").textContent = message || "Try again.";
     if ($("act-count")) $("act-count").textContent = "—";
@@ -346,9 +462,26 @@ if (!window.__yrSpaShell) {
     $("act-schedule-new")?.addEventListener("click", () => openScheduleForm());
     $("act-schedule-form-cancel")?.addEventListener("click", closeScheduleForm);
     $("act-schedule-form")?.addEventListener("submit", submitSchedule);
+    // Changing the page size is treated as a dataset-view change: jump back to
+    // page 1 so the viewer is not left mid-list after the rows shrink/expand.
+    $("act-pager-size")?.addEventListener("change", (event) => {
+      activityPaging.pageSize = normalizePageSize(event.target?.value);
+      activityPaging.page = 1;
+      repaintActivities();
+    });
     root.addEventListener("click", (event) => {
       const button = event.target.closest("button");
       if (!button) return;
+      // Pagination step buttons (Previous/Next) carry a relative offset.
+      if (button.dataset.pagerStep) {
+        if (goToPage(activityPaging.page + Number(button.dataset.pagerStep))) repaintActivities();
+        return;
+      }
+      // Numbered page buttons carry an absolute target page.
+      if (button.dataset.pagerPage) {
+        if (goToPage(Number(button.dataset.pagerPage))) repaintActivities();
+        return;
+      }
       if (button.dataset.templateEdit) openTemplateForm(automation.templates.find((item) => item.id === button.dataset.templateEdit));
       if (button.dataset.templateDelete) deleteTemplate(button.dataset.templateDelete);
       if (button.dataset.scheduleCancel) cancelSchedule(button.dataset.scheduleCancel);
@@ -373,7 +506,14 @@ if (!window.__yrSpaShell) {
     }
   }
 
-  function activitiesLeave() { lifecycleToken += 1; activeSiteId = ""; }
+  function activitiesLeave() {
+    lifecycleToken += 1;
+    activeSiteId = "";
+    // Drop the cached dataset so switching boards cannot briefly page through the
+    // previous board's activities. `pageSize` is a UI preference and is kept.
+    activityPaging.items = [];
+    activityPaging.page = 1;
+  }
   _activitiesEnter = activitiesEnter;
   _activitiesLeave = activitiesLeave;
   if (!window.__yrSpaShell) {

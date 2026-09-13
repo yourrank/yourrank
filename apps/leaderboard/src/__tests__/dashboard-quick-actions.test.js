@@ -256,7 +256,10 @@ describe("dashboard overview quick actions", () => {
     expect(html).not.toContain("<h2>Theme &amp; branding</h2>");
     expect(html).toContain("Public identity is managed in Site.");
     expect(html).toContain("Name, tagline, logo, colors and social links apply across every public page.");
-    expect(html).toContain('href="/dashboard/site">Edit site identity</a>');
+    // Identity opens in place: an action button, not an <a> that leaves the
+    // section (and trips the unsaved-changes guard).
+    expect(html).toContain('class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit="true">Edit site identity</button>');
+    expect(html).not.toContain('href="/dashboard/site">Edit site identity</a>');
     expect(html).toContain("The same renderer visitors see on your public site.");
   });
 

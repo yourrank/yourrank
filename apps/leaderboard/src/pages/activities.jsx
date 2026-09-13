@@ -41,6 +41,15 @@ export const activitiesContentHtml = `
       </div>
       <div class="act-loading" id="act-loading" role="status" aria-live="polite"><span class="ui-loading__spinner" aria-hidden="true"></span><span>Loading activities…</span></div>
       <div class="act-list" id="act-list" hidden></div>
+      <nav class="act-pager" id="act-pager" aria-label="Activity pages" hidden>
+        <p class="act-pager__range" id="act-pager-range" aria-live="polite">Showing 0 of 0 activities</p>
+        <div class="act-pager__controls">
+          <button class="btn btn--sm act-pager__step" id="act-pager-prev" type="button" data-pager-step="-1" disabled>Previous</button>
+          <ol class="act-pager__pages" id="act-pager-pages"></ol>
+          <button class="btn btn--sm act-pager__step" id="act-pager-next" type="button" data-pager-step="1" disabled>Next</button>
+        </div>
+        <label class="act-pager__size" for="act-pager-size"><span>Per page</span><select id="act-pager-size"></select></label>
+      </nav>
       <div class="act-empty" id="act-empty" hidden>
         <h3>No code drops yet</h3>
         <p>Launch a free code drop when you are ready. Claim progress will appear here.</p>
