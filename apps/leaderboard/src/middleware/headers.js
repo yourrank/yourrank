@@ -24,19 +24,32 @@ export const HTML = {
   "Content-Security-Policy": "default-src 'self'; script-src 'self' https://telegram.org https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com; frame-ancestors *; base-uri 'none'; form-action 'self'; upgrade-insecure-requests; report-uri /api/csp-report",
 };
 
+// The Kick chat feed the Engage page listens to arrives over Pusher's public
+// WebSocket, and a page-level CSP that omits this origin silently blocks it —
+// `connect-src` governs WebSocket handshakes too, not just fetch(). The symptom
+// is a giveaway that "cannot connect" with no server error, because the socket
+// never opens. Keep this shared so the dashboard set and any future surface that
+// embeds the chat listener cannot drift apart.
+export const KICK_CHAT_WS_ORIGINS = "https://ws-us2.pusher.com wss://ws-us2.pusher.com";
+
 // Hardened headers for the authenticated/app pages (login, signup, forgot,
 // reset, dashboard, admin). The public leaderboard keeps the plain HTML set
 // (it's intentionally iframe-able and loads Google Fonts) so we scope security
 // headers only to the pages that hold sessions/credentials. All inline scripts
 // are external; style-src still allows 'unsafe-inline' because a few dynamic UI
 // elements (progress bars, dashboard widgets) set inline styles via JS/templates.
+//
+// SEC-005-v8: `X-Frame-Options` is deliberately absent. `frame-ancestors` is the
+// modern, precisely-scoped equivalent, and when both are sent browsers discard
+// X-Frame-Options and log a console warning on every authenticated page load.
+// Clickjacking protection is unchanged — `frame-ancestors 'self'` is stricter
+// than SAMEORIGIN for this document set and is honoured by every browser we support.
 export const SECURE_HTML = {
   "content-type": "text/html; charset=utf-8",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "X-Frame-Options": "SAMEORIGIN",
-  "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' https://cloudflareinsights.com; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests",
+  "Content-Security-Policy": `default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; script-src 'self' https://static.cloudflareinsights.com; connect-src 'self' ${KICK_CHAT_WS_ORIGINS} https://cloudflareinsights.com; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests`,
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
 };
 
