@@ -13,7 +13,6 @@
 
 import { describe, it, expect } from "bun:test";
 import { readFileSync } from "node:fs";
-import { parseHTML } from "linkedom";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
 const dashboardJsx = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
@@ -38,9 +37,31 @@ globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }), { stat
 
 const { diagnosePreviewDocument } = await import("../assets/dashboard/site.js");
 
-/** A stand-in for an iframe whose document is `html`. */
+/**
+ * A stand-in for an iframe whose document is `html`.
+ *
+ * `diagnosePreviewDocument` reads exactly three things — `querySelector` for
+ * the ready meta and the login form, `body.textContent`, and `title` — so the
+ * suite builds those directly instead of pulling in a DOM implementation. That
+ * keeps the test dependency-free (CI installs with a frozen lockfile, so an
+ * undeclared parser would fail there while passing locally off a stale
+ * node_modules).
+ */
 function frameWith(html) {
-  const { document: doc } = parseHTML(`<!doctype html><html>${html}</html>`);
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "";
+  // The endpoint answers 400/404 as plain text, so the body IS the reason.
+  const text = html.includes("<body>") ? html.replace(/[\s\S]*<body[^>]*>/, "").replace(/<\/body>[\s\S]*/, "") : "";
+  const meta = /<meta[^>]+name=["']yr-preview-ready["'][^>]*>/i.test(html);
+  const loginForm = /<form[^>]+action=["'][^"']*\/login/i.test(html) || /<input[^>]+name=["']password["']/i.test(html);
+  const doc = {
+    title,
+    body: { textContent: text.replace(/<[^>]*>/g, "") },
+    querySelector: (selector) => {
+      if (selector.includes("yr-preview-ready")) return meta ? {} : null;
+      if (selector.includes("/login") || selector.includes('name="password"')) return loginForm ? {} : null;
+      return null;
+    },
+  };
   return { contentDocument: doc };
 }
 
