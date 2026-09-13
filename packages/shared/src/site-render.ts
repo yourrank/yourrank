@@ -505,7 +505,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const isCustomDomain = !!opts.isCustomDomain;
   const homeUrl = String(opts.homeUrl || "https://yourrank.site").replace(/\/$/, "");
   const logoUrl = opts.logoUrl || null;
-  const watermark = r.plan === "free";
+  const watermark = data.sections?.poweredBy !== undefined ? !!data.sections?.poweredBy : r.plan === "free";
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
   const viewerShell = section !== "games";
@@ -703,12 +703,14 @@ ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 
   const timing = ended
     ? "Round ended"
-    : timingHtml(cd, { scheduled }) || (scheduled ? "Not started yet" : "");
+    : data.sections?.countdown !== false
+      ? (timingHtml(cd, { scheduled }) || (scheduled ? "Not started yet" : ""))
+      : "";
   const boardMeta = [
     `${esc(period)} leaderboard`,
     timing,
     playerCount ? `${formatNumber(playerCount)} ${playerCount === 1 ? "player" : "players"}` : "",
-    hasConfiguredPrizePool(pool) && !hidePrizes ? `${esc(pool)} prize pool` : "",
+    data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes ? `${esc(pool)} prize pool` : "",
   ].filter(Boolean).join(" · ");
 
   const leaders = players.slice(0, 5).map((p, i) => `<li class="yr-lead">
@@ -773,7 +775,7 @@ function boardMain(ctx) {
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
   const prizeLabel = esc(data.prizes?.prizeLabel || "Prize");
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
-  const showPrizes = !hidePrizes && (hasConfiguredPrizePool(pool) || players.some((player) => Number(player.prize) > 0));
+  const showPrizes = data.sections?.payouts !== false && !hidePrizes && (hasConfiguredPrizePool(pool) || players.some((player) => Number(player.prize) > 0));
   const playerHref = (name) => isCustomDomain ? `/player/${encodeURIComponent(name)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(name)}`;
 
   // Compact intro: the title, one state line built only from board data that is
@@ -784,8 +786,8 @@ function boardMain(ctx) {
     `<span class="yr-lbh-state ${stateClass}">${stateLabel}</span>`,
     `<span>${esc(period)} leaderboard</span>`,
 
-    !ended ? timingHtml(cd, { scheduled }) : "",
-    hasConfiguredPrizePool(pool) && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
+    !ended && data.sections?.countdown !== false ? timingHtml(cd, { scheduled }) : "",
+    data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
   ].filter(Boolean).join("");
 
   const introHtml = `<section class="yr-lbh">
@@ -826,7 +828,7 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
-    hasConfiguredPrizePool(pool) && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
+    data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
   ].filter(Boolean).join("");
 
   const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
