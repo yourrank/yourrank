@@ -38,6 +38,31 @@ globalThis.fetch = async () => new Response(JSON.stringify({ ok: true }), { stat
 const { diagnosePreviewDocument } = await import("../assets/dashboard/site.js");
 
 /**
+ * Reduce a fragment to its visible text, the way a text renderer would.
+ *
+ * This walks the string once, tracking whether it is inside a tag, instead of
+ * repeatedly regex-replacing `<...>`. A replacement pass can leave a live tag
+ * behind on crafted input (the "incomplete multi-character sanitization" flaw
+ * CodeQL scans for); a single forward scan has no such re-entry problem and is
+ * trivially correct: everything between an unmatched `<` and the next `>` is
+ * markup, everything else is text.
+ */
+function stripTags(html) {
+  let out = "";
+  let inTag = false;
+  for (const char of String(html)) {
+    if (char === "<") {
+      inTag = true;
+    } else if (char === ">") {
+      inTag = false;
+    } else if (!inTag) {
+      out += char;
+    }
+  }
+  return out;
+}
+
+/**
  * A stand-in for an iframe whose document is `html`.
  *
  * `diagnosePreviewDocument` reads exactly three things — `querySelector` for
@@ -55,7 +80,7 @@ function frameWith(html) {
   const loginForm = /<form[^>]+action=["'][^"']*\/login/i.test(html) || /<input[^>]+name=["']password["']/i.test(html);
   const doc = {
     title,
-    body: { textContent: text.replace(/<[^>]*>/g, "") },
+    body: { textContent: stripTags(text) },
     querySelector: (selector) => {
       if (selector.includes("yr-preview-ready")) return meta ? {} : null;
       if (selector.includes("/login") || selector.includes('name="password"')) return loginForm ? {} : null;
