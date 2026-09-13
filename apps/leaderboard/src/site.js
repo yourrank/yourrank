@@ -88,6 +88,22 @@ export const DEFAULT_EXTRA = {
   },
 };
 
+/**
+ * The canonical shape of the public block-visibility map. `poweredBy` is the
+ * one block that defaults off; every other known block defaults on. Booleans
+ * are coerced from `!== false` rather than `!!`: a stored row written before a
+ * key existed means "on", and only an explicit `false` turns a block off.
+ *
+ * Unknown keys are preserved as booleans rather than dropped, so a save from a
+ * client that knows fewer blocks than the viewer never discards a flag.
+ */
+export function normalizeSections(raw) {
+  const merged = { ...DEFAULT_EXTRA.sections, ...(raw && typeof raw === "object" ? raw : {}) };
+  const out = {};
+  for (const key of Object.keys(merged)) out[key] = merged[key] !== false;
+  return out;
+}
+
 // All site columns except logo_data (base64 image, up to 180KB) — that's only
 // needed by the /logo/:slug endpoint and saveSite(), which fetch it separately.
 // PERF-004 / PERF-107: avoid SELECT * to prevent 180KB+ transfers on every page.
@@ -479,7 +495,7 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
       rank: Number(p.rank) || i + 1,
       streak: playerStreak(p, i, archives),
     })),
-    sections: m.sections || DEFAULT_EXTRA.sections,
+    sections: normalizeSections(m.sections || DEFAULT_EXTRA.sections),
     siteSections: {
       home: true,
       leaderboard: true,
@@ -953,6 +969,43 @@ export function normalizeEndsAt(incoming, existing) {
   return trimmed || null;
 }
 
+/**
+ * Server-side twin of the editor's schedule guardrails. Returns a normalized
+ * { startsAt, endsAt } on success, or { error, code } the caller turns into a
+ * response.
+ *
+ * The ordering matters and mirrors the client: an unparseable value gets the
+ * "valid date" error and is then excluded from both the range and ordering
+ * checks, so a bad value yields exactly one accurate message. The range check
+ * is additionally gated on the client having actually sent that field — an
+ * omitted field keeps its stored value, which must never make an unrelated
+ * save fail.
+ */
+export function validateScheduleDates({ startsAt, endsAt, sentStartsAt, sentEndsAt, now = Date.now() } = {}) {
+  const startsMs = startsAt ? new Date(startsAt).getTime() : NaN;
+  const endsMs = endsAt ? new Date(endsAt).getTime() : NaN;
+  if (startsAt && !Number.isFinite(startsMs)) {
+    return { error: "Start date must be a valid date and time.", code: "invalid_starts_at" };
+  }
+  if (endsAt && !Number.isFinite(endsMs)) {
+    return { error: "End date must be a valid date and time.", code: "invalid_ends_at" };
+  }
+  // A mistyped year (2222) must not reach the row, where it would block every
+  // later save. Only enforced on a value the client actually sent.
+  const plausibleMs = Math.round(10 * 365.25 * 24 * 60 * 60 * 1000);
+  const reference = Number.isFinite(now) ? now : null;
+  if (sentStartsAt && Number.isFinite(startsMs) && reference !== null && Math.abs(startsMs - reference) > plausibleMs) {
+    return { error: "Start date must be within 10 years of today.", code: "invalid_starts_at" };
+  }
+  if (sentEndsAt && Number.isFinite(endsMs) && reference !== null && Math.abs(endsMs - reference) > plausibleMs) {
+    return { error: "End date must be within 10 years of today.", code: "invalid_ends_at" };
+  }
+  if (Number.isFinite(startsMs) && Number.isFinite(endsMs) && startsMs >= endsMs) {
+    return { error: "End date must be after the start date.", code: "invalid_schedule" };
+  }
+  return { startsAt: startsAt ?? null, endsAt: endsAt ?? null };
+}
+
 function isProPlan(plan) {
   return plan === "pro" || plan === "team";
 }
@@ -964,26 +1017,13 @@ export async function saveSite(env, user, payload, siteId, request = null) {
   if (!site) return { error: "no site" };
   const requestedStartsAt = normalizeEndsAt(payload.startsAt, site.starts_at);
   const requestedEndsAt = normalizeEndsAt(payload.endsAt, site.ends_at);
-  if (requestedStartsAt && !Number.isFinite(new Date(requestedStartsAt).getTime())) {
-    return { error: "Start date must be a valid date and time.", code: "invalid_starts_at" };
-  }
-  if (requestedEndsAt && !Number.isFinite(new Date(requestedEndsAt).getTime())) {
-    return { error: "End date must be a valid date and time.", code: "invalid_ends_at" };
-  }
-  // Same plausibility bound the editor applies client-side: a mistyped year
-  // (2222) must not reach the row, where it would block every later save.
-  // Only enforced on values the client actually sent — an omitted field keeps
-  // its stored value, which must never make an unrelated save fail.
-  const plausibleMs = Math.round(10 * 365.25 * 24 * 60 * 60 * 1000);
-  if (payload.startsAt !== undefined && requestedStartsAt && Math.abs(new Date(requestedStartsAt).getTime() - Date.now()) > plausibleMs) {
-    return { error: "Start date must be within 10 years of today.", code: "invalid_starts_at" };
-  }
-  if (payload.endsAt !== undefined && requestedEndsAt && Math.abs(new Date(requestedEndsAt).getTime() - Date.now()) > plausibleMs) {
-    return { error: "End date must be within 10 years of today.", code: "invalid_ends_at" };
-  }
-  if (requestedStartsAt && requestedEndsAt && new Date(requestedStartsAt) >= new Date(requestedEndsAt)) {
-    return { error: "End date must be after the start date.", code: "invalid_schedule" };
-  }
+  const schedule = validateScheduleDates({
+    startsAt: requestedStartsAt,
+    endsAt: requestedEndsAt,
+    sentStartsAt: payload.startsAt !== undefined,
+    sentEndsAt: payload.endsAt !== undefined,
+  });
+  if (schedule.error) return schedule;
   // Internal / dedicated-endpoint fields are silently ignored rather than
   // rejecting the whole save: the dashboard and setup wizard round-trip fields
   // like `customDomain` (managed via /api/site/domain) straight back from the
@@ -1083,7 +1123,10 @@ export async function saveSite(env, user, payload, siteId, request = null) {
     whyStats: payload.whyStats ?? existingExtra.whyStats ?? DEFAULT_EXTRA.whyStats,
     rules: payload.rules ?? existingExtra.rules ?? DEFAULT_EXTRA.rules,
     socials: payload.socials ?? existingExtra.socials ?? DEFAULT_EXTRA.socials,
-    sections: { ...(existingExtra.sections || DEFAULT_EXTRA.sections), ...incomingSections },
+    // Every block flag is stored as a strict boolean. The editor sends booleans,
+    // but the public payload is read by the viewer and by older clients, so a
+    // string "false" or a missing key must not be able to make a block look on.
+    sections: normalizeSections({ ...(existingExtra.sections || DEFAULT_EXTRA.sections), ...incomingSections }),
     legal,
     playerFields,
     samplePlayers: Array.isArray(payload.players) ? false : !!existingExtra.samplePlayers,

@@ -160,7 +160,7 @@ describe("authenticated editor body", () => {
     const html = editorHtml("/dashboard/leaderboard/setup");
     // Ranking essentials stay visible. Site-wide identity points to its proven
     // owner; optional sponsor and scheduling detail sit behind disclosures.
-    expect(html).toContain('id="setupBrandLink">Edit site identity');
+    expect(html).toContain('id="setupBrandLink" type="button" data-identity-edit="true">Edit site identity</button>');
     expect(html).toContain("Leaderboard basics");
     expect(html).toMatch(/<details class="editor-more editor-more--standalone"[^>]*data-editor-more="setup-sponsor">/);
     expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-schedule">/);
@@ -178,6 +178,18 @@ describe("authenticated editor body", () => {
     expect(html).toContain('id="f_ends_error" data-field-error="f_ends" hidden');
     expect(siteJs).toContain("validateScheduleValues");
     expect(utilsJs).toContain("Choose an end time after the start time.");
+  });
+
+  it("keeps the schedule range check off when the Countdown Timer block is hidden", () => {
+    // A stale or sentinel stored date must not block a layout-only save or a
+    // preview, so the editor switches the plausibility range off when the
+    // countdown block that presents it is toggled off — while still reporting a
+    // genuinely malformed value.
+    expect(siteJs).toContain("countdownBlockEnabled");
+    expect(siteJs).toContain("enforcePlausibleRange: countdownBlockEnabled()");
+    expect(utilsJs).toContain("enforcePlausibleRange = true");
+    // The range check runs only on a value that parsed to a finite instant.
+    expect(utilsJs).toContain("if (!Number.isFinite(instant)) continue;");
   });
 
   it("keeps Players focused on adding and editing the essential fields", () => {

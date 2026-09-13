@@ -78,4 +78,81 @@ describe("timezone labels and datetime-local conversion", () => {
     });
     expect(result.invalid.some(({ field }) => field === "ends")).toBe(false);
   });
+
+  it("reports a malformed date as invalid, never as out of range", () => {
+    // A non-datetime-local value (an ISO string, a bare number, a date without
+    // a time) must produce one accurate message. The old range check coerced
+    // these and could surface the misleading "within 10 years" complaint.
+    for (const value of ["2026-09-13T01:00:00.000Z", "0", "2026-09-13", "not-a-date"]) {
+      const result = validateScheduleValues({ startsValue: value, endsValue: "", timeZone: "Europe/Paris" });
+      const messages = result.invalid.map((entry) => entry.message);
+      expect(messages).toContain("Choose a valid start date and time.");
+      expect(messages).not.toContain("Choose a date within 10 years of today.");
+    }
+  });
+
+  it("never fabricates a date error from an unusable reference clock", () => {
+    // `undefined` is deliberately excluded: it is the default and means "use
+    // the real clock", so a far-future date is genuinely out of range there.
+    // `null` is excluded too — `new Date(null)` is a real epoch instant, not a
+    // missing clock, and a 1970 reference legitimately puts 2222 out of range.
+    for (const now of ["bad", NaN, Infinity]) {
+      const result = validateScheduleValues({
+        startsValue: "2222-01-01T00:00",
+        timeZone: "Europe/Paris",
+        now,
+      });
+      expect(result.invalid).toEqual([]);
+    }
+    // The default clock still enforces the range.
+    expect(validateScheduleValues({
+      startsValue: "2222-01-01T00:00",
+      timeZone: "Europe/Paris",
+    }).invalid).toContainEqual({
+      field: "starts",
+      label: "Period start",
+      message: "Choose a date within 10 years of today.",
+    });
+  });
+
+  it("skips the plausibility range when the schedule is not presented", () => {
+    // The Countdown Timer block toggled off makes the dates inert; a stored
+    // sentinel must not block an unrelated save or preview. Actual malformed
+    // input is still rejected — only the range check is switched off.
+    const sentinel = validateScheduleValues({
+      startsValue: "1970-01-01T00:00",
+      endsValue: "2222-01-01T00:00",
+      timeZone: "Europe/Paris",
+      enforcePlausibleRange: false,
+    });
+    expect(sentinel.invalid).toEqual([]);
+    expect(sentinel.startsAt).toBe("1969-12-31T23:00:00.000Z");
+    expect(sentinel.endsAt).toBe("2221-12-31T23:00:00.000Z");
+
+    const malformed = validateScheduleValues({
+      startsValue: "0",
+      timeZone: "Europe/Paris",
+      enforcePlausibleRange: false,
+    });
+    expect(malformed.invalid).toContainEqual({
+      field: "starts",
+      label: "Period start",
+      message: "Choose a valid start date and time.",
+    });
+  });
+
+  it("compares ordering only between two usable instants", () => {
+    // A start that fails to parse must not also invent an "end after start".
+    const malformedStart = validateScheduleValues({
+      startsValue: "0",
+      endsValue: "2026-12-31T23:59",
+      timeZone: "Europe/Paris",
+    });
+    expect(malformedStart.invalid).toContainEqual({
+      field: "starts",
+      label: "Period start",
+      message: "Choose a valid start date and time.",
+    });
+    expect(malformedStart.invalid.some((entry) => entry.message === "Choose an end time after the start time.")).toBe(false);
+  });
 });

@@ -351,26 +351,54 @@ export function fromLocalInput(value, timeZone = getViewerTimeZone()) {
  * Presentation-only guardrails for the leaderboard schedule. The API shape and
  * period mechanics stay unchanged; this only catches dates a creator is very
  * unlikely to intend before the draft is previewed or saved.
+ *
+ * A datetime-local input can hold a value the creator never typed: a restored
+ * draft, an imported board, or a sentinel default (epoch/`0`/`1970-01-01`).
+ * Range-checking those produced "Choose a date within 10 years of today." on
+ * saves and previews the creator never associated with a date. So this runs in
+ * three ordered stages and never lets one stage's failure become another
+ * stage's message:
+ *   1. Syntactic validity — a non-empty value that cannot be parsed is a
+ *      "choose a valid date" problem, not a range problem.
+ *   2. Object validity — only a real, finite Date is eligible for comparison;
+ *      everything else is skipped rather than coerced.
+ *   3. Range plausibility — only on a value that passed stages 1 and 2.
+ *
+ * `enforcePlausibleRange` lets a caller switch stage 3 off entirely when the
+ * schedule is not publicly presented (the Countdown Timer block is toggled
+ * off), so an inert stored date can never block an unrelated save.
  */
-export function validateScheduleValues({ startsValue = "", endsValue = "", now = Date.now(), timeZone = getViewerTimeZone() } = {}) {
+export function validateScheduleValues({ startsValue = "", endsValue = "", now = Date.now(), timeZone = getViewerTimeZone(), enforcePlausibleRange = true } = {}) {
   const invalid = [];
   const startsAt = startsValue ? fromLocalInput(startsValue, timeZone) : "";
   const endsAt = endsValue ? fromLocalInput(endsValue, timeZone) : "";
   if (startsValue && !startsAt) invalid.push({ field: "starts", label: "Period start", message: "Choose a valid start date and time." });
   if (endsValue && !endsAt) invalid.push({ field: "ends", label: "Period end", message: "Choose a valid end date and time." });
 
-  const nowMs = dateFromInput(now)?.getTime();
+  // `now` itself must be a usable instant; a bad clock is not the creator's
+  // fault and must never surface as a date error.
+  const nowDate = dateFromInput(now);
+  const nowMs = nowDate ? nowDate.getTime() : NaN;
   const plausibleWindowMs = Math.round(10 * 365.25 * 24 * 60 * 60 * 1000);
   for (const [field, label, iso] of [
     ["starts", "Period start", startsAt],
     ["ends", "Period end", endsAt],
   ]) {
-    const instant = iso ? new Date(iso).getTime() : null;
-    if (Number.isFinite(nowMs) && Number.isFinite(instant) && Math.abs(instant - nowMs) > plausibleWindowMs) {
+    // Stage 2: a value that failed stage 1 already has its own message; do not
+    // also range-check it (or its empty/NaN placeholder).
+    if (!iso) continue;
+    const instant = new Date(iso).getTime();
+    if (!Number.isFinite(instant)) continue;
+    // Stage 3: both sides are real finite instants here.
+    if (enforcePlausibleRange && Number.isFinite(nowMs) && Math.abs(instant - nowMs) > plausibleWindowMs) {
       invalid.push({ field, label, message: "Choose a date within 10 years of today." });
     }
   }
-  if (startsAt && endsAt && new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+  // Ordering only compares two values that each passed the stages above, so a
+  // rejected start never fabricates a second "end after start" error.
+  const startsMs = startsAt ? new Date(startsAt).getTime() : NaN;
+  const endsMs = endsAt ? new Date(endsAt).getTime() : NaN;
+  if (Number.isFinite(startsMs) && Number.isFinite(endsMs) && endsMs <= startsMs) {
     invalid.push({ field: "ends", label: "Period end", message: "Choose an end time after the start time." });
   }
   return { startsAt, endsAt, invalid };
@@ -409,7 +437,12 @@ export function currentPlayers() {
 export function resetsIn() {
   const v = $("f_ends")?.value;
   if (!v) return "—";
-  const end = new Date(v);
+  // A datetime-local value is not an ISO string: `new Date(v)` is
+  // implementation-defined for it and can silently land on the wrong instant.
+  // Resolve it through the same timezone-aware reader the validator uses.
+  const iso = fromLocalInput(v, getViewerTimeZone());
+  if (!iso) return "—";
+  const end = new Date(iso);
   if (isNaN(end)) return "—";
   const ms = end.getTime() - Date.now();
   if (ms <= 0) return "Ended";
