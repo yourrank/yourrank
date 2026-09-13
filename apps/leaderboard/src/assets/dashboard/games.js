@@ -187,14 +187,45 @@ let activeSimulatorGame = "mines";
  * Point the simulator frame at `url` without touching the browser history:
  * assigning `src` appends an entry to the joint session history, which pollutes
  * Back and truncates the forward stack, so navigate the frame in place.
+ *
+ * The in-place path only works once the frame has actually navigated somewhere.
+ * Before the first navigation `contentWindow` is the initial `about:blank`
+ * document, and poking its `location` starts a navigation against a frame the
+ * browser has not laid out yet — which is reported as layout being forced
+ * before the page's stylesheets finished loading. So the first assignment goes
+ * through `src` (no layout is forced) and later ones replace in place.
  */
 function loadSimulatorFrame(iframe, url) {
   const frameWindow = iframe.contentWindow;
-  if (frameWindow && typeof frameWindow.location?.replace === "function") {
-    frameWindow.location.replace(url);
-    return;
+  const navigated = iframe.dataset.frameLoaded === "true";
+  if (navigated && frameWindow && typeof frameWindow.location?.replace === "function") {
+    try {
+      frameWindow.location.replace(url);
+      return;
+    } catch {
+      // A cross-origin document (custom-domain preview) refuses the write, so
+      // fall through to the src assignment which is always permitted.
+    }
   }
   iframe.setAttribute("src", url);
+}
+
+/**
+ * Mark the frame as having a real document once it lands. Only then may a
+ * later navigation replace in place instead of re-assigning `src`.
+ */
+function wireSimulatorFrameLoadState(iframe) {
+  if (!iframe || iframe.dataset.frameLoadWired === "true") return;
+  iframe.dataset.frameLoadWired = "true";
+  iframe.addEventListener("load", () => {
+    let href = "";
+    try {
+      href = iframe.contentWindow?.location?.href || "";
+    } catch { /* cross-origin: it loaded, we just cannot read the href */ }
+    // The initial about:blank fires `load` too and must not count.
+    if (!href || href === "about:blank") return;
+    iframe.dataset.frameLoaded = "true";
+  });
 }
 
 function setSimulatorGame(gameId) {
@@ -233,6 +264,8 @@ function updateSimulator() {
 function setupSimulator() {
   if (setupSimulator._wired) return;
   setupSimulator._wired = true;
+
+  wireSimulatorFrameLoadState($("gamesSimulatorIframe"));
 
   subscribe((keys) => {
     if (keys.includes("SLUG") || keys.includes("ACTIVE_SITE_ID") || keys.includes("GAMES_STATUS")) {
