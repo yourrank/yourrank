@@ -393,10 +393,10 @@
 /* Home: the creator's introduction and their viewer's balance share the first
    band, the two previews share the second. One stack on a phone. */
 .yr-home-top { display: grid; gap: 20px; align-items: start; }
-.yr-home-cols { display: grid; gap: 20px; align-items: start; }
+.yr-home-cols, .yr-home-support { display: grid; gap: 20px; align-items: start; }
 /* Grid children default to min-width:auto, which lets one unbreakable name
    push the whole column past the viewport. Every band child stays shrinkable. */
-.yr-home-top > *, .yr-home-cols > *, .yr-vhead--split > * { min-width: 0; }
+.yr-home-top > *, .yr-home-cols > *, .yr-home-support > *, .yr-vhead--split > * { min-width: 0; }
 
 /* The bar owns creator identity, so Home opens as an editorial band rather than
    a second identity card or hero slab. */
@@ -477,6 +477,9 @@
 .yr-sec-link { min-height: 44px; padding: 0 2px; font-size: 14px; font-weight: 600; color: var(--yr-accent-readable); display: inline-flex; align-items: center; gap: 6px; border-radius: var(--yr-r-ctl); transition: color 0.15s; }
 .yr-sec-link:hover { color: var(--yr-fog); text-decoration: underline; text-underline-offset: 4px; }
 .yr-sec-link svg { width: 14px; height: 14px; }
+.yr-rules-list { margin: 0; padding-inline-start: 22px; display: grid; gap: 10px; color: var(--yr-mute); font-size: 14px; line-height: 1.55; }
+.yr-rules-list li { padding-inline-start: 4px; overflow-wrap: anywhere; }
+.yr-share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* ── Viewer surfaces: page head, reward / activity / order rows ──────── */
 

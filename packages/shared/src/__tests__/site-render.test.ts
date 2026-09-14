@@ -75,6 +75,81 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("Credits / 7d");
   });
 
+  it("honors every Layout & blocks switch on the public Home renderer", async () => {
+    const renderHome = (sections) => renderSite({
+      r: {
+        ...fixture,
+        data: {
+          ...fixture.data,
+          brand: { ...fixture.data.brand, prizePool: "$5,000" },
+          endsAt: new Date(Date.now() + 86400000).toISOString(),
+          rules: ["Be respectful", "One account per player"],
+          socials: [{ name: "Kick", url: "https://kick.com/ampersand", enabled: true }],
+          sections,
+        },
+      },
+      section: "home",
+      viewer: null,
+      viewerData: null,
+      opts,
+    });
+
+    const visible = await renderHome({
+      leaderboard: true,
+      payouts: true,
+      countdown: true,
+      rules: true,
+      socials: true,
+      share: true,
+      poweredBy: true,
+    });
+    expect(visible).toContain('data-public-block="leaderboard"');
+    expect(visible).toContain("$5,000 prize pool");
+    expect(visible).toContain('data-countdown-mode="relative"');
+    expect(visible).toContain('data-public-block="rules"');
+    expect(visible).toContain("Be respectful");
+    expect(visible).toContain("https://kick.com/ampersand");
+    expect(visible).toContain('data-public-block="share"');
+    expect(visible).toContain("Powered by");
+
+    const hidden = await renderHome({
+      leaderboard: false,
+      payouts: false,
+      countdown: false,
+      rules: false,
+      socials: false,
+      share: false,
+      poweredBy: false,
+    });
+    expect(hidden).not.toContain('data-public-block="leaderboard"');
+    expect(hidden).not.toContain("$5,000 prize pool");
+    expect(hidden).not.toContain('data-countdown-mode="relative"');
+    expect(hidden).not.toContain('data-public-block="rules"');
+    expect(hidden).not.toContain("Be respectful");
+    expect(hidden).not.toContain("https://kick.com/ampersand");
+    expect(hidden).not.toContain('data-public-block="share"');
+    expect(hidden).not.toContain("Powered by");
+  });
+
+  it("does not render a blank Rules block when no usable rules exist", async () => {
+    const html = await renderSite({
+      r: {
+        ...fixture,
+        data: {
+          ...fixture.data,
+          rules: ["", "   ", { text: "not a public rule" }],
+          sections: { rules: true },
+        },
+      },
+      section: "home",
+      viewer: null,
+      viewerData: null,
+      opts,
+    });
+
+    expect(html).not.toContain('data-public-block="rules"');
+  });
+
   it("contains a chosen creator typeface to display roles", async () => {
     const render = (branding) => renderSite({
       r: { ...fixture, data: { ...fixture.data, branding } },

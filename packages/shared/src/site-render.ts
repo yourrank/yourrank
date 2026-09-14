@@ -379,6 +379,37 @@ function sectionHead(title, right = "") {
 }
 
 /**
+ * Optional Home blocks are rendered by the same public renderer used by the
+ * dashboard preview and the live site. Keeping them here makes each Appearance
+ * switch control one concrete, server-rendered outcome rather than dashboard-
+ * only state.
+ */
+function homeRulesBlock(data) {
+  if (data.sections?.rules === false) return "";
+  const rules = (Array.isArray(data.rules) ? data.rules : [])
+    .filter((rule) => typeof rule === "string" && rule.trim())
+    .map((rule) => rule.trim());
+  if (!rules.length) return "";
+  return `<section class="yr-sec" data-public-block="rules">
+${sectionHead("Community rules")}
+<ol class="yr-rules-list">${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol>
+</section>`;
+}
+
+function homeShareBlock(data, b, slug, pageUrl) {
+  if (data.sections?.share === false) return "";
+  const name = String(b.name || slug || "this community");
+  const message = `Visit ${name} on YourRank`;
+  const xHref = `https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}&url=${encodeURIComponent(pageUrl)}`;
+  const whatsAppHref = `https://wa.me/?text=${encodeURIComponent(`${message} ${pageUrl}`)}`;
+  return `<section class="yr-sec" data-public-block="share">
+${sectionHead("Share this community")}
+<p class="yr-sec-meta">Invite people to view this public page.</p>
+<div class="yr-share-actions"><a class="yr-btn yr-btn--ghost yr-btn--sm" href="${esc(xHref)}" target="_blank" rel="noopener noreferrer">Share on X<span class="yr-sr"> (opens in a new tab)</span></a><a class="yr-btn yr-btn--ghost yr-btn--sm" href="${esc(whatsAppHref)}" target="_blank" rel="noopener noreferrer">Share on WhatsApp<span class="yr-sr"> (opens in a new tab)</span></a></div>
+</section>`;
+}
+
+/**
  * One empty state everywhere: a quiet mark, what is empty, and one sentence
  * saying when it fills. Modest height on purpose — an empty list is not an
  * event worth half a viewport.
@@ -523,7 +554,10 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const membershipStatus = viewerData?.membershipStatus || (viewerOnSite ? "member" : "unavailable");
   const isMember = membershipStatus === "member" && !!viewerOnSite;
   const balance = Number(viewerOnSite?.balance || 0);
-  const kickUrl = (Array.isArray(data.socials) ? data.socials : []).find((s) => /kick/i.test(s?.type || s?.name || ""))?.url;
+  // One switch, one concept: "Show Social Links" hides every creator channel
+  // link on the public page — the navigation channels, the intro action and the
+  // footer's watch link all read the same gate.
+  const kickUrl = data.sections?.socials === false ? null : (Array.isArray(data.socials) ? data.socials : []).find((s) => /kick/i.test(s?.type || s?.name || ""))?.url;
   const socialLinks = data.sections?.socials === false ? [] : (Array.isArray(data.socials) ? data.socials : [])
     .filter(s => s && s.enabled !== false && /^https?:\/\//i.test(String(s.url || "")))
     .map(s => ({ label: s.name || s.brand || s.type || "Channel", href: String(s.url).trim() }));
@@ -677,7 +711,10 @@ function homeMain(ctx) {
   const playerHref = (player) => isCustomDomain ? `/player/${encodeURIComponent(player)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(player)}`;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false);
   const shopEnabled = siteSections.shop !== false;
-  const boardEnabled = siteSections.leaderboard !== false;
+  // `siteSections.leaderboard` controls whether the destination exists in the
+  // public navigation. `sections.leaderboard` independently controls the Home
+  // preview card exposed by Appearance → Layout & blocks.
+  const boardEnabled = siteSections.leaderboard !== false && data.sections?.leaderboard !== false;
   const meEnabled = siteSections.me !== false;
   const socials = (data.sections?.socials === false ? [] : Array.isArray(data.socials) ? data.socials : [])
     .filter((s) => s && s.enabled !== false && s.url)
@@ -720,7 +757,7 @@ ${introActs ? `<div class="yr-intro-acts">${introActs}</div>` : ""}
 </li>`).join("");
 
   const boardSection = boardEnabled
-    ? `<section class="yr-sec">
+    ? `<section class="yr-sec" data-public-block="leaderboard">
 ${sectionHead("Leaderboard", `<a class="yr-sec-link" href="${boardHref}">View leaderboard ${ICONS.arrow}</a>`)}
 <p class="yr-sec-meta">${boardMeta}</p>
 ${leaders ? `<ol class="yr-leads">${leaders}</ol>` : emptyState(ICONS.trophy, "No players on the board yet", "The first scores show up here once the board opens.")}
@@ -751,11 +788,16 @@ ${preview.length
     ? `<p class="yr-sec-note">${name} hasn't added players or rewards yet. Check back soon.</p>`
     : "";
 
+  const rulesSection = homeRulesBlock(data);
+  const shareSection = homeShareBlock(data, b, slug, `${homeUrl}${siteSectionHref("home", slug, isCustomDomain)}`);
+
   // Two balanced previews on a wide viewport, one stack on a phone: the creator
-  // and their balance first, then the board, then the rewards.
+  // and their balance first, then the board and rewards, then optional guidance
+  // and sharing blocks controlled by the creator.
   return `<div class="yr-home-top${viewerNote ? "" : " yr-home-top--solo"}">${intro}${viewerNote}</div>
 ${boardSection || rewardsSection ? `<div class="yr-home-cols">${boardSection}${rewardsSection}</div>` : ""}
-${nothingYet}`;
+${nothingYet}
+${rulesSection || shareSection ? `<div class="yr-home-support">${rulesSection}${shareSection}</div>` : ""}`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
