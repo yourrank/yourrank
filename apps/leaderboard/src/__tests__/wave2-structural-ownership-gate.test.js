@@ -81,9 +81,13 @@ function assertClientNavigationOwnership() {
     /pushState/.test(executableSource(path))
   );
   expect((shellRuntime.match(/export (?:async )?function requestDashboardRoute/g) || []).length).toBe(1);
-  // Dashboard routing stays singular in dashboard/shell.js. The global Viewer
-  // Account is a membership index and does not own a second client router.
-  expect(navigationOwners).toEqual([join(leaderboardAssets, "dashboard/shell.js")]);
+  // Each product shell has one navigation owner: the creator dashboard keeps
+  // dashboard/shell.js, while the viewer shell keeps viewer-app.js across the
+  // membership directory, community pages, and viewer help.
+  expect(navigationOwners).toEqual([
+    join(leaderboardAssets, "dashboard/shell.js"),
+    join(leaderboardAssets, "viewer-app.js"),
+  ]);
 }
 
 function assertShellStructureOwnership() {

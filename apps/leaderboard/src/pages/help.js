@@ -161,7 +161,7 @@ const VIEWER_OVERRIDES = {
   mainClass: "viewer-layout",
   nav: false, footer: false, wide: false,
   designContract: VIEWER_DESIGN_CONTRACT,
-  scripts: ['<script src="/assets/contact.js?v=1" type="module"></script>'],
+  scripts: ['<script src="/assets/viewer-app.js" defer></script>'],
 };
 
 function helpContent({ active, h1, intro, kind, subjectPlaceholder, messagePlaceholder, user, activePath, viewerHelp }) {
@@ -254,7 +254,7 @@ const helpHubConfig = {
 
 export const helpHubPage = {
   config: helpHubConfig,
-  configFor: ({ user, viewerHelp } = {}) => (viewerHelp ? { ...helpHubConfig, ...VIEWER_OVERRIDES, scripts: [] } : user ? helpHubConfig : { ...helpHubConfig, ...PUBLIC_OVERRIDES }),
+  configFor: ({ user, viewerHelp } = {}) => (viewerHelp ? { ...helpHubConfig, ...VIEWER_OVERRIDES } : user ? helpHubConfig : { ...helpHubConfig, ...PUBLIC_OVERRIDES }),
   Component: (renderOpts) => helpHubContent(renderOpts),
 };
 

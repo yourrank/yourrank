@@ -1,5 +1,6 @@
 import { resolveContactType } from "./contact-context.js";
 
+function initContactPage() {
 // Contact form handling
 const form = document.getElementById("contactForm");
 const err = document.getElementById("c_err");
@@ -146,3 +147,6 @@ wireHelpDrawer();
 
 const yr = document.getElementById("yr");
 if (yr) yr.textContent = new Date().getFullYear();
+}
+window.YRInitContactPage = initContactPage;
+initContactPage();
