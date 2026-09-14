@@ -68,9 +68,9 @@ describe("demo credibility invariants", () => {
     for (const [section, label] of Object.entries(expected)) {
       const html = await render(section);
       expect(html).toContain(`data-section="${section}"`);
-      if (section === "home") expect(html).toContain('<h1>Welcome to your community.</h1>');
-      else if (section === "me") expect(html).toContain('<h1>Your corner of the community.</h1>');
-      else if (section === "shop") expect(html).toContain('<h1>A little something for you.</h1>');
+      if (section === "home") expect(html).toContain('<h1>Community overview</h1>');
+      else if (section === "me") expect(html).toContain('<h1>My activity</h1>');
+      else if (section === "shop") expect(html).toContain('<h1>Reward shop</h1>');
       else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
       if (section !== "games") expect(html).toContain(`id="viewer-top-title">${label}</span>`);
     }

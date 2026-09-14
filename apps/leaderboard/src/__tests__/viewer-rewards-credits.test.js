@@ -208,7 +208,7 @@ describe("the creator home credit state", () => {
     expect(html).toContain('class="viewer-home-intro"');
     expect(html).not.toContain("yr-vnote");
     expect(html).toContain("No rewards yet");
-    expect(html).toContain(">Browse rewards ");
+    expect(html).toContain("Reward shop</a>");
   });
 
   it("shows a truthful zero balance and empty reward preview", async () => {
@@ -220,8 +220,8 @@ describe("the creator home credit state", () => {
       opts,
     });
     expect(html).toContain('class="viewer-credit-amount" data-credit-balance="0"');
-    expect(html).toContain("No rewards yet");
-    expect(html).toContain(">Browse rewards ");
+    expect(html).toContain("No rewards are available right now.");
+    expect(html).toContain("Reward shop</a>");
     expect(html).not.toContain(">Spend credits</a>");
   });
 
@@ -235,8 +235,8 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: items },
       opts,
     });
-    expect(signedOutHtml).toContain(">Browse rewards ");
-    expect(signedInHtml).toContain(">Browse rewards ");
+    expect(signedOutHtml).toContain("Sign in to see your reward progress.");
+    expect(signedInHtml).toContain(">Explore rewards</a>");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
@@ -273,7 +273,7 @@ describe("a creator's My Community page", () => {
       expect(html).toContain('data-site-slug="demo-board"');
       expect(html).toContain('id="yr-code-drop-code"');
       expect(html).toContain('id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"');
-      expect(html).toContain("Claim free code");
+      expect(html).toContain("Redeem code");
       const claimSection = html.match(/<section class="member-code yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
       expect(claimSection).toContain("data-code-drop-claim");
       expect(claimSection).not.toMatch(/raffle|prediction|wager|stake|odds|payout|settlement/i);
@@ -478,6 +478,6 @@ describe("the global account page", () => {
 
   it("groups large credit numbers so a balance stays readable", () => {
     expect(clientSource).toContain('function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }');
-    expect(clientSource).toContain("${fmtNum(community.balance)} free credits");
+    expect(clientSource).toContain("${fmtNum(community.balance)} Credits");
   });
 });

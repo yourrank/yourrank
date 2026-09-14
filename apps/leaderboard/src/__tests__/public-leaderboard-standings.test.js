@@ -126,14 +126,14 @@ describe("public leaderboard standings", () => {
     // The empty board is a designed state: what is empty, and one line about
     // when it fills — not a sentence floating in a blank panel.
     expect(html).toContain('<p class="yr-empty-t">No players yet</p>');
-    expect(html).toContain('<p class="yr-empty-p">The board fills in when');
+    expect(html).toContain('<p class="yr-empty-p">Ask');
     expect(rowsOf(html).length).toBe(0);
     expect(html).not.toContain('id="yr-search"');
     expect(html).not.toContain("data-load-more");
     expect(html).not.toContain("No players match that search.");
 
     const soon = await render("leaderboard", { data: { ...baseData, players: [], scheduled: true } });
-    expect(soon).toContain('<p class="yr-empty-p">Standings fill in once the round starts.</p>');
+    expect(soon).toContain('<p class="yr-empty-p">Standings fill in once the round starts. Ask the creator how to participate.</p>');
   });
 
   it("ranks one player, three players and twenty players through the same rows", async () => {

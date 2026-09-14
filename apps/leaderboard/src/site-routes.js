@@ -135,7 +135,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       // Each surface composes only the canonical reads it owns. Personalized
       // history is loaded only after site-scoped Membership resolution.
       const opts = section === "home"
-        ? { shop: true, claims: !!viewer }
+        ? { shop: true, claims: !!viewer, ledger: !!viewer }
         : section === "shop"
           ? { shop: true, claims: !!viewer }
           : { claims: !!viewer, ledger: !!viewer, participation: !!viewer };

@@ -11,7 +11,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
   styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
   designContract: VIEWER_DESIGN_CONTRACT,
   scripts: [
-    '<script src="/assets/viewer-dashboard.js?v=4" type="module"></script>',
+    '<script src="/assets/viewer-app.js" defer></script>',
   ],
   content: `
 ${viewerNavigation()}
@@ -20,7 +20,7 @@ ${viewerNavigation()}
   <div id="vd-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span class="sr-only">Loading your communities…</span></div>
   <div class="vd-head">
     <h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>
-    <p class="vd-sub" id="vd-subtitle">Good to have you here. Pick up where you left off. Your rewards and claims stay with each community.</p>
+    <p class="vd-sub" id="vd-subtitle">Choose a community. Your rewards and claims stay with each community.</p>
   </div>
 
   <section id="vd-login-card" tabindex="-1">
@@ -47,10 +47,10 @@ ${viewerNavigation()}
     </div>
     <div class="vd-find-community"><h3>Looking for another community?</h3>
       <form id="vd-open-community" class="vd-community-entry">
-        <label for="vd-community-name">Community name</label>
-        <p id="vd-community-name-hint">Enter the name after the slash in the creator's YourRank link.</p>
+        <label for="vd-community-name">Community name or link</label>
+        <p id="vd-community-name-hint">Find a joined community by name, or enter a creator's handle or YourRank community link.</p>
         <div class="vd-community-entry-controls">
-          <input id="vd-community-name" type="text" required maxlength="63" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. atlas-community" aria-describedby="vd-community-name-hint vd-community-entry-status" />
+          <input id="vd-community-name" type="text" required maxlength="256" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Creator name or yourrank.site/community" aria-describedby="vd-community-name-hint vd-community-entry-status" />
           <button class="btn btn--accent" type="submit">Open community</button>
         </div>
         <p id="vd-community-entry-status" class="status" role="status" aria-live="polite"></p>

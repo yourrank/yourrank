@@ -2,8 +2,34 @@
 // Progressive enhancement only: every section renders and is navigable with
 // this file blocked. Handles the narrow-width menu drawer, the standings tabs and
 // filter, the shop redeem call, the reset countdown and the feedback dialog.
-(function () {
+(function initSitePage() {
   "use strict";
+  window.YRInitSitePage = initSitePage;
+  var pageLifetime = new AbortController();
+  var streamState = document.querySelector('[data-kick-channel]');
+  if (streamState) {
+    fetch('/api/giveaways/chatroom?channel=' + encodeURIComponent(streamState.dataset.kickChannel), { signal: pageLifetime.signal })
+      .then(function (response) { if (!response.ok) throw new Error('Unavailable'); return response.json(); })
+      .then(function (data) {
+        if (typeof data.isLive !== 'boolean' || data.error || pageLifetime.signal.aborted) return;
+        streamState.textContent = data.isLive ? 'Live now' : 'Offline';
+        var creator = document.querySelector('.viewer-creator>div');
+        if (creator) {
+          var status = creator.querySelector('[data-stream-status]') || document.createElement('span');
+          status.dataset.streamStatus = '';
+          status.textContent = data.isLive ? 'Live on Kick' : 'Kick · Offline';
+          if (!status.parentNode) creator.appendChild(status);
+        }
+      }).catch(function () { /* Keep the explicit unavailable state. */ });
+  }
+  document.addEventListener("yr:viewer-unmount", function () {
+    pageLifetime.abort();
+    clearTimeout(searchTimer);
+    if (searchController) searchController.abort();
+    clearInterval(countdownTimer);
+    searchRequest++;
+    pageRequest++;
+  }, { once: true });
 
   // Guide progress is a per-tab browsing aid, never persisted membership state.
   var guide = document.querySelector("[data-viewer-guide]");
@@ -39,20 +65,20 @@
     };
     guide.querySelector("[data-guide-dismiss]").addEventListener("click", function () { setGuideHidden(true, true); });
     restoreGuide.querySelector("button").addEventListener("click", function () { setGuideHidden(false, true); });
-    if (guideVisits.dismissed === true) setGuideHidden(true, false);
+    if (completed === total || guideVisits.dismissed === true) setGuideHidden(true, false);
   }
 
   var communitySwitch = document.querySelector(".viewer-switch");
   if (communitySwitch) {
     document.addEventListener("click", function (event) {
       if (!communitySwitch.contains(event.target)) communitySwitch.open = false;
-    });
+    }, { signal: pageLifetime.signal });
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape" && communitySwitch.open) {
         communitySwitch.open = false;
         communitySwitch.querySelector("summary").focus();
       }
-    });
+    }, { signal: pageLifetime.signal });
   }
 
   // OAuth errors are one-time context. The server renders a controlled message
@@ -150,7 +176,7 @@
     if (!side.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }
     else if (e.shiftKey && (document.activeElement === first || document.activeElement === side)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
+  }, { signal: pageLifetime.signal });
 
   // ── Standings: board tabs ───────────────────────────────────────────
   var tabs = Array.prototype.slice.call(document.querySelectorAll("[data-tab]"));
@@ -429,7 +455,7 @@
             joinButton.textContent = "Joined";
             joinButton.removeAttribute("aria-busy");
             setJoinStatus("Community joined. Loading your membership…");
-            window.location.reload();
+            if (window.YRViewerApp) window.YRViewerApp.refresh(); else window.location.reload();
             return;
           }
           joinButton.disabled = false;
@@ -483,7 +509,7 @@
       event.preventDefault();
       var code = codeDropInput.value.trim().toUpperCase();
       if (!code) {
-        setCodeDropStatus("Enter the free code shared by the creator.", true);
+        setCodeDropStatus("Enter the community code shared by the creator.", true);
         focusWithoutScroll(codeDropInput);
         return;
       }
@@ -505,10 +531,10 @@
             codeDropButton.removeAttribute("aria-busy");
             codeDropButton.classList.add("is-success");
             var points = Number(result.data.pointsAwarded || 0);
-            setCodeDropStatus("Code claimed. " + points.toLocaleString("en-US") + " free credits added. Loading your participation…");
+            setCodeDropStatus("Code redeemed. " + points.toLocaleString("en-US") + " credits added. Loading your participation…");
             if (typeof result.data.newBalance === "number") updateBalance(result.data.newBalance);
             focusWithoutScroll(codeDropStatus || codeDropButton);
-            window.location.reload();
+            if (window.YRViewerApp) window.YRViewerApp.refresh(); else window.location.reload();
             return;
           }
           codeDropButton.disabled = false;
@@ -676,7 +702,7 @@
     };
     syncOverflow();
     wrap.addEventListener("scroll", syncOverflow, { passive: true });
-    window.addEventListener("resize", syncOverflow);
+    window.addEventListener("resize", syncOverflow, { signal: pageLifetime.signal });
   });
 
   // ── Countdown ───────────────────────────────────────────────────────
