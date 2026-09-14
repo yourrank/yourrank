@@ -38,12 +38,32 @@ function safeNextPath(value) {
       "/help/support",
       "/verify-email"
     ]);
+    const viewerPrefixes = ["/me", "/help/"];
+    if (viewerPrefixes.some(prefix => path.startsWith(prefix))
+      || /^\/[^/]+\/(?:me|shop|leaderboard|games)(?:\/|$)/.test(path)
+      || /^\/[^/]+$/.test(path)) return path + u.search;
     const allowedPrefixes = ["/dashboard/"];
     if (allowedExact.has(path) || allowedPrefixes.some(prefix => path.startsWith(prefix))) return path + u.search;
   } catch (_) {}
   return "";
 }
 const nextPath = safeNextPath(urlParams.get("next") || "");
+
+/* Viewer journeys arrive from a community page (next=/slug/...) and need the
+   task they came for, not the creator sales panel. Everything outside /login
+   keeps its existing behavior. */
+if (mode === "login" && nextPath && !nextPath.startsWith("/dashboard")) {
+  const title = document.getElementById("auth-title");
+  const sub = document.getElementById("auth-sub");
+  const banner = document.getElementById("viewerBanner");
+  const foot = document.getElementById("viewer-foot");
+  if (title) title.textContent = "Sign in to continue";
+  if (sub) sub.textContent = "You are signing in as a viewer.";
+  if (banner) banner.hidden = false;
+  if (foot) foot.remove();
+  const side = document.querySelector(".auth-side");
+  if (side) side.remove();
+}
 const form = document.getElementById("form");
 const errEl = document.getElementById("err");
 function getCsrf() { const m = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/); return m ? m[1] : ""; }

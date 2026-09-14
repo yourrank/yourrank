@@ -56,3 +56,5 @@ __pycache__/
 .restore-drill/
 
 cookies*.txt
+
+.openclaw/
