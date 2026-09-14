@@ -51,7 +51,7 @@ describe("public leaderboard standings", () => {
     const leaderboard = await render("leaderboard", { data: neutral });
 
     for (const html of [home, leaderboard]) {
-      expect(html).toContain("42 pts");
+      expect(html).toContain(html === home ? "<span>42</span>" : "42 pts");
       for (const restricted of ["wagered", "wager total", "casino", "paid in cash", "cash payout", "prize pool", "deposit", "rakeback", "odds", "betting"]) {
         expect(html.toLowerCase()).not.toContain(restricted);
       }
@@ -180,7 +180,7 @@ describe("public leaderboard standings", () => {
     expect(html).toContain(`>${long}</a>`);
     expect(html).toContain(">Ω_игрок</a>");
     expect(html).toContain(">🎯 aim &lt;b&gt;</a>");
-    expect(html).not.toContain("<b>");
+    expect(html).not.toContain("🎯 aim <b>");
     // Names wrap inside their own cell rather than widening the document.
     expect(css).toMatch(/\.yr-srow-name \{[^}]*overflow-wrap: anywhere/);
     expect(css).toMatch(/\.yr-srow-name \{[^}]*min-width: 0/);
@@ -342,8 +342,8 @@ describe("public leaderboard standings", () => {
     expect((html.match(/aria-current="page"/g) || []).length).toBe(1);
 
     const home = await render("home");
-    expect(home).toContain('<a class="yr-lead-name" href="/creator/player/Alice">Alice</a>');
-    expect(home).toContain('<span class="yr-lead-rank">01</span>');
-    expect(home).toContain("3 players");
+    expect(home).toContain('<span class="viewer-player-name">Alice</span>');
+    expect(home).toContain('<span class="viewer-rank">01</span>');
+    expect((home.match(/class="viewer-board-row"/g) || [])).toHaveLength(3);
   });
 });

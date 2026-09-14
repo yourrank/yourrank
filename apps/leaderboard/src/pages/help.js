@@ -1,7 +1,7 @@
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
 import { dashboardNavItems, workspaceAccountTopbarHtml } from "./dashboard-shell.jsx";
 import { workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
-import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
+import { viewerNavigation, viewerAccountOverview, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 
 // Explicit viewer navigation keeps the viewer shell even with a creator cookie.
 // Otherwise creators keep their workspace and visitors get the public shell.
@@ -152,7 +152,7 @@ function viewerHelpContent({ active, title, intro, body, viewerHelp }) {
 <div class="viewer-main viewer-help">
 <a class="yr-sec-link" href="${esc(viewerHelp.returnTo)}">Back to ${viewerHelp.returnTo === "/me" ? "my communities" : "community page"}</a>
 <header class="vd-head"><h1 class="vd-h1" id="contactTitle">${esc(title)}</h1><p class="vd-sub" id="contactIntro">${esc(intro)}</p></header>
-${subnavHtml(active, false, viewerHelp)}${body}</div>`;
+${subnavHtml(active, false, viewerHelp)}${body}</div>${viewerAccountOverview()}`;
 }
 
 const VIEWER_OVERRIDES = {

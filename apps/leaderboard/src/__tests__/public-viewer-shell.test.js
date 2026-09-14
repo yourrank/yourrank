@@ -47,7 +47,7 @@ describe("public viewer shell", () => {
   it("keeps viewer support context and makes an empty shop discoverable", async () => {
     const html = await render("home", { data: { ...baseData, shopItems: [] } });
     expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
-    expect(html).toContain('href="https://example.test/creator/shop">Browse reward shop');
+    expect(html).toContain('href="/creator/shop">Browse reward shop');
     const custom = await render("shop", { custom: true });
     expect(custom).toContain('href="https://yourrank.site/help/support?audience=viewer&amp;return=%2Fcreator%2Fshop"');
   });
@@ -103,38 +103,13 @@ describe("public viewer shell", () => {
     expect(withoutLogo).toContain('href="/creator">Creator Name</a>');
   });
 
-  it("clamps a long creator name in the bar without dropping it from the markup", async () => {
-    const long =
-      "Streamerwithaverylongsinglewordchannelname Extended Championship Board Season Finale";
-    const html = await render("home", {
-      data: { ...baseData, brand: { ...baseData.brand, name: long } },
-    });
-    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
-    // Full name in the DOM (so it stays the accessible name) even though the bar clips it.
-    expect(html).toContain(`href="/creator">${long}</a>`);
-    expect(html).toContain(`<h1 class="yr-intro-name">Welcome to <span data-preview-field="f_name">${long}</span>'s channel</h1>`);
-    const bar = css.match(/\.yr-id-name \{([^}]*)\}/);
-    expect(bar).not.toBeNull();
-    expect(bar[1]).toContain("overflow-wrap: anywhere");
-    expect(bar[1]).toContain("-webkit-line-clamp: 2");
-    expect(bar[1]).toContain("overflow: hidden");
-    // No JS truncation. The home heading breaks inside the word; desktop stops
-    // after three lines and phones get a fourth so the final word remains
-    // readable without letting an extreme name take over the page.
-    expect(readFileSync(join(assets, "site-shell.js"), "utf8")).not.toContain("yr-id-name");
-    const intro = css.match(/\.yr-intro-name \{([^}]*)\}/);
-    expect(intro).not.toBeNull();
-    expect(intro[1]).toContain("overflow-wrap: anywhere");
-    expect(intro[1]).toContain("line-clamp: 3");
-    expect(intro[1]).toContain("overflow: hidden");
-    expect(css).toMatch(
-      /@media \(max-width: 899px\)[\s\S]*?\.yr-intro-name \{[^}]*-webkit-line-clamp: 4; line-clamp: 4;/,
-    );
-    // Copy that quotes the creator's name must break inside the word too, or a
-    // single unbreakable name widens the whole document on a phone.
-    expect(css).toMatch(/\.yr-vnote-p \{[^}]*overflow-wrap: anywhere/);
-    expect(css).toMatch(/\.yr-foot-c \{[^}]*overflow-wrap: anywhere/);
-    expect(css).toMatch(/\.yr-sec-title \{([^}]*)overflow-wrap: anywhere/);
+  it("keeps long creator names intact with wrapping in the context panel", async () => {
+    const long = "Streamerwithaverylongsinglewordchannelname Extended Championship Board Season Finale";
+    const html = await render("home", { data: { ...baseData, brand: { ...baseData.brand, name: long } } });
+    expect(html).toContain(`data-preview-field="f_name">${long}</p>`);
+    const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
+    expect(css).toMatch(/\.viewer-context-name\{[^}]*overflow-wrap:anywhere/);
+    expect(css).toMatch(/\.viewer-switch summary>span:nth-child\(2\)\{[^}]*text-overflow:ellipsis/);
   });
 
   it("keeps viewer navigation targets reachable at narrow widths", async () => {
@@ -149,47 +124,31 @@ describe("public viewer shell", () => {
     expect(html).toContain(">free credits</span>");
   });
 
-  it("leaves signing in to the bar alone on a signed-out page", async () => {
-    const signedOut = await render("home");
-    const intro = signedOut.slice(signedOut.indexOf('class="yr-intro"'), signedOut.indexOf("</section>", signedOut.indexOf('class="yr-intro"')));
-    // The bar owns authentication on every page, so the introduction carries the
-    // creator's own actions and never repeats sign-in in the same viewport.
-    // One sign-in action on the page: the bar's. (The drawer's credit row still
-    // explains itself with "Sign in for credits" text, which is not a second one.)
-    expect((signedOut.match(/Sign in( with (Kick|Discord))?<\/a>/g) || []).length).toBe(1);
-    expect(signedOut.search(/Sign in( with (Kick|Discord))?<\/a>/)).toBeLessThan(signedOut.indexOf("</aside>"));
-    expect(intro).not.toContain("Sign in");
-
-    // The bar's real Kick and Discord entry points are untouched, and each is
-    // still the only sign-in on the page.
-    const kick = await render("home", { r: { viewerKickAuthEnabled: true } });
-    expect(kick).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Kick</a>');
-    expect((kick.match(/\/api\/viewer\/auth\//g) || []).length).toBe(1);
-    const discord = await render("home", { r: { viewerDiscordAuthEnabled: true } });
-    expect(discord).toContain('href="/api/viewer/auth/discord?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Discord</a>');
-    expect((discord.match(/\/api\/viewer\/auth\//g) || []).length).toBe(1);
-    expect(intro).toContain('<a class="yr-btn" href="https://example.test/creator/shop">View rewards</a>');
-    expect(intro).toContain("Watch on Kick");
-
-    // Signed in, the introduction keeps exactly the actions it had before.
-    const signedIn = await render("home", { viewer, viewerData });
-    const inIntro = signedIn.slice(signedIn.indexOf('class="yr-intro"'), signedIn.indexOf("</section>", signedIn.indexOf('class="yr-intro"')));
-    expect(inIntro).toContain("Watch on Kick");
-    expect(inIntro).not.toContain("View rewards");
-    expect(signedIn).not.toContain("/api/viewer/auth/");
+  it("keeps one real OAuth entry point and a navigable welcome guide", async () => {
+    for (const provider of ["Kick", "Discord"]) {
+      const html = await render("home", { r: { [`viewer${provider}AuthEnabled`]: true } });
+      expect((html.match(/\/api\/viewer\/auth\//g) || [])).toHaveLength(1);
+      expect(html).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
+      expect(html).toContain('data-guide-base="0"');
+      expect(html).toContain('href="/creator/me"');
+    }
+    const member = await render("home", { viewer, viewerData });
+    expect(member).not.toContain('/api/viewer/auth/');
+    expect(member).toContain('data-guide-base="2"');
+    expect(member).toContain('data-guide-visit="shop"');
   });
 
   it("keeps sign-in and account navigation role-correct", async () => {
-    const signedOut=await render("home");
-    expect(signedOut).toContain(">Sign in<");
+    const signedOut = await render("home");
     expect(signedOut).toContain('href="/creator/me">Sign in</a>');
-    expect(signedOut).not.toContain('>My communities</a>');
     expect(signedOut).toContain('id="viewer-account-link" href="/me#vd-profile" hidden');
-    const signedIn=await render("home",{viewer,viewerData});
-    expect(signedIn).toContain('<span class="yr-vnote-num">1,234</span>');
+    expect(signedOut).not.toContain('data-credit-balance="1234"');
+    const signedIn = await render("home", { viewer, viewerData });
+    expect(signedIn).toContain('data-credit-balance-num>1,234</strong>');
     expect(signedIn).toContain('id="viewer-account-link" href="/me#vd-profile"');
-    expect(signedIn).not.toContain(">Sign in<");
-    expect(signedIn).toContain('href="/me">My communities</a>');
+    expect(signedIn).not.toContain('>Sign in<');
+    expect(signedIn).toContain('href="/me"');
+    expect(signedIn).not.toContain('href="/dashboard"');
   });
 
   it("keeps demo content, legal links and OAuth continuation on the supplied origin", async () => {
@@ -206,79 +165,64 @@ describe("public viewer shell", () => {
   });
 
   it("keeps local membership and global account destinations distinct on custom domains", async () => {
-    const html=await render("me",{viewer,viewerData,custom:true});
-    expect(html).toContain('href="/me" aria-current="page">My activity</a>');
+    const html = await render("me", { viewer, viewerData, custom: true });
+    expect(html).toMatch(/href="\/me" aria-current="page">[\s\S]*?My activity<\/a>/);
     expect(html).toContain('id="viewer-account-link" href="https://yourrank.site/me#vd-profile"');
-    expect(html).toContain('href="https://yourrank.site/me">My communities</a>');
+    expect(html).toContain('href="https://yourrank.site/me"');
+    expect(html).not.toContain('href="/creator/me"');
   });
 
-  it("drops the dashboard reading of home", async () => {
+  it("uses the supplied welcome guide without inventing viewer statistics", async () => {
     const html = await render("home", { viewer, viewerData });
-    for (const removed of [
-      "yr-chart",
-      "yr-kpi",
-      "Credits earned",
-      "7-day average",
-      "Recent activity",
-      "Lifetime",
-      "Pending orders",
-      "Welcome back",
-    ]) {
-      expect(html).not.toContain(removed);
-    }
+    for (const removed of ['yr-chart', 'yr-kpi', '7-day average', 'Lifetime', 'Pending orders']) expect(html).not.toContain(removed);
+    expect(html).toContain('Welcome back, viewer_one.');
+    expect(html).toContain('Your community starts here.');
+    expect(html).toContain('2 of 4 guide steps completed');
   });
 
-  it("tells the board story from configured data only", async () => {
+  it("uses real standings in the reference's community rail", async () => {
     const html = await render("home");
-    expect(html).toContain('<h2 class="yr-sec-title">Leaderboard</h2>');
-    expect(html).toContain("Monthly leaderboard");
-    expect(html).toContain("2 players");
-    expect(html).toContain('<a class="yr-lead-name" href="/creator/player/Alice">Alice</a>');
-    expect(html).toContain(">View leaderboard ");
-
+    expect(html).toContain('On the leaderboard');
+    expect(html).toContain('class="viewer-player-name">Alice</span>');
+    expect(html).toContain('class="viewer-player-name">Bob</span>');
+    expect(html).toContain('href="/creator/leaderboard">See the standings');
     const empty = await render("home", { data: { ...baseData, players: [] } });
-    expect(empty).toContain("No players on the board yet");
-    expect(empty).not.toContain("yr-leads");
+    expect(empty).toContain('No standings yet.');
+    expect(empty).not.toContain('class="viewer-board-row"');
   });
 
-  it("previews at most three free-credit rewards, cheapest first", async () => {
+  it("shows the reference's two reward previews from actual configured rewards", async () => {
     const html = await render("home");
-    const section = html.slice(html.indexOf('class="yr-preview"'), html.indexOf("</ul>"));
-    const names = (section.match(/yr-preview-n">([^<]+)/g) || []).map((m) => m.split(">")[1]);
-    expect(names).toEqual(["VIP badge", "Shoutout", "Song request"]);
-    expect(section).toContain("250 credits");
-    expect(html).toContain(">Browse reward shop ");
-
-    const noShop = await render("home", {
-      data: { ...baseData, siteSections: { ...baseData.siteSections, shop: false } },
-    });
-    expect(noShop).not.toContain("yr-preview");
+    const section = html.slice(html.indexOf('class="viewer-reward-mini"'), html.indexOf('<footer class="viewer-panel-footer"'));
+    expect((section.match(/class="viewer-reward-peek"/g) || [])).toHaveLength(2);
+    expect(section).toContain('Song request');
+    expect(section).toContain('VIP badge');
+    expect(section).toContain('250 free credits');
+    expect(section).not.toContain('Overlay cameo');
+    const noShop = await render("home", { data: { ...baseData, siteSections: { ...baseData.siteSections, shop: false } } });
+    expect(noShop).not.toContain('class="viewer-reward-mini"');
+    expect(noShop).not.toContain('data-guide-visit="shop"');
   });
 
-  it("gives a signed-in viewer their balance and local/global membership destinations", async () => {
+  it("gives a signed-in viewer a scoped balance and local/global destinations", async () => {
     const html = await render("home", { viewer, viewerData });
-    expect(html).toContain('<span class="yr-vnote-num">1,234</span>');
-    expect(html).toContain("credits on this site");
-    expect(html).toContain('href="https://example.test/creator/shop">Spend credits</a>');
-    expect(html).toContain('href="https://example.test/creator/me">My activity ');
-    expect(html).toContain("No purchase, no cash value.");
+    expect(html).toContain('data-credit-balance="1234"');
+    expect(html).toContain('Only in Creator Name');
+    expect(html).toContain('href="/creator/shop">Browse rewards');
+    expect(html).toContain('href="/creator/me">View my activity');
+    expect(html).toContain('No purchases. No cash value. Just community.');
+    expect(html).toContain('href="/me"');
   });
 
-  it("stays useful when the streamer configured almost nothing", async () => {
-    const bare = {
-      ...baseData,
-      brand: { name: "Bare Board" },
-      players: [],
-      shopItems: [],
-      socials: [],
-      siteSections: { home: true, leaderboard: true, shop: false, games: false, me: false },
-    };
-    const html = await render("home", { data: bare });
-    expect(html).toContain("Leaderboard and free-credit rewards.");
-    expect(html).toContain('<p class="yr-empty-t">No players on the board yet</p>');
-    expect(html).not.toContain("yr-chips");
-    expect(html).not.toContain("yr-vnote");
-    expect(html).not.toContain(">My activity<");
+  it("stays useful without linking disabled community destinations", async () => {
+    const bare = { ...baseData, brand: { name: 'Bare Board' }, players: [], shopItems: [], socials: [], siteSections: { home: true, leaderboard: true, shop: false, games: false, me: false } };
+    const html = await render('home', { data: bare });
+    expect(html).toContain('No standings yet.');
+    expect(html).toContain('A little closer to your community.');
+    expect(html).not.toContain('href="/creator/shop"');
+    expect(html).not.toContain('data-guide-visit="me"');
+    expect(html).not.toContain('Claim free code');
+    expect(html).toContain('data-guide-total="1"');
   });
 
   it("links the creator's configured channels and nothing else", async () => {
@@ -302,15 +246,15 @@ describe("public viewer shell", () => {
     }
   });
 
-  it("uses the same server-rendered navigation at both sizes without a script gate", async () => {
-    const html=await render("home");
-    const css=readFileSync(join(assets,"viewer-shell.css"),"utf8");
-    expect((html.match(/class="viewer-destinations"/g)||[]).length).toBe(1);
+  it("uses the same server-rendered navigation on desktop and mobile", async () => {
+    const html = await render('home');
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    expect((html.match(/class="viewer-destinations"/g) || [])).toHaveLength(1);
     expect(html).not.toContain('id="yr-menu"');
     expect(html).not.toContain('id="yr-side"');
-    expect(css).toContain(".viewer-layout{grid-template-columns:minmax(0,1fr)}");
-    expect(css).toContain(".viewer-destinations{grid-column:1/-1;display:flex;flex-wrap:wrap;");
-    expect(css).not.toMatch(/\.viewer-rail[^}]*display:none/);
+    expect(css).toContain('.viewer-layout{display:flex;flex-direction:column');
+    expect(css).toContain('.viewer-destinations{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))');
+    expect(css).not.toMatch(/\.viewer-rail\{[^}]*display:none/);
   });
 
   it("keeps player search with the table it filters", async () => {
@@ -417,65 +361,53 @@ describe("public viewer shell", () => {
     expect(shell).toMatch(/!\/\^HTTP \/\.test\(message\)/);
   });
 
-  it("keeps the real creator identity without duplicating its logo across chrome", async () => {
-    const plain=await render("home");
-    expect(plain).toContain('href="/creator">Creator Name</a>');
-    expect(plain).toContain('<h1 class="yr-intro-name">Welcome to <span data-preview-field="f_name">Creator Name</span>\'s channel</h1>');
-    const logo=await render("home",{data:{...baseData,logoUrl:"https://cdn.test/logo.png"}});
-    expect((logo.match(/class="yr-id-logo"/g)||[]).length).toBe(1);
+  it("keeps the real creator identity without duplicating its configured logo", async () => {
+    const plain = await render('home');
+    expect(plain).toContain('data-preview-field="f_name">Creator Name</p>');
+    const logo = await render('home', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
+    expect((logo.match(/class="yr-id-logo"/g) || [])).toHaveLength(1);
     expect(logo).not.toContain('class="yr-intro-logo"');
   });
 
-  it("keeps Home's opening at its own height beside the balance card", () => {
-    const css = readFileSync(join(assets, "site-shell.css"), "utf8");
-    const wide = css.slice(css.indexOf("@media (min-width: 900px)"));
-    const band = wide.match(/\.yr-home-top \{([^}]*)\}/);
-    expect(band).not.toBeNull();
-    expect(band[1]).toContain("grid-template-columns");
-    // A sparse introduction is never stretched to the balance card's height.
-    expect(band[1]).not.toContain("align-items: stretch");
+  it("uses the supplied three-column geometry with a separate context bar", () => {
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    expect(css).toContain('--viewer-rail-width:212px');
+    expect(css).toContain('grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 314px');
+    expect(css).toContain('.viewer-topbar{grid-column:1/-1;height:90px');
+    expect(css).toContain('.viewer-claim-preview .yr-ord-main{flex:0 1 auto}');
   });
 
-  it("never hides the way back to all communities or the viewer account", async () => {
-    const html=await render("me",{viewer,viewerData});
-    expect(html).toContain('href="/me">My communities</a>');
-    expect(html).toContain('href="/me#vd-profile">Viewer account</a>');
-    const css=readFileSync(join(assets,"viewer-shell.css"),"utf8");
-    expect(css).not.toMatch(/\.viewer-rail-account[^}]*display:none/);
-    expect(css).toContain(".viewer-rail-account{grid-column:1/-1");
+  it("keeps account and community return links reachable on mobile", async () => {
+    const html = await render('me', { viewer, viewerData });
+    expect(html).toContain('href="/me"');
+    expect(html).toContain('href="/me#vd-profile"');
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    expect(css).not.toMatch(/\.viewer-rail-account\{[^}]*display:none/);
+    expect(css).toContain('.viewer-rail-account{display:flex;justify-content:space-between');
   });
 
-  it("leaves one primary action per band and one heading per module", async () => {
-    const html = await render("home");
-    const intro = html.slice(html.indexOf('class="yr-intro-acts"'), html.indexOf("</section>", html.indexOf('class="yr-intro-acts"')));
-    // View rewards is the primary; watching the creator is the quiet second.
-    expect((intro.match(/class="yr-btn"/g) || []).length).toBe(1);
-    expect(intro).toContain('class="yr-btn yr-btn--ghost"');
-
-    // The leaderboard page named itself in the H1, so its panel does not
-    // repeat the word in a second visible heading.
-    const board = await render("leaderboard");
-    expect(board).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
-    expect((board.match(/>Standings</g) || []).length).toBe(1);
+  it("gives the credits rail one primary action and the standings one page heading", async () => {
+    const html = await render('home');
+    const credit = html.match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
+    expect((credit.match(/class="yr-btn"/g) || [])).toHaveLength(1);
+    expect(credit).toContain('Browse rewards');
+    const board = await render('leaderboard');
+    expect((board.match(/<h1\b/g) || [])).toHaveLength(1);
     expect(board).toContain('<h2 class="yr-sr">Standings</h2>');
     expect(board).not.toContain('<h2 class="yr-panel-title">Standings</h2>');
   });
 
-  it("states every empty list in the same shape", async () => {
+  it("states empty rewards, standings and claims without fabricating data", async () => {
     const bare = { ...baseData, players: [], shopItems: [], socials: [] };
-    const home = await render("home", { data: bare });
-    const shop = await render("shop", { data: bare, viewer, viewerData });
-    const me = await render("me", { data: bare, viewer, viewerData });
-    for (const html of [home, shop]) {
-      const block = html.slice(html.indexOf('class="yr-empty yr-empty--compact"'));
-      expect(block).toContain('class="yr-empty-ico"');
-      expect(block).toContain('class="yr-empty-t"');
-      expect(block).toContain('class="yr-empty-p"');
-    }
-    expect(shop).toContain("Rewards will appear here when Creator Name adds them.");
+    const home = await render('home', { data: bare });
+    const shop = await render('shop', { data: bare, viewer, viewerData });
+    const me = await render('me', { data: bare, viewer, viewerData });
+    expect(home).toContain('No rewards yet.');
+    expect(home).toContain('No standings yet.');
+    expect(shop).toContain('Rewards will appear here when Creator Name adds them.');
     expect(me).toContain('<h3>No claims yet</h3>');
-    expect(me).toContain('class="member-empty"');
     expect(me).toContain('href="/creator/shop">Browse reward shop</a>');
+    expect(me).not.toContain('class="viewer-claim-preview"');
   });
 
   it("puts the creator's own line first in the footer and keeps section links quiet", async () => {

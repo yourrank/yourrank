@@ -117,7 +117,7 @@ describe("a creator's Rewards page", () => {
     const html = await signedOut("shop");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Use the navigation to sign in and use your credits.");
+    expect(html).toContain("Sign in to use your community credits.");
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
   });
 
@@ -202,16 +202,16 @@ describe("a creator's Rewards page", () => {
 });
 
 describe("the creator home credit state", () => {
-  it("keeps a zero-reward signed-out introduction whole without promoting the empty destination", async () => {
+  it("keeps an empty shop discoverable alongside the signed-out guide", async () => {
     const html = await signedOut("home");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).toContain('class="yr-home-top yr-home-top--solo"');
+    expect(html).toContain('class="viewer-home-intro"');
     expect(html).not.toContain("yr-vnote");
     expect(html).toContain("No rewards yet");
-    expect(html).not.toContain(">View rewards</a>");
+    expect(html).toContain(">Browse rewards ");
   });
 
-  it("keeps signed-in zero credits quiet when there are no rewards to browse", async () => {
+  it("shows a truthful zero balance and empty reward preview", async () => {
     const html = await renderSite({
       r: record,
       section: "home",
@@ -219,9 +219,9 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: [] },
       opts,
     });
-    expect(html).toContain('class="yr-vnote is-zero"');
+    expect(html).toContain('class="viewer-credit-amount" data-credit-balance="0"');
     expect(html).toContain("No rewards yet");
-    expect(html).not.toContain(">View rewards</a>");
+    expect(html).toContain(">Browse rewards ");
     expect(html).not.toContain(">Spend credits</a>");
   });
 
@@ -235,8 +235,8 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: items },
       opts,
     });
-    expect(signedOutHtml).toContain(">View rewards</a>");
-    expect(signedInHtml).toContain(">View rewards</a>");
+    expect(signedOutHtml).toContain(">Browse rewards ");
+    expect(signedInHtml).toContain(">Browse rewards ");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
@@ -274,7 +274,8 @@ describe("a creator's My Community page", () => {
       expect(html).toContain('id="yr-code-drop-code"');
       expect(html).toContain('id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"');
       expect(html).toContain("Claim free code");
-      const claimSection = html.match(/<section class="yr-vsec yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
+      const claimSection = html.match(/<section class="member-code yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
+      expect(claimSection).toContain("data-code-drop-claim");
       expect(claimSection).not.toMatch(/raffle|prediction|wager|stake|odds|payout|settlement/i);
     }
 
@@ -286,7 +287,7 @@ describe("a creator's My Community page", () => {
 
   it("keeps a signed-in zero balance and empty activity compact", async () => {
     const html = await zeroCredits();
-    expect(html).toContain('class="member-balance" data-credit-balance="0"');
+    expect(html).toContain('data-credit-balance="0"');
     expect(html).toContain('class="member-tools"');
     expect(html.indexOf('id="membership-claims"')).toBeLessThan(html.indexOf('id="membership-history"'));
     expect((html.match(/class="member-empty"/g) || []).length).toBe(1);
@@ -417,7 +418,7 @@ describe("viewer row geometry", () => {
   it("lets the title keep a readable measure instead of stacking at one width", () => {
     expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }");
     expect(appCss).toContain(".vd-card-main,.vd-profile-txt{min-width:0}");
-    expect(appCss).toContain("grid-template-columns:44px minmax(0,1fr) auto");
+    expect(appCss).toContain("grid-template-columns:46px minmax(0,1fr) auto");
     // The 360px stacking workaround is gone: wrapping is the root behaviour.
     expect(appCss).not.toContain("@media (max-width:360px)");
     expect(appCss).toContain(".vd-card-side{grid-column:2}");
@@ -435,7 +436,7 @@ describe("the global account page", () => {
   const page = String(viewerDashboardPage);
 
   it("opens with My communities, not an operator dashboard head", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title">My communities</h1>');
+    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
     expect((page.match(/<h1\b/g) || []).length).toBe(1);
     expect(page).not.toContain("an-eyebrow");
     expect(page).not.toContain("an-title");
@@ -458,7 +459,7 @@ describe("the global account page", () => {
   });
 
   it("links to the canonical creator membership without a client router", () => {
-    expect(clientSource).toContain('const href = `/${encodeURIComponent(community.slug)}/me`');
+    expect(clientSource).toContain('const href = `/${encodeURIComponent(community.slug)}`');
     expect(clientSource).not.toContain('"popstate"');
     expect(clientSource).not.toContain("pushState");
     expect(clientSource).not.toContain("/api/viewer/site");

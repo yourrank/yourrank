@@ -280,8 +280,8 @@ describe("new-shell auxiliary renderers", () => {
     });
     // Each preview owns its own empty state, so the page does not repeat a
     // "nothing here yet" line underneath them.
-    expect(html).toContain('<p class="yr-empty-t">No players on the board yet</p>');
-    expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
+    expect(html).toContain('<p>No standings yet.</p>');
+    expect(html).toContain('No rewards yet.');
     expect(html).not.toContain("hasn't added players or rewards yet");
     expect(html).not.toContain("How credits work");
     expect(html).not.toContain("Top of the leaderboard");
@@ -336,7 +336,9 @@ describe("new-shell auxiliary renderers", () => {
       .replace(/\s+/g, " ");
     // Three jobs: community context, home introduction, and copyright.
     // The visible responsive rail no longer duplicates identity in a drawer.
-    expect((visible.match(/Demo Board/g) || []).length).toBe(3);
+    expect(html).toContain('data-preview-field="f_name">Demo Board</p>');
+    expect(html).toContain('class="viewer-switch"');
+    expect(visible).not.toContain("Demo Board Demo Board");
     expect(html).toContain("Send a suggestion to this site's owner.");
     expect(html).toContain("There is no personal reply here.");
     expect(html).not.toContain("Tell Demo Board what works");

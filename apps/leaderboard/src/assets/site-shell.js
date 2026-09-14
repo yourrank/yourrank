@@ -5,6 +5,56 @@
 (function () {
   "use strict";
 
+  // Guide progress is a per-tab browsing aid, never persisted membership state.
+  var guide = document.querySelector("[data-viewer-guide]");
+  var guideVisits = {};
+  var guideKey = "yr-viewer-guide:" + (document.body.dataset.slug || "");
+  try { guideVisits = JSON.parse(sessionStorage.getItem(guideKey) || "{}"); } catch (_) { /* Storage is optional. */ }
+  if (!guideVisits || typeof guideVisits !== "object" || Array.isArray(guideVisits)) guideVisits = {};
+  if (["shop", "me"].includes(document.body.dataset.section)) {
+    guideVisits[document.body.dataset.section] = true;
+    try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Links still work. */ }
+  }
+  if (guide) {
+    guide.querySelector("[data-guide-dismiss]").hidden = false;
+    var completed = Number(guide.dataset.guideBase);
+    var total = Number(guide.dataset.guideTotal);
+    guide.querySelectorAll("[data-guide-visit]").forEach(function (row) {
+      if (guideVisits[row.dataset.guideVisit] === true) {
+        completed++;
+        row.querySelector(".viewer-check-icon").classList.add("is-done");
+        row.querySelector(".viewer-check-icon").innerHTML = '<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+      }
+    });
+    guide.querySelector("[data-guide-count]").textContent = String(completed);
+    guide.querySelector(".viewer-ring-fill").setAttribute("stroke-dasharray", (completed / total * 219.92) + " 219.92");
+    guide.querySelector(".viewer-progress-ring").setAttribute("aria-label", completed + " of " + total + " guide steps completed");
+    var restoreGuide = document.querySelector(".viewer-guide-restore");
+    var setGuideHidden = function (hidden, focus) {
+      guide.hidden = hidden;
+      restoreGuide.hidden = !hidden;
+      guideVisits.dismissed = hidden;
+      try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Optional. */ }
+      if (focus) (hidden ? restoreGuide.querySelector("button") : guide.querySelector("[data-guide-dismiss]")).focus();
+    };
+    guide.querySelector("[data-guide-dismiss]").addEventListener("click", function () { setGuideHidden(true, true); });
+    restoreGuide.querySelector("button").addEventListener("click", function () { setGuideHidden(false, true); });
+    if (guideVisits.dismissed === true) setGuideHidden(true, false);
+  }
+
+  var communitySwitch = document.querySelector(".viewer-switch");
+  if (communitySwitch) {
+    document.addEventListener("click", function (event) {
+      if (!communitySwitch.contains(event.target)) communitySwitch.open = false;
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && communitySwitch.open) {
+        communitySwitch.open = false;
+        communitySwitch.querySelector("summary").focus();
+      }
+    });
+  }
+
   // OAuth errors are one-time context. The server renders a controlled message
   // on My Community; remove only the known query key so refresh does not replay
   // stale failure feedback and unrelated navigation state remains intact.
@@ -596,6 +646,8 @@
           btn.classList.add("is-success");
           setRedeemStatus("Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.");
           if (typeof r.data.balance === "number") updateBalance(r.data.balance);
+          var overviewStatus = document.querySelector("[data-viewer-claim-summary]");
+          if (overviewStatus) overviewStatus.textContent = "Claim submitted";
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);
         } else {
