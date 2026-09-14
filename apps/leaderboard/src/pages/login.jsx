@@ -38,9 +38,10 @@ export function LoginPage() {
             </div>
           </aside>
           <main class="auth-main" id="main-content">
-            <div class="auth-card">
+            <div class="auth-card" id="auth-card">
               <a href="/" class="auth-brand-m">Your<b>Rank</b></a>
-              <h1>Sign in</h1><p class="sub">Welcome back.</p>
+              <h1 id="auth-title">Sign in</h1><p class="sub" id="auth-sub">Welcome back.</p>
+              <div class="plan-banner" id="viewerBanner" hidden role="status">Sign in with the account you use in creator communities. After signing in you go back to the community you came from.</div>
               <form id="form" method="POST" action="/api/auth/login" novalidate>
                 <div class="field">
                   <label for="email">Email</label>
@@ -67,7 +68,7 @@ export function LoginPage() {
                 <div class="err" id="err" role="alert" aria-live="assertive"></div>
                 <button class="btn btn--accent w-full" type="submit" id="submit">Sign in</button>
               </form>
-              <p class="foot">No account? <a href="/signup">Create one</a> · <a href="/forgot">Forgot password?</a><span class="foot-sep">Are you a viewer? <a href="/me">Log in with Kick or Discord</a></span></p>
+              <p class="foot">No account? <a href="/signup">Create one</a> · <a href="/forgot">Forgot password?</a><span class="foot-sep" id="viewer-foot">Are you a viewer? <a href="/me">Log in with Kick or Discord</a></span></p>
             </div>
           </main>
         </div>

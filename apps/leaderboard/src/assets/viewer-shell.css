@@ -5,7 +5,7 @@
   --yr-ink:#f3f6fa;--yr-panel:#ffffff;--yr-surface:#edf2f9;
   --yr-edge:#dfe6ef;--yr-edge-soft:#ebeff5;--yr-fog:#142a48;
   --yr-mute:#52627a;--yr-faint:#52627a;--yr-primary:#205acc;--yr-primary-hover:#1648ac;
-  --yr-warning-readable:#91410b;--yr-success-readable:#126045;
+  --yr-warning-readable:#91410b;--yr-success-readable:#126045;--yr-danger-readable:#B42318;
   --yr-accent-readable:#205acc;--yr-r-card:14px;--yr-r-ctl:99px;
   --viewer-rail:#e4edff;--viewer-active:#e7efff;--viewer-soft:#f6f8fc;--viewer-rail-width:212px;--podium-gold:#c99a39;--podium-silver:#8192a7;--podium-bronze:#aa794a;
   color-scheme:light;background:var(--yr-ink);color:var(--yr-fog);
@@ -219,7 +219,7 @@
 .viewer-shell .btn--accent:hover{background:var(--yr-primary-hover)}
 .viewer-shell .btn:disabled{opacity:.55;cursor:wait}
 .viewer-shell .status{font-size:14px;color:var(--yr-mute)}
-.viewer-shell .status.error{color:#a52e28}
+.viewer-shell .status.error{color:var(--yr-danger-readable)}
 .viewer-shell .status:empty{display:none}
 .vd-head{margin:0}
 .vd-layout{display:grid;gap:32px}

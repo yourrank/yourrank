@@ -176,7 +176,7 @@ describe("public viewer shell", () => {
     const html = await render("home", { viewer, viewerData });
     for (const removed of ['yr-chart', 'yr-kpi', '7-day average', 'Lifetime', 'Pending orders']) expect(html).not.toContain(removed);
     expect(html).toContain('<h1>Community overview</h1>');
-    expect(html).toContain('Not linked');
+    expect(html).toContain('Ranked by the creator');
     expect(html).toContain('Your community starts here.');
     expect(html).toContain('2 of 4 guide steps completed');
   });

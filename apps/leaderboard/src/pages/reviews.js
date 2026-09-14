@@ -1,5 +1,6 @@
 // Reviews / Google Business Profile page
 import { DEVIN_DESIGN_CONTRACT } from "@yourrank/shared/page-shell";
+import { brandLogoSvg } from "@yourrank/shared/brand-assets";
 
 const gbpStructuredData = JSON.stringify({
   "@context": "https://schema.org",
@@ -34,7 +35,7 @@ export const reviewsPage = `<!DOCTYPE html><html lang="en"><head>
 <script type="application/ld+json">${gbpStructuredData}</script>
 </head><body class="marketing-page marketing-page--reviews" data-identity="devin-reference">${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
-<header><nav class="top wrap"><a href="/" class="brand" aria-label="YourRank home"><span class="brand-icon-wrap" aria-hidden="true"><svg class="brand-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span><span class="brand-text">Your<b>Rank</b></span></a>
+<header><nav class="top wrap"><a href="/" class="brand" aria-label="YourRank home"><span class="brand-icon-wrap" aria-hidden="true">${brandLogoSvg({ idPrefix: "yrRev" })}</span></a>
 <button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
 <div class="links"><a href="/">Home</a><a href="/#products">Products</a><a href="/pricing">Pricing</a><a href="/faq">FAQ</a><a href="/login">Sign in</a><a href="/signup" class="btn btn--accent">Create your free page</a></div></nav></header>
 <main class="wrap pg-wrap pg-wrap--center" id="main-content">
