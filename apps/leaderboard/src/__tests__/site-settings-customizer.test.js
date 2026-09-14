@@ -742,7 +742,7 @@ describe("behavior: viewer template selection", () => {
     site.applyViewerTemplate("spotlight");
     expect(state._dirty).toBe(true);
     expect($id("f_viewerTemplate").value).toBe("spotlight");
-    expect($id("siteTemplateHint").textContent).toContain("dark");
+    expect($id("siteTemplateHint").textContent).toContain("top-three podium");
     expect(site.collect().payload.branding.template).toBe("spotlight");
     expect(state.CURRENT_BRANDING.accentA).toBe("#5b5bf5");
     site.applyViewerTemplate("cyber_arcade");

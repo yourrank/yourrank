@@ -2,6 +2,14 @@
 
 Maintained to prevent architecture drift.
 
+## Supplied viewer dashboard design — 2026-09-14
+
+Replaced the viewer shell with the owner's supplied `viewer-dashboard.html` design: ice canvas, context topbar, icon sidebar, white central panel, circular welcome guide, reward cards and a community overview rail. Home, Leaderboard, Reward shop, My activity, the viewer account/directory and viewer help use the canonical shared shell. Spotlight retains its podium within this light layout. Existing authentication, membership isolation, code redemption, reward confirmation and creator preview editing remain connected to their production owners. Home and Leaderboard now load site-scoped claims for the overview. No route, schema, identity, billing or deployment migration.
+
+Verified: full root `bun run test`, lint, typecheck, shared compilation and generated asset build PASSED. Desktop (1440px) and mobile (390px) browser checks PASSED for six viewer destinations, guide dismissal/restoration, keyboard menu recovery, account navigation, reward cancel/confirm with CSRF and idempotency, invalid/valid code responses, community isolation and signed-out/empty/unavailable states, with no page errors. Regression assertions and the shared snapshot now describe the supplied layout while preserving permission and escaping checks. Runner: `scripts/verify-viewer-design.mjs`; browser evidence: `.local-logs/viewer-design`; full suite log: `.local-viewer-full-test.log`. Final review found no current-change blocker.
+
+Not verified: live OAuth providers, deployed Worker rendering or real database persistence in the fixture browser run. Existing environment-dependent suite skips remain skips. No commit, push or deployment. The supplied HTML's sample records are replaced with actual renderer data; no sample memberships, balances or claims were added to production.
+
 ## Help drawer interaction follow-up — 2026-09-10
 
 The previously identified help focus gap is repaired using the existing YRDialog.trap primitive. The drawer and clickable backdrop share a body-level layer; opening makes the background inert, Tab/Shift+Tab stay inside, and Escape/close release the trap. Profile-menu openers return to the visible profile summary. Removed delayed open/close callbacks and automatic post-send closure, avoiding stale timers closing a reopened drawer. Support and product feedback clear only the submitted version of the form; newer edits remain with an explicit unsent message. Mobile maximum width uses the available containing width rather than 100vw.

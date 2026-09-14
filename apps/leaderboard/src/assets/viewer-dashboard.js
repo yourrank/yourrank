@@ -81,7 +81,30 @@ function setGlobalLoading(loading) {
   if (element) element.hidden = !loading;
 }
 
+let signedIn = false;
+function selectAccountView() {
+  const profile = signedIn && window.location.hash === "#vd-profile";
+  $("vd-profile").hidden = !profile;
+  $("vd-communities-card").hidden = !signedIn || profile;
+  $("vd-title").textContent = profile ? "Your viewer account." : "My communities";
+  $("vd-subtitle").textContent = profile
+    ? "The account you use across creator communities."
+    : "Good to have you here. Pick up where you left off. Your rewards and claims stay with each community.";
+  const accountLink = $("viewer-account-link");
+  const communitiesLink = $("viewer-communities-link");
+  if (profile) { accountLink.setAttribute("aria-current", "page"); communitiesLink.removeAttribute("aria-current"); }
+  else { accountLink.removeAttribute("aria-current"); communitiesLink.setAttribute("aria-current", "page"); }
+  $("viewer-top-title").textContent = profile ? "Viewer account" : "My communities";
+}
+window.addEventListener("hashchange", () => {
+  selectAccountView();
+  if (signedIn) $(window.location.hash === "#vd-profile" ? "vd-profile" : "vd-title").focus();
+});
+
 function renderLoggedOut() {
+  signedIn = false;
+  $("viewer-top-avatar").textContent = "YR";
+  selectAccountView();
   $("viewer-account-link").setAttribute("href", "/me#vd-login-card");
   $("viewer-account-link").hidden = true;
   $("vd-login-card").hidden = false;
@@ -95,9 +118,11 @@ function renderLoggedOut() {
 }
 
 function renderAccount(viewer) {
+  signedIn = true;
   $("viewer-account-link").setAttribute("href", "/me#vd-profile");
   $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
+  $("viewer-top-avatar").textContent = Array.from(name).slice(0, 2).join("").toUpperCase();
   $("vd-username").textContent = name;
   $("vd-avatar-fallback").textContent = initial(name);
 
@@ -122,6 +147,7 @@ function renderAccount(viewer) {
   const accountAge = viewer.createdAt ? ` · Viewer Account since ${fmtDate(viewer.createdAt)}` : "";
   $("vd-identity").textContent = `${connections.length ? `Connected to ${connections.join(" and ")}` : "Signed in to YourRank"}${accountAge}`;
   $("vd-wrong-account").hidden = false;
+  selectAccountView();
 }
 
 function membershipSummary(community) {
@@ -139,7 +165,7 @@ function renderCommunities(communities) {
   $("vd-communities-empty").hidden = communities.length > 0;
   list.innerHTML = communities.map((community) => {
     const name = community.name || community.slug;
-    const href = `/${encodeURIComponent(community.slug)}/me`;
+    const href = `/${encodeURIComponent(community.slug)}`;
     return `
       <article class="vd-card-row vd-community-row">
         <span class="vd-site-mark" aria-hidden="true">${esc(initial(name))}</span>
@@ -148,7 +174,7 @@ function renderCommunities(communities) {
           <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
         </div>
         <div class="vd-card-side">
-          <a class="btn btn--sm" href="${href}" aria-label="View my activity in ${esc(name)}">View my activity</a>
+          <a class="btn btn--sm" href="${href}" aria-label="Open ${esc(name)}">Open community</a>
         </div>
       </article>`;
   }).join("");

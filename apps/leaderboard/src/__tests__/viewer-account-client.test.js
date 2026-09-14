@@ -56,6 +56,7 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
   };
   const location = new URL(url);
   const window = {
+    addEventListener() {},
     location,
     history: { replaceState(_state, _title, next) { location.href = new URL(next, location.href).href; } },
   };
@@ -94,7 +95,7 @@ describe("global Viewer Account client", () => {
     await env.ready();
 
     expect(env.$("vd-login-card").hidden).toBe(true);
-    expect(env.$("vd-profile").hidden).toBe(false);
+    expect(env.$("vd-profile").hidden).toBe(true);
     expect(env.$("viewer-account-link").hidden).toBe(false);
     expect(env.$("vd-communities-card").hidden).toBe(false);
     expect(env.$("vd-username").textContent).toBe("member");
@@ -102,7 +103,7 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities").innerHTML).toContain("Alpha Community");
     expect(env.$("vd-communities").innerHTML).toContain("1,234 free credits");
     expect(env.$("vd-communities").innerHTML).toContain("1 Claim needs creator action");
-    expect(env.$("vd-communities").innerHTML).toContain('href="/alpha/me"');
+    expect(env.$("vd-communities").innerHTML).toContain('href="/alpha"');
     expect(env.$("vd-communities").innerHTML).not.toContain("Member since");
     expect(env.calls).toEqual([{ path: "/api/viewer/me", method: "GET" }]);
   });
@@ -176,7 +177,7 @@ describe("global Viewer Account ownership", () => {
   const page = String(viewerDashboardPage);
 
   it("names the real account-to-membership hierarchy", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title">My communities</h1>');
+    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
     expect(page).toContain("Your rewards and claims stay with each community.");
     expect(page).toContain(">Your memberships<");
     expect(page).toContain("Separate memberships, rewards and credit balances.");
@@ -211,7 +212,7 @@ describe("global Viewer Account ownership", () => {
 
   it("uses one replacement material owner and puts memberships before account maintenance", () => {
     expect(page).not.toContain('/assets/devin-system.css');
-    expect(page).toContain('direction seed c2610fb4');
+    expect(page).toContain('User-supplied viewer-dashboard.html');
     expect(page.indexOf('id="vd-communities-card"')).toBeLessThan(page.indexOf('id="vd-profile"'));
     expect(page).toContain('<summary>Manage your login</summary>');
     expect(page).not.toContain('href="/dashboard"');
@@ -270,7 +271,7 @@ describe("viewer login recovery", () => {
   });
 
   it("does not claim a login switch succeeded when sign-out fails", async () => {
-    const env = makeEnvironment({ response: (_path, opts) => opts.method === "POST" ? { status: 500, body: { error: "failed" } } : { body: ACCOUNT } });
+    const env = makeEnvironment({ url: "https://yourrank.site/me#vd-profile", response: (_path, opts) => opts.method === "POST" ? { status: 500, body: { error: "failed" } } : { body: ACCOUNT } });
     await env.ready();
     await env.$("vd-switch").click();
     expect(env.$("vd-profile").hidden).toBe(false);

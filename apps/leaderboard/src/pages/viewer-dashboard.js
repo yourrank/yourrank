@@ -1,4 +1,4 @@
-import { viewerNavigation, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
+import { viewerNavigation, viewerAccountOverview, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 import { leaderboardPageHtml } from "@yourrank/shared/page-shell";
 
 export const viewerDashboardPage = leaderboardPageHtml({
@@ -11,7 +11,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
   styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
   designContract: VIEWER_DESIGN_CONTRACT,
   scripts: [
-    '<script src="/assets/viewer-dashboard.js?v=3" type="module"></script>',
+    '<script src="/assets/viewer-dashboard.js?v=4" type="module"></script>',
   ],
   content: `
 ${viewerNavigation()}
@@ -19,8 +19,8 @@ ${viewerNavigation()}
 
   <div id="vd-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span class="sr-only">Loading your communities…</span></div>
   <div class="vd-head">
-    <h1 class="vd-h1" id="vd-title">My communities</h1>
-    <p class="vd-sub">Pick up where you left off. Your rewards and claims stay with each community.</p>
+    <h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>
+    <p class="vd-sub" id="vd-subtitle">Good to have you here. Pick up where you left off. Your rewards and claims stay with each community.</p>
   </div>
 
   <section id="vd-login-card" tabindex="-1">
@@ -44,6 +44,8 @@ ${viewerNavigation()}
     <div class="empty vd-community-empty" id="vd-communities-empty" hidden>
       <h3>You haven't joined any communities yet.</h3>
       <p>Visit a creator's YourRank site and choose Join community. Your membership will be waiting here when you come back.</p>
+    </div>
+    <div class="vd-find-community"><h3>Looking for another community?</h3>
       <form id="vd-open-community" class="vd-community-entry">
         <label for="vd-community-name">Community name</label>
         <p id="vd-community-name-hint">Enter the name after the slash in the creator's YourRank link.</p>
@@ -79,5 +81,6 @@ ${viewerNavigation()}
   </div>
   <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="${viewerHelpHref().replaceAll('&', '&amp;')}">Contact support</a></nav>
 </div>
+${viewerAccountOverview()}
 `,
 });

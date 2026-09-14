@@ -1,19 +1,19 @@
 ---
 name: YourRank Community Workspace
-description: A mineral creator workspace, a blue Channel guide for viewers, and separately scoped marketing material.
+description: A mineral creator workspace, the supplied Channel guide for viewers, and separately scoped marketing material.
 colors:
   viewer-action: "#205acc"
   viewer-action-hover: "#1648ac"
-  viewer-canvas: "#f4f7fc"
+  viewer-canvas: "#f3f6fa"
   viewer-surface: "#ffffff"
-  viewer-inset: "#e9eff8"
+  viewer-inset: "#edf2f9"
   viewer-text: "#142a48"
-  viewer-text-soft: "#435a76"
-  viewer-text-mute: "#526782"
-  viewer-rail: "#dce9ff"
-  viewer-rail-hover: "#c3d7fb"
-  viewer-line: "#c9d5e5"
-  viewer-line-soft: "#dce4ef"
+  viewer-text-soft: "#52627a"
+  viewer-text-mute: "#52627a"
+  viewer-rail: "#e4edff"
+  viewer-rail-hover: "#e7efff"
+  viewer-line: "#dfe6ef"
+  viewer-line-soft: "#ebeff5"
   viewer-warning: "#91410b"
   viewer-success: "#126045"
   workspace-accent: "#4056b9"
@@ -50,7 +50,7 @@ colors:
 typography:
   viewer-page:
     fontFamily: "Fira Sans, Inter, system-ui, -apple-system, Segoe UI, sans-serif"
-    fontSize: "32px"
+    fontSize: "26px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.025em"
@@ -127,8 +127,8 @@ typography:
     lineHeight: 1.3
     letterSpacing: "0.1em"
 rounded:
-  viewer-control: "8px"
-  viewer-module: "14px"
+  viewer-control: "99px"
+  viewer-module: "18px"
   workspace-control: "8px"
   workspace-module: "14px"
   workspace-pill: "999px"
@@ -236,7 +236,7 @@ components:
 
 The authenticated creator workspace uses a cool mineral canvas, white work surfaces, quiet slate navigation, indigo actions, Fira Sans interface text, and measured Fira Code data. It organizes community work around one next action and readable activity. This is the user-authorized replacement of the incumbent dashboard world, recorded from the canonical stylesheet and shared shell contract.
 
-The viewer world is **Channel guide**, direction seed `c2610fb4`: a visible blue community rail beside a flat ice reading field, navy Fira Sans copy, compact labeled controls, and divided working records. The account directory connects separate memberships; each creator destination keeps its community identity and personal state visible. This is a code-led replacement authorized by the user, without an approved comp or quality-bar image.
+The viewer world follows the owner-supplied `viewer-dashboard.html` (14 September 2026) as an exact visual specification: ice canvas, quiet icon navigation, white rounded center panel, Channel Blue pill controls, circular welcome guide, and a separate community overview. Real Viewer Accounts and site-scoped memberships supply the names, balances, rewards, claims and standings. Prototype sample records and simulated actions are not production content.
 
 Frontmatter keys prefixed `workspace-` describe the creator workspace and `viewer-` describe the supported viewer shell. Unprefixed keys retain the incumbent marketing and legacy material record; they do not govern the viewer world. Marketing keeps its near-white, ink-black, electric-violet language and Inter/Geist Mono stacks. The retained North Star names that earlier record; Channel guide names only the viewer world. Transparent OBS overlays and restricted legacy Games surfaces retain their existing scope.
 
@@ -249,7 +249,7 @@ The product demonstration and the user's state carry each screen. Decoration sta
 - Hairline dividers and shared outer boundaries instead of nested card stacks.
 - Compact identity, clear purpose, visible action, and readable state in the first viewport.
 - One coherent creator workspace with explicit account and selected-site context.
-- A visible blue viewer guide with community identity and a wrapping mobile header.
+- A quiet viewer sidebar, white center panel, membership rail and a wrapping mobile header.
 - An account directory of separate memberships, with flat personal claims and activity records inside each community.
 
 ## Colors
@@ -316,7 +316,7 @@ Marketing and product education use a centered reading frame of approximately 11
 
 The authenticated workspace uses a 232px slate rail by default, a 64px white context bar, and a mineral working field with 40px default inline padding. The stylesheet retains a 248px rail adjustment between 981px and 1180px and a 44px collapsed desktop rail. At 980px the rail becomes a drawer. Home places a launch region above a two-value summary, then activity and player lists; at 700px its columns stack and material Home actions have 44px minimum targets. The target creator IA is Home → Community → Activities → People → Rewards → Insights → Settings, while current labels and URLs remain implementation truth until migrated deliberately. Account and selected-site context stay visibly distinct. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
 
-Channel guide uses a 228px sticky rail and a reading column capped at 1180px, with 40px/48px/24px main padding and 32px section gaps. The rail owns community destinations and persistent account/help links. Community identity appears only in a community context; the account directory starts with My communities and does not repeat a YourRank context heading. At 900px the rail becomes a visible header: destinations and account links wrap onto their own rows, with community identity beside the brand. It does not become a drawer. Main padding becomes 28px/24px/20px, then 24px/18px at 600px. Membership activity and optional code entry stack at 600px; directory actions move below their community text. Record side columns wrap intrinsically when titles need room.
+The viewer layout uses a 90px top bar over 212px navigation, a flexible white center panel, and a 314px overview, with 24px gutters and 28px outer margins. At 1250px the rails become 180px/276px; below 1050px the overview moves beneath the center. Below 760px the same navigation becomes four icon destinations above a single-column content stack. Center padding is 29px/30px/22px on desktop and 20px/18px/16px on mobile. Guide state records only browsing progress in the current tab; membership steps come from authenticated records.
 
 At narrow widths, marketing navigation becomes a disclosed menu while the primary Start free action remains visible; the creator workspace rail uses its separate drawer behavior. Wide data stays inside its own scroll container. Viewer primary controls and community destinations have at least 44px targets; compact viewer account links use a 40px minimum in the wrapping header.
 
@@ -351,7 +351,7 @@ One mark, one wordmark, one owner. `packages/shared/src/brand-assets.ts` is the 
 
 ## Shapes
 
-Authenticated and viewer controls use their scoped 8px radius and modules use 14px. Viewer directory and membership records remain open divided rows; the code form is a bounded white panel. The near-square action language below is retained marketing/legacy guidance.
+Creator controls retain their 8px radius and 14px modules. Viewer actions follow the supplied pill controls; inputs use 9px corners, center and overview panels use 18px corners, reward cards use 15px, and the welcome guide uses 20px. Membership and account lists are divided rows. Code entry uses a soft ice inset. Marketing and legacy guidance below remains separately scoped.
 
 Geometry is restrained and role-based. Primary actions and compact controls are nearly square; fields and small identity marks receive a gentle curve; cards and substantial reading surfaces use the larger soft corner; pills are limited to statuses and compact navigation. Adjacent information in one workflow shares an outer boundary and internal dividers rather than accumulating nested rounded containers.
 
@@ -371,9 +371,9 @@ Viewer navigation names the destination: **Reward shop** at `/<slug>/shop`, **My
 
 Channel guide is owned by `packages/shared/src/viewer-shell.ts` and `apps/leaderboard/src/assets/viewer-shell.css`, with record, field, and public action primitives inherited from `site-shell.css`. The supported body is `.yr-site.viewer-shell`; supported public sections load site-shell followed by viewer-shell and omit `devin-system.css` and stored `data-template` overrides. The account directory is rendered by `apps/leaderboard/src/pages/viewer-dashboard.js`; community content is rendered by `packages/shared/src/site-render.ts`. Restricted Games keeps its legacy shell and is outside this replacement.
 
-**Optional Spotlight presentation — 2026-09-07.** The owner requested an additional creator-selected viewer template while preserving the current design. Site → Public site → Brand → Viewer template offers Channel guide (the existing default) and Spotlight through the existing Pro Brand controls, live preview, and Save changes flow. `packages/shared/src/viewer-templates.ts` is the supported catalogue; the existing `branding.template` / `theme_json.template` stores the choice. Untouched older values retain their current appearance and round-trip unchanged.
+**Optional Spotlight presentation — 2026-09-07.** The owner requested an additional creator-selected viewer template while preserving the current design. Site → Public site → Brand → Viewer template offers Channel guide (the existing default) and Spotlight through the existing Pro Brand controls, live preview, and Save changes flow. `packages/shared/src/viewer-templates.ts` is the supported catalogue; the existing `branding.template` / `theme_json.template` stores the choice. Older stored values continue to round-trip; supported pages share the supplied light viewer shell.
 
-Spotlight follows the owner's podium-leaderboard reference: horizontal navigation, rank 1 centered above rank 2 on the left and rank 3 on the right, dark geometric pedestals, and compact standings below. Scoped `data-viewer-template="spotlight"` overrides use canvas `#0c1016`, panel `#141b25`, row surface `#1b2533`, pale text `#f0f4fa`, muted text `#bdc9d9`, blue action `#2869a8`, and focus outline `#90c8ff`. Gold `#f1c968`, silver `#c6d3e2`, and bronze `#d7a477` mark actual first, second, and third ranks. Navigation wraps on narrow screens; the three podium positions retain their order with smaller marks and type.
+Spotlight retains rank 1 centered above rank 2 on the left and rank 3 on the right, with compact standings below. After the September 14 viewer replacement, it uses the supplied light shell and its navigation. Gold `#c99a39`, silver `#8192a7`, and bronze `#aa794a` mark actual podium ranks. The original player rows remain the only standings source.
 
 The podium styles the original top-three list rows without duplicating players. Tied top ranks keep equally presented compact rows; search shows compact matching rows, and clearing it restores the original standings presentation. Public player records have no avatar field, so marks use the first two name characters without inferring a Viewer Account connection. `boardMain()` in `packages/shared/src/site-render.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and `apps/leaderboard/src/assets/site-shell.js` own this rendering and search behavior. This optional presentation applies to supported community Home, Leaderboard, Reward shop, and My activity pages; the global directory, help pages, creator workspace, marketing, and restricted Games retain their own presentation. No data, ranking, claim, or identity behavior changes with a template.
 
@@ -564,7 +564,7 @@ Later migrations lower the ratchets as they touch each surface.
 
 ### Reward imagery and community events — 2026-09-08
 
-Reward shop uses a responsive image-card grid within the selected viewer template. A 3:2 image area, creator display heading, description, credit cost and full-width claim action form each card. Empty image slots use the existing gift mark. A lone card keeps a normal column width; mobile cards occupy the available width without fixed-height empty space. Creator uploads re-encode JPG/PNG/WebP to static WebP at most 960 pixels per edge and 180 KB; separate lazy image requests keep binary data out of public shop JSON. Delete removes a reward from the shop while preserving existing claim history.
+Reward shop uses the supplied two-column grid, a 135px art area (110px mobile), creator reward name and description, a tabular credit price and a full-width pill action. Uploaded art retains its canonical media pipeline; missing images use the gift icon. The creator fulfills each reward. Claims remain in the selected community activity page and its overview rail.
 
 The public brand link returns to that community's Home. Enabled, configured channels appear in the shared viewer navigation. Site settings uses the full workspace width, and its destination labels match Reward shop and My activity. Appearance labels use workspace text tokens; Insights uses readable section panels and prominent values.
 
@@ -591,3 +591,6 @@ Billing uses the owner-supplied pricing-card composition inside the mineral work
 - **Don't** turn mono labels, uppercase captions, or numbered markers into decoration; each must encode actual state, scope, sequence, or data.
 - **Don't** invent testimonials, customer logos, metrics, billing promises, or performance claims that the product evidence does not support.
 - **Don't** apply viewer-world rules to the creator workspace, marketing, OBS overlays, or restricted legacy Games.
+
+
+The supplied viewer HTML supersedes earlier Channel guide composition details in this record. Supported viewer destinations all use its light three-column shell. A saved Spotlight choice retains its standings podium inside that shell; it does not select dark chrome. Global `/me` shows memberships, while `/me#vd-profile` shows account maintenance using the same account response. No aggregate credit balance is displayed.

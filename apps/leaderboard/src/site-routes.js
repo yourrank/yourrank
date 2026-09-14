@@ -135,14 +135,14 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       // Each surface composes only the canonical reads it owns. Personalized
       // history is loaded only after site-scoped Membership resolution.
       const opts = section === "home"
-        ? { shop: true }
+        ? { shop: true, claims: !!viewer }
         : section === "shop"
           ? { shop: true, claims: !!viewer }
           : { claims: !!viewer, ledger: !!viewer, participation: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {
-      // Leaderboard and Games only need the balance shown in the header.
-      viewerData = await getViewerSiteData(r.id, viewer.id);
+      // The viewer overview reads membership Claims; Games keeps its balance-only contract.
+      viewerData = await getViewerSiteData(r.id, viewer.id, section === "games" ? {} : { claims: true });
     }
 
     if (section === "home" || section === "leaderboard") {
