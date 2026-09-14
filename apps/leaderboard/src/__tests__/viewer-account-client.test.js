@@ -101,7 +101,7 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-username").textContent).toBe("member");
     expect(env.$("vd-identity").textContent).toContain("Connected to Kick as @member");
     expect(env.$("vd-communities").innerHTML).toContain("Alpha Community");
-    expect(env.$("vd-communities").innerHTML).toContain("1,234 free credits");
+    expect(env.$("vd-communities").innerHTML).toContain("1,234 Credits");
     expect(env.$("vd-communities").innerHTML).toContain("1 Claim needs creator action");
     expect(env.$("vd-communities").innerHTML).toContain('href="/alpha"');
     expect(env.$("vd-communities").innerHTML).not.toContain("Member since");
@@ -221,18 +221,21 @@ describe("global Viewer Account ownership", () => {
 });
 
 describe("viewer login recovery", () => {
-  it("opens the named community from the empty membership directory without creating a membership", async () => {
+  it("opens a named or pasted YourRank community from the directory without creating a membership", async () => {
     const env = makeEnvironment({ response: { body: { ...ACCOUNT, communities: [] } } });
     await env.ready();
     expect(env.$("vd-communities-empty").hidden).toBe(false);
     env.$("vd-community-name").value = " Atlas-Community ";
     await env.$("vd-open-community").submit();
-    expect(env.location.pathname).toBe("/atlas-community/me");
+    expect(env.location.pathname).toBe("/atlas-community");
     // Existing slugify truncates after trimming, so a stored slug can end in '-'.
     const truncatedSlug = "a".repeat(39) + "-";
     env.$("vd-community-name").value = truncatedSlug;
     await env.$("vd-open-community").submit();
-    expect(env.location.pathname).toBe(`/${truncatedSlug}/me`);
+    expect(env.location.pathname).toBe(`/${truncatedSlug}`);
+    env.$("vd-community-name").value = "https://yourrank.site/atlas-community/shop";
+    await env.$("vd-open-community").submit();
+    expect(env.location.pathname).toBe("/atlas-community");
     expect(env.calls.every(call => call.method === "GET")).toBe(true);
   });
 

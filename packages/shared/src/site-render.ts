@@ -399,7 +399,7 @@ const LEDGER_KIND = {
 const CLAIM_STATUS_NOTE = "Needs fulfillment means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled means the credits went back to your balance.";
 
 
-function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, membershipHref = "", slug = "" }) {
+function rewardRow({ item, viewer, member = !!viewer, balance, blocked, unavailable = false, signIn, membershipHref = "", slug = "" }) {
   const cost = Number(item.cost) || 0;
   const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
   const inStock = stock === null || stock > 0;
@@ -411,6 +411,9 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, signIn, 
   let action;
   if (!viewer) {
     action = `<a class="yr-act" href="${signIn}">Sign in to claim</a>`;
+  } else if (unavailable) {
+    state = "Membership could not load";
+    action = `<span class="yr-act yr-act--off" role="note">Unavailable</span>`;
   } else if (!member) {
     state = "Join this community first";
     action = `<a class="yr-act" href="${membershipHref}">Join to claim</a>`;
@@ -521,7 +524,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 
   const ctx = {
     r, data, b, br, section, siteSections, slug, isCustomDomain, homeUrl, logoUrl,
-    viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, casino, pool, period, ctaHref, hasCta,
+    viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, casino, pool, period, ctaHref, hasCta, socialLinks,
     returnTo, nonce, watermark, isDemo: !!opts.isDemo,
     viewerAuthError: typeof opts.viewerAuthError === "string" ? opts.viewerAuthError : "",
   };
@@ -564,7 +567,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
   const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
-${viewerShell ? `<div class="viewer-layout">${viewerNavigation({name:rawTitleBase,socialLinks,creatorMark:creatorMark(logoUrl,"yr-id-logo",36),viewerName:viewer ? viewerName(viewer) : '',signedIn:!!viewer,sessionControl:!viewer && section!=="me" ? signInLink(r,returnTo,"yr-btn",siteSectionHref("me",slug,isCustomDomain)) : "",homeHref:siteSectionHref("home",slug,isCustomDomain),accountHref:globalViewerAccountHref(isCustomDomain),helpHref:viewerHelpHref(siteSectionHref(section || "home",slug,false),isCustomDomain ? "https://yourrank.site" : ""),links:sectionList(siteSections).map(key=>({label:SECTION_LABELS[key],href:siteSectionHref(key,slug,isCustomDomain),active:key===section}))})}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
+${viewerShell ? `<div class="viewer-layout">${viewerNavigation({name:rawTitleBase,socialLinks,creatorMark:creatorMark(logoUrl,"yr-id-logo",36),viewerName:viewer ? viewerName(viewer) : '',communityStatus:streamerChannel(ctx)?.label || 'Creator community',signedIn:!!viewer,sessionControl:!viewer && section!=="me" ? signInLink(r,returnTo,"yr-btn",siteSectionHref("me",slug,isCustomDomain)) : "",homeHref:siteSectionHref("home",slug,isCustomDomain),accountHref:globalViewerAccountHref(isCustomDomain),helpHref:viewerHelpHref(siteSectionHref(section || "home",slug,false),isCustomDomain ? "https://yourrank.site" : ""),links:sectionList(siteSections).map(key=>({label:SECTION_LABELS[key],href:siteSectionHref(key,slug,isCustomDomain),active:key===section}))})}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="${viewerShell ? "viewer-main" : "yr-main"}" id="main-content">
 ${viewerShell ? viewerCommunityHeading(ctx) : ''}
 ${mainInner}
@@ -573,7 +576,7 @@ ${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield'
 ${viewerShell ? `${viewerCommunityOverview(ctx)}</div><div class="viewer-site-footer">${footer}</div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
-<script src="/assets/site-shell.js" nonce="${nonce}" defer></script>
+<script src="/assets/${viewerShell ? 'viewer-app' : 'site-shell'}.js" nonce="${nonce}" defer></script>
 </body></html>`;
 
   return head + body;
@@ -634,29 +637,38 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
  * has not configured.
  */
 function viewerCommunityHeading(ctx) {
-  const { b, slug, viewer, isMember, membershipStatus, siteSections, isCustomDomain } = ctx;
+  const { b, slug, viewer, isMember, membershipStatus, siteSections, isCustomDomain, viewerOnSite, logoUrl } = ctx;
   const name = b.name || slug;
-  return `<header class="viewer-panel-head"><div class="viewer-community-heading"><span class="viewer-avatar viewer-avatar-large">${esc(Array.from(name)[0] || 'Y')}</span><div><p class="viewer-context-name" data-preview-field="f_name">${esc(name)}</p><p class="viewer-context-sub">${isMember ? '<span class="viewer-member-dot"></span>Community member' : viewer && membershipStatus === 'unavailable' ? 'Membership unavailable' : 'Creator community'}</p></div></div>${siteSections.me !== false ? `<a class="yr-btn yr-btn--ghost" href="${siteSectionHref('me', slug, isCustomDomain)}#membership-code">${viewerIcon('code')}Claim free code</a>` : ''}</header>`;
+  return `<header class="viewer-panel-head"><div class="viewer-community-heading">${creatorMark(logoUrl, 'viewer-avatar viewer-avatar-large', 46, `<span class="viewer-avatar viewer-avatar-large">${esc(Array.from(name)[0] || 'Y')}</span>`)}<div><p class="viewer-context-name" data-preview-field="f_name">${esc(name)}</p><p class="viewer-context-sub">${isMember ? '<span class="viewer-member-dot"></span>Community member' : viewer && membershipStatus === 'unavailable' ? 'Membership unavailable' : 'Creator community'}</p></div></div>${siteSections.me !== false && !viewerOnSite?.blocked && !(viewer && membershipStatus === 'unavailable') ? `<a class="yr-btn yr-btn--ghost" href="${siteSectionHref('me', slug, isCustomDomain)}#membership-code">${viewerIcon('code')}Redeem code</a>` : ''}</header>`;
+}
+
+function streamerChannel(ctx) {
+  return (ctx.socialLinks || []).map(link => {
+    try {
+      const url = new URL(link.href);
+      const host = url.hostname.replace(/^www\./, '');
+      const label = ({ 'kick.com': 'Kick', 'twitch.tv': 'Twitch', 'youtube.com': 'YouTube' })[host];
+      return label ? { ...link, label, kick: host === 'kick.com' && /^[a-z0-9_-]*[a-z][a-z0-9_-]*$/i.test(url.pathname.slice(1)) ? url.pathname.slice(1) : '' } : null;
+    } catch { return null; }
+  }).find(Boolean);
 }
 
 function viewerCommunityOverview(ctx) {
   const { b, slug, data, viewer, viewerData, isMember, membershipStatus, balance, siteSections, isCustomDomain } = ctx;
   const name = b.name || slug;
-  const shopHref = siteSectionHref('shop', slug, isCustomDomain);
-  const meHref = siteSectionHref('me', slug, isCustomDomain);
   const claims = viewerData?.claims || [];
   const pending = claims.filter(claim => claim.status === 'submitted');
   const latest = pending[0] || claims[0];
   const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0,3);
-  return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>Your community credits</h2>${viewerIcon('coins')}</div>${isMember ? `<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}"><strong data-credit-balance-num>${formatNumber(balance)}</strong><span>free credits</span></div><p class="viewer-scope-note">Only in ${esc(name)}</p>` : `<p>${viewer && membershipStatus === 'unavailable' ? 'Your community credits could not load. Reload this page to try again.' : viewer ? 'Join this community to keep your rewards and credits here.' : 'Sign in to see your credits in this community.'}</p>`}${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Browse rewards ${viewerIcon('arrow')}</a>` : ''}<p class="viewer-fine">No purchases. No cash value. Just community.</p></section>
-<h2 class="viewer-rail-heading">Your community, at a glance</h2>
-${siteSections.me !== false ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Your claims</h3>${isMember ? `<span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span>` : ''}</div>${isMember && latest ? `<ul class="viewer-claim-preview">${claimRow(latest)}</ul>` : `<p>${isMember ? 'Your first claimed reward will appear here.' : 'Your reward claims stay with your membership.'}</p>`}<a class="viewer-text-link" href="${meHref}">View my activity ${viewerIcon('arrow')}</a></section>` : ''}
-${siteSections.leaderboard !== false ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>On the leaderboard</h3>${viewerIcon('leaderboard')}</div><div class="viewer-board-list">${players.map((player, i) => `<div class="viewer-board-row"><span class="viewer-rank">${String(player.rank || i + 1).padStart(2,'0')}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span>${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('') || '<p>No standings yet.</p>'}</div><a class="viewer-text-link" href="${siteSectionHref('leaderboard',slug,isCustomDomain)}">See the standings ${viewerIcon('arrow')}</a></section>` : ''}
+  const channel = streamerChannel(ctx);
+  return `<aside class="viewer-overview" aria-label="Selected community overview">${channel ? `<section class="viewer-rail-panel viewer-stream"><h2>${esc(channel.label)} channel</h2><p><a href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">Watch ${esc(name)} ${viewerIcon('arrow')}</a></p><p data-stream-status${channel.kick ? ` data-kick-channel="${esc(channel.kick)}"` : ''}>Live status unavailable</p></section>` : ''}<section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>Your community credits</h2>${viewerIcon('coins')}</div>${isMember ? `<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}"><strong data-credit-balance-num>${formatNumber(balance)}</strong><span>Credits</span></div><p class="viewer-scope-note">Only in ${esc(name)}</p>${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}` : `<p>${viewer && membershipStatus === 'unavailable' ? 'Your community credits could not load. Reload this page to try again.' : viewer ? 'Join this community to keep your rewards and credits here.' : 'Sign in to see your credits in this community.'}</p>`}</section>
+${siteSections.me !== false && latest && isMember ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Latest claim</h3><span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span></div><ul class="viewer-claim-preview">${claimRow(latest)}</ul></section>` : ''}
+${siteSections.leaderboard !== false ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>On the leaderboard</h3>${viewerIcon('leaderboard')}</div><div class="viewer-board-list">${players.map((player, i) => `<div class="viewer-board-row"><span class="viewer-rank">${String(player.rank || i + 1).padStart(2,'0')}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span>${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('') || '<p>No standings yet. The creator publishes leaderboard scores.</p>'}</div></section>` : ''}
 <div class="viewer-scope-help">${viewerIcon('shield')}<p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside>`;
 }
 
 function homeMain(ctx) {
-  const { b, slug, viewer, viewerData, data, siteSections, isCustomDomain, isMember } = ctx;
+  const { b, slug, viewer, viewerData, data, siteSections, isCustomDomain, isMember, balance } = ctx;
   const name = b.name || slug;
   const shopHref = siteSectionHref('shop', slug, isCustomDomain);
   const meHref = siteSectionHref('me', slug, isCustomDomain);
@@ -668,10 +680,19 @@ function homeMain(ctx) {
     ...(siteSections.me !== false ? [{ done: false, icon: 'activity', title: 'Get to know your activity', note: 'Your claims, credits and participation', href: meHref, visit: 'me' }] : []),
   ];
   const done = steps.filter(step => step.done).length;
-  return `<div class="viewer-home-intro"><h1>${viewer ? `Welcome back, ${esc(viewerName(viewer))}.` : 'Welcome to your community.'}</h1><p data-preview-field="f_tagline">${esc(b.tagline || 'A little closer to your community.')}</p></div>
+  const blocked = !!viewerData?.viewerOnSite?.blocked;
+  const available = (viewerData?.shopItems || data.shopItems || []).filter(item => item.active !== false && (item.stock == null || Number(item.stock) > 0) && !Number(item.cooldownRemaining)).sort((a,b) => Number(a.cost) - Number(b.cost));
+  const nextReward = available.find(item => Number(item.cost) > balance) || available[0];
+  const progress = nextReward ? Math.min(100, Math.max(0, Math.floor(balance / Math.max(1, Number(nextReward.cost)) * 100))) : 0;
+  const recent = (viewerData?.ledger || []).slice(0,3);
+  const rewardProgress = siteSections.shop !== false ? `<section class="viewer-next-reward"><h2>Your next reward</h2>${blocked ? '<p>Claiming is unavailable for this membership. Contact the creator for help.</p>' : !isMember ? `<p>${viewer ? 'Join this community to start collecting credits for rewards.' : 'Sign in to see your reward progress.'}</p>` : nextReward ? `<div class="viewer-reward-progress"><strong>${esc(nextReward.name)}</strong><span>${formatNumber(balance)} / ${formatNumber(nextReward.cost)} Credits</span></div><progress max="100" value="${progress}" aria-label="Progress toward ${esc(nextReward.name)}">${progress}%</progress><p>${balance >= Number(nextReward.cost) ? 'You have enough credits for this reward.' : `${formatNumber(Number(nextReward.cost) - balance)} more Credits needed. Use the creator's channel-point rewards or redeem a community code to earn credits.`}</p><a class="yr-btn" href="${shopHref}">${balance >= Number(nextReward.cost) ? 'Choose a reward' : 'Explore rewards'}</a>` : '<p>No rewards are available right now. Check back after the creator adds more.</p>'}</section>` : '';
+  return `<div class="viewer-home-intro"><h1>Community overview</h1>${b.tagline ? `<p><span class="viewer-fine">About this community: </span><span data-preview-field="f_tagline">${esc(b.tagline)}</span></p>` : ''}</div>
+<dl class="viewer-home-stats"><div><dt>Your credits</dt><dd>${isMember ? `<strong data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span></strong><small>Credits</small>` : '—'}</dd></div>${siteSections.leaderboard !== false ? '<div><dt>Your leaderboard rank</dt><dd class="viewer-stat-text">Not linked</dd><p>Leaderboard players are managed by the creator. Your viewer account has no verified player link.</p></div>' : ''}<div><dt>Reward claims</dt><dd>${isMember ? formatNumber((viewerData?.claims || []).length) + (viewerData?.claimsTruncated ? '+' : '') : '—'}</dd></div></dl>
+${rewardProgress}
+<section class="viewer-recent-activity"><h2>Recent credit activity</h2>${!isMember ? '<p>Join the community to keep your activity here.</p>' : recent.length ? `<ul>${recent.map(row => `<li><span>${esc(LEDGER_KIND[row.type] || 'Credit activity')}<small>${esc(formatDate(row.created_at))}</small></span><strong>${Number(row.amount) >= 0 ? '+' : '−'}${formatNumber(Math.abs(Number(row.amount) || 0))} Credits</strong></li>`).join('')}</ul>` : '<p>No credit activity yet. Redeem a code shared by the creator or use their channel-point rewards to get started.</p>'}</section>
 <section class="viewer-guide" data-viewer-guide data-guide-total="${steps.length}" data-guide-base="${done}" aria-labelledby="viewer-guide-title"><div class="viewer-guide-top"><div class="viewer-progress-ring" role="img" aria-label="${done} of ${steps.length} guide steps completed"><svg viewBox="0 0 84 84" fill="none"><circle class="viewer-ring-track" cx="42" cy="42" r="35" stroke-width="6"/><circle class="viewer-ring-fill" cx="42" cy="42" r="35" stroke-width="6" stroke-dasharray="${done / steps.length * 219.92} 219.92"/></svg><div class="viewer-ring-label"><b data-guide-count>${done}</b><span>/${steps.length}</span></div></div><h2 id="viewer-guide-title">Your community starts here.</h2><p>A quick guide to feeling right at home.</p></div><div class="viewer-checklist">${steps.map(step => `<${step.done ? 'div' : 'a'} class="viewer-check-row"${step.done ? '' : ` href="${step.href}"`}${step.visit ? ` data-guide-visit="${step.visit}"` : ''}><span class="viewer-check-icon${step.done ? ' is-done' : ''}">${viewerIcon(step.done ? 'check' : step.icon)}</span><span class="viewer-check-copy"><strong>${esc(step.title)}</strong><small>${esc(step.note)}</small></span>${step.done ? '' : viewerIcon('arrow')}</${step.done ? 'div' : 'a'}>`).join('')}</div><div class="viewer-guide-footer"><span class="viewer-fine">Your place on the other side of the stream.</span><button type="button" class="viewer-text-link" data-guide-dismiss hidden>Explore on my own ${viewerIcon('arrow')}</button></div></section>
-<div class="viewer-guide-restore" hidden><p>Make yourself at home.</p><button class="viewer-text-link" type="button" data-guide-restore>Show quick guide</button></div>
-${siteSections.shop !== false ? `<div class="viewer-home-section-title"><h2>From the reward shop</h2><a class="viewer-text-link" href="${shopHref}">View shop ${viewerIcon('arrow')}</a></div><div class="viewer-reward-mini">${items.map(item => `<a class="viewer-reward-peek" href="${shopHref}"><span class="viewer-reward-symbol">${viewerIcon('gift')}</span><span><strong>${esc(item.name)}</strong><small>${formatNumber(item.cost)} free credits</small></span></a>`).join('') || `<p>No rewards yet. <a class="viewer-text-link" href="${shopHref}">Browse reward shop</a></p>`}</div>` : ''}`;
+<div class="viewer-guide-restore" hidden><button class="viewer-text-link" type="button" data-guide-restore>Show quick guide</button></div>
+${siteSections.shop !== false && !isMember ? `<div class="viewer-home-section-title"><h2>Community rewards</h2></div><div class="viewer-reward-mini">${items.map(item => `<div class="viewer-reward-peek"><span class="viewer-reward-symbol">${viewerIcon('gift')}</span><span><strong>${esc(item.name)}</strong><small>${formatNumber(item.cost)} Credits</small></span></div>`).join('') || '<p>No rewards yet. The creator will publish them here.</p>'}</div>` : ''}`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
@@ -740,7 +761,7 @@ ${prize ? `<span class="yr-srow-prize"><span class="${spotlight ? "yr-podium-lab
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
-    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts." : `The board fills in when ${esc(b.name || slug)} publishes the first scores.`);
+    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how to earn points on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.`);
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
@@ -773,7 +794,8 @@ function shopMain(ctx) {
     : (r.viewerDiscordAuthEnabled ? `/api/viewer/auth/discord?returnTo=${encodeURIComponent(returnTo)}` : "/me");
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
-  const head = `<header class="viewer-page-intro"><h1>A little something for you.</h1><p>Creator rewards, claimed with your community's free credits.</p></header>${viewer && isMember ? `<div class="viewer-balance-strip"><span>Available in ${esc(b.name || slug)}</span><strong data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span> <small>credits</small></strong></div>` : `<p class="yr-note">${viewer ? 'Join this community before claiming a reward.' : 'Sign in to use your community credits.'}</p>`}`;
+  const unavailable = viewer && ctx.membershipStatus === 'unavailable';
+  const head = `<header class="viewer-page-intro"><h1>Reward shop</h1><p>Rewards from ${esc(b.name || slug)}, claimed with community Credits.</p></header>${viewer && isMember ? `<div class="viewer-balance-strip"><span>Available in ${esc(b.name || slug)}</span><strong data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span> <small>Credits</small></strong></div>` : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : viewer ? 'Join this community before claiming a reward.' : 'Sign in to use your community credits.'}</p>`}`;
 
   const blockedNote = viewer && blocked
     ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
@@ -781,7 +803,7 @@ function shopMain(ctx) {
 
   const list = items.length
     ? `<section class="yr-vsec" aria-label="All rewards">
-<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, signIn, membershipHref: creditsHref, slug })).join("")}</ul></section>`
+<ul class="yr-rwds" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, signIn, membershipHref: creditsHref, slug })).join("")}</ul></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
@@ -862,7 +884,7 @@ function meMain(ctx) {
   };
   const authError = viewerAuthError ? `<p class="yr-note yr-note--w" role="alert">${esc(authMessages[viewerAuthError] || "We couldn't complete sign-in. Try again.")}</p>` : "";
   const member = membershipStatus === "member" && !!viewerData?.viewerOnSite;
-  const heading = `<header class="member-heading"><div><h1>Your corner of the community.</h1><p>${creator}${viewer ? ` · Signed in as <b>${esc(viewerName(viewer))}</b>` : ""}</p></div></header>${member ? `<div class="viewer-balance-strip"><span>Your free-credit balance</span><strong data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span> <small>credits</small></strong></div>` : ''}`;
+  const heading = `<header class="member-heading"><div><h1>My activity</h1><p>${viewer ? `Signed in as <b>${esc(viewerName(viewer))}</b>` : 'Your claims and credit history in this community.'}</p></div></header>${member ? `<div class="viewer-balance-strip"><span>Your balance</span><strong data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span> <small>Credits</small></strong></div>` : ''}`;
   if (!viewer) {
     const join = joinAuthButton(r, returnTo, slug);
     return `${heading}${authError}<section class="member-gate"><h2>Your place in ${creator}'s community</h2><p>Sign in to join, follow your reward claims and see your community activity. Your credits stay with this community.</p><div class="member-actions">${join || '<p role="status">Sign-in is not available for this community right now.</p>'}<a class="yr-sec-link" href="${accountHref}">Back to my communities</a></div></section>`;
@@ -888,7 +910,7 @@ ${blocked ? '<p class="yr-note yr-note--w" role="status">Claiming is currently u
 <div class="member-section-head"><h2 id="member-claims-title">Your claims</h2><p>${claims.length ? `${formatNumber(claims.length)} recent` : "Reward status, in one place"}</p></div>
 ${claims.length
   ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}`
-  : `<div class="member-empty"><div><h3>No claims yet</h3><p>When you claim a reward, you can follow its status here.</p></div>${siteSections.shop !== false ? `<a class="yr-btn" href="${shopHref}">Browse reward shop</a>` : ""}</div>`}
+  : `<div class="member-empty"><div><h3>No claims yet</h3><p>${blocked ? 'Claiming is unavailable for this membership.' : 'Choose a reward in the Reward shop. Its status will appear here after you claim it.'}</p></div></div>`}
 </section>
 <div class="member-tools"><section class="member-section" id="membership-history" aria-labelledby="member-history-title"><div class="member-section-head"><h2 id="member-history-title">Your activity</h2></div>
 <details class="member-history"${ledger.length ? " open" : ""}><summary>Credit activity <span>${formatNumber(ledger.length)} recent</span></summary>${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<p>No credit activity yet. Use ${creator}'s channel-point rewards to earn credits.</p>`}</details>
@@ -900,14 +922,14 @@ function codeDropClaimSection({ slug, creator, joinsMembership = false }) {
   const membershipNote = joinsMembership
     ? " A successful claim joins this community and records the participation on your Membership."
     : " A successful claim appears in Participation on this Membership.";
-  return `<section class="member-code yr-code-drop" id="membership-code" aria-label="Claim a free code drop">
+  return `<section class="member-code yr-code-drop" id="membership-code" aria-label="Redeem a community code">
 <h2>Have a community code?</h2>
 <p class="yr-note" id="yr-code-drop-help">Enter a code shared by ${creator}.${membershipNote} Each code can be claimed once while it is active.</p>
 <form class="yr-code-drop-form" data-code-drop-claim data-site-slug="${esc(slug)}">
-<label class="yr-code-drop-label" for="yr-code-drop-code">Free code</label>
+<label class="yr-code-drop-label" for="yr-code-drop-code">Community code</label>
 <div class="yr-code-drop-controls">
 <input class="yr-code-drop-input" id="yr-code-drop-code" name="code" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" placeholder="COMMUNITY100" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="yr-code-drop-help" required />
-<button class="yr-btn yr-btn--sm" type="submit" data-code-drop-submit>Claim free code</button>
+<button class="yr-btn yr-btn--sm" type="submit" data-code-drop-submit>Redeem code</button>
 </div>
 <p class="yr-code-drop-status" id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"></p>
 </form>

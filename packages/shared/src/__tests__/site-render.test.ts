@@ -65,8 +65,9 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("Events & Duels");
     // The page states the viewer's membership, own balance, credits and Claims —
     // no stat grid and no analytics reading of a loyalty balance.
-    expect(html).toContain("Ampersand &amp; Board · Signed in as <b>alice</b>");
-    expect(html).toContain('data-credit-balance-num>500</strong><span>free credits');
+    expect(html).toContain('<p class="viewer-context-name" data-preview-field="f_name">Ampersand &amp; Board</p>');
+    expect(html).toContain("Signed in as <b>alice</b>");
+    expect(html).toContain('data-credit-balance-num>500</strong><span>Credits');
     expect(html).toContain("Credits earned");
     expect(html).toContain("+100");
     expect(html).toContain("Needs fulfillment");

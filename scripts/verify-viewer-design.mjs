@@ -6,6 +6,16 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { renderSite } from '../packages/shared/dist/site-render.js';
 import { viewerDashboardPage } from '../apps/leaderboard/src/pages/viewer-dashboard.js';
+import { execFileSync } from 'node:child_process';
+
+// The help renderer imports repository JSX. Render those fixtures with Bun;
+// Chromium automation runs in Node, including on Windows.
+const helpPages = JSON.parse(execFileSync('bun', ['-e', `
+import { helpSupportPage, helpHubPage } from './apps/leaderboard/src/pages/help.js';
+import { leaderboardPageHtml } from './packages/shared/dist/page-shell.js';
+const options = { viewerHelp: { returnTo: '/nova' } };
+console.log(JSON.stringify([helpHubPage, helpSupportPage].map(page => leaderboardPageHtml({ ...page.configFor(options), content: page.Component(options) }))));
+`], { encoding: 'utf8', timeout: 30000 }));
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH ? pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href : 'playwright');
 const output = '.local-logs/viewer-design';
@@ -36,6 +46,9 @@ const server = createServer(async (req, res) => {
       res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({ viewer: { displayName: 'Alex', connections: [{ provider: 'kick', username: 'alexontheotherside' }] }, communities: [{ slug: 'nova', name: "Nova's community", balance, pendingClaims: claims.length, claimingAvailable: true }, { slug: 'luna', name: 'Luna Lounge', balance: 480, pendingClaims: 0, claimingAvailable: true }] })); return;
     }
+    if (url.pathname === '/api/giveaways/chatroom') {
+      res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ isLive: true, chatroomId: 123 })); return;
+    }
     if (url.pathname === '/api/viewer/redeem' || url.pathname === '/api/events/drops/claim' || url.pathname === '/api/viewer/logout') {
       let raw = ''; for await (const part of req) raw += part;
       const body = raw ? JSON.parse(raw) : {};
@@ -50,20 +63,24 @@ const server = createServer(async (req, res) => {
       }
       if (url.pathname.endsWith('/claim')) {
         if (body.code !== 'NOVA100') { res.writeHead(400).end(JSON.stringify({ error: 'Invalid code' })); return; }
-        balance += 100; res.end(JSON.stringify({ ok: true, points: 100, balance })); return;
+        balance += 100; res.end(JSON.stringify({ ok: true, pointsAwarded: 100, newBalance: balance })); return;
       }
       res.end(JSON.stringify({ ok: true })); return;
     }
     if (url.pathname.startsWith('/api/')) { res.setHeader('content-type', 'application/json'); res.end('{}'); return; }
     res.setHeader('content-type', 'text/html');
     if (url.pathname === '/me') { res.end(viewerDashboardPage); return; }
+    if (url.pathname.startsWith('/help')) {
+      res.end(helpPages[url.pathname === '/help' ? 0 : 1]); return;
+    }
+    if (url.pathname === '/missing') { res.writeHead(404).end('Not found'); return; }
     const slug = url.pathname.split('/')[1] || 'nova';
     const section = url.pathname.split('/')[2] || 'home';
     const signedOut = url.searchParams.has('signedout');
     const empty = url.searchParams.has('empty');
     const unavailable = url.searchParams.has('unavailable');
-    const data = { brand: { name: slug === 'luna' ? 'Luna Lounge' : "Nova's community" }, branding: { template: url.searchParams.get('template') || 'cyber_arcade' }, rankBy: 'score', players: empty ? [] : players, siteSections: { home: true, leaderboard: true, shop: true, me: true }, shopItems: empty ? [] : rewards };
-    res.end(await renderSite({ r: { slug, plan: 'pro', data, viewerKickAuthEnabled: true }, section, viewer: signedOut ? null : viewer, viewerData: { membershipStatus: unavailable ? 'unavailable' : signedOut ? 'absent' : 'member', viewerOnSite: signedOut || unavailable ? null : { balance: slug === 'luna' ? 480 : balance }, shopItems: data.shopItems, claims: empty ? [] : claims, ledger: [], participation: [] }, opts: { slug, homeUrl: origin, nonce: 'n', csrfToken: 'fixture-csrf' } }));
+    const data = { brand: { name: slug === 'luna' ? 'Luna Lounge' : "Nova's community" }, socials: [{ name: 'Kick', url: 'https://kick.com/nova' }], branding: { template: url.searchParams.get('template') || 'cyber_arcade' }, rankBy: 'score', players: empty ? [] : players, siteSections: { home: true, leaderboard: true, shop: true, me: true }, shopItems: empty ? [] : rewards };
+    res.end(await renderSite({ r: { slug, plan: 'pro', data, viewerKickAuthEnabled: true }, section, viewer: signedOut ? null : viewer, viewerData: { membershipStatus: unavailable ? 'unavailable' : signedOut ? 'absent' : 'member', viewerOnSite: signedOut || unavailable ? null : { balance: slug === 'luna' ? 480 : balance, blocked: url.searchParams.has('blocked') }, shopItems: data.shopItems, claims: empty ? [] : claims, ledger: empty ? [] : [{ type: 'code_drop', amount: 100, created_at: '2026-09-12T12:00:00Z' }], participation: [] }, opts: { slug, homeUrl: origin, nonce: 'n', csrfToken: 'fixture-csrf' } }));
   } catch (error) { console.error(error); res.writeHead(500).end('Fixture server failed'); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -80,7 +97,7 @@ try {
     await page.setViewportSize({ width, height: 1000 });
     for (const path of ['/nova', '/nova/shop', '/nova/me', '/nova/leaderboard', '/me', '/me#vd-profile']) {
       await page.goto(origin + path); await page.evaluate(() => document.fonts.ready);
-      if (path.startsWith('/me')) await page.evaluate(() => window.__yrViewerReady);
+      await page.evaluate(() => window.__yrViewerAppReady);
       if (await page.locator('#cookieReject').isVisible()) await page.locator('#cookieReject').click();
       assert.equal(await page.locator('h1').count(), 1, `${path}: one page heading`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path} at ${width}: no horizontal overflow`);
@@ -93,6 +110,10 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + '/nova');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  await page.evaluate(() => { sessionStorage.removeItem('yr-viewer-guide:nova'); });
+  await page.reload(); await page.evaluate(() => window.__yrViewerAppReady);
+  await page.evaluate(() => { window.shellIdentity = { rail: document.querySelector('.viewer-rail'), top: document.querySelector('.viewer-topbar'), selector: document.querySelector('.viewer-switch') }; });
   await page.locator('[data-guide-dismiss]').click();
   assert.equal(await page.locator('[data-viewer-guide]').isVisible(), false);
   await page.locator('[data-guide-restore]').click();
@@ -100,6 +121,8 @@ try {
   await page.locator('.viewer-switch summary').click(); await page.keyboard.press('Escape');
   assert.equal(await page.locator('.viewer-switch').getAttribute('open'), null);
   await page.locator('.viewer-destinations a[href="/nova/shop"]').click();
+  await page.waitForSelector('[data-redeem="shoutout"]');
+  assert.equal(await page.evaluate(() => window.shellIdentity.rail === document.querySelector('.viewer-rail') && window.shellIdentity.top === document.querySelector('.viewer-topbar') && window.shellIdentity.selector === document.querySelector('.viewer-switch')), true, 'Shell and selector stay mounted');
   await page.locator('[data-redeem="shoutout"]').click();
   assert.equal(await page.locator('#yr-order-confirm').isVisible(), true);
   await page.locator('[data-order-cancel]').click();
@@ -120,11 +143,35 @@ try {
   await page.locator('[data-code-drop-submit]').click();
   await page.waitForURL('**/nova/me');
   await page.waitForFunction(() => document.querySelector('.viewer-credit-amount').dataset.creditBalance === '1100');
+  await page.locator('.viewer-destinations a[href="/nova"]').click();
+  await page.waitForSelector('[data-viewer-guide][hidden]', { state: 'attached' });
+  assert.match(await page.locator('.viewer-next-reward').innerText(), /900 more Credits/);
+  await page.locator('#viewer-communities-link').click();
+  await page.waitForSelector('.vd-card-row');
+  assert.equal(await page.evaluate(() => window.shellIdentity.rail === document.querySelector('.viewer-rail') && window.shellIdentity.selector === document.querySelector('.viewer-switch')), true);
+  assert.match(await page.locator('.viewer-creator').innerText(), /Nova/);
+  assert.equal(await page.locator('.viewer-destinations a').count(), 4);
+  await page.goBack(); await page.waitForSelector('.viewer-next-reward');
+  await page.goForward(); await page.waitForSelector('.vd-card-row');
+  await page.locator('.viewer-sidebar-bottom a').click();
+  await page.waitForURL(url => url.pathname === '/help/support');
+  try {
+    await page.waitForSelector('#contactForm', { timeout: 5000 });
+  } catch (error) {
+    throw new Error(`Viewer help did not mount at ${page.url()}: ${await page.locator('.viewer-main').innerText()} | status=${await page.locator('.viewer-navigation-status').innerText()} | pageErrors=${errors.join('; ')}`, { cause: error });
+  }
+  assert.equal(await page.evaluate(() => window.shellIdentity.rail === document.querySelector('.viewer-rail')), true);
+  await page.locator('.viewer-destinations a[href="/nova"]').click();
+  await page.waitForSelector('.viewer-next-reward');
+  await page.evaluate(() => window.YRViewerApp.navigate('/missing'));
+  assert.match(await page.locator('.viewer-navigation-status').innerText(), /could not load/);
+  assert.equal(new URL(page.url()).pathname, '/nova');
   await page.goto(origin + '/luna');
   assert.match(await page.locator('.viewer-credit-amount').innerText(), /480/);
-  await page.goto(origin + '/me'); await page.evaluate(() => window.__yrViewerReady);
+  await page.goto(origin + '/me'); await page.evaluate(() => window.__yrViewerAppReady);
   assert.equal(await page.locator('#vd-profile').isVisible(), false);
   await page.locator('#viewer-account-link').click();
+  await page.waitForSelector('#vd-profile', { state: 'visible' });
   assert.equal(await page.locator('#vd-profile').isVisible(), true);
   assert.equal(await page.locator('#vd-communities-card').isVisible(), false);
   assert.equal(await page.locator('#viewer-account-link').getAttribute('aria-current'), 'page');
@@ -132,12 +179,17 @@ try {
   await page.evaluate(() => window.__yrViewerReady);
   await page.locator('.vd-card-side a[href="/nova"]').click();
   assert.match(await page.locator('.viewer-context-name').innerText(), /Nova/);
-  for (const state of ['signedout', 'empty', 'unavailable']) {
+  for (const state of ['signedout', 'empty', 'unavailable', 'blocked']) {
     await page.goto(`${origin}/nova/me?${state}`);
+    await page.evaluate(() => window.__yrViewerAppReady);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     if (state === 'signedout') assert.equal(await page.locator('[data-code-drop-claim]').count(), 0);
     if (state === 'unavailable') assert.match(await page.locator('.viewer-main').innerText(), /couldn't load/);
+    if (state === 'blocked') {
+      assert.equal(await page.locator('a:has-text("Browse rewards")').count(), 0);
+      assert.equal(await page.locator('[data-code-drop-claim]').count(), 0);
+    }
   }
   assert.deepEqual(errors, []);
-  console.log('PASSED: six viewer destinations at desktop/mobile, guide and keyboard menu, account navigation, reward confirm/cancel with CSRF and idempotency, code error/success, community isolation, signed-out/empty/unavailable states; no page errors.');
+  console.log('PASSED: desktop/mobile viewer pages, persistent shell/selector through community/account/help routes and Back/Forward, context retention, completed guide collapse, failed navigation recovery, rewards and codes with CSRF/idempotency, isolation and signed-out/empty/unavailable/blocked states; no page errors.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

@@ -4,6 +4,10 @@
 // /<slug>/me surface. This account page deliberately links there instead of
 // rebuilding a second copy of the creator's product.
 
+(function initViewerAccount() {
+window.YRInitViewerAccount = initViewerAccount;
+const lifetime = new AbortController();
+document.addEventListener?.("yr:viewer-unmount", () => lifetime.abort(), { once: true });
 function $(id) { return document.getElementById(id); }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
 function fmtDate(iso) {
@@ -23,6 +27,7 @@ async function api(method, path) {
   const response = await fetch(path, {
     method,
     credentials: "same-origin",
+    signal: lifetime.signal,
     headers: { "x-csrf-token": csrf() },
   });
   const data = await response.json().catch(() => ({}));
@@ -89,7 +94,7 @@ function selectAccountView() {
   $("vd-title").textContent = profile ? "Your viewer account." : "My communities";
   $("vd-subtitle").textContent = profile
     ? "The account you use across creator communities."
-    : "Good to have you here. Pick up where you left off. Your rewards and claims stay with each community.";
+    : "Choose a community. Your rewards and claims stay with each community.";
   const accountLink = $("viewer-account-link");
   const communitiesLink = $("viewer-communities-link");
   if (profile) { accountLink.setAttribute("aria-current", "page"); communitiesLink.removeAttribute("aria-current"); }
@@ -99,13 +104,14 @@ function selectAccountView() {
 window.addEventListener("hashchange", () => {
   selectAccountView();
   if (signedIn) $(window.location.hash === "#vd-profile" ? "vd-profile" : "vd-title").focus();
-});
+}, { signal: lifetime.signal });
 
 function renderLoggedOut() {
   signedIn = false;
-  $("viewer-top-avatar").textContent = "YR";
+  $("viewer-top-avatar").setAttribute("aria-label", "Sign in to your viewer account");
   selectAccountView();
   $("viewer-account-link").setAttribute("href", "/me#vd-login-card");
+  if (window.YRViewerApp) document.querySelector('.viewer-overview')?.replaceChildren();
   $("viewer-account-link").hidden = true;
   $("vd-login-card").hidden = false;
   $("vd-profile").hidden = true;
@@ -122,7 +128,8 @@ function renderAccount(viewer) {
   $("viewer-account-link").setAttribute("href", "/me#vd-profile");
   $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
-  $("viewer-top-avatar").textContent = Array.from(name).slice(0, 2).join("").toUpperCase();
+  $("viewer-top-avatar").setAttribute("aria-label", `Viewer account: ${name}`);
+  $("viewer-top-avatar").setAttribute("title", `Open ${name}'s viewer account`);
   $("vd-username").textContent = name;
   $("vd-avatar-fallback").textContent = initial(name);
 
@@ -151,7 +158,7 @@ function renderAccount(viewer) {
 }
 
 function membershipSummary(community) {
-  const parts = [`${fmtNum(community.balance)} free credits`];
+  const parts = [`${fmtNum(community.balance)} Credits`];
   if (community.pendingClaims > 0) {
     parts.push(`${fmtNum(community.pendingClaims)} ${community.pendingClaims === 1 ? "Claim needs" : "Claims need"} creator action`);
   }
@@ -159,7 +166,9 @@ function membershipSummary(community) {
   return parts.join(" · ");
 }
 
+let memberships = [];
 function renderCommunities(communities) {
+  memberships = communities;
   const list = $("vd-communities");
   $("vd-membership-count").textContent = `${communities.length}`;
   $("vd-communities-empty").hidden = communities.length > 0;
@@ -196,11 +205,12 @@ async function load() {
     renderAccount(data.viewer);
     renderCommunities(data.communities || []);
   } catch (error) {
+    if (error.name === "AbortError") return;
     if (error.message === "unauthorized") renderLoggedOut();
     else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
     setGlobalLoading(false);
-    if (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card") {
+    if (!lifetime.signal.aborted && (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card")) {
       const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
       destination.focus();
     }
@@ -210,16 +220,26 @@ async function load() {
 $("vd-open-community")?.addEventListener("submit", (event) => {
   event.preventDefault();
   const input = $("vd-community-name");
-  const slug = input.value.trim().toLowerCase();
+  const value = input.value.trim();
+  const match = memberships.find(community => community.name.toLowerCase() === value.toLowerCase());
+  let slug = match?.slug || value.toLowerCase();
+  if (/^(?:https?:\/\/|yourrank\.site\/)/i.test(value)) {
+    try {
+      const communityUrl = new URL(/^https?:/i.test(value) ? value : `https://${value}`);
+      if (communityUrl.hostname !== "yourrank.site" || communityUrl.username || communityUrl.password || communityUrl.port || !/^\/[a-z0-9][a-z0-9-]{0,62}(?:\/(?:me|shop|leaderboard))?\/?$/.test(communityUrl.pathname)) throw new Error("Invalid community link");
+      slug = communityUrl.pathname.split("/")[1];
+    } catch { slug = ""; }
+  }
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
     input.setAttribute("aria-invalid", "true");
-    setStatus("vd-community-entry-status", "Enter a community name using letters, numbers and hyphens, such as atlas-community.", true);
+    setStatus("vd-community-entry-status", "Enter a community handle or paste its YourRank community link.", true);
     input.focus();
     return;
   }
   input.removeAttribute("aria-invalid");
   setStatus("vd-community-entry-status", "");
-  window.location.href = new URL(`/${encodeURIComponent(slug)}/me`, window.location.origin).href;
+  const destination = new URL(`/${encodeURIComponent(slug)}`, window.location.origin).href;
+  if (window.YRViewerApp) window.YRViewerApp.navigate(destination); else window.location.href = destination;
 });
 
 $("vd-logout")?.addEventListener("click", async () => {
@@ -273,3 +293,5 @@ if (loginError) {
 window.__yrViewerReady = load().catch((error) => {
   setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account. Try again."), true);
 });
+return window.__yrViewerReady;
+})();
