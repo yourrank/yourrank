@@ -41,7 +41,7 @@ ${viewerNavigation()}
     <div class="vd-directory-head"><h2 id="vd-communities-heading" tabindex="-1">Your memberships</h2><span id="vd-membership-count" class="vd-count"></span></div>
     <p class="status" id="vd-communities-status" role="status" aria-live="polite" tabindex="-1"></p>
     <div id="vd-communities" class="vd-community-list"></div>
-    <div class="empty vd-community-empty" id="vd-communities-empty" hidden>
+    <div class="vd-community-empty" id="vd-communities-empty" hidden>
       <h3>You haven't joined any communities yet.</h3>
       <p>Visit a creator's YourRank site and choose Join community. Your membership will be waiting here when you come back.</p>
     </div>
