@@ -314,6 +314,12 @@ function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUr
 </header>`;
 }
 
+function viewerSignInHref(r, returnTo) {
+  if (r.viewerKickAuthEnabled) return `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`;
+  if (r.viewerDiscordAuthEnabled) return `/api/viewer/auth/discord?returnTo=${encodeURIComponent(returnTo)}`;
+  return "/me";
+}
+
 function signInLink(r, returnTo, cls = "yr-btn", accountHref = "/me") {
   if (r.viewerKickAuthEnabled) {
     return `<a class="${cls} yr-btn--sm" href="/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}">Sign in with Kick</a>`;
@@ -898,7 +904,7 @@ function gamesMain(ctx) {
     siteName: b.name || slug,
     logoUrl: logoUrl || null,
     creditsUrl: `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`,
-    signInUrl: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(returnTo)}`,
+    signInUrl: viewerSignInHref(r, returnTo),
     header: false,
   });
 
@@ -925,6 +931,12 @@ function meMain(ctx) {
     oauth_state_expired: "That sign-in took too long. Try again.",
     kick_auth_failed: "We couldn't complete Kick sign-in. Try again.",
     discord_auth_failed: "We couldn't complete Discord sign-in. Try again.",
+    kick_signin_unavailable: "Kick sign-in isn't available right now. Try again later.",
+    discord_signin_unavailable: "Discord sign-in isn't available right now. Try again later.",
+    kick_oauth_callback_mismatch: "Kick returned to an unexpected callback. Try again.",
+    discord_oauth_callback_mismatch: "Discord returned to an unexpected callback. Try again.",
+    kick_oauth_browser_mismatch: "Kick sign-in must finish in the browser where it started.",
+    discord_oauth_browser_mismatch: "Discord sign-in must finish in the browser where it started.",
     join_unavailable: "This community isn't available to join right now.",
     join_failed: "We couldn't join this community. Try again.",
     rate_limited: "Too many sign-in attempts. Wait a moment, then try again.",

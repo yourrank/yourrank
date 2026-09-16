@@ -82,7 +82,7 @@ export async function handleDashboardPreview(request, env, nonce, {
       siteName: b.name || site.slug,
       logoUrl: null,
       creditsUrl: `/${site.slug}/credits`,
-      signInUrl: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(`/${site.slug}/games`)}`,
+      signInUrl: "/me",
       header: false,
     });
     const embedHtml = `<!DOCTYPE html>

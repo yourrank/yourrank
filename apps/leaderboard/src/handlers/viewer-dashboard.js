@@ -18,6 +18,7 @@ import {
   requestIsSameOrigin,
   resolveJoinableCommunity,
 } from "../viewer-membership.js";
+import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "../viewer-oauth.js";
 
 const privateViewerJson = (data) => json(
   { ok: true, ...data },
@@ -42,9 +43,11 @@ export async function handleViewerMe(request, env, deps = {}) {
   const requireViewerImpl = deps.requireViewer || requireViewer;
   const rateLimitImpl = deps.rateLimit || rateLimit;
   const queryImpl = deps.query || query;
+  const resolveViewerOAuthStatusImpl = deps.resolveViewerOAuthStatus || resolveViewerOAuthStatus;
   const { viewer, res } = await requireViewerImpl(request, env);
   if (res) return res;
   if (!(await rateLimitImpl(env, `viewer:me:${viewer.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
+  const authProviders = viewerOAuthAvailability(resolveViewerOAuthStatusImpl(request, env));
 
   const communities = await queryImpl(
     `SELECT s.slug, s.name,
@@ -98,6 +101,7 @@ export async function handleViewerMe(request, env, deps = {}) {
       createdAt: viewer.created_at,
       connections,
     },
+    authProviders,
     communities: safeCommunities,
   });
 }

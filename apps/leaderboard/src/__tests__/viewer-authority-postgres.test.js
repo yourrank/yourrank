@@ -126,7 +126,7 @@ describe("C08-C10 real database and browser proof boundary", () => {
         ...providerDeps,
         [provider === "kick" ? "exchangeKickViewerCode" : "exchangeDiscordCode"]: async () => { exchanged = true; throw new Error("must not exchange"); },
       });
-      expect(refused.headers.get("location")).toContain("oauth_browser_mismatch");
+      expect(refused.headers.get("location")).toContain(`${provider}_oauth_browser_mismatch`);
       expect(exchanged).toBe(false);
       const valid = await start(provider);
       const accepted = await handler(callback(provider, valid.state, valid.cookie), {}, providerDeps);
@@ -156,7 +156,7 @@ describe("C08-C10 real database and browser proof boundary", () => {
     const refused = await handleKickViewerAuthHandoff(new Request(relayed.headers.get("location")), {}, {
       ...providerDeps, exchangeKickViewerCode: async () => { exchanged = true; throw new Error("must not exchange"); },
     });
-    expect(refused.headers.get("location")).toContain("oauth_browser_mismatch");
+    expect(refused.headers.get("location")).toContain("kick_oauth_browser_mismatch");
     expect(refused.headers.get("set-cookie")).toBeNull();
     expect(exchanged).toBe(false);
   });

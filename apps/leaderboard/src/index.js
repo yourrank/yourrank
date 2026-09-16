@@ -11,6 +11,7 @@ import { HISTORY_DAYS } from "@yourrank/shared/plans";
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
+import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 import { verifyEmailPageHtml } from "./pages/verify-email.js";
 import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
@@ -1038,7 +1039,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/me" || path === "/me.html") {
         const community = await viewerCommunityContext(env, viewerCommunityParam(url));
-        return new Response(addCookieConsent(fillYear(viewerDashboardPage(community))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+        const viewerProviders = viewerOAuthAvailability(resolveViewerOAuthStatus(request, env));
+        return new Response(addCookieConsent(fillYear(viewerDashboardPage(community, viewerProviders))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
       }
       if (path === "/forgot") return new Response(addCookieConsent(await renderHtmlPage(PAGES.forgot)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       if (path === "/reset") {

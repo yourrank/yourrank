@@ -10,9 +10,14 @@ function esc(value) {
  * viewer arrived from (`/me?community=<slug>`), so every account destination
  * keeps a way back to it.
  */
-export function viewerDashboardPage(community = null) {
+export function viewerDashboardPage(community = null, providerAvailability = { kick: false, discord: false }) {
   const accountHref = viewerAccountHref(community?.slug || "");
   const helpHref = esc(viewerHelpHref(accountHref));
+  const available = {
+    kick: providerAvailability?.kick === true,
+    discord: providerAvailability?.discord === true,
+  };
+  const primaryProvider = available.kick ? "kick" : available.discord ? "discord" : "";
   const loginHref = (provider) => esc(`/api/viewer/auth/${provider}${community ? `?returnTo=${encodeURIComponent(accountHref)}` : ""}`);
   return leaderboardPageHtml({
   title: "My communities · YourRank",
@@ -45,8 +50,9 @@ ${viewerNavigation({ accountHref, community })}
     <p class="vd-login-note">One account. Separate memberships, rewards and credit balances.</p></div>
     <div class="vd-login-controls">
     <div class="vd-login-actions">
-      <a class="btn btn--accent" id="vd-login-kick" href="${loginHref("kick")}">Log in with Kick</a>
-      <a class="btn" id="vd-login-discord" href="${loginHref("discord")}">Log in with Discord</a>
+      ${available.kick ? `<a class="btn${primaryProvider === "kick" ? " btn--accent" : ""}" id="vd-login-kick" href="${loginHref("kick")}">Log in with Kick</a>` : ""}
+      ${available.discord ? `<a class="btn${primaryProvider === "discord" ? " btn--accent" : ""}" id="vd-login-discord" href="${loginHref("discord")}">Log in with Discord</a>` : ""}
+      ${!primaryProvider ? '<p class="status" role="status">Sign-in is not available right now. Please try again later.</p>' : ""}
     </div>
     <p class="status" id="vd-login-status" role="status" aria-live="polite"></p>
     </div>

@@ -110,6 +110,28 @@ Integrations (set manually, or declare them disabled — see 2.2):
 Forbidden on every staging Worker: `DATABASE_URL` (would bypass Hyperdrive),
 production Supabase service keys, production Telegram/NOWPayments credentials.
 
+### Viewer OAuth staging safety
+
+The Leaderboard staging Worker declares `VIEWER_KICK_OAUTH_ENABLED = "false"`
+and `VIEWER_DISCORD_OAUTH_ENABLED = "false"` by default. Staging provider
+journeys remain **not verified** until isolated, dedicated provider apps and
+accounts are available. Do not enable either provider with production
+credentials or a shared provider account.
+
+To enable a provider for an isolated staging run, set the corresponding switch
+to `true`, provide the staging-only client ID/secret as Worker secrets, and
+register the exact callback with that provider app:
+
+- Kick: `https://staging.yourrank.site/auth/kick/callback`
+- Discord: `https://staging.yourrank.site/api/viewer/auth/discord/callback`
+
+Set `KICK_REDIRECT_URI` / `DISCORD_REDIRECT_URI` to the same exact callback
+when the app requires an explicit URI. The resolver fails closed on missing
+credentials, invalid switches, insecure/non-canonical production or staging
+callbacks, and callback-origin mismatches. A green local check is not a claim
+that the live Kick or Discord account flow works; completing the dedicated
+provider-account verification requires staging access and isolated accounts.
+
 ## 2. GitHub `staging` environment
 
 ### 2.1 Variables
