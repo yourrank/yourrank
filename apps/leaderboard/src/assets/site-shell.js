@@ -649,36 +649,38 @@
   });
 
   // ── Countdown ───────────────────────────────────────────────────────
-  var cd = document.querySelector("[data-countdown-mode=\"relative\"] [data-ends-at]");
-  if (cd) {
-    var end = Date.parse(cd.dataset.endsAt || "");
-    var countdown = cd.closest("[data-countdown-mode]");
+  // A page can carry several relative countdowns (head chip plus the rail
+  // card's box timer) — each owns its own interval.
+  document.querySelectorAll("[data-countdown-mode]").forEach(function (countdown) {
+    var cd = countdown.querySelector("[data-ends-at]");
+    var end = cd ? Date.parse(cd.dataset.endsAt || "") : NaN;
+    if (!Number.isFinite(end)) return;
+    var hasBoxes = !!countdown.querySelector("[data-cd-days]");
     var tick = function () {
       var left = end - Date.now();
       if (left <= 0) {
-        if (countdown) countdown.textContent = countdown.dataset.countdownComplete || "Ended";
+        countdown.textContent = countdown.dataset.countdownComplete || "Ended";
         return false;
       }
       var d = Math.floor(left / 86400000);
       var h = Math.floor((left % 86400000) / 3600000);
       var m = Math.floor((left % 3600000) / 60000);
       var s = Math.floor((left % 60000) / 1000);
-      if (countdown && countdown.querySelector("[data-cd-days]")) {
+      var text = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "Less than 1m";
+      if (hasBoxes) {
         var units = { days: d, hours: h, minutes: m, seconds: s };
         Object.keys(units).forEach(function (key) {
           var el = countdown.querySelector("[data-cd-" + key + "]");
           if (el) el.textContent = String(units[key]).padStart(2, "0");
         });
-      } else {
-        cd.textContent = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "Less than 1m";
       }
+      cd.textContent = text;
       return true;
     };
-    if (Number.isFinite(end) && tick()) {
-      var cdMs = countdown && countdown.querySelector("[data-cd-days]") ? 1000 : 30000;
-      var countdownTimer = setInterval(function () { if (!tick()) clearInterval(countdownTimer); }, cdMs);
+    if (tick()) {
+      var countdownTimer = setInterval(function () { if (!tick()) clearInterval(countdownTimer); }, hasBoxes ? 1000 : 30000);
     }
-  }
+  });
 
   // ── Feedback dialog ─────────────────────────────────────────────────
   var dialog = document.getElementById("yr-feedback");

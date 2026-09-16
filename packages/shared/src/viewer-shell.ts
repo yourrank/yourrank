@@ -56,6 +56,7 @@ const ICON_PATHS: Record<string, string> = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   inbox: '<path d="M3 13.5 5.5 5h13L21 13.5V19H3z"/><path d="M3 13.5h5.5a3.5 3.5 0 0 0 7 0H21"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  collapse: '<path d="m14 6-6 6 6 6"/><path d="m20 6-6 6 6 6"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   refresh: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/>',
   download: '<path d="M12 4v11M7 11l5 5 5-5"/><path d="M4 20h16"/>',
@@ -149,7 +150,7 @@ ${tagline ? `<p class="viewer-rail-quote">“${esc(tagline)}”<span>— ${esc(n
 <div class="viewer-scrim" data-nav-scrim hidden></div>`;
 
   const topbar = `<header class="viewer-topbar${dark ? " viewer-topbar--dark" : ""}${minimal ? " viewer-topbar--minimal" : ""}">
-<button class="viewer-menu" type="button" data-nav-menu aria-label="Open menu" aria-expanded="false">${viewerIcon("menu")}</button>
+<button class="viewer-menu" type="button" data-nav-menu aria-label="${minimal ? "Toggle sidebar" : "Open menu"}" aria-expanded="false">${viewerIcon(minimal ? "collapse" : "menu")}</button>
 ${minimal ? (kickChannel ? `<span data-stream-status data-kick-channel="${esc(kickChannel)}" hidden></span>` : "") : `<a class="viewer-top-context" href="${esc(homeHref)}"><span class="viewer-top-mark">${mark || avatarMark(name)}</span><span class="viewer-top-txt"><b>${esc(name)}<span class="viewer-top-check">${viewerIcon("check")}</span>${kickChannel ? ` <span class="viewer-live viewer-live--top" data-live-badge hidden><span class="viewer-live-dot"></span>LIVE</span>` : ""}</b>${statusNote}</span></a>`}
 <div class="viewer-top-actions">
 ${!minimal && watchHref ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}${esc(watchLabel || "Watch Live")}</a>` : ""}

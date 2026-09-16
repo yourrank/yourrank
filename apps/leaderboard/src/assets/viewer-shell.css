@@ -310,6 +310,14 @@ body.viewer-shell .yr-sr:focus-visible {
 }
 .viewer-menu .viewer-icon { width: 18px; height: 18px; }
 
+/* The home topbar keeps its collapse control on desktop (the mockup shows the
+   glyph on wide widths); there it hides the rail instead of opening a drawer. */
+@media (min-width: 901px) {
+  .viewer-topbar--minimal .viewer-menu { display: inline-flex; }
+}
+body.viewer-rail-collapsed .viewer-layout { grid-template-columns: minmax(0, 1fr); }
+body.viewer-rail-collapsed .viewer-rail { display: none; }
+
 .viewer-top-context {
   display: flex; align-items: center; gap: 10px; min-width: 0;
 }
@@ -933,7 +941,7 @@ body.viewer-shell .yr-page-status { font-size: 12.5px; color: var(--vr-mute); mi
 
 .viewer-reward-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 .viewer-reward-card {
@@ -950,11 +958,12 @@ body.viewer-shell .yr-page-status { font-size: 12.5px; color: var(--vr-mute); mi
 .viewer-reward-main { padding: 15px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .viewer-reward-name { font-size: 14.5px; font-weight: 700; }
 .viewer-reward-desc { font-size: 12.5px; line-height: 1.5; color: var(--vr-soft); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
-.viewer-reward-foot { margin-top: auto; padding-top: 8px; display: flex; align-items: center; gap: 10px; }
+.viewer-reward-foot { margin-top: auto; padding-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .viewer-cost { display: inline-flex; align-items: center; gap: 5px; font-family: var(--yr-mono); font-size: 13px; font-weight: 700; color: var(--vr-gold); font-variant-numeric: tabular-nums; }
 .viewer-cost .viewer-icon { width: 14px; height: 14px; }
 .viewer-reward-state { font-size: 11.5px; color: var(--vr-mute); margin-left: auto; }
 .viewer-reward-foot .yr-btn, .viewer-reward-foot .yr-act { margin-left: auto; }
+body.viewer-shell .viewer-reward-foot .yr-btn { flex: 1 1 100%; margin-left: 0; justify-content: center; }
 .viewer-reward-foot .yr-act ~ .yr-btn { margin-left: 0; }
 /* The mockup's Redeem control is the soft-violet pill. */
 body.viewer-shell .viewer-reward-card .yr-btn {
@@ -1003,6 +1012,31 @@ body.viewer-shell .yr-rwd-p { margin-top: 2px; font-size: 12.5px; color: var(--v
 body.viewer-shell .yr-rwd-side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
 body.viewer-shell .yr-rwd-c { font-family: var(--yr-mono); font-size: 12.5px; font-weight: 700; color: var(--vr-gold); font-variant-numeric: tabular-nums; }
 body.viewer-shell .yr-rwd-state { font-size: 11.5px; color: var(--vr-mute); }
+
+/* "All rewards" mirrors the mockup's second grid: compact cards four across,
+   icon tile beside the copy, cost above the full-width soft button. */
+body.viewer-shell .yr-rwds--grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+body.viewer-shell .yr-rwds--grid .yr-rwd {
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 10px;
+  padding: 14px;
+  background: var(--vr-surface);
+  border: 1px solid var(--vr-edge);
+  border-radius: var(--vr-radius);
+  box-shadow: var(--vr-shadow);
+}
+body.viewer-shell .yr-rwds--grid .yr-rwd:first-child { border-top: 1px solid var(--vr-edge); padding-top: 14px; }
+body.viewer-shell .yr-rwds--grid .yr-rwd-img,
+body.viewer-shell .yr-rwds--grid .yr-rwd-img.viewer-reward-art { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px; }
+body.viewer-shell .yr-rwds--grid .yr-rwd-img.viewer-reward-art .viewer-icon { width: 17px; height: 17px; }
+body.viewer-shell .yr-rwds--grid .yr-rwd-main { flex: 1 1 calc(100% - 50px); }
+body.viewer-shell .yr-rwds--grid .yr-rwd-side { flex: 1 1 100%; align-items: stretch; margin-top: 2px; }
+body.viewer-shell .yr-rwds--grid .yr-rwd .yr-btn { width: 100%; justify-content: center; }
 
 .viewer-earn-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 13px; }
 .viewer-earn-list li { display: flex; gap: 11px; align-items: flex-start; }
@@ -1280,6 +1314,7 @@ body.viewer-shell .yr-top, body.viewer-shell .yr-drawer, body.viewer-shell .yr-s
 
 @media (max-width: 1100px) {
   .viewer-grid { grid-template-columns: minmax(0, 1fr); }
+  .viewer-reward-grid, body.viewer-shell .yr-rwds--grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .viewer-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .viewer-side > * { min-width: 0; }
   .viewer-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1324,7 +1359,7 @@ body.viewer-shell .yr-top, body.viewer-shell .yr-drawer, body.viewer-shell .yr-s
 
 @media (max-width: 620px) {
   .viewer-side { grid-template-columns: minmax(0, 1fr); }
-  .viewer-reward-grid { grid-template-columns: minmax(0, 1fr); }
+  .viewer-reward-grid, body.viewer-shell .yr-rwds--grid { grid-template-columns: minmax(0, 1fr); }
   .viewer-stat-grid { grid-template-columns: minmax(0, 1fr); }
   .va-stat-grid { grid-template-columns: minmax(0, 1fr); }
   .viewer-trio, .viewer-duo { grid-template-columns: minmax(0, 1fr); }

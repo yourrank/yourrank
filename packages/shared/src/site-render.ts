@@ -1208,8 +1208,9 @@ function shopMain(ctx) {
 ${viewer && isMember ? `<span class="viewer-chip viewer-chip--credits" data-credit-balance="${Number(balance) || 0}">${viewerIcon("coins")}<b data-credit-balance-num>${formatNumber(balance)}</b> Credits</span>` : ""}
 ${items.length ? `<span class="viewer-search viewer-search--rewards"><label class="yr-sr" for="yr-reward-search">Search rewards</label>${viewerIcon("search")}<input id="yr-reward-search" class="viewer-search-input" type="search" placeholder="Search rewards" autocomplete="off" data-reward-search /></span>` : ""}
 </div>
-</header>
-<section class="viewer-shop-hero"><div><h2 class="viewer-shop-hero-title">Exclusive rewards for real supporters</h2><p class="viewer-shop-hero-sub">Earn free Credits by watching ${name} and completing quests — then claim what you want.</p></div>${viewer && isMember ? `<a class="yr-btn yr-btn--light" href="${siteSectionHref("activities", slug, isCustomDomain)}">Earn more</a>` : ""}</section>${!viewer || !isMember ? `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : viewer ? 'Join this community before claiming a reward.' : 'Sign in to use your community credits.'}</p>` : ""}`;
+</header>`;
+
+  const heroHtml = `<section class="viewer-shop-hero"><div><h2 class="viewer-shop-hero-title">Exclusive rewards for real supporters</h2><p class="viewer-shop-hero-sub">Earn free Credits by watching ${name} and completing quests — then claim what you want.</p></div>${viewer && isMember ? `<a class="yr-btn yr-btn--light" href="${siteSectionHref("activities", slug, isCustomDomain)}">Earn more</a>` : ""}</section>${!viewer || !isMember ? `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : viewer ? 'Join this community before claiming a reward.' : 'Sign in to use your community credits.'}</p>` : ""}`;
 
   const blockedNote = viewer && blocked
     ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
@@ -1221,12 +1222,7 @@ ${items.length ? `<span class="viewer-search viewer-search--rewards"><label clas
     ? `<h2 class="viewer-section-title">Featured Rewards${rest.length ? `<a class="viewer-card-link" href="#yr-all-rewards">See All ${viewerIcon("arrow")}</a>` : ""}</h2><div class="viewer-reward-grid" data-reward-featured>${featured.map((item) => rewardCard({ item, viewer, member: isMember, balance, blocked, unavailable, signIn, membershipHref: creditsHref, slug })).join("")}</div>`
     : "";
   const restHtml = rest.length
-    ? card({
-      cls: "viewer-rewards-list",
-      attrs: ' id="yr-all-rewards"',
-      title: featured.length ? "All rewards" : "Rewards",
-      body: `<ul class="yr-rwds" role="list">${rest.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, signIn, membershipHref: creditsHref, slug })).join("")}</ul><p class="yr-nomatch" id="yr-reward-nomatch" hidden>No rewards match that search.</p>`,
-    })
+    ? `<h2 class="viewer-section-title" id="yr-all-rewards">${featured.length ? "All rewards" : "Rewards"}</h2><ul class="yr-rwds yr-rwds--grid" role="list">${rest.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, signIn, membershipHref: creditsHref, slug })).join("")}</ul><p class="yr-nomatch" id="yr-reward-nomatch" hidden>No rewards match that search.</p>`
     : featured.length ? `<p class="yr-nomatch" id="yr-reward-nomatch" hidden>No rewards match that search.</p>` : "";
   const emptyHtml = items.length
     ? ""
@@ -1245,7 +1241,7 @@ ${items.length ? `<span class="viewer-search viewer-search--rewards"><label clas
     foot: siteSections.activities !== false ? `<a class="yr-btn yr-btn--sm" href="${siteSectionHref("activities", slug, isCustomDomain)}">View today's quests</a>` : "",
   });
 
-  const sectionList = [featuredHtml, restHtml, emptyHtml].filter(Boolean).join("");
+  const sectionList = [heroHtml, featuredHtml, restHtml, emptyHtml].filter(Boolean).join("");
   return `${head}
 ${blockedNote}
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>

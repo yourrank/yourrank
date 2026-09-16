@@ -51,7 +51,17 @@
       railOpener = null;
     }
   }
-  if (railMenu) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", function () { setRailOpen(rail && rail.dataset.open !== "true"); }); }
+  // On wide widths the menu control collapses the rail (the mockups' home
+  // topbar carries the collapse glyph); on narrow widths it opens the drawer.
+  function railMenuClick() {
+    if (window.matchMedia("(min-width: 901px)").matches) {
+      var collapsed = document.body.classList.toggle("viewer-rail-collapsed");
+      if (railMenu) railMenu.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      return;
+    }
+    setRailOpen(rail && rail.dataset.open !== "true");
+  }
+  if (railMenu) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", railMenuClick); }
   if (railClose) { railClose.dataset.bound = "1"; railClose.addEventListener("click", function () { setRailOpen(false); }); }
   if (railScrim) { railScrim.dataset.bound = "1"; railScrim.addEventListener("click", function () { setRailOpen(false); }); }
   document.addEventListener("keydown", function (event) {
@@ -133,7 +143,7 @@
     railMenu = document.querySelector("[data-nav-menu]");
     railScrim = document.querySelector("[data-nav-scrim]");
     railClose = document.querySelector("[data-nav-close]");
-    if (railMenu && !railMenu.dataset.bound) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", function () { setRailOpen(rail && rail.dataset.open !== "true"); }); }
+    if (railMenu && !railMenu.dataset.bound) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", railMenuClick); }
     if (railClose && !railClose.dataset.bound) { railClose.dataset.bound = "1"; railClose.addEventListener("click", function () { setRailOpen(false); }); }
     if (railScrim && !railScrim.dataset.bound) { railScrim.dataset.bound = "1"; railScrim.addEventListener("click", function () { setRailOpen(false); }); }
   }
@@ -166,9 +176,11 @@
       var sourceShell = source.body.dataset.viewerShell || "";
       var currentShell = document.body.dataset.viewerShell || "";
       var communityPage = !!source.body.dataset.slug;
-      // Chrome follows the surface: a different shell kind or a different
-      // community swaps the rail and bar, never the document.
-      if (sourceShell !== currentShell || (communityPage && source.body.dataset.slug !== selectedSlug)) syncChrome(source);
+      // Chrome follows the surface: a different shell kind or community swaps
+      // the rail, and the topbar variant is per-section (minimal/dark), so the
+      // chrome always re-syncs — the rail swap is identical markup within one
+      // shell and only costs a rebind.
+      syncChrome(source);
       var existing = document.querySelector(".viewer-main");
       existing.className = next.className;
       existing.replaceChildren.apply(existing, Array.from(next.childNodes));

@@ -130,7 +130,7 @@ describe("a creator's Rewards page", () => {
     // The first four rewards are featured cards; the rest continue as list rows.
     expect(html).toContain('data-reward-featured');
     expect((html.match(/viewer-reward-card/g) || []).length).toBe(4);
-    expect(html).toContain('<ul class="yr-rwds" role="list">');
+    expect(html).toContain('<ul class="yr-rwds yr-rwds--grid" role="list">');
     expect((html.match(/<li class="yr-rwd">/g) || []).length).toBe(items.length - 4);
     // One action per reward, and only the affordable in-stock ones can be claimed.
     expect((html.match(/data-redeem="/g) || []).length).toBe(3);
