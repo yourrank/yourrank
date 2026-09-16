@@ -26,7 +26,7 @@ import {
 } from "./public-html-cache.js";
 import { setRequestMetrics } from "@yourrank/shared/request-id";
 
-const SECTIONS = new Set(["home", "leaderboard", "shop", "games", "me"]);
+const SECTIONS = new Set(["home", "activities", "leaderboard", "shop", "games", "me"]);
 
 export function parseSitePath(path, isCustomDomain, customSlug) {
   const clean = (path || "").replace(/\/$/, "") || "/";
@@ -108,7 +108,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
     }
 
-    const siteSections = r.data?.siteSections || { home: true, leaderboard: true, shop: true, games: false, me: true };
+    const siteSections = r.data?.siteSections || { home: true, activities: true, leaderboard: true, shop: true, games: false, me: true };
     if (!siteSections[section] && !(section === "games" && isDemo)) {
       return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
     }
@@ -131,18 +131,20 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     const logoUrl = paid && r.data?.branding?.hasLogo ? `${homeUrl}/logo/${slug}` : null;
 
     let viewerData = null;
-    if (section === "home" || section === "shop" || section === "me") {
+    if (section !== "games") {
       // Each surface composes only the canonical reads it owns. Personalized
       // history is loaded only after site-scoped Membership resolution.
       const opts = section === "home"
-        ? { shop: true, claims: !!viewer, ledger: !!viewer }
+        ? { shop: true, claims: !!viewer, ledger: !!viewer, quests: !!viewer }
         : section === "shop"
           ? { shop: true, claims: !!viewer }
-          : { claims: !!viewer, ledger: !!viewer, participation: !!viewer };
+          : section === "me"
+            ? { claims: !!viewer, ledger: !!viewer, participation: !!viewer, quests: !!viewer }
+            : { shop: true, claims: !!viewer, quests: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {
-      // The viewer overview reads membership Claims; Games keeps its balance-only contract.
-      viewerData = await getViewerSiteData(r.id, viewer.id, section === "games" ? {} : { claims: true });
+      // Games keeps its balance-only contract.
+      viewerData = await getViewerSiteData(r.id, viewer.id, {});
     }
 
     if (section === "home" || section === "leaderboard") {

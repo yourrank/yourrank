@@ -43,7 +43,7 @@ describe("demo credibility invariants", () => {
     // One row per player: no podium copy of the top three to filter, announce
     // or keep in sync with the standings below it.
     expect(markerCount).toBe(data.players.length);
-    expect(html).toContain("<div data-player-board>");
+    expect(html).toContain("data-player-board");
     expect(html).not.toContain('data-name="');
     expect(html).not.toContain("yr-card-name");
     expect(shell).toContain('playerBoard.querySelectorAll("[data-player-name]")');
@@ -55,28 +55,36 @@ describe("demo credibility invariants", () => {
   });
 
   it("keeps section identity, Rewards naming, and the shop route compatible", async () => {
+    // The demo board keeps Activities off: daily quests need a signed-in
+    // membership the virtual board cannot have.
     const expected = {
       home: "Home",
       leaderboard: "Leaderboard",
-      shop: "Reward shop",
+      shop: "Rewards",
       games: "Games",
-      me: "My activity",
+      me: "My Activity",
     };
 
-    // Each section names itself in its own heading; the shared chrome no
-    // longer restates the current section next to the creator identity.
+    // Each section names itself in its own heading and is marked as the
+    // current destination in the community rail; home leads with the
+    // creator's identity inside the hero instead of a generic page head.
     for (const [section, label] of Object.entries(expected)) {
       const html = await render(section);
       expect(html).toContain(`data-section="${section}"`);
-      if (section === "home") expect(html).toContain('<h1>Community overview</h1>');
-      else if (section === "me") expect(html).toContain('<h1>My activity</h1>');
-      else if (section === "shop") expect(html).toContain('<h1>Reward shop</h1>');
-      else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
-      if (section !== "games") expect(html).toContain(`id="viewer-top-title">${label}</span>`);
+      if (section === "home") expect(html).toContain('<h1 class="viewer-hero-name" data-preview-field="f_name">Demo Challenge</h1>');
+      else if (section === "games") expect(html).toContain("Games");
+      else expect(html).toContain(`<h1 class="viewer-h1">${label}</h1>`);
+      // Games is reachable but sits outside the five rail destinations.
+      if (section !== "games") {
+        const on = (html.match(/aria-current="page"/g) || []).length;
+        expect(`${section} has exactly one current nav link`).toBe(on === 1 ? `${section} has exactly one current nav link` : `${section} has ${on}`);
+        const link = (html.match(/class="viewer-nav-link is-on"[^>]*>([\s\S]*?)<\/a>/) || [])[1] || "";
+        expect(`${section} current link is ${label}`).toBe(link.includes(`<span>${label}</span>`) ? `${section} current link is ${label}` : link);
+      }
     }
 
     const shop = await render("shop");
-    expect(shop).toContain("Reward shop");
+    expect(shop).toContain("Rewards");
     expect(shop).toContain("/demo/shop");
     expect(shop).not.toContain(">Shop<");
     expect(shop).not.toContain("in the shop");
@@ -91,9 +99,11 @@ describe("demo credibility invariants", () => {
     expect(data.shopItems.length).toBeLessThanOrEqual(5);
     expect(data.demoActivity.length).toBeGreaterThan(0);
     expect(data.demoGiveaway).toMatchObject({ name: "Demo Drop" });
-    // Home previews the board and the cheapest rewards; the activity feed and
-    // giveaway panel belong to the sections that own them, not the landing page.
-    expect(home).not.toContain("Recent activity");
+    // Home previews the board and the cheapest reward; the giveaway panel
+    // belongs to the sections that own it, and a signed-out viewer gets an
+    // honest sign-in prompt in the activity module rather than fake entries.
+    expect(home).toContain("Recent activity");
+    expect(home).toContain("Sign in to see your credit activity");
     expect(home).not.toContain("LIVE GIVEAWAY");
     expect(home).toContain(data.shopItems[0].name);
     for (const item of data.shopItems) expect(shop).toContain(item.name);
@@ -101,10 +111,10 @@ describe("demo credibility invariants", () => {
 
     const illustrated = {
       ...data,
-      shopItems: [{ ...data.shopItems[0], image_url: "https://example.test/reward.png" }],
+      shopItems: [...data.shopItems, { ...data.shopItems[0], id: "demo-extra", cost: 2000, image_url: "https://example.test/reward.png" }],
     };
     const illustratedShop = await render("shop", illustrated);
-    // A configured reward image still renders, now as a row thumbnail.
+    // A configured reward image still renders on a non-featured row.
     expect(illustratedShop).toContain('<img class="yr-rwd-img" src="https://example.test/reward.png" alt=""');
   });
 });

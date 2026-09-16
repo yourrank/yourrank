@@ -456,6 +456,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   accentA: [{ classification: "feature", context: "public leaderboard rendering", where: "Public leaderboard render options." }],
   accentB: [{ classification: "feature", context: "public leaderboard rendering", where: "Public leaderboard render options." }],
   channel: [{ classification: "feature", context: "API endpoints", where: "API connection endpoints; not a dashboard document parameter." }],
+  community: [{ classification: "feature", context: "viewer account pages", where: "Community back-link on /me* viewer account pages (index.js + viewer-app.js); not a dashboard document parameter." }],
   handoff: [{ classification: "feature", context: "auth flows", where: "Auth session handoff between Workers." }],
   isolated: [{ classification: "feature", context: "Games island debug", where: "Games island debug/render mode." }],
   id: [{ classification: "feature", context: "API endpoints", where: "API object lookups." }],

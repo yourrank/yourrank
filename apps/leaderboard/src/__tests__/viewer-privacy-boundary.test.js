@@ -10,7 +10,6 @@ const viewer = {
   kick_linked_at: "2026-08-01T00:00:00.000Z",
   created_at: "2026-08-01T00:00:00.000Z",
 };
-const allowViewer = async () => ({ viewer, res: null });
 const allowRate = async () => ({ ok: true });
 
 function siteData() {
@@ -52,11 +51,12 @@ describe("viewer privacy boundary", () => {
       balance: 20, total_earned: 30, total_spent: 10, blocked: true,
       block_reason: INTERNAL_REASON,
       pending_claims: 2,
-    }]);
+    }]).mockResolvedValue([]);
     const response = await handleViewerMe(new Request("https://example.test/api/viewer/me"), {}, {
-      requireViewer: allowViewer,
+      resolveViewer: async () => ({ viewer, cookie: null, session: null }),
       rateLimit: allowRate,
       query,
+      one: async () => [],
     });
     const text = await response.text();
 
@@ -73,7 +73,7 @@ describe("viewer privacy boundary", () => {
     expect(text).not.toContain('"totalSpent"');
     expect(text).not.toContain("memberSince");
     expect(text).toContain('"pendingClaims":2');
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2); // communities + sessions
     expect(query.mock.calls.every(([sql]) => !String(sql).includes("last_active_at"))).toBe(true);
   });
 

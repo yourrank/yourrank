@@ -43,7 +43,7 @@ describe("new-shell auxiliary renderers", () => {
     const legal = await renderNewLegalPage(record.data, "privacy", opts);
     const profile = await renderNewStreamerProfile(record.data, opts);
     expect(legal).toContain('class="yr-site viewer-shell"');
-    expect(legal).toContain('aria-label="Viewer navigation"');
+    expect(legal).toContain('aria-label="Community"');
     expect(legal).not.toContain('/assets/devin-system.css');
     expect(legal).toContain("Privacy Policy");
     expect(profile).toContain("No channel links yet.");
@@ -203,7 +203,10 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).not.toContain(">Prize<");
     expect(profile).not.toContain("Prize $25");
     expect(profile).not.toContain('class="yr-hist-d"');
-    expect(profile).not.toContain("—");
+    // The rail attribution uses an em-dash for the creator's own line, so the
+    // hidden-prize contract is the prize text itself, not punctuation.
+    const hist = profile.slice(profile.indexOf('id="yr-player-standing"'));
+    expect(hist).not.toContain("—");
   });
 
   it("gives legal pages the viewer heading, readable prose and a help region", async () => {
@@ -280,7 +283,7 @@ describe("new-shell auxiliary renderers", () => {
     });
     // Each preview owns its own empty state, so the page does not repeat a
     // "nothing here yet" line underneath them.
-    expect(html).toContain('<p>No standings yet. The creator publishes leaderboard scores.</p>');
+    expect(html).toContain('No standings yet. The creator publishes leaderboard scores.');
     expect(html).toContain('No rewards yet.');
     expect(html).not.toContain("hasn't added players or rewards yet");
     expect(html).not.toContain("How credits work");
@@ -336,8 +339,9 @@ describe("new-shell auxiliary renderers", () => {
       .replace(/\s+/g, " ");
     // Three jobs: community context, home introduction, and copyright.
     // The visible responsive rail no longer duplicates identity in a drawer.
-    expect(html).toContain('data-preview-field="f_name">Demo Board</p>');
-    expect(html).toContain('class="viewer-switch"');
+    expect(html).toContain('data-preview-field="f_name">Demo Board</span>');
+    expect(html).toContain('data-preview-field="f_name">Demo Board</h1>');
+    expect(html).toContain('class="viewer-rail-brand"');
     expect(visible).not.toContain("Demo Board Demo Board");
     expect(html).toContain("Send a suggestion to this site's owner.");
     expect(html).toContain("There is no personal reply here.");

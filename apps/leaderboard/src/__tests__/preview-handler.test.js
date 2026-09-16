@@ -120,14 +120,13 @@ describe("handleDashboardPreview", () => {
 
   it("edits only the creator name and tagline, never the leaderboard heading", async () => {
     const home = await (await handleDashboardPreview(previewRequest("board=site-1&section=home&device=desktop", { brand: { name: "Northstar", tagline: "Our community" } }), {}, "nonce123", impls())).text();
-    expect(home).toContain('<p class="viewer-context-name" data-preview-field="f_name">Northstar</p>');
-    expect(home).toContain('data-preview-field="f_tagline">Our community</span>');
+    expect(home).toContain('<h1 class="viewer-hero-name" data-preview-field="f_name">Northstar</h1>');
+    expect(home).toContain('data-preview-field="f_tagline">Our community</p>');
     expect(home).not.toContain('yr_preview_update');
-    expect(home).not.toContain('.yr-hero-r');
     const leaderboard = await (await handleDashboardPreview(previewRequest("board=site-1&section=leaderboard&device=desktop", {}), {}, "nonce123", impls())).text();
-    expect(leaderboard).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
-    expect(leaderboard).toContain('class="viewer-context-name" data-preview-field="f_name"');
-    expect(leaderboard).not.toMatch(/<h1[^>]*data-preview-field/);
+    expect(leaderboard).toContain('<h1 class="viewer-h1">Leaderboard</h1>');
+    expect(leaderboard).toContain('class="viewer-rail-name" data-preview-field="f_name"');
+    expect(leaderboard).not.toContain('viewer-hero-name');
   });
 
   it("shows a picked logo before it is saved, and its removal too", async () => {

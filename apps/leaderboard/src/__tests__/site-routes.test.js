@@ -383,7 +383,7 @@ describe("logged-out vs logged-in rendering", () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("My activity");
+    expect(html).toContain("My Activity");
     expect(html).toContain("Your place in TestStreamer's community");
     expect(html).toContain("Join community");
     expect(html).toContain("/api/viewer/auth/kick?");
@@ -403,7 +403,7 @@ describe("logged-out vs logged-in rendering", () => {
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "shop", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('<span data-credit-balance-num>500</span>'); // balance in the shop strip
+    expect(html).toContain('data-credit-balance="500"'); // balance in the shop header chip
     expect(html).toContain(">Claim<");
     expect(html).not.toContain("Sign in with Kick");
   });
@@ -415,7 +415,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Credits");
-    expect(html).toContain('<strong data-credit-balance-num>500</strong>'); // compact membership balance
+    expect(html).toContain('data-credit-balance="500"'); // membership balance on the stats row
     expect(html).toContain("Shoutout"); // claim
     expect(html).toContain("Stream"); // ledger description
     expect(html).toContain("Claimed a code drop");
@@ -433,7 +433,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(routeSiteData.calls.at(-1)).toEqual({
       siteId: "site-1",
       viewerId: "v1",
-      opts: { claims: true, ledger: true, participation: true },
+      opts: { claims: true, ledger: true, participation: true, quests: true },
     });
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain("Shoutout");
@@ -455,7 +455,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(viewerBResponse.headers.get("vary")).toContain("Cookie");
     expect(viewerBHtml).not.toContain("Claimed a code drop");
     expect(viewerBHtml).not.toContain("Shoutout");
-    expect(viewerBHtml).toContain("No participation history yet");
+    expect(viewerBHtml).toContain("No credit activity yet");
     expect(viewerBHtml).toContain("No claims yet");
   });
 

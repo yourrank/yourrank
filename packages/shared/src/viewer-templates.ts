@@ -1,7 +1,6 @@
-/** Supported public presentation choices. Older stored templates keep the default. */
+/** Supported public presentation. Older stored templates resolve to the canonical community shell. */
 export const VIEWER_TEMPLATES = [
-  { value: 'cyber_arcade', name: 'Channel guide', description: 'The supplied light viewer dashboard, with a welcome guide and community overview.' },
-  { value: 'spotlight', name: 'Spotlight', description: 'The viewer dashboard with a top-three podium, player monograms and compact standings.' },
+  { value: 'cyber_arcade', name: 'Community hub', description: 'The supplied community experience: a creator rail, daily activities, standings, rewards and member activity.' },
 ] as const;
 
 export function resolveViewerTemplate(value: unknown) {

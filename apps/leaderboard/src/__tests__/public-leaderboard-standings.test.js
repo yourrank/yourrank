@@ -5,7 +5,8 @@ import { renderSite } from "@yourrank/shared/site-render";
 
 const root = join(import.meta.dir, "../../../../");
 const assets = join(root, "apps/leaderboard/src/assets");
-const css = readFileSync(join(assets, "site-shell.css"), "utf8");
+const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
+const cssBase = readFileSync(join(assets, "site-shell.css"), "utf8");
 const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
 
 const player = (name, rank, wagered, prize) => ({ name, rank, wagered, prize });
@@ -51,7 +52,7 @@ describe("public leaderboard standings", () => {
     const leaderboard = await render("leaderboard", { data: neutral });
 
     for (const html of [home, leaderboard]) {
-      expect(html).toContain(html === home ? "<span>42</span>" : "42 pts");
+      expect(html).toContain("42 pts");
       for (const restricted of ["wagered", "wager total", "casino", "paid in cash", "cash payout", "prize pool", "deposit", "rakeback", "odds", "betting"]) {
         expect(html.toLowerCase()).not.toContain(restricted);
       }
@@ -71,9 +72,9 @@ describe("public leaderboard standings", () => {
   it("opens with one leaderboard heading and a generic state line", async () => {
     const html = await render();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
-    expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
-    expect(html).toContain('<span class="yr-lbh-state is-live">Live</span>');
-    expect(html).toContain("<span>Monthly leaderboard</span>");
+    expect(html).toContain('<h1 class="viewer-h1">Leaderboard</h1>');
+    expect(html).toContain('<span class="viewer-state is-live">Live</span>');
+    expect(html).toContain("Monthly leaderboard");
     // The count belongs to the list it counts, stated once above the rows.
     expect(html).toContain('<span data-player-count-badge>3 players</span>');
     expect((html.match(/3 players/g) || []).length).toBe(1);
@@ -85,20 +86,19 @@ describe("public leaderboard standings", () => {
   });
 
   it("avoids leading separators when mobile metadata wraps", () => {
-    expect(css).toMatch(/\.yr-lbh-meta > \* \{[^}]*display: inline-flex;/);
-    expect(css).toMatch(/\.yr-lbh-meta > \* \+ \*::before \{ content: none; \}/);
-    expect(css.slice(css.indexOf(".yr-lbh-meta"), css.indexOf(".yr-lbh-note"))).not.toContain('content: "·"');
+    expect(css).toMatch(/\.viewer-head-chips \{[^}]*display: flex/);
+    expect(css).not.toMatch(/\.viewer-head-chips[^{]*::before/);
   });
 
   it("labels an upcoming and an ended board without inventing data", async () => {
     const soon = await render("leaderboard", { data: { ...baseData, scheduled: true, startsAt: new Date(Date.now() + 864e5).toISOString() } });
     expect(soon).toContain("Leaderboard opens soon");
-    expect(soon).toContain('<span class="yr-lbh-state is-soon">Not started</span>');
+    expect(soon).toContain('<span class="viewer-state is-soon">Not started</span>');
     expect(soon).toContain("Starts in");
 
     const ended = await render("leaderboard", { data: { ...baseData, ended: true } });
     expect(ended).toContain("Final leaderboard");
-    expect(ended).toContain('<span class="yr-lbh-state is-ended">Ended</span>');
+    expect(ended).toContain('<span class="viewer-state is-ended">Ended</span>');
     expect(ended).not.toContain("Ends in");
   });
 
@@ -113,7 +113,7 @@ describe("public leaderboard standings", () => {
     const expired = await render("leaderboard", {
       data: { ...baseData, endsAt: new Date(Date.now() - 864e5).toISOString() },
     });
-    expect(expired).toContain('<span class="yr-lbh-state is-ended">Ended</span>');
+    expect(expired).toContain('<span class="viewer-state is-ended">Ended</span>');
     expect(expired).not.toContain("Ends in");
 
     const invalid = await render("leaderboard", { data: { ...baseData, endsAt: "not-a-date" } });
@@ -177,12 +177,12 @@ describe("public leaderboard standings", () => {
     const html = await render("leaderboard", {
       data: { ...baseData, players: [player(long, 1, 10, 0), player("Ω_игрок", 2, 9, 0), player("🎯 aim <b>", 3, 8, 0)] },
     });
-    expect(html).toContain(`>${long}</a>`);
-    expect(html).toContain(">Ω_игрок</a>");
-    expect(html).toContain(">🎯 aim &lt;b&gt;</a>");
+    expect(html).toContain(`<span class="yr-player-name">${long}</span>`);
+    expect(html).toContain('<span class="yr-player-name">Ω_игрок</span>');
+    expect(html).toContain('<span class="yr-player-name">🎯 aim &lt;b&gt;</span>');
     expect(html).not.toContain("🎯 aim <b>");
-    // Names wrap inside their own cell rather than widening the document.
-    expect(css).toMatch(/\.yr-srow-name \{[^}]*overflow-wrap: anywhere/);
+    // Names ellipsize inside their own cell rather than widening the document.
+    expect(css).toMatch(/\.yr-player-name \{[^}]*text-overflow: ellipsis/);
     expect(css).toMatch(/\.yr-srow-name \{[^}]*min-width: 0/);
   });
 
@@ -190,42 +190,36 @@ describe("public leaderboard standings", () => {
     const long = "L".repeat(100);
     const html = await render("leaderboard", { data: { ...baseData, players: [player(long, 1, 1e12, 0)] } });
     // The whole name is the link text and the link target: nothing is cut.
-    expect(html).toContain(`>${long}</a>`);
+    expect(html).toContain(`<span class="yr-player-name">${long}</span>`);
     expect(html).toContain(`/creator/player/${long}`);
     expect(html).not.toContain("…</a>");
 
-    const nameRule = css.match(/\.yr-srow-name \{([^}]*)\}/)[1];
-    // Two visible lines on a phone, so one username cannot build a 250px row.
-    expect(nameRule).toContain("-webkit-line-clamp: 2");
-    expect(nameRule).toContain("line-clamp: 2");
-    expect(nameRule).toContain("-webkit-box-orient: vertical");
-    expect(nameRule).toContain("overflow: hidden");
-    // Identity keeps the row's primary width because a phone lets the secondary
-    // values claim at most 10ch instead of reserving half the row for a figure.
-    const rowRule = css.match(/\.yr-stand-head, \.yr-srow \{([^}]*)\}/)[1];
-    expect(rowRule).toContain("grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) auto");
-    expect(css).toMatch(/\.yr-srow-val \{[^}]*max-width: 10ch/);
-    expect(css).toMatch(/\.yr-srow-prize \{[^}]*max-width: 10ch/);
+    // A long name ellipsizes inside its flex identity cell instead of pushing
+    // the value columns off the row: the cell is the flexible track.
+    const rowRule = css.match(/\.viewer-shell \.yr-srow \{([^}]*)\}/)[1];
+    expect(rowRule).toContain("grid-template-columns: 44px minmax(0, 1fr) max-content max-content");
+    expect(css).toMatch(/\.yr-srow-name \{[^}]*display: flex[^}]*min-width: 0/);
+    expect(css).toMatch(/\.yr-player-name \{[^}]*white-space: nowrap/);
   });
 
   it("leaves normal names and the wide layout alone", async () => {
     const html = await render();
-    expect(html).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
-    // A one-line name still occupies the same 44px target as before.
-    expect(css).toMatch(/\.yr-srow-name \{[^}]*min-height: 44px/);
-    expect(css).toMatch(/\.yr-srow-name \{[^}]*line-height: 20px/);
-    const wide = css.slice(css.indexOf("@media (min-width: 640px)"));
-    expect(wide).toMatch(/\.yr-srow-name \{ -webkit-line-clamp: 3; line-clamp: 3; \}/);
-    expect(wide).toMatch(/\.yr-srow-val, \.yr-srow-prize \{ max-width: none; \}/);
-    expect(wide).toMatch(/grid-template-areas: "rank name val prize"/);
+    expect(html).toContain('<a class="yr-srow-name" href="/creator/player/Alice">');
+    expect(html).toContain('<span class="yr-player-name">Alice</span>');
+    // The four-column standings geometry is the same at every width; the
+    // narrow-phone media query only tightens its tracks.
+    const base = css.match(/\.viewer-shell \.yr-srow \{([^}]*)\}/)[1];
+    expect(base).toContain("grid-template-columns: 44px minmax(0, 1fr) max-content max-content");
+    const narrow = css.slice(css.indexOf("@media (max-width: 620px)"));
+    expect(narrow).toMatch(/\.yr-srow \{[^}]*grid-template-columns: 32px minmax\(0, 1fr\) max-content max-content/);
   });
 
   it("links players on slug sites and on custom domains", async () => {
     const slugged = await render();
-    expect(slugged).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
+    expect(slugged).toContain('<a class="yr-srow-name" href="/creator/player/Alice">');
 
     const custom = await render("leaderboard", { custom: true });
-    expect(custom).toContain('<a class="yr-srow-name" href="/player/Alice">Alice</a>');
+    expect(custom).toContain('<a class="yr-srow-name" href="/player/Alice">');
     expect(custom).not.toContain("/creator/player/");
 
     expect(shell).toContain('(isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/")');
@@ -239,15 +233,15 @@ describe("public leaderboard standings", () => {
     expect(html.indexOf('id="yr-search"')).toBeLessThan(html.indexOf('class="yr-stand"'));
     expect((html.match(/type="search"/g) || []).length).toBe(1);
     expect(html).toContain('<p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite">');
-    expect(css).toMatch(/\.yr-search \{[^}]*min-height: 44px/);
+    expect(cssBase).toMatch(/\.yr-search \{[^}]*min-height: 44px/);
     expect(shell).toContain('setSearchStatus(plural(visiblePlayerCount()) + " match');
     // Search takes the standings module's width on every viewport: no desktop
     // cap that stops it short of the panel and leaves the composition open.
-    expect(css).toMatch(/\.yr-search \{[^}]*width: 100%/);
+    expect(cssBase).toMatch(/\.yr-search \{[^}]*width: 100%/);
     expect(css).not.toMatch(/\.yr-search-row \.yr-search \{[^}]*max-width/);
-    // The count stays as quiet metadata at the top of the panel, to the side.
+    // The count stays as quiet metadata in the card header, to the side.
     expect(html).toContain('<span data-player-count-badge>3 players</span>');
-    expect(css).toMatch(/\.yr-panel-head--quiet \{[^}]*justify-content: flex-end/);
+    expect(html).toContain('<span class="viewer-card-meta"><span data-player-count-badge>');
   });
 
   it("keeps the no-match, failure and cleared states of search honest", async () => {
@@ -269,7 +263,7 @@ describe("public leaderboard standings", () => {
     expect(html).toContain("<span data-player-count-badge>140 players</span>");
     expect(html).toContain('<button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button>');
     expect(html).toContain('<p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1">');
-    expect(css).toMatch(/\.yr-btn--sm \{[^}]*min-height: 44px/);
+    expect(cssBase).toMatch(/\.yr-btn--sm \{[^}]*min-height: 44px/);
 
     const complete = await render("leaderboard", { data: { ...baseData, players: seq(20) }, playerCount: 20 });
     expect(complete).not.toContain("data-load-more");
@@ -303,16 +297,16 @@ describe("public leaderboard standings", () => {
   });
 
   it("builds one list geometry for phones and columns only when there is room", () => {
-    const base = css.match(/\.yr-stand-head, \.yr-srow \{([^}]*)\}/);
+    const base = css.match(/\.viewer-shell \.yr-srow \{([^}]*)\}/);
     expect(base).not.toBeNull();
-    expect(base[1]).toContain('grid-template-areas: "rank name val" "rank name prize"');
-    const wide = css.slice(css.indexOf("@media (min-width: 640px)"));
-    expect(wide).toMatch(/\.yr-stand-head, \.yr-srow \{[^}]*grid-template-areas: "rank name val prize"/);
-    expect(wide).toMatch(/\.yr-stand-head \{ display: grid; \}/);
+    expect(base[1]).toContain("display: grid");
+    expect(css).toMatch(/\.viewer-shell \.yr-stand-head \{[^}]*display: grid/);
+    const narrow = css.slice(css.indexOf("@media (max-width: 620px)"));
+    expect(narrow).toMatch(/\.viewer-shell \.yr-stand-head \{ display: none; \}/);
     // Standings never inherit the horizontally scrolling table contract.
     expect(css).not.toMatch(/\.yr-stand[^-{]*\{[^}]*min-width: 620px/);
     expect(css).not.toMatch(/\.yr-srow[^{]*\{[^}]*white-space: nowrap/);
-    expect(css).toMatch(/\.yr-srow-name \{[^}]*min-height: 44px/);
+    expect(css).toMatch(/\.yr-player-name \{[^}]*overflow: hidden/);
   });
 
   it("keeps one public stylesheet and script owner for the standings", () => {
@@ -325,12 +319,12 @@ describe("public leaderboard standings", () => {
   });
 
   it("keeps creator fonts on brand and display roles while utility copy stays sans", () => {
-    expect(css).toContain("--yr-display: var(--yr-display-font, var(--yr-sans))");
-    expect(css).toMatch(/\.yr-id-name[^}]*font-family: var\(--yr-display\)/);
-    expect(css).toMatch(/\.yr-h1[^}]*font-family: var\(--yr-display\)/);
-    expect(css).toMatch(/\.yr-site \{[^}]*font-family: var\(--yr-sans\)/);
-    expect(css).toMatch(/\.yr-btn[^}]*font-family: var\(--yr-sans\)/);
-    expect(css).toMatch(/\.yr-search[^}]*font-family: var\(--yr-sans\)/);
+    expect(cssBase).toContain("--yr-display: var(--yr-display-font, var(--yr-sans))");
+    expect(cssBase).toMatch(/\.yr-id-name[^}]*font-family: var\(--yr-display\)/);
+    expect(cssBase).toMatch(/\.yr-h1[^}]*font-family: var\(--yr-display\)/);
+    expect(cssBase).toMatch(/\.yr-site \{[^}]*font-family: var\(--yr-sans\)/);
+    expect(cssBase).toMatch(/\.yr-btn[^}]*font-family: var\(--yr-sans\)/);
+    expect(cssBase).toMatch(/\.yr-search[^}]*font-family: var\(--yr-sans\)/);
   });
 
   it("uses the shared viewer shell and preserves the home preview", async () => {
@@ -342,8 +336,8 @@ describe("public leaderboard standings", () => {
     expect((html.match(/aria-current="page"/g) || []).length).toBe(1);
 
     const home = await render("home");
-    expect(home).toContain('<span class="viewer-player-name">Alice</span>');
-    expect(home).toContain('<span class="viewer-rank">01</span>');
+    expect(home).toContain('<span class="viewer-board-name">Alice</span>');
+    expect(home).toContain('<span class="viewer-board-rank">1</span>');
     expect((home.match(/class="viewer-board-row"/g) || [])).toHaveLength(3);
   });
 });

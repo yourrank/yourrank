@@ -1,5 +1,7 @@
-// One persistent viewer shell. Documents remain the canonical route/render owner;
-// this enhancement swaps their content without retaining private page responses.
+// One persistent viewer shell. Documents remain the canonical route/render
+// owner; this enhancement swaps their content without retaining private page
+// responses, and it owns the rail's narrow-width disclosure and the account
+// logout control — both chrome-level, so they survive page-to-page navigation.
 (function () {
   "use strict";
   if (window.YRViewerApp || !document.body.classList.contains("viewer-shell")) return;
@@ -16,31 +18,74 @@
 
   function rememberCommunity() {
     var slug = document.body.dataset.slug;
-    if (slug) {
-      selectedSlug = slug;
-      try { sessionStorage.setItem("yr-viewer-community", slug); } catch (_) { /* Optional context only. */ }
-    }
+    if (slug) selectedSlug = slug;
     document.querySelectorAll('a[href]').forEach(function (link) {
+      var raw = link.getAttribute("href") || "";
+      if (raw.charAt(0) === "#") return; // fragment links are never destinations
       var url = new URL(link.href, location.href);
-      if (selectedSlug && url.pathname === "/me" && (url.origin !== location.origin || document.body.dataset.customDomain !== "true")) {
+      if (selectedSlug && /^\/me(?:\/|$)/.test(url.pathname) && (url.origin !== location.origin || document.body.dataset.customDomain !== "true")) {
         url.searchParams.set("community", selectedSlug);
         link.href = url.href;
       }
     });
   }
+
+  // The rail's narrow-width disclosure: menu opens it as a modal drawer,
+  // scrim/Escape/a chosen destination close it, focus returns to the trigger.
+  var rail = document.querySelector(".viewer-rail");
+  var railMenu = document.querySelector("[data-nav-menu]");
+  var railScrim = document.querySelector("[data-nav-scrim]");
+  var railClose = document.querySelector("[data-nav-close]");
+  var railOpener = null;
+  function setRailOpen(open) {
+    if (!rail) return;
+    rail.dataset.open = open ? "true" : "";
+    if (railScrim) railScrim.hidden = !open;
+    if (railMenu) railMenu.setAttribute("aria-expanded", open ? "true" : "false");
+    document.body.classList.toggle("viewer-nav-open", open);
+    if (open) {
+      railOpener = document.activeElement;
+      window.setTimeout(function () { (railClose || rail).focus(); }, 0);
+    } else if (railOpener) {
+      railOpener.focus();
+      railOpener = null;
+    }
+  }
+  if (railMenu) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", function () { setRailOpen(rail && rail.dataset.open !== "true"); }); }
+  if (railClose) { railClose.dataset.bound = "1"; railClose.addEventListener("click", function () { setRailOpen(false); }); }
+  if (railScrim) { railScrim.dataset.bound = "1"; railScrim.addEventListener("click", function () { setRailOpen(false); }); }
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && rail && rail.dataset.open === "true") setRailOpen(false);
+  });
+
+  // Account chrome logout — POST /api/viewer/logout, then land back on /me.
+  document.addEventListener("click", function (event) {
+    var logout = event.target.closest("[data-viewer-logout]");
+    if (!logout) return;
+    event.preventDefault();
+    if (logout.disabled) return;
+    logout.disabled = true;
+    fetch("/api/viewer/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "x-csrf-token": (document.querySelector('meta[name="csrf-token"]') || {}).content || "" },
+    }).then(function () { location.assign("/me"); })
+      .catch(function () { location.assign("/me"); });
+  });
+
   function updateNavigation() {
-    document.querySelectorAll('.viewer-rail a[aria-current]').forEach(function (link) { link.removeAttribute("aria-current"); });
-    document.querySelectorAll('.viewer-rail a[href]').forEach(function (link) {
+    document.querySelectorAll('.viewer-rail a[aria-current]').forEach(function (link) {
+      link.removeAttribute("aria-current");
+      link.classList.remove("is-on");
+    });
+    document.querySelectorAll('.viewer-rail .viewer-nav-link[href]').forEach(function (link) {
       var target = new URL(link.href, location.href);
       var active = target.origin === location.origin && target.pathname === location.pathname;
-      if (active && target.pathname === "/me" && document.body.dataset.customDomain !== "true") {
-        active = (target.hash === "#vd-profile") === (location.hash === "#vd-profile");
+      if (active) {
+        link.setAttribute("aria-current", "page");
+        link.classList.add("is-on");
       }
-      if (active) link.setAttribute("aria-current", "page");
     });
-    var heading = document.querySelector('.viewer-main h1');
-    var active = document.querySelector('.viewer-rail a[aria-current]');
-    document.getElementById("viewer-top-title").textContent = active ? active.textContent : heading ? heading.textContent : "Community";
     rememberCommunity();
   }
   function loadAsset(src, initName, module) {
@@ -57,8 +102,8 @@
   }
   async function mount() {
     await loadAsset("/assets/site-shell.js", "YRInitSitePage", false);
-    if (document.getElementById("vd-profile")) {
-      await loadAsset("/assets/viewer-dashboard.js", "YRInitViewerAccount", true);
+    if (document.querySelector("[data-va-page]")) {
+      await loadAsset("/assets/viewer-account.js", "YRInitViewerAccount", true);
       await window.__yrViewerReady;
     }
     if (document.getElementById("contactForm")) await loadAsset("/assets/contact.js", "YRInitContactPage", true);
@@ -75,29 +120,22 @@
     });
   }
   function syncChrome(source) {
-    [".viewer-topbar", ".viewer-rail"].forEach(function (selector) {
+    [".viewer-rail", ".viewer-topbar"].forEach(function (selector) {
       var next = source.querySelector(selector);
       var existing = document.querySelector(selector);
-      if (next && existing) existing.replaceChildren.apply(existing, Array.from(next.childNodes));
+      // Whole-element swap: the rail's own class carries the shell variant
+      // (community vs viewer-rail--account), so children alone won't do.
+      if (next && existing) existing.replaceWith(next);
     });
-  }
-  async function restoreContext() {
-    if (selectedSlug) { rememberCommunity(); return; }
-    var slug = new URL(location.href).searchParams.get("community");
-    try { slug = slug || sessionStorage.getItem("yr-viewer-community"); } catch (_) { /* Optional. */ }
-    if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(slug || "")) return;
-    try {
-      var response = await fetch("/" + encodeURIComponent(slug), { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      var source = new DOMParser().parseFromString(await response.text(), "text/html");
-      if (!source.body.classList.contains("viewer-shell") || source.body.dataset.slug !== slug) return;
-      syncChrome(source);
-      var overview = document.querySelector('.viewer-overview');
-      var sourceOverview = source.querySelector('.viewer-overview');
-      if (overview && sourceOverview) overview.replaceChildren.apply(overview, Array.from(sourceOverview.childNodes));
-      selectedSlug = slug;
-      rememberCommunity();
-    } catch (_) { /* Account content remains usable without a community fetch. */ }
+    var layout = document.querySelector(".viewer-layout");
+    if (layout) layout.dataset.viewerShell = source.body.dataset.viewerShell || "";
+    rail = document.querySelector(".viewer-rail");
+    railMenu = document.querySelector("[data-nav-menu]");
+    railScrim = document.querySelector("[data-nav-scrim]");
+    railClose = document.querySelector("[data-nav-close]");
+    if (railMenu && !railMenu.dataset.bound) { railMenu.dataset.bound = "1"; railMenu.addEventListener("click", function () { setRailOpen(rail && rail.dataset.open !== "true"); }); }
+    if (railClose && !railClose.dataset.bound) { railClose.dataset.bound = "1"; railClose.addEventListener("click", function () { setRailOpen(false); }); }
+    if (railScrim && !railScrim.dataset.bound) { railScrim.dataset.bound = "1"; railScrim.addEventListener("click", function () { setRailOpen(false); }); }
   }
   async function navigate(value, options) {
     var opts = options || {};
@@ -113,6 +151,7 @@
     if (pending) pending.abort();
     pending = new AbortController();
     notice.textContent = "Loading page…"; notice.hidden = false;
+    setRailOpen(false);
     try {
       var response = await fetch(target.href, { credentials: "same-origin", cache: "no-store", signal: pending.signal });
       if (response.redirected && new URL(response.url).origin !== location.origin) { location.assign(response.url); return; }
@@ -124,8 +163,12 @@
       // Only supported page controllers run. Arbitrary document scripts are never evaluated.
       if (next.querySelector("script")) { location.assign(target.href); return; }
       document.dispatchEvent(new Event("yr:viewer-unmount"));
+      var sourceShell = source.body.dataset.viewerShell || "";
+      var currentShell = document.body.dataset.viewerShell || "";
       var communityPage = !!source.body.dataset.slug;
-      if (communityPage && source.body.dataset.slug !== selectedSlug) syncChrome(source);
+      // Chrome follows the surface: a different shell kind or a different
+      // community swaps the rail and bar, never the document.
+      if (sourceShell !== currentShell || (communityPage && source.body.dataset.slug !== selectedSlug)) syncChrome(source);
       var existing = document.querySelector(".viewer-main");
       existing.className = next.className;
       existing.replaceChildren.apply(existing, Array.from(next.childNodes));
@@ -140,16 +183,15 @@
       var theme = source.querySelector('[data-theme-tokens]');
       var currentTheme = document.querySelector('[data-theme-tokens]');
       if (theme && currentTheme) currentTheme.textContent = theme.textContent;
-      // The overview is context data, not a navigation destination.
-      if (communityPage) {
-        var overview = document.querySelector('.viewer-overview');
-        var nextOverview = source.querySelector('.viewer-overview');
-        if (overview && nextOverview) overview.replaceChildren.apply(overview, Array.from(nextOverview.childNodes));
-      }
-      ["#yr-feedback", ".viewer-site-footer"].forEach(function (selector) {
+      ["#yr-feedback"].forEach(function (selector) {
         var old = document.querySelector(selector); if (old) old.remove();
         var replacement = source.querySelector(selector); if (replacement) document.body.appendChild(replacement);
       });
+      var oldFooter = document.querySelector(".viewer-site-footer");
+      var newFooter = source.querySelector(".viewer-site-footer");
+      if (oldFooter && newFooter) oldFooter.replaceWith(newFooter);
+      else if (oldFooter) oldFooter.remove();
+      else if (newFooter) document.querySelector(".viewer-body").appendChild(newFooter);
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
       await mount();
@@ -179,7 +221,7 @@
   });
   window.addEventListener("popstate", function () { navigate(location.href, { pop: true, refresh: true }); });
   window.YRViewerApp = { navigate: navigate, refresh: function () { return navigate(location.href, { refresh: true }); } };
-  window.__yrViewerAppReady = restoreContext().then(mount).catch(function () {
+  window.__yrViewerAppReady = mount().catch(function () {
     notice.textContent = "Page controls could not load. Reload to try again."; notice.hidden = false;
   });
 })();

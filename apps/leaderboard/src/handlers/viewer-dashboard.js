@@ -4,6 +4,7 @@ import { one, query, withTransaction } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { getPublicSite } from "../site.js";
 import { requireViewer } from "./viewer-auth.js";
+import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { bad, json, ok } from "../auth.js";
 import { decryptCredential } from "@yourrank/shared/crypto";
 import { buildRedemptionEmbed, sendDiscordWebhook } from "@yourrank/shared/notifications";
@@ -39,11 +40,11 @@ export function cooldownRemainingSeconds(lastAt, cooldownSeconds, nowMs = Date.n
 }
 
 export async function handleViewerMe(request, env, deps = {}) {
-  const requireViewerImpl = deps.requireViewer || requireViewer;
+  const resolveViewerImpl = deps.resolveViewer || resolveViewer;
   const rateLimitImpl = deps.rateLimit || rateLimit;
   const queryImpl = deps.query || query;
-  const { viewer, res } = await requireViewerImpl(request, env);
-  if (res) return res;
+  const { viewer, session } = await resolveViewerImpl(request, env);
+  if (!viewer) return bad("unauthorized", 401);
   if (!(await rateLimitImpl(env, `viewer:me:${viewer.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
 
   const communities = await queryImpl(
@@ -91,6 +92,31 @@ export async function handleViewerMe(request, env, deps = {}) {
   }
   const displayName = connections.find((connection) => connection.username)?.username || "Member";
 
+  // Live session rows power the account's active-sessions list. Token hashes
+  // never serialize — `current` only marks the row the caller is holding.
+  const sessionRows = await queryImpl(
+    `SELECT vs.token, vs.authority, vs.hostname, vs.created_at, vs.expires_at,
+            s.slug AS site_slug, s.name AS site_name
+       FROM viewer_sessions vs
+       LEFT JOIN sites s ON s.id = vs.site_id
+      WHERE vs.viewer_id = $1 AND vs.expires_at > now()
+      ORDER BY vs.created_at DESC
+      LIMIT 20`,
+    [viewer.id]
+  ).catch((err) => {
+    console.error("[viewer-me] session list failed:", err?.message || err);
+    return [];
+  });
+  const sessions = (sessionRows || []).map((row) => ({
+    authority: row.authority,
+    hostname: row.hostname,
+    siteSlug: row.site_slug,
+    siteName: row.site_name,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    current: row.token === session?.sessionToken,
+  }));
+
   return privateViewerJson({
     viewer: {
       displayName,
@@ -99,6 +125,7 @@ export async function handleViewerMe(request, env, deps = {}) {
       connections,
     },
     communities: safeCommunities,
+    sessions,
   });
 }
 

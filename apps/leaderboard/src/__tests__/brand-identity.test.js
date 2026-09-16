@@ -90,9 +90,9 @@ describe("brand identity", () => {
       expect(source, `${rel} should be scanned`).toBeDefined();
       expect(source.text, `${rel} must import from brand-assets`).toMatch(/brand-assets/);
     }
-    const viewerPage = sources.find((s) => s.rel === "apps/leaderboard/src/pages/viewer-dashboard.js");
+    const viewerPage = sources.find((s) => s.rel === "apps/leaderboard/src/pages/viewer-account.js");
     expect(viewerPage.text).toContain('@yourrank/shared/viewer-shell');
-    expect(viewerPage.text).toContain('viewerNavigation()');
+    expect(viewerPage.text).toContain('viewerAccountChrome');
   });
 
   it("serves the canonical mark as the favicon", () => {

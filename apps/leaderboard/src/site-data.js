@@ -54,7 +54,7 @@ export async function getViewerParticipationHistory(
 export async function getViewerSiteData(
   siteId,
   viewerId,
-  { shop = false, claims = false, ledger = false, participation = false } = {},
+  { shop = false, claims = false, ledger = false, participation = false, quests = false } = {},
   {
     oneImpl = one,
     queryImpl = query,
@@ -71,6 +71,8 @@ export async function getViewerSiteData(
     participation: [],
     participationLimit: VIEWER_PARTICIPATION_LIMIT,
     participationTruncated: false,
+    streak: null,
+    questsCompleted: 0,
   };
   if (!viewerId) {
     if (shop) return { membershipStatus: "absent", viewerOnSite: null, shopItems: await getShopItems(siteId, queryImpl), ...emptyHistory };
@@ -115,7 +117,7 @@ export async function getViewerSiteData(
     }
   }
 
-  const [claimResult, ledgerRows, participationResult] = await Promise.all([
+  const [claimResult, ledgerRows, participationResult, streakRow, questsDoneRow] = await Promise.all([
     claims
       ? getViewerClaimsImpl(siteId, viewerId, viewerOnSite.id, { queryImpl })
       : Promise.resolve({ claims: [], limit: 50, truncated: false }),
@@ -128,6 +130,27 @@ export async function getViewerSiteData(
     participation
       ? getViewerParticipationImpl(siteId, viewerId, viewerOnSite.id, { queryImpl })
       : Promise.resolve({ participation: [], limit: VIEWER_PARTICIPATION_LIMIT, truncated: false }),
+    quests
+      ? oneImpl(
+          "SELECT current_streak, longest_streak FROM viewer_streaks WHERE site_id=$1 AND viewer_id=$2",
+          [siteId, viewerId]
+        ).catch((err) => {
+          console.error("[site-data] viewer streak lookup failed:", err?.message || err);
+          return null;
+        })
+      : Promise.resolve(null),
+    quests
+      ? oneImpl(
+          `SELECT count(*)::int AS n
+             FROM viewer_daily_quests vq
+             JOIN daily_quests dq ON dq.id = vq.quest_id
+            WHERE dq.site_id=$1 AND vq.viewer_id=$2 AND vq.completed = true`,
+          [siteId, viewerId]
+        ).catch((err) => {
+          console.error("[site-data] viewer quest count lookup failed:", err?.message || err);
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   // Per-item cooldown snapshot: how long this member must still wait before
@@ -176,5 +199,9 @@ export async function getViewerSiteData(
     participation: participationResult.participation || [],
     participationLimit: participationResult.limit,
     participationTruncated: !!participationResult.truncated,
+    streak: streakRow
+      ? { current: Number(streakRow.current_streak) || 0, longest: Number(streakRow.longest_streak) || 0 }
+      : null,
+    questsCompleted: Number(questsDoneRow?.n) || 0,
   };
 }

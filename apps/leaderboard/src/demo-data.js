@@ -24,11 +24,11 @@ export function demoLeaderboardData() {
     branding: { hasLogo: false },
     rankBy: "score",
     players: [
-      { name: "Alex", score: 9500, wagered: 0, prize: 0 },
-      { name: "Bree", score: 7200, wagered: 0, prize: 0 },
-      { name: "Casey", score: 5400, wagered: 0, prize: 0 },
-      { name: "Drew", score: 3100, wagered: 0, prize: 0 },
-      { name: "Ellis", score: 1800, wagered: 0, prize: 0 },
+      { name: "Alex", score: 9500, wagered: 0, prize: 0, rank: 1 },
+      { name: "Bree", score: 7200, wagered: 0, prize: 0, rank: 2 },
+      { name: "Casey", score: 5400, wagered: 0, prize: 0, rank: 3 },
+      { name: "Drew", score: 3100, wagered: 0, prize: 0, rank: 4 },
+      { name: "Ellis", score: 1800, wagered: 0, prize: 0, rank: 5 },
     ],
     shopItems: [
       { id: "demo-vip", name: "VIP chat badge", description: "Stand out in chat for one stream.", cost: 250, stock: null, active: true },
@@ -47,6 +47,9 @@ export function demoLeaderboardData() {
       entries: "128 entries",
       ends: "Ends in 2h 14m",
     },
+    // Daily quests need a signed-in membership — there is nothing a demo can
+    // show on Activities, so the demo board keeps the section off.
+    siteSections: { home: true, activities: false, leaderboard: true, shop: true, games: false, me: true },
     endsAt: new Date(Date.now() + 7 * 86400000).toISOString(),
     rules: [
       "Leaderboard resets automatically each period.",

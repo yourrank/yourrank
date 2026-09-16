@@ -2,7 +2,6 @@
 /** @jsxImportSource hono/jsx */
 
 import { raw } from "hono/html";
-import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { DashboardShell } from "./dashboard-shell.jsx";
 
 import { brandLoaderLogoSvg } from "@yourrank/shared/brand-assets";
@@ -415,14 +414,8 @@ function BoardSettingsSection({ active } = {}) {
           </div>
         </div>
         <div class="v3-settings-card" id="brandCard">
-          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your viewer template, logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
+          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
           <div id="brandBody">
-            <div class="v3-settings-field">
-              <label class="v3-settings-label" for="f_viewerTemplate">Viewer template</label>
-              <select id="f_viewerTemplate" aria-describedby="siteTemplateHint siteTemplateScope">{VIEWER_TEMPLATES.map(template => <option value={template.value}>{template.name}</option>)}</select>
-              <span class="v3-settings-muted" id="siteTemplateHint" role="status" aria-live="polite">{VIEWER_TEMPLATES[0].description}</span>
-              <span class="v3-settings-muted" id="siteTemplateScope">Applies to this site's viewer pages. Check the preview, then save your choice.</span>
-            </div>
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="logoFile">Logo</label>
               <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" hidden /><button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>

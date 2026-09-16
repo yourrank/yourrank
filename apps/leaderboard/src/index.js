@@ -10,7 +10,7 @@ import { fromJsonb } from "@yourrank/shared/jsonb";
 import { HISTORY_DAYS } from "@yourrank/shared/plans";
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
-import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
+import { viewerAccountPage } from "./pages/viewer-account.js";
 import { verifyEmailPageHtml } from "./pages/verify-email.js";
 import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
@@ -1019,8 +1019,15 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(error500Page(nonce), { status: 500, headers: HTML_N });
         }
       }
+      const accountCommunity = url.searchParams.get("community") || "";
       if (path === "/me" || path === "/me.html") {
-        return new Response(addCookieConsent(fillYear(viewerDashboardPage)), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+        return new Response(addCookieConsent(fillYear(viewerAccountPage("communities", { nonce, csrfToken, community: accountCommunity }))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+      }
+      if (path.startsWith("/me/")) {
+        const accountPageKey = path.slice(4).replace(/\/$/, "");
+        if (["profile", "connections", "notifications", "privacy", "data"].includes(accountPageKey)) {
+          return new Response(addCookieConsent(fillYear(viewerAccountPage(accountPageKey, { nonce, csrfToken, community: accountCommunity }))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+        }
       }
       if (path === "/forgot") return new Response(addCookieConsent(await renderHtmlPage(PAGES.forgot)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       if (path === "/reset") {

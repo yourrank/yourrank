@@ -32,7 +32,7 @@ describe("viewer help routing", () => {
     const help = await redirect(location.pathname + location.search);
     expect(help.status).toBe(200);
     const html = await help.text();
-    expect(html).toContain('class="viewer-rail"');
+    expect(html).toContain('class="viewer-rail viewer-rail--account"');
     expect(html).toContain('href="/creator/shop"');
     expect(html).not.toContain('href="/dashboard');
   });

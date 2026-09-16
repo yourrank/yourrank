@@ -29,7 +29,8 @@ describe("help pages", () => {
   it("keeps viewer help in the viewer shell even with a creator session", () => {
     for (const page of ["helpHub", "helpSupport", "helpFeedback"]) {
       const html = render(page, user, "/help/support", { returnTo: "/creator/shop" });
-      expect(html).toContain('class="viewer-rail"');
+      expect(html).toContain('class="viewer-rail viewer-rail--account"');
+      expect(html).toContain('data-viewer-shell="account"');
       expect(html).not.toContain('data-auth-workspace="true"');
       expect(html).not.toContain('href="/dashboard');
       expect(html).not.toContain('/assets/dashboard-v4.css');

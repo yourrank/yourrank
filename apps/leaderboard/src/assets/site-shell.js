@@ -12,14 +12,11 @@
       .then(function (response) { if (!response.ok) throw new Error('Unavailable'); return response.json(); })
       .then(function (data) {
         if (typeof data.isLive !== 'boolean' || data.error || pageLifetime.signal.aborted) return;
-        streamState.textContent = data.isLive ? 'Live now' : 'Offline';
-        var creator = document.querySelector('.viewer-creator>div');
-        if (creator) {
-          var status = creator.querySelector('[data-stream-status]') || document.createElement('span');
-          status.dataset.streamStatus = '';
-          status.textContent = data.isLive ? 'Live on Kick' : 'Kick · Offline';
-          if (!status.parentNode) creator.appendChild(status);
-        }
+        streamState.textContent = data.isLive ? 'Live now on Kick' : 'Offline on Kick';
+        document.querySelectorAll('[data-live-badge]').forEach(function (badge) { badge.hidden = !data.isLive; });
+        document.querySelectorAll('[data-stream-status-plain]').forEach(function (el) {
+          el.textContent = data.isLive ? 'Live now — watch on Kick' : 'Offline right now';
+        });
       }).catch(function () { /* Keep the explicit unavailable state. */ });
   }
   document.addEventListener("yr:viewer-unmount", function () {
@@ -30,56 +27,6 @@
     searchRequest++;
     pageRequest++;
   }, { once: true });
-
-  // Guide progress is a per-tab browsing aid, never persisted membership state.
-  var guide = document.querySelector("[data-viewer-guide]");
-  var guideVisits = {};
-  var guideKey = "yr-viewer-guide:" + (document.body.dataset.slug || "");
-  try { guideVisits = JSON.parse(sessionStorage.getItem(guideKey) || "{}"); } catch (_) { /* Storage is optional. */ }
-  if (!guideVisits || typeof guideVisits !== "object" || Array.isArray(guideVisits)) guideVisits = {};
-  if (["shop", "me"].includes(document.body.dataset.section)) {
-    guideVisits[document.body.dataset.section] = true;
-    try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Links still work. */ }
-  }
-  if (guide) {
-    guide.querySelector("[data-guide-dismiss]").hidden = false;
-    var completed = Number(guide.dataset.guideBase);
-    var total = Number(guide.dataset.guideTotal);
-    guide.querySelectorAll("[data-guide-visit]").forEach(function (row) {
-      if (guideVisits[row.dataset.guideVisit] === true) {
-        completed++;
-        row.querySelector(".viewer-check-icon").classList.add("is-done");
-        row.querySelector(".viewer-check-icon").innerHTML = '<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
-      }
-    });
-    guide.querySelector("[data-guide-count]").textContent = String(completed);
-    guide.querySelector(".viewer-ring-fill").setAttribute("stroke-dasharray", (completed / total * 219.92) + " 219.92");
-    guide.querySelector(".viewer-progress-ring").setAttribute("aria-label", completed + " of " + total + " guide steps completed");
-    var restoreGuide = document.querySelector(".viewer-guide-restore");
-    var setGuideHidden = function (hidden, focus) {
-      guide.hidden = hidden;
-      restoreGuide.hidden = !hidden;
-      guideVisits.dismissed = hidden;
-      try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Optional. */ }
-      if (focus) (hidden ? restoreGuide.querySelector("button") : guide.querySelector("[data-guide-dismiss]")).focus();
-    };
-    guide.querySelector("[data-guide-dismiss]").addEventListener("click", function () { setGuideHidden(true, true); });
-    restoreGuide.querySelector("button").addEventListener("click", function () { setGuideHidden(false, true); });
-    if (completed === total || guideVisits.dismissed === true) setGuideHidden(true, false);
-  }
-
-  var communitySwitch = document.querySelector(".viewer-switch");
-  if (communitySwitch) {
-    document.addEventListener("click", function (event) {
-      if (!communitySwitch.contains(event.target)) communitySwitch.open = false;
-    }, { signal: pageLifetime.signal });
-    document.addEventListener("keydown", function (event) {
-      if (event.key === "Escape" && communitySwitch.open) {
-        communitySwitch.open = false;
-        communitySwitch.querySelector("summary").focus();
-      }
-    }, { signal: pageLifetime.signal });
-  }
 
   // OAuth errors are one-time context. The server renders a controlled message
   // on My Community; remove only the known query key so refresh does not replay
@@ -221,7 +168,7 @@
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
   var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
   var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";
-  var spotlight = document.body.dataset.viewerTemplate === "spotlight";
+  var podium = document.querySelector("[data-podium]");
   var eventId = document.body.dataset.eventId || "";
   var money = function (v) { return currency + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); };
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]); }); };
@@ -247,10 +194,8 @@
     var name = esc(String(p.name || "").toLowerCase());
     var value = esc(rankBy === "score" ? Number(p.score || 0).toLocaleString("en-US") + " pts" : money(p.wagered));
     var prize = !hidePrizes && p.prize ? esc(money(p.prize)) : "";
-    var identity = spotlight
-      ? '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>'
-      : esc(p.name);
-    var labelClass = spotlight ? "yr-podium-label" : "yr-sr";
+    var identity = '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>';
+    var labelClass = "yr-sr";
     return '<li class="yr-srow' + (rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : "") +
       '" data-player-name="' + name + '" data-position="' + rank + '">' +
       '<span class="yr-srow-rank"><span class="yr-sr">Rank </span>' + rank + "</span>" +
@@ -308,7 +253,7 @@
   if (search && rowsRoot && playerBoard) {
     search.addEventListener("input", function () {
       var q = search.value.trim().toLowerCase();
-      if (playerBoard.hasAttribute("data-podium")) playerBoard.classList.toggle("is-searching", !!q);
+      if (podium) podium.hidden = !!q;
       activeSearch = q;
       searchOffset = 0;
       searchRequest += 1;
@@ -672,8 +617,6 @@
           btn.classList.add("is-success");
           setRedeemStatus("Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.");
           if (typeof r.data.balance === "number") updateBalance(r.data.balance);
-          var overviewStatus = document.querySelector("[data-viewer-claim-summary]");
-          if (overviewStatus) overviewStatus.textContent = "Claim submitted";
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);
         } else {
@@ -786,6 +729,131 @@
           if (statusEl) statusEl.textContent = "Could not confirm delivery. Your message is still here; check your connection before trying again.";
           btn.disabled = false;
           btn.textContent = "Send";
+        });
+    });
+  }
+
+  // ── Rewards: search filter ──────────────────────────────────────────
+  var rewardSearch = document.querySelector("[data-reward-search]");
+  if (rewardSearch) {
+    var rewardTargets = function () {
+      return Array.prototype.slice.call(document.querySelectorAll(".viewer-reward-card, .yr-rwd"));
+    };
+    var rewardNoMatch = document.getElementById("yr-reward-nomatch");
+    rewardSearch.addEventListener("input", function () {
+      var q = rewardSearch.value.trim().toLowerCase();
+      var shown = 0;
+      rewardTargets().forEach(function (el) {
+        var hit = !q || el.textContent.toLowerCase().indexOf(q) !== -1;
+        el.hidden = !hit;
+        if (hit) shown += 1;
+      });
+      if (rewardNoMatch) rewardNoMatch.hidden = shown > 0;
+    });
+  }
+
+  // ── Activities: daily quests ─────────────────────────────────────────
+  // The quests payload is the canonical API contract: the GET lazily creates
+  // today's rows server-side, so the page never invents a quest.
+  var questsRoot = document.querySelector("[data-quests-root]");
+  if (questsRoot) {
+    var questsLoading = questsRoot.querySelector("[data-quests-loading]");
+    var fmt = function (n) { return Number(n || 0).toLocaleString("en-US"); };
+    var questIcon = function (key) {
+      var paths = {
+        watch_30m: '<path d="M7 4.5v15l13-7.5z"/>',
+        chat_5_msgs: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',
+        event_participate: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+      };
+      return '<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[key] || paths.event_participate) + '</svg>';
+    };
+    var questCta = function (quest, signedIn, member) {
+      if (!signedIn) return '<a class="yr-btn yr-btn--sm" href="/me">Sign in to track</a>';
+      if (!member) return '<span class="yr-act yr-act--off" role="note">Join to track</span>';
+      if (quest.claimed) return '<span class="viewer-chip viewer-chip--done">Claimed</span>';
+      if (quest.completed) return '<button class="yr-btn yr-btn--sm" type="button" data-quest-claim="' + esc(quest.id) + '">Claim +' + fmt(quest.rewardPoints) + '</button>';
+      return '<span class="yr-act yr-act--off" role="note">In progress</span>';
+    };
+    var questRow = function (quest, signedIn, member) {
+      var pct = Math.min(100, Math.max(0, Math.round((Number(quest.progress) || 0) / Math.max(1, Number(quest.targetCount) || 1) * 100)));
+      return '<li class="viewer-quest' + (quest.claimed ? " is-claimed" : quest.completed ? " is-complete" : "") + '" data-quest-row="' + esc(quest.id) + '">' +
+        '<span class="viewer-quest-ico">' + questIcon(quest.questKey) + '</span>' +
+        '<span class="viewer-quest-main"><b class="viewer-quest-name">' + esc(quest.title) + '</b>' +
+        '<span class="viewer-quest-meta">' + fmt(quest.progress) + ' / ' + fmt(quest.targetCount) + ' · +' + fmt(quest.rewardXp) + ' XP · +' + fmt(quest.rewardPoints) + ' credits</span>' +
+        '<span class="viewer-quest-bar"><span style="width:' + pct + '%"></span></span></span>' +
+        '<span class="viewer-quest-cta">' + questCta(quest, signedIn, member) + '</span></li>';
+    };
+    var renderQuests = function (payload) {
+      var signedIn = questsRoot.dataset.signedIn === "true";
+      var member = questsRoot.dataset.member === "true";
+      var quests = payload && payload.quests ? payload.quests : [];
+      var streak = payload && payload.streak ? payload.streak : null;
+      var activeChip = document.querySelector("[data-quest-active]");
+      var streakChip = document.querySelector("[data-quest-streak]");
+      var open = quests.filter(function (q) { return !q.claimed; });
+      var done = quests.filter(function (q) { return q.claimed; });
+      if (activeChip) { activeChip.hidden = !open.length; activeChip.querySelector("[data-quest-active-num]").textContent = fmt(open.length); }
+      if (streakChip) {
+        var days = streak ? Number(streak.currentStreak) || 0 : 0;
+        streakChip.hidden = days < 1;
+        streakChip.querySelector("[data-quest-streak-num]").textContent = fmt(days);
+      }
+      var featured = open.filter(function (q) { return q.completed; })[0] || open[0];
+      var rest = open.filter(function (q) { return q !== featured; });
+      questsRoot.innerHTML =
+        (featured ? '<div class="viewer-quest-hero">' +
+          '<div class="viewer-quest-hero-copy"><p class="viewer-quest-hero-tag">Today’s quests</p><h2 class="viewer-quest-hero-name">' + esc(featured.title) + '</h2>' +
+          '<p class="viewer-quest-hero-meta">' + fmt(featured.progress) + ' / ' + fmt(featured.targetCount) + ' — +' + fmt(featured.rewardXp) + ' XP · +' + fmt(featured.rewardPoints) + ' credits when you claim</p></div>' +
+          '<div class="viewer-quest-hero-cta">' + questCta(featured, signedIn, member) + '</div></div>' : "") +
+        (rest.length ? '<ul class="viewer-quest-list" role="list">' + rest.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul>' : "") +
+        (!featured && !rest.length ? '<p class="viewer-muted">No quests today yet — check back after midnight.</p>' : "") +
+        (done.length ? '<div class="viewer-quest-done"><h3 class="viewer-quest-done-title">Completed today</h3><ul class="viewer-quest-list" role="list">' + done.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul></div>' : "") +
+        '<p class="yr-fine">Quests reset daily. Claimed credits land in your community balance.</p>';
+    };
+    fetch("/api/quests/daily?site=" + encodeURIComponent(questsRoot.dataset.siteSlug || slug), { credentials: "same-origin", cache: "no-store", signal: pageLifetime.signal })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (result) {
+        if (!result.ok || !result.data || result.data.ok === false) throw new Error(result.data && result.data.error || "load failed");
+        if (pageLifetime.signal.aborted) return;
+        renderQuests(result.data);
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        if (questsLoading) {
+          questsLoading.innerHTML = '<p class="viewer-muted">Today’s quests could not load. Reload to try again.</p>';
+        } else {
+          questsRoot.innerHTML = '<p class="viewer-muted">Today’s quests could not load. Reload to try again.</p>';
+        }
+      });
+    questsRoot.addEventListener("click", function (event) {
+      var claimBtn = event.target.closest("[data-quest-claim]");
+      if (!claimBtn) return;
+      var label = claimBtn.textContent;
+      claimBtn.disabled = true;
+      claimBtn.textContent = "Claiming…";
+      fetch("/api/quests/claim", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        body: JSON.stringify({ questId: claimBtn.dataset.questClaim }),
+      })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(function (result) {
+          if (result.ok && result.data.ok !== false) {
+            if (typeof result.data.newBalance === "number") updateBalance(result.data.newBalance);
+            var row = questsRoot.querySelector('[data-quest-row="' + claimBtn.dataset.questClaim + '"]');
+            claimBtn.textContent = "Claimed";
+            claimBtn.className = "viewer-chip viewer-chip--done";
+            claimBtn.disabled = true;
+            if (row) row.className = "viewer-quest is-claimed";
+            return;
+          }
+          claimBtn.disabled = false;
+          claimBtn.textContent = label;
+        })
+        .catch(function () {
+          claimBtn.disabled = false;
+          claimBtn.textContent = label;
         });
     });
   }

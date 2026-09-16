@@ -1,7 +1,7 @@
 import { dashboardChromeHtml } from "@yourrank/shared/dashboard-chrome";
 import { dashboardNavItems, workspaceAccountTopbarHtml } from "./dashboard-shell.jsx";
 import { workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
-import { viewerNavigation, viewerAccountOverview, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
+import { viewerAccountChrome, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 
 // Explicit viewer navigation keeps the viewer shell even with a creator cookie.
 // Otherwise creators keep their workspace and visitors get the public shell.
@@ -148,17 +148,27 @@ const PUBLIC_OVERRIDES = {
 };
 
 function viewerHelpContent({ active, title, intro, body, viewerHelp }) {
-  return `${viewerNavigation({ accountActive: false, helpActive: true, helpHref: viewerHelpHref(viewerHelp.returnTo) })}
+  const chrome = viewerAccountChrome({
+    active: "help",
+    backHref: viewerHelp.returnTo,
+    backLabel: "Back",
+    helpHref: viewerHelpHref(viewerHelp.returnTo),
+  });
+  return `<div class="viewer-layout" data-viewer-shell="account">
+${chrome.rail}
+<div class="viewer-body">
+${chrome.topbar}
 <div class="viewer-main viewer-help">
-<a class="yr-sec-link" href="${esc(viewerHelp.returnTo)}">Back to ${viewerHelp.returnTo === "/me" ? "my communities" : "community page"}</a>
-<header class="vd-head"><h1 class="vd-h1" id="contactTitle">${esc(title)}</h1><p class="vd-sub" id="contactIntro">${esc(intro)}</p></header>
-${subnavHtml(active, false, viewerHelp)}${body}</div>${viewerAccountOverview()}`;
+<header class="viewer-page-head"><div class="viewer-page-copy"><h1 class="viewer-h1" id="contactTitle">${esc(title)}</h1><p class="viewer-sub" id="contactIntro">${esc(intro)}</p></div></header>
+${subnavHtml(active, false, viewerHelp)}${body}</div>
+</div>
+</div>`;
 }
 
 const VIEWER_OVERRIDES = {
   styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
   bodyClass: "yr-site viewer-shell viewer-help-page",
-  mainClass: "viewer-layout",
+  mainClass: "viewer-shell-doc",
   nav: false, footer: false, wide: false,
   designContract: VIEWER_DESIGN_CONTRACT,
   scripts: ['<script src="/assets/viewer-app.js" defer></script>'],

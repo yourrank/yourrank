@@ -24,7 +24,7 @@ describe("dashboard asset bundling", () => {
     // still resolve to the original asset, never a second bundled instance.
     expect(siteBundle).toMatch(/from ["']\.\/state\.js["']/);
     expect(siteBundle).not.toContain("function createDashboardState(");
-    expect(siteBundle).toContain('name: "Spotlight"');
+    expect(siteBundle).toContain('"cyber_arcade"');
     const stateEntries = Object.entries(ASSETS)
       .filter(([, [content]]) => content.includes("function createDashboardState("))
       .map(([path]) => path);

@@ -499,6 +499,7 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
     sections: normalizeSections(m.sections || DEFAULT_EXTRA.sections),
     siteSections: {
       home: true,
+      activities: !!site.credits_enabled,
       leaderboard: true,
       shop: !!site.shop_enabled,
       games: !!site.games_enabled,

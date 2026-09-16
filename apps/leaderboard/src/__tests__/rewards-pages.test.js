@@ -28,7 +28,7 @@ const pages = [
 const rewardsMarkupSource = readFileSync(new URL("../pages/credits-pages.js", import.meta.url), "utf8");
 const rewardsClientSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 const dashboardV4Source = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
-const viewerClientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
+const viewerClientSource = readFileSync(new URL("../assets/site-shell.js", import.meta.url), "utf8");
 
 describe("server-rendered rewards pages", () => {
   for (const [tab, render] of pages) {
@@ -74,10 +74,13 @@ describe("server-rendered rewards pages", () => {
   });
 
   it("maps Viewer Account sign-in errors to plain language and removes the one-time query", () => {
-    expect(viewerClientSource).toContain("LOGIN_ERROR_MESSAGES");
-    expect(viewerClientSource).toContain("That sign-in took too long. Try again.");
-    expect(viewerClientSource).toContain('url.searchParams.delete("error")');
-    expect(viewerClientSource).toContain("url.search");
-    expect(viewerClientSource).not.toContain('"Login failed: " + urlParams.get("error")');
+    // The renderer turns the ?error= code into a friendly note on My Activity;
+    // site-shell.js then strips the one-time key so refresh cannot replay it.
+    const renderSource = readFileSync(new URL("../../../../packages/shared/src/site-render.ts", import.meta.url), "utf8");
+    expect(renderSource).toContain("authMessages");
+    expect(renderSource).toContain("That sign-in took too long. Try again.");
+    expect(viewerClientSource).toContain('authUrl.searchParams.delete("error")');
+    expect(viewerClientSource).toContain("authUrl.search");
+    expect(viewerClientSource).toContain("window.history.replaceState");
   });
 });

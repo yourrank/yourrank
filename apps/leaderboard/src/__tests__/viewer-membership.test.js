@@ -5,6 +5,7 @@ import { getViewerSiteData } from "../site-data.js";
 
 const viewer = { id: "viewer-a", kick_username: "member" };
 const allowViewer = async () => ({ viewer, res: null });
+const resolveMember = async () => ({ viewer, cookie: null, session: null });
 const allowRate = async () => ({ ok: true });
 const publicCommunity = async () => ({
   id: "site-b",
@@ -116,7 +117,7 @@ describe("explicit Viewer membership Join", () => {
     ]);
     let insertAttempts = 0;
     const globalMe = () => handleViewerMe(new Request("https://yourrank.site/api/viewer/me"), {}, {
-      requireViewer: allowViewer,
+      resolveViewer: resolveMember,
       rateLimit: allowRate,
       query: async (_sql, [viewerId]) => viewerId === "viewer-a"
         ? [...memberships.values()].map((membership) => ({

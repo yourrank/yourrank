@@ -5,11 +5,11 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { renderSite } from "@yourrank/shared/site-render";
-import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
+import { viewerAccountPage } from "../pages/viewer-account.js";
 
 const appCss = readFileSync(new URL("../assets/viewer-shell.css", import.meta.url), "utf8");
 const shellCss = readFileSync(new URL("../assets/site-shell.css", import.meta.url), "utf8");
-const clientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
+const clientSource = readFileSync(new URL("../assets/viewer-account.js", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/site-shell.js", import.meta.url), "utf8");
 
 const LONG_NAME = "R".repeat(100);
@@ -35,6 +35,7 @@ const items = [
   { id: "mid", name: LONG_NAME, description: "😀 Ünicode description", cost: 50, stock: 2 },
   { id: "dear", name: "Profile shoutout", description: "A shoutout on stream.", cost: 500, stock: null },
   { id: "gone", name: "Wallpaper pack", description: "", cost: 500, stock: 0 },
+  { id: "pin", name: "Pinned message", description: "Pin a message in chat.", cost: 20, stock: null },
 ];
 
 function shop({ viewer = { kick_username: "member" }, balance = 50, blocked = false } = {}) {
@@ -113,9 +114,11 @@ function zeroCredits() {
 /* ── a creator's Rewards page ─────────────────────────────────────── */
 
 describe("a creator's Rewards page", () => {
-  it("uses the header as the only sign-in owner in the empty signed-out state", async () => {
+  it("keeps sign-in out of the empty reward list in the signed-out state", async () => {
     const html = await signedOut("shop");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    // The topbar chip and the Join community CTA are the only auth entries.
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(2);
+    expect(html).toContain('class="viewer-signin"');
     expect(html).not.toContain('class="yr-vhead-aside"');
     expect(html).toContain("Sign in to use your community credits.");
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
@@ -124,11 +127,14 @@ describe("a creator's Rewards page", () => {
   it("is a plain list of rewards with one action each, not a shop", async () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
+    // The first four rewards are featured cards; the rest continue as list rows.
+    expect(html).toContain('data-reward-featured');
+    expect((html.match(/viewer-reward-card/g) || []).length).toBe(4);
     expect(html).toContain('<ul class="yr-rwds" role="list">');
-    // One action per reward row, and only the affordable in-stock ones can be claimed.
-    expect((html.match(/<li class="yr-rwd">/g) || []).length).toBe(items.length);
-    expect((html.match(/class="yr-act/g) || []).length).toBe(items.length);
-    expect((html.match(/data-redeem="/g) || []).length).toBe(2);
+    expect((html.match(/<li class="yr-rwd">/g) || []).length).toBe(items.length - 4);
+    // One action per reward, and only the affordable in-stock ones can be claimed.
+    expect((html.match(/data-redeem="/g) || []).length).toBe(3);
+    expect((html.match(/yr-act yr-act--off/g) || []).length).toBe(2);
     // No commerce apparatus and no pressure: those patterns do not belong on a
     // page that spends free loyalty points.
     for (const banned of ["Add to cart", "Wishlist", "Buy now", "quantity", "Limited time", "Hurry", "Bundle"]) {
@@ -140,11 +146,13 @@ describe("a creator's Rewards page", () => {
   it("says in words why a reward cannot be claimed", async () => {
     const html = await shop();
     expect(html).toContain('<span class="yr-act yr-act--off" role="note">Not enough credits</span>');
-    expect(html).toContain('<p class="yr-rwd-state">450 more needed</p>');
+    expect(html).toContain('<span class="viewer-reward-state">450 more needed</span>');
     // Each unavailable state is named once, by the control the viewer reaches for.
     expect((html.match(/Out of stock/g) || []).length).toBe(1);
     expect(html).toContain("2 left");
-    expect(html).toContain(">Claim</button>");
+    expect((html.match(/>Redeem<\/button>/g) || []).length).toBe(3);
+    expect(html).toContain(">Claim</button>"); // dialog confirm
+
   });
 
   it("offers sign-in instead of a dead Claim button to a signed-out viewer", async () => {
@@ -204,11 +212,11 @@ describe("a creator's Rewards page", () => {
 describe("the creator home credit state", () => {
   it("keeps an empty shop discoverable alongside the signed-out guide", async () => {
     const html = await signedOut("home");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).toContain('class="viewer-home-intro"');
+    expect(html).toContain('class="viewer-signin"');
+    expect(html).toContain('class="viewer-hero"');
     expect(html).not.toContain("yr-vnote");
     expect(html).toContain("No rewards yet");
-    expect(html).toContain("Reward shop</a>");
+    expect(html).toContain("All rewards</a>");
   });
 
   it("shows a truthful zero balance and empty reward preview", async () => {
@@ -219,9 +227,9 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: [] },
       opts,
     });
-    expect(html).toContain('class="viewer-credit-amount" data-credit-balance="0"');
+    expect(html).toContain('data-credit-balance="0"');
     expect(html).toContain("No rewards are available right now.");
-    expect(html).toContain("Reward shop</a>");
+    expect(html).toContain("All rewards</a>");
     expect(html).not.toContain(">Spend credits</a>");
   });
 
@@ -236,7 +244,7 @@ describe("the creator home credit state", () => {
       opts,
     });
     expect(signedOutHtml).toContain("Sign in to see your reward progress.");
-    expect(signedInHtml).toContain(">Explore rewards</a>");
+    expect(signedInHtml).toContain(">Browse rewards</a>");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
@@ -246,8 +254,8 @@ describe("the creator home credit state", () => {
 describe("a creator's My Community page", () => {
   it("explains the signed-out state without repeating the header sign-in action", async () => {
     const html = await signedOut("me");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).toContain('class="member-gate"');
+    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(2);
+    expect(html).toContain('class="viewer-card viewer-gate"');
     expect(html).toContain("Join community</a>");
     expect(html).toContain("intent=join");
     expect(html).toContain("site=demo-board");
@@ -274,7 +282,7 @@ describe("a creator's My Community page", () => {
       expect(html).toContain('id="yr-code-drop-code"');
       expect(html).toContain('id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"');
       expect(html).toContain("Redeem code");
-      const claimSection = html.match(/<section class="member-code yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
+      const claimSection = html.match(/<section class="viewer-card yr-code-drop"[\s\S]*?<\/section>/)?.[0] || "";
       expect(claimSection).toContain("data-code-drop-claim");
       expect(claimSection).not.toMatch(/raffle|prediction|wager|stake|odds|payout|settlement/i);
     }
@@ -288,11 +296,10 @@ describe("a creator's My Community page", () => {
   it("keeps a signed-in zero balance and empty activity compact", async () => {
     const html = await zeroCredits();
     expect(html).toContain('data-credit-balance="0"');
-    expect(html).toContain('class="member-tools"');
-    expect(html.indexOf('id="membership-claims"')).toBeLessThan(html.indexOf('id="membership-history"'));
+    expect(html).toContain('class="viewer-stat-grid"');
+    expect(html.indexOf('viewer-activity-card')).toBeLessThan(html.indexOf('id="membership-claims"'));
     expect((html.match(/class="member-empty"/g) || []).length).toBe(1);
-    expect((html.match(/class="member-history"/g) || []).length).toBe(2);
-    expect(html).toContain("No participation history yet");
+    expect(html).toContain("No credit activity yet");
   });
 
   it("does not invent a zero-balance membership when persistence is unavailable", async () => {
@@ -319,7 +326,7 @@ describe("a creator's My Community page", () => {
     expect(html).toContain("Signed in as <b>member</b>");
     expect(html).toContain("You haven't joined this community yet.");
     expect(html).toContain('data-membership-join');
-    expect(html).toContain("Join to keep your Rewards, free credits and Claims together here.");
+    expect(html).toContain("Join to keep your rewards, free credits and claims together here.");
     expect(html).not.toContain("We couldn&#39;t load your community membership");
     expect(html).not.toContain('class="yr-vbal');
     expect(html).not.toContain("Member since");
@@ -343,7 +350,8 @@ describe("a creator's My Community page", () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
-    expect(html).toContain('class="member-heading"');
+    expect(html).toContain('class="viewer-stat-grid"');
+    expect(html).toContain("Credits balance");
     expect(html).not.toContain("Member since");
     expect(html).not.toContain("yr-gamer");
     expect(html).not.toContain("Credits / 7d");
@@ -362,11 +370,11 @@ describe("a creator's My Community page", () => {
 
   it("shows safe Participation as a bounded reverse-chronological membership record", async () => {
     const html = await credits();
-    expect(html).toContain('<summary>Participation <span>');
+    expect(html).toContain('class="viewer-card viewer-participation"');
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain(">Claimed</span>");
     expect(html).toContain("Feb 3, 2024");
-    const participationHtml = html.match(/<details class="member-history"[^>]*><summary>Participation[\s\S]*?<\/details>/)?.[0] || "";
+    const participationHtml = html.match(/<section class="viewer-card viewer-participation"[\s\S]*?<\/section>/)?.[0] || "";
     expect(participationHtml).toContain("Claimed a code drop");
     for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
       expect(participationHtml.toLowerCase()).not.toContain(banned);
@@ -417,11 +425,10 @@ describe("a creator's My Community page", () => {
 describe("viewer row geometry", () => {
   it("lets the title keep a readable measure instead of stacking at one width", () => {
     expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }");
-    expect(appCss).toContain(".vd-card-main,.vd-profile-txt{min-width:0}");
-    expect(appCss).toContain("grid-template-columns:46px minmax(0,1fr) auto");
-    // The 360px stacking workaround is gone: wrapping is the root behaviour.
-    expect(appCss).not.toContain("@media (max-width:360px)");
-    expect(appCss).toContain(".vd-card-side{grid-column:2}");
+    // Account community rows keep the name column flexible with ellipsis.
+    expect(appCss).toContain(".va-community-main { flex: 1; min-width: 0;");
+    expect(appCss).toContain("text-overflow: ellipsis");
+    expect(appCss).not.toContain("vd-card");
   });
 });
 
@@ -429,37 +436,36 @@ describe("viewer row geometry", () => {
 
 describe("the global account page", () => {
   it("keeps restricted legacy mechanics out of the viewer membership journey", () => {
-    expect(viewerDashboardPage).not.toContain("vd-raffles");
-    expect(viewerDashboardPage).not.toContain("vd-predictions");
+    for (const page of ["communities", "profile", "connections", "notifications", "security", "data"]) {
+      const html = viewerAccountPage(page, { nonce: "n", csrfToken: "t" });
+      expect(html).not.toContain("vd-raffles");
+      expect(html).not.toContain("vd-predictions");
+    }
   });
 
-  const page = String(viewerDashboardPage);
+  const page = String(viewerAccountPage("communities", { nonce: "n", csrfToken: "t" }));
 
   it("opens with My communities, not an operator dashboard head", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
+    expect(page).toContain('<h1 class="viewer-h1">My communities</h1>');
     expect((page.match(/<h1\b/g) || []).length).toBe(1);
     expect(page).not.toContain("an-eyebrow");
     expect(page).not.toContain("an-title");
-    expect(page).toContain("Your rewards and claims stay with each community.");
   });
 
-  it("keeps one identity row and one community membership list", () => {
-    expect(page).toContain('<main class="viewer-layout"');
-    expect(page).toContain('id="vd-avatar"');
-    expect(page).toContain('id="vd-avatar-fallback"');
-    expect(page).toContain('id="vd-username"');
-    expect(page).toContain('id="vd-identity"');
-    expect(page).toContain('id="vd-logout"');
-    expect(page).toContain('class="vd-profile-actions"');
-    expect(page).toContain(">Your memberships<");
-    expect(page).toContain('id="vd-communities"');
-    expect(page).not.toContain('id="vd-site-card"');
-    expect(page).not.toContain('id="vd-back"');
-    expect(clientSource).toContain('class="vd-site-mark"');
+  it("keeps one identity chip and one community membership list", () => {
+    expect(page).toContain('class="viewer-rail viewer-rail--account"');
+    expect(page).toContain('data-viewer-shell="account"');
+    expect(page).toContain('data-va-list="communities"');
+    expect(page).toContain('data-va-empty="communities"');
+    expect(page).toContain("You haven't joined any communities yet.");
+    expect(page).toContain("Your communities");
+    expect(page).not.toContain('id="vd-communities"');
+    expect(clientSource).toContain('class="va-community-mark"');
   });
 
   it("links to the canonical creator membership without a client router", () => {
-    expect(clientSource).toContain('const href = `/${encodeURIComponent(community.slug)}`');
+    expect(clientSource).toContain("encodeURIComponent(slug)");
+    expect(clientSource).toContain('">View site</a>');
     expect(clientSource).not.toContain('"popstate"');
     expect(clientSource).not.toContain("pushState");
     expect(clientSource).not.toContain("/api/viewer/site");
@@ -470,14 +476,14 @@ describe("the global account page", () => {
 
   it("shows only compact membership status, not expanded Claims history", () => {
     expect(clientSource).toContain("pendingClaims");
-    expect(clientSource).toContain("Claiming unavailable");
+    expect(clientSource).toContain("claiming paused");
     expect(clientSource).not.toContain("redemptions");
     expect(clientSource).not.toContain("ORDER_STATUS");
     expect(clientSource).not.toContain("/api/viewer/claims");
   });
 
   it("groups large credit numbers so a balance stays readable", () => {
-    expect(clientSource).toContain('function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }');
-    expect(clientSource).toContain("${fmtNum(community.balance)} Credits");
+    expect(clientSource).toContain('var fmt = function (n) { return Number(n || 0).toLocaleString("en-US"); }');
+    expect(clientSource).toContain("fmt(c.balance)");
   });
 });

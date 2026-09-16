@@ -147,6 +147,12 @@ export interface ViewerSessionContext {
   siteId: string | null;
   hostname: string | null;
   domainBindingId: string | null;
+  /**
+   * The viewer_sessions row's current token hash (server-side only — never
+   * serialized to the client). Lets handlers mark which listed session is
+   * the one the caller is holding right now.
+   */
+  sessionToken: string;
 }
 
 interface ResolveResult {
@@ -177,6 +183,7 @@ export async function resolveViewerSession(
   const execImpl = deps.exec || exec;
   const row = await queryImpl(
     `SELECT vs.viewer_id, vs.authority, vs.site_id, vs.hostname, vs.domain_binding_id,
+            vs.token AS session_token,
             extract(epoch FROM now() - vs.created_at)::int AS age,
             (vs.token = $1) AS is_current
        FROM viewer_sessions vs
@@ -220,6 +227,7 @@ export async function resolveViewerSession(
     siteId: (row[0].site_id as string | null) ?? null,
     hostname: (row[0].hostname as string | null) ?? null,
     domainBindingId: (row[0].domain_binding_id as string | null) ?? null,
+    sessionToken: String(row[0].session_token || ""),
   };
 
   // Rotate session if older than threshold.
