@@ -41,7 +41,11 @@ const deps = {
   exec: async (sql, params) => { executed.push({ sql, params }); return []; },
   withTransaction: async (fn) => fn({
     one: async () => deps.oneResponses.shift(),
-    unsafe: async () => [],
+    unsafe: async (sql, params) => {
+      executed.push({ sql, params });
+      if (sql.includes("INSERT INTO credit_reward_mappings")) return [{ id: "mapping-1" }];
+      return [];
+    },
     query: async () => [],
     exec: async () => [],
   }),
@@ -71,7 +75,13 @@ function req(body) {
 function seedTokenRows() {
   deps.oneResponses.push(
     { count: 0 }, // plan-limit pre-count
-    { kick_access_token_enc: "enc", kick_refresh_token_enc: "ref", kick_token_expires_at: null },
+    {
+      kick_user_id: "chan-1",
+      kick_linked_at: "2026-09-15T00:00:00.000Z",
+      kick_access_token_enc: "enc",
+      kick_refresh_token_enc: "ref",
+      kick_token_expires_at: null,
+    },
   );
 }
 
@@ -91,6 +101,18 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     expect(res.status).toBe(403);
     expect((await res.json()).error).toMatch(/active-viewer allowance/i);
     expect(deps.oneResponses).toHaveLength(0);
+  });
+
+  it("marks the provider-derived channel binding verified before saving the reward mapping", async () => {
+    seedTokenRows();
+    deps.oneResponses.push({ count: 0 }, null);
+
+    const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
+
+    expect(res.status).toBe(200);
+    const binding = executed.find((call) => call.sql.includes("UPDATE sites"));
+    expect(binding.sql).toContain("kick_channel_verified_at = now()");
+    expect(binding.sql).toContain("kick_channel_linked_at = now()");
   });
 
   it("returns 409 kick_reconnect_required when the token refresh hits invalid_grant", async () => {

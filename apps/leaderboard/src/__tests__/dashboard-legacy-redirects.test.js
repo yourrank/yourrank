@@ -15,7 +15,9 @@ import {
 } from "../index.js";
 import { runWithLogger } from "@yourrank/shared/request-id";
 
-const request = (path) => new Request(`https://yourrank.test${path}`);
+// These are platform-route tests. A non-platform hostname is deliberately
+// treated as an unverified custom domain and fails closed before routing.
+const request = (path) => new Request(`https://yourrank.site${path}`);
 const testEnv = {};
 
 const redirect = async (path) => handleRequest(request(path), testEnv, {});

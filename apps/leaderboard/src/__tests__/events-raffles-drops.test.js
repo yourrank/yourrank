@@ -7,6 +7,7 @@ import {
   handleCreateCodeDrop,
   handleClaimCodeDrop,
 } from "../handlers/events.js";
+import { boardPasswordSetCookieHeader } from "../board-password.js";
 
 function mockEnv() {
   return {
@@ -38,6 +39,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       unsafe: mockExec,
     }));
     mockExec.mockResolvedValue([{}]);
+    mockQuery.mockResolvedValue([]);
 
     deps = {
       requireUser: mock().mockResolvedValue({ user: USER, res: null }),
@@ -50,6 +52,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       rateLimit: mockRateLimit,
       withTransaction: mockWithTransaction,
       requireViewer: mock().mockResolvedValue({ viewer: { id: "viewer-123" }, res: null }),
+      resolveJoinableCommunity: mock().mockResolvedValue(SITE),
       expansionRestriction: mock().mockResolvedValue({ restricted: false, usage: null }),
       markActive: mock().mockResolvedValue(null),
     };
@@ -238,7 +241,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("handleClaimCodeDrop rejects already claimed code for same viewer", async () => {
-    mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
       code: "KICK30",
@@ -267,7 +269,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("does not increment a drop or award credits when the atomic claim conflicts", async () => {
-    mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
       code: "KICK30",
@@ -294,6 +295,52 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(mockOne.mock.calls.some(([sql]) => String(sql).includes("ON CONFLICT (code_drop_id, viewer_id) DO NOTHING"))).toBe(true);
   });
 
+  it("binds a code-drop claim to the accessible community represented by the request host", async () => {
+    deps.resolveJoinableCommunity.mockResolvedValueOnce(null);
+
+    const res = await handleClaimCodeDrop(new Request("https://community-a.example/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "community-b", code: "KICK30" }),
+    }), mockEnv(), deps);
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe("Community is not available.");
+    expect(deps.resolveJoinableCommunity).toHaveBeenCalledWith(
+      expect.any(Request),
+      expect.any(Object),
+      "community-b",
+    );
+    expect(mockOne).not.toHaveBeenCalled();
+    expect(mockWithTransaction).not.toHaveBeenCalled();
+    expect(deps.markActive).not.toHaveBeenCalled();
+  });
+
+  it("rejects raw Site identifiers instead of treating them as public community authority", async () => {
+    deps.resolveJoinableCommunity.mockResolvedValueOnce(null);
+
+    const res = await handleClaimCodeDrop(new Request("https://yourrank.site/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: "site-456", code: "KICK30" }),
+    }), mockEnv(), deps);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Code and community are required.");
+    expect(deps.resolveJoinableCommunity).not.toHaveBeenCalled();
+    expect(mockOne).not.toHaveBeenCalled();
+  });
+
+  it("scopes unlocked board cookies so apex claim requests can present the Site-bound proof", () => {
+    const cookie = boardPasswordSetCookieHeader(
+      { slug: "streamer", password_hash: "hash" },
+      "streamer:123:signature",
+      { isCustomDomain: false },
+    );
+    expect(cookie).toContain("Path=/;");
+    expect(cookie).toContain("yr_boardpass_streamer=");
+  });
+
   it("handleClaimCodeDrop rejects anonymous callers", async () => {
     deps.requireViewer.mockResolvedValue({ viewer: null, res: new Response(null, { status: 401 }) });
     const res = await handleClaimCodeDrop(new Request("http://localhost/api/events/drops/claim", {
@@ -304,7 +351,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("handleClaimCodeDrop successfully awards points and increments claims", async () => {
-    mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
       code: "KICK30",
@@ -345,7 +391,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("handleClaimCodeDrop creates a site_viewer row on first claim", async () => {
-    mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
       code: "KICK30",
@@ -376,7 +421,6 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
   });
 
   it("does not let a blocked Membership claim a free code drop", async () => {
-    mockOne.mockResolvedValueOnce(SITE); // find site
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
       code: "KICK30",

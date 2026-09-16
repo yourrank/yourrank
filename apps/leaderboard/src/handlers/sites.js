@@ -9,7 +9,7 @@ import { logAudit } from "@yourrank/shared/audit";
 import { buildTop3Embed, sendDiscordWebhook, sendTelegramMessage } from "@yourrank/shared/notifications";
 import { decryptToken, decryptCredential } from "@yourrank/shared/crypto";
 import { PLATFORM_HOST } from "../constants.js";
-import { invalidateCustomDomain } from "../middleware/custom-domain.js";
+import { invalidateCustomDomain, verifyDomainOwnership, verifiedProviderHostname } from "../middleware/custom-domain.js";
 import { notifyLiveBoard } from "../live-board-config.js";
 import { requireSiteCapability, requireSiteOwner } from "../site-authorization.js";
 import { routeContext } from "../middleware/handler.js";
@@ -666,7 +666,7 @@ export async function handleDomainVerify(request, env) {
         }
       }
       await exec(
-        "UPDATE sites SET custom_domain=NULL, custom_hostname_id=NULL, domain_status='pending', updated_at=now() WHERE id=$1",
+        "UPDATE sites SET custom_domain=NULL, custom_hostname_id=NULL, domain_status='pending', domain_auth_binding_id=NULL, domain_auth_verified_at=NULL, domain_auth_challenge=NULL, domain_auth_challenge_host=NULL, updated_at=now() WHERE id=$1",
         [site.id]
       );
       void notifyLiveBoard(env, site.id);
@@ -682,6 +682,34 @@ export async function handleDomainVerify(request, env) {
       return bad("Invalid domain format.");
     }
 
+    if (domain === PLATFORM_HOST || domain.endsWith(`.${PLATFORM_HOST}`)) return bad("Platform domains cannot be claimed.", 400);
+
+    // Stage proof without reserving custom_domain: an arbitrary Site owner must
+    // not squat another community's hostname by knowing its public CNAME.
+    const proofRows = await exec(
+      `UPDATE sites SET
+         domain_auth_challenge=CASE WHEN domain_auth_challenge_host=$1 THEN COALESCE(domain_auth_challenge, gen_random_uuid()::text) ELSE gen_random_uuid()::text END,
+         domain_auth_challenge_host=$1
+       WHERE id=$2 AND user_id=$3 RETURNING domain_auth_challenge`,
+      [domain, site.id, user.id]
+    );
+    const challenge = proofRows?.[0]?.domain_auth_challenge;
+    if (!challenge) return bad("Site authorization changed.", 403);
+    if (!await verifyDomainOwnership(domain, challenge)) {
+      return json({ ok: false, error: "Publish the Site-specific DNS TXT record, then verify again.",
+        code: "domain_ownership_required", record: { type: "TXT", name: `_yourrank.${domain}`, value: `yourrank-verification=${challenge}` } }, 409);
+    }
+
+    // Bind every eventual write to this verification attempt. A removal or
+    // replacement invalidates the challenge while provider I/O is in flight.
+    const bindingExec = async (text, params) => {
+      const values = [...params, challenge, domain, user.id];
+      const rows = await exec(`${text} AND domain_auth_challenge=$${params.length + 1}
+        AND domain_auth_challenge_host=$${params.length + 2} AND user_id=$${params.length + 3} RETURNING id`, values);
+      if (!rows?.length) throw new Error("Domain assignment changed during verification");
+      return rows;
+    };
+
     // Verify DNS CNAME before saving or provisioning.
     const hasCname = await verifyCnameToYourrank(domain);
     if (!hasCname) {
@@ -690,7 +718,7 @@ export async function handleDomainVerify(request, env) {
 
     if (!cfToken) {
       // Fallback: just save the domain without TLS provisioning
-      await exec("UPDATE sites SET custom_domain=$1, custom_hostname_id=NULL, domain_status='pending', updated_at=now() WHERE id=$2", [domain, site.id]);
+      await bindingExec("UPDATE sites SET custom_domain=$1, custom_hostname_id=NULL, domain_status='pending', domain_auth_binding_id=NULL, domain_auth_verified_at=NULL, updated_at=now() WHERE id=$2", [domain, site.id]);
       void notifyLiveBoard(env, site.id);
       invalidateSiteCache(env, site.slug);
       invalidateUserCache(env, user.id);
@@ -715,7 +743,17 @@ export async function handleDomainVerify(request, env) {
           }
         );
         const cfData = await cfRes.json();
-        if (cfData.success && cfData.result?.ssl?.status === "active") {
+        if (cfData.success && verifiedProviderHostname(cfData.result, domain, existing.custom_hostname_id)) {
+          await bindingExec(
+            `UPDATE sites
+                SET domain_status='active',
+                    domain_auth_binding_id=COALESCE(domain_auth_binding_id, gen_random_uuid()),
+                    domain_auth_verified_at=now(),
+                    updated_at=now()
+              WHERE id=$1 AND custom_domain=$2 AND custom_hostname_id=$3`,
+            [site.id, domain, existing.custom_hostname_id]
+          );
+          invalidateCustomDomain(domain);
           return ok({ status: "active", message: "TLS is active on your custom domain." });
         }
       } catch (e) {
@@ -767,7 +805,7 @@ export async function handleDomainVerify(request, env) {
       const errMsg = cfResult.errors?.[0]?.message || "Cloudflare API error";
       console.error("[domain] CF error:", errMsg);
       // Save domain even if CF fails, for manual resolution
-      await exec("UPDATE sites SET custom_domain=$1, custom_hostname_id=NULL, domain_status='error', updated_at=now() WHERE id=$2", [domain, site.id]);
+      await bindingExec("UPDATE sites SET custom_domain=$1, custom_hostname_id=NULL, domain_status='error', domain_auth_binding_id=NULL, domain_auth_verified_at=NULL, updated_at=now() WHERE id=$2", [domain, site.id]);
       void notifyLiveBoard(env, site.id);
       invalidateSiteCache(env, site.slug);
       invalidateUserCache(env, user.id);
@@ -776,13 +814,21 @@ export async function handleDomainVerify(request, env) {
     }
 
     const chId = cfResult.result?.id;
-    const chStatus = cfResult.result?.ssl?.status || "pending";
-    const dbStatus = chStatus === "active" ? "active" : "pending";
+    const verified = verifiedProviderHostname(cfResult.result, domain);
+    const dbStatus = verified ? "active" : "pending";
 
-    // Save domain, custom_hostname_id, and status
-    await exec(
-      "UPDATE sites SET custom_domain=$1, custom_hostname_id=$2, domain_status=$3, updated_at=now() WHERE id=$4",
-      [domain, chId, dbStatus, site.id]
+    // Save the exact provider hostname assignment. Authentication authority is
+    // granted only when the provider response proves this hostname is active.
+    await bindingExec(
+      `UPDATE sites
+          SET custom_domain=$1,
+              custom_hostname_id=$2,
+              domain_status=$3,
+              domain_auth_binding_id=CASE WHEN $4 THEN gen_random_uuid() ELSE NULL END,
+              domain_auth_verified_at=CASE WHEN $4 THEN now() ELSE NULL END,
+              updated_at=now()
+        WHERE id=$5`,
+      [domain, chId, dbStatus, verified, site.id]
     );
     void notifyLiveBoard(env, site.id);
 

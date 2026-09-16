@@ -3,7 +3,7 @@
 
 import { one } from "@yourrank/shared/db";
 import { getPublicSite } from "./site.js";
-import { resolveCustomDomain } from "./middleware/custom-domain.js";
+import { resolveVerifiedCustomDomain } from "./middleware/custom-domain.js";
 import { PLATFORM_HOST } from "./constants.js";
 
 // Matches the canonical slugify() output, including a possible trailing hyphen
@@ -33,13 +33,14 @@ export function requestIsSameOrigin(request) {
 /** Resolve a public, accessible community and bind custom-domain requests to it. */
 export async function resolveJoinableCommunity(request, env, rawSlug, deps = {}) {
   const getPublicSiteImpl = deps.getPublicSite || getPublicSite;
-  const resolveCustomDomainImpl = deps.resolveCustomDomain || resolveCustomDomain;
+  const resolveCustomDomainImpl = deps.resolveVerifiedCustomDomain || deps.resolveCustomDomain || resolveVerifiedCustomDomain;
   const slug = normalizedSlug(rawSlug);
   if (!slug) return null;
 
   const url = new URL(request.url);
   if (!isPlatformHost(url.hostname)) {
-    const domainSlug = await resolveCustomDomainImpl(env, url.hostname);
+    const binding = await resolveCustomDomainImpl(env, url.hostname);
+    const domainSlug = typeof binding === "string" ? binding : binding?.slug;
     if (normalizedSlug(domainSlug) !== slug) return null;
   }
 

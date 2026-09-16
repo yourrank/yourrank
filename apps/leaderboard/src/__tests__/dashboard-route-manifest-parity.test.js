@@ -148,7 +148,7 @@ describe("manifest parity: legacy aliases", () => {
       const servedBy = alias.servedBy || routeById(alias.routeId).owner;
       if (servedBy !== "leaderboard") continue;
       // Two unrelated parameters prove exact search behavior, not resemblance.
-      const response = await worker.fetch(new Request(`https://yourrank.test${alias.path}?keep=1&other=two`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.site${alias.path}?keep=1&other=two`), {}, {});
       // Exact status — never "either 301 or 302".
       expect(response.status, `${alias.path} → ${response.status}`).toBe(alias.status);
       const location = new URL(response.headers.get("location"), "https://yourrank.test");
@@ -212,7 +212,7 @@ describe("manifest parity: legacy aliases", () => {
   it("canonicalizes every legacy ?nav= value exactly like the Worker", async () => {
     for (const [nav, routeId] of Object.entries(NAV_QUERY_ALIASES)) {
       const requestSearch = `nav=${nav}&from=test&keep=2`;
-      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?${requestSearch}`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.site/dashboard?${requestSearch}`), {}, {});
       // Expected behavior is DERIVED from the encoded manifest policy
       // (NAV_QUERY_REDIRECT_POLICY + NAV_QUERY_ALIASES via resolveNavRedirect),
       // then compared against the Worker's real response — the test does not
@@ -346,7 +346,7 @@ describe("manifest parity: complete route inventory", () => {
     // Worker without redirecting away (auth redirects to /auth are fine).
     for (const route of DASHBOARD_ROUTES) {
       if (route.owner !== "leaderboard") continue;
-      const response = await worker.fetch(new Request(`https://yourrank.test${route.canonicalPath}`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.site${route.canonicalPath}`), {}, {});
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = new URL(response.headers.get("location"), "https://yourrank.test");
         expect(location.pathname, `${route.id} → ${location.pathname}`).toBe("/login");

@@ -120,7 +120,7 @@ function req(url, method = "GET", body) {
   const init = { method };
   if (body !== undefined) {
     init.headers = { "content-type": "application/json" };
-    init.body = JSON.stringify(body);
+    init.body = JSON.stringify(body.delta === undefined ? body : { operationId: "adjust-test-1", ...body });
   }
   return new Request(url, init);
 }
@@ -153,7 +153,6 @@ function earnEvent(overrides = {}) {
 function mockCommonPrefix({ existingSiteViewer = { id: "sv-1" } } = {}) {
   db.unsafeResponses.push([{ event_id: "msg-1" }]); // kick_reward_events insert
   db.oneResponses.push({ id: "site-1", user_id: "user-1" }); // site
-  db.unsafeResponses.push([]); // site FOR UPDATE
   db.oneResponses.push({ plan: "pro", plan_expires_at: null, status: "active", email_verified: true }); // owner
   db.oneResponses.push({ id: "viewer-1", kick_username: "alice" }); // existing viewer
   db.unsafeResponses.push([]); // UPDATE viewers
@@ -204,6 +203,20 @@ describe("processKickRewardRedemption earn path", () => {
     expect(result).toEqual({ duplicate: true });
     expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql))).toBe(false);
     expect(db.calls.some((c) => /INSERT INTO credit_ledger/.test(c.sql))).toBe(false);
+  });
+
+  it("rejects webhook routing unless the Site binding is verified and matches its owner identity", async () => {
+    db.unsafeResponses.push([{ event_id: "msg-1" }]);
+    db.oneResponses.push(null);
+
+    const result = await processKickRewardRedemption(earnEvent());
+
+    expect(result).toEqual({ skipped: true });
+    const lookup = db.calls.find((call) => call.method === "one" && call.sql.includes("kick_channel_external_id"));
+    expect(lookup.sql).toContain("kick_channel_verified_at IS NOT NULL");
+    expect(lookup.sql).toContain("u.kick_user_id = s.kick_channel_external_id");
+    expect(db.calls.some((call) => /INSERT INTO site_viewers/.test(call.sql))).toBe(false);
+    expect(db.calls.some((call) => /INSERT INTO credit_ledger/.test(call.sql))).toBe(false);
   });
 
   it("skips a reward whose cost was tampered with after mapping", async () => {
@@ -308,8 +321,10 @@ describe("handleCreditsAdjustBalance validation", () => {
 
   it("allows debiting exactly the full balance down to zero", async () => {
     db.oneResponses.push(
+      null, // operation receipt
       { id: "sv-1", balance: 100, total_earned: 100 }, // FOR UPDATE
-      { id: "sv-1", balance: 0 } // guarded debit succeeds
+      { id: "sv-1", balance: 0 }, // guarded debit succeeds
+      { id: "ledger-1" }
     );
     db.unsafeResponses.push([]); // ledger
     const res = await handleCreditsAdjustBalance(
@@ -326,8 +341,10 @@ describe("handleCreditsAdjustBalance validation", () => {
 
   it("writes a ledger row for every manual adjustment so history matches the balance", async () => {
     db.oneResponses.push(
+      null, // operation receipt
       { id: "sv-1", balance: 100, total_earned: 100 },
-      { id: "sv-1", balance: 150 } // +50 credit
+      { id: "sv-1", balance: 150 }, // +50 credit
+      { id: "ledger-1" }
     );
     db.unsafeResponses.push([]);
     const res = await handleCreditsAdjustBalance(
@@ -343,8 +360,10 @@ describe("handleCreditsAdjustBalance validation", () => {
 
   it("lets the compatibility tip route select only an existing authenticated membership", async () => {
     db.oneResponses.push(
+      null, // operation receipt
       { id: "sv-1", balance: 100, total_earned: 100 }, // exact existing membership
-      { id: "sv-1", balance: 150 } // +50 credit
+      { id: "sv-1", balance: 150 }, // +50 credit
+      { id: "ledger-1" }
     );
     db.unsafeResponses.push([]);
     const res = await handleCreditsAdjustBalance(

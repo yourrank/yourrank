@@ -112,5 +112,5 @@ export async function deliverNotifyOnce(
     dispatchImpl?: typeof dispatchNotifyEvent;
   } = {},
 ): Promise<LedgerOutcome> {
-  return runOnceWithLeaseImpl(identity, () => dispatchImpl({ one, query }, env, event, tokenCache));
+  return runOnceWithLeaseImpl(identity, () => dispatchImpl({ one, query }, env, event, tokenCache, { parentEventId: identity.eventId }));
 }

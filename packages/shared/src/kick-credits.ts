@@ -184,13 +184,19 @@ export async function processKickRewardRedemption(
 
     // Find the leaderboard site linked to this Kick channel and lock it.
     const site = await tx.one<{ id: string; user_id: string }>(
-      "SELECT id, user_id FROM sites WHERE kick_channel_external_id = $1 LIMIT 1",
+      `SELECT s.id, s.user_id
+         FROM sites s
+         JOIN users u ON u.id = s.user_id
+        WHERE s.kick_channel_external_id = $1
+          AND s.kick_channel_verified_at IS NOT NULL
+          AND u.kick_linked_at IS NOT NULL
+          AND u.kick_user_id = s.kick_channel_external_id
+        LIMIT 1 FOR UPDATE OF s FOR SHARE OF u`,
       [channelExternalId]
     );
     if (!site) {
       return { skipped: true };
     }
-    await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
 
     // Resolve effective plan for the streamer and reject suspended/unverified accounts.
     const owner = await tx.one<{ status: string; email_verified: boolean }>(
@@ -589,12 +595,20 @@ export async function upsertCreditRewardMapping(
 export async function setSiteKickChannel(
   siteId: string,
   kickChannelExternalId: string,
-  kickChannelName = ""
+  kickChannelName: string
 ): Promise<void> {
-  await exec(
-    `UPDATE sites
-        SET kick_channel_external_id = $1, kick_channel_name = $2, kick_channel_linked_at = now(), updated_at = now()
-      WHERE id = $3`,
+  const rows = await exec(
+    `UPDATE sites s
+        SET kick_channel_external_id = $1,
+            kick_channel_name = $2,
+            kick_channel_linked_at = now(),
+            kick_channel_verified_at = u.kick_linked_at,
+            updated_at = now()
+       FROM users u
+      WHERE s.id = $3 AND u.id=s.user_id AND u.kick_user_id=$1
+        AND u.kick_linked_at IS NOT NULL
+      RETURNING s.id`,
     [kickChannelExternalId, kickChannelName, siteId]
   );
+  if (!rows?.length) throw new Error("Kick identity changed before binding");
 }

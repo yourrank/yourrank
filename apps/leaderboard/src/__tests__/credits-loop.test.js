@@ -139,7 +139,7 @@ function req(url, method = "GET", body) {
   const init = { method };
   if (body !== undefined) {
     init.headers = { "content-type": "application/json" };
-    init.body = JSON.stringify(body);
+    init.body = JSON.stringify(body.delta === undefined ? body : { operationId: "adjust-test-1", ...body });
   }
   return new Request(url, init);
 }
@@ -352,8 +352,10 @@ describe("handleCreditsUpdateRedemption", () => {
 describe("handleCreditsAdjustBalance", () => {
   it("adds credits with an earn ledger row", async () => {
     db.oneResponses.push(
+      null, // operation receipt
       { id: "sv-1", balance: 10, total_earned: 50 }, // select
-      { id: "sv-1", balance: 30 } // update
+      { id: "sv-1", balance: 30 }, // update
+      { id: "ledger-1" }
     );
     db.unsafeResponses.push([]);
     const res = await handleCreditsAdjustBalance(
@@ -363,13 +365,14 @@ describe("handleCreditsAdjustBalance", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.balance).toBe(30);
-    const ledger = db.calls.find((c) => c.method === "unsafe" && /INSERT INTO credit_ledger/.test(c.sql));
+    const ledger = db.calls.find((c) => c.method === "one" && /INSERT INTO credit_ledger/.test(c.sql));
     expect(ledger.sql).toMatch(/'earn'/);
     expect(ledger.params[2]).toContain("Birthday bonus");
   });
 
   it("refuses to debit more than the viewer's balance", async () => {
     db.oneResponses.push(
+      null, // operation receipt
       { id: "sv-1", balance: 10, total_earned: 50 },
       null // conditional debit fails
     );

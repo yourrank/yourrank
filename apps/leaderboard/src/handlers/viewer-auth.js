@@ -20,7 +20,7 @@ import {
 } from "@yourrank/shared/viewer-session";
 import { bad, json, rateLimit, clientIp } from "../auth.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
-import { resolveCustomDomain } from "../middleware/custom-domain.js";
+import { resolveVerifiedCustomDomain } from "../middleware/custom-domain.js";
 import { PLATFORM_HOST } from "../constants.js";
 import { applyOAuthJoinIntent, resolveJoinableCommunity } from "../viewer-membership.js";
 
@@ -33,6 +33,40 @@ const CUSTOM_DOMAIN_RETURN_PATHS = new Set(["/", "/leaderboard", "/shop", "/game
 function randomState() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Buffer.from(bytes).toString("hex");
+}
+
+const OAUTH_BROWSER_COOKIE_PREFIX = "yr_oauth_";
+const OAUTH_BROWSER_TTL_SECONDS = 600 + KICK_VIEWER_HANDOFF_TTL_SECONDS;
+
+async function hashBrowserNonce(value) {
+  const bytes = new TextEncoder().encode(String(value || ""));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Buffer.from(digest).toString("hex");
+}
+
+function oauthBrowserCookieName(state) {
+  return `${OAUTH_BROWSER_COOKIE_PREFIX}${String(state || "").replace(/[^a-zA-Z0-9_-]/g, "")}`;
+}
+
+function oauthBrowserCookie(request, state, value, maxAge = OAUTH_BROWSER_TTL_SECONDS) {
+  const hostname = new URL(request.url).hostname.toLowerCase();
+  const domain = isCookieCoveredOrigin(new URL(request.url).origin) && hostname !== "localhost"
+    ? `; Domain=.${PLATFORM_HOST}`
+    : "";
+  return `${oauthBrowserCookieName(state)}=${encodeURIComponent(value)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}${domain}`;
+}
+
+function readOAuthBrowserNonce(request, state) {
+  const cookie = request.headers.get("cookie") || "";
+  const name = oauthBrowserCookieName(state);
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+  try { return match ? decodeURIComponent(match[1]) : ""; } catch { return ""; }
+}
+
+async function browserTransactionMatches(request, state, expectedHash) {
+  const nonce = readOAuthBrowserNonce(request, state);
+  if (!nonce || !expectedHash) return false;
+  return (await hashBrowserNonce(nonce)) === String(expectedHash);
 }
 
 function redirect(url, headers = {}, status = 302) {
@@ -115,29 +149,62 @@ function isCookieCoveredOrigin(origin) {
   }
 }
 
-async function resolveViewerOriginInfo(rawOrigin, env, resolveCustomDomainImpl = resolveCustomDomain) {
+async function resolveViewerOriginInfo(rawOrigin, env, resolveCustomDomainImpl = resolveVerifiedCustomDomain) {
   let parsed;
   try {
     parsed = new URL(String(rawOrigin || ""));
   } catch {
-    return { origin: APEX_ORIGIN, siteSlug: null, isCustomDomain: false };
+    return { origin: null, siteSlug: null, isCustomDomain: false };
   }
-  if (parsed.protocol !== "https:") return { origin: APEX_ORIGIN, siteSlug: null, isCustomDomain: false };
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) return { origin: null, siteSlug: null, isCustomDomain: false };
   const hostname = parsed.hostname.toLowerCase();
   if (hostname === PLATFORM_HOST || hostname.endsWith(`.${PLATFORM_HOST}`)) {
     return { origin: parsed.origin, siteSlug: null, isCustomDomain: false };
   }
   try {
-    const siteSlug = await resolveCustomDomainImpl(env, hostname);
-    if (siteSlug) return { origin: parsed.origin, siteSlug, isCustomDomain: true };
+    const binding = await resolveCustomDomainImpl(env, hostname);
+    if (binding?.site_id && binding?.binding_id && binding.hostname === hostname) {
+      return {
+        origin: parsed.origin,
+        siteSlug: binding.slug,
+        siteId: binding.site_id,
+        bindingId: binding.binding_id,
+        hostname,
+        isCustomDomain: true,
+      };
+    }
   } catch {
-    // Invalid or unavailable custom domains fall back to the platform origin.
+    // Authentication never falls back from a failed custom-domain lookup to
+    // global platform authority.
   }
-  return { origin: APEX_ORIGIN, siteSlug: null, isCustomDomain: true };
+  return { origin: null, siteSlug: null, siteId: null, bindingId: null, hostname, isCustomDomain: true };
 }
 
-async function resolveViewerOrigin(rawOrigin, env, resolveCustomDomainImpl = resolveCustomDomain) {
-  return (await resolveViewerOriginInfo(rawOrigin, env, resolveCustomDomainImpl)).origin;
+function sessionAuthority(originInfo) {
+  if (!originInfo?.origin) return null;
+  if (!originInfo.isCustomDomain) return { authority: "global" };
+  if (!originInfo.origin || !originInfo.siteId || !originInfo.hostname || !originInfo.bindingId) return null;
+  return {
+    authority: "site",
+    siteId: originInfo.siteId,
+    hostname: originInfo.hostname,
+    domainBindingId: originInfo.bindingId,
+  };
+}
+
+function sameAuthority(expected, actual) {
+  return Boolean(expected && actual && expected.authority === actual.authority
+    && (actual.authority === "global" || (
+      expected.siteId === actual.siteId && expected.hostname === actual.hostname
+      && expected.domainBindingId === actual.domainBindingId
+    )));
+}
+
+function isExpectedCallback(url, redirectUri) {
+  try {
+    const expected = new URL(redirectUri);
+    return expected.protocol === "https:" && url.origin === expected.origin && url.pathname === expected.pathname;
+  } catch { return false; }
 }
 
 async function explicitJoinState(request, env, url, deps) {
@@ -157,8 +224,8 @@ function viewerReturnLocation(stateData, targetOrigin) {
   }
 }
 
-export async function requireViewer(req, env) {
-  const { viewer, cookie } = await resolveViewer(req, env);
+export async function requireViewer(req, env, scope = {}) {
+  const { viewer, cookie } = await resolveViewer(req, env, scope);
   if (!viewer) return { viewer: null, cookie, res: bad("unauthorized", 401) };
   return { viewer, cookie, res: null };
 }
@@ -178,6 +245,8 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
   }
   const url = new URL(request.url);
   const origin = url.origin;
+  const originInfo = await resolveViewerOriginInfo(origin, env, deps.resolveVerifiedCustomDomain || resolveVerifiedCustomDomain);
+  if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = env.KICK_REDIRECT_URI || "https://yourrank.site/auth/kick/callback";
   const joinState = await explicitJoinState(request, env, url, deps);
@@ -185,7 +254,20 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
 
   const { codeVerifier, codeChallenge } = await generatePKCEImpl();
   const state = `${KICK_VIEWER_STATE_PREFIX}${randomState()}`;
-  await storeOAuthStateImpl("kick", state, { provider: "kick", flow: "viewer", codeVerifier, returnTo, origin, redirectUri, ...joinState });
+  const browserNonce = randomState();
+  const browserNonceHash = await hashBrowserNonce(browserNonce);
+  await storeOAuthStateImpl("kick", state, {
+    transactionVersion: 1,
+    provider: "kick",
+    flow: "viewer",
+    browserNonceHash,
+    authority: sessionAuthority(originInfo),
+    codeVerifier,
+    returnTo,
+    origin,
+    redirectUri,
+    ...joinState,
+  });
 
   let authorizeURL;
   try {
@@ -194,23 +276,17 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
     // Missing OAuth credentials: fail visibly on the site, not as a raw 500.
     return errorRedirect("signin_unavailable", origin);
   }
-  return redirect(authorizeURL);
+  return redirect(authorizeURL, { "set-cookie": oauthBrowserCookie(request, state, browserNonce) });
 }
 
 export async function handleKickViewerAuthCallback(request, env, deps = {}) {
   const {
     consumeOAuthState: consumeOAuthStateImpl = consumeOAuthState,
-    exchangeKickViewerCode: exchangeKickViewerCodeImpl = exchangeKickViewerCode,
-    fetchKickCurrentUser: fetchKickCurrentUserImpl = fetchKickCurrentUser,
-    encryptKickToken: encryptKickTokenImpl = encryptKickToken,
-    one: oneImpl = one,
-    exec: execImpl = exec,
-    createViewerSession: createViewerSessionImpl = createViewerSession,
-    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
     stateData: injectedStateData = null,
     stateConsumed: stateConsumedImpl = false,
-    resolveCustomDomain: resolveCustomDomainImpl = resolveCustomDomain,
+    resolveVerifiedCustomDomain: resolveCustomDomainImpl = resolveVerifiedCustomDomain,
     storeOAuthState: storeOAuthStateImpl = storeOAuthState,
+    browserTransactionMatches: browserTransactionMatchesImpl = browserTransactionMatches,
   } = deps;
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -228,8 +304,18 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
     return errorRedirect("oauth_state_expired");
   }
 
+  if (stateData.transactionVersion !== 1 || stateData.flow !== "viewer" || stateData.provider !== "kick") {
+    return errorRedirect("oauth_state_expired");
+  }
   const targetOriginInfo = await resolveViewerOriginInfo(stateData.origin, env, resolveCustomDomainImpl);
   const targetOrigin = targetOriginInfo.origin;
+  const authority = sessionAuthority(targetOriginInfo);
+  if (!targetOrigin || !sameAuthority(stateData.authority, authority)) return errorRedirect("custom_domain_unverified");
+  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("oauth_callback_mismatch");
+  const callbackHasBrowserCookie = url.origin === targetOrigin || authority.authority === "global";
+  if (callbackHasBrowserCookie && !await browserTransactionMatchesImpl(request, state, stateData.browserNonceHash)) {
+    return errorRedirect("oauth_browser_mismatch", targetOrigin);
+  }
   if (error) {
     return errorRedirect(error === "access_denied" ? "access_denied" : "kick_auth_failed", targetOrigin);
   }
@@ -237,6 +323,31 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
     return errorRedirect("missing_oauth_params", targetOrigin);
   }
 
+  if (!callbackHasBrowserCookie) {
+    // The initiating custom-host cookie cannot arrive at the registered apex
+    // callback. Relay a pending code, not an authenticated Viewer Account.
+    const handoff = randomState();
+    await storeOAuthStateImpl(KICK_VIEWER_HANDOFF_PROVIDER, handoff, {
+      ...stateData, stage: "pending_completion", code, browserState: state,
+    }, { ttlSeconds: KICK_VIEWER_HANDOFF_TTL_SECONDS });
+    const handoffUrl = new URL("/api/viewer/auth/kick/handoff", targetOrigin);
+    handoffUrl.searchParams.set("handoff", handoff);
+    return redirect(handoffUrl.toString());
+  }
+  return completeKickViewerAuth(request, env, { ...stateData, browserState: state }, code, authority, deps);
+}
+
+async function completeKickViewerAuth(request, env, stateData, code, authority, deps) {
+  const {
+    exchangeKickViewerCode: exchangeKickViewerCodeImpl = exchangeKickViewerCode,
+    fetchKickCurrentUser: fetchKickCurrentUserImpl = fetchKickCurrentUser,
+    encryptKickToken: encryptKickTokenImpl = encryptKickToken,
+    one: oneImpl = one,
+    exec: execImpl = exec,
+    createViewerSession: createViewerSessionImpl = createViewerSession,
+    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
+  } = deps;
+  const targetOrigin = stateData.origin;
   try {
     const tokens = await exchangeKickViewerCodeImpl(env, code, stateData.codeVerifier, stateData.redirectUri);
     if (!tokens.access_token) {
@@ -313,21 +424,10 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
     const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
     if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
 
-    if (isCookieCoveredOrigin(targetOrigin) || url.origin === targetOrigin) {
-      const sessionToken = await createViewerSessionImpl(env, viewerId);
-      return redirect(viewerReturnLocation(stateData, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
-    }
-
-    const handoff = randomState();
-    await storeOAuthStateImpl(
-      KICK_VIEWER_HANDOFF_PROVIDER,
-      handoff,
-      { viewerId, returnTo: safeViewerReturnTo(stateData.returnTo, targetOrigin, stateData.origin), origin: targetOrigin },
-      { ttlSeconds: KICK_VIEWER_HANDOFF_TTL_SECONDS },
-    );
-    const handoffUrl = new URL("/api/viewer/auth/kick/handoff", targetOrigin);
-    handoffUrl.searchParams.set("handoff", handoff);
-    return redirect(handoffUrl.toString());
+    const sessionToken = await createViewerSessionImpl(env, viewerId, authority);
+    const response = redirect(viewerReturnLocation(stateData, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
+    response.headers.append("set-cookie", oauthBrowserCookie(request, stateData.browserState, "", 0));
+    return response;
   } catch (err) {
     console.error("[viewer-auth] kick callback failed:", err?.message || err);
     return errorRedirect("kick_auth_failed", targetOrigin);
@@ -337,29 +437,27 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
 export async function handleKickViewerAuthHandoff(request, env, deps = {}) {
   const {
     consumeOAuthState: consumeOAuthStateImpl = consumeOAuthState,
-    createViewerSession: createViewerSessionImpl = createViewerSession,
-    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
-    resolveCustomDomain: resolveCustomDomainImpl = resolveCustomDomain,
+    resolveVerifiedCustomDomain: resolveCustomDomainImpl = resolveVerifiedCustomDomain,
+    browserTransactionMatches: browserTransactionMatchesImpl = browserTransactionMatches,
   } = deps;
   const url = new URL(request.url);
   const handoff = url.searchParams.get("handoff");
   const stateData = handoff
     ? await consumeOAuthStateImpl(KICK_VIEWER_HANDOFF_PROVIDER, handoff)
     : null;
-  const targetOrigin = stateData?.origin === url.origin
-    ? await resolveViewerOrigin(url.origin, env, resolveCustomDomainImpl)
-    : APEX_ORIGIN;
-  if (!stateData || targetOrigin !== url.origin || !stateData.viewerId) {
+  if (stateData?.transactionVersion !== 1 || stateData.flow !== "viewer" || stateData.provider !== "kick"
+      || stateData.stage !== "pending_completion" || !stateData.code || stateData.origin !== url.origin) {
     return errorRedirect("oauth_state_expired");
   }
-  try {
-    const sessionToken = await createViewerSessionImpl(env, stateData.viewerId);
-    const location = safeViewerReturnTo(stateData.returnTo, url.origin, stateData.origin);
-    return redirect(location, { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
-  } catch (err) {
-    console.error("[viewer-auth] kick handoff failed:", err?.message || err);
-    return errorRedirect("kick_auth_failed", url.origin);
+  const originInfo = await resolveViewerOriginInfo(url.origin, env, resolveCustomDomainImpl);
+  const authority = sessionAuthority(originInfo);
+  if (authority?.authority !== "site" || !sameAuthority(stateData.authority, authority)) {
+    return errorRedirect("oauth_state_expired");
   }
+  if (!await browserTransactionMatchesImpl(request, stateData.browserState, stateData.browserNonceHash)) {
+    return errorRedirect("oauth_browser_mismatch", url.origin);
+  }
+  return completeKickViewerAuth(request, env, stateData, stateData.code, authority, deps);
 }
 
 // --- Discord ---
@@ -374,13 +472,27 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   }
   const url = new URL(request.url);
   const origin = url.origin;
+  const originInfo = await resolveViewerOriginInfo(origin, env, deps.resolveVerifiedCustomDomain || resolveVerifiedCustomDomain);
+  if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = `${origin}/api/viewer/auth/discord/callback`;
   const joinState = await explicitJoinState(request, env, url, deps);
   if (!joinState) return errorRedirect("join_unavailable", origin);
 
   const state = randomState();
-  await storeOAuthStateImpl("discord", state, { provider: "discord", flow: "viewer", returnTo, origin, redirectUri, ...joinState });
+  const browserNonce = randomState();
+  const browserNonceHash = await hashBrowserNonce(browserNonce);
+  await storeOAuthStateImpl("discord", state, {
+    transactionVersion: 1,
+    provider: "discord",
+    flow: "viewer",
+    browserNonceHash,
+    authority: sessionAuthority(originInfo),
+    returnTo,
+    origin,
+    redirectUri,
+    ...joinState,
+  });
 
   let authorizeURL;
   try {
@@ -388,7 +500,7 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   } catch {
     return errorRedirect("signin_unavailable", origin);
   }
-  return redirect(authorizeURL);
+  return redirect(authorizeURL, { "set-cookie": oauthBrowserCookie(request, state, browserNonce) });
 }
 
 export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
@@ -402,7 +514,8 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
     exec: execImpl = exec,
     createViewerSession: createViewerSessionImpl = createViewerSession,
     viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
-    resolveCustomDomain: resolveCustomDomainImpl = resolveCustomDomain,
+    resolveVerifiedCustomDomain: resolveCustomDomainImpl = resolveVerifiedCustomDomain,
+    browserTransactionMatches: browserTransactionMatchesImpl = browserTransactionMatches,
   } = deps;
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -414,8 +527,17 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
   const stateData = await consumeOAuthStateImpl("discord", state);
   if (!stateData) return errorRedirect("oauth_state_expired");
 
+  if (stateData.transactionVersion !== 1 || stateData.flow !== "viewer" || stateData.provider !== "discord") {
+    return errorRedirect("oauth_state_expired");
+  }
   const targetOriginInfo = await resolveViewerOriginInfo(stateData.origin, env, resolveCustomDomainImpl);
   const targetOrigin = targetOriginInfo.origin;
+  const authority = sessionAuthority(targetOriginInfo);
+  if (!targetOrigin || !sameAuthority(stateData.authority, authority) || url.origin !== targetOrigin) return errorRedirect("custom_domain_unverified");
+  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("oauth_callback_mismatch");
+  if (!await browserTransactionMatchesImpl(request, state, stateData.browserNonceHash)) {
+    return errorRedirect("oauth_browser_mismatch", targetOrigin);
+  }
   if (error) return errorRedirect(error === "access_denied" ? "access_denied" : "discord_auth_failed", targetOrigin);
   if (!code) return errorRedirect("missing_oauth_params", targetOrigin);
 
@@ -495,8 +617,10 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
     const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
     if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
 
-    const sessionToken = await createViewerSessionImpl(env, viewerId);
-    return redirect(safeReturnTo(stateData.returnTo, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
+    const sessionToken = await createViewerSessionImpl(env, viewerId, authority);
+    const response = redirect(safeReturnTo(stateData.returnTo, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
+    response.headers.append("set-cookie", oauthBrowserCookie(request, state, "", 0));
+    return response;
   } catch (err) {
     console.error("[viewer-auth] discord callback failed:", err?.message || err);
     return errorRedirect("discord_auth_failed", targetOrigin);
@@ -507,6 +631,6 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
 
 export async function handleViewerLogout(request, env) {
   const token = readViewerToken(request);
-  await destroyViewerSession(env, token);
+  await destroyViewerSession(env, token, new URL(request.url).hostname);
   return json({ ok: true, loggedOut: true }, 200, { "set-cookie": viewerCookieClear(env, request) });
 }

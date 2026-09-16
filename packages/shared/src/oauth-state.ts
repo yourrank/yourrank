@@ -27,16 +27,14 @@ export async function storeOAuthState(
   const ttl = Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? Math.floor(ttlSeconds) : OAUTH_STATE_TTL_SECONDS;
   await withTransaction(async (tx: Tx) => {
     await tx.unsafe("DELETE FROM public.oauth_states WHERE expires_at <= now()");
-    await tx.unsafe(
+    const inserted = await tx.unsafe(
       `INSERT INTO public.oauth_states (state, provider, payload, created_at, expires_at)
        VALUES ($1, $2, $3::jsonb, now(), now() + ($4 * interval '1 second'))
-       ON CONFLICT (state) DO UPDATE
-         SET provider = EXCLUDED.provider,
-             payload = EXCLUDED.payload,
-             created_at = EXCLUDED.created_at,
-             expires_at = EXCLUDED.expires_at`,
+       ON CONFLICT (state) DO NOTHING
+       RETURNING state`,
       [normalizedState, normalizedProvider, normalizedPayload(payload), ttl],
     );
+    if (!inserted?.length) throw new Error("OAuth state collision");
   });
 }
 

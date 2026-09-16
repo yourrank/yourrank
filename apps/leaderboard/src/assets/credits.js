@@ -38,6 +38,21 @@ async function api(method, path, body) {
     throw error;
   }
 }
+// Persist the operation key until a confirmed response, including across a
+// reload after a lost response. Never manufacture a new key for a blind retry.
+async function adjustMemberCredits(id, delta, reason) {
+  const storageKey = "yr:credit-adjustment:" + JSON.stringify([activeSiteId, id, delta, reason]);
+  let operationId = sessionStorage.getItem(storageKey);
+  if (!operationId) {
+    operationId = crypto.randomUUID();
+    sessionStorage.setItem(storageKey, operationId);
+  }
+  const result = await api("POST", sitePath(`/api/credits/viewers/${encodeURIComponent(id)}/balance`), {
+    delta, reason, operationId,
+  });
+  sessionStorage.removeItem(storageKey);
+  return result;
+}
 let state = {}; // local credits page state (not dashboard/state.js)
 let viewerCtrl, redemptionCtrl, rewardCtrl;
 let activeSiteId = "";
@@ -1134,7 +1149,7 @@ async function bulkAwardMembers() {
   // adjustment rate limit intact and surfaces per-member errors clearly.
   for (const id of ids) {
     try {
-      await api("POST", sitePath(`/api/credits/viewers/${encodeURIComponent(id)}/balance`), { delta: amount, reason });
+      await adjustMemberCredits(id, amount, reason);
       ok++;
     } catch (err) {
       logError("bulk-award-member", err);
@@ -1292,8 +1307,7 @@ function wireActions() {
       render();
     }
     try {
-      const endpoint = sitePath(`/api/credits/viewers/${encodeURIComponent(viewerId)}/balance`);
-      await api("POST", endpoint, { delta: amount, reason });
+      await adjustMemberCredits(viewerId, amount, reason);
       setStatus("cr-tip-status", `Sent +${amount} credits to ${username || "this member"}.`);
       setTimeout(() => {
         closeTip();

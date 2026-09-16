@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   handleCreditsAdjustBalance,
+  handleCreditsConnect,
   handleCreditsCreateReward,
   handleCreditsSaveReward,
 } from "../handlers/credits.js";
@@ -83,6 +84,55 @@ describe("Wave H Rewards capability split", () => {
     expect(rateLimited).toBe(false);
   });
 
+  it("rejects a request-supplied Kick channel that does not match the owner's verified provider identity", async () => {
+    let persisted = false;
+    const owner = { id: "owner-1", plan: "pro", status: "active" };
+    const response = await handleCreditsConnect(
+      request("/api/credits/connect?siteId=site-1", { externalId: "victim-channel", name: "victim" }),
+      env,
+      {
+        requireUser: async () => ({ user: owner, res: null }),
+        getByUser: async () => null,
+        getBoardById: async () => site,
+        requireSiteCapability: async () => ({ role: "owner", res: null }),
+        rateLimit: async () => ({ ok: true }),
+        one: async () => ({ kick_user_id: "owner-channel", kick_username: "owner", kick_linked_at: "2026-09-15T00:00:00.000Z" }),
+        setSiteKickChannel: async () => { persisted = true; },
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatch(/verified Kick account/i);
+    expect(persisted).toBe(false);
+  });
+
+  it("allows the compatibility connect route only for the owner's verified provider identity", async () => {
+    const writes = [];
+    const owner = { id: "owner-1", plan: "pro", status: "active" };
+    const response = await handleCreditsConnect(
+      request("/api/credits/connect?siteId=site-1", { externalId: "owner-channel", name: "spoofed" }),
+      env,
+      {
+        requireUser: async () => ({ user: owner, res: null }),
+        getByUser: async () => null,
+        getBoardById: async () => site,
+        requireSiteCapability: async () => ({ role: "owner", res: null }),
+        rateLimit: async () => ({ ok: true }),
+        one: async (sql) => {
+          if (sql.includes("FROM users")) {
+            return { kick_user_id: "owner-channel", kick_username: "provider-name", kick_linked_at: "2026-09-15T00:00:00.000Z" };
+          }
+          return { kick_channel_linked_at: "2026-09-15T00:00:00.000Z" };
+        },
+        setSiteKickChannel: async (...args) => writes.push(args),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(writes).toEqual([[site.id, "owner-channel", "provider-name"]]);
+    expect((await response.json()).channel.name).toBe("provider-name");
+  });
+
   it("denies a Moderator before arbitrary manual credit adjustment", async () => {
     let transactionStarted = false;
     const response = await handleCreditsAdjustBalance(
@@ -107,7 +157,7 @@ describe("Wave H Rewards capability split", () => {
   it("keeps provider identifiers out of the dashboard response and hides owner-only controls", () => {
     const handler = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
     const client = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
-    expect(handler).toContain("connected: Boolean(channel?.kick_channel_external_id)");
+    expect(handler).toContain("connected: Boolean(channel?.kick_channel_external_id && channel?.channel_verified)");
     expect(handler).not.toContain("externalId: channel?.kick_channel_external_id");
     expect(client).toContain('toggleAttribute("hidden", !capabilities.manageConnections)');
     expect(handler).toContain('"canRoleAdjustCredits"');

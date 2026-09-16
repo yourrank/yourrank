@@ -13,6 +13,7 @@ import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { creatorExpansionRestriction, markSiteViewerActive } from "@yourrank/shared/plan-usage";
 import { createCanonicalCodeDrop, validateCodeDropConfig } from "../code-drop-service.js";
+import { resolveJoinableCommunity as defaultResolveJoinableCommunity } from "../viewer-membership.js";
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -295,19 +296,22 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     withTransaction = defaultWithTransaction,
     rateLimit = defaultRateLimit,
     requireViewer = defaultRequireViewer,
+    resolveJoinableCommunity = defaultResolveJoinableCommunity,
     markActive = markSiteViewerActive,
   } = deps;
 
-  const { viewer, res } = await requireViewer(request, env);
-  if (res) return res;
-
   const body = await readJson(request);
   const rawCode = String(body?.code || "").trim().toUpperCase();
-  const siteSlugOrId = String(body?.site || body?.siteId || "").trim();
+  const siteSlug = String(body?.site || "").trim();
+  // Resolve the Site before authorizing a local bearer: hostname possession alone
+  // never grants Viewer Account authority or access to another community.
+  const site = siteSlug ? await resolveJoinableCommunity(request, env, siteSlug) : null;
+  const { viewer, res } = await requireViewer(request, env, { siteId: site?.id });
+  if (res) return res;
   const viewerId = viewer.id;
 
-  if (!rawCode || !siteSlugOrId) {
-    return bad("Code and site are required.");
+  if (!rawCode || !siteSlug) {
+    return bad("Code and community are required.");
   }
 
   // Rate limit claims by IP / viewer to prevent brute forcing
@@ -315,9 +319,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   const rl = await rateLimit(env, `drop:claim:${viewerId}:${clientIp}`, 15, 60);
   if (!rl.ok) return bad("Too many attempts. Please wait a minute.", 429);
 
-  // Find site
-  const site = await one("SELECT id, slug FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
-  if (!site) return bad("Site not found.", 404);
+  if (!site) return bad("Community is not available.", 404);
 
   // Find active drop
   const drop = await one(

@@ -18,9 +18,37 @@ const ownerCapability = async (_user, _site, capability) => {
 };
 const pkce = async () => ({ codeVerifier: "verifier", codeChallenge: "challenge" });
 
-function request(path) {
-  return new Request(`https://test.local${path}`);
+function request(path, init) {
+  return new Request(`https://yourrank.site${path}`, init);
 }
+
+const browserTransactionMatches = async () => true;
+const verifiedDomain = async () => ({
+  site_id: "site-custom",
+  slug: "streamer",
+  hostname: "streamer.example",
+  binding_id: "binding-1",
+});
+const kickViewerState = (overrides = {}) => ({
+  transactionVersion: 1,
+  provider: "kick",
+  flow: "viewer",
+  browserNonceHash: "browser-hash",
+  redirectUri: "https://yourrank.site/auth/kick/callback",
+  authority: overrides.origin === "https://streamer.example"
+    ? { authority: "site", siteId: "site-custom", hostname: "streamer.example", domainBindingId: "binding-1" }
+    : { authority: "global" },
+  ...overrides,
+});
+const discordViewerState = (overrides = {}) => ({
+  transactionVersion: 1,
+  provider: "discord",
+  flow: "viewer",
+  browserNonceHash: "browser-hash",
+  redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback",
+  authority: { authority: "global" },
+  ...overrides,
+});
 
 describe("Kick OAuth state integration seams", () => {
   test("requires an authenticated user before rate limiting or site lookup", async () => {
@@ -120,10 +148,10 @@ describe("Kick OAuth state integration seams", () => {
 
   test("substituted custom-domain Join targets are rejected before OAuth state is stored", async () => {
     let stored = false;
-    const response = await handleKickViewerAuthStart(request("/api/viewer/auth/kick?intent=join&site=other&returnTo=/me"), {}, {
+    const response = await handleKickViewerAuthStart(new Request("https://streamer.example/api/viewer/auth/kick?intent=join&site=other&returnTo=/me"), {}, {
       rateLimit: noRateLimit,
       clientIp: () => "127.0.0.1",
-      resolveCustomDomain: async () => "beta",
+      resolveVerifiedCustomDomain: verifiedDomain,
       getPublicSite: async () => { throw new Error("must not resolve a substituted target"); },
       storeOAuthState: async () => { stored = true; },
     });
@@ -192,9 +220,41 @@ describe("Kick OAuth state integration seams", () => {
     expect(consumed).toBe(1);
   });
 
+  test("rejects a transferred global Kick callback without the initiating browser proof", async () => {
+    let exchanged = false;
+    const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/me" }),
+      exchangeKickViewerCode: async () => { exchanged = true; return { access_token: "access" }; },
+      browserTransactionMatches: async () => false,
+    });
+
+    expect(response.headers.get("location")).toBe("/me?error=oauth_browser_mismatch");
+    expect(exchanged).toBe(false);
+  });
+
+  test("rejects a transferred Discord callback without the initiating browser proof", async () => {
+    let exchanged = false;
+    const response = await handleDiscordViewerAuthCallback(
+      new Request("https://yourrank.site/api/viewer/auth/discord/callback?code=code&state=state"),
+      {},
+      {
+        consumeOAuthState: async () => discordViewerState({
+          origin: "https://yourrank.site",
+          redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback",
+        }),
+        browserTransactionMatches: async () => false,
+        exchangeDiscordCode: async () => { exchanged = true; return { access_token: "access" }; },
+      },
+    );
+
+    expect(response.headers.get("location")).toBe("/me?error=oauth_browser_mismatch");
+    expect(exchanged).toBe(false);
+  });
+
   test("viewer callback sets a cookie directly for a cookie-covered origin", async () => {
     const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://streamer.yourrank.site", returnTo: "/me" },
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://streamer.yourrank.site", returnTo: "/me" }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -212,7 +272,8 @@ describe("Kick OAuth state integration seams", () => {
     const queries = [];
     const memberships = [];
     const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://streamer.yourrank.site", returnTo: "/streamer-slug/me" },
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://streamer.yourrank.site", returnTo: "/streamer-slug/me" }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -237,7 +298,8 @@ describe("Kick OAuth state integration seams", () => {
   test("platform paths do not create a viewer site membership", async () => {
     const memberships = [];
     await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/dashboard" },
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/dashboard" }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -257,7 +319,8 @@ describe("Kick OAuth state integration seams", () => {
   test("generic custom-domain Kick sign-in does not join the resolved site", async () => {
     const memberships = [];
     await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://streamer.example", returnTo: "/me" },
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://streamer.example", returnTo: "/me" }),
+      resolveVerifiedCustomDomain: verifiedDomain,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -280,11 +343,12 @@ describe("Kick OAuth state integration seams", () => {
       request("/api/viewer/auth/discord/callback?code=code&state=state"),
       {},
       {
-        consumeOAuthState: async () => ({
+        consumeOAuthState: async () => discordViewerState({
           origin: "https://yourrank.site",
           returnTo: "/discord-site/me",
           redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback",
         }),
+        browserTransactionMatches,
         exchangeDiscordCode: async () => ({ access_token: "access" }),
         fetchDiscordCurrentUser: async () => ({ id: "discord-1", username: "viewer", global_name: "Viewer", avatar: null }),
         encryptDiscordToken: async (value) => `enc:${value}`,
@@ -307,15 +371,16 @@ describe("Kick OAuth state integration seams", () => {
   test("Discord consumes Join state even when the provider returns an error", async () => {
     let consumes = 0;
     const response = await handleDiscordViewerAuthCallback(
-      request("/api/viewer/auth/discord/callback?error=access_denied&state=join-state"),
+      new Request("https://yourrank.site/api/viewer/auth/discord/callback?error=access_denied&state=join-state"),
       {},
       {
         consumeOAuthState: async () => {
           consumes += 1;
           return consumes === 1
-            ? { origin: "https://yourrank.site", intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta" }
+            ? discordViewerState({ origin: "https://yourrank.site", intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta" })
             : null;
         },
+        browserTransactionMatches,
       },
     );
 
@@ -335,10 +400,11 @@ describe("Kick OAuth state integration seams", () => {
     };
     const exec = async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-joined" }] : [];
     const kick = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: {
-        flow: "viewer", codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
+      stateData: kickViewerState({
+        codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
         intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta",
-      },
+      }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -346,12 +412,13 @@ describe("Kick OAuth state integration seams", () => {
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
     });
-    const discord = await handleDiscordViewerAuthCallback(request("/api/viewer/auth/discord/callback?code=code&state=state"), {}, {
-      consumeOAuthState: async () => ({
-        flow: "viewer", origin: "https://yourrank.site", returnTo: "/beta/me",
+    const discord = await handleDiscordViewerAuthCallback(new Request("https://yourrank.site/api/viewer/auth/discord/callback?code=code&state=state"), {}, {
+      consumeOAuthState: async () => discordViewerState({
+        origin: "https://yourrank.site", returnTo: "/beta/me",
         redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback",
         intent: "join", joinSiteId: "site-beta", joinSiteSlug: "beta",
       }),
+      browserTransactionMatches,
       exchangeDiscordCode: async () => ({ access_token: "access" }),
       fetchDiscordCurrentUser: async () => ({ id: "discord-1", username: "viewer", global_name: "Viewer", avatar: null }),
       encryptDiscordToken: async (value) => `enc:${value}`,
@@ -374,10 +441,11 @@ describe("Kick OAuth state integration seams", () => {
   test("expired or substituted explicit Join state cannot create Membership", async () => {
     const joined = [];
     const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: {
-        flow: "viewer", codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
+      stateData: kickViewerState({
+        codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
         intent: "join", joinSiteId: "site-alpha", joinSiteSlug: "beta",
-      },
+      }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
@@ -398,19 +466,19 @@ describe("Kick OAuth state integration seams", () => {
   test("viewer callback creates a short-lived custom-domain handoff", async () => {
     let handoffArgs;
     const response = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
-      stateData: { flow: "viewer", codeVerifier: "verifier", origin: "https://streamer.example", returnTo: "/me" },
-      exchangeKickViewerCode: async () => ({ access_token: "access" }),
-      fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
-      encryptKickToken: async (value) => `enc:${value}`,
-      one: async () => null,
-      exec: async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-1" }] : [],
+      stateData: kickViewerState({ codeVerifier: "verifier", origin: "https://streamer.example", returnTo: "/me" }),
+      resolveVerifiedCustomDomain: verifiedDomain,
+      exchangeKickViewerCode: async () => { throw new Error("must not exchange before browser proof"); },
+      one: async () => { throw new Error("must not read identity before browser proof"); },
+      exec: async () => { throw new Error("must not mutate before browser proof"); },
       resolveCustomDomain: async () => "streamer",
       storeOAuthState: async (...args) => { handoffArgs = args; },
     });
 
     expect(response.headers.get("location")).toMatch(/^https:\/\/streamer\.example\/api\/viewer\/auth\/kick\/handoff\?handoff=/);
     expect(handoffArgs[0]).toBe("kick_viewer_handoff");
-    expect(handoffArgs[2]).toMatchObject({ viewerId: "viewer-1", origin: "https://streamer.example" });
+    expect(handoffArgs[2]).toMatchObject({ code: "code", stage: "pending_completion", origin: "https://streamer.example", browserState: "state" });
+    expect(handoffArgs[2].viewerId).toBeUndefined();
     expect(handoffArgs[3]).toMatchObject({ ttlSeconds: 90 });
   });
 
@@ -420,12 +488,12 @@ describe("Kick OAuth state integration seams", () => {
       request("/auth/kick/callback?code=code&state=state"),
       {},
       {
-        stateData: {
-          flow: "viewer",
+        stateData: kickViewerState({
           codeVerifier: "verifier",
           origin: "https://streamer.example",
           returnTo: "/dashboard",
-        },
+        }),
+        resolveVerifiedCustomDomain: verifiedDomain,
         exchangeKickViewerCode: async () => ({ access_token: "access" }),
         fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
         encryptKickToken: async (value) => `enc:${value}`,
@@ -438,16 +506,23 @@ describe("Kick OAuth state integration seams", () => {
 
     expect(response.status).toBe(302);
     expect(handoffArgs[2]).toMatchObject({
-      viewerId: "viewer-1",
-      returnTo: "https://yourrank.site/me",
+      stage: "pending_completion",
       origin: "https://streamer.example",
     });
+    expect(handoffArgs[2].viewerId).toBeUndefined();
   });
 
   test("viewer handoffs are single-use and host-bound", async () => {
     const rejected = await handleKickViewerAuthHandoff(new Request("https://other.example/api/viewer/auth/kick/handoff?handoff=x"), {}, {
       consumeOAuthState: async () => {
-        return { viewerId: "viewer-1", origin: "https://streamer.example", returnTo: "/me" };
+        return {
+          viewerId: "viewer-1",
+          origin: "https://streamer.example",
+          returnTo: "/me",
+          browserState: "state",
+          browserNonceHash: "browser-hash",
+          authority: { authority: "site", siteId: "site-custom", hostname: "streamer.example", domainBindingId: "binding-1" },
+        };
       },
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
@@ -456,18 +531,31 @@ describe("Kick OAuth state integration seams", () => {
     const deps = {
       consumeOAuthState: async () => {
         consumes += 1;
-        return consumes === 1 ? { viewerId: "viewer-1", origin: "https://streamer.example", returnTo: "/me" } : null;
+        return consumes === 1 ? kickViewerState({
+          origin: "https://streamer.example", returnTo: "/me", browserState: "state",
+          stage: "pending_completion", code: "code", codeVerifier: "verifier",
+        }) : null;
       },
-      createViewerSession: async () => "session-token",
+      exchangeKickViewerCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
+      encryptKickToken: async (value) => `enc:${value}`,
+      one: async () => ({ id: "viewer-1", kick_username: "viewer" }),
+      exec: async () => [],
+      createViewerSession: async (_env, id, authority) => {
+        expect(id).toBe("viewer-1");
+        expect(authority).toEqual({ authority: "site", siteId: "site-custom", hostname: "streamer.example", domainBindingId: "binding-1" });
+        return "session-token";
+      },
       viewerCookieSet: (token) => `yr_viewer=${token}`,
-      resolveCustomDomain: async () => "streamer",
+      resolveVerifiedCustomDomain: verifiedDomain,
+      browserTransactionMatches,
     };
     const accepted = await handleKickViewerAuthHandoff(new Request("https://streamer.example/api/viewer/auth/kick/handoff?handoff=x"), {}, deps);
     const replayed = await handleKickViewerAuthHandoff(new Request("https://streamer.example/api/viewer/auth/kick/handoff?handoff=x"), {}, deps);
 
     expect(rejected.headers.get("location")).toContain("error=oauth_state_expired");
-    expect(accepted.headers.get("location")).toBe("/me");
-    expect(accepted.headers.get("set-cookie")).toBe("yr_viewer=session-token");
+    expect(accepted.headers.get("location")).toBe("https://streamer.example/me");
+    expect(accepted.headers.get("set-cookie")).toContain("yr_viewer=session-token");
     expect(replayed.headers.get("location")).toContain("error=oauth_state_expired");
   });
 
@@ -530,6 +618,50 @@ describe("Kick OAuth state integration seams", () => {
     expect(response.headers.get("location")).toBe("/dashboard/site/connections?error=oauth_user_mismatch&siteId=site-1");
   });
 
+  test("streamer callback atomically records matching provider identity and verified Site binding", async () => {
+    const writes = [];
+    let transactionCount = 0;
+    const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      currentUser: async () => user,
+      consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
+      one: async () => site,
+      requireSiteCapability: ownerCapability,
+      exchangeKickCode: async () => ({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
+      fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
+      fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 123, slug: "owner" }),
+      subscribeKickWebhookEvent: async () => {},
+      encryptKickToken: async (token) => `encrypted:${token}`,
+      withTransaction: async (fn) => {
+        transactionCount += 1;
+        return fn({ unsafe: async (sql, params) => writes.push({ sql, params }) });
+      },
+    });
+
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&siteId=site-1");
+    expect(transactionCount).toBe(1);
+    expect(writes).toHaveLength(2);
+    expect(writes[0].sql).toContain("UPDATE users");
+    expect(writes[1].sql).toContain("kick_channel_verified_at = now()");
+    expect(writes[1].params).toEqual(["123", "owner", site.id]);
+  });
+
+  test("streamer callback rejects provider user/channel mismatches before persisting credentials", async () => {
+    let transactionStarted = false;
+    const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      currentUser: async () => user,
+      consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
+      one: async () => site,
+      requireSiteCapability: ownerCapability,
+      exchangeKickCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
+      fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 999, slug: "other" }),
+      withTransaction: async () => { transactionStarted = true; },
+    });
+
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?error=kick_auth_failed&siteId=site-1");
+    expect(transactionStarted).toBe(false);
+  });
+
   test("streamer callback redirects with a stable error code", async () => {
     const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
       currentUser: async () => user,
@@ -546,7 +678,8 @@ describe("Kick OAuth state integration seams", () => {
 
   test("viewer callback redirects with a stable error code", async () => {
     const response = await handleKickViewerAuthCallback(request("/api/viewer/auth/kick/callback?code=code&state=state"), {}, {
-      consumeOAuthState: async () => ({ codeVerifier: "verifier", redirectUri: "https://test.local/callback" }),
+      consumeOAuthState: async () => kickViewerState({ codeVerifier: "verifier", origin: "https://yourrank.site", redirectUri: "https://yourrank.site/api/viewer/auth/kick/callback" }),
+      browserTransactionMatches,
       exchangeKickViewerCode: async () => {
         throw new Error("Kick token endpoint returned 401: response body");
       },

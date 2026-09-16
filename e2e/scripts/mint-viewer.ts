@@ -21,8 +21,8 @@ const [viewer] = await sql`
   returning id`;
 
 await sql`
-  insert into viewer_sessions (token, viewer_id, expires_at)
-  values (${hashed}, ${viewer.id}, now() + interval '2 hours')`;
+  insert into viewer_sessions (token, viewer_id, authority, expires_at)
+  values (${hashed}, ${viewer.id}, 'global', now() + interval '2 hours')`;
 
 console.log(JSON.stringify({ rawToken: raw, viewerId: viewer.id, username }));
 

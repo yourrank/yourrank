@@ -10,6 +10,7 @@ import { logAudit } from "@yourrank/shared/audit";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { encrypt } from "@yourrank/shared/crypto";
+import { recordReplayHash } from "@yourrank/shared/postback";
 import { verifyBoardPasswordCookie } from "./board-password.js";
 import { detectImageMime, validateLogoData } from "./logo-validation.js";
 import { invalidatePublicBoardCache } from "./public-html-cache.js";
@@ -1010,7 +1011,7 @@ function isProPlan(plan) {
   return plan === "pro" || plan === "team";
 }
 
-export async function saveSite(env, user, payload, siteId, request = null) {
+export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null } = {}) {
   const uid = typeof user === "string" ? user : user.id;
   const plan = typeof user === "object" ? effectivePlan(user) : "free";
   const site = siteId ? await getBoardById(env, uid, siteId) : await getByUser(env, uid);
@@ -1265,6 +1266,14 @@ export async function saveSite(env, user, payload, siteId, request = null) {
           currentUpdatedAt: locked.updated_at,
         };
       }
+    }
+
+    // The signed score API's replay identity commits with this exact mutation.
+    // It is an internal option, never accepted from a dashboard save payload.
+    if (scoreReplay) {
+      if (scoreReplay.userId !== site.user_id || !validatedPlayers) throw new Error("Invalid score operation scope");
+      const admitted = await recordReplayHash(scoreReplay.userId, scoreReplay.hash, undefined, { execImpl: tx.unsafe });
+      if (!admitted) return { error: "Duplicate postback.", code: "duplicate_postback" };
     }
 
     const publishedVal = typeof payload.published === "boolean" ? payload.published : site.published;

@@ -5,7 +5,7 @@ import { one, exec, withTransaction } from "@yourrank/shared/db";
 import { getDomainProvider, SUPPORTED_TLDS } from "@yourrank/shared/domain-provider";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { PLATFORM_HOST } from "../constants.js";
-import { invalidateCustomDomain } from "../middleware/custom-domain.js";
+import { invalidateCustomDomain, verifiedProviderHostname } from "../middleware/custom-domain.js";
 import { logAudit } from "@yourrank/shared/audit";
 import { effectivePlan, BOARD_LIMITS } from "@yourrank/shared/plans";
 import { requireSiteCapability } from "../site-authorization.js";
@@ -153,6 +153,9 @@ export async function handleDomainPurchase(request, env, {
       return bad(purchaseResult.error || "Failed to register domain with registrar.", 400);
     }
 
+    // Registrar ownership is proof for a purchased domain. Use an assignment
+    // generation to fence the asynchronous TLS response against removal/replacement.
+    const assignmentChallenge = crypto.randomUUID();
     // Record order in database and attach domain to the streamer's site
     await withTransaction(async (tx) => {
       await tx.unsafe(
@@ -172,8 +175,17 @@ export async function handleDomainPurchase(request, env, {
       );
 
       await tx.unsafe(
-        `UPDATE sites SET custom_domain=$1, domain_status='active', updated_at=now() WHERE id=$2`,
-        [domain, site.id]
+        `UPDATE sites
+            SET custom_domain=$1,
+                custom_hostname_id=NULL,
+                domain_status='pending',
+                domain_auth_binding_id=NULL,
+                domain_auth_verified_at=NULL,
+                domain_auth_challenge=$3,
+                domain_auth_challenge_host=$1,
+                updated_at=now()
+          WHERE id=$2`,
+        [domain, site.id, assignmentChallenge]
       );
     });
 
@@ -192,8 +204,18 @@ export async function handleDomainPurchase(request, env, {
           }),
         });
         const cfData = await cfRes.json();
+        const verified = cfData.success && verifiedProviderHostname(cfData.result, domain);
         if (cfData.success && cfData.result?.id) {
-          await exec("UPDATE sites SET custom_hostname_id=$1 WHERE id=$2", [cfData.result.id, site.id]);
+          await exec(
+            `UPDATE sites
+                SET custom_hostname_id=$1,
+                    domain_status=$2,
+                    domain_auth_binding_id=CASE WHEN $3 THEN gen_random_uuid() ELSE NULL END,
+                    domain_auth_verified_at=CASE WHEN $3 THEN now() ELSE NULL END,
+                    updated_at=now()
+              WHERE id=$4 AND custom_domain=$5 AND domain_auth_challenge=$6`,
+            [cfData.result.id, verified ? "active" : "pending", verified, site.id, domain, assignmentChallenge]
+          );
         }
       } catch (e) {
         console.error("[domain-purchase] CF custom hostname error:", String(e?.message || e));
