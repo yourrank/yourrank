@@ -17,6 +17,7 @@ function fmtDate(iso) {
 }
 function fmtNum(value) { return Number(value || 0).toLocaleString("en-US"); }
 function initial(value) { return Array.from(String(value || "").trim())[0]?.toUpperCase() || "Y"; }
+function accountPath() { return `${window.location.pathname}${window.location.search}`; }
 
 function csrf() {
   const match = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/);
@@ -132,7 +133,7 @@ function renderLoggedOut() {
   $("viewer-top-mark").textContent = "";
   $("viewer-top-avatar").setAttribute("aria-label", "Sign in to your viewer account");
   selectAccountView();
-  $("viewer-account-link").setAttribute("href", "/me#vd-login-card");
+  $("viewer-account-link").setAttribute("href", `${accountPath()}#vd-login-card`);
   if (window.YRViewerApp) document.querySelector('.viewer-overview')?.replaceChildren();
   $("viewer-account-link").hidden = true;
   $("vd-login-card").hidden = false;
@@ -147,7 +148,7 @@ function renderLoggedOut() {
 
 function renderAccount(viewer) {
   signedIn = true;
-  $("viewer-account-link").setAttribute("href", "/me#vd-profile");
+  $("viewer-account-link").setAttribute("href", `${accountPath()}#vd-profile`);
   $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
   $("viewer-top-name").textContent = name;

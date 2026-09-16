@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 const helpPages = JSON.parse(execFileSync('bun', ['-e', `
 import { helpSupportPage, helpHubPage } from './apps/leaderboard/src/pages/help.js';
 import { leaderboardPageHtml } from './packages/shared/dist/page-shell.js';
-const options = { viewerHelp: { returnTo: '/nova' } };
+const options = { viewerHelp: { returnTo: '/nova', community: { slug: 'nova', name: "Nova's community", href: '/nova' } } };
 console.log(JSON.stringify([helpHubPage, helpSupportPage].map(page => leaderboardPageHtml({ ...page.configFor(options), content: page.Component(options) }))));
 `], { encoding: 'utf8', timeout: 30000 }));
 
@@ -75,7 +75,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) { res.setHeader('content-type', 'application/json'); res.end('{}'); return; }
     documents.push(url.pathname + url.search);
     res.setHeader('content-type', 'text/html');
-    if (url.pathname === '/me') { res.end(viewerDashboardPage); return; }
+    if (url.pathname === '/me') { res.end(viewerDashboardPage(url.searchParams.get('community') === 'nova' ? { slug: 'nova', name: "Nova's community", href: '/nova' } : null)); return; }
     if (url.pathname.startsWith('/help')) {
       res.end(helpPages[url.pathname === '/help' ? 0 : 1]); return;
     }
@@ -184,6 +184,18 @@ try {
   assert.equal(await page.locator('.viewer-switch').count(), 0);
   assert.equal(await page.locator('.viewer-destinations a').count(), 5);
   assert.equal(await page.locator('.viewer-topbar [data-credit-balance]').count(), 0);
+  // The account page keeps a real way back to the community it was opened from.
+  assert.equal(new URL(page.url()).search, '?community=nova');
+  assert.equal(await page.locator('.viewer-rail .viewer-return').getAttribute('href'), '/nova');
+  assert.match(await page.locator('.viewer-rail .viewer-return').innerText(), /Nova's community/);
+  await page.locator('#viewer-account-link').click();
+  await page.waitForSelector('#vd-profile', { state: 'visible' });
+  assert.equal(new URL(page.url()).search, '?community=nova', 'Account settings keep the community context');
+  await page.locator('.viewer-rail .viewer-return').click();
+  await page.waitForSelector('.viewer-next-reward');
+  assert.equal(new URL(page.url()).pathname, '/nova');
+  await page.locator('#viewer-communities-link').click();
+  await page.waitForSelector('.vd-card-row');
   await page.goBack(); await page.waitForSelector('.viewer-next-reward');
   await page.goForward(); await page.waitForSelector('.vd-card-row');
   await page.locator('.viewer-sidebar-bottom a').click();
@@ -194,6 +206,8 @@ try {
     throw new Error(`Viewer help did not mount at ${page.url()}: ${await page.locator('.viewer-main').innerText()} | status=${await page.locator('.viewer-navigation-status').innerText()} | pageErrors=${errors.join('; ')}`, { cause: error });
   }
   assert.equal(await page.evaluate(() => window.shellIdentity.rail === document.querySelector('.viewer-rail')), true);
+  assert.equal(await page.locator('.viewer-rail .viewer-return').getAttribute('href'), '/nova');
+  assert.equal(await page.locator('#viewer-communities-link').getAttribute('href'), '/me?community=nova');
   await page.locator('.viewer-help > .yr-sec-link').click();
   await page.waitForSelector('.viewer-next-reward');
   await page.evaluate(() => window.YRViewerApp.navigate('/missing'));

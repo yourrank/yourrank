@@ -39,6 +39,22 @@ describe("help pages", () => {
     }
   });
 
+  it("keeps the originating community reachable from viewer help", () => {
+    const community = { slug: "creator", name: "Creator & Co", href: "/creator" };
+    const fromCommunity = render("helpSupport", null, "/help/support", { returnTo: "/creator/shop", community });
+    expect(fromCommunity).toContain('<a class="viewer-return" href="/creator">');
+    expect(fromCommunity).toContain('Back to community</small>Creator &amp; Co');
+    expect(fromCommunity).toContain('<a class="yr-sec-link" href="/creator/shop">Back to Creator &amp; Co</a>');
+    expect(fromCommunity).toContain('id="viewer-communities-link" href="/me?community=creator"');
+    const fromAccount = render("helpSupport", null, "/help/support", { returnTo: "/me?community=creator", community });
+    expect(fromAccount).toContain('<a class="yr-sec-link" href="/me?community=creator">Back to my communities</a>');
+    expect(fromAccount).toContain('<a class="viewer-return" href="/creator">');
+    expect(fromAccount).toContain('return=%2Fme%3Fcommunity%3Dcreator');
+    const plain = render("helpSupport", null, "/help/support", { returnTo: "/me" });
+    expect(plain).not.toContain("viewer-return");
+    expect(plain).toContain('id="viewer-communities-link" href="/me"');
+  });
+
   it("renders the creator help hub in both shells", () => {
     const signedIn = render("helpHub", user, "/help");
     const signedOut = render("helpHub", null, "/help");

@@ -11,7 +11,7 @@ import {
   formatWaitSeconds,
 } from "./public-render-helpers.js";
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
-import { viewerNavigation, viewerIcon, viewerHelpHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
+import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
 import { resolveViewerTemplate } from "./viewer-templates.js";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
@@ -94,9 +94,8 @@ export function siteSectionHref(section, slug, isCustomDomain) {
   return section === "home" ? `/${s}` : `/${s}/${section}`;
 }
 
-const GLOBAL_VIEWER_ACCOUNT_URL = "https://yourrank.site/me";
-function globalViewerAccountHref(isCustomDomain) {
-  return isCustomDomain ? GLOBAL_VIEWER_ACCOUNT_URL : "/me";
+function globalViewerAccountHref(isCustomDomain, slug) {
+  return viewerAccountHref(slug, isCustomDomain ? "https://yourrank.site" : "");
 }
 
 function formatNumber(n) {
@@ -241,7 +240,7 @@ function drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoU
 
   const name = esc(b.name || slug);
   const boardCreditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
-  const accountHref = globalViewerAccountHref(isCustomDomain);
+  const accountHref = globalViewerAccountHref(isCustomDomain, slug);
   // The membership row only exists where the streamer kept My activity on;
   // otherwise there is no local viewer destination on this site.
   // The bar's account shortcut is desktop-only, so the drawer carries the
@@ -287,7 +286,7 @@ function avatarHtml(viewer) {
 function topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember }) {
   const name = esc(b.name || slug);
   const tagline = b.tagline ? esc(b.tagline) : "";
-  const accountHref = globalViewerAccountHref(isCustomDomain);
+  const accountHref = globalViewerAccountHref(isCustomDomain, slug);
   const nav = sectionList(siteSections).map((s) => {
     const href = `${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}`;
     const active = s === section ? ' aria-current="page"' : "";
@@ -571,9 +570,9 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     tagline: b.tagline || '',
     watchHref: channel?.href || '', watchLabel: channel?.label || '',
     communityStatus: channel?.label || 'Creator community', signedIn: !!viewer,
-    sessionControl: !viewer && section !== "me" ? signInLink(r, returnTo, "yr-btn", siteSections.me === false ? globalViewerAccountHref(isCustomDomain) : siteSectionHref("me", slug, isCustomDomain)) : "",
+    sessionControl: !viewer && section !== "me" ? signInLink(r, returnTo, "yr-btn", siteSections.me === false ? globalViewerAccountHref(isCustomDomain, slug) : siteSectionHref("me", slug, isCustomDomain)) : "",
     homeHref: siteSectionHref("home", slug, isCustomDomain),
-    accountHref: globalViewerAccountHref(isCustomDomain),
+    accountHref: globalViewerAccountHref(isCustomDomain, slug),
     helpHref: viewerHelpHref(siteSectionHref(section || "home", slug, false), isCustomDomain ? "https://yourrank.site" : ""),
     links: sectionList(siteSections).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
@@ -622,7 +621,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
   const secondary = [
     kickUrl && kickUrl !== "#" ? `<a href="${kickUrl}" target="_blank" rel="noopener noreferrer">Watch on Kick<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     hasCta && casino ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(casino)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
-    viewer ? `<a href="${globalViewerAccountHref(isCustomDomain)}">My communities</a>` : "",
+    viewer ? `<a href="${globalViewerAccountHref(isCustomDomain, slug)}">My communities</a>` : "",
   ].filter(Boolean).join("");
   // What a viewer normally reads at the bottom is the creator's sign-off: the
   // fine print, their copyright, the legal pages and one way to reach us. The
@@ -891,7 +890,7 @@ ${mount}`;
 function meMain(ctx) {
   const { r, b, slug, viewer, viewerData, membershipStatus, balance, returnTo, isCustomDomain, siteSections, viewerAuthError } = ctx;
   const creator = esc(b.name || slug);
-  const accountHref = globalViewerAccountHref(isCustomDomain);
+  const accountHref = globalViewerAccountHref(isCustomDomain, slug);
   const shopHref = siteSectionHref("shop", slug, isCustomDomain);
   const authMessages = {
     access_denied: "Sign-in was cancelled. Try again when you're ready.",

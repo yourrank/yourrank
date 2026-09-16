@@ -437,7 +437,7 @@ describe("logged-out vs logged-in rendering", () => {
     });
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain("Shoutout");
-    expect(html).toContain('href="https://yourrank.site/me"');
+    expect(html).toContain('href="https://yourrank.site/me?community=streamer"');
   });
 
   it("never carries one Viewer Account's history into the next signed-in response", async () => {
