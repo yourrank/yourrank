@@ -216,7 +216,23 @@ describe("global Viewer Account client", () => {
 });
 
 describe("global Viewer Account ownership", () => {
-  const page = String(viewerDashboardPage);
+  const page = viewerDashboardPage();
+
+  it("offers a way back to the originating community without inventing a membership", () => {
+    const html = viewerDashboardPage({ slug: "creator", name: "Creator <One>", href: "/creator" });
+    expect(html).toContain('<a class="viewer-return" href="/creator">');
+    expect(html).toContain('<a class="yr-sec-link vd-return" href="/creator">');
+    expect(html).toContain("Creator &lt;One&gt;");
+    expect(html).toContain('id="viewer-communities-link" href="/me?community=creator" aria-current="page"');
+    expect(html).toContain('href="/me?community=creator#vd-profile"');
+    expect(html).toContain('href="/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dcreator"');
+    expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fme%3Fcommunity%3Dcreator"');
+    expect(html).toContain('<div id="vd-communities" class="vd-community-list"></div>');
+    expect(html).toContain('id="vd-communities-card" hidden');
+    expect(page).not.toContain("viewer-return");
+    expect(page).toContain('href="/api/viewer/auth/kick"');
+    expect(page).toContain('id="viewer-communities-link" href="/me" aria-current="page"');
+  });
 
   it("names the real account-to-membership hierarchy", () => {
     expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');

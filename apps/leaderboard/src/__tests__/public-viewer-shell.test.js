@@ -146,13 +146,15 @@ describe("public viewer shell", () => {
   it("keeps sign-in and account navigation role-correct", async () => {
     const signedOut = await render("home");
     expect(signedOut).toContain('href="/creator/me#membership-code">Sign in ');
-    expect(signedOut).toContain('id="viewer-account-link" href="/me#vd-profile" hidden');
+    expect(signedOut).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
     const signedIn = await render("home", { viewer, viewerData });
     expect(signedIn).toContain('data-credit-balance-num>1,234</strong>');
-    expect(signedIn).toContain('id="viewer-account-link" href="/me#vd-profile"');
+    expect(signedIn).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile"');
     expect(signedIn).not.toContain('>Sign in<');
-    expect(signedIn).toContain('href="/me"');
+    // Every global account link remembers this community so My communities can lead back.
+    expect(signedIn).toContain('id="viewer-communities-link" href="/me?community=creator"');
+    expect(signedIn).not.toContain('href="/me"');
     expect(signedIn).not.toContain('href="/dashboard"');
   });
 
@@ -172,8 +174,8 @@ describe("public viewer shell", () => {
   it("keeps local membership and global account destinations distinct on custom domains", async () => {
     const html = await render("me", { viewer, viewerData, custom: true });
     expect(html).toMatch(/href="\/me" aria-current="page">[\s\S]*?My Activity<\/a>/);
-    expect(html).toContain('id="viewer-account-link" href="https://yourrank.site/me#vd-profile"');
-    expect(html).toContain('href="https://yourrank.site/me"');
+    expect(html).toContain('id="viewer-account-link" href="https://yourrank.site/me?community=creator#vd-profile"');
+    expect(html).toContain('href="https://yourrank.site/me?community=creator"');
     expect(html).not.toContain('href="/creator/me"');
   });
 
@@ -216,7 +218,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('href="/creator/shop">Choose a reward');
     expect(html).not.toContain('View my activity');
     expect(html).toContain('No purchase, no cash value, no cashout.');
-    expect(html).toContain('href="/me"');
+    expect(html).toContain('href="/me?community=creator"');
   });
 
   it("stays useful without linking disabled community destinations", async () => {
@@ -326,7 +328,7 @@ describe("public viewer shell", () => {
   it("keeps navigation and return paths available without JavaScript", async () => {
     const html=await render("me",{viewer,viewerData});
     const nav=html.match(/<aside class="viewer-rail"[\s\S]*?<\/aside>/)[0];
-    for(const href of ["/creator","/creator/shop","/creator/me","/me","/me#vd-profile"]) expect(nav).toContain('href="'+href+'"');
+    for(const href of ["/creator","/creator/shop","/creator/me","/me?community=creator","/me?community=creator#vd-profile"]) expect(nav).toContain('href="'+href+'"');
     expect(nav).not.toContain("<button");
     expect(nav).not.toMatch(/<(?:aside|nav|a)[^>]*\shidden\b/);
   });
@@ -403,8 +405,8 @@ describe("public viewer shell", () => {
 
   it("keeps account and community return links reachable on mobile", async () => {
     const html = await render('me', { viewer, viewerData });
-    expect(html).toContain('href="/me"');
-    expect(html).toContain('href="/me#vd-profile"');
+    expect(html).toContain('href="/me?community=creator"');
+    expect(html).toContain('href="/me?community=creator#vd-profile"');
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     expect(css).not.toMatch(/\.viewer-rail-account\{[^}]*display:none/);
     expect(css).toContain('.viewer-rail-account{display:flex;flex-wrap:wrap');

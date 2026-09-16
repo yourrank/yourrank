@@ -1,6 +1,6 @@
 import { destroySession, cookieClear, readToken, RESERVED, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
-import { resolveViewerHelp } from "@yourrank/shared/viewer-shell";
+import { resolveViewerHelp, viewerCommunityParam, viewerReturnCommunity } from "@yourrank/shared/viewer-shell";
 import { withWorkerFetch } from "@yourrank/shared/with-worker";
 import { RateLimiter } from "@yourrank/shared/rate-limiter-do";
 import { LiveBoard } from "./live-board.js";
@@ -63,6 +63,23 @@ import { readDlqHealth } from "./dlq-health.js";
 import { proxyMarketingHome } from "./marketing-proxy.js";
 import { redirectResponse, redirectToLogin } from "./login-redirect.js";
 import { safeNextPath } from "@yourrank/shared/safe-next";
+
+/**
+ * The published community a viewer page was reached from. Only the community's
+ * public identity is exposed; it says nothing about membership.
+ */
+async function viewerCommunityContext(env, slug) {
+  if (!slug || RESERVED.has(slug)) return null;
+  const site = await getBySlug(env, slug).catch(() => null);
+  if (!site || !site.published || site.is_draft) return null;
+  return { slug: site.slug, name: site.name || site.slug, href: `/${encodeURIComponent(site.slug)}` };
+}
+
+async function withViewerCommunity(env, viewerHelp) {
+  if (!viewerHelp) return viewerHelp;
+  const community = await viewerCommunityContext(env, viewerReturnCommunity(viewerHelp.returnTo));
+  return community ? { ...viewerHelp, community } : viewerHelp;
+}
 
 const LEGAL_PAGES = new Set(["terms", "privacy", "responsible", "cookies", "refund", "contact"]);
 const MARKETING_PAGES = new Set(["/", "/index.html", "/sites", "/telegram", "/credits", "/pricing", "/overlays", "/games", "/switch", "/docs", "/faq", "/about", "/changelog", "/brand", "/status"]);
@@ -1020,7 +1037,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         }
       }
       if (path === "/me" || path === "/me.html") {
-        return new Response(addCookieConsent(fillYear(viewerDashboardPage)), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+        const community = await viewerCommunityContext(env, viewerCommunityParam(url));
+        return new Response(addCookieConsent(fillYear(viewerDashboardPage(community))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
       }
       if (path === "/forgot") return new Response(addCookieConsent(await renderHtmlPage(PAGES.forgot)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       if (path === "/reset") {
@@ -1079,7 +1097,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return redirectResponse(new URL("/help", url), 302);
       }
       if (path === "/help") {
-        const viewerHelp = resolveViewerHelp(url);
+        const viewerHelp = await withViewerCommunity(env, resolveViewerHelp(url));
         const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
         const helpHtml = await renderHtmlPage(PAGES.helpHub, { activePath: "/help", user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });
@@ -1089,7 +1107,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const map = { support: "helpSupport", feedback: "helpFeedback" };
         const pageKey = map[tab];
         if (!pageKey) return redirectResponse(new URL("/help/support", url), 302);
-        const viewerHelp = resolveViewerHelp(url);
+        const viewerHelp = await withViewerCommunity(env, resolveViewerHelp(url));
         const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
         const helpHtml = await renderHtmlPage(PAGES[pageKey], { activePath: path, user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });

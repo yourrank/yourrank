@@ -429,11 +429,11 @@ describe("viewer row geometry", () => {
 
 describe("the global account page", () => {
   it("keeps restricted legacy mechanics out of the viewer membership journey", () => {
-    expect(viewerDashboardPage).not.toContain("vd-raffles");
-    expect(viewerDashboardPage).not.toContain("vd-predictions");
+    expect(viewerDashboardPage()).not.toContain("vd-raffles");
+    expect(viewerDashboardPage()).not.toContain("vd-predictions");
   });
 
-  const page = String(viewerDashboardPage);
+  const page = viewerDashboardPage();
 
   it("opens with My communities, not an operator dashboard head", () => {
     expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
