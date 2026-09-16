@@ -75,7 +75,7 @@ export function createGamesStore(opts: CreateStoreOptions): GamesStore {
   const store: GamesStore = {
     api: opts.api,
     slug: opts.slug,
-    signInHref: opts.signInHref ?? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(`/${opts.slug}/games`)}`,
+    signInHref: opts.signInHref ?? "/me",
     earnHref: opts.earnHref ?? `/${opts.slug}/credits`,
     config,
     viewer,

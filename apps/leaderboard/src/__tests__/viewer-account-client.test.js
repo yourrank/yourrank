@@ -216,10 +216,11 @@ describe("global Viewer Account client", () => {
 });
 
 describe("global Viewer Account ownership", () => {
-  const page = viewerDashboardPage();
+  const providers = { kick: true, discord: true };
+  const page = viewerDashboardPage(null, providers);
 
   it("offers a way back to the originating community without inventing a membership", () => {
-    const html = viewerDashboardPage({ slug: "creator", name: "Creator <One>", href: "/creator" });
+    const html = viewerDashboardPage({ slug: "creator", name: "Creator <One>", href: "/creator" }, providers);
     expect(html).toContain('<a class="viewer-return" href="/creator">');
     expect(html).toContain('<a class="yr-sec-link vd-return" href="/creator">');
     expect(html).toContain("Creator &lt;One&gt;");

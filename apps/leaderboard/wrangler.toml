@@ -79,6 +79,10 @@ DLQ_HEALTH_DEGRADE_THRESHOLD = "100"
 DLQ_HEALTH_MAX_AGE_SECONDS = "86400"
 REQUEST_METRICS = "true"  # Set false to disable per-request capacity telemetry.
 POSTBACK_UNSIGNED_ENABLED = "false"  # Signed postbacks only.
+# Viewer OAuth readiness: Kick is auto/config-derived; Discord stays disabled
+# until the dedicated provider app/account and callback are verified.
+VIEWER_KICK_OAUTH_ENABLED = ""
+VIEWER_DISCORD_OAUTH_ENABLED = "false"
 # Production session cookie is scoped to the apex domain so it is shared across
 # subdomains, but isolated from staging by the staging value below.
 SESSION_COOKIE_DOMAIN = ".yourrank.site"
@@ -117,6 +121,9 @@ bucket_name = "yourrank-reward-images"
 #   KICK_CLIENT_ID          (required for Kick OAuth login)
 #   KICK_CLIENT_SECRET      (required for Kick OAuth login)
 #   KICK_REDIRECT_URI       (defaults to https://yourrank.site/auth/kick/callback)
+#   DISCORD_CLIENT_ID       (required only when Discord Viewer OAuth is enabled)
+#   DISCORD_CLIENT_SECRET   (required only when Discord Viewer OAuth is enabled)
+#   DISCORD_REDIRECT_URI    (must exactly match https://yourrank.site/api/viewer/auth/discord/callback)
 
 # ---------------------------------------------------------------------------
 # Staging environment (wrangler deploy --env staging)
@@ -158,6 +165,10 @@ REQUEST_METRICS = "true"
 ALLOW_DEMO_LOGIN = "false"
 DEMO_USER_EMAIL = "demo@yourrank.site"
 POSTBACK_UNSIGNED_ENABLED = "false"
+# Staging provider switches remain disabled until isolated apps/accounts and
+# exact callback registrations are configured.
+VIEWER_KICK_OAUTH_ENABLED = "false"
+VIEWER_DISCORD_OAUTH_ENABLED = "false"
 LIVE_BOARD_PUSH_ENABLED = "false"
 LIVE_BOARD_STREAM_KILL_SWITCH = "false"
 LIVE_BOARD_FALLBACK_POLL_MS = "60000"

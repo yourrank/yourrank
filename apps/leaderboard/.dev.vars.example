@@ -39,5 +39,14 @@ KICK_WEBHOOK_PUBLIC_KEY=
 # Kick OAuth app credentials.
 KICK_CLIENT_ID=
 KICK_CLIENT_SECRET=
-# Kick OAuth redirect URI. Must exactly match the URL in your Kick app settings.
-KICK_REDIRECT_URI=https://yourrank.site/auth/kick/callback
+# Viewer OAuth requires a verified HTTPS origin and secure callback cookies.
+# Default HTTP localhost cannot complete this flow; keep both providers disabled
+# locally and use an isolated HTTPS staging deployment for end-to-end checks.
+KICK_REDIRECT_URI=
+VIEWER_KICK_OAUTH_ENABLED=false
+VIEWER_DISCORD_OAUTH_ENABLED=false
+
+# Discord Viewer OAuth app credentials (use a dedicated non-production app).
+DISCORD_CLIENT_ID=
+DISCORD_CLIENT_SECRET=
+DISCORD_REDIRECT_URI=

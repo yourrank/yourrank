@@ -17,6 +17,7 @@ import { invalidatePublicBoardCache } from "./public-html-cache.js";
 import { notifyLiveBoard } from "./live-board-config.js";
 import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
 import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
+import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 
 export { detectImageMime, validateLogoData };
 
@@ -522,6 +523,19 @@ export async function resolvePublicEvent(requestUrl, siteId, readEvent = one) {
   return { event, unavailable: !event, notFound: !event && isPlayerApi };
 }
 
+export function maskViewerAuthProviders(site, availability) {
+    const deployment = viewerOAuthAvailability(availability);
+    const authProviders = {
+      kick: !!site?.viewer_kick_auth_enabled && deployment.kick,
+      discord: !!site?.viewer_discord_auth_enabled && deployment.discord,
+    };
+    return {
+      viewerKickAuthEnabled: authProviders.kick,
+      viewerDiscordAuthEnabled: authProviders.discord,
+      viewerAuthProviders: authProviders,
+    };
+  }
+
 export async function getPublicSite(env, slug, request = null, playerOptions = null) {
     const site = playerOptions?.fresh
       ? await one(`SELECT ${SITE_COLUMNS}, now() AS _fresh FROM sites WHERE slug=$1`, [slug])
@@ -580,6 +594,7 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       data.brand = { ...data.brand, period: event.name, hidePrizeAmounts: true, prizePool: '' };
       data.endsAt = null; data.startsAt = null; data.scheduled = false; data.ended = false;
     }
+    const viewerAuth = maskViewerAuthProviders(site, resolveViewerOAuthStatus(request, env));
     return {
       id: site.id,
       userId: site.user_id,
@@ -589,8 +604,9 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       plan,
       boards,
       botUsername: bot?.username || null,
-      viewerKickAuthEnabled: !!site.viewer_kick_auth_enabled,
-      viewerDiscordAuthEnabled: !!site.viewer_discord_auth_enabled,
+      // Database flags express creator intent; deployment readiness is the
+      // trusted upper bound exposed to public renderers and auth metadata.
+      ...viewerAuth,
       viewerPublicRedeemEnabled: !!site.viewer_public_redeem_enabled,
     };
   }

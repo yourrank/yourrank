@@ -332,7 +332,7 @@ $("vd-switch")?.addEventListener("click", async () => {
   try {
     await api("POST", "/api/viewer/logout");
     renderLoggedOut();
-    $("vd-login-kick").focus();
+    ($("vd-login-kick") || $("vd-login-discord"))?.focus();
   } catch (error) {
     setStatus("vd-account-status", errorText(error.message, "We couldn't switch your login. Try again."), true);
   } finally {
@@ -347,7 +347,12 @@ const LOGIN_ERROR_MESSAGES = Object.freeze({
   access_denied: "Sign-in was cancelled.",
   kick_auth_failed: "We couldn't complete Kick sign-in. Try again.",
   discord_auth_failed: "We couldn't complete Discord sign-in. Try again.",
-  signin_unavailable: "Sign-in isn't available on this site right now. Try again later.",
+  kick_signin_unavailable: "Kick sign-in isn't available right now. Try again later.",
+  discord_signin_unavailable: "Discord sign-in isn't available right now. Try again later.",
+  kick_oauth_callback_mismatch: "Kick returned to an unexpected callback. Try again.",
+  discord_oauth_callback_mismatch: "Discord returned to an unexpected callback. Try again.",
+  kick_oauth_browser_mismatch: "Kick sign-in must finish in the browser where it started.",
+  discord_oauth_browser_mismatch: "Discord sign-in must finish in the browser where it started.",
 });
 
 const url = new URL(window.location.href);

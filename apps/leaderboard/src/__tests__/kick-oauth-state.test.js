@@ -17,6 +17,10 @@ const ownerCapability = async (_user, _site, capability) => {
   return { role: "owner", res: null };
 };
 const pkce = async () => ({ codeVerifier: "verifier", codeChallenge: "challenge" });
+const readyOAuth = () => ({
+  kick: { available: true, redirectUri: "https://yourrank.site/auth/kick/callback" },
+  discord: { available: true, redirectUri: "https://yourrank.site/api/viewer/auth/discord/callback" },
+});
 
 function request(path, init) {
   return new Request(`https://yourrank.site${path}`, init);
@@ -84,6 +88,7 @@ describe("Kick OAuth state integration seams", () => {
       storeOAuthState,
       generatePKCE: pkce,
       buildKickViewerAuthorizeURL: (_env, state) => `https://kick.test/authorize?state=${state}`,
+      resolveViewerOAuthStatus: readyOAuth,
     });
 
     expect(streamer.status).toBe(302);
@@ -110,6 +115,7 @@ describe("Kick OAuth state integration seams", () => {
         authorizeArgs = args;
         return "https://kick.test/authorize";
       },
+      resolveViewerOAuthStatus: readyOAuth,
     });
 
     expect(response.status).toBe(302);
@@ -124,6 +130,7 @@ describe("Kick OAuth state integration seams", () => {
       storeOAuthState: async (...args) => stored.push(args),
       getPublicSite: async (_env, slug) => ({ id: "site-beta", slug, data: { siteSections: { me: true } } }),
       resolveCustomDomain: async () => "beta",
+      resolveViewerOAuthStatus: readyOAuth,
     };
     await handleKickViewerAuthStart(request("/api/viewer/auth/kick?intent=join&site=beta&returnTo=/me"), {}, {
       ...common,
@@ -152,6 +159,7 @@ describe("Kick OAuth state integration seams", () => {
       rateLimit: noRateLimit,
       clientIp: () => "127.0.0.1",
       resolveVerifiedCustomDomain: verifiedDomain,
+      resolveViewerOAuthStatus: readyOAuth,
       getPublicSite: async () => { throw new Error("must not resolve a substituted target"); },
       storeOAuthState: async () => { stored = true; },
     });
@@ -228,7 +236,7 @@ describe("Kick OAuth state integration seams", () => {
       browserTransactionMatches: async () => false,
     });
 
-    expect(response.headers.get("location")).toBe("/me?error=oauth_browser_mismatch");
+    expect(response.headers.get("location")).toBe("/me?error=kick_oauth_browser_mismatch");
     expect(exchanged).toBe(false);
   });
 
@@ -247,7 +255,7 @@ describe("Kick OAuth state integration seams", () => {
       },
     );
 
-    expect(response.headers.get("location")).toBe("/me?error=oauth_browser_mismatch");
+    expect(response.headers.get("location")).toBe("/me?error=discord_oauth_browser_mismatch");
     expect(exchanged).toBe(false);
   });
 

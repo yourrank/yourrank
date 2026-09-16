@@ -157,7 +157,11 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
         siteName: b.name || slug,
         logoUrl: logoUrl || null,
         creditsUrl: `/${slug}/credits`,
-        signInUrl: `/api/viewer/auth/kick?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`,
+        signInUrl: r.viewerKickAuthEnabled
+          ? `/api/viewer/auth/kick?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`
+          : (r.viewerDiscordAuthEnabled
+            ? `/api/viewer/auth/discord?returnTo=${encodeURIComponent(isCustomDomain ? "/games" : `/${slug}/games`)}`
+            : "/me"),
         header: false,
       });
       const embedHtml = `<!DOCTYPE html>

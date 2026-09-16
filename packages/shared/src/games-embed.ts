@@ -57,7 +57,7 @@ export function gamesIslandMount({
     siteName: siteName || slug,
     logoUrl: logoUrl || null,
     homeUrl: `/${slug}`,
-    signInHref: signInUrl || `/api/viewer/auth/kick?returnTo=${encodeURIComponent(`/${slug}/games`)}`,
+    signInHref: signInUrl || "/me",
     earnHref: creditsUrl || `/${slug}/credits`,
     header,
   };

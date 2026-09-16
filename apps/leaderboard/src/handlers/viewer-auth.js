@@ -23,6 +23,7 @@ import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state
 import { resolveVerifiedCustomDomain } from "../middleware/custom-domain.js";
 import { PLATFORM_HOST } from "../constants.js";
 import { applyOAuthJoinIntent, resolveJoinableCommunity } from "../viewer-membership.js";
+import { resolveViewerOAuthStatus } from "../viewer-oauth.js";
 
 const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
@@ -239,16 +240,19 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
     generatePKCE: generatePKCEImpl = generatePKCE,
     storeOAuthState: storeOAuthStateImpl = storeOAuthState,
     buildKickViewerAuthorizeURL: buildKickViewerAuthorizeURLImpl = buildKickViewerAuthorizeURL,
+    resolveViewerOAuthStatus: resolveViewerOAuthStatusImpl = resolveViewerOAuthStatus,
   } = deps;
   if (!(await rateLimitImpl(env, `viewer-oauth-start:kick:${clientIpImpl(request)}`, 20, 60)).ok) {
     return redirect("/me?error=rate_limited");
   }
   const url = new URL(request.url);
   const origin = url.origin;
+  const oauth = resolveViewerOAuthStatusImpl(request, env)?.kick;
+  if (!oauth?.available) return errorRedirect("kick_signin_unavailable", origin);
   const originInfo = await resolveViewerOriginInfo(origin, env, deps.resolveVerifiedCustomDomain || resolveVerifiedCustomDomain);
   if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
-  const redirectUri = env.KICK_REDIRECT_URI || "https://yourrank.site/auth/kick/callback";
+  const redirectUri = oauth.redirectUri;
   const joinState = await explicitJoinState(request, env, url, deps);
   if (!joinState) return errorRedirect("join_unavailable", origin);
 
@@ -273,8 +277,8 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
   try {
     authorizeURL = buildKickViewerAuthorizeURLImpl(env, state, codeChallenge, undefined, redirectUri);
   } catch {
-    // Missing OAuth credentials: fail visibly on the site, not as a raw 500.
-    return errorRedirect("signin_unavailable", origin);
+    // A provider-specific construction failure must not imply every sign-in is unavailable.
+    return errorRedirect("kick_signin_unavailable", origin);
   }
   return redirect(authorizeURL, { "set-cookie": oauthBrowserCookie(request, state, browserNonce) });
 }
@@ -311,10 +315,10 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
   const targetOrigin = targetOriginInfo.origin;
   const authority = sessionAuthority(targetOriginInfo);
   if (!targetOrigin || !sameAuthority(stateData.authority, authority)) return errorRedirect("custom_domain_unverified");
-  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("oauth_callback_mismatch");
+  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("kick_oauth_callback_mismatch");
   const callbackHasBrowserCookie = url.origin === targetOrigin || authority.authority === "global";
   if (callbackHasBrowserCookie && !await browserTransactionMatchesImpl(request, state, stateData.browserNonceHash)) {
-    return errorRedirect("oauth_browser_mismatch", targetOrigin);
+    return errorRedirect("kick_oauth_browser_mismatch", targetOrigin);
   }
   if (error) {
     return errorRedirect(error === "access_denied" ? "access_denied" : "kick_auth_failed", targetOrigin);
@@ -455,7 +459,7 @@ export async function handleKickViewerAuthHandoff(request, env, deps = {}) {
     return errorRedirect("oauth_state_expired");
   }
   if (!await browserTransactionMatchesImpl(request, stateData.browserState, stateData.browserNonceHash)) {
-    return errorRedirect("oauth_browser_mismatch", url.origin);
+    return errorRedirect("kick_oauth_browser_mismatch", url.origin);
   }
   return completeKickViewerAuth(request, env, stateData, stateData.code, authority, deps);
 }
@@ -467,15 +471,18 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   const clientIpImpl = deps.clientIp || clientIp;
   const storeOAuthStateImpl = deps.storeOAuthState || storeOAuthState;
   const buildDiscordAuthorizeURLImpl = deps.buildDiscordAuthorizeURL || buildDiscordAuthorizeURL;
+  const resolveViewerOAuthStatusImpl = deps.resolveViewerOAuthStatus || resolveViewerOAuthStatus;
   if (!(await rateLimitImpl(env, `viewer-oauth-start:discord:${clientIpImpl(request)}`, 20, 60)).ok) {
     return redirect("/me?error=rate_limited");
   }
   const url = new URL(request.url);
   const origin = url.origin;
+  const oauth = resolveViewerOAuthStatusImpl(request, env)?.discord;
+  if (!oauth?.available) return errorRedirect("discord_signin_unavailable", origin);
   const originInfo = await resolveViewerOriginInfo(origin, env, deps.resolveVerifiedCustomDomain || resolveVerifiedCustomDomain);
   if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
-  const redirectUri = `${origin}/api/viewer/auth/discord/callback`;
+  const redirectUri = oauth.redirectUri;
   const joinState = await explicitJoinState(request, env, url, deps);
   if (!joinState) return errorRedirect("join_unavailable", origin);
 
@@ -498,7 +505,7 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   try {
     authorizeURL = buildDiscordAuthorizeURLImpl(env, state, undefined, redirectUri);
   } catch {
-    return errorRedirect("signin_unavailable", origin);
+    return errorRedirect("discord_signin_unavailable", origin);
   }
   return redirect(authorizeURL, { "set-cookie": oauthBrowserCookie(request, state, browserNonce) });
 }
@@ -534,9 +541,9 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
   const targetOrigin = targetOriginInfo.origin;
   const authority = sessionAuthority(targetOriginInfo);
   if (!targetOrigin || !sameAuthority(stateData.authority, authority) || url.origin !== targetOrigin) return errorRedirect("custom_domain_unverified");
-  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("oauth_callback_mismatch");
+  if (!isExpectedCallback(url, stateData.redirectUri)) return errorRedirect("discord_oauth_callback_mismatch");
   if (!await browserTransactionMatchesImpl(request, state, stateData.browserNonceHash)) {
-    return errorRedirect("oauth_browser_mismatch", targetOrigin);
+    return errorRedirect("discord_oauth_browser_mismatch", targetOrigin);
   }
   if (error) return errorRedirect(error === "access_denied" ? "access_denied" : "discord_auth_failed", targetOrigin);
   if (!code) return errorRedirect("missing_oauth_params", targetOrigin);
