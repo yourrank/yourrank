@@ -1,21 +1,21 @@
 ---
 name: YourRank Community Workspace
-description: A mineral creator workspace, the supplied Channel guide for viewers, and separately scoped marketing material.
+description: A mineral creator workspace, the September 16 community/account mockups, and separately scoped marketing material.
 colors:
-  viewer-action: "#205acc"
-  viewer-action-hover: "#1648ac"
-  viewer-canvas: "#f3f6fa"
+  viewer-action: "#5024f5"
+  viewer-action-hover: "#3e1bca"
+  viewer-canvas: "#fafbfe"
   viewer-surface: "#ffffff"
-  viewer-inset: "#edf2f9"
-  viewer-text: "#142a48"
-  viewer-text-soft: "#52627a"
-  viewer-text-mute: "#52627a"
-  viewer-rail: "#e4edff"
-  viewer-rail-hover: "#e7efff"
-  viewer-line: "#dfe6ef"
-  viewer-line-soft: "#ebeff5"
-  viewer-warning: "#91410b"
-  viewer-success: "#126045"
+  viewer-inset: "#f2f4fa"
+  viewer-text: "#0e1221"
+  viewer-text-soft: "#52618a"
+  viewer-text-mute: "#5a6789"
+  viewer-rail: "#0e171e"
+  viewer-rail-hover: "#efebff"
+  viewer-line: "#e5e9f3"
+  viewer-line-soft: "#edf0f6"
+  viewer-warning: "#9a4b10"
+  viewer-success: "#087e48"
   workspace-accent: "#4056b9"
   workspace-accent-hover: "#304398"
   workspace-accent-soft: "#edf0fc"
@@ -49,26 +49,26 @@ colors:
   danger: "#B42318"
 typography:
   viewer-page:
-    fontFamily: "Fira Sans, Inter, system-ui, -apple-system, Segoe UI, sans-serif"
-    fontSize: "26px"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "36px"
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.025em"
   viewer-section:
-    fontFamily: "Fira Sans, Inter, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, sans-serif"
     fontSize: "21px"
     lineHeight: 1.3
   viewer-body:
-    fontFamily: "Fira Sans, Inter, system-ui, -apple-system, Segoe UI, sans-serif"
-    fontSize: "16px"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontSize: "14px"
     lineHeight: 1.5
   viewer-control:
-    fontFamily: "Fira Sans, Inter, system-ui, -apple-system, Segoe UI, sans-serif"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, sans-serif"
     fontSize: "14px"
     fontWeight: 600
     lineHeight: 1.4
   viewer-record-number:
-    fontFamily: "Fira Code, IBM Plex Mono, ui-monospace, SFMono-Regular, Menlo, monospace"
+    fontFamily: "Inter, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 700
   workspace-page:
@@ -127,8 +127,8 @@ typography:
     lineHeight: 1.3
     letterSpacing: "0.1em"
 rounded:
-  viewer-control: "99px"
-  viewer-module: "18px"
+  viewer-control: "6px"
+  viewer-module: "8px"
   workspace-control: "8px"
   workspace-module: "14px"
   workspace-pill: "999px"
@@ -236,9 +236,9 @@ components:
 
 The authenticated creator workspace uses a cool mineral canvas, white work surfaces, quiet slate navigation, indigo actions, Fira Sans interface text, and measured Fira Code data. It organizes community work around one next action and readable activity. This is the user-authorized replacement of the incumbent dashboard world, recorded from the canonical stylesheet and shared shell contract.
 
-The viewer world follows the owner-supplied `viewer-dashboard.html` (14 September 2026) as an exact visual specification: ice canvas, quiet icon navigation, white rounded center panel, Channel Blue pill controls, a collapsible circular guide, and a separate community overview. Its shell remains mounted while Home, Leaderboard, Reward shop, My activity, My communities, Viewer account, and viewer Help replace the center content. Real Viewer Accounts and site-scoped memberships supply the names, balances, rewards, claims and standings. Prototype sample records and simulated actions are not production content.
+The viewer world follows the owner-supplied September 16, 2026 screenshots: charcoal navigation and context bar, a pale canvas, violet controls, bordered white cards, and a separate global YourRank account layout. Home, Leaderboard, Rewards, My Activity, account settings, and viewer Help use the canonical renderer and navigation controller. Real Viewer Accounts and site-scoped memberships supply identity, balances, rewards, claims and standings. Screenshot-only records, imagery and unsupported controls are not production content.
 
-Frontmatter keys prefixed `workspace-` describe the creator workspace and `viewer-` describe the supported viewer shell. Unprefixed keys retain the incumbent marketing and legacy material record; they do not govern the viewer world. Marketing keeps its near-white, ink-black, electric-violet language and Inter/Geist Mono stacks. The retained North Star names that earlier record; Channel guide names only the viewer world. Transparent OBS overlays and restricted legacy Games surfaces retain their existing scope.
+Frontmatter keys prefixed `workspace-` describe the creator workspace and `viewer-` describe the supported viewer shell. Unprefixed keys retain the incumbent marketing and legacy material record; they do not govern the viewer world. Marketing keeps its near-white, ink-black, electric-violet language and Inter/Geist Mono stacks. Transparent OBS overlays and restricted legacy Games surfaces retain their existing scope.
 
 The product demonstration and the user's state carry each screen. Decoration stays quiet so the current state, the next action, and the selected account/site context remain obvious.
 
@@ -254,7 +254,7 @@ The product demonstration and the user's state carry each screen. Decoration sta
 
 ## Colors
 
-The authenticated palette uses indigo for action and focus, a mineral canvas behind white work surfaces, and a slate rail for navigation. Workspace-prefixed frontmatter tokens map to the canonical `--ws-*` CSS tokens. Viewer-prefixed tokens record the overrides in `viewer-shell.css`: Channel Blue for actions and focus, Ice for the canvas, Navy for copy, and Pale Blue for the visible rail. White is reserved for fields and bounded tasks such as code entry; blue-gray lines divide records. Readable amber and green label claim states. The color names below describe the retained marketing/legacy palette; they must not override either replacement world.
+The authenticated palette uses indigo for action and focus, a mineral canvas behind white work surfaces, and a slate rail for navigation. Workspace-prefixed frontmatter tokens map to the canonical `--ws-*` CSS tokens. Viewer-prefixed tokens map to `viewer-shell.css`: violet actions, a pale canvas, dark text, and charcoal navigation. White bordered cards group related records. Readable amber and green label claim states. The color names below describe the retained marketing/legacy palette.
 
 ### Primary
 
@@ -280,13 +280,13 @@ The authenticated palette uses indigo for action and focus, a mineral canvas beh
 
 ### Named Rules
 
-**The Scoped Accent Rule.** Creator identity may retain its local accent; supported viewer actions and readable accent text use Channel Blue, marketing actions retain Electric Violet, and creator workspace actions use workspace indigo. Identity configuration does not own viewer layout or action colors.
+**The Scoped Accent Rule.** Creator identity may retain its local accent; supported viewer actions use the mockup violet, marketing actions retain Electric Violet, and creator workspace actions use workspace indigo. Identity configuration does not own viewer layout or action colors.
 
 **The State, Not Decoration Rule.** Success, warning, and danger appear in status text, dots, narrow cue bands, and alerts—not as ornamental card themes.
 
 ## Typography
 
-The workspace uses Fira Sans for interface copy and Fira Code for real data and compact metadata. Its six roles are the `workspace-*` frontmatter entries and the Authenticated Workspace Contract below. Channel guide also uses Fira Sans, with the exact inherited stack recorded in `viewer-*`; Fira Code appears in record amounts, dates, and code entry. Membership balances and directory summaries use tabular Fira Sans numerals. Viewer page titles are bold and tighten slightly; introductory copy is 15px with a 65ch limit, record labels are 14px, and supporting record copy is 13px. At 900px page titles become 28px; membership titles become 26px at 600px. The following Inter/Geist hierarchy is retained for marketing/legacy surfaces only.
+The workspace uses Fira Sans for interface copy and Fira Code for real data and compact metadata. Its six roles are the `workspace-*` frontmatter entries and the Authenticated Workspace Contract below. Viewer pages use Inter with tabular numerals for balances, scores, and dates. Viewer titles are bold, 36px on desktop and 30px on mobile. Supporting copy uses the blue-gray text tokens. The following Inter/Geist hierarchy is retained for marketing/legacy surfaces only.
 
 **Display Font:** Inter, falling back to Fira Sans and the system sans stack
 
@@ -316,7 +316,7 @@ Marketing and product education use a centered reading frame of approximately 11
 
 The authenticated workspace uses a 232px slate rail by default, a 64px white context bar, and a mineral working field with 40px default inline padding. The stylesheet retains a 248px rail adjustment between 981px and 1180px and a 44px collapsed desktop rail. At 980px the rail becomes a drawer. Home places a launch region above a two-value summary, then activity and player lists; at 700px its columns stack and material Home actions have 44px minimum targets. The target creator IA is Home → Community → Activities → People → Rewards → Insights → Settings, while current labels and URLs remain implementation truth until migrated deliberately. Account and selected-site context stay visibly distinct. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
 
-The viewer layout uses a 90px top bar over 212px navigation, a flexible white center panel, and a 314px overview, with 24px gutters and 28px outer margins. At 1250px the rails become 180px/276px; below 1050px the overview moves beneath the center. Below 760px the same navigation becomes four icon destinations above a single-column content stack. Center padding is 29px/30px/22px on desktop and 20px/18px/16px on mobile. The persistent shell intercepts supported same-origin navigation, swaps canonical server-rendered center content, and preserves full-page links as a working fallback. Guide state records only browsing progress in the current tab; membership steps come from authenticated records, and a completed guide collapses automatically.
+The community layout uses an 80px context bar, 228px navigation, flexible content, and an overview column, with 26px gutters. Home adds the creator banner below the context bar. Global account pages use a 252px YourRank navigation rail, 64px context bar, and full-width settings content. Below 1000px the community overview moves beneath the main content. Below 760px navigation wraps above a single-column layout. The controller preserves the layout container while replacing canonical server-rendered content and chrome; entering global `/me` always replaces the community chrome with the account shell. Full-page links remain a fallback.
 
 At narrow widths, marketing navigation becomes a disclosed menu while the primary Start free action remains visible; the creator workspace rail uses its separate drawer behavior. Wide data stays inside its own scroll container. Viewer primary controls and community destinations have at least 44px targets; compact viewer account links use a 40px minimum in the wrapping header.
 
@@ -326,7 +326,7 @@ At narrow widths, marketing navigation becomes a disclosed menu while the primar
 
 ## Elevation & Depth
 
-The system is flat by default. White and near-white surfaces separate through hairline borders, shared outer boundaries, internal dividers, and tonal shifts. Cards and product previews rest without shadow. Elevation is reserved for temporary overlays, menus, and brief interactive lift; the standard overlay shadow is a soft black 16px/48px spread. Workspace focus uses indigo, marketing focus retains violet, and viewer focus uses a 2px Channel Blue outline with 4px offset. Channel guide adds no resting shadows, decorative lift, or entrance motion; inherited public control color/border/opacity transitions last 150ms and respect reduced motion.
+The system is flat by default. White and near-white surfaces separate through hairline borders, shared outer boundaries, internal dividers, and tonal shifts. Elevation is reserved for temporary overlays and menus. Workspace focus uses indigo, marketing focus retains violet, and viewer focus uses a 2px violet outline with 4px offset (light violet on the dark rail). Viewer transitions respect reduced motion.
 
 ### Shadow Vocabulary
 
@@ -367,25 +367,21 @@ Rewards setup keeps the current step prominent with a 44px action, suppresses du
 
 ### Viewer components
 
-Viewer navigation names the destination: **Reward shop** at `/<slug>/shop`, **My activity** at `/<slug>/me` (that community's credits, claims, and participation), **My communities** at `/me`, and **Viewer account** at `/me#vd-profile`. These are presentation labels; membership and account identity boundaries remain unchanged. Home leads with real Credits, the explicit player-link state, claim count, next-reward progress, recent credit activity, and verified channel status. The leaderboard page heading matches its navigation label and explains how standings become populated. Reward actions reflect signed-out, unavailable, blocked, affordable, and insufficient-credit states. Viewer Help, Support, and Feedback retain the Channel guide shell and a return link; an existing creator session never changes an explicitly viewer-origin help journey into the creator workspace.
+Community navigation names Home, Activities, Leaderboard, Rewards (`/<slug>/shop`), and My Activity (`/<slug>/me`). Activities is explicitly unavailable because no public activity contract exists. Global `/me` remains the membership directory; its settings hashes are Profile, Connected Accounts, Notifications, Privacy & Security, and Data & Account. Profile/provider editing, notification preferences, 2FA, session management, email management, and deletion are explicitly unavailable. Data export uses the existing viewer export endpoints; no backend model changes are implied by the navigation.
 
-Channel guide is owned by `packages/shared/src/viewer-shell.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and the progressive navigation controller `apps/leaderboard/src/assets/viewer-app.js`, with record, field, and public action primitives inherited from `site-shell.css`. The supported body is `.yr-site.viewer-shell`; supported pages load viewer-app, which mounts the page-specific site, account, or contact controller. The account directory is rendered by `apps/leaderboard/src/pages/viewer-dashboard.js`; community content is rendered by `packages/shared/src/site-render.ts`. Restricted Games keeps its legacy shell and is outside this replacement.
+The viewer system is owned by `packages/shared/src/viewer-shell.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and `apps/leaderboard/src/assets/viewer-app.js`, with record, field, and dialog primitives inherited from `site-shell.css`. The supported body is `.yr-site.viewer-shell`; viewer-app mounts the page-specific site, account, or contact controller. The account directory/settings are rendered by `apps/leaderboard/src/pages/viewer-dashboard.js`; community content is rendered by `packages/shared/src/site-render.ts`. Restricted Games keeps its existing shell and is outside this replacement.
 
-**Optional Spotlight presentation — 2026-09-07.** The owner requested an additional creator-selected viewer template while preserving the current design. Site → Public site → Brand → Viewer template offers Channel guide (the existing default) and Spotlight through the existing Pro Brand controls, live preview, and Save changes flow. `packages/shared/src/viewer-templates.ts` is the supported catalogue; the existing `branding.template` / `theme_json.template` stores the choice. Older stored values continue to round-trip; supported pages share the supplied light viewer shell.
+Leaderboard podiums style the original top-three list rows, with rank 1 centered, rank 2 left and rank 3 right. Tied top ranks retain equally presented compact rows. Search shows matching compact rows; clearing search restores the original layout. Player records have no avatar field, so marks use name initials without implying a Viewer Account link. Stored template configuration continues to round-trip; supported viewer pages share the September 16 composition.
 
-Spotlight retains rank 1 centered above rank 2 on the left and rank 3 on the right, with compact standings below. After the September 14 viewer replacement, it uses the supplied light shell and its navigation. Gold `#c99a39`, silver `#8192a7`, and bronze `#aa794a` mark actual podium ranks. The original player rows remain the only standings source.
-
-The podium styles the original top-three list rows without duplicating players. Tied top ranks keep equally presented compact rows; search shows compact matching rows, and clearing it restores the original standings presentation. Public player records have no avatar field, so marks use the first two name characters without inferring a Viewer Account connection. `boardMain()` in `packages/shared/src/site-render.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and `apps/leaderboard/src/assets/site-shell.js` own this rendering and search behavior. This optional presentation applies to supported community Home, Leaderboard, Reward shop, and My activity pages; the global directory, help pages, creator workspace, marketing, and restricted Games retain their own presentation. No data, ranking, claim, or identity behavior changes with a template.
-
-- **Navigation:** The visible rail carries enabled community pages with a filled blue current destination and `aria-current="page"`; hover uses the pale-blue selected tint. My communities opens the global directory inside the same shell, Viewer account targets its identity section, and Help & contact remains a persistent utility. The selected creator mark, name, platform, and verified live state remain visible while center content changes. Account and membership scope must stay distinguishable. The viewer shell has no duplicate navigation-card shortcuts in Home.
-- **Directory:** A 44px community mark precedes a title, scoped free-credit/claim summary, and Open membership action. Items share horizontal dividers. Account identity follows the directory; rare login actions live in a native Manage your login disclosure.
-- **Membership:** Community identity and a compact free-credit balance precede full-width claims. Each row keeps reward title, cost/date, and an explicit status together. Credit activity and participation use native details disclosures, initially open when records exist. Optional code entry follows in a bounded panel. Empty, signed-out, absent-membership, unavailable, and blocked states are distinct.
-- **Actions:** Directory/account buttons use a 44px minimum, 14px semibold text, and 10px/16px padding. Inherited community buttons use 48px height, 15px semibold text, and 22px inline padding; small code-submit and record actions use 44px height. Primary fill is Channel Blue; secondary fill is white or transparent with a blue-gray border. Disabled account buttons use 0.55 opacity; inherited disabled/busy community controls use 0.45 opacity and explicit state.
-- **Fields and status:** Code fields use the inset blue-gray fill, 44px minimum height, 14px Fira Code, uppercase text, and 0.04em tracking. Status tags remain compact bordered text with readable semantic colors; they never substitute for the claim explanation. Inputs retain visible labels, adjacent feedback, and the viewer focus outline.
+- **Navigation:** Pale violet marks the active community destination; global account navigation uses a saturated violet selection. Both use `aria-current="page"`. Missing Activities support is visible as unavailable, never a dead link.
+- **Home:** Creator identity, configured channels, real reward progress, standings preview, and recent ledger activity occupy the mockup's card positions. Unavailable stream status stays explicit until the existing Kick lookup returns a boolean.
+- **Rewards:** Configured reward imagery, or a gift icon when absent, heads each card. Search and sorting operate on actual configured items. Existing stock, cooldown, balance, membership, confirmation and redemption behavior remains canonical.
+- **Membership:** Real balance and recent record counts precede credit history, claims, participation, and code entry. Record statuses and community scope remain explicit. Empty, signed-out, absent-membership, unavailable, and blocked states are distinct.
+- **Account:** Full-width settings cards replace the former account identity tile and community overview. Only supported identity/provider data and actions are rendered. Read-only gaps explain their unavailable state.
 
 **The Membership Scope Rule.** The account page is a directory of relationships. Credits, claims, and participation stay attached to their community; visual grouping must not imply a global wallet, merged identity, or new shared persistence model.
 
-Sources were rescanned on 2026-09-14. Local synthetic review captures under `.local-logs/viewer-design/` cover the current desktop/mobile Home, Leaderboard, Reward shop, My activity, My communities, and Viewer account layouts. They show fixture data rather than live customer data or production deployment. Direction seed `c2610fb4` is provenance for this code-led world, not an approved visual comp.
+Visual authority is the owner-supplied September 16 community and account screenshots, including the additional Rewards image. Exact artwork, platform identities, notifications and metrics absent from the product cannot be reproduced as real production content. Verification evidence must distinguish fixture behavior from deployed provider/database behavior.
 
 The component descriptions below preserve the incumbent marketing/legacy guidance. Viewer tokens and the viewer components above take precedence inside the viewer shell; workspace tokens and the authenticated contract take precedence inside the dashboard shell.
 
@@ -579,7 +575,7 @@ Leaderboard Setup includes independently saved event standings: name, players an
 - **Do** use shared outer boundaries, internal dividers, and readable state before introducing another container.
 - **Do** preserve visible focus, semantic status announcements, reduced-motion behavior, and 44px touch targets where practical.
 - **Do** keep creator identity accents separate from scoped viewer and workspace action colors.
-- **Do** preserve the viewer's visible community guide, wrapping mobile navigation, and separate membership records.
+- **Do** preserve wrapping mobile viewer navigation and separate membership records.
 
 Billing uses the owner-supplied pricing-card composition inside the mineral workspace: Free/Pro/Team columns, one recommended Pro border, aligned price/interval/CTA, checkmarked feature lists, and a labelled monthly/annual control. Prices and feature copy come from the shared plan catalog. Usage uses actual capacity meters with explicit account/site scope. Data gives export the primary surface and isolates account deletion. Insights uses a two-column community/rewards and participation composition with current operations spanning beneath it; it stacks with consistent insets on mobile. Expandable secondary panels use a visible surface, border, keyboard focus, and a directional chevron rather than unmarked text. These extend the existing Fira/mineral tokens; they do not create another theme.
 
@@ -593,4 +589,4 @@ Billing uses the owner-supplied pricing-card composition inside the mineral work
 - **Don't** apply viewer-world rules to the creator workspace, marketing, OBS overlays, or restricted legacy Games.
 
 
-The supplied viewer HTML supersedes earlier Channel guide composition details in this record. Supported viewer destinations all use its light three-column shell. A saved Spotlight choice retains its standings podium inside that shell; it does not select dark chrome. Global `/me` shows memberships, while `/me#vd-profile` shows account maintenance using the same account response. No aggregate credit balance is displayed.
+The September 16 screenshots supersede the earlier Channel guide HTML. Community pages use the charcoal rail and pale card canvas; global `/me` uses the distinct YourRank account layout. Account views share the existing account response. No aggregate credit balance is displayed.

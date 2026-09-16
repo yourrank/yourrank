@@ -35,6 +35,10 @@ const GOOGLE_FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com" />' +
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
   '<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@500;700&display=swap" rel="stylesheet" />';
+const VIEWER_FONTS =
+  '<link rel="preconnect" href="https://fonts.googleapis.com" />' +
+  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
+  '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />';
 
 // The operator console has no dark skin (the workspace stylesheets declare only
 // light values), so nothing here opts a document into `data-theme="dark"`. A
@@ -98,7 +102,7 @@ export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${esc(opts.title)}</title>
 ${reqIdMeta}
-${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${GOOGLE_FONTS}
+${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${opts.bodyClass?.split(" ").includes("viewer-shell") ? VIEWER_FONTS : GOOGLE_FONTS}
 ${styles}
 ${opts.bootWatchdog ? DASHBOARD_BOOT_WATCHDOG : ""}
 </head><body${bodyAttr}>${opts.designContract || (workspace ? "" : DEVIN_DESIGN_CONTRACT)}

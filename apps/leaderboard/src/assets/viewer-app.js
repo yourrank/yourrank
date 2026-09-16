@@ -34,7 +34,7 @@
       var target = new URL(link.href, location.href);
       var active = target.origin === location.origin && target.pathname === location.pathname;
       if (active && target.pathname === "/me" && document.body.dataset.customDomain !== "true") {
-        active = (target.hash === "#vd-profile") === (location.hash === "#vd-profile");
+        active = target.hash === location.hash;
       }
       if (active) link.setAttribute("aria-current", "page");
     });
@@ -81,24 +81,6 @@
       if (next && existing) existing.replaceChildren.apply(existing, Array.from(next.childNodes));
     });
   }
-  async function restoreContext() {
-    if (selectedSlug) { rememberCommunity(); return; }
-    var slug = new URL(location.href).searchParams.get("community");
-    try { slug = slug || sessionStorage.getItem("yr-viewer-community"); } catch (_) { /* Optional. */ }
-    if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(slug || "")) return;
-    try {
-      var response = await fetch("/" + encodeURIComponent(slug), { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      var source = new DOMParser().parseFromString(await response.text(), "text/html");
-      if (!source.body.classList.contains("viewer-shell") || source.body.dataset.slug !== slug) return;
-      syncChrome(source);
-      var overview = document.querySelector('.viewer-overview');
-      var sourceOverview = source.querySelector('.viewer-overview');
-      if (overview && sourceOverview) overview.replaceChildren.apply(overview, Array.from(sourceOverview.childNodes));
-      selectedSlug = slug;
-      rememberCommunity();
-    } catch (_) { /* Account content remains usable without a community fetch. */ }
-  }
   async function navigate(value, options) {
     var opts = options || {};
     var target = new URL(value, location.href);
@@ -124,8 +106,7 @@
       // Only supported page controllers run. Arbitrary document scripts are never evaluated.
       if (next.querySelector("script")) { location.assign(target.href); return; }
       document.dispatchEvent(new Event("yr:viewer-unmount"));
-      var communityPage = !!source.body.dataset.slug;
-      if (communityPage && source.body.dataset.slug !== selectedSlug) syncChrome(source);
+      syncChrome(source);
       var existing = document.querySelector(".viewer-main");
       existing.className = next.className;
       existing.replaceChildren.apply(existing, Array.from(next.childNodes));
@@ -140,12 +121,16 @@
       var theme = source.querySelector('[data-theme-tokens]');
       var currentTheme = document.querySelector('[data-theme-tokens]');
       if (theme && currentTheme) currentTheme.textContent = theme.textContent;
-      // The overview is context data, not a navigation destination.
-      if (communityPage) {
-        var overview = document.querySelector('.viewer-overview');
-        var nextOverview = source.querySelector('.viewer-overview');
-        if (overview && nextOverview) overview.replaceChildren.apply(overview, Array.from(nextOverview.childNodes));
-      }
+      [".viewer-overview", ".viewer-home-banner"].forEach(function (selector) {
+        var old = document.querySelector(selector);
+        var replacement = source.querySelector(selector);
+        if (old) old.remove();
+        if (replacement) {
+          var layout = document.querySelector('.viewer-layout');
+          if (selector === ".viewer-home-banner") layout.insertBefore(replacement, existing);
+          else layout.appendChild(replacement);
+        }
+      });
       ["#yr-feedback", ".viewer-site-footer"].forEach(function (selector) {
         var old = document.querySelector(selector); if (old) old.remove();
         var replacement = source.querySelector(selector); if (replacement) document.body.appendChild(replacement);
@@ -179,7 +164,7 @@
   });
   window.addEventListener("popstate", function () { navigate(location.href, { pop: true, refresh: true }); });
   window.YRViewerApp = { navigate: navigate, refresh: function () { return navigate(location.href, { refresh: true }); } };
-  window.__yrViewerAppReady = restoreContext().then(mount).catch(function () {
+  window.__yrViewerAppReady = mount().catch(function () {
     notice.textContent = "Page controls could not load. Reload to try again."; notice.hidden = false;
   });
 })();
