@@ -558,15 +558,19 @@ function viewerStatusCard(ctx) {
       foot: viewer ? (meOn ? `<a class="yr-btn yr-btn--sm" href="${meHref}">Join in My Activity</a>` : "") : (join || signInLink(ctx.r, ctx.returnTo, "yr-btn yr-btn--sm", meOn ? meHref : globalViewerAccountHref(isCustomDomain))),
     });
   }
+  const players = Array.isArray(ctx.data?.players) ? ctx.data.players : [];
+  const meName = String(viewerName(viewer) || "").toLowerCase();
+  const meEntry = meName ? players.slice().sort((a, z) => (a.rank || 0) - (z.rank || 0)).findIndex((p) => String(p.name || "").toLowerCase() === meName) : -1;
+  const meRank = meEntry >= 0 ? Number(players.slice().sort((a, z) => (a.rank || 0) - (z.rank || 0))[meEntry].rank) || meEntry + 1 : null;
   return card({
     cls: "viewer-status",
     title: "Your Status",
     icon: "crown",
     meta: meOn ? `<a class="viewer-card-link" href="${meHref}">View profile</a>` : "",
     body: `<div class="viewer-status-stats">
+<div class="viewer-status-stat"><b>${meRank ? `#${meRank}` : "—"}</b><span>Rank</span></div>
 <div class="viewer-status-stat" data-credit-balance="${Number(balance) || 0}"><b data-credit-balance-num>${formatNumber(balance)}</b><span>Credits</span></div>
-<div class="viewer-status-stat"><b>${formatNumber(claims.length)}${viewerData?.claimsTruncated ? "+" : ""}</b><span>Claims</span></div>
-<div class="viewer-status-stat"><b>${streak ? formatNumber(streak.current) : "—"}</b><span>${viewerIcon("flame")} Streak</span></div>
+<div class="viewer-status-stat"><b>${streak ? `${formatNumber(streak.current)} days` : "—"}</b><span>${viewerIcon("flame")} Streak</span></div>
 </div>
 ${ctx.b?.tagline ? `<p class="viewer-status-quote">“${esc(ctx.b.tagline)}”<span>— ${name}</span></p>` : ""}`,
   });
@@ -629,6 +633,8 @@ function eventsCard(ctx) {
     title: "Upcoming events",
     icon: "clock",
     meta: `<a class="viewer-card-link" href="${boardHref}">View all</a>`,
+    icon: "clock",
+    meta: `<a class="viewer-card-link" href="${boardHref}">View all</a>`,
     body: `<ul class="viewer-event-list">${events.map((event) => `<li><a class="viewer-event" href="${boardHref}?event=${esc(event.id)}"><span class="viewer-event-ico">${viewerIcon("calendar")}</span><span>${esc(event.name)}</span>${viewerIcon("arrow")}</a></li>`).join("")}</ul>`,
   });
 }
@@ -656,18 +662,25 @@ ${channel.kick ? `<span class="viewer-live viewer-live--card" data-live-badge hi
 function leaderboardWidget(ctx) {
   const { data, slug, isCustomDomain, siteSections } = ctx;
   if (siteSections.leaderboard === false) return "";
-  const players = (Array.isArray(data.players) ? data.players : [])
-    .slice().sort((a, z) => (a.rank || 0) - (z.rank || 0)).slice(0, 3);
+  const sorted = (Array.isArray(data.players) ? data.players : [])
+    .slice().sort((a, z) => (a.rank || 0) - (z.rank || 0));
+  const players = sorted.slice(0, 3);
   const boardHref = siteSectionHref("leaderboard", slug, isCustomDomain);
   const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
   const value = (p) => rankBy === "score" ? `${formatNumber(p.score || 0)} pts` : formatMoney(prizeCurrency(data), p.wagered);
+  const row = (player, i) => `<li class="viewer-board-row"><span class="viewer-board-rank viewer-board-rank--${i + 1}">${Number(player.rank) || i + 1}</span><span class="viewer-ava">${esc(Array.from(String(player.name || "?")).slice(0, 2).join("").toUpperCase())}</span><span class="viewer-board-name">${esc(player.name)}</span><span class="viewer-board-val">${esc(value(player))}</span></li>`;
+  const meName = ctx.viewer ? String(viewerName(ctx.viewer) || "").toLowerCase() : "";
+  const meIdx = meName ? sorted.findIndex((p) => String(p.name || "").toLowerCase() === meName) : -1;
+  const meRow = meIdx >= 3
+    ? `<li class="viewer-board-gap" aria-hidden="true">…</li><li class="viewer-board-row is-you"><span class="viewer-board-rank">${Number(sorted[meIdx].rank) || meIdx + 1}</span><span class="viewer-ava">${esc(Array.from(String(sorted[meIdx].name || "?")).slice(0, 2).join("").toUpperCase())}</span><span class="viewer-board-name">${esc(sorted[meIdx].name)}<span class="viewer-board-you">you</span></span><span class="viewer-board-val">${esc(value(sorted[meIdx]))}</span></li>`
+    : "";
   return card({
     cls: "viewer-board-widget",
     title: "Leaderboard",
     icon: "trophy",
     meta: `<a class="viewer-card-link" href="${boardHref}">View all</a>`,
     body: players.length
-      ? `${ctx.period ? `<p class="viewer-board-period">${esc(ctx.period)}</p>` : ""}<ol class="viewer-board-list">${players.map((player, i) => `<li class="viewer-board-row"><span class="viewer-board-rank viewer-board-rank--${i + 1}">${i + 1}</span><span class="viewer-ava">${esc(Array.from(String(player.name || "?")).slice(0, 2).join("").toUpperCase())}</span><span class="viewer-board-name">${esc(player.name)}</span><span class="viewer-board-val">${esc(value(player))}</span></li>`).join("")}</ol>`
+      ? `${ctx.period ? `<p class="viewer-board-period">${esc(ctx.period)}</p>` : ""}<ol class="viewer-board-list">${players.map(row).join("")}${meRow}</ol>`
       : `<p class="viewer-muted">No standings yet. The creator publishes leaderboard scores.</p>`,
   });
 }
@@ -767,7 +780,7 @@ function communityChrome(ctx, mainInner) {
       icon: SECTION_ICONS[key],
     })),
     channels,
-    watchHref: channel ? channel.href : "",
+    watchHref: channel && section !== "activities" ? channel.href : "",
     watchLabel: channel ? `Watch on ${channel.label}` : "",
     kickChannel: channel?.kick || "",
     signedIn: !!viewer,
@@ -777,6 +790,7 @@ function communityChrome(ctx, mainInner) {
     member: isMember,
     signInHtml: signInLink(r, ctx.returnTo, "viewer-signin", globalViewerAccountHref(isCustomDomain)),
     dark: section === "leaderboard" || section === "shop" || section === "me",
+    minimal: section === "home",
   });
   return `<div class="viewer-layout" data-viewer-shell="community">
 ${chrome.rail}
@@ -1054,9 +1068,9 @@ function activitiesMain(ctx) {
   return `<header class="viewer-page-head">
 <div class="viewer-page-copy"><h1 class="viewer-h1">Activities</h1><p class="viewer-sub">Complete daily quests to earn free credits in ${name}.</p></div>
 <div class="viewer-head-chips">
-<span class="viewer-chip" data-quest-active hidden>${viewerIcon("activities")}<b data-quest-active-num>0</b> active</span>
-<span class="viewer-chip" data-quest-done hidden>${viewerIcon("check")}<b data-quest-done-num>0</b> completed</span>
-<span class="viewer-chip" data-quest-streak hidden>${viewerIcon("flame")}<b data-quest-streak-num>0</b>-day streak</span>
+<span class="viewer-head-stat" data-quest-active hidden><span class="viewer-head-stat-ico viewer-head-stat-ico--violet">${viewerIcon("activities")}</span><span><b data-quest-active-num>0</b><small>active</small></span></span>
+<span class="viewer-head-stat" data-quest-done hidden><span class="viewer-head-stat-ico viewer-head-stat-ico--green">${viewerIcon("check")}</span><span><b data-quest-done-num>0</b><small>completed this week</small></span></span>
+<span class="viewer-head-stat" data-quest-streak hidden><span class="viewer-head-stat-ico viewer-head-stat-ico--gold">${viewerIcon("flame")}</span><span><b data-quest-streak-num>0</b><small>-day streak</small></span></span>
 ${channel ? `<a class="yr-btn yr-btn--sm" href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}Watch Live</a>` : ""}
 </div>
 </header>
@@ -1069,7 +1083,7 @@ ${channel ? `<a class="yr-btn yr-btn--sm" href="${esc(channel.href)}" target="_b
 /* ── Leaderboard ───────────────────────────────────────────────────────── */
 
 function boardMain(ctx) {
-  const { data, b, slug, isCustomDomain, period, pool } = ctx;
+  const { data, b, slug, isCustomDomain, period, pool, viewer } = ctx;
   const currency = prizeCurrency(data);
   const hidePrizes = !!data.brand?.hidePrizeAmounts;
   const cd = formatLeaderboardTiming(data.scheduled ? data.startsAt : data.endsAt);
@@ -1120,11 +1134,13 @@ ${[players[1], players[0], players[2]].map((p) => {
   }).join("")}
 </div>` : "";
 
+  const viewerBoardName = viewer ? String(viewerName(viewer) || "").toLowerCase() : "";
   const rows = players.map((p, i) => {
     const rank = Number(p.rank) || i + 1;
     const prize = showPrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
     const nameTag = data.eventId ? 'span' : 'a';
-    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}">
+    const isYou = viewerBoardName && String(p.name || "").toLowerCase() === viewerBoardName;
+    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}${isYou ? " yr-srow--you" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}">
 <span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
 <${nameTag} class="yr-srow-name"${data.eventId ? '' : ` href="${playerHref(p.name)}"`}><span class="yr-player-mark" aria-hidden="true">${esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase())}</span><span class="yr-player-name">${esc(p.name)}</span></${nameTag}>
 <span class="yr-srow-val"><span class="yr-sr">${wagerLabel}: </span>${esc(rankValue(p))}</span>

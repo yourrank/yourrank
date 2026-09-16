@@ -363,9 +363,10 @@ describe("public viewer shell", () => {
   it("keeps the real creator identity without duplicating its configured logo", async () => {
     const plain = await render('home');
     expect(plain).toContain('data-preview-field="f_name">Creator Name</span>');
-    const logo = await render('home', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
+    const logo = await render('leaderboard', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
     expect((logo.match(/class="viewer-mark-img"/g) || []).length).toBe(2); // rail mark + topbar mark
-    expect((logo.match(/class="viewer-hero-logo"/g) || []).length).toBe(1);
+    const homeLogo = await render('home', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
+    expect((homeLogo.match(/class="viewer-hero-logo"/g) || []).length).toBe(1);
   });
 
   it("uses the supplied dark-rail geometry with a quiet top bar", () => {

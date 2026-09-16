@@ -792,12 +792,13 @@
       };
       return '<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[key] || paths.event_participate) + '</svg>';
     };
+    var kickWatchHref = streamState && streamState.dataset.kickChannel ? 'https://kick.com/' + encodeURIComponent(streamState.dataset.kickChannel) : '';
     var questCta = function (quest, signedIn, member) {
       if (!signedIn) return '<a class="yr-btn yr-btn--sm" href="/me">Sign in to track</a>';
       if (!member) return '<span class="yr-act yr-act--off" role="note">Join to track</span>';
-      if (quest.claimed) return '<span class="viewer-chip viewer-chip--done">Claimed</span>';
+      if (quest.claimed) return '<span class="viewer-chip viewer-chip--done">Completed</span>';
       if (quest.completed) return '<button class="yr-btn yr-btn--sm" type="button" data-quest-claim="' + esc(quest.id) + '">Claim +' + fmt(quest.rewardPoints) + '</button>';
-      return '<span class="yr-act yr-act--off" role="note">In progress</span>';
+      return kickWatchHref ? '<a class="yr-btn yr-btn--sm" href="' + esc(kickWatchHref) + '" target="_blank" rel="noopener noreferrer">Continue →</a>' : '<span class="yr-act yr-act--off" role="note">In progress</span>';
     };
     var questRow = function (quest, signedIn, member) {
       var pct = Math.min(100, Math.max(0, Math.round((Number(quest.progress) || 0) / Math.max(1, Number(quest.targetCount) || 1) * 100)));
@@ -831,8 +832,8 @@
       var featuredPct = featured ? Math.min(100, Math.max(0, Math.round((Number(featured.progress) || 0) / Math.max(1, Number(featured.targetCount) || 1) * 100))) : 0;
       questsRoot.innerHTML =
         '<div class="viewer-tabs" role="tablist" aria-label="Quest filter">' +
-          '<button class="viewer-tab is-on" type="button" role="tab" aria-selected="true" data-quest-tab="all">All ' + fmt(quests.length) + '</button>' +
-          '<button class="viewer-tab" type="button" role="tab" aria-selected="false" data-quest-tab="active">Active ' + fmt(open.length) + '</button>' +
+          '<button class="viewer-tab is-on" type="button" role="tab" aria-selected="true" data-quest-tab="active">Active ' + fmt(open.length) + '</button>' +
+          '<button class="viewer-tab" type="button" role="tab" aria-selected="false" data-quest-tab="all">All ' + fmt(quests.length) + '</button>' +
           '<button class="viewer-tab" type="button" role="tab" aria-selected="false" data-quest-tab="done">Completed ' + fmt(done.length) + '</button>' +
         '</div>' +
         (featured ? '<div class="viewer-quest-hero" data-quest-state="active">' +

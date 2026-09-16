@@ -119,6 +119,7 @@ export function viewerCommunityChrome({
   member = false,
   signInHtml = "",
   dark = false,
+  minimal = false,
 }: {
   name?: string; mark?: string; tagline?: string; homeHref?: string; accountHref?: string;
   links?: Array<{ label: string; href: string; active?: boolean; icon?: string }>;
@@ -127,7 +128,7 @@ export function viewerCommunityChrome({
   searchHref?: string; bellHref?: string;
   signedIn?: boolean; viewerName?: string; viewerAvatarUrl?: string;
   balance?: number | null; member?: boolean; signInHtml?: string;
-  dark?: boolean;
+  dark?: boolean; minimal?: boolean;
 }) {
   const statusNote = `<span class="viewer-top-status">${tagline ? esc(tagline) : "Creator community"}</span>${kickChannel ? `<span data-stream-status data-kick-channel="${esc(kickChannel)}" hidden></span>` : ""}`;
 
@@ -147,11 +148,11 @@ ${tagline ? `<p class="viewer-rail-quote">“${esc(tagline)}”<span>— ${esc(n
 </aside>
 <div class="viewer-scrim" data-nav-scrim hidden></div>`;
 
-  const topbar = `<header class="viewer-topbar${dark ? " viewer-topbar--dark" : ""}">
+  const topbar = `<header class="viewer-topbar${dark ? " viewer-topbar--dark" : ""}${minimal ? " viewer-topbar--minimal" : ""}">
 <button class="viewer-menu" type="button" data-nav-menu aria-label="Open menu" aria-expanded="false">${viewerIcon("menu")}</button>
-<a class="viewer-top-context" href="${esc(homeHref)}"><span class="viewer-top-mark">${mark || avatarMark(name)}</span><span class="viewer-top-txt"><b>${esc(name)}<span class="viewer-top-check">${viewerIcon("check")}</span>${kickChannel ? ` <span class="viewer-live viewer-live--top" data-live-badge hidden><span class="viewer-live-dot"></span>LIVE</span>` : ""}</b>${statusNote}</span></a>
+${minimal ? (kickChannel ? `<span data-stream-status data-kick-channel="${esc(kickChannel)}" hidden></span>` : "") : `<a class="viewer-top-context" href="${esc(homeHref)}"><span class="viewer-top-mark">${mark || avatarMark(name)}</span><span class="viewer-top-txt"><b>${esc(name)}<span class="viewer-top-check">${viewerIcon("check")}</span>${kickChannel ? ` <span class="viewer-live viewer-live--top" data-live-badge hidden><span class="viewer-live-dot"></span>LIVE</span>` : ""}</b>${statusNote}</span></a>`}
 <div class="viewer-top-actions">
-${watchHref ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}${esc(watchLabel || "Watch Live")}</a>` : ""}
+${!minimal && watchHref ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}${esc(watchLabel || "Watch Live")}</a>` : ""}
 ${searchHref ? `<a class="viewer-icon-btn" href="${esc(searchHref)}" aria-label="Search">${viewerIcon("search")}</a>` : ""}
 <a class="viewer-icon-btn" href="${esc(bellHref)}" aria-label="Notifications">${viewerIcon("bell")}</a>
 ${viewerChip({ signedIn, viewerName, viewerAvatarUrl, accountHref, balance, member, creditLabel: `credits in ${name}`, signInHtml })}

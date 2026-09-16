@@ -239,13 +239,14 @@ body.viewer-shell .yr-sr:focus-visible {
 .viewer-logout { text-align: left; }
 .viewer-rail-quote {
   margin: 4px 2px 0;
-  padding: 12px 14px;
-  background: var(--vr-rail-2);
+  padding: 20px 16px 16px;
+  background: radial-gradient(120% 150% at 80% -10%, rgba(120, 90, 255, 0.4), transparent 55%), linear-gradient(150deg, #1b1e38, #0f1126 70%);
   border: 1px solid var(--vr-rail-line);
   border-radius: var(--vr-radius-sm);
-  font-size: 12.5px; line-height: 1.55; color: var(--vr-rail-ink);
+  font-size: 14px; line-height: 1.5; font-weight: 700; letter-spacing: 0.02em;
+  color: #fff;
 }
-.viewer-rail-quote span { display: block; margin-top: 6px; color: var(--vr-rail-mute); font-size: 11.5px; }
+.viewer-rail-quote span { display: block; margin-top: 8px; color: var(--vr-rail-mute); font-size: 11.5px; font-weight: 500; }
 
 /* ── The quiet top bar ──────────────────────────────────────────────── */
 
@@ -602,14 +603,15 @@ body.viewer-shell .yr-empty-p { margin-top: 4px; font-size: 13px; line-height: 1
 .viewer-channel-sub { margin-top: 2px; font-size: 12.5px; color: var(--vr-mute); }
 
 /* "Your status" compact stats card. */
-.viewer-status-stats { display: flex; gap: 10px; }
-.viewer-status-stat { flex: 1; min-width: 0; padding: 12px 13px; background: var(--vr-edge-soft); border-radius: 12px; display: flex; flex-direction: column; gap: 3px; }
-.viewer-status-stat b { font-family: var(--yr-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.viewer-status-stats { display: flex; gap: 18px; }
+.viewer-status-stat { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.viewer-status-stat + .viewer-status-stat { border-left: 1px solid var(--vr-edge); padding-left: 18px; }
+.viewer-status-stat b { font-family: var(--yr-mono); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .viewer-status-stat span { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--vr-mute); }
 .viewer-status-stat span .viewer-icon { width: 12px; height: 12px; color: var(--vr-warning); }
 .viewer-status-quote {
-  margin-top: 14px; padding: 12px 14px;
-  background: var(--vr-edge-soft); border-radius: 11px;
+  margin-top: 14px; padding: 14px 16px;
+  background: var(--vr-violet-soft); border-radius: 12px;
   font-size: 12.5px; line-height: 1.55; color: var(--vr-soft); font-style: italic;
 }
 .viewer-status-quote span { display: block; margin-top: 5px; font-style: normal; font-weight: 600; color: var(--vr-mute); font-size: 11.5px; }
@@ -663,6 +665,14 @@ body.viewer-shell .yr-empty-p { margin-top: 4px; font-size: 13px; line-height: 1
 .viewer-board-rank--1 { background: var(--vr-gold-soft); color: var(--vr-gold); }
 .viewer-board-rank--2 { background: #eef0f6; color: #7b7f96; }
 .viewer-board-rank--3 { background: #f8ead9; color: #b0792f; }
+.viewer-board-row.is-you {
+  margin: 6px -8px -2px; padding: 9px 8px;
+  background: var(--vr-violet-soft); border-top-color: var(--vr-violet-line);
+  border-radius: 10px;
+}
+.viewer-board-row.is-you .viewer-board-rank { background: #fff; color: var(--vr-violet); }
+.viewer-board-you { margin-left: 6px; font-size: 10.5px; font-weight: 700; color: var(--vr-violet); }
+.viewer-board-gap { list-style: none; margin: 2px 0 0; color: var(--vr-faint); font-size: 12px; letter-spacing: 3px; }
 .viewer-ava {
   width: 28px; height: 28px; flex: 0 0 28px;
   border-radius: 50%;
@@ -888,6 +898,9 @@ body.viewer-shell .yr-srow:hover { background: var(--vr-violet-soft); }
 body.viewer-shell .yr-srow-rank { font-family: var(--yr-mono); font-size: 13px; font-weight: 700; color: var(--vr-mute); }
 body.viewer-shell .yr-srow--first .yr-srow-rank { color: var(--vr-gold); }
 body.viewer-shell .yr-srow--top .yr-srow-rank { color: var(--vr-violet); }
+body.viewer-shell .yr-srow--you { background: var(--vr-violet-soft); }
+body.viewer-shell .yr-srow--you .yr-srow-rank { color: var(--vr-violet); }
+body.viewer-shell .yr-srow--you .yr-player-name::after { content: "you"; margin-left: 7px; font-size: 10.5px; font-weight: 700; color: var(--vr-violet); }
 body.viewer-shell .yr-srow-name { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
 body.viewer-shell a.yr-srow-name:hover .yr-player-name { color: var(--vr-violet); }
 body.viewer-shell .yr-player-mark {
@@ -952,6 +965,15 @@ body.viewer-shell .viewer-reward-card .yr-btn:hover { background: var(--vr-viole
 body.viewer-shell .yr-rwd .yr-btn { background: var(--vr-violet-soft); border-color: var(--vr-violet-soft); color: var(--vr-violet); }
 body.viewer-shell .yr-rwd .yr-btn:hover { background: var(--vr-violet-line); border-color: var(--vr-violet-line); }
 .viewer-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 17px; font-weight: 800; letter-spacing: -0.015em; margin: 22px 0 12px; }
+/* Page-head stat blocks (Activities): icon + figure + caption, mockup style. */
+.viewer-head-stat { display: inline-flex; align-items: center; gap: 9px; }
+.viewer-head-stat-ico { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 9px; }
+.viewer-head-stat-ico .viewer-icon { width: 15px; height: 15px; }
+.viewer-head-stat-ico--violet { background: var(--vr-violet-soft); color: var(--vr-violet); }
+.viewer-head-stat-ico--green { background: var(--vr-success-soft); color: var(--vr-success); }
+.viewer-head-stat-ico--gold { background: var(--vr-gold-soft); color: var(--vr-gold); }
+.viewer-head-stat b { display: block; font-family: var(--yr-mono); font-size: 16px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.viewer-head-stat small { display: block; font-size: 11px; color: var(--vr-mute); margin-top: 2px; }
 
 /* Shop right-rail balance card. */
 .viewer-balance-row { display: flex; align-items: center; gap: 14px; }
