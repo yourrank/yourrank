@@ -458,7 +458,7 @@ describe("the global account page", () => {
     expect(page).toContain('data-va-list="communities"');
     expect(page).toContain('data-va-empty="communities"');
     expect(page).toContain("You haven't joined any communities yet.");
-    expect(page).toContain("Your communities");
+    expect(page).toContain("Your memberships");
     expect(page).not.toContain('id="vd-communities"');
     expect(clientSource).toContain('class="va-community-mark"');
   });

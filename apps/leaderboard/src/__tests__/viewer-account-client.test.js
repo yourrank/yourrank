@@ -297,7 +297,7 @@ describe("global Viewer Account client", () => {
 
 describe("global Viewer Account ownership", () => {
   it("names the real account-to-membership hierarchy", () => {
-    for (const copy of ["My communities", "Your communities", "Open a community", "You haven't joined any communities yet.",
+    for (const copy of ["My communities", "Your memberships", "Open a community", "You haven't joined any communities yet.",
       "rewards and credits stay with each one", "Your membership will be waiting here."]) {
       expect(page).toContain(copy);
     }

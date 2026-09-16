@@ -43,7 +43,7 @@ const PAGES = {
 <div class="viewer-stat"><div><p class="viewer-stat-num" data-va-stat="claims">0</p><p class="viewer-stat-label">Pending claims</p></div></div>
 </div>
 <section class="viewer-card" data-va-card="communities" hidden>
-<header class="viewer-card-head"><h2 class="viewer-card-title">Your communities</h2><span class="viewer-card-meta" data-va-count></span></header>
+<header class="viewer-card-head"><h2 class="viewer-card-title">Your memberships</h2><span class="viewer-card-meta" data-va-count></span></header>
 <div class="va-community-list" data-va-list="communities"></div>
 <div class="va-empty" data-va-empty="communities" hidden><h3>You haven't joined any communities yet.</h3><p>Visit a creator's YourRank site and choose Join community. Your membership will be waiting here.</p></div>
 </section>
