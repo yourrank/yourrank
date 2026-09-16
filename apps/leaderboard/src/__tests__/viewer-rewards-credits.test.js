@@ -216,7 +216,7 @@ describe("the creator home credit state", () => {
     expect(html).toContain('class="viewer-hero"');
     expect(html).not.toContain("yr-vnote");
     expect(html).toContain("No rewards yet");
-    expect(html).toContain("All rewards</a>");
+    expect(html).toContain("View all</a>");
   });
 
   it("shows a truthful zero balance and empty reward preview", async () => {
@@ -228,8 +228,8 @@ describe("the creator home credit state", () => {
       opts,
     });
     expect(html).toContain('data-credit-balance="0"');
-    expect(html).toContain("No rewards are available right now.");
-    expect(html).toContain("All rewards</a>");
+    expect(html).toContain("No rewards yet");
+    expect(html).toContain("View all</a>");
     expect(html).not.toContain(">Spend credits</a>");
   });
 
@@ -243,8 +243,8 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: items },
       opts,
     });
-    expect(signedOutHtml).toContain("Sign in to see your reward progress.");
-    expect(signedInHtml).toContain(">Browse rewards</a>");
+    expect(signedOutHtml).toContain("Sign in to claim");
+    expect(signedInHtml).toContain(">View all</a>");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
@@ -370,11 +370,11 @@ describe("a creator's My Community page", () => {
 
   it("shows safe Participation as a bounded reverse-chronological membership record", async () => {
     const html = await credits();
-    expect(html).toContain('class="viewer-card viewer-participation"');
+    expect(html).toContain('class="yr-parts"');
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain(">Claimed</span>");
     expect(html).toContain("Feb 3, 2024");
-    const participationHtml = html.match(/<section class="viewer-card viewer-participation"[\s\S]*?<\/section>/)?.[0] || "";
+    const participationHtml = html.match(/<ul class="yr-parts"[\s\S]*?<\/ul>/)?.[0] || "";
     expect(participationHtml).toContain("Claimed a code drop");
     for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
       expect(participationHtml.toLowerCase()).not.toContain(banned);

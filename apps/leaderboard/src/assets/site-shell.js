@@ -662,11 +662,21 @@
       var d = Math.floor(left / 86400000);
       var h = Math.floor((left % 86400000) / 3600000);
       var m = Math.floor((left % 3600000) / 60000);
-      cd.textContent = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "Less than 1m";
+      var s = Math.floor((left % 60000) / 1000);
+      if (countdown && countdown.querySelector("[data-cd-days]")) {
+        var units = { days: d, hours: h, minutes: m, seconds: s };
+        Object.keys(units).forEach(function (key) {
+          var el = countdown.querySelector("[data-cd-" + key + "]");
+          if (el) el.textContent = String(units[key]).padStart(2, "0");
+        });
+      } else {
+        cd.textContent = d > 0 ? d + "d " + h + "h" : h > 0 ? h + "h " + m + "m" : m > 0 ? m + "m" : "Less than 1m";
+      }
       return true;
     };
     if (Number.isFinite(end) && tick()) {
-      var countdownTimer = setInterval(function () { if (!tick()) clearInterval(countdownTimer); }, 30000);
+      var cdMs = countdown && countdown.querySelector("[data-cd-days]") ? 1000 : 30000;
+      var countdownTimer = setInterval(function () { if (!tick()) clearInterval(countdownTimer); }, cdMs);
     }
   }
 
@@ -752,6 +762,21 @@
     });
   }
 
+  // ── My Activity: tabbed history ──────────────────────────────────────
+  document.addEventListener("click", function (event) {
+    var tab = event.target.closest("[data-me-tab]");
+    if (!tab) return;
+    var card = tab.closest(".viewer-activity-card");
+    if (!card) return;
+    card.querySelectorAll("[data-me-tab]").forEach(function (t) {
+      t.classList.toggle("is-on", t === tab);
+      t.setAttribute("aria-selected", t === tab ? "true" : "false");
+    });
+    card.querySelectorAll("[data-me-pane]").forEach(function (pane) {
+      pane.hidden = pane.dataset.mePane !== tab.dataset.meTab;
+    });
+  });
+
   // ── Activities: daily quests ─────────────────────────────────────────
   // The quests payload is the canonical API contract: the GET lazily creates
   // today's rows server-side, so the page never invents a quest.
@@ -776,11 +801,12 @@
     };
     var questRow = function (quest, signedIn, member) {
       var pct = Math.min(100, Math.max(0, Math.round((Number(quest.progress) || 0) / Math.max(1, Number(quest.targetCount) || 1) * 100)));
-      return '<li class="viewer-quest' + (quest.claimed ? " is-claimed" : quest.completed ? " is-complete" : "") + '" data-quest-row="' + esc(quest.id) + '">' +
+      return '<li class="viewer-quest' + (quest.claimed ? " is-claimed" : quest.completed ? " is-complete" : "") + '" data-quest-row="' + esc(quest.id) + '" data-quest-state="' + (quest.claimed ? "done" : "active") + '">' +
         '<span class="viewer-quest-ico">' + questIcon(quest.questKey) + '</span>' +
         '<span class="viewer-quest-main"><b class="viewer-quest-name">' + esc(quest.title) + '</b>' +
-        '<span class="viewer-quest-meta">' + fmt(quest.progress) + ' / ' + fmt(quest.targetCount) + ' · +' + fmt(quest.rewardXp) + ' XP · +' + fmt(quest.rewardPoints) + ' credits</span>' +
+        '<span class="viewer-quest-meta">' + fmt(quest.progress) + ' / ' + fmt(quest.targetCount) + ' · +' + fmt(quest.rewardXp) + ' XP</span>' +
         '<span class="viewer-quest-bar"><span style="width:' + pct + '%"></span></span></span>' +
+        '<span class="viewer-quest-reward">+' + fmt(quest.rewardPoints) + ' credits</span>' +
         '<span class="viewer-quest-cta">' + questCta(quest, signedIn, member) + '</span></li>';
     };
     var renderQuests = function (payload) {
@@ -790,9 +816,11 @@
       var streak = payload && payload.streak ? payload.streak : null;
       var activeChip = document.querySelector("[data-quest-active]");
       var streakChip = document.querySelector("[data-quest-streak]");
+      var doneChip = document.querySelector("[data-quest-done]");
       var open = quests.filter(function (q) { return !q.claimed; });
       var done = quests.filter(function (q) { return q.claimed; });
       if (activeChip) { activeChip.hidden = !open.length; activeChip.querySelector("[data-quest-active-num]").textContent = fmt(open.length); }
+      if (doneChip) { doneChip.hidden = !done.length; doneChip.querySelector("[data-quest-done-num]").textContent = fmt(done.length); }
       if (streakChip) {
         var days = streak ? Number(streak.currentStreak) || 0 : 0;
         streakChip.hidden = days < 1;
@@ -800,15 +828,34 @@
       }
       var featured = open.filter(function (q) { return q.completed; })[0] || open[0];
       var rest = open.filter(function (q) { return q !== featured; });
+      var featuredPct = featured ? Math.min(100, Math.max(0, Math.round((Number(featured.progress) || 0) / Math.max(1, Number(featured.targetCount) || 1) * 100))) : 0;
       questsRoot.innerHTML =
-        (featured ? '<div class="viewer-quest-hero">' +
-          '<div class="viewer-quest-hero-copy"><p class="viewer-quest-hero-tag">Today’s quests</p><h2 class="viewer-quest-hero-name">' + esc(featured.title) + '</h2>' +
-          '<p class="viewer-quest-hero-meta">' + fmt(featured.progress) + ' / ' + fmt(featured.targetCount) + ' — +' + fmt(featured.rewardXp) + ' XP · +' + fmt(featured.rewardPoints) + ' credits when you claim</p></div>' +
-          '<div class="viewer-quest-hero-cta">' + questCta(featured, signedIn, member) + '</div></div>' : "") +
-        (rest.length ? '<ul class="viewer-quest-list" role="list">' + rest.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul>' : "") +
+        '<div class="viewer-tabs" role="tablist" aria-label="Quest filter">' +
+          '<button class="viewer-tab is-on" type="button" role="tab" aria-selected="true" data-quest-tab="all">All ' + fmt(quests.length) + '</button>' +
+          '<button class="viewer-tab" type="button" role="tab" aria-selected="false" data-quest-tab="active">Active ' + fmt(open.length) + '</button>' +
+          '<button class="viewer-tab" type="button" role="tab" aria-selected="false" data-quest-tab="done">Completed ' + fmt(done.length) + '</button>' +
+        '</div>' +
+        (featured ? '<div class="viewer-quest-hero" data-quest-state="active">' +
+          '<div class="viewer-quest-hero-art" aria-hidden="true">' + questIcon(featured.questKey) + '</div>' +
+          '<div class="viewer-quest-hero-copy"><p class="viewer-quest-hero-tag">Featured challenge</p><h2 class="viewer-quest-hero-name">' + esc(featured.title) + '</h2>' +
+          '<p class="viewer-quest-hero-meta">' + fmt(featured.progress) + ' / ' + fmt(featured.targetCount) + ' · +' + fmt(featured.rewardXp) + ' XP · ends today</p>' +
+          '<div class="viewer-quest-hero-bar"><span style="width:' + featuredPct + '%"></span></div></div>' +
+          '<div class="viewer-quest-hero-cta"><span class="viewer-quest-reward">+' + fmt(featured.rewardPoints) + ' credits</span>' + questCta(featured, signedIn, member) + '</div></div>' : "") +
+        (rest.length ? '<h3 class="viewer-quest-section">Active now</h3><ul class="viewer-quest-list" role="list">' + rest.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul>' : "") +
         (!featured && !rest.length ? '<p class="viewer-muted">No quests today yet — check back after midnight.</p>' : "") +
-        (done.length ? '<div class="viewer-quest-done"><h3 class="viewer-quest-done-title">Completed today</h3><ul class="viewer-quest-list" role="list">' + done.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul></div>' : "") +
+        (done.length ? '<h3 class="viewer-quest-section">Recently completed</h3><ul class="viewer-quest-list" role="list">' + done.map(function (q) { return questRow(q, signedIn, member); }).join("") + '</ul>' : "") +
         '<p class="yr-fine">Quests reset daily. Claimed credits land in your community balance.</p>';
+      var tabs = questsRoot.querySelectorAll("[data-quest-tab]");
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          tabs.forEach(function (t) { t.classList.toggle("is-on", t === tab); t.setAttribute("aria-selected", t === tab ? "true" : "false"); });
+          var mode = tab.dataset.questTab;
+          questsRoot.querySelectorAll("[data-quest-state]").forEach(function (row) {
+            row.hidden = mode !== "all" && row.dataset.questState !== mode;
+          });
+          questsRoot.querySelectorAll(".viewer-quest-section").forEach(function (h) { h.hidden = mode === "all"; });
+        });
+      });
     };
     fetch("/api/quests/daily?site=" + encodeURIComponent(questsRoot.dataset.siteSlug || slug), { credentials: "same-origin", cache: "no-store", signal: pageLifetime.signal })
       .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })

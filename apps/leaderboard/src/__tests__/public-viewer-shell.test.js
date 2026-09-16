@@ -46,10 +46,11 @@ const viewerData = { viewerOnSite: { balance: 1234 }, ledger: [], claims: [], pa
 describe("public viewer shell", () => {
   it("keeps viewer support context and makes an empty shop discoverable", async () => {
     const html = await render("home", { data: { ...baseData, shopItems: [] } });
-    expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
+    expect(html).toContain('data-feedback-open');
+    expect(html).toContain('/creator/contact');
     expect(html).toMatch(/<nav class="viewer-destinations"[\s\S]*?href="\/creator\/shop"/);
     const custom = await render("shop", { custom: true });
-    expect(custom).toContain('href="https://yourrank.site/help/support?audience=viewer&amp;return=%2Fcreator%2Fshop"');
+    expect(custom).toContain('data-feedback-open');
   });
 
   it("gives the shared viewer rail sole ownership of public chrome", async () => {
@@ -117,7 +118,7 @@ describe("public viewer shell", () => {
 
   it("keeps viewer navigation targets reachable at narrow widths", async () => {
     const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
-    expect(css).toMatch(/\.viewer-nav-link\s*\{[^}]*min-height: 42px/s);
+    expect(css).toMatch(/\.viewer-nav-link\s*\{[^}]*min-height: 44px/s);
     expect(css).toContain("@media (max-width: 900px)");
     expect(css).not.toMatch(/\.viewer-destinations[^}]*display:none/s);
     expect(css).not.toMatch(/\.viewer-rail\s*\{[^}]*display:none/s);
@@ -135,7 +136,7 @@ describe("public viewer shell", () => {
     }
     const member = await render("home", { viewer, viewerData });
     expect(member).not.toContain('/api/viewer/auth/');
-    expect(member).toContain('viewer-chip--member');
+    expect(member).toContain('Your Status');
   });
 
   it("keeps sign-in and account navigation role-correct", async () => {
@@ -380,7 +381,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('href="/me"');
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     expect(css).toMatch(/\.viewer-menu\s*\{[^}]*display: inline-flex/s);
-    expect(css).toMatch(/\.viewer-nav-link\s*\{[^}]*min-height: 42px/s);
+    expect(css).toMatch(/\.viewer-nav-link\s*\{[^}]*min-height: 44px/s);
   });
 
   it("states empty rewards, standings and claims without fabricating data", async () => {

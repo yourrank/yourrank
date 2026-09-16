@@ -152,7 +152,6 @@ function viewerHelpContent({ active, title, intro, body, viewerHelp }) {
     active: "help",
     backHref: viewerHelp.returnTo,
     backLabel: "Back",
-    helpHref: viewerHelpHref(viewerHelp.returnTo),
   });
   return `<div class="viewer-layout" data-viewer-shell="account">
 ${chrome.rail}

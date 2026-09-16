@@ -98,11 +98,12 @@
 
   function renderProfile(data) {
     var viewer = data.viewer || {};
-    var providers = (viewer.connections || []).map(function (c) { return (PROVIDERS[c.provider] || {}).name || c.provider; });
+    var connections = viewer.connections || [];
+    var username = connections.map(function (c) { return c.username; }).find(Boolean);
     var fields = {
       displayName: viewer.displayName || "Viewer",
-      providers: providers.length ? "Signed in with " + providers.join(" + ") : "No sign-in method connected",
-      memberSince: "Viewer account since " + date(viewer.createdAt),
+      username: username ? "@" + username : "—",
+      memberSince: date(viewer.createdAt),
     };
     pageEl.querySelectorAll("[data-va-field]").forEach(function (el) {
       el.textContent = fields[el.dataset.vaField] || "—";
@@ -120,37 +121,70 @@
     }
   }
 
-  function connectionRow(provider, connection) {
+  var PROVIDER_DESC = {
+    kick: "Verify your watch time and follows.",
+    discord: "Join communities and unlock Discord rewards.",
+  };
+
+  function connectionRow(provider, connection, compact) {
     var meta = PROVIDERS[provider];
     var connected = !!connection;
     return '<div class="va-conn">' +
       '<span class="va-conn-ico va-conn-ico--' + provider + '">' + svg(meta.icon) + '</span>' +
       '<span class="va-conn-main"><b>' + meta.name + '</b>' +
-      '<span class="va-conn-sub">' + (connected ? "Linked as " + esc(connection.username || "—") + " · since " + date(connection.linkedAt) : "Not connected") + '</span></span>' +
+      '<span class="va-conn-sub">' + (connected ? "Linked as " + esc(connection.username || "—") + " · since " + date(connection.linkedAt) : (PROVIDER_DESC[provider] || "Not connected")) + '</span></span>' +
       (connected
         ? '<span class="va-chip va-chip--ok">Connected</span>'
         : '<a class="yr-btn yr-btn--sm" href="' + meta.connect + '?returnTo=' + encodeURIComponent(location.pathname) + '">Connect</a>') +
       '</div>';
   }
 
+  function providerMap(data) {
+    var byProvider = {};
+    ((data.viewer || {}).connections || []).forEach(function (c) { byProvider[c.provider] = c; });
+    return byProvider;
+  }
+
   function renderConnections(data) {
     var list = pageEl.querySelector('[data-va-list="connections"]');
-    var connections = ((data.viewer || {}).connections || []);
-    var byProvider = {};
-    connections.forEach(function (c) { byProvider[c.provider] = c; });
+    var byProvider = providerMap(data);
     if (list) {
       list.innerHTML = Object.keys(PROVIDERS).map(function (p) { return connectionRow(p, byProvider[p]); }).join("");
+    }
+    var panel = pageEl.querySelector('[data-va-card="connect"]');
+    if (panel) {
+      var next = Object.keys(PROVIDERS).filter(function (p) { return !byProvider[p]; })[0];
+      if (next) {
+        var meta = PROVIDERS[next];
+        var title = panel.querySelector("[data-va-connect-title]");
+        var sub = panel.querySelector("[data-va-connect-sub]");
+        var btn = panel.querySelector("[data-va-connect-btn]");
+        if (title) title.textContent = "Connect " + meta.name;
+        if (sub) sub.textContent = "Link your " + meta.name + " account to verify your activity and earn rewards in communities.";
+        if (btn) { btn.textContent = "Connect with " + meta.name; btn.href = meta.connect + "?returnTo=" + encodeURIComponent(location.pathname); }
+        panel.hidden = false;
+      } else {
+        panel.hidden = true;
+      }
     }
   }
 
   function renderPrivacy(data) {
-    renderConnections({ viewer: data.viewer });
+    var byProvider = providerMap(data);
     var signin = pageEl.querySelector('[data-va-list="signin"]');
-    var connections = ((data.viewer || {}).connections || []);
-    var byProvider = {};
-    connections.forEach(function (c) { byProvider[c.provider] = c; });
     if (signin) {
-      signin.innerHTML = Object.keys(PROVIDERS).map(function (p) { return connectionRow(p, byProvider[p]); }).join("");
+      signin.innerHTML = Object.keys(PROVIDERS).map(function (p) {
+        var meta = PROVIDERS[p];
+        var connected = !!byProvider[p];
+        return '<div class="va-conn">' +
+          '<span class="va-conn-ico va-conn-ico--' + p + '">' + svg(meta.icon) + '</span>' +
+          '<span class="va-conn-main"><b>' + meta.name + '</b>' +
+          '<span class="va-conn-sub">Sign in with your ' + meta.name + ' account.</span></span>' +
+          (connected
+            ? '<span class="va-chip va-chip--ok">Connected</span>'
+            : '<a class="yr-btn yr-btn--ghost yr-btn--sm" href="' + meta.connect + '?returnTo=' + encodeURIComponent(location.pathname) + '">Add</a>') +
+          '</div>';
+      }).join("");
     }
     var sessionsEl = pageEl.querySelector('[data-va-list="sessions"]');
     var sessions = data.sessions || [];
@@ -159,16 +193,40 @@
         ? sessions.map(function (s) {
           var scope = s.authority === "site"
             ? (s.siteName ? "Community session · " + s.siteName : "Community session" + (s.hostname ? " · " + s.hostname : ""))
-            : "Global session";
+            : "Viewer Account session";
           return '<div class="va-session' + (s.current ? " is-current" : "") + '">' +
             '<span class="va-session-ico">' + svg('<path d="M4 6.5h16v9H4z"/><path d="M9 19.5h6"/>') + '</span>' +
             '<span class="va-session-main"><b>' + esc(scope) + '</b>' +
             '<span class="va-session-sub">Started ' + date(s.createdAt) + ' · expires ' + date(s.expiresAt) + '</span></span>' +
-            (s.current ? '<span class="va-chip va-chip--ok">This device</span>' : '') +
+            (s.current ? '<span class="va-chip va-chip--ok">Current session</span>' : '<span class="va-session-sub">Last active ' + date(s.createdAt) + '</span>') +
             '</div>';
         }).join("")
         : '<p class="viewer-muted">This device’s session.</p>';
     }
+  }
+
+  function renderNotifications() {
+    var slot = pageEl.querySelector("[data-va-push-toggle]");
+    if (!slot) return;
+    if (!("Notification" in window)) {
+      slot.innerHTML = '<span class="va-chip va-chip--mute">Not supported</span>';
+      return;
+    }
+    var draw = function () {
+      var state = Notification.permission;
+      if (state === "granted") {
+        slot.innerHTML = '<button class="va-toggle is-on" type="button" role="switch" aria-checked="true" disabled aria-label="Browser notifications on"><span></span></button>';
+      } else if (state === "denied") {
+        slot.innerHTML = '<button class="va-toggle" type="button" role="switch" aria-checked="false" disabled aria-label="Browser notifications blocked"><span></span></button><small class="va-field-note">Blocked by your browser</small>';
+      } else {
+        slot.innerHTML = '<button class="va-toggle" type="button" role="switch" aria-checked="false" aria-label="Enable browser notifications"><span></span></button>';
+        var btn = slot.querySelector("button");
+        if (btn) btn.addEventListener("click", function () {
+          Notification.requestPermission().then(draw);
+        });
+      }
+    };
+    draw();
   }
 
   function renderData(data) {
@@ -260,6 +318,7 @@
       if (page === "communities") renderCommunities(result.data);
       if (page === "profile") renderProfile(result.data);
       if (page === "connections") renderConnections(result.data);
+      if (page === "notifications") renderNotifications();
       if (page === "privacy") renderPrivacy(result.data);
       if (page === "data") renderData(result.data);
     })

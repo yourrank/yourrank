@@ -61,6 +61,9 @@ const ICON_PATHS: Record<string, string> = {
   download: '<path d="M12 4v11M7 11l5 5 5-5"/><path d="M4 20h16"/>',
   trash: '<path d="M4 7h16M9.5 7V4.5A1.5 1.5 0 0 1 11 3h2a1.5 1.5 0 0 1 1.5 1.5V7M6.5 7l1 13h9l1-13"/>',
   kick: '<path d="M7 4v16"/><path d="M17 4l-6.5 8L17 20"/>',
+  crown: '<path d="m3 8 4 4 5-6 5 6 4-4v9H3z"/><path d="M3 20h18"/>',
+  bars: '<path d="M6 20V10"/><path d="M12 20V4"/><path d="M18 20v-8"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
 };
 
 export function viewerIcon(name: string) {
@@ -89,9 +92,9 @@ function viewerChip({ signedIn, viewerName, viewerAvatarUrl, accountHref, balanc
 }) {
   if (!signedIn) return signInHtml || `<a class="viewer-signin" href="${esc(accountHref)}">${viewerIcon("user")}Sign in</a>`;
   const credits = member && typeof balance === "number"
-    ? `<span class="viewer-chip-credits" data-credit-balance="${Number(balance) || 0}">${viewerIcon("coins")}<b data-credit-balance-num>${Number(balance || 0).toLocaleString("en-US")}</b><span class="viewer-sr"> ${esc(creditLabel || "credits on this site")}</span></span>`
+    ? `<span class="viewer-chip-credits" data-credit-balance="${Number(balance) || 0}"><b data-credit-balance-num>${Number(balance || 0).toLocaleString("en-US")}</b> credits<span class="viewer-sr"> ${esc(creditLabel || "on this site")}</span></span>`
     : "";
-  return `<a class="viewer-user" href="${esc(accountHref)}">${avatarMark(viewerName, viewerAvatarUrl || "", "viewer-chip-mark")}<span class="viewer-chip-txt"><b data-viewer-chip-name>${esc(viewerName || "Viewer")}</b>${credits}</span></a>`;
+  return `<a class="viewer-user" href="${esc(accountHref)}">${avatarMark(viewerName, viewerAvatarUrl || "", "viewer-chip-mark")}<span class="viewer-chip-txt"><b data-viewer-chip-name>${esc(viewerName || "Viewer")}</b>${credits}</span>${viewerIcon("down")}</a>`;
 }
 
 /* ── community chrome ───────────────────────────────────────────────── */
@@ -104,27 +107,29 @@ export function viewerCommunityChrome({
   accountHref = "/me",
   links = [],
   channels = [],
-  helpHref = "/help/support?audience=viewer",
   watchHref = "",
   watchLabel = "",
   kickChannel = "",
+  searchHref = "",
+  bellHref = "/me/notifications",
   signedIn = false,
   viewerName = "",
   viewerAvatarUrl = "",
   balance = null,
   member = false,
   signInHtml = "",
+  dark = false,
 }: {
   name?: string; mark?: string; tagline?: string; homeHref?: string; accountHref?: string;
   links?: Array<{ label: string; href: string; active?: boolean; icon?: string }>;
   channels?: Array<{ label: string; href: string; icon?: string }>;
-  helpHref?: string; watchHref?: string; watchLabel?: string; kickChannel?: string;
+  watchHref?: string; watchLabel?: string; kickChannel?: string;
+  searchHref?: string; bellHref?: string;
   signedIn?: boolean; viewerName?: string; viewerAvatarUrl?: string;
   balance?: number | null; member?: boolean; signInHtml?: string;
+  dark?: boolean;
 }) {
-  const statusNote = kickChannel
-    ? `<span class="viewer-top-status" data-stream-status data-kick-channel="${esc(kickChannel)}">Checking live status…</span>`
-    : tagline ? `<span class="viewer-top-status">${esc(tagline)}</span>` : `<span class="viewer-top-status">Creator community</span>`;
+  const statusNote = `<span class="viewer-top-status">${tagline ? esc(tagline) : "Creator community"}</span>${kickChannel ? `<span data-stream-status data-kick-channel="${esc(kickChannel)}" hidden></span>` : ""}`;
 
   const channelNav = channels.length
     ? `<p class="viewer-rail-caption">Community</p><nav class="viewer-channels" aria-label="Creator channels">${channels
@@ -137,18 +142,18 @@ export function viewerCommunityChrome({
 <nav class="viewer-destinations" aria-label="Community">${navLinks(links)}</nav>
 ${channelNav}
 <div class="viewer-rail-foot">
-<a class="viewer-rail-help" href="${esc(helpHref)}">${viewerIcon("help")}<span>Help &amp; contact</span></a>
 ${tagline ? `<p class="viewer-rail-quote">“${esc(tagline)}”<span>— ${esc(name)}</span></p>` : ""}
 </div>
 </aside>
 <div class="viewer-scrim" data-nav-scrim hidden></div>`;
 
-  const topbar = `<header class="viewer-topbar">
+  const topbar = `<header class="viewer-topbar${dark ? " viewer-topbar--dark" : ""}">
 <button class="viewer-menu" type="button" data-nav-menu aria-label="Open menu" aria-expanded="false">${viewerIcon("menu")}</button>
-<a class="viewer-top-context" href="${esc(homeHref)}"><span class="viewer-top-mark">${mark || avatarMark(name)}</span><span class="viewer-top-txt"><b>${esc(name)}</b>${statusNote}</span></a>
+<a class="viewer-top-context" href="${esc(homeHref)}"><span class="viewer-top-mark">${mark || avatarMark(name)}</span><span class="viewer-top-txt"><b>${esc(name)}<span class="viewer-top-check">${viewerIcon("check")}</span>${kickChannel ? ` <span class="viewer-live viewer-live--top" data-live-badge hidden><span class="viewer-live-dot"></span>LIVE</span>` : ""}</b>${statusNote}</span></a>
 <div class="viewer-top-actions">
-${watchHref ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}${esc(watchLabel || "Watch live")}</a>` : ""}
-<a class="viewer-icon-btn" href="${esc(helpHref)}" aria-label="Help and contact">${viewerIcon("help")}</a>
+${watchHref ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon("play")}${esc(watchLabel || "Watch Live")}</a>` : ""}
+${searchHref ? `<a class="viewer-icon-btn" href="${esc(searchHref)}" aria-label="Search">${viewerIcon("search")}</a>` : ""}
+<a class="viewer-icon-btn" href="${esc(bellHref)}" aria-label="Notifications">${viewerIcon("bell")}</a>
 ${viewerChip({ signedIn, viewerName, viewerAvatarUrl, accountHref, balance, member, creditLabel: `credits in ${name}`, signInHtml })}
 </div>
 </header>`;
@@ -173,34 +178,31 @@ export function viewerAccountHref(key: string) {
 
 export function viewerAccountChrome({
   active = "communities",
-  helpHref = "/help/support?audience=viewer&return=/me",
   backHref = "",
   backLabel = "",
 }: {
-  active?: string; helpHref?: string; backHref?: string; backLabel?: string;
+  active?: string; backHref?: string; backLabel?: string;
 }) {
   const mainLink = VIEWER_ACCOUNT_NAV[0];
   const settings = VIEWER_ACCOUNT_NAV.slice(1);
   const rail = `<aside class="viewer-rail viewer-rail--account">
-<div class="viewer-rail-top"><a class="viewer-rail-brand viewer-rail-brand--yr" href="${esc(mainLink.href)}"><span class="viewer-rail-mark viewer-rail-mark--yr">${brandMarkSvg({ className: "viewer-yr-mark" })}</span><span class="viewer-rail-name">YourRank</span><span class="viewer-account-badge">Viewer</span></a><button class="viewer-rail-close" type="button" data-nav-close aria-label="Close menu">${viewerIcon("close")}</button></div>
+<div class="viewer-rail-top"><a class="viewer-rail-brand viewer-rail-brand--yr" href="${esc(mainLink.href)}"><span class="viewer-rail-mark viewer-rail-mark--yr">${brandMarkSvg({ className: "viewer-yr-mark" })}</span><span class="viewer-rail-name">YourRank</span></a><button class="viewer-rail-close" type="button" data-nav-close aria-label="Close menu">${viewerIcon("close")}</button></div>
 <nav class="viewer-destinations" aria-label="Viewer account">
-<a class="viewer-nav-link viewer-nav-back${active === "communities" ? " is-on" : ""}" href="${esc(backHref || mainLink.href)}"${active === "communities" ? ' aria-current="page"' : ""}>${viewerIcon(backHref ? "back" : "users")}<span>${esc(backLabel || mainLink.label)}</span></a>
+<a class="viewer-nav-link viewer-nav-back${active === "communities" ? " is-on" : ""}" href="${esc(backHref || mainLink.href)}"${active === "communities" ? ' aria-current="page"' : ""}>${viewerIcon("back")}<span>${esc(backLabel || "My communities")}</span></a>
 <p class="viewer-rail-caption">Account</p>
 ${navLinks(settings.map((item) => ({ ...item, active: item.key === active })), "")}
 </nav>
 <div class="viewer-rail-foot">
-<a class="viewer-rail-help" href="${esc(helpHref)}">${viewerIcon("help")}<span>Help &amp; contact</span></a>
 <button class="viewer-logout" type="button" data-viewer-logout>${viewerIcon("logout")}<span>Log out</span></button>
 </div>
 </aside>
 <div class="viewer-scrim" data-nav-scrim hidden></div>`;
 
-  const topbar = `<header class="viewer-topbar">
+  const topbar = `<header class="viewer-topbar viewer-topbar--account">
 <button class="viewer-menu" type="button" data-nav-menu aria-label="Open menu" aria-expanded="false">${viewerIcon("menu")}</button>
-<span class="viewer-top-context viewer-top-context--account"><b>Viewer account</b><span class="viewer-top-status" data-viewer-chip-context>Your identity and communities</span></span>
 <div class="viewer-top-actions">
-<a class="viewer-icon-btn" href="${esc(helpHref)}" aria-label="Help and contact">${viewerIcon("help")}</a>
-<a class="viewer-user" href="${esc(viewerAccountHref("profile"))}" data-viewer-chip><span class="viewer-chip-mark" data-viewer-chip-mark aria-hidden="true">V</span><span class="viewer-chip-txt"><b data-viewer-chip-name>Viewer account</b></span></a>
+<a class="viewer-icon-btn" href="${esc(viewerAccountHref("notifications"))}" aria-label="Notifications">${viewerIcon("bell")}</a>
+<a class="viewer-user" href="${esc(viewerAccountHref("profile"))}" data-viewer-chip><span class="viewer-chip-mark" data-viewer-chip-mark aria-hidden="true">V</span><span class="viewer-chip-txt"><b data-viewer-chip-name>Account</b></span>${viewerIcon("down")}</a>
 </div>
 </header>`;
 

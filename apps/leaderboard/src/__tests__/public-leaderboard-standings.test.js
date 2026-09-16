@@ -337,7 +337,7 @@ describe("public leaderboard standings", () => {
 
     const home = await render("home");
     expect(home).toContain('<span class="viewer-board-name">Alice</span>');
-    expect(home).toContain('<span class="viewer-board-rank">1</span>');
+    expect(home).toContain('<span class="viewer-board-rank viewer-board-rank--1">1</span>');
     expect((home.match(/class="viewer-board-row"/g) || [])).toHaveLength(3);
   });
 });

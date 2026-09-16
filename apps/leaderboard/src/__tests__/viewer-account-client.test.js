@@ -77,7 +77,7 @@ function makeEnvironment({ response, url = "https://yourrank.site/me", page: pag
     seed("[data-va-open-community]", makeElement(document));
   }
   if (pageName === "profile") {
-    const fields = ["displayName", "providers", "memberSince"].map((n) => { const e = makeElement(document); e.dataset.vaField = n; return e; });
+    const fields = ["displayName", "username", "memberSince"].map((n) => { const e = makeElement(document); e.dataset.vaField = n; return e; });
     seed("[data-va-field]", fields);
     seed("[data-va-avatar]", makeElement(document));
     seed("[data-va-card]", ["profile", "identity"].map(() => { const e = makeElement(document); e.hidden = true; return e; }));
@@ -206,7 +206,7 @@ describe("global Viewer Account client", () => {
     await env.ready();
     const fields = Object.fromEntries(env.atAll("[data-va-field]").map((el) => [el.dataset.vaField, el.textContent]));
     expect(fields.displayName).toBe("member");
-    expect(fields.providers).toBe("Signed in with Kick");
+    expect(fields.username).toBe("@member");
     expect(fields.memberSince).toContain("2026");
     expect(env.at("[data-va-avatar]").textContent).toBe("M");
   });
@@ -226,7 +226,7 @@ describe("global Viewer Account client", () => {
     const list = env.at('[data-va-list="connections"]');
     expect(list.innerHTML).toContain("Linked as member");
     expect(list.innerHTML).toContain("Connected");
-    expect(list.innerHTML).toContain("Not connected");
+    expect(list.innerHTML).toContain("Join communities and unlock Discord rewards.");
     expect(list.innerHTML).toContain("/api/viewer/auth/discord?returnTo=");
   });
 
@@ -234,11 +234,13 @@ describe("global Viewer Account client", () => {
     const env = makeEnvironment({ page: "privacy", response: { body: ACCOUNT } });
     await env.ready();
     const sessions = env.at('[data-va-list="sessions"]');
-    expect(sessions.innerHTML).toContain("Global session");
+    expect(sessions.innerHTML).toContain("Viewer Account session");
     expect(sessions.innerHTML).toContain("Community session · Alpha Community");
-    expect(sessions.innerHTML).toContain("This device");
+    expect(sessions.innerHTML).toContain("Current session");
     const signin = env.at('[data-va-list="signin"]');
-    expect(signin.innerHTML).toContain("Linked as member");
+    expect(signin.innerHTML).toContain("Sign in with your Kick account.");
+    expect(signin.innerHTML).toContain("Connected");
+    expect(signin.innerHTML).toContain("Add</a>");
   });
 
   it("shows account facts and runs the export from request to download", async () => {
