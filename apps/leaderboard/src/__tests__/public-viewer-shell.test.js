@@ -64,7 +64,9 @@ describe("public viewer shell", () => {
   it("renders enabled sections once in navigation with one current destination", async () => {
     const html = await render("shop");
     const nav = html.match(/<nav class="viewer-destinations"[\s\S]*?<\/nav>/)[0];
-    for(const label of ["Home","Leaderboard","Reward shop","My activity"]) expect(nav).toContain(">"+label+"</a>");
+    for(const label of ["Home","Leaderboard","Rewards","My Activity"]) expect(nav).toContain(">"+label+"</a>");
+    expect(nav).toContain('aria-disabled="true" title="Public activities are not available yet"');
+    expect(nav).not.toContain('href="/creator/activities"');
     expect(nav).not.toContain(">Games<");
     expect((html.match(/aria-current="page"/g)||[]).length).toBe(1);
     expect(nav).toContain('href="/creator/shop" aria-current="page"');
@@ -94,13 +96,12 @@ describe("public viewer shell", () => {
     });
     expect(withLogo).toContain('class="yr-id-logo" src="https://cdn.example.test/logo.png"');
     expect(withLogo).toContain('srcset="https://cdn.example.test/logo.png?w=64 64w');
-    expect(withLogo).toContain('width="36" height="36" alt=""');
-    // The bar and the drawer own the mark; Home does not print a second copy.
+    expect(withLogo).toMatch(/class="yr-id-logo"[^>]*width="[1-9]\d*" height="[1-9]\d*" alt=""/);
     expect(withLogo).not.toContain("yr-intro-logo");
 
     const withoutLogo = await render("home");
     expect(withoutLogo).not.toContain("yr-id-logo");
-    expect(withoutLogo).toContain('href="/creator">Creator Name</a>');
+    expect(withoutLogo).toContain('<strong>Creator Name</strong>');
   });
 
   it("keeps long creator names intact with wrapping in the context panel", async () => {
@@ -109,38 +110,40 @@ describe("public viewer shell", () => {
     expect(html).toContain(`data-preview-field="f_name">${long}</p>`);
     const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
     expect(css).toMatch(/\.viewer-context-name\{[^}]*overflow-wrap:anywhere/);
-    expect(css).toMatch(/\.viewer-switch summary>span:nth-child\(2\)\{[^}]*text-overflow:ellipsis/);
+    expect(css).toMatch(/\.viewer-switch summary strong\{[^}]*overflow-wrap:anywhere/);
   });
 
   it("keeps viewer navigation targets reachable at narrow widths", async () => {
     const css=readFileSync(join(assets,"viewer-shell.css"),"utf8");
     expect(css).toContain(".viewer-destinations a,.viewer-rail-account a");
     expect(css).toContain("min-height:44px");
-    expect(css).toContain("@media(max-width:900px)");
+    expect(css).toContain("@media(max-width:760px)");
     expect(css).not.toMatch(/viewer-destinations[^}]*display:none/);
     const html=await render("me",{viewer,viewerData:{...viewerData,viewerOnSite:{balance:1234567}}});
     expect(html).toContain('data-credit-balance="1234567"');
     expect(html).toContain('data-credit-balance-num>1,234,567</strong>');
-    expect(html).toContain(">Credits</span>");
+    expect(html).toContain(">credits</p>");
   });
 
-  it("keeps one real OAuth entry point and a navigable welcome guide", async () => {
+  it("keeps real OAuth continuation and local membership navigation without the obsolete guide", async () => {
     for (const provider of ["Kick", "Discord"]) {
       const html = await render("home", { r: { [`viewer${provider}AuthEnabled`]: true } });
+      const membership = await render("me", { r: { [`viewer${provider}AuthEnabled`]: true } });
       expect((html.match(/\/api\/viewer\/auth\//g) || [])).toHaveLength(1);
       expect(html).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
-      expect(html).toContain('data-guide-base="0"');
+      expect(membership).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join community</a>`);
+      expect(html).not.toContain('data-guide-base');
       expect(html).toContain('href="/creator/me"');
     }
     const member = await render("home", { viewer, viewerData });
     expect(member).not.toContain('/api/viewer/auth/');
-    expect(member).toContain('data-guide-base="2"');
-    expect(member).toContain('data-guide-visit="shop"');
+    expect(member).not.toContain('data-guide-visit');
+    expect(member).toContain('href="/creator/shop"');
   });
 
   it("keeps sign-in and account navigation role-correct", async () => {
     const signedOut = await render("home");
-    expect(signedOut).toContain('href="/creator/me">Sign in</a>');
+    expect(signedOut).toContain('href="/creator/me#membership-code">Sign in ');
     expect(signedOut).toContain('id="viewer-account-link" href="/me#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
     const signedIn = await render("home", { viewer, viewerData });
@@ -166,24 +169,24 @@ describe("public viewer shell", () => {
 
   it("keeps local membership and global account destinations distinct on custom domains", async () => {
     const html = await render("me", { viewer, viewerData, custom: true });
-    expect(html).toMatch(/href="\/me" aria-current="page">[\s\S]*?My activity<\/a>/);
+    expect(html).toMatch(/href="\/me" aria-current="page">[\s\S]*?My Activity<\/a>/);
     expect(html).toContain('id="viewer-account-link" href="https://yourrank.site/me#vd-profile"');
     expect(html).toContain('href="https://yourrank.site/me"');
     expect(html).not.toContain('href="/creator/me"');
   });
 
-  it("uses the supplied welcome guide without inventing viewer statistics", async () => {
+  it("uses the community home composition without inventing viewer statistics", async () => {
     const html = await render("home", { viewer, viewerData });
     for (const removed of ['yr-chart', 'yr-kpi', '7-day average', 'Lifetime', 'Pending orders']) expect(html).not.toContain(removed);
-    expect(html).toContain('<h1>Community overview</h1>');
-    expect(html).toContain('Ranked by the creator');
-    expect(html).toContain('Your community starts here.');
-    expect(html).toContain('2 of 4 guide steps completed');
+    expect(html).toContain('<h1>Creator Name</h1>');
+    expect(html).toContain('class="viewer-home-banner"');
+    expect(html).toContain('class="viewer-card viewer-stream-card"');
+    expect(html).not.toContain('data-guide-');
   });
 
-  it("uses real standings in the reference's community rail", async () => {
+  it("uses real standings in the community home preview", async () => {
     const html = await render("home");
-    expect(html).toContain('On the leaderboard');
+    expect(html).toContain('Monthly standings');
     expect(html).toContain('class="viewer-player-name">Alice</span>');
     expect(html).toContain('class="viewer-player-name">Bob</span>');
     expect(html).not.toContain('See the standings');
@@ -192,17 +195,16 @@ describe("public viewer shell", () => {
     expect(empty).not.toContain('class="viewer-board-row"');
   });
 
-  it("shows the reference's two reward previews from actual configured rewards", async () => {
+  it("shows a community reward preview from actual configured rewards", async () => {
     const html = await render("home");
-    const section = html.slice(html.indexOf('class="viewer-reward-mini"'), html.indexOf('<footer class="viewer-panel-footer"'));
-    expect((section.match(/class="viewer-reward-peek"/g) || [])).toHaveLength(2);
+    const section = html.slice(html.indexOf('class="viewer-home-columns"'), html.indexOf('<footer class="viewer-panel-footer"'));
+    expect((section.match(/class="yr-rwd"/g) || [])).toHaveLength(1);
     expect(section).toContain('Song request');
-    expect(section).toContain('VIP badge');
-    expect(section).toContain('250 Credits');
+    expect(section).toContain('600 credits');
     expect(section).not.toContain('Overlay cameo');
     const noShop = await render("home", { data: { ...baseData, siteSections: { ...baseData.siteSections, shop: false } } });
-    expect(noShop).not.toContain('class="viewer-reward-mini"');
-    expect(noShop).not.toContain('data-guide-visit="shop"');
+    expect(noShop).not.toContain('Community Rewards');
+    expect(noShop).not.toContain('href="/creator/shop"');
   });
 
   it("gives a signed-in viewer a scoped balance and local/global destinations", async () => {
@@ -219,11 +221,11 @@ describe("public viewer shell", () => {
     const bare = { ...baseData, brand: { name: 'Bare Board' }, players: [], shopItems: [], socials: [], siteSections: { home: true, leaderboard: true, shop: false, games: false, me: false } };
     const html = await render('home', { data: bare });
     expect(html).toContain('No standings yet.');
-    expect(html).toContain('<h1>Community overview</h1>');
+    expect(html).toContain('<h1>Bare Board</h1>');
     expect(html).not.toContain('href="/creator/shop"');
-    expect(html).not.toContain('data-guide-visit="me"');
+    expect(html).not.toContain('href="/creator/me"');
     expect(html).not.toContain('Claim free code');
-    expect(html).toContain('data-guide-total="1"');
+    expect(html).not.toContain('data-guide-total');
   });
 
   it("links the creator's configured channels and nothing else", async () => {
@@ -254,7 +256,7 @@ describe("public viewer shell", () => {
     expect(html).not.toContain('id="yr-menu"');
     expect(html).not.toContain('id="yr-side"');
     expect(css).toContain('.viewer-layout{display:flex;flex-direction:column');
-    expect(css).toContain('.viewer-destinations{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))');
+    expect(css).toContain('.viewer-destinations{display:flex;flex-wrap:wrap');
     expect(css).not.toMatch(/\.viewer-rail\{[^}]*display:none/);
   });
 
@@ -312,9 +314,9 @@ describe("public viewer shell", () => {
     }
     const html = await render("home");
     expect((html.match(/fonts\.googleapis\.com\/css2/g) || []).length).toBe(2); // async link + noscript
-    expect(html).toContain("family=Fira+Sans");
-    expect(html).toContain("family=Fira+Code");
-    expect(html).not.toContain("family=Inter");
+    expect(html).not.toContain("family=Fira+Sans");
+    expect(html).not.toContain("family=Fira+Code");
+    expect(html).toContain("family=Inter");
     expect(html).not.toContain("IBM+Plex+Mono");
   });
 
@@ -374,20 +376,26 @@ describe("public viewer shell", () => {
     expect(shell).toMatch(/!\/\^HTTP \/\.test\(message\)/);
   });
 
-  it("keeps the real creator identity without duplicating its configured logo", async () => {
+  it("uses the configured creator identity in the rail, banner and channel card", async () => {
     const plain = await render('home');
     expect(plain).toContain('data-preview-field="f_name">Creator Name</p>');
     const logo = await render('home', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
-    expect((logo.match(/class="yr-id-logo"/g) || [])).toHaveLength(2);
+    for (const region of [
+      logo.match(/<aside class="viewer-rail"[^]*?<\/aside>/)?.[0],
+      logo.match(/<header class="viewer-home-banner"[^]*?<\/header>/)?.[0],
+      logo.match(/<div class="viewer-channel-art"[^]*?<\/div>/)?.[0],
+    ]) {
+      expect(region).toBeDefined();
+      expect((region.match(/class="yr-id-logo"/g) || [])).toHaveLength(1);
+    }
     expect(logo).not.toContain('class="yr-intro-logo"');
   });
 
   it("uses the supplied three-column geometry with a separate context bar", () => {
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
-    expect(css).toContain('--viewer-rail-width:212px');
-    expect(css).toContain('grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 314px');
+    expect(css).toContain('grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 320px');
     expect(css).toMatch(/\.viewer-topbar\{[^}]*position:sticky;top:0/);
-    expect(css).toContain('.viewer-claim-preview .yr-ord-main{flex:0 1 auto}');
+    expect(css).toContain('.viewer-overview{grid-column:3');
   });
 
   it("keeps account and community return links reachable on mobile", async () => {
@@ -396,13 +404,14 @@ describe("public viewer shell", () => {
     expect(html).toContain('href="/me#vd-profile"');
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     expect(css).not.toMatch(/\.viewer-rail-account\{[^}]*display:none/);
-    expect(css).toContain('.viewer-rail-account{display:flex;justify-content:space-between');
+    expect(css).toContain('.viewer-rail-account{display:flex;flex-wrap:wrap');
   });
 
-  it("keeps navigation out of the credits rail and gives standings one page heading", async () => {
+  it("links the credits rail to local earning activity and gives standings one page heading", async () => {
     const html = await render('home');
     const credit = html.match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
-    expect((credit.match(/class="yr-btn"/g) || [])).toHaveLength(0);
+    expect(credit).toContain('href="/creator/me#membership-code"');
+    expect(credit).not.toContain('href="/me"');
     expect(credit).not.toContain('Browse rewards');
     const board = await render('leaderboard');
     expect((board.match(/<h1\b/g) || [])).toHaveLength(1);

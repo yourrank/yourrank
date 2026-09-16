@@ -13,13 +13,6 @@
       .then(function (data) {
         if (typeof data.isLive !== 'boolean' || data.error || pageLifetime.signal.aborted) return;
         streamState.textContent = data.isLive ? 'Live now' : 'Offline';
-        var creator = document.querySelector('.viewer-creator>div');
-        if (creator) {
-          var status = creator.querySelector('[data-stream-status]') || document.createElement('span');
-          status.dataset.streamStatus = '';
-          status.textContent = data.isLive ? 'Live on Kick' : 'Kick · Offline';
-          if (!status.parentNode) creator.appendChild(status);
-        }
       }).catch(function () { /* Keep the explicit unavailable state. */ });
   }
   document.addEventListener("yr:viewer-unmount", function () {
@@ -31,41 +24,23 @@
     pageRequest++;
   }, { once: true });
 
-  // Guide progress is a per-tab browsing aid, never persisted membership state.
-  var guide = document.querySelector("[data-viewer-guide]");
-  var guideVisits = {};
-  var guideKey = "yr-viewer-guide:" + (document.body.dataset.slug || "");
-  try { guideVisits = JSON.parse(sessionStorage.getItem(guideKey) || "{}"); } catch (_) { /* Storage is optional. */ }
-  if (!guideVisits || typeof guideVisits !== "object" || Array.isArray(guideVisits)) guideVisits = {};
-  if (["shop", "me"].includes(document.body.dataset.section)) {
-    guideVisits[document.body.dataset.section] = true;
-    try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Links still work. */ }
-  }
-  if (guide) {
-    guide.querySelector("[data-guide-dismiss]").hidden = false;
-    var completed = Number(guide.dataset.guideBase);
-    var total = Number(guide.dataset.guideTotal);
-    guide.querySelectorAll("[data-guide-visit]").forEach(function (row) {
-      if (guideVisits[row.dataset.guideVisit] === true) {
-        completed++;
-        row.querySelector(".viewer-check-icon").classList.add("is-done");
-        row.querySelector(".viewer-check-icon").innerHTML = '<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
-      }
-    });
-    guide.querySelector("[data-guide-count]").textContent = String(completed);
-    guide.querySelector(".viewer-ring-fill").setAttribute("stroke-dasharray", (completed / total * 219.92) + " 219.92");
-    guide.querySelector(".viewer-progress-ring").setAttribute("aria-label", completed + " of " + total + " guide steps completed");
-    var restoreGuide = document.querySelector(".viewer-guide-restore");
-    var setGuideHidden = function (hidden, focus) {
-      guide.hidden = hidden;
-      restoreGuide.hidden = !hidden;
-      guideVisits.dismissed = hidden;
-      try { sessionStorage.setItem(guideKey, JSON.stringify(guideVisits)); } catch (_) { /* Optional. */ }
-      if (focus) (hidden ? restoreGuide.querySelector("button") : guide.querySelector("[data-guide-dismiss]")).focus();
+  var rewardList = document.getElementById("viewer-rewards");
+  if (rewardList) {
+    var rewardSearch = document.getElementById("viewer-reward-search");
+    var rewardSort = document.getElementById("viewer-reward-sort");
+    var rewardRows = Array.from(rewardList.children);
+    document.querySelectorAll(".viewer-reward-tools").forEach(function (tools) { tools.hidden = false; });
+    var filterRewards = function () {
+      var query = rewardSearch.value.trim().toLowerCase();
+      rewardRows.forEach(function (row) { row.hidden = !row.dataset.rewardFilter.includes(query); });
+      document.getElementById("viewer-reward-empty").hidden = rewardRows.some(function (row) { return !row.hidden; });
     };
-    guide.querySelector("[data-guide-dismiss]").addEventListener("click", function () { setGuideHidden(true, true); });
-    restoreGuide.querySelector("button").addEventListener("click", function () { setGuideHidden(false, true); });
-    if (completed === total || guideVisits.dismissed === true) setGuideHidden(true, false);
+    rewardSearch.addEventListener("input", filterRewards, { signal: pageLifetime.signal });
+    rewardSort.addEventListener("change", function () {
+      rewardRows.sort(function (a, b) {
+        return rewardSort.value === "name" ? a.dataset.rewardFilter.localeCompare(b.dataset.rewardFilter) : Number(a.dataset.rewardSortCost) - Number(b.dataset.rewardSortCost);
+      }).forEach(function (row) { rewardList.appendChild(row); });
+    }, { signal: pageLifetime.signal });
   }
 
   var communitySwitch = document.querySelector(".viewer-switch");
@@ -221,7 +196,7 @@
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
   var prizeLabel = (rowsRoot && rowsRoot.dataset.prizeLabel) || "Prize";
   var hidePrizes = !!rowsRoot && rowsRoot.dataset.hidePrizes === "true";
-  var spotlight = document.body.dataset.viewerTemplate === "spotlight";
+  var spotlight = document.body.classList.contains("viewer-shell");
   var eventId = document.body.dataset.eventId || "";
   var money = function (v) { return currency + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); };
   var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]); }); };
@@ -250,13 +225,12 @@
     var identity = spotlight
       ? '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>'
       : esc(p.name);
-    var labelClass = spotlight ? "yr-podium-label" : "yr-sr";
     return '<li class="yr-srow' + (rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : "") +
       '" data-player-name="' + name + '" data-position="' + rank + '">' +
       '<span class="yr-srow-rank"><span class="yr-sr">Rank </span>' + rank + "</span>" +
       (eventId ? '<span class="yr-srow-name">' + identity + '</span>' : '<a class="yr-srow-name" href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + identity + "</a>") +
-      '<span class="yr-srow-val"><span class="' + labelClass + '">' + esc(valueLabel) + ': </span>' + value + "</span>" +
-      (prize ? '<span class="yr-srow-prize"><span class="' + labelClass + '">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
+      '<span class="yr-srow-val"><span class="yr-sr">' + esc(valueLabel) + ': </span>' + value + "</span>" +
+      (prize ? '<span class="yr-srow-prize"><span class="yr-sr">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
       "</li>";
   };
   var fetchPage = function (offset, q, signal) {
@@ -664,18 +638,26 @@
       body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem, idempotencyKey: idempotencyKey }),
     })
       .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
-      .then(function (r) {
+      .then(async function (r) {
         if (r.ok && r.data.ok) {
           delete btn.dataset.redeemKey;
           btn.textContent = "Claimed";
           btn.removeAttribute("aria-busy");
           btn.classList.add("is-success");
-          setRedeemStatus("Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.");
+          var message = "Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.";
+          setRedeemStatus(message);
           if (typeof r.data.balance === "number") updateBalance(r.data.balance);
           var overviewStatus = document.querySelector("[data-viewer-claim-summary]");
           if (overviewStatus) overviewStatus.textContent = "Claim submitted";
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);
+          if (window.YRViewerApp) {
+            await window.YRViewerApp.refresh();
+            if (document.body.dataset.slug !== slug) return;
+            redeemStatus = document.getElementById("yr-redeem-status");
+            setRedeemStatus(message);
+            focusWithoutScroll(redeemStatus);
+          }
         } else {
           recover(orderErrorText(r.data.error));
         }

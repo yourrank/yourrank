@@ -6,7 +6,6 @@
   var pending;
   var sequence = 0;
   var currentUrl = location.href;
-  var selectedSlug = document.body.dataset.slug || "";
   var loaded = {};
   var notice = document.createElement("p");
   notice.className = "viewer-navigation-status";
@@ -14,34 +13,20 @@
   notice.hidden = true;
   document.querySelector(".viewer-layout").appendChild(notice);
 
-  function rememberCommunity() {
-    var slug = document.body.dataset.slug;
-    if (slug) {
-      selectedSlug = slug;
-      try { sessionStorage.setItem("yr-viewer-community", slug); } catch (_) { /* Optional context only. */ }
-    }
-    document.querySelectorAll('a[href]').forEach(function (link) {
-      var url = new URL(link.href, location.href);
-      if (selectedSlug && url.pathname === "/me" && (url.origin !== location.origin || document.body.dataset.customDomain !== "true")) {
-        url.searchParams.set("community", selectedSlug);
-        link.href = url.href;
-      }
-    });
-  }
   function updateNavigation() {
+    if (document.body.classList.contains("viewer-account-page")) return;
     document.querySelectorAll('.viewer-rail a[aria-current]').forEach(function (link) { link.removeAttribute("aria-current"); });
     document.querySelectorAll('.viewer-rail a[href]').forEach(function (link) {
       var target = new URL(link.href, location.href);
       var active = target.origin === location.origin && target.pathname === location.pathname;
       if (active && target.pathname === "/me" && document.body.dataset.customDomain !== "true") {
-        active = (target.hash === "#vd-profile") === (location.hash === "#vd-profile");
+        active = target.hash === location.hash;
       }
       if (active) link.setAttribute("aria-current", "page");
     });
     var heading = document.querySelector('.viewer-main h1');
     var active = document.querySelector('.viewer-rail a[aria-current]');
     document.getElementById("viewer-top-title").textContent = active ? active.textContent : heading ? heading.textContent : "Community";
-    rememberCommunity();
   }
   function loadAsset(src, initName, module) {
     if (window[initName]) return Promise.resolve(window[initName]());
@@ -55,22 +40,46 @@
     });
     return loaded[src];
   }
-  async function mount() {
+  async function mount(ticket) {
     await loadAsset("/assets/site-shell.js", "YRInitSitePage", false);
+    if (ticket !== sequence) return;
     if (document.getElementById("vd-profile")) {
       await loadAsset("/assets/viewer-dashboard.js", "YRInitViewerAccount", true);
+      if (ticket !== sequence) return;
       await window.__yrViewerReady;
     }
+    if (ticket !== sequence) return;
     if (document.getElementById("contactForm")) await loadAsset("/assets/contact.js", "YRInitContactPage", true);
+    if (ticket !== sequence) return;
     updateNavigation();
   }
   function focusContent() {
-    var target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
-    if (!target || target.hidden) target = document.querySelector('.viewer-main h1');
-    if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start" }); }
+    var hash = location.hash.slice(1);
+    try { hash = decodeURIComponent(hash); } catch (_) { /* Use the literal anchor. */ }
+    var target = hash && document.getElementById(hash);
+    var anchor = target && !target.hidden;
+    if (!anchor) target = document.querySelector('.viewer-main h1');
+    if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); }
+    if (anchor) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, 0);
+  }
+  function syncTheme(source) {
+    var fonts = source.querySelector("link[data-viewer-fonts]");
+    var existing = document.querySelector("link[data-viewer-fonts]");
+    if (fonts && (!existing || existing.href !== fonts.href)) {
+      var replacement = fonts.cloneNode();
+      replacement.media = "all";
+      if (existing) existing.replaceWith(replacement);
+      else document.head.appendChild(replacement);
+    }
+    ["accent", "accent-ink", "display-font"].forEach(function (name) {
+      var token = source.querySelector('meta[name="viewer-' + name + '"]');
+      if (token) document.body.style.setProperty("--yr-" + name, token.content);
+      else document.body.style.removeProperty("--yr-" + name);
+    });
   }
   function hasPendingAction() {
-    return Array.from(document.querySelectorAll('.viewer-main [aria-busy="true"], .viewer-main button:disabled[aria-busy], #c_submit:disabled')).some(function (element) {
+    return Array.from(document.querySelectorAll('.viewer-main button[aria-busy="true"], #c_submit:disabled')).some(function (element) {
       return !element.hidden && element.getClientRects().length > 0;
     });
   }
@@ -81,36 +90,18 @@
       if (next && existing) existing.replaceChildren.apply(existing, Array.from(next.childNodes));
     });
   }
-  async function restoreContext() {
-    if (selectedSlug) { rememberCommunity(); return; }
-    var slug = new URL(location.href).searchParams.get("community");
-    try { slug = slug || sessionStorage.getItem("yr-viewer-community"); } catch (_) { /* Optional. */ }
-    if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(slug || "")) return;
-    try {
-      var response = await fetch("/" + encodeURIComponent(slug), { credentials: "same-origin", cache: "no-store" });
-      if (!response.ok) return;
-      var source = new DOMParser().parseFromString(await response.text(), "text/html");
-      if (!source.body.classList.contains("viewer-shell") || source.body.dataset.slug !== slug) return;
-      syncChrome(source);
-      var overview = document.querySelector('.viewer-overview');
-      var sourceOverview = source.querySelector('.viewer-overview');
-      if (overview && sourceOverview) overview.replaceChildren.apply(overview, Array.from(sourceOverview.childNodes));
-      selectedSlug = slug;
-      rememberCommunity();
-    } catch (_) { /* Account content remains usable without a community fetch. */ }
-  }
   async function navigate(value, options) {
     var opts = options || {};
     var target = new URL(value, location.href);
     if (target.origin !== location.origin) { location.assign(target.href); return; }
-    if (!opts.refresh && target.pathname === location.pathname && target.search === location.search) {
+    var ticket = ++sequence;
+    if (pending) pending.abort();
+    if (!opts.refresh && target.pathname === location.pathname && target.search === location.search && target.hash !== location.hash) {
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
       window.dispatchEvent(new Event("hashchange"));
-      updateNavigation(); focusContent(); return;
+      updateNavigation(); focusContent(); notice.hidden = true; return;
     }
-    var ticket = ++sequence;
-    if (pending) pending.abort();
     pending = new AbortController();
     notice.textContent = "Loading page…"; notice.hidden = false;
     try {
@@ -124,8 +115,7 @@
       // Only supported page controllers run. Arbitrary document scripts are never evaluated.
       if (next.querySelector("script")) { location.assign(target.href); return; }
       document.dispatchEvent(new Event("yr:viewer-unmount"));
-      var communityPage = !!source.body.dataset.slug;
-      if (communityPage && source.body.dataset.slug !== selectedSlug) syncChrome(source);
+      syncChrome(source);
       var existing = document.querySelector(".viewer-main");
       existing.className = next.className;
       existing.replaceChildren.apply(existing, Array.from(next.childNodes));
@@ -137,22 +127,24 @@
       var oldToken = document.querySelector('meta[name="csrf-token"]');
       if (oldToken) oldToken.remove();
       if (token) document.head.appendChild(token);
-      var theme = source.querySelector('[data-theme-tokens]');
-      var currentTheme = document.querySelector('[data-theme-tokens]');
-      if (theme && currentTheme) currentTheme.textContent = theme.textContent;
-      // The overview is context data, not a navigation destination.
-      if (communityPage) {
-        var overview = document.querySelector('.viewer-overview');
-        var nextOverview = source.querySelector('.viewer-overview');
-        if (overview && nextOverview) overview.replaceChildren.apply(overview, Array.from(nextOverview.childNodes));
-      }
+      syncTheme(source);
+      [".viewer-overview", ".viewer-home-banner"].forEach(function (selector) {
+        var old = document.querySelector(selector);
+        var replacement = source.querySelector(selector);
+        if (old) old.remove();
+        if (replacement) {
+          var layout = document.querySelector('.viewer-layout');
+          if (selector === ".viewer-home-banner") layout.insertBefore(replacement, existing);
+          else layout.appendChild(replacement);
+        }
+      });
       ["#yr-feedback", ".viewer-site-footer"].forEach(function (selector) {
         var old = document.querySelector(selector); if (old) old.remove();
         var replacement = source.querySelector(selector); if (replacement) document.body.appendChild(replacement);
       });
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
-      await mount();
+      await mount(ticket);
       if (ticket !== sequence) return;
       focusContent();
       notice.hidden = true;
@@ -166,6 +158,16 @@
   document.addEventListener("click", function (event) {
     var link = event.target.closest('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute("download")) return;
+    if (link.getAttribute("href") === "#main-content") {
+      var content = document.getElementById("main-content");
+      if (content) {
+        event.preventDefault();
+        content.setAttribute("tabindex", "-1");
+        content.focus({ preventScroll: true });
+        content.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
     var target = new URL(link.href, location.href);
     if (target.origin !== location.origin || /^\/(?:api|dashboard|login|logout|auth)(?:\/|$)/.test(target.pathname)) return;
     if (!link.closest('.viewer-layout,.viewer-site-footer')) return;
@@ -179,7 +181,8 @@
   });
   window.addEventListener("popstate", function () { navigate(location.href, { pop: true, refresh: true }); });
   window.YRViewerApp = { navigate: navigate, refresh: function () { return navigate(location.href, { refresh: true }); } };
-  window.__yrViewerAppReady = restoreContext().then(mount).catch(function () {
+  syncTheme(document);
+  window.__yrViewerAppReady = mount(sequence).catch(function () {
     notice.textContent = "Page controls could not load. Reload to try again."; notice.hidden = false;
   });
 })();

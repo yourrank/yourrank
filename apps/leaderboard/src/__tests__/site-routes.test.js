@@ -383,8 +383,8 @@ describe("logged-out vs logged-in rendering", () => {
     const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("My activity");
-    expect(html).toContain("Your place in TestStreamer's community");
+    expect(html).toContain("My Activity");
+    expect(html).toContain("Your claims and credit history in TestStreamer's community");
     expect(html).toContain("Join community");
     expect(html).toContain("/api/viewer/auth/kick?");
   });
@@ -404,7 +404,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('<span data-credit-balance-num>500</span>'); // balance in the shop strip
-    expect(html).toContain(">Claim<");
+    expect(html).toContain(">Redeem</button>");
     expect(html).not.toContain("Sign in with Kick");
   });
 
@@ -433,7 +433,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(routeSiteData.calls.at(-1)).toEqual({
       siteId: "site-1",
       viewerId: "v1",
-      opts: { claims: true, ledger: true, participation: true },
+      opts: { shop: true, claims: true, ledger: true, participation: true },
     });
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain("Shoutout");
@@ -445,7 +445,7 @@ describe("logged-out vs logged-in rendering", () => {
     const viewerAResponse = await renderSiteRoute({ request: viewerARequest, env, ctx, nonce: "a", slug: "streamer", section: "me", isCustomDomain: false });
     const viewerAHtml = await viewerAResponse.text();
     expect(viewerAHtml).toContain("Claimed a code drop");
-    expect(viewerAHtml).toContain("Shoutout");
+    expect(viewerAHtml.match(/<section[^>]*id="membership-claims"[^]*?<\/section>/)?.[0]).toContain("Shoutout");
 
     const viewerBRequest = req("https://example.com/streamer/me", { viewer: { id: "v2", kick_username: "viewer2" } });
     const viewerBResponse = await renderSiteRoute({ request: viewerBRequest, env, ctx, nonce: "b", slug: "streamer", section: "me", isCustomDomain: false });
@@ -454,7 +454,10 @@ describe("logged-out vs logged-in rendering", () => {
     expect(viewerBResponse.headers.get("cache-control")).toContain("no-store");
     expect(viewerBResponse.headers.get("vary")).toContain("Cookie");
     expect(viewerBHtml).not.toContain("Claimed a code drop");
-    expect(viewerBHtml).not.toContain("Shoutout");
+    const viewerBClaims = viewerBHtml.match(/<section[^>]*id="membership-claims"[^]*?<\/section>/)?.[0];
+    expect(viewerBClaims).toBeDefined();
+    expect(viewerBClaims).not.toContain("Shoutout");
+    expect(viewerBHtml).not.toContain('class="viewer-claim-preview"');
     expect(viewerBHtml).toContain("No participation history yet");
     expect(viewerBHtml).toContain("No claims yet");
   });

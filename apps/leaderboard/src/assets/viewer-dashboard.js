@@ -87,27 +87,49 @@ function setGlobalLoading(loading) {
 }
 
 let signedIn = false;
+const accountViews = {
+  "vd-profile": ["Profile", "Manage your basic YourRank identity."],
+  "vd-connections": ["Connected Accounts", "View the accounts connected to your YourRank identity."],
+  "vd-notifications": ["Notifications", "Notification settings for your viewer account."],
+  "vd-security": ["Privacy & Security", "Review your sign-in and privacy information."],
+  "vd-data": ["Data & Account", "Manage your account information and control your data."],
+};
+let exportId = "";
 function selectAccountView() {
-  const profile = signedIn && window.location.hash === "#vd-profile";
-  $("vd-profile").hidden = !profile;
-  $("vd-communities-card").hidden = !signedIn || profile;
-  $("vd-title").textContent = profile ? "Your viewer account." : "My communities";
-  $("vd-subtitle").textContent = profile
-    ? "The account you use across creator communities."
+  const hash = window.location.hash.slice(1);
+  const current = signedIn && Object.hasOwn(accountViews, hash) ? hash : "";
+  Object.keys(accountViews).forEach(id => { $(id).hidden = id !== current; });
+  $("vd-communities-card").hidden = !signedIn || !!current;
+  $("vd-title").textContent = current ? accountViews[current][0] : "My communities";
+  $("vd-subtitle").textContent = current
+    ? accountViews[current][1]
     : "Choose a community. Your rewards and claims stay with each community.";
+  $("vd-breadcrumb").hidden = !current;
+  $("vd-breadcrumb-current").textContent = current ? accountViews[current][0] : "";
   const accountLink = $("viewer-account-link");
   const communitiesLink = $("viewer-communities-link");
-  if (profile) { accountLink.setAttribute("aria-current", "page"); communitiesLink.removeAttribute("aria-current"); }
+  if (current) { communitiesLink.removeAttribute("aria-current"); }
   else { accountLink.removeAttribute("aria-current"); communitiesLink.setAttribute("aria-current", "page"); }
-  $("viewer-top-title").textContent = profile ? "Viewer account" : "My communities";
+  document.querySelectorAll('.viewer-destinations a').forEach(link => {
+    if (new URL(link.href, window.location.href).hash === `#${current}`) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  $("viewer-top-title").textContent = current ? accountViews[current][0] : "My communities";
 }
 window.addEventListener("hashchange", () => {
   selectAccountView();
-  if (signedIn) $(window.location.hash === "#vd-profile" ? "vd-profile" : "vd-title").focus();
+  if (signedIn) $("vd-title").focus();
 }, { signal: lifetime.signal });
 
 function renderLoggedOut() {
   signedIn = false;
+  exportId = "";
+  $("vd-export-download").hidden = true;
+  $("vd-export-check").hidden = true;
+  setStatus("vd-export-status", "");
+  $("vd-rail-logout").hidden = true;
+  $("viewer-top-name").textContent = "Sign in";
+  $("viewer-top-mark").textContent = "";
   $("viewer-top-avatar").setAttribute("aria-label", "Sign in to your viewer account");
   selectAccountView();
   $("viewer-account-link").setAttribute("href", "/me#vd-login-card");
@@ -128,6 +150,14 @@ function renderAccount(viewer) {
   $("viewer-account-link").setAttribute("href", "/me#vd-profile");
   $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
+  $("viewer-top-name").textContent = name;
+  $("viewer-top-mark").textContent = initial(name);
+  $("vd-rail-logout").hidden = false;
+  $("vd-created").textContent = fmtDate(viewer.createdAt) || "Not available";
+  $("vd-data-name").textContent = name;
+  const providers = (viewer.connections || []).map(connection => `<div class="vd-provider"><div><h3>${esc(connection.provider === "kick" ? "Kick" : connection.provider === "discord" ? "Discord" : connection.provider)}</h3><p>${connection.username ? `@${esc(connection.username)}` : 'Connected account'}${connection.linkedAt ? ` · Connected ${esc(fmtDate(connection.linkedAt))}` : ''}</p></div><span class="vd-connection-status">Connected</span></div>`).join("") || "<p>No connected providers were returned.</p>";
+  $("vd-provider-list").innerHTML = providers;
+  $("vd-security-providers").innerHTML = providers;
   $("viewer-top-avatar").setAttribute("aria-label", `Viewer account: ${name}`);
   $("viewer-top-avatar").setAttribute("title", `Open ${name}'s viewer account`);
   $("vd-username").textContent = name;
@@ -137,8 +167,16 @@ function renderAccount(viewer) {
   const fallback = $("vd-avatar-fallback");
   avatar.hidden = true;
   fallback.hidden = false;
-  avatar.onload = () => { avatar.hidden = false; fallback.hidden = true; };
-  avatar.onerror = () => { avatar.hidden = true; fallback.hidden = false; };
+  avatar.onload = () => {
+    if (lifetime.signal.aborted || !signedIn) return;
+    avatar.hidden = false; fallback.hidden = true;
+    $("viewer-top-mark").innerHTML = `<img src="${esc(viewer.avatarUrl)}" alt="" />`;
+  };
+  avatar.onerror = () => {
+    if (lifetime.signal.aborted || !signedIn) return;
+    avatar.hidden = true; fallback.hidden = false;
+    $("viewer-top-mark").textContent = initial(name);
+  };
   if (viewer.avatarUrl) {
     avatar.alt = `${name}'s profile picture`;
     avatar.src = viewer.avatarUrl;
@@ -195,6 +233,7 @@ async function load() {
   setStatus("vd-communities-status", "");
   try {
     const data = await api("GET", "/api/viewer/me");
+    if (lifetime.signal.aborted) return;
     if (!data.viewer) {
       renderLoggedOut();
       return;
@@ -209,10 +248,10 @@ async function load() {
     if (error.message === "unauthorized") renderLoggedOut();
     else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
-    setGlobalLoading(false);
+    if (!lifetime.signal.aborted) setGlobalLoading(false);
     if (!lifetime.signal.aborted && (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card")) {
       const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
-      destination.focus();
+      destination.focus({ preventScroll: true });
     }
   }
 }
@@ -242,6 +281,35 @@ $("vd-open-community")?.addEventListener("submit", (event) => {
   if (window.YRViewerApp) window.YRViewerApp.navigate(destination); else window.location.href = destination;
 });
 
+$("vd-rail-logout")?.addEventListener("click", () => $("vd-logout").click(), { signal: lifetime.signal });
+$("vd-export")?.addEventListener("click", async () => {
+  const button = $("vd-export");
+  setLoading(button, true, "Requesting export…");
+  $("vd-export-download").hidden = true;
+  try {
+    const data = await api("POST", "/api/viewer/export");
+    exportId = data.exportId || "";
+    if (!exportId) throw new Error("Could not start data export. Please try again.");
+    $("vd-export-check").hidden = false;
+    setStatus("vd-export-status", "Your export is being prepared. Check its status here.");
+  } catch (error) {
+    setStatus("vd-export-status", errorText(error.message, "Could not start data export. Please try again."), true);
+  } finally { setLoading(button, false); }
+}, { signal: lifetime.signal });
+$("vd-export-check")?.addEventListener("click", async () => {
+  if (!exportId) return;
+  const button = $("vd-export-check");
+  setLoading(button, true, "Checking…");
+  try {
+    const data = await api("GET", `/api/viewer/export/${encodeURIComponent(exportId)}/status`);
+    const complete = data.status === "completed";
+    $("vd-export-download").hidden = !complete;
+    if (complete) $("vd-export-download").setAttribute("href", `/api/viewer/export/${encodeURIComponent(exportId)}/download`);
+    setStatus("vd-export-status", complete ? `Your export is ready.${data.expiresAt ? ` Available until ${fmtDate(data.expiresAt)}.` : ""}` : data.status === "failed" || data.status === "expired" ? "This export is unavailable. Request a new export." : "Your export is still being prepared.", data.status === "failed" || data.status === "expired");
+  } catch (error) {
+    setStatus("vd-export-status", errorText(error.message, "Could not check export status. Try again."), true);
+  } finally { setLoading(button, false); }
+}, { signal: lifetime.signal });
 $("vd-logout")?.addEventListener("click", async () => {
   const button = $("vd-logout");
   setLoading(button, true, "Signing out…");

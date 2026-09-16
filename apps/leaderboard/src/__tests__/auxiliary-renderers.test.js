@@ -203,7 +203,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).not.toContain(">Prize<");
     expect(profile).not.toContain("Prize $25");
     expect(profile).not.toContain('class="yr-hist-d"');
-    expect(profile).not.toContain("—");
+    expect(profile.match(/<main\b[\s\S]*?<\/main>/)?.[0]).not.toContain("—");
   });
 
   it("gives legal pages the viewer heading, readable prose and a help region", async () => {

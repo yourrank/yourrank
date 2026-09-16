@@ -177,9 +177,9 @@ describe("public leaderboard standings", () => {
     const html = await render("leaderboard", {
       data: { ...baseData, players: [player(long, 1, 10, 0), player("Ω_игрок", 2, 9, 0), player("🎯 aim <b>", 3, 8, 0)] },
     });
-    expect(html).toContain(`>${long}</a>`);
-    expect(html).toContain(">Ω_игрок</a>");
-    expect(html).toContain(">🎯 aim &lt;b&gt;</a>");
+    expect(html).toContain(`class="yr-player-name">${long}</span></a>`);
+    expect(html).toContain('class="yr-player-name">Ω_игрок</span></a>');
+    expect(html).toContain('class="yr-player-name">🎯 aim &lt;b&gt;</span></a>');
     expect(html).not.toContain("🎯 aim <b>");
     // Names wrap inside their own cell rather than widening the document.
     expect(css).toMatch(/\.yr-srow-name \{[^}]*overflow-wrap: anywhere/);
@@ -190,7 +190,7 @@ describe("public leaderboard standings", () => {
     const long = "L".repeat(100);
     const html = await render("leaderboard", { data: { ...baseData, players: [player(long, 1, 1e12, 0)] } });
     // The whole name is the link text and the link target: nothing is cut.
-    expect(html).toContain(`>${long}</a>`);
+    expect(html).toContain(`class="yr-player-name">${long}</span></a>`);
     expect(html).toContain(`/creator/player/${long}`);
     expect(html).not.toContain("…</a>");
 
@@ -210,7 +210,7 @@ describe("public leaderboard standings", () => {
 
   it("leaves normal names and the wide layout alone", async () => {
     const html = await render();
-    expect(html).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
+    expect(html).toMatch(/<a class="yr-srow-name" href="\/creator\/player\/Alice">[^]*?<span class="yr-player-name">Alice<\/span><\/a>/);
     // A one-line name still occupies the same 44px target as before.
     expect(css).toMatch(/\.yr-srow-name \{[^}]*min-height: 44px/);
     expect(css).toMatch(/\.yr-srow-name \{[^}]*line-height: 20px/);
@@ -222,10 +222,10 @@ describe("public leaderboard standings", () => {
 
   it("links players on slug sites and on custom domains", async () => {
     const slugged = await render();
-    expect(slugged).toContain('<a class="yr-srow-name" href="/creator/player/Alice">Alice</a>');
+    expect(slugged).toMatch(/<a class="yr-srow-name" href="\/creator\/player\/Alice">[^]*?<span class="yr-player-name">Alice<\/span><\/a>/);
 
     const custom = await render("leaderboard", { custom: true });
-    expect(custom).toContain('<a class="yr-srow-name" href="/player/Alice">Alice</a>');
+    expect(custom).toMatch(/<a class="yr-srow-name" href="\/player\/Alice">[^]*?<span class="yr-player-name">Alice<\/span><\/a>/);
     expect(custom).not.toContain("/creator/player/");
 
     expect(shell).toContain('(isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/")');
@@ -343,7 +343,7 @@ describe("public leaderboard standings", () => {
 
     const home = await render("home");
     expect(home).toContain('<span class="viewer-player-name">Alice</span>');
-    expect(home).toContain('<span class="viewer-rank">01</span>');
+    expect(home).toContain('<span class="viewer-rank">1</span>');
     expect((home.match(/class="viewer-board-row"/g) || [])).toHaveLength(3);
   });
 });

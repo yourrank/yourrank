@@ -35,6 +35,10 @@ const GOOGLE_FONTS =
   '<link rel="preconnect" href="https://fonts.googleapis.com" />' +
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
   '<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@500;700&display=swap" rel="stylesheet" />';
+const VIEWER_FONTS =
+  '<link rel="preconnect" href="https://fonts.googleapis.com" />' +
+  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />' +
+  '<link data-viewer-fonts href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />';
 
 // The operator console has no dark skin (the workspace stylesheets declare only
 // light values), so nothing here opts a document into `data-theme="dark"`. A
@@ -49,6 +53,7 @@ export interface LeaderboardPageOpts {
   reqId?: string;
   bodyClass?: string;
   mainClass?: string;
+  contentOwnsMain?: boolean;
   styles?: string[];
   scripts?: string[];
   noscript?: string;
@@ -69,6 +74,8 @@ export const DASHBOARD_BOOT_WATCHDOG =
 /** Full HTML document for leaderboard dashboard pages. */
 export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
   const mainClass = esc(opts.mainClass || "wrap");
+  const mainTag = opts.contentOwnsMain ? "div" : "main";
+  const mainId = opts.contentOwnsMain ? "" : ' id="main-content"';
   const bodyClass = opts.bodyClass ? ` class="${esc(opts.bodyClass)}"` : "";
   const bodyAttr = `${bodyClass}${opts.wide ? ' data-wide="true"' : ""}`;
   const reqIdMeta = opts.reqId ? `<meta name="request-id" content="${esc(opts.reqId)}" />` : "";
@@ -98,14 +105,14 @@ export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
 <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${esc(opts.title)}</title>
 ${reqIdMeta}
-${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${GOOGLE_FONTS}
+${description}<meta name="robots" content="${esc(opts.robots || "noindex, nofollow")}" /><link rel="canonical" href="${esc(opts.canonical)}" />${opts.bodyClass?.split(" ").includes("viewer-shell") ? VIEWER_FONTS : GOOGLE_FONTS}
 ${styles}
 ${opts.bootWatchdog ? DASHBOARD_BOOT_WATCHDOG : ""}
 </head><body${bodyAttr}>${opts.designContract || (workspace ? "" : DEVIN_DESIGN_CONTRACT)}
 <noscript><div class="noscript-msg">${noscript}</div></noscript>
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
 ${navPlaceholder}
-<main class="${mainClass}" id="main-content">${opts.content}</main>
+<${mainTag} class="${mainClass}"${mainId}>${opts.content}</${mainTag}>
 ${footer}
 ${navScript}
 ${scripts}

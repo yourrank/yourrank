@@ -20,6 +20,7 @@ function makeElement(document, id = "") {
     alt: "",
     dataset: {},
     attributes: {},
+    get href() { return this.attributes.href; },
     classList: { add() {}, remove() {} },
     setAttribute(name, value) { this.attributes[name] = value; },
     removeAttribute(name) { delete this.attributes[name]; },
@@ -35,15 +36,31 @@ function makeElement(document, id = "") {
 
 function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
   const elements = new Map();
+  const navigation = [];
   const document = {
     activeElement: null,
     cookie: "__csrf=token",
     createElement: () => makeElement(document),
+    querySelectorAll(selector) {
+      if (selector === ".viewer-destinations a") return navigation;
+      throw new Error(`Unhandled selector: ${selector}`);
+    },
     getElementById(id) {
       if (!elements.has(id)) elements.set(id, makeElement(document, id));
       return elements.get(id);
     },
   };
+  for (const [id, hash] of [
+    ["viewer-account-link", "vd-profile"],
+    ["connections-link", "vd-connections"],
+    ["notifications-link", "vd-notifications"],
+    ["security-link", "vd-security"],
+    ["data-link", "vd-data"],
+  ]) {
+    const link = document.getElementById(id);
+    link.setAttribute("href", `/me#${hash}`);
+    navigation.push(link);
+  }
   const calls = [];
   const fetch = async (path, opts = {}) => {
     calls.push({ path, method: opts.method || "GET" });
@@ -55,8 +72,9 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
     };
   };
   const location = new URL(url);
+  const listeners = {};
   const window = {
-    addEventListener() {},
+    addEventListener(type, listener) { (listeners[type] ||= []).push(listener); },
     location,
     history: { replaceState(_state, _title, next) { location.href = new URL(next, location.href).href; } },
   };
@@ -67,6 +85,11 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
     activeElement: () => document.activeElement,
     calls,
     location,
+    navigation,
+    navigateHash(hash) {
+      location.hash = hash;
+      for (const listener of listeners.hashchange || []) listener();
+    },
     ready: () => window.__yrViewerReady,
   };
 }
@@ -171,6 +194,25 @@ describe("global Viewer Account client", () => {
     expect(clientSource).toContain('retry();');
     expect(clientSource).toContain('api("GET", "/api/viewer/me")');
   });
+
+  it("selects each account section without showing another section or community balance", async () => {
+    const env = makeEnvironment({ response: { body: ACCOUNT } });
+    await env.ready();
+    const sections = ["vd-profile", "vd-connections", "vd-notifications", "vd-security", "vd-data"];
+    for (const section of sections) {
+      env.navigateHash(section);
+      expect(sections.filter(id => !env.$(id).hidden)).toEqual([section]);
+      expect(env.$("vd-communities-card").hidden).toBe(true);
+      const active = env.navigation.filter(link => link.attributes["aria-current"] === "page");
+      expect(active.map(link => link.href)).toEqual([`/me#${section}`]);
+      expect(env.activeElement()).toBe(env.$("vd-title"));
+    }
+    env.navigateHash("");
+    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    expect(env.$("vd-communities-card").hidden).toBe(false);
+    expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
+    expect(env.$("viewer-communities-link").attributes["aria-current"]).toBe("page");
+  });
 });
 
 describe("global Viewer Account ownership", () => {
@@ -198,10 +240,12 @@ describe("global Viewer Account ownership", () => {
     expect(page).not.toContain("vd-drop-claim");
   });
 
-  it("leaves the main landmark and CSP to the shared shell", () => {
+  it("keeps the skip target on one content landmark outside the navigation", () => {
     expect((page.match(/<main\b/g) || []).length).toBe(1);
     expect((page.match(/id="main-content"/g) || []).length).toBe(1);
     expect(page).not.toContain(' style="');
+    expect(page).toContain('<main class="viewer-main" id="main-content" tabindex="-1">');
+    expect(page.indexOf('class="viewer-rail"')).toBeLessThan(page.indexOf('<main '));
   });
 
   it("gives every account failure a visible status owner", () => {
@@ -212,7 +256,7 @@ describe("global Viewer Account ownership", () => {
 
   it("uses one replacement material owner and puts memberships before account maintenance", () => {
     expect(page).not.toContain('/assets/devin-system.css');
-    expect(page).toContain('User-supplied viewer-dashboard.html');
+    expect(page).toContain('Owner-supplied September 16 mockups');
     expect(page.indexOf('id="vd-communities-card"')).toBeLessThan(page.indexOf('id="vd-profile"'));
     expect(page).toContain('<summary>Manage your login</summary>');
     expect(page).not.toContain('href="/dashboard"');

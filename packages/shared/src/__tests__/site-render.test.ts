@@ -63,11 +63,10 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("VIP");
     expect(html).not.toContain("Active Streak");
     expect(html).not.toContain("Events & Duels");
-    // The page states the viewer's membership, own balance, credits and Claims —
-    // no stat grid and no analytics reading of a loyalty balance.
-    expect(html).toContain('<p class="viewer-context-name" data-preview-field="f_name">Ampersand &amp; Board</p>');
-    expect(html).toContain("Signed in as <b>alice</b>");
-    expect(html).toContain('data-credit-balance-num>500</strong><span>Credits');
+    expect(html).toContain("<strong>Ampersand &amp; Board</strong>");
+    expect(html).toContain('<strong id="viewer-top-name">alice</strong>');
+    expect(html).toContain('data-credit-balance-num>500</strong>');
+    expect(html).toContain("Only in Ampersand &amp; Board");
     expect(html).toContain("Credits earned");
     expect(html).toContain("+100");
     expect(html).toContain("Needs fulfillment");
@@ -87,16 +86,16 @@ describe("shared public board renderer", () => {
 
     const chosen = await render({ ...fixture.data.branding, font: "Bebas Neue" });
     expect(chosen).toContain("family=Bebas+Neue");
-    expect(chosen).toContain('--yr-display-font:"Bebas Neue"');
+    expect(chosen).toContain('name="viewer-display-font" content="&quot;Bebas Neue&quot;');
     expect(chosen).not.toContain('--yr-font:"Bebas Neue"');
 
     // "Inter" is the dashboard's Default option, so it must not override the
     // site's own type stack, and an unknown family never reaches the CSS.
     const dflt = await render(fixture.data.branding);
-    expect(dflt).not.toContain("--yr-display-font");
+    expect(dflt).not.toContain('name="viewer-display-font"');
     const bogus = await render({ ...fixture.data.branding, font: "Comic Sans MS" });
-    expect(bogus).not.toContain("--yr-display-font");
-    expect(bogus).toContain("family=Fira+Sans");
+    expect(bogus).not.toContain('name="viewer-display-font"');
+    expect(bogus).toContain("family=Inter");
   });
 
   it("formats ordinary, expired, invalid, extreme and offset countdowns safely", () => {

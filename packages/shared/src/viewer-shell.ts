@@ -3,10 +3,10 @@ import { brandMarkSvg } from './brand-assets.js';
 
 export const VIEWER_DESIGN_CONTRACT = `<!--
 THESIS: A viewer's community home.
-OWN-WORLD: User-supplied viewer-dashboard.html: ice canvas, white center panel, quiet navigation, blue pills, circular guide and membership rail.
-STORY: Select a community, browse its rewards, follow personal claims, return to your memberships.
-FIRST VIEWPORT: 212px navigation, flexible center panel, 314px community overview beneath one context bar.
-FORM: The supplied HTML is the visual specification. Production routes and scoped records supply all content and actions.
+OWN-WORLD: Owner-supplied September 16 mockups: charcoal navigation, pale canvas, violet actions, bordered cards and a separate YourRank settings shell.
+STORY: Browse a creator's community, follow real standings, redeem rewards, and manage your global viewer identity.
+FIRST VIEWPORT: 228px community navigation, 80px context bar and a 320px supporting column. Home uses a 218px rail, 64px bar and 434px supporting column. Account navigation is 252px.
+FORM: The supplied images own the composition. Production routes and scoped records supply content and actions.
 -->`;
 
 type Destination = { label: string; href: string; active?: boolean };
@@ -14,7 +14,7 @@ const iconPaths: Record<string, string> = {
   home: '<path d="m3 10 9-7 9 7v11h-7v-7H9v7H3Z"/>',
   leaderboard: '<path d="M8 3h8v7a4 4 0 0 1-8 0ZM8 5H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 2v6m-4 1h8"/>',
   gift: '<rect x="3" y="7" width="18" height="5" rx="1.5"/><path d="M5 12v9h14v-9M12 7v14m0-14C7 8 4 3 7 2c3-1 5 5 5 5Zm0 0c5 1 8-4 5-5-3-1-5 5-5 5Z"/>',
-  activity: '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="20" cy="18" r="2"/>',
+  activity: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 4.2 1.5C13 11.2 12 11.5 12 13m0 3h.01"/>',
@@ -24,6 +24,12 @@ const iconPaths: Record<string, string> = {
   shield: '<path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   coins: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 4 16 4 16 0V6M4 12v6c0 4 16 4 16 0v-6"/>',
   code: '<path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4Zm10 0v3m0 3v2m0 3v3"/>',
+  link: '<path d="m10 13 4-4m-6 5-2 2a3 3 0 0 0 4 4l4-4a3 3 0 0 0 0-4m2-2 2-2a3 3 0 0 0-4-4L10 8a3 3 0 0 0 0 4"/>',
+  bell: '<path d="M5 16h14l-2-3V9a5 5 0 0 0-10 0v4Zm5 4h4"/>',
+  logout: '<path d="M10 3H4v18h6m-1-9h12m-4-4 4 4-4 4"/>',
+  external: '<path d="M14 3h7v7m0-7-11 11m0-11H3v18h18v-7"/>',
+  chat: '<path d="M4 4h16v12H9l-5 4Z"/><path d="M8 9h.01M12 9h.01M16 9h.01"/>',
+  back: '<path d="M20 12H4m6-6-6 6 6 6"/>',
 };
 export function viewerIcon(name: string): string {
   return `<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.arrow}</svg>`;
@@ -52,19 +58,30 @@ export function resolveViewerHelp(url: URL): { returnTo: string } | null {
   return { returnTo: '/me' };
 }
 
-export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountHref = '/me', links = [], socialLinks = [], creatorMark = '', sessionControl = '', signedIn = false, helpHref, accountActive = true, helpActive = false, viewerName = '', communityStatus = 'Creator community' }: {
-  name?: string; homeHref?: string; accountHref?: string; links?: Destination[]; socialLinks?: Destination[]; creatorMark?: string; sessionControl?: string; signedIn?: boolean; helpHref?: string; accountActive?: boolean; helpActive?: boolean; viewerName?: string; communityStatus?: string;
+export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountHref = '/me', links = [], socialLinks = [], creatorMark = '', sessionControl = '', signedIn = false, helpHref, accountActive = true, helpActive = false, viewerName = '', communityStatus = 'Creator community', viewerMark = '', balance, tagline = '', watchHref = '', watchLabel = '' }: {
+  name?: string; homeHref?: string; accountHref?: string; links?: Destination[]; socialLinks?: Destination[]; creatorMark?: string; sessionControl?: string; signedIn?: boolean; helpHref?: string; accountActive?: boolean; helpActive?: boolean; viewerName?: string; communityStatus?: string; viewerMark?: string; balance?: number; tagline?: string; watchHref?: string; watchLabel?: string;
 } = {}): string {
   const help = helpHref || viewerHelpHref('/me', accountHref.startsWith('https:') ? new URL(accountHref).origin : '');
-  const names: Record<string, string> = { Home: 'home', Leaderboard: 'leaderboard', 'Reward shop': 'gift', 'My activity': 'activity', 'My communities': 'grid' };
+  const names: Record<string, string> = { Home: 'home', Leaderboard: 'leaderboard', 'Reward shop': 'gift', Rewards: 'gift', 'My activity': 'activity', 'My Activity': 'activity', 'My communities': 'grid' };
+  const labels: Record<string, string> = { 'Reward shop': 'Rewards', 'My activity': 'My Activity' };
   const mark = creatorMark || `<span class="viewer-avatar">${esc(Array.from(name)[0] || 'Y')}</span>`;
-  return `<header class="viewer-topbar"><a class="viewer-brand" href="${esc(links.length ? homeHref : accountHref)}"><span>${brandMarkSvg({ fill: '#2200ff' })}</span><b>yourrank</b><small>Viewer</small></a><span class="viewer-top-title" id="viewer-top-title">${esc(helpActive ? 'Help & contact' : links.find(link => link.active)?.label || 'My communities')}</span><div class="viewer-top-actions"><a class="viewer-icon-button" href="${esc(help)}" aria-label="Help and contact" title="Help and contact">${viewerIcon('help')}</a><details class="viewer-switch"><summary aria-label="Select community">${links.length ? mark : viewerIcon('grid')}<span>${links.length ? esc(name) : 'Select community'}</span>${viewerIcon('down')}</summary><div class="viewer-switch-menu">${links.length ? `<p>Your selected community</p><a href="${esc(homeHref)}">${esc(name)}</a>` : ''}<a href="${esc(accountHref)}">Switch community ${viewerIcon('grid')}</a></div></details><a class="viewer-user" id="viewer-top-avatar" href="${esc(accountHref)}#vd-profile" aria-label="Viewer account${viewerName ? `: ${esc(viewerName)}` : ''}" title="Open viewer account">${viewerIcon('user')}<span>Account</span></a></div></header>
+  const home = links.some(link => link.active && link.label === 'Home');
+  const settings = [
+    ['vd-profile', 'Profile', 'user'],
+    ['vd-connections', 'Connected Accounts', 'link'],
+    ['vd-notifications', 'Notifications', 'bell'],
+    ['vd-security', 'Privacy & Security', 'shield'],
+    ['vd-data', 'Data & Account', 'coins'],
+  ];
+  return `<header class="viewer-topbar">
+${links.length && !home ? `<a class="viewer-top-community" href="${esc(homeHref)}">${mark}<span><strong data-preview-field="f_name">${esc(name)}</strong><small${tagline ? ' data-preview-field="f_tagline"' : ''}>${esc(tagline || communityStatus)}</small></span></a>` : ''}
+<span class="yr-sr" id="viewer-top-title">${esc(helpActive ? 'Help & contact' : links.find(link => link.active)?.label || 'My communities')}</span>
+<div class="viewer-top-actions">${watchHref && !home ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(watchLabel)}${viewerIcon('external')}</a>` : ''}
+<a class="viewer-icon-button" href="${esc(help)}" aria-label="Help and contact" title="Help and contact">${viewerIcon('help')}</a>
+<a class="viewer-user" id="viewer-top-avatar" href="${esc(accountHref)}#vd-profile" aria-label="Viewer account${viewerName ? `: ${esc(viewerName)}` : ''}" title="Open viewer account"><span class="viewer-user-avatar" id="viewer-top-mark">${viewerMark || viewerIcon('user')}</span><span><strong id="viewer-top-name">${esc(viewerName || 'Account')}</strong>${balance != null ? `<small data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${Number(balance).toLocaleString("en-US")}</span> credits</small>` : ''}</span>${viewerIcon('down')}</a></div></header>
 <aside class="viewer-rail" aria-label="Viewer navigation">
-<div class="viewer-creator">${links.length ? `${mark}<div><span class="viewer-fine">Current community</span><strong>${esc(name)}</strong><span>${esc(communityStatus)}</span></div>` : '<p>Select a community to open its pages.</p>'}</div>
-<nav class="viewer-destinations" aria-label="Community pages">${links.length ? links.map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${viewerIcon(names[link.label] || 'arrow')}${esc(link.label)}</a>`).join('') : ['Home','Leaderboard','Reward shop','My activity'].map(label => `<span class="viewer-nav-unavailable" aria-disabled="true">${viewerIcon(names[label])}${label}</span>`).join('')}</nav>
-<div class="viewer-rail-account"><p class="viewer-nav-caption">Your account</p>${sessionControl}<a id="viewer-communities-link" href="${esc(accountHref)}"${!links.length && accountActive ? ' aria-current="page"' : ''}>${viewerIcon('grid')}My communities</a><a id="viewer-account-link" href="${esc(accountHref)}#vd-profile"${signedIn ? '' : ' hidden'}>${viewerIcon('user')}Viewer account</a></div>
-${socialLinks.length ? `<nav class="viewer-channels" aria-label="${esc(name)} channels">${socialLinks.map(link => `<a href="${esc(link.href)}" target="_blank" rel="noopener noreferrer">${esc(link.label)}<span class="yr-sr"> (opens in a new tab)</span></a>`).join('')}</nav>` : ''}
-<div class="viewer-sidebar-bottom"><a href="${esc(help)}"${helpActive ? ' aria-current="page"' : ''}>${viewerIcon('help')}Help &amp; contact</a><p><strong>Your people. Your place.</strong><br>Made for the other side of the stream.</p></div>
-
+${links.length ? `<details class="viewer-switch"><summary aria-label="Select community">${home ? mark : ''}<strong>${esc(name)}</strong>${viewerIcon('down')}</summary><div class="viewer-switch-menu"><p>Your selected community</p><a href="${esc(homeHref)}">${esc(name)}</a><a href="${esc(accountHref)}">Switch community ${viewerIcon('grid')}</a></div></details><nav class="viewer-destinations" aria-label="Community pages">${links.map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${viewerIcon(names[link.label] || 'arrow')}${esc(labels[link.label] || link.label)}</a>${link.label === 'Home' ? `<span class="viewer-nav-unavailable" aria-disabled="true" title="Public activities are not available yet">${viewerIcon('code')}<span>Activities<small>Not available yet</small></span></span>` : ''}`).join('')}</nav>` : `<a class="viewer-brand" href="${esc(accountHref)}"><span>${brandMarkSvg({ className: 'viewer-icon' })}</span><b>YourRank</b></a><a class="viewer-back" id="viewer-communities-link" href="${esc(accountHref)}"${accountActive ? ' aria-current="page"' : ''}>${viewerIcon('back')}My Communities</a><p class="viewer-nav-caption">Account</p><nav class="viewer-destinations" aria-label="Account settings">${settings.map(([id, label, icon]) => `<a ${id === 'vd-profile' ? 'id="viewer-account-link" ' : ''}href="${esc(accountHref)}#${id}">${viewerIcon(icon)}${label}</a>`).join('')}</nav>`}
+${socialLinks.length ? `<nav class="viewer-channels" aria-label="${esc(name)} channels"><p class="viewer-nav-caption">Community</p>${socialLinks.map(link => `<a href="${esc(link.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}<span>${esc(link.label)}</span>${viewerIcon('external')}<span class="yr-sr"> (opens in a new tab)</span></a>`).join('')}</nav>` : ''}
+<div class="viewer-sidebar-bottom">${links.length ? `${tagline ? `<blockquote>${esc(tagline)}<cite>— ${esc(name)}</cite></blockquote>` : ''}<div class="viewer-rail-account">${sessionControl}<a id="viewer-communities-link" href="${esc(accountHref)}">${viewerIcon('grid')}My communities</a><a id="viewer-account-link" href="${esc(accountHref)}#vd-profile"${signedIn ? '' : ' hidden'}>${viewerIcon('user')}Viewer account</a></div>` : '<button type="button" id="vd-rail-logout" hidden>' + viewerIcon('logout') + 'Log out</button>'}<a href="${esc(help)}"${helpActive ? ' aria-current="page"' : ''}>${viewerIcon('help')}Help &amp; contact</a></div>
 </aside>`;
 }
