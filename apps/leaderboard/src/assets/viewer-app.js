@@ -138,10 +138,14 @@
           else layout.appendChild(replacement);
         }
       });
-      ["#yr-feedback", ".viewer-site-footer"].forEach(function (selector) {
-        var old = document.querySelector(selector); if (old) old.remove();
-        var replacement = source.querySelector(selector); if (replacement) document.body.appendChild(replacement);
-      });
+      var oldFooter = document.querySelector(".viewer-site-footer");
+      var footer = source.querySelector(".viewer-site-footer");
+      if (oldFooter) oldFooter.remove();
+      if (footer) document.querySelector(".viewer-layout").appendChild(footer);
+      var oldFeedback = document.querySelector("#yr-feedback");
+      var feedback = source.querySelector("#yr-feedback");
+      if (oldFeedback) oldFeedback.remove();
+      if (feedback) document.body.appendChild(feedback);
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
       await mount(ticket);

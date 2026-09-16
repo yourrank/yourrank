@@ -69,14 +69,14 @@ FORM: The supplied images own the composition. Production routes and scoped reco
 
 
 
-<div class="viewer-scope-help"><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside></div><div class="viewer-site-footer"><footer class="yr-foot">
+<div class="viewer-scope-help"><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside><div class="viewer-site-footer"><footer class="yr-foot">
 <p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
 <div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-feedback-open>Send feedback</button></div>
 </div>
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My Activity</a></nav>
-</footer></div>
+</footer></div></div>
 <dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
 <h2 id="yr-feedback-title">Send feedback</h2>

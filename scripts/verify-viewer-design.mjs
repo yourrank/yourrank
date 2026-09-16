@@ -99,7 +99,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.context().addCookies([{ name: '__csrf', value: 'fixture-csrf', url: origin }]);
   // Visual inspection is batched before the behavioral checks.
-  for (const width of [1440, 390]) {
+  for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const path of ['/nova', '/nova/shop', '/nova/me', '/nova/leaderboard', '/me', '/me#vd-profile', '/me#vd-connections', '/me#vd-notifications', '/me#vd-security', '/me#vd-data']) {
       await page.goto(origin + path); await page.evaluate(() => document.fonts.ready);
@@ -109,6 +109,24 @@ try {
       assert.equal(await page.locator('main').count(), 1, `${path}: one content landmark`);
       assert.equal(await page.locator('main .viewer-rail').count(), 0, `${path}: navigation outside content`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${path} at ${width}: no horizontal overflow`);
+      if (path.startsWith('/nova')) {
+        assert.equal(await page.locator('.viewer-layout > .viewer-site-footer').count(), 1, `${path}: footer stays inside the viewer layout`);
+        assert.equal(await page.evaluate(() => {
+          const footer = document.querySelector('.viewer-site-footer').getBoundingClientRect();
+          const main = document.querySelector('.viewer-main').getBoundingClientRect();
+          const overview = document.querySelector('.viewer-overview').getBoundingClientRect();
+          return footer.top >= Math.max(main.bottom, overview.bottom) - 1;
+        }), true, `${path} at ${width}: footer follows all page content`);
+        if (width > 760) {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          assert.equal(await page.evaluate(() => {
+            const rail = document.querySelector('.viewer-rail').getBoundingClientRect();
+            const footer = document.querySelector('.viewer-site-footer').getBoundingClientRect();
+            return rail.bottom >= footer.bottom - 1;
+          }), true, `${path}: rail reaches the footer`);
+          await page.evaluate(() => window.scrollTo(0, 0));
+        }
+      }
       await page.screenshot({ path: `${output}/${path.slice(1).replace(/[\/#]/g, '-')}-${width}.png`, fullPage: true });
     }
     if (process.env.VIEWER_DESIGN_REFERENCE) {
