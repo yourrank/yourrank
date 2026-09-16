@@ -585,7 +585,7 @@ ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? 
 ${mainInner}
 ${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : ''))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
 </main>
-${viewerShell ? `${viewerCommunityOverview(ctx)}</div><div class="viewer-site-footer">${footer}</div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
+${viewerShell ? `${viewerCommunityOverview(ctx)}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
 <script src="/assets/${viewerShell ? 'viewer-app' : 'site-shell'}.js" nonce="${nonce}" defer></script>

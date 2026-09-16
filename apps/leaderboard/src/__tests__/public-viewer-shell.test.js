@@ -57,6 +57,8 @@ describe("public viewer shell", () => {
     expect((html.match(/class="viewer-rail"/g)||[]).length).toBe(1);
     expect((html.match(/<main\b/g)||[]).length).toBe(1);
     expect((html.match(/<h1\b/g)||[]).length).toBe(1);
+    expect(html).toContain('</aside><div class="viewer-site-footer"><footer');
+    expect(html).not.toContain('</aside></div><div class="viewer-site-footer">');
     for (const legacy of ['class="yr-top"', 'id="yr-side"', 'id="yr-menu"', '/assets/devin-system.css', 'data-template=']) expect(html).not.toContain(legacy);
     expect(html).toContain('/assets/viewer-shell.css');
   });
@@ -269,6 +271,7 @@ describe("public viewer shell", () => {
     expect(app).toContain('window.addEventListener("popstate"');
     expect(app).toContain('!element.hidden && element.getClientRects().length > 0');
     expect(app).toContain('location.assign(target.href)');
+    expect(app).toContain('document.querySelector(".viewer-layout").appendChild(footer)');
     expect(app).not.toContain('document.documentElement.innerHTML');
   });
 
