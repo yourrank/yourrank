@@ -110,7 +110,7 @@ function selectAccountView() {
   const communitiesLink = $("viewer-communities-link");
   if (current) { communitiesLink.removeAttribute("aria-current"); }
   else { accountLink.removeAttribute("aria-current"); communitiesLink.setAttribute("aria-current", "page"); }
-  document.querySelectorAll?.('.viewer-destinations a').forEach(link => {
+  document.querySelectorAll('.viewer-destinations a').forEach(link => {
     if (new URL(link.href, window.location.href).hash === `#${current}`) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
@@ -167,8 +167,16 @@ function renderAccount(viewer) {
   const fallback = $("vd-avatar-fallback");
   avatar.hidden = true;
   fallback.hidden = false;
-  avatar.onload = () => { avatar.hidden = false; fallback.hidden = true; };
-  avatar.onerror = () => { avatar.hidden = true; fallback.hidden = false; };
+  avatar.onload = () => {
+    if (lifetime.signal.aborted || !signedIn) return;
+    avatar.hidden = false; fallback.hidden = true;
+    $("viewer-top-mark").innerHTML = `<img src="${esc(viewer.avatarUrl)}" alt="" />`;
+  };
+  avatar.onerror = () => {
+    if (lifetime.signal.aborted || !signedIn) return;
+    avatar.hidden = true; fallback.hidden = false;
+    $("viewer-top-mark").textContent = initial(name);
+  };
   if (viewer.avatarUrl) {
     avatar.alt = `${name}'s profile picture`;
     avatar.src = viewer.avatarUrl;
@@ -242,7 +250,7 @@ async function load() {
     setGlobalLoading(false);
     if (!lifetime.signal.aborted && (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card")) {
       const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
-      destination.focus();
+      destination.focus({ preventScroll: true });
     }
   }
 }

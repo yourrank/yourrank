@@ -6,7 +6,6 @@
   var pending;
   var sequence = 0;
   var currentUrl = location.href;
-  var selectedSlug = document.body.dataset.slug || "";
   var loaded = {};
   var notice = document.createElement("p");
   notice.className = "viewer-navigation-status";
@@ -14,20 +13,6 @@
   notice.hidden = true;
   document.querySelector(".viewer-layout").appendChild(notice);
 
-  function rememberCommunity() {
-    var slug = document.body.dataset.slug;
-    if (slug) {
-      selectedSlug = slug;
-      try { sessionStorage.setItem("yr-viewer-community", slug); } catch (_) { /* Optional context only. */ }
-    }
-    document.querySelectorAll('a[href]').forEach(function (link) {
-      var url = new URL(link.href, location.href);
-      if (selectedSlug && url.pathname === "/me" && (url.origin !== location.origin || document.body.dataset.customDomain !== "true")) {
-        url.searchParams.set("community", selectedSlug);
-        link.href = url.href;
-      }
-    });
-  }
   function updateNavigation() {
     document.querySelectorAll('.viewer-rail a[aria-current]').forEach(function (link) { link.removeAttribute("aria-current"); });
     document.querySelectorAll('.viewer-rail a[href]').forEach(function (link) {
@@ -41,7 +26,6 @@
     var heading = document.querySelector('.viewer-main h1');
     var active = document.querySelector('.viewer-rail a[aria-current]');
     document.getElementById("viewer-top-title").textContent = active ? active.textContent : heading ? heading.textContent : "Community";
-    rememberCommunity();
   }
   function loadAsset(src, initName, module) {
     if (window[initName]) return Promise.resolve(window[initName]());
@@ -66,8 +50,18 @@
   }
   function focusContent() {
     var target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
-    if (!target || target.hidden) target = document.querySelector('.viewer-main h1');
-    if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); target.scrollIntoView({ block: "start" }); }
+    var anchor = target && !target.hidden;
+    if (!anchor) target = document.querySelector('.viewer-main h1');
+    if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); }
+    if (anchor) target.scrollIntoView({ block: "start" });
+    else window.scrollTo(0, 0);
+  }
+  function syncTheme(source) {
+    ["accent", "accent-ink", "display-font"].forEach(function (name) {
+      var token = source.querySelector('meta[name="viewer-' + name + '"]');
+      if (token) document.body.style.setProperty("--yr-" + name, token.content);
+      else document.body.style.removeProperty("--yr-" + name);
+    });
   }
   function hasPendingAction() {
     return Array.from(document.querySelectorAll('.viewer-main [aria-busy="true"], .viewer-main button:disabled[aria-busy], #c_submit:disabled')).some(function (element) {
@@ -118,9 +112,7 @@
       var oldToken = document.querySelector('meta[name="csrf-token"]');
       if (oldToken) oldToken.remove();
       if (token) document.head.appendChild(token);
-      var theme = source.querySelector('[data-theme-tokens]');
-      var currentTheme = document.querySelector('[data-theme-tokens]');
-      if (theme && currentTheme) currentTheme.textContent = theme.textContent;
+      syncTheme(source);
       [".viewer-overview", ".viewer-home-banner"].forEach(function (selector) {
         var old = document.querySelector(selector);
         var replacement = source.querySelector(selector);
@@ -164,6 +156,7 @@
   });
   window.addEventListener("popstate", function () { navigate(location.href, { pop: true, refresh: true }); });
   window.YRViewerApp = { navigate: navigate, refresh: function () { return navigate(location.href, { refresh: true }); } };
+  syncTheme(document);
   window.__yrViewerAppReady = mount().catch(function () {
     notice.textContent = "Page controls could not load. Reload to try again."; notice.hidden = false;
   });

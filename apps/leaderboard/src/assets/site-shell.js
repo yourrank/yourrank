@@ -29,7 +29,7 @@
     var rewardSearch = document.getElementById("viewer-reward-search");
     var rewardSort = document.getElementById("viewer-reward-sort");
     var rewardRows = Array.from(rewardList.children);
-    document.querySelector(".viewer-reward-tools").hidden = false;
+    document.querySelectorAll(".viewer-reward-tools").forEach(function (tools) { tools.hidden = false; });
     var filterRewards = function () {
       var query = rewardSearch.value.trim().toLowerCase();
       rewardRows.forEach(function (row) { row.hidden = !row.dataset.rewardFilter.includes(query); });
@@ -225,13 +225,12 @@
     var identity = spotlight
       ? '<span class="yr-player-mark" aria-hidden="true">' + esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase()) + '</span><span class="yr-player-name">' + esc(p.name) + '</span>'
       : esc(p.name);
-    var labelClass = spotlight ? "yr-podium-label" : "yr-sr";
     return '<li class="yr-srow' + (rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : "") +
       '" data-player-name="' + name + '" data-position="' + rank + '">' +
       '<span class="yr-srow-rank"><span class="yr-sr">Rank </span>' + rank + "</span>" +
       (eventId ? '<span class="yr-srow-name">' + identity + '</span>' : '<a class="yr-srow-name" href="' + (isCustomDomain ? "/player/" : "/" + encodeURIComponent(slug) + "/player/") + encodeURIComponent(p.name || "") + '">' + identity + "</a>") +
-      '<span class="yr-srow-val"><span class="' + labelClass + '">' + esc(valueLabel) + ': </span>' + value + "</span>" +
-      (prize ? '<span class="yr-srow-prize"><span class="' + labelClass + '">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
+      '<span class="yr-srow-val"><span class="yr-sr">' + esc(valueLabel) + ': </span>' + value + "</span>" +
+      (prize ? '<span class="yr-srow-prize"><span class="yr-sr">' + esc(prizeLabel) + ': </span>' + prize + "</span>" : "") +
       "</li>";
   };
   var fetchPage = function (offset, q, signal) {
@@ -639,18 +638,26 @@
       body: JSON.stringify({ slug: slug, shopItemId: btn.dataset.redeem, idempotencyKey: idempotencyKey }),
     })
       .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
-      .then(function (r) {
+      .then(async function (r) {
         if (r.ok && r.data.ok) {
           delete btn.dataset.redeemKey;
           btn.textContent = "Claimed";
           btn.removeAttribute("aria-busy");
           btn.classList.add("is-success");
-          setRedeemStatus("Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.");
+          var message = "Claim submitted: “" + name + "”. " + cost + " free credits used. The creator will complete it.";
+          setRedeemStatus(message);
           if (typeof r.data.balance === "number") updateBalance(r.data.balance);
           var overviewStatus = document.querySelector("[data-viewer-claim-summary]");
           if (overviewStatus) overviewStatus.textContent = "Claim submitted";
           // The button is spent, so the status region keeps focus on the page.
           focusWithoutScroll(redeemStatus || btn);
+          if (window.YRViewerApp) {
+            await window.YRViewerApp.refresh();
+            if (document.body.dataset.slug !== slug) return;
+            redeemStatus = document.getElementById("yr-redeem-status");
+            setRedeemStatus(message);
+            focusWithoutScroll(redeemStatus);
+          }
         } else {
           recover(orderErrorText(r.data.error));
         }
