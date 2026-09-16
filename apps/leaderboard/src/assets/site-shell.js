@@ -709,6 +709,22 @@
     }
   }
 
+  // ── Share block: native share sheet when available, else copy the URL ──
+  document.querySelectorAll("[data-share-copy]").forEach(function (b) {
+    var status = b.parentNode && b.parentNode.querySelector("[data-share-status]");
+    var say = function (text) { if (status) status.textContent = text; };
+    b.addEventListener("click", function () {
+      var url = b.dataset.shareUrl || window.location.href;
+      var title = b.dataset.shareTitle || document.title;
+      if (navigator.share) {
+        navigator.share({ title: title, url: url }).catch(function () {});
+        return;
+      }
+      if (!navigator.clipboard || !navigator.clipboard.writeText) { say("Copy this link: " + url); return; }
+      navigator.clipboard.writeText(url).then(function () { say("Link copied"); }, function () { say("Copy this link: " + url); });
+    });
+  });
+
   // ── Feedback dialog ─────────────────────────────────────────────────
   var dialog = document.getElementById("yr-feedback");
   var statusEl = document.getElementById("yr-feedback-status");

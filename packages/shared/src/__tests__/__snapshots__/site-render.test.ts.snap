@@ -62,6 +62,7 @@ FORM: The supplied images own the composition. Production routes and scoped reco
 
 
 </div></div>
+
 <footer class="viewer-panel-footer"><span><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg>Your credits and claims stay with this community.</span><a href="/help/support?audience=viewer&amp;return=%2Fboard%2520fixture%2Fleaderboard">How YourRank works <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a></footer>
 </main>
 <aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>Your Balance</h2></div><p>Sign in to see your credits in this community.</p><a class="yr-btn" href="/board%20fixture/me#membership-code">Sign in <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a></section>
@@ -75,6 +76,7 @@ FORM: The supplied images own the composition. Production routes and scoped reco
 <p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
 <div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-feedback-open>Send feedback</button></div>
 </div>
+<div class="yr-share" data-share-block><span>Share</span><button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-share-copy data-share-url="https://example.test/board%20fixture/leaderboard" data-share-title="Ampersand &amp; Board">Share link</button><a class="yr-btn yr-btn--sm yr-btn--ghost" href="https://x.com/intent/post?url=https%3A%2F%2Fexample.test%2Fboard%2520fixture%2Fleaderboard&amp;text=Ampersand%20%26%20Board" target="_blank" rel="noopener noreferrer">Share on X<span class="yr-sr"> (opens in a new tab)</span></a><span class="yr-share-status" data-share-status role="status" aria-live="polite"></span></div>
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My Activity</a></nav>
 </footer></div></div>
 <dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">

@@ -208,3 +208,71 @@ describe("Layout & blocks toggle wiring (client)", () => {
     expect(siteJs).toContain('aria-label="${esc(s.label)}"');
   });
 });
+
+const { renderSite } = await import("@yourrank/shared/site-render");
+
+describe("every Layout & blocks toggle changes the public page", () => {
+  const baseData = {
+    brand: { name: "Creator Name", period: "Monthly", prizePool: "$500" },
+    branding: { template: "cyber_arcade", font: "Inter", options: {} },
+    players: [
+      { name: "Alice", rank: 1, wagered: 5000, prize: "$100" },
+      { name: "Bob", rank: 2, wagered: 3000, prize: "$60" },
+    ],
+    prizes: { currency: "$", wagerLabel: "Wagered", prizeLabel: "Prize" },
+    socials: [{ name: "Kick", type: "kick", url: "https://kick.com/creator", enabled: true }],
+    rules: DEFAULT_EXTRA.rules,
+    endsAt: new Date(Date.now() + 86400000).toISOString(),
+    siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
+  };
+  const render = (section, sections) => renderSite({
+    r: { slug: "creator", plan: "pro", data: { ...baseData, sections: normalizeSections(sections) } },
+    section, viewer: null, viewerData: null,
+    opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n" },
+  });
+
+  it("hides the standings and the home preview when Show Leaderboard is off", async () => {
+    const on = await render("leaderboard", {});
+    const off = await render("leaderboard", { leaderboard: false });
+    expect(on).toContain("data-player-board");
+    expect(on).toContain('data-player-name="alice"');
+    expect(off).not.toContain("data-player-board");
+    expect(off).not.toContain("Alice");
+    expect(off).toContain("Standings are hidden");
+    expect(await render("home", {})).toContain("viewer-board-list");
+    expect(await render("home", { leaderboard: false })).not.toContain("viewer-board-list");
+  });
+
+  it("renders the creator's rules only while Show Rules block is on", async () => {
+    const on = await render("leaderboard", {});
+    expect(on).toContain('class="viewer-card viewer-rules"');
+    expect(on).toContain("Leaderboard resets automatically each period.");
+    expect(await render("leaderboard", { rules: false })).not.toContain("viewer-rules");
+    const empty = await renderSite({
+      r: { slug: "creator", plan: "pro", data: { ...baseData, rules: [{ name: "not a string" }], sections: normalizeSections({}) } },
+      section: "leaderboard", viewer: null, viewerData: null,
+      opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n" },
+    });
+    expect(empty).not.toContain("viewer-rules");
+  });
+
+  it("renders share controls for the page's own URL only while Show Share Buttons is on", async () => {
+    const on = await render("leaderboard", {});
+    expect(on).toContain('data-share-url="https://example.test/creator/leaderboard"');
+    expect(on).toContain("https://x.com/intent/post?url=https%3A%2F%2Fexample.test%2Fcreator%2Fleaderboard");
+    expect(await render("home", {})).toContain('data-share-url="https://example.test/creator"');
+    expect(await render("leaderboard", { share: false })).not.toContain("data-share-block");
+  });
+
+  it("keeps prize pool, countdown, social links and the badge on their toggles", async () => {
+    const on = await render("leaderboard", {});
+    expect(on).toContain("$500 prize pool");
+    expect(on).toContain("data-countdown");
+    expect(on).toContain('<nav class="viewer-channels"');
+    expect(on).not.toContain("Powered by <a");
+    expect(await render("leaderboard", { poweredBy: true })).toContain("Powered by <a");
+    expect(await render("leaderboard", { payouts: false })).not.toContain("$500 prize pool");
+    expect(await render("leaderboard", { countdown: false })).not.toContain("data-countdown");
+    expect(await render("leaderboard", { socials: false })).not.toContain('<nav class="viewer-channels"');
+  });
+});
