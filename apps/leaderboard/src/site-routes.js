@@ -114,7 +114,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     }
 
     const cacheableSite = cacheableRequest && isPublicBoardCacheSite(r);
-    const { viewer, cookie: viewerCookie } = await resolveViewer(request, env);
+    const { viewer, cookie: viewerCookie } = await resolveViewer(request, env, { siteId: r.id });
     if (viewer) {
       respHeaders.set("cache-control", "private, no-store");
       respHeaders.append("vary", "Cookie");

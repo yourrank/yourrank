@@ -106,18 +106,17 @@ export async function handleViewerJoin(request, env, deps = {}) {
   const requireViewerImpl = deps.requireViewer || requireViewer;
   const rateLimitImpl = deps.rateLimit || rateLimit;
   const oneImpl = deps.one || one;
-  const { viewer, res } = await requireViewerImpl(request, env);
-  if (res) return res;
   if (!requestIsSameOrigin(request)) return bad("Join request origin is not allowed.", 403);
-
-  const rl = await rateLimitImpl(env, `viewer:join:${viewer.id}`, 10, 60);
-  if (!rl.ok) return bad("Too many join attempts. Try again shortly.", 429);
-
   const body = request.validatedBody || await (async () => {
     try { return await request.json(); } catch { return null; }
   })();
   const community = await resolveJoinableCommunity(request, env, body?.slug, deps);
   if (!community) return bad("Community is not available.", 404);
+  const { viewer, res } = await requireViewerImpl(request, env, { siteId: community.id });
+  if (res) return res;
+
+  const rl = await rateLimitImpl(env, `viewer:join:${viewer.id}`, 10, 60);
+  if (!rl.ok) return bad("Too many join attempts. Try again shortly.", 429);
 
   const membership = await createViewerMembership(community.id, viewer.id, { oneImpl });
   if (!membership) return bad("Community membership is unavailable.", 503);

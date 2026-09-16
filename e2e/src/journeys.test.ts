@@ -695,6 +695,7 @@ describeViewer("viewer wagering journeys", () => {
       username: VIEWER_USERNAME,
       delta: 5000,
       reason: "release gate funding",
+      operationId: `gate-funding-${randomId()}`,
     });
     if (!grant.json?.ok) throw new Error(`viewer funding failed: ${grant.status} ${grant.body}`);
   });

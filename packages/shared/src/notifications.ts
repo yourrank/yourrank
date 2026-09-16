@@ -14,6 +14,7 @@
 
 import { decryptToken, decryptCredential } from "./crypto.js";
 import { errMessage } from "./errors.js";
+import { runOnceWithLease, type LedgerIdentity } from "./queue-ledger.js";
 
 // ----------------------------------------------------------------------------
 // Telegram Markdown escaping
@@ -235,6 +236,27 @@ export function detectTop3Changes(
 // Notification firing functions
 // ----------------------------------------------------------------------------
 
+export interface NotifyDeliveryOptions {
+  /** Producer event id. When present, each destination delivery (Discord embed i,
+   *  Telegram message) gets its own durable ledger identity, so a retry after a
+   *  later failure re-sends only the legs that actually failed (C15/F14). */
+  parentEventId?: string;
+  correlationId?: string | null;
+  runOnceWithLeaseImpl?: typeof runOnceWithLease;
+  sendDiscordWebhookImpl?: typeof sendDiscordWebhook;
+  sendTelegramMessageImpl?: typeof sendTelegramMessage;
+}
+
+function notifySubIdentity(options: NotifyDeliveryOptions, key: string): LedgerIdentity | null {
+  if (!options.parentEventId) return null;
+  return {
+    eventId: `${options.parentEventId}#${key}`,
+    eventType: "notify",
+    correlationId: options.correlationId ?? null,
+    identitySource: "envelope",
+  };
+}
+
 /**
  * Fire all configured notifications for a top-3 change event.
  * Reads the site's extra_json for notification config and bot token.
@@ -249,7 +271,8 @@ export async function notifyTop3Change(
   env: any,
   siteId: string,
   siteName: string,
-  top3Changes: Array<{ name: string; rank: number; wagered: number; score?: number; rankBy?: "wagered" | "score" }>
+  top3Changes: Array<{ name: string; rank: number; wagered: number; score?: number; rankBy?: "wagered" | "score" }>,
+  options: NotifyDeliveryOptions = {},
 ): Promise<void> {
   if (!top3Changes.length) return;
 
@@ -263,12 +286,19 @@ export async function notifyTop3Change(
   const tgEnabled = site.telegram_notify;
   const tgChatId = site.telegram_chat_id;
 
-  // Discord: one embed per new top-3 player
+  // Discord: one embed per new top-3 player. Each embed is its own durable
+  // delivery (C15/F14): a later embed failing must not cause the already
+  // delivered ones to be resent on retry.
   if (discordUrl) {
-    for (const change of top3Changes) {
+    const sendDiscord = options.sendDiscordWebhookImpl ?? sendDiscordWebhook;
+    const leaseOnce = options.runOnceWithLeaseImpl ?? runOnceWithLease;
+    for (const [changeIndex, change] of top3Changes.entries()) {
       const scoreRanked = change.rankBy === "score";
       const embed = buildTop3Embed(siteName, change.name, change.rank, change.wagered, scoreRanked ? "Points" : "Wagered", scoreRanked ? Number(change.score || 0) : change.wagered);
-      requireDelivery("Discord", await sendDiscordWebhook(discordUrl, embed));
+      const sub = notifySubIdentity(options, `discord:${changeIndex}`);
+      const sendOne = async () => requireDelivery("Discord", await sendDiscord(discordUrl, embed));
+      if (sub) await leaseOnce(sub, sendOne);
+      else await sendOne();
     }
   }
 
@@ -295,7 +325,14 @@ export async function notifyTop3Change(
         return `${medal} *${escapeTgMarkdown(c.name)}* entered #${c.rank} — ${metric}`;
       });
       const text = `⚡ *${escapeTgMarkdown(siteName)}* — New Top 3!\n\n${lines.join("\n")}`;
-      requireDelivery("Telegram", await sendTelegramMessage(botToken, tgChatId, text));
+      // C15/F14: the Telegram summary message is its own durable delivery,
+      // separate from the Discord embeds above.
+      const sendTelegram = options.sendTelegramMessageImpl ?? sendTelegramMessage;
+      const leaseOnce = options.runOnceWithLeaseImpl ?? runOnceWithLease;
+      const sub = notifySubIdentity(options, "telegram");
+      const sendOne = async () => requireDelivery("Telegram", await sendTelegram(botToken, tgChatId, text));
+      if (sub) await leaseOnce(sub, sendOne);
+      else await sendOne();
     }
   }
 }
@@ -483,11 +520,12 @@ export async function dispatchNotifyEvent(
   db: { one: (sql: string, params: any[]) => Promise<any>; query: (sql: string, params: any[]) => Promise<any[]> },
   env: any,
   event: NotifyEventPayload,
-  tokenCache: Map<string, string> = new Map()
+  tokenCache: Map<string, string> = new Map(),
+  options: NotifyDeliveryOptions = {}
 ): Promise<void> {
   switch (event.kind) {
     case "top3":
-      await notifyTop3Change(db, env, event.siteId, event.siteName, event.changes || []);
+      await notifyTop3Change(db, env, event.siteId, event.siteName, event.changes || [], options);
       break;
     case "reset":
       await notifyReset(db, env, event.siteId, event.siteName, event.players || [], event.period || "");

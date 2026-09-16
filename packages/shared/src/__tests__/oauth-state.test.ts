@@ -2,13 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { consumeOAuthState, storeOAuthState } from "../oauth-state.js";
 import type { Tx } from "../db.js";
 
-function transactionDb({ consumeRows = [] as Record<string, unknown>[] } = {}) {
+function transactionDb({ consumeRows = [] as Record<string, unknown>[], insertRows = [{ state: "stored" }] as Record<string, unknown>[] } = {}) {
   const calls: Array<{ sql: string; params?: unknown[] }> = [];
   let consumeCount = 0;
   const withTransaction = async <R>(fn: (tx: Tx) => Promise<R>): Promise<R> => fn({
     unsafe: async (sql, params = []) => {
       calls.push({ sql, params });
       if (sql.includes("RETURNING payload")) return consumeRows[consumeCount++] ? [consumeRows[consumeCount - 1]] : [];
+      if (sql.includes("RETURNING state")) return insertRows;
       return [];
     },
     one: async () => undefined,
@@ -26,6 +27,12 @@ describe("OAuth state storage", () => {
     expect(db.calls[0].sql).toContain("DELETE FROM public.oauth_states WHERE expires_at <= now()");
     expect(db.calls[1].sql).toContain("INSERT INTO public.oauth_states");
     expect(db.calls[1].params).toEqual(["state-1", "kick", { codeVerifier: "verifier", siteId: "site-1" }, 600]);
+  });
+
+  test("does not overwrite an existing transaction on a state collision", async () => {
+    const db = transactionDb({ insertRows: [] });
+    await expect(storeOAuthState("kick", "state-1", { browserNonceHash: "hash" }, db)).rejects.toThrow("OAuth state collision");
+    expect(db.calls[1].sql).toContain("ON CONFLICT (state) DO NOTHING");
   });
 
   test("consumes a state once and rejects a replay", async () => {

@@ -1,6 +1,6 @@
 // Kick OAuth 2.1 flow for streamers linking their Kick channel.
 import { currentUser, requireUser, ok, bad, readJson, rateLimit } from "../auth.js";
-import { one, exec, withTransaction } from "@yourrank/shared/db";
+import { one, withTransaction } from "@yourrank/shared/db";
 import { requireSiteCapability } from "../site-authorization.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
 import {
@@ -100,7 +100,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
   const {
     currentUser: currentUserImpl = currentUser,
     one: oneImpl = one,
-    exec: execImpl = exec,
+    withTransaction: withTransactionImpl = withTransaction,
     requireSiteCapability: requireSiteCapabilityImpl = requireSiteCapability,
     consumeOAuthState: consumeOAuthStateImpl = consumeOAuthState,
     exchangeKickCode: exchangeKickCodeImpl = exchangeKickCode,
@@ -168,6 +168,11 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
     if (!kickUser || !kickChannel) {
       throw new Error("Could not fetch Kick user or channel");
     }
+    const kickUserId = String(kickUser.user_id || "");
+    const kickChannelId = String(kickChannel.broadcaster_user_id || "");
+    if (!kickUserId || !kickChannelId || kickUserId !== kickChannelId) {
+      throw new Error("Kick user and channel ownership did not match");
+    }
 
     // Subscribe to the channel-point reward redemption event.
     try {
@@ -182,35 +187,31 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
       ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
       : null;
 
-    await execImpl(
-      `UPDATE users
-          SET kick_user_id = $1,
-              kick_username = $2,
-              kick_access_token_enc = $3,
-              kick_refresh_token_enc = $4,
-              kick_token_expires_at = $5,
-              kick_linked_at = now(),
-              updated_at = now()
-        WHERE id = $6`,
-      [
-        String(kickUser.user_id),
-        kickUser.name || "",
-        accessEnc,
-        refreshEnc,
-        expiresAt,
-        user.id,
-      ]
-    );
+    await withTransactionImpl(async (tx) => {
+      await tx.unsafe(
+        `UPDATE users
+            SET kick_user_id = $1,
+                kick_username = $2,
+                kick_access_token_enc = $3,
+                kick_refresh_token_enc = $4,
+                kick_token_expires_at = $5,
+                kick_linked_at = now(),
+                updated_at = now()
+          WHERE id = $6`,
+        [kickUserId, kickUser.name || "", accessEnc, refreshEnc, expiresAt, user.id]
+      );
 
-    await execImpl(
-      `UPDATE sites
-          SET kick_channel_external_id = $1,
-              kick_channel_name = $2,
-              kick_channel_linked_at = now(),
-              updated_at = now()
-        WHERE id = $3`,
-      [String(kickChannel.broadcaster_user_id), kickChannel.slug || "", stateData.siteId]
-    );
+      await tx.unsafe(
+        `UPDATE sites
+            SET kick_channel_external_id = $1,
+                kick_channel_name = $2,
+                kick_channel_linked_at = now(),
+                kick_channel_verified_at = now(),
+                updated_at = now()
+          WHERE id = $3`,
+        [kickChannelId, kickChannel.slug || "", stateData.siteId]
+      );
+    });
     void notifyLiveBoard(env, stateData.siteId);
 
     return redirect(channelRedirect({ kick_connected: "1" }, stateData.siteId));
@@ -248,6 +249,10 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
         WHERE user_id=$1
           AND id<>$2
           AND kick_channel_external_id IS NOT NULL
+          AND kick_channel_verified_at IS NOT NULL
+          AND kick_channel_external_id = (
+            SELECT kick_user_id FROM public.users WHERE id=$1 AND kick_linked_at IS NOT NULL
+          )
         LIMIT 1`,
       [user.id, site.id]
     );
@@ -270,6 +275,7 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
           SET kick_channel_external_id = null,
               kick_channel_name = null,
               kick_channel_linked_at = null,
+              kick_channel_verified_at = null,
               updated_at = now()
         WHERE id = $1`,
       [site.id]

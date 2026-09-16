@@ -442,6 +442,9 @@ describe("broadcast worker", () => {
     });
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("FROM bot_subscribers")) return Promise.resolve(subs);
+      if (sql.includes("RETURNING id") && sql.includes("processing_lease_expires_at")) {
+        return Promise.resolve([{ id: bc.id }]);
+      }
       return Promise.resolve([]);
     });
   }
@@ -538,5 +541,22 @@ describe("broadcast worker", () => {
     expect(failed).toBeTruthy();
     const sent = mockQuery.mock.calls.some(([sql]) => typeof sql === "string" && sql.includes("FROM bot_subscribers"));
     expect(sent).toBe(false);
+  });
+
+  it("leaves the cursor untouched when the first recipient of a batch is rate-limited", async () => {
+    mockClaim({}, [
+      { tg_user_id: 101, first_name: "A", tg_username: "a" },
+      { tg_user_id: 102, first_name: "B", tg_username: "b" },
+    ]);
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ parameters: { retry_after: 0 } }), { status: 429 })) as any;
+    await processBroadcastBatch();
+    // Nothing was processed: no cursor/counter write may happen at all.
+    expect(cursorUpdate()).toBeUndefined();
+    // The lease must be handed back so the next tick retries recipient 101.
+    const released = mockQuery.mock.calls.some(
+      ([sql]) => typeof sql === "string" && sql.includes("processing_lease_token = NULL")
+    );
+    expect(released).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import { getByUser, getBoardById, getPublicSite } from "../site.js";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
+import { hashToken } from "@yourrank/shared/crypto";
 import { setSiteKickChannel } from "@yourrank/shared/kick-credits";
 import { notifyLiveBoard } from "../live-board-config.js";
 import {
@@ -41,6 +42,17 @@ const creditsCreateRewardDefaults = {
   createKickChannelReward,
   fetchKickCurrentChannel,
   creatorExpansionRestriction,
+};
+
+const creditsConnectDefaults = {
+  requireUser,
+  getByUser,
+  getBoardById,
+  requireSiteCapability,
+  rateLimit,
+  one,
+  setSiteKickChannel,
+  notifyLiveBoard,
 };
 
 const creditsGrowthDefaults = {
@@ -261,6 +273,9 @@ export async function handleCreditsStatus(request, env) {
   const [channel, mappings, items, viewers, redemptions, usage] = await Promise.all([
     one(
       `SELECT s.kick_channel_external_id, s.kick_channel_name, s.kick_channel_linked_at,
+              s.kick_channel_verified_at IS NOT NULL
+                AND u.kick_user_id = s.kick_channel_external_id
+                AND u.kick_linked_at IS NOT NULL AS channel_verified,
               u.kick_user_id IS NOT NULL AND u.kick_linked_at IS NOT NULL AS account_linked,
               u.kick_access_token_enc IS NOT NULL AS has_access_token,
               u.kick_refresh_token_enc IS NOT NULL AS has_refresh_token,
@@ -313,7 +328,7 @@ export async function handleCreditsStatus(request, env) {
   const plan = await effectiveSitePlan(site, user);
   const canManageConnections = hasSiteCapability(authorization.role, "canRoleManageConnections");
   const channelHealth = deriveKickConnectionHealth({
-    channelLinked: Boolean(channel?.kick_channel_external_id),
+    channelLinked: Boolean(channel?.kick_channel_external_id && channel?.channel_verified),
     accountLinked: Boolean(channel?.account_linked),
     hasAccessToken: Boolean(channel?.has_access_token),
     hasRefreshToken: Boolean(channel?.has_refresh_token),
@@ -339,7 +354,7 @@ export async function handleCreditsStatus(request, env) {
     ok: true,
     enabled: Boolean(site.credits_enabled),
     channel: {
-      connected: Boolean(channel?.kick_channel_external_id),
+      connected: Boolean(channel?.kick_channel_external_id && channel?.channel_verified),
       name: channel?.kick_channel_name || null,
       linkedAt: channel?.kick_channel_linked_at || null,
       status: channelHealth.status,
@@ -375,28 +390,40 @@ export async function handleCreditsStatus(request, env) {
   }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }
 
-export async function handleCreditsConnect(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleCreditsConnect(request, env, deps = creditsConnectDefaults) {
+  const { user, res } = await deps.requireUser(request, env);
   if (res) return res;
   const url = new URL(request.url);
-  const site = await getSite(env, user, url);
+  const siteId = url.searchParams.get("siteId");
+  const site = siteId ? await deps.getBoardById(env, user.id, siteId) : await deps.getByUser(env, user.id);
   if (!site) return bad("no site", 404);
-  const authorization = await requireSiteCapability(user, site, "canRoleManageConnections");
+  const authorization = await deps.requireSiteCapability(user, site, "canRoleManageConnections");
   if (authorization.res) return authorization.res;
-  if (!(await rateLimit(env, `credits:connect:${user.id}`, 10, 60)).ok) return bad("Too many requests.", 429);
+  if (!(await deps.rateLimit(env, `credits:connect:${user.id}`, 10, 60)).ok) return bad("Too many requests.", 429);
 
   const body = await readJson(request);
   const externalId = String(body?.externalId || "").trim();
-  const name = String(body?.name || "").trim();
   if (!externalId) return bad("Kick channel ID is required");
 
-  await setSiteKickChannel(site.id, externalId, name);
-  void notifyLiveBoard(env, site.id);
-  const row = await one(
+  const providerIdentity = await deps.one(
+    `SELECT kick_user_id, kick_username, kick_linked_at
+       FROM users
+      WHERE id = $1`,
+    [site.user_id]
+  );
+  const verifiedExternalId = String(providerIdentity?.kick_user_id || "");
+  if (!providerIdentity?.kick_linked_at || externalId !== verifiedExternalId) {
+    return bad("Kick channel must match the Site owner's verified Kick account. Reconnect Kick to continue.", 403);
+  }
+
+  const verifiedName = String(providerIdentity.kick_username || "").trim();
+  await deps.setSiteKickChannel(site.id, verifiedExternalId, verifiedName);
+  void deps.notifyLiveBoard?.(env, site.id);
+  const row = await deps.one(
     `SELECT kick_channel_linked_at FROM sites WHERE id = $1`,
     [site.id]
   );
-  return ok({ channel: { connected: true, name, linkedAt: row?.kick_channel_linked_at || null } });
+  return ok({ channel: { connected: true, name: verifiedName, linkedAt: row?.kick_channel_linked_at || null } });
 }
 
 export async function handleCreditsSaveReward(request, env, deps = creditsGrowthDefaults) {
@@ -518,7 +545,8 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
 
   // Load and refresh the streamer's Kick tokens.
   const tokenRow = await deps.one(
-    `SELECT kick_access_token_enc, kick_refresh_token_enc, kick_token_expires_at
+    `SELECT kick_user_id, kick_linked_at,
+            kick_access_token_enc, kick_refresh_token_enc, kick_token_expires_at
        FROM users WHERE id=$1`,
     [user.id]
   );
@@ -586,6 +614,9 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   if (!kickChannelId) {
     return bad("Kick channel ID missing from current channel response", 500);
   }
+  if (!tokenRow.kick_linked_at || kickChannelId !== String(tokenRow.kick_user_id || "")) {
+    return bad("Kick channel does not match the connected provider identity. Reconnect Kick to continue.", 409);
+  }
 
   // Persist refreshed tokens if they changed.
   await deps.exec(
@@ -606,6 +637,8 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
       `UPDATE sites
           SET kick_channel_external_id = $1,
               kick_channel_name = $2,
+              kick_channel_linked_at = now(),
+              kick_channel_verified_at = now(),
               updated_at = now()
         WHERE id = $3`,
       [kickChannelId, kickChannelName, site.id]
@@ -1250,11 +1283,36 @@ export async function handleCreditsAdjustBalance(request, env, deps = getCredits
   const delta = Number(body?.delta);
   const reason = String(body?.reason || "").trim();
   const kickUsername = String(body?.username || body?.kickUsername || "").trim().replace(/^@/, "");
+  const operationId = String(request.headers.get("idempotency-key") || body?.operationId || body?.idempotencyKey || "").trim();
 
-  if (!Number.isFinite(delta) || delta === 0) return bad("delta must be a non-zero integer");
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 2147483647) return bad("delta must be a non-zero 32-bit integer");
   if (!reason) return bad("reason is required");
+  if (!/^[A-Za-z0-9._:-]{8,128}$/.test(operationId)) return bad("A valid idempotency key is required.");
+  const requestHash = await hashToken(JSON.stringify([
+    site.id, user.id, siteViewerId || null, kickUsername.toLowerCase(), delta, reason,
+  ]));
 
   const result = await deps.withTransaction(async (tx) => {
+    // Serialize admission by Site. The receipt is written only with the balance
+    // and ledger commit, and replay precedes mutable membership/balance checks.
+    await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
+    const existingOperation = await tx.one(
+      `SELECT site_viewer_id, request_hash, delta, balance_after
+         FROM app_private.manual_credit_operations
+        WHERE site_id=$1 AND operation_id=$2`,
+      [site.id, operationId]
+    );
+    if (existingOperation) {
+      if (existingOperation.request_hash !== requestHash) {
+        return { error: "Idempotency key was already used for a different adjustment.", status: 409 };
+      }
+      return {
+        siteViewerId: existingOperation.site_viewer_id,
+        balance: existingOperation.balance_after,
+        delta: existingOperation.delta,
+        replayed: true,
+      };
+    }
     let siteViewer = null;
     if (siteViewerId && siteViewerId !== "tip" && siteViewerId !== "by-username") {
       siteViewer = await tx.one(
@@ -1295,12 +1353,19 @@ export async function handleCreditsAdjustBalance(request, env, deps = getCredits
           RETURNING id, balance`,
         [delta, siteViewer.id]
       );
-      await tx.unsafe(
+      const ledger = await tx.one(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
-         VALUES ($1, 'earn', $2, $3, $4)`,
-        [siteViewer.id, delta, `Manual credit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
+         VALUES ($1, 'earn', $2, $3, $4)
+         RETURNING id`,
+        [siteViewer.id, delta, `Manual credit: ${reason}`, { reason, adjusted_by: user.id, manual: true, operation_id: operationId }]
       );
-      return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
+      await tx.unsafe(
+        `INSERT INTO app_private.manual_credit_operations
+           (site_id, operation_id, site_viewer_id, actor_id, delta, reason, ledger_id, balance_after, request_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [site.id, operationId, siteViewer.id, user.id, delta, reason, ledger.id, updated.balance, requestHash]
+      );
+      return { siteViewerId: siteViewer.id, balance: updated.balance, delta, replayed: false };
     }
 
     // delta < 0: debit/refund credits.
@@ -1315,12 +1380,19 @@ export async function handleCreditsAdjustBalance(request, env, deps = getCredits
       [debitAmount, siteViewer.id]
     );
     if (!updated) return { error: "insufficient balance to debit", status: 400 };
-    await tx.unsafe(
+    const ledger = await tx.one(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description, metadata)
-       VALUES ($1, 'refund', $2, $3, $4)`,
-      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, { reason, adjusted_by: user.id, manual: true }]
+       VALUES ($1, 'refund', $2, $3, $4)
+       RETURNING id`,
+      [siteViewer.id, debitAmount, `Manual debit: ${reason}`, { reason, adjusted_by: user.id, manual: true, operation_id: operationId }]
     );
-    return { siteViewerId: siteViewer.id, balance: updated.balance, delta };
+    await tx.unsafe(
+      `INSERT INTO app_private.manual_credit_operations
+         (site_id, operation_id, site_viewer_id, actor_id, delta, reason, ledger_id, balance_after, request_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [site.id, operationId, siteViewer.id, user.id, delta, reason, ledger.id, updated.balance, requestHash]
+    );
+    return { siteViewerId: siteViewer.id, balance: updated.balance, delta, replayed: false };
   });
 
   if (result.error) return bad(result.error, result.status);

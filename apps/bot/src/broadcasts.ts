@@ -15,9 +15,42 @@ const esc = (s: unknown): string =>
 // batch (default 300 messages at ~28 msg/s ≈ 11s of work) and saves
 // a cursor, so a broadcast of any size finishes across ticks without
 // ever exceeding Workers CPU limits. On Node you can just loop it.
+//
+// C13/F12: batch ownership is a durable lease (processing_lease_token +
+// processing_lease_expires_at), not the FOR UPDATE row lock that ended
+// the moment the claim UPDATE committed. While a batch is in flight the
+// row is unclaimable and every write is ownership-checked, so a worker
+// whose lease expired (or was reclaimed by another tick) cannot advance,
+// complete, or fail a broadcast it no longer owns. The lease is RELEASED
+// by the same ownership-checked write that ends the batch, so the next
+// tick continues immediately; a worker that dies mid-batch self-heals
+// after PROCESSING_LEASE_SECONDS.
+//
+// C14/F13: the cursor only advances past subscribers actually processed
+// (sent/failed/blocked). A 429 on the FIRST recipient of a batch leaves
+// the cursor untouched — and merely hands the lease back — so the next
+// tick retries that recipient instead of skipping them forever.
 // ------------------------------------------------------------------
 
 const MSG_INTERVAL_MS = 36; // ~28 msg/s, under Telegram's 30/s cap
+
+// Must comfortably cover one batch's sends (300 × ~36ms pacing + network +
+// up to 30s of 429 backoff) but stay short enough that a dead worker's
+// broadcast is reclaimed on the tick after expiry.
+const PROCESSING_LEASE_SECONDS = 10 * 60;
+
+async function renewBroadcastLease(broadcastId: string, leaseToken: string): Promise<boolean> {
+  const renewed = await query<{ id: string }>(
+    `UPDATE broadcasts
+        SET processing_lease_expires_at = now() + ($3::int * interval '1 second')
+      WHERE id = $1
+        AND processing_lease_token = $2
+        AND processing_lease_expires_at >= now()
+      RETURNING id`,
+    [broadcastId, leaseToken, PROCESSING_LEASE_SECONDS]
+  );
+  return renewed.length === 1;
+}
 
 interface ActiveBroadcast {
   id: string;
@@ -58,18 +91,27 @@ export function buildBroadcastTotalCountUpdate(
  * Returns true if there is (possibly) more work to do.
  */
 export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
-  // Claim one due broadcast (SKIP LOCKED = safe with concurrent ticks).
+  // Claim one due broadcast through a durable lease. SKIP LOCKED keeps
+  // concurrent ticks from fighting over the same row at claim time; the
+  // lease window then keeps them apart for the whole batch, which the old
+  // FOR UPDATE lock (released at claim-commit) could not.
+  const leaseToken = crypto.randomUUID();
   const bc = await one<ActiveBroadcast>(
-    `UPDATE broadcasts SET status = 'sending'
+    `UPDATE broadcasts SET status = 'sending',
+            processing_lease_token = $1,
+            processing_lease_expires_at = now() + ($2::int * interval '1 second')
       WHERE id = (
         SELECT id FROM broadcasts
          WHERE status IN ('scheduled', 'sending')
            AND (scheduled_at IS NULL OR scheduled_at <= now())
+           AND (processing_lease_expires_at IS NULL
+                OR processing_lease_expires_at < now())
          ORDER BY created_at
          LIMIT 1
          FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, bot_id, body, media_url, buttons, segment, cursor_tg_user_id, sent_count, fail_count`
+      RETURNING id, bot_id, body, media_url, buttons, segment, cursor_tg_user_id, sent_count, fail_count`,
+    [leaseToken, PROCESSING_LEASE_SECONDS]
   );
   if (!bc) return false;
 
@@ -78,16 +120,32 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
     [bc.bot_id]
   );
   if (!bot || bot.status !== "active") {
-    await query(`UPDATE broadcasts SET status = 'failed' WHERE id = $1`, [bc.id]);
+    // Ownership-checked: a worker whose lease was stolen must not fail the
+    // broadcast another worker is actively sending. The lease columns are
+    // cleared so a terminal row never holds a stale token.
+    await query(
+      `UPDATE broadcasts SET status = 'failed',
+              processing_lease_token = NULL,
+              processing_lease_expires_at = NULL
+        WHERE id = $1 AND processing_lease_token = $2`,
+      [bc.id, leaseToken]
+    );
     return true;
   }
   const token = await decryptToken(Buffer.from(bot.token_encrypted));
   const segment = parseSegment(bc.segment);
 
-  // Set total on first batch.
+  // Set total on first batch. Ownership-checked through the same lease.
   if (broadcastAtStart(bc.cursor_tg_user_id)) {
     const totalCountUpdate = buildBroadcastTotalCountUpdate(segment, bc.bot_id, bc.id);
-    await query(totalCountUpdate.text, totalCountUpdate.params);
+    const totalParams = totalCountUpdate.params.length; // broadcast id is last
+    await query(
+      totalCountUpdate.text.replace(
+        `WHERE id = $${totalParams}`,
+        `WHERE id = $${totalParams} AND processing_lease_token = $${totalParams + 1}`
+      ),
+      [...totalCountUpdate.params, leaseToken]
+    );
   }
 
   // Broadcasts respect the segment filter (language, last_seen window, etc.).
@@ -103,16 +161,31 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
 
   if (subs.length === 0) {
     await query(
-      `UPDATE broadcasts SET status = 'sent', sent_at = now() WHERE id = $1`,
-      [bc.id]
+      `UPDATE broadcasts SET status = 'sent', sent_at = now(),
+              processing_lease_token = NULL,
+              processing_lease_expires_at = NULL
+        WHERE id = $1 AND processing_lease_token = $2`,
+      [bc.id, leaseToken]
     );
     return true;
   }
 
   let sent = 0;
   let failed = 0;
-  let lastProcessedId = subs[0].tg_user_id; // Track last actually processed sub
+  // C14/F13: start BELOW the first fetched subscriber. If the very first
+  // send hits a 429 the loop breaks before anything is processed and the
+  // cursor stays where it was, so that subscriber is retried next tick
+  // instead of being skipped.
+  const claimCursor = Number(bc.cursor_tg_user_id);
+  let lastProcessedId = claimCursor - 1;
   for (const sub of subs) {
+    // Renew and prove ownership immediately before every irreversible external
+    // send. A stale worker may finish the one provider call that was already
+    // in flight when its lease was lost, but it must not start another one.
+    // Requiring the current lease to still be unexpired also prevents a worker
+    // from reviving its own expired token while a reclaim races it.
+    if (!(await renewBroadcastLease(bc.id, leaseToken))) break;
+
     const firstName = sub.first_name || sub.tg_username || "there";
     const personalized = esc(bc.body).replace(/\{name\}/g, esc(firstName));
     const hasMedia = !!bc.media_url;
@@ -164,17 +237,34 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
     await sleep(MSG_INTERVAL_MS);
   }
 
-  // Advance cursor to the last subscriber we actually processed (sent or failed),
-  // NOT to the last fetched subscriber. On 429, unprocessed subs will be retried
-  // in the next batch.
-  const cursorId = lastProcessedId;
-  await query(
-    `UPDATE broadcasts
-        SET cursor_tg_user_id = $1,
-            sent_count = sent_count + $2,
-            fail_count = fail_count + $3
-      WHERE id = $4`,
-    [cursorId, sent, failed, bc.id]
-  );
+  if (lastProcessedId >= claimCursor) {
+    // End of batch with progress: advance the cursor to the last subscriber
+    // actually processed and RELEASE the lease in the same ownership-checked
+    // write, so the next tick continues immediately instead of waiting out
+    // the lease window, while a superseded worker still cannot move another
+    // worker's cursor or counters.
+    await query(
+      `UPDATE broadcasts
+          SET cursor_tg_user_id = $1,
+              sent_count = sent_count + $2,
+              fail_count = fail_count + $3,
+              processing_lease_token = NULL,
+              processing_lease_expires_at = NULL
+        WHERE id = $4 AND processing_lease_token = $5`,
+      [lastProcessedId, sent, failed, bc.id, leaseToken]
+    );
+  } else {
+    // Nothing was processed (the first recipient hit a rate limit): leave
+    // cursor and counters untouched and just hand the lease back, so the
+    // next tick retries the same recipient rather than stalling for the
+    // whole lease window.
+    await query(
+      `UPDATE broadcasts
+          SET processing_lease_token = NULL,
+              processing_lease_expires_at = NULL
+        WHERE id = $1 AND processing_lease_token = $2`,
+      [bc.id, leaseToken]
+    );
+  }
   return true;
 }

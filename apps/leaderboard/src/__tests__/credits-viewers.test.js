@@ -7,6 +7,28 @@ const creditsHandlerJs = readFileSync(new URL("../handlers/credits.js", import.m
 const peopleHandlerJs = readFileSync(new URL("../handlers/people.js", import.meta.url), "utf8");
 const routesJs = readFileSync(new URL("../routes.js", import.meta.url), "utf8");
 
+describe("credit adjustment retry identity", () => {
+  it("retains the same operation across a lost response and reload, then issues a fresh operation", async () => {
+    const source = creditsJs.slice(creditsJs.indexOf("async function adjustMemberCredits("), creditsJs.indexOf("let state = {};"));
+    const stored = new Map();
+    const sessionStorage = { getItem: (key) => stored.get(key), setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) };
+    const calls = [];
+    let fail = true;
+    const api = async (_method, _path, payload) => {
+      calls.push(payload);
+      if (fail) throw new Error("response lost");
+      return { ok: true };
+    };
+    const load = () => new Function("sessionStorage", "api", "sitePath", "crypto", "activeSiteId", `${source}; return adjustMemberCredits;`)(sessionStorage, api, (path) => path, crypto, "site-1");
+    await expect(load()("member-1", 25, "adjustment")).rejects.toThrow("response lost");
+    fail = false;
+    await load()("member-1", 25, "adjustment");
+    await load()("member-1", 25, "adjustment");
+    expect(calls[0].operationId).toBe(calls[1].operationId);
+    expect(calls[2].operationId).not.toBe(calls[1].operationId);
+  });
+});
+
 describe("viewer membership display", () => {
   it("shows site membership and authenticated connection state without raw IDs", () => {
     expect(creditsJs).toContain("v.lastSeenAt || v.lastCreditAt");

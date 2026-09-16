@@ -8,7 +8,6 @@ import {
   computeReplayHash as defaultComputeReplayHash,
   findPostbackOwner as defaultFindPostbackOwner,
   logPostbackIntake as defaultLogPostbackIntake,
-  recordReplayHash as defaultRecordReplayHash,
 } from "@yourrank/shared/postback";
 import { z } from "@yourrank/shared/validation";
 import { validateAndNormalizePlayers } from "../player-rules.js";
@@ -74,7 +73,6 @@ export async function handleScores(request, env, {
   computeReplayHash = defaultComputeReplayHash,
   findPostbackOwner = defaultFindPostbackOwner,
   logPostbackIntake = defaultLogPostbackIntake,
-  recordReplayHash = defaultRecordReplayHash,
 } = {}) {
   try {
     const postbackKey = request.headers.get("x-postback-key");
@@ -93,7 +91,6 @@ export async function handleScores(request, env, {
     const keyOwner = await findPostbackOwner(postbackKey, "signed");
     if (!keyOwner) return bad("Invalid postback key or board reference.", 401);
     logPostbackIntake("scores_signed", keyOwner, true);
-    const replayHash = await computeReplayHash({ body: rawBody });
 
     let raw;
     try { raw = JSON.parse(rawBody); } catch { return bad("Invalid JSON body."); }
@@ -124,9 +121,9 @@ export async function handleScores(request, env, {
     // Plan gate: player count
     const validPlayers = validation.players;
     if (validPlayers.length > PLAN_LIMITS[plan]) return bad(`Your plan allows up to ${PLAN_LIMITS[plan]} players.`, 400);
-    if (!(await recordReplayHash(keyOwner.userId, replayHash))) {
-      return bad("Duplicate postback.", 409);
-    }
+    // Include the resolved immutable Site ID, even when selected in a header.
+    // Keep the existing 24-hour replay window and 409 integration contract.
+    const replayHash = await computeReplayHash({ kind: "scores", siteId: site.id, body: rawBody });
     // Reuse saveSite with just the players update — pass minimal payload
     const user = owner;
     const savePayload = {
@@ -134,8 +131,10 @@ export async function handleScores(request, env, {
       partner: { blurb: site.blurb },
       players: validPlayers,
     };
-    const r = await saveSiteImpl(env, user, savePayload, site.id, request);
-    return r.error ? bad(r.error, 400) : json({ ok: true, players: validPlayers.length }, 200, rateLimitHeaders(rl));
+    const r = await saveSiteImpl(env, user, savePayload, site.id, request, {
+      scoreReplay: { userId: keyOwner.userId, hash: replayHash },
+    });
+    return r.error ? bad(r.error, r.code === "duplicate_postback" ? 409 : 400) : json({ ok: true, players: validPlayers.length }, 200, rateLimitHeaders(rl));
   } catch (e) {
     console.error("scores API failed:", String(e?.message || e));
     return bad("Internal error.", 500);

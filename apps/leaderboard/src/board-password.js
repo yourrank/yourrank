@@ -56,8 +56,9 @@ export async function verifyBoardPasswordCookie(request, site) {
   return verifyBoardPasswordToken(token, site);
 }
 
-export function boardPasswordSetCookieHeader(site, token, opts = {}) {
-  const isCustomDomain = !!opts.isCustomDomain;
-  const path = isCustomDomain ? "/" : `/${site.slug}`;
-  return `${cookieName(site.slug)}=${encodeURIComponent(token)}; Path=${path}; Max-Age=${COOKIE_MAX_AGE}; Secure; SameSite=Lax; HttpOnly`;
+export function boardPasswordSetCookieHeader(site, token) {
+  // The token is cryptographically bound to the Site slug, so a root path does
+  // not grant authority to another community. Root scope is required because
+  // authenticated claim mutations live under /api rather than /<slug>.
+  return `${cookieName(site.slug)}=${encodeURIComponent(token)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; Secure; SameSite=Lax; HttpOnly`;
 }

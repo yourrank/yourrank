@@ -462,7 +462,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       const url = new URL(request.url);
       const path = url.pathname;
       const method = request.method === "HEAD" ? "GET" : request.method;
-      const host = (request.headers.get("host") || "").toLowerCase().split(":")[0];
+      const host = url.hostname.toLowerCase();
       setRequestMetrics({
         route: telemetryRoute(path),
         site: telemetrySite(path),
@@ -473,7 +473,13 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // user's custom domain. If yes, serve their leaderboard at /.
       if (isCustomHost(host)) {
         const customSlug = await resolveCustomDomainImpl(env, host);
-        if (customSlug && !isCustomViewerApiPath(method, path, customSlug)) {
+        if (!customSlug) {
+          // An unrecognized custom host is never a platform authorization
+          // context. Failing closed prevents stale or unverified hostnames from
+          // reaching global Viewer Account APIs.
+          return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N });
+        }
+        if (!isCustomViewerApiPath(method, path, customSlug)) {
           // Serve the leaderboard as if the path were /<slug>
           // Rewrite the URL path internally
           url.pathname = "/" + customSlug;
@@ -584,7 +590,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           // Everything else on a custom domain → 404
           return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N });
         }
-        // No matching custom domain — fall through to normal routing
       }
 
       // --- static assets ---

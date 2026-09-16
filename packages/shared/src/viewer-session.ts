@@ -10,13 +10,17 @@
 //  separate cookie and session table.
 // ============================================================================
 
-import { one, exec, query } from "./db.js";
+import { one, exec, query, withTransaction } from "./db.js";
 import { hashToken } from "./crypto.js";
 
 export interface ViewerSessionEnv {
   SESSION_COOKIE_DOMAIN?: string;
   ENVIRONMENT?: string;
 }
+
+export type ViewerSessionAuthority =
+  | { authority: "global" }
+  | { authority: "site"; siteId: string; hostname: string; domainBindingId: string };
 
 export interface ViewerRecord {
   id: string;
@@ -80,35 +84,82 @@ export function viewerCookieClear(env?: ViewerSessionEnv, req?: Request): string
 export function readViewerToken(req: Request): string | null {
   const header = req.headers.get("cookie") || "";
   const m = header.match(new RegExp(`(?:^|;\\s*)${VIEWER_COOKIE_NAME}=([^;]+)`));
-  return m ? decodeURIComponent(m[1]) : null;
+  try { return m ? decodeURIComponent(m[1]) : null; } catch { return null; }
 }
 
-export async function createViewerSession(_env: ViewerSessionEnv, viewerId: string): Promise<string> {
+export async function createViewerSession(
+  _env: ViewerSessionEnv,
+  viewerId: string,
+  scope: ViewerSessionAuthority,
+): Promise<string> {
+  if (!scope || !["global", "site"].includes(scope.authority)) throw new Error("Viewer session authority required");
+  const isSite = scope.authority === "site";
+  if (isSite && (!scope.siteId || !scope.hostname || !scope.domainBindingId || cookieDomainFromHostname(scope.hostname))) {
+    throw new Error("Invalid local viewer session authority");
+  }
   const token = newViewerToken();
-  const tokenHash = await hashToken(token);
-  await exec(
-    `INSERT INTO viewer_sessions (token, viewer_id, created_at, expires_at)
-     VALUES ($1, $2, now(), now() + make_interval(secs => $3))
-     ON CONFLICT (token) DO NOTHING`,
-    [tokenHash, viewerId, VIEWER_SESSION_TTL_S]
+  // Domain-separated storage prevents a scope-blind N-1 reader from accepting
+  // newly issued local tokens via its legacy sha256(rawToken) lookup.
+  const tokenHash = await hashToken(isSite ? `site:${scope.hostname.toLowerCase()}:${token}` : token);
+  const rows = await exec(
+    `INSERT INTO viewer_sessions
+       (token, viewer_id, authority, site_id, hostname, domain_binding_id, created_at, expires_at)
+     SELECT $1, $2::uuid, $3, $4::uuid, $5, $6::uuid, now(), now() + make_interval(secs => $7)
+      WHERE $3 = 'global' OR EXISTS (
+        SELECT 1 FROM sites s JOIN users u ON u.id=s.user_id
+         WHERE s.id=$4::uuid AND lower(s.custom_domain)=$5
+           AND s.domain_auth_binding_id=$6::uuid AND s.domain_auth_verified_at IS NOT NULL
+           AND s.domain_status='active' AND s.custom_hostname_id IS NOT NULL
+           AND s.published=true AND s.is_draft=false AND u.email_verified=true AND u.status != 'suspended'
+      )
+     RETURNING token`,
+    [tokenHash, viewerId, scope.authority, isSite ? scope.siteId : null,
+      isSite ? scope.hostname.toLowerCase() : null, isSite ? scope.domainBindingId : null, VIEWER_SESSION_TTL_S]
   );
+  if (!rows?.length) throw new Error("Viewer session domain authority changed");
   return token;
 }
 
-export async function destroyViewerSession(_env: ViewerSessionEnv, token: string | null): Promise<void> {
+export async function destroyViewerSession(
+  _env: ViewerSessionEnv,
+  token: string | null,
+  requestHostname?: string | null,
+  { execImpl = exec, hashTokenImpl = hashToken }: {
+    execImpl?: typeof exec;
+    hashTokenImpl?: typeof hashToken;
+  } = {},
+): Promise<void> {
   if (!token) return;
-  const tokenHash = await hashToken(token);
-  await exec("DELETE FROM viewer_sessions WHERE token = $1 OR previous_token = $1", [tokenHash]);
+  const hostname = String(requestHostname || "").toLowerCase();
+  const globalHash = await hashTokenImpl(token);
+  const localHash = hostname && cookieDomainFromHostname(hostname) !== VIEWER_COOKIE_DOMAIN
+    ? await hashTokenImpl(`site:${hostname}:${token}`)
+    : null;
+  await execImpl(
+    `DELETE FROM viewer_sessions
+      WHERE token = $1 OR previous_token = $1 OR token = $2 OR previous_token = $2`,
+    [globalHash, localHash],
+  );
+}
+
+export interface ViewerSessionContext {
+  authority: "global" | "site";
+  siteId: string | null;
+  hostname: string | null;
+  domainBindingId: string | null;
 }
 
 interface ResolveResult {
   viewerId: string | null;
   cookie: string | null;
+  session: ViewerSessionContext | null;
 }
 
 interface ViewerSessionResolveDeps {
   query?: typeof query;
   exec?: typeof exec;
+  // Only an explicitly authorized Site operation may accept a local session.
+  siteId?: string;
 }
 
 export async function resolveViewerSession(
@@ -117,30 +168,65 @@ export async function resolveViewerSession(
   deps: ViewerSessionResolveDeps = {},
 ): Promise<ResolveResult> {
   const token = readViewerToken(req);
-  if (!token) return { viewerId: null, cookie: null };
-  const tokenHash = await hashToken(token);
-  const queryImpl = deps.query || query;
+  if (!token) return { viewerId: null, cookie: null, session: null };
+  const requestHost = new URL(req.url).hostname.toLowerCase();
+  const platform = cookieDomainFromHostname(requestHost) === VIEWER_COOKIE_DOMAIN
+    || (env.ENVIRONMENT === "development" && ["localhost", "127.0.0.1", "[::1]"].includes(requestHost));
+  const tokenHash = await hashToken(platform ? token : `site:${requestHost}:${token}`);
+  const queryImpl = deps.query || ((text, params) => withTransaction((tx) => tx.query(text, params)));
   const execImpl = deps.exec || exec;
-
   const row = await queryImpl(
-    `SELECT viewer_id, extract(epoch FROM now() - created_at)::int AS age
-            ,(token = $1) AS is_current
-       FROM viewer_sessions
-      WHERE (token = $1 OR (previous_token = $1 AND rotated_at > now() - make_interval(secs => $2)))
-        AND expires_at > now()`,
-    [tokenHash, VIEWER_SESSION_ROTATE_GRACE_S]
+    `SELECT vs.viewer_id, vs.authority, vs.site_id, vs.hostname, vs.domain_binding_id,
+            extract(epoch FROM now() - vs.created_at)::int AS age,
+            (vs.token = $1) AS is_current
+       FROM viewer_sessions vs
+       LEFT JOIN sites s ON s.id = vs.site_id
+       LEFT JOIN users u ON u.id = s.user_id
+      WHERE (vs.token = $1 OR (vs.previous_token = $1 AND vs.rotated_at > now() - make_interval(secs => $2)))
+        AND vs.expires_at > now()
+        AND (
+          (vs.authority = 'global' AND $3 = true
+            AND vs.site_id IS NULL AND vs.hostname IS NULL AND vs.domain_binding_id IS NULL)
+          OR
+          (vs.authority = 'site' AND $3 = false AND vs.site_id = $5::uuid
+            AND lower(vs.hostname) = $4
+            AND s.id = vs.site_id
+            AND lower(s.custom_domain) = lower(vs.hostname)
+            AND s.domain_status = 'active'
+            AND s.custom_hostname_id IS NOT NULL
+            AND s.domain_auth_binding_id = vs.domain_binding_id
+            AND s.domain_auth_verified_at IS NOT NULL
+            AND s.published = true
+            AND s.is_draft = false
+            AND u.status != 'suspended'
+            AND u.email_verified = true)
+        )
+      FOR SHARE OF vs`,
+    [
+      tokenHash,
+      VIEWER_SESSION_ROTATE_GRACE_S,
+      platform,
+      requestHost,
+      deps.siteId || null,
+    ]
   );
-  if (!row || row.length === 0) return { viewerId: null, cookie: null };
+  if (!row || row.length === 0) return { viewerId: null, cookie: null, session: null };
 
   const viewerId = row[0].viewer_id as string;
   const age = Number(row[0].age || 0);
   const isCurrent = row[0].is_current !== false;
+  const session: ViewerSessionContext = {
+    authority: row[0].authority as "global" | "site",
+    siteId: (row[0].site_id as string | null) ?? null,
+    hostname: (row[0].hostname as string | null) ?? null,
+    domainBindingId: (row[0].domain_binding_id as string | null) ?? null,
+  };
 
   // Rotate session if older than threshold.
   if (isCurrent && age > VIEWER_SESSION_ROTATE_AFTER_S) {
     try {
       const rotated = newViewerToken();
-      const rotatedHash = await hashToken(rotated);
+      const rotatedHash = await hashToken(platform ? rotated : `site:${requestHost}:${rotated}`);
       const updated = await execImpl(
         `UPDATE viewer_sessions
             SET token = $1,
@@ -153,7 +239,7 @@ export async function resolveViewerSession(
         [rotatedHash, VIEWER_SESSION_TTL_S, tokenHash]
       );
       if (updated && updated.length > 0) {
-        return { viewerId, cookie: viewerCookieSet(rotated, env, req) };
+        return { viewerId, cookie: viewerCookieSet(rotated, env, req), session };
       }
     } catch {
       console.error("[viewer-session] rotation failed, serving with old token");
@@ -166,7 +252,7 @@ export async function resolveViewerSession(
     [VIEWER_SESSION_TTL_S, tokenHash]
   ).catch((e) => console.error("[viewer-session] TTL refresh failed:", (e as Error)?.message));
 
-  return { viewerId, cookie: null };
+  return { viewerId, cookie: null, session };
 }
 
 export async function loadViewer(_env: ViewerSessionEnv, viewerId: string): Promise<ViewerRecord | null> {
@@ -185,10 +271,11 @@ export async function loadViewer(_env: ViewerSessionEnv, viewerId: string): Prom
 
 export async function resolveViewer(
   req: Request,
-  env: ViewerSessionEnv
-): Promise<{ viewer: ViewerRecord | null; cookie: string | null }> {
-  const { viewerId, cookie } = await resolveViewerSession(req, env);
-  if (!viewerId) return { viewer: null, cookie: null };
+  env: ViewerSessionEnv,
+  scope: { siteId?: string } = {},
+): Promise<{ viewer: ViewerRecord | null; cookie: string | null; session: ViewerSessionContext | null }> {
+  const { viewerId, cookie, session } = await resolveViewerSession(req, env, scope);
+  if (!viewerId) return { viewer: null, cookie: null, session: null };
   const viewer = await loadViewer(env, viewerId);
-  return { viewer, cookie };
+  return { viewer, cookie, session };
 }

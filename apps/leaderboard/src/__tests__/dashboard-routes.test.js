@@ -71,10 +71,10 @@ describe("dashboard routes", () => {
     expect(LEGACY_ACCOUNT_PATHS.billing).toBe(dashboardPath("billing"));
     expect(LEGACY_ACCOUNT_PATHS.integrations).toBe(dashboardPath("integrations"));
     for (const [nav, expected] of Object.entries(LEGACY_ACCOUNT_PATHS)) {
-      const response = await worker.fetch(new Request(`https://yourrank.test/dashboard?nav=${nav}&from=test`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.site/dashboard?nav=${nav}&from=test`), {}, {});
       expect(response.status, nav).toBe(302);
       const location = response.headers.get("location");
-      expect(location, nav).toBe(`https://yourrank.test${expected}?from=test`);
+      expect(location, nav).toBe(`https://yourrank.site${expected}?from=test`);
     }
     expect(resolveSection("editor")).toBe("board");
     expect(dashboardPath("performance")).toBe("/dashboard/analytics");
@@ -93,9 +93,9 @@ describe("dashboard routes", () => {
       ["/dashboard/billing", "/dashboard/settings/billing"],
       ["/dashboard/giveaways/preds", "/dashboard/giveaways/predictions"],
     ]) {
-      const response = await worker.fetch(new Request(`https://yourrank.test${legacy}?viewer=GhostSniperr`), {}, {});
+      const response = await worker.fetch(new Request(`https://yourrank.site${legacy}?viewer=GhostSniperr`), {}, {});
       expect(response.status, legacy).toBe(301);
-      expect(response.headers.get("location"), legacy).toBe(`https://yourrank.test${canonical}?viewer=GhostSniperr`);
+      expect(response.headers.get("location"), legacy).toBe(`https://yourrank.site${canonical}?viewer=GhostSniperr`);
     }
   });
 

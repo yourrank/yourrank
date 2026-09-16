@@ -12,6 +12,8 @@ let _ownerRow = null;
 let _existingSiteRow = null;
 let _saveSiteResult = {};
 let _savedPayload = null;
+let _saveOptions = null;
+let _hashInput = null;
 
 const dbDeps = ({
   one: (sql, _params) => {
@@ -72,8 +74,8 @@ const postbackDeps = ({
   getActivePostbackKey: async () => null,
   createPostbackKey: async () => "pbkey",
   revokePostbackKeys: async () => 0,
-  computeReplayHash: async () => "replay-hash",
-  recordReplayHash: async () => true,
+  computeReplayHash: async (input) => { _hashInput = input; return "replay-hash"; },
+  recordReplayHash: async () => { throw new Error("Replay admission must be inside the save transaction"); },
 });
 
 const { handleScores } = await import("../handlers/scores.js");
@@ -83,8 +85,9 @@ const invokeScores = (request, env) =>
     ...sessionDeps,
     ...cryptoDeps,
     ...postbackDeps,
-    saveSiteImpl: async (_env, _user, payload) => {
+    saveSiteImpl: async (_env, _user, payload, _siteId, _request, options) => {
       _savedPayload = payload;
+      _saveOptions = options;
       return _saveSiteResult;
     },
   });
@@ -317,6 +320,22 @@ describe("handleScores — payload validation", () => {
     });
     const res = await invokeScores(req, makeEnv());
     expect(res.status).toBe(400);
+  });
+
+  test("passes Site-scoped replay identity into the save transaction", async () => {
+    const res = await invokeScores(makeRequest({
+      headers: { "x-postback-key": "key", "x-postback-site": "test" },
+      body: { players: [{ name: "Alice", score: 10 }] },
+    }), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_hashInput).toMatchObject({ kind: "scores", siteId: "site-1" });
+    expect(_saveOptions).toEqual({ scoreReplay: { userId: "user-1", hash: "replay-hash" } });
+  });
+
+  test("preserves 409 on a committed score replay", async () => {
+    _saveSiteResult = { error: "Duplicate postback.", code: "duplicate_postback" };
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(409);
   });
 
   test("saveSite error is surfaced as 400", async () => {
