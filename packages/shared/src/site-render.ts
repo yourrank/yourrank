@@ -549,7 +549,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <link rel="canonical" href="${canonicalUrl}" /><meta property="og:url" content="${canonicalUrl}" />
 <meta name="twitter:card" content="${logoUrl ? "summary_large_image" : "summary"}" /><meta name="twitter:title" content="${titleBase}" /><meta name="twitter:description" content="${desc}" /><meta property="og:image" content="${ogImageUrl}" /><meta name="twitter:image" content="${ogImageUrl}" />
 <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="${fontsHref}" rel="stylesheet" media="print" data-async />
+<link href="${fontsHref}" rel="stylesheet" media="print" data-async${viewerShell ? " data-viewer-fonts" : ""} />
 <script nonce="${nonce}">document.querySelector('link[data-async]').onload=function(){this.media='all'};</script>
 <noscript><link href="${fontsHref}" rel="stylesheet" /></noscript>
 <link rel="stylesheet" href="/assets/site-shell.css" />
@@ -571,7 +571,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     tagline: b.tagline || '',
     watchHref: channel?.href || '', watchLabel: channel?.label || '',
     communityStatus: channel?.label || 'Creator community', signedIn: !!viewer,
-    sessionControl: !viewer && section !== "me" ? signInLink(r, returnTo, "yr-btn", siteSectionHref("me", slug, isCustomDomain)) : "",
+    sessionControl: !viewer && section !== "me" ? signInLink(r, returnTo, "yr-btn", siteSections.me === false ? globalViewerAccountHref(isCustomDomain) : siteSectionHref("me", slug, isCustomDomain)) : "",
     homeHref: siteSectionHref("home", slug, isCustomDomain),
     accountHref: globalViewerAccountHref(isCustomDomain),
     helpHref: viewerHelpHref(siteSectionHref(section || "home", slug, false), isCustomDomain ? "https://yourrank.site" : ""),
@@ -949,7 +949,7 @@ function codeDropClaimSection({ slug, creator, joinsMembership = false }) {
 <form class="yr-code-drop-form" data-code-drop-claim data-site-slug="${esc(slug)}">
 <label class="yr-code-drop-label" for="yr-code-drop-code">Community code</label>
 <div class="yr-code-drop-controls">
-<input class="yr-code-drop-input" id="yr-code-drop-code" name="code" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_-]+" placeholder="COMMUNITY100" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="yr-code-drop-help" required />
+<input class="yr-code-drop-input" id="yr-code-drop-code" name="code" type="text" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\\-]+" placeholder="COMMUNITY100" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="yr-code-drop-help" required />
 <button class="yr-btn yr-btn--sm" type="submit" data-code-drop-submit>Redeem code</button>
 </div>
 <p class="yr-code-drop-status" id="yr-code-drop-status" role="status" aria-live="polite" tabindex="-1"></p>

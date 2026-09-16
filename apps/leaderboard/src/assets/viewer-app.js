@@ -14,6 +14,7 @@
   document.querySelector(".viewer-layout").appendChild(notice);
 
   function updateNavigation() {
+    if (document.body.classList.contains("viewer-account-page")) return;
     document.querySelectorAll('.viewer-rail a[aria-current]').forEach(function (link) { link.removeAttribute("aria-current"); });
     document.querySelectorAll('.viewer-rail a[href]').forEach(function (link) {
       var target = new URL(link.href, location.href);
@@ -39,17 +40,23 @@
     });
     return loaded[src];
   }
-  async function mount() {
+  async function mount(ticket) {
     await loadAsset("/assets/site-shell.js", "YRInitSitePage", false);
+    if (ticket !== sequence) return;
     if (document.getElementById("vd-profile")) {
       await loadAsset("/assets/viewer-dashboard.js", "YRInitViewerAccount", true);
+      if (ticket !== sequence) return;
       await window.__yrViewerReady;
     }
+    if (ticket !== sequence) return;
     if (document.getElementById("contactForm")) await loadAsset("/assets/contact.js", "YRInitContactPage", true);
+    if (ticket !== sequence) return;
     updateNavigation();
   }
   function focusContent() {
-    var target = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    var hash = location.hash.slice(1);
+    try { hash = decodeURIComponent(hash); } catch (_) { /* Use the literal anchor. */ }
+    var target = hash && document.getElementById(hash);
     var anchor = target && !target.hidden;
     if (!anchor) target = document.querySelector('.viewer-main h1');
     if (target) { target.setAttribute("tabindex", "-1"); target.focus({ preventScroll: true }); }
@@ -57,6 +64,14 @@
     else window.scrollTo(0, 0);
   }
   function syncTheme(source) {
+    var fonts = source.querySelector("link[data-viewer-fonts]");
+    var existing = document.querySelector("link[data-viewer-fonts]");
+    if (fonts && (!existing || existing.href !== fonts.href)) {
+      var replacement = fonts.cloneNode();
+      replacement.media = "all";
+      if (existing) existing.replaceWith(replacement);
+      else document.head.appendChild(replacement);
+    }
     ["accent", "accent-ink", "display-font"].forEach(function (name) {
       var token = source.querySelector('meta[name="viewer-' + name + '"]');
       if (token) document.body.style.setProperty("--yr-" + name, token.content);
@@ -64,7 +79,7 @@
     });
   }
   function hasPendingAction() {
-    return Array.from(document.querySelectorAll('.viewer-main [aria-busy="true"], .viewer-main button:disabled[aria-busy], #c_submit:disabled')).some(function (element) {
+    return Array.from(document.querySelectorAll('.viewer-main button[aria-busy="true"], #c_submit:disabled')).some(function (element) {
       return !element.hidden && element.getClientRects().length > 0;
     });
   }
@@ -79,14 +94,14 @@
     var opts = options || {};
     var target = new URL(value, location.href);
     if (target.origin !== location.origin) { location.assign(target.href); return; }
-    if (!opts.refresh && target.pathname === location.pathname && target.search === location.search) {
+    var ticket = ++sequence;
+    if (pending) pending.abort();
+    if (!opts.refresh && target.pathname === location.pathname && target.search === location.search && target.hash !== location.hash) {
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
       window.dispatchEvent(new Event("hashchange"));
-      updateNavigation(); focusContent(); return;
+      updateNavigation(); focusContent(); notice.hidden = true; return;
     }
-    var ticket = ++sequence;
-    if (pending) pending.abort();
     pending = new AbortController();
     notice.textContent = "Loading page…"; notice.hidden = false;
     try {
@@ -129,7 +144,7 @@
       });
       if (!opts.pop) history.pushState({}, "", target.href);
       currentUrl = target.href;
-      await mount();
+      await mount(ticket);
       if (ticket !== sequence) return;
       focusContent();
       notice.hidden = true;
@@ -143,6 +158,16 @@
   document.addEventListener("click", function (event) {
     var link = event.target.closest('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute("download")) return;
+    if (link.getAttribute("href") === "#main-content") {
+      var content = document.getElementById("main-content");
+      if (content) {
+        event.preventDefault();
+        content.setAttribute("tabindex", "-1");
+        content.focus({ preventScroll: true });
+        content.scrollIntoView({ block: "start" });
+      }
+      return;
+    }
     var target = new URL(link.href, location.href);
     if (target.origin !== location.origin || /^\/(?:api|dashboard|login|logout|auth)(?:\/|$)/.test(target.pathname)) return;
     if (!link.closest('.viewer-layout,.viewer-site-footer')) return;
@@ -157,7 +182,7 @@
   window.addEventListener("popstate", function () { navigate(location.href, { pop: true, refresh: true }); });
   window.YRViewerApp = { navigate: navigate, refresh: function () { return navigate(location.href, { refresh: true }); } };
   syncTheme(document);
-  window.__yrViewerAppReady = mount().catch(function () {
+  window.__yrViewerAppReady = mount(sequence).catch(function () {
     notice.textContent = "Page controls could not load. Reload to try again."; notice.hidden = false;
   });
 })();

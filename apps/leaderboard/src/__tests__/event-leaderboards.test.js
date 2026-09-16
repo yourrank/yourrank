@@ -49,7 +49,7 @@ it('renders selected event identity, switcher and channels without linking to ma
   expect(html).toContain('Main leaderboard');
   expect(html).toContain('https://kick.com/northstar');
   expect(html).not.toContain('/player/Event%20player');
-  expect(html).toContain('class="viewer-brand" href="/northstar"');
+  expect(html).toContain('class="viewer-top-community" href="/northstar"');
   expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('class="viewer-board-switcher"'));
 });
 

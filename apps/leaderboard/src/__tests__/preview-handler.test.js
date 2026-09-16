@@ -64,7 +64,7 @@ describe("handleDashboardPreview", () => {
     expect(html).toContain('<meta name="yr-preview-ready" content="true">');
     expect(html).toContain('class="yr-site viewer-shell"');
     expect(html).toContain("Actual Board");
-    expect(html).toContain("--yr-accent:#00ffd1");
+    expect(html).toContain('<meta name="viewer-accent" content="#00ffd1"');
     expect(html).toContain("Actual Player");
     expect(SITE.data.branding).toEqual({
       template: "classic",
@@ -121,12 +121,12 @@ describe("handleDashboardPreview", () => {
   it("edits only the creator name and tagline, never the leaderboard heading", async () => {
     const home = await (await handleDashboardPreview(previewRequest("board=site-1&section=home&device=desktop", { brand: { name: "Northstar", tagline: "Our community" } }), {}, "nonce123", impls())).text();
     expect(home).toContain('<p class="viewer-context-name" data-preview-field="f_name">Northstar</p>');
-    expect(home).toContain('data-preview-field="f_tagline">Our community</span>');
+    expect(home).toContain('data-preview-field="f_tagline">Our community</p>');
     expect(home).not.toContain('yr_preview_update');
     expect(home).not.toContain('.yr-hero-r');
     const leaderboard = await (await handleDashboardPreview(previewRequest("board=site-1&section=leaderboard&device=desktop", {}), {}, "nonce123", impls())).text();
     expect(leaderboard).toContain('<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>');
-    expect(leaderboard).toContain('class="viewer-context-name" data-preview-field="f_name"');
+    expect(leaderboard).toContain('<strong data-preview-field="f_name">Actual Board</strong>');
     expect(leaderboard).not.toMatch(/<h1[^>]*data-preview-field/);
   });
 

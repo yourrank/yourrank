@@ -121,12 +121,12 @@ describe("a creator's Rewards page", () => {
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
   });
 
-  it("is a plain list of rewards with one action each, not a shop", async () => {
+  it("lists real rewards with one action each and no commerce controls", async () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
-    expect(html).toContain('<ul class="yr-rwds" role="list">');
+    expect(html).toContain('<ul class="yr-rwds" id="viewer-rewards" role="list">');
     // One action per reward row, and only the affordable in-stock ones can be claimed.
-    expect((html.match(/<li class="yr-rwd">/g) || []).length).toBe(items.length);
+    expect((html.match(/<li class="yr-rwd" /g) || []).length).toBe(items.length);
     expect((html.match(/class="yr-act/g) || []).length).toBe(items.length);
     expect((html.match(/data-redeem="/g) || []).length).toBe(2);
     // No commerce apparatus and no pressure: those patterns do not belong on a
@@ -202,13 +202,14 @@ describe("a creator's Rewards page", () => {
 });
 
 describe("the creator home credit state", () => {
-  it("keeps an empty shop discoverable alongside the signed-out guide", async () => {
+  it("keeps empty rewards discoverable from the signed-out community home", async () => {
     const html = await signedOut("home");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).toContain('class="viewer-home-intro"');
+    expect(html).toContain('class="viewer-home-banner"');
+    expect(html).not.toContain("data-viewer-guide");
     expect(html).not.toContain("yr-vnote");
     expect(html).toContain("No rewards yet");
-    expect(html).toContain("Reward shop</a>");
+    expect(html).toContain("Rewards</a>");
   });
 
   it("shows a truthful zero balance and empty reward preview", async () => {
@@ -221,7 +222,7 @@ describe("the creator home credit state", () => {
     });
     expect(html).toContain('class="viewer-credit-amount" data-credit-balance="0"');
     expect(html).toContain("No rewards are available right now.");
-    expect(html).toContain("Reward shop</a>");
+    expect(html).toContain("Rewards</a>");
     expect(html).not.toContain(">Spend credits</a>");
   });
 
@@ -236,7 +237,7 @@ describe("the creator home credit state", () => {
       opts,
     });
     expect(signedOutHtml).toContain("Sign in to see your reward progress.");
-    expect(signedInHtml).toContain(">Explore rewards</a>");
+    expect(signedInHtml).toContain(">Explore rewards ");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
 });
@@ -288,10 +289,10 @@ describe("a creator's My Community page", () => {
   it("keeps a signed-in zero balance and empty activity compact", async () => {
     const html = await zeroCredits();
     expect(html).toContain('data-credit-balance="0"');
-    expect(html).toContain('class="member-tools"');
-    expect(html.indexOf('id="membership-claims"')).toBeLessThan(html.indexOf('id="membership-history"'));
-    expect((html.match(/class="member-empty"/g) || []).length).toBe(1);
-    expect((html.match(/class="member-history"/g) || []).length).toBe(2);
+    expect(html).toContain('class="viewer-tabs" aria-label="Activity sections"');
+    expect(html.indexOf('id="membership-history"')).toBeLessThan(html.indexOf('id="membership-claims"'));
+    expect((html.match(/class="member-empty"/g) || []).length).toBe(3);
+    expect((html.match(/class="member-section"/g) || []).length).toBe(3);
     expect(html).toContain("No participation history yet");
   });
 
@@ -316,7 +317,7 @@ describe("a creator's My Community page", () => {
       viewerData: { membershipStatus: "absent", viewerOnSite: null, shopItems: [], ledger: [], claims: [], participation: [] },
       opts,
     });
-    expect(html).toContain("Signed in as <b>member</b>");
+    expect(html).toContain('<strong id="viewer-top-name">member</strong>');
     expect(html).toContain("You haven't joined this community yet.");
     expect(html).toContain('data-membership-join');
     expect(html).toContain("Join to keep your Rewards, free credits and Claims together here.");
@@ -362,11 +363,11 @@ describe("a creator's My Community page", () => {
 
   it("shows safe Participation as a bounded reverse-chronological membership record", async () => {
     const html = await credits();
-    expect(html).toContain('<summary>Participation <span>');
+    expect(html).toContain('<h2 id="member-participation-title">Participation</h2>');
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain(">Claimed</span>");
     expect(html).toContain("Feb 3, 2024");
-    const participationHtml = html.match(/<details class="member-history"[^>]*><summary>Participation[\s\S]*?<\/details>/)?.[0] || "";
+    const participationHtml = html.match(/<section class="member-section" id="membership-participation"[\s\S]*?<\/section>/)?.[0] || "";
     expect(participationHtml).toContain("Claimed a code drop");
     for (const banned of ["raffle", "prediction", "wager", "streak", "scorecard"]) {
       expect(participationHtml.toLowerCase()).not.toContain(banned);
@@ -417,10 +418,9 @@ describe("a creator's My Community page", () => {
 describe("viewer row geometry", () => {
   it("lets the title keep a readable measure instead of stacking at one width", () => {
     expect(shellCss).toContain(".yr-rwd-main, .yr-hist-main, .yr-ord-main, .yr-part-main { flex: 1 1 24ch; min-width: 0; }");
-    expect(appCss).toContain(".vd-card-main,.vd-profile-txt{min-width:0}");
-    expect(appCss).toContain("grid-template-columns:46px minmax(0,1fr) auto");
-    // The 360px stacking workaround is gone: wrapping is the root behaviour.
-    expect(appCss).not.toContain("@media (max-width:360px)");
+    expect(appCss).toContain(".vd-card-main{min-width:0}");
+    expect(appCss).toContain("grid-template-columns:44px minmax(0,1fr) auto");
+    expect(appCss).toContain(".vd-card-title{font-size:16px;overflow-wrap:anywhere}");
     expect(appCss).toContain(".vd-card-side{grid-column:2}");
   });
 });
@@ -444,7 +444,8 @@ describe("the global account page", () => {
   });
 
   it("keeps one identity row and one community membership list", () => {
-    expect(page).toContain('<main class="viewer-layout"');
+    expect(page).toContain('<div class="viewer-layout"');
+    expect(page).toContain('<main class="viewer-main" id="main-content"');
     expect(page).toContain('id="vd-avatar"');
     expect(page).toContain('id="vd-avatar-fallback"');
     expect(page).toContain('id="vd-username"');

@@ -58,9 +58,9 @@ describe("demo credibility invariants", () => {
     const expected = {
       home: "Home",
       leaderboard: "Leaderboard",
-      shop: "Reward shop",
+      shop: "Rewards",
       games: "Games",
-      me: "My activity",
+      me: "My Activity",
     };
 
     // Each section names itself in its own heading; the shared chrome no
@@ -68,15 +68,15 @@ describe("demo credibility invariants", () => {
     for (const [section, label] of Object.entries(expected)) {
       const html = await render(section);
       expect(html).toContain(`data-section="${section}"`);
-      if (section === "home") expect(html).toContain('<h1>Community overview</h1>');
-      else if (section === "me") expect(html).toContain('<h1>My activity</h1>');
-      else if (section === "shop") expect(html).toContain('<h1>Reward shop</h1>');
+      if (section === "home") expect(html).toContain(`<h1>${demoLeaderboardData().brand.name}</h1>`);
+      else if (section === "me") expect(html).toContain('<h1>My Activity</h1>');
+      else if (section === "shop") expect(html).toContain('<h1>Rewards</h1>');
       else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
       if (section !== "games") expect(html).toContain(`id="viewer-top-title">${label}</span>`);
     }
 
     const shop = await render("shop");
-    expect(shop).toContain("Reward shop");
+    expect(shop).toContain("Rewards");
     expect(shop).toContain("/demo/shop");
     expect(shop).not.toContain(">Shop<");
     expect(shop).not.toContain("in the shop");

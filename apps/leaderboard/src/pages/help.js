@@ -149,16 +149,17 @@ const PUBLIC_OVERRIDES = {
 
 function viewerHelpContent({ active, title, intro, body, viewerHelp }) {
   return `${viewerNavigation({ accountActive: false, helpActive: true, helpHref: viewerHelpHref(viewerHelp.returnTo) })}
-<div class="viewer-main viewer-help">
+<main class="viewer-main viewer-help" id="main-content" tabindex="-1">
 <a class="yr-sec-link" href="${esc(viewerHelp.returnTo)}">Back to ${viewerHelp.returnTo === "/me" ? "my communities" : "community page"}</a>
 <header class="vd-head"><h1 class="vd-h1" id="contactTitle">${esc(title)}</h1><p class="vd-sub" id="contactIntro">${esc(intro)}</p></header>
-${subnavHtml(active, false, viewerHelp)}${body}</div>${viewerAccountOverview()}`;
+${subnavHtml(active, false, viewerHelp)}${body}</main>${viewerAccountOverview()}`;
 }
 
 const VIEWER_OVERRIDES = {
   styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
   bodyClass: "yr-site viewer-shell viewer-help-page",
   mainClass: "viewer-layout",
+  contentOwnsMain: true,
   nav: false, footer: false, wide: false,
   designContract: VIEWER_DESIGN_CONTRACT,
   scripts: ['<script src="/assets/viewer-app.js" defer></script>'],

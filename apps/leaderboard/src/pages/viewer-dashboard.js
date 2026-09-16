@@ -6,6 +6,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
   canonical: "https://yourrank.site/me",
   bodyClass: "yr-site viewer-shell viewer-account-page",
   mainClass: "viewer-layout",
+  contentOwnsMain: true,
   nav: false,
   footer: false,
   styles: ["/assets/site-shell.css", "/assets/viewer-shell.css"],
@@ -15,7 +16,7 @@ export const viewerDashboardPage = leaderboardPageHtml({
   ],
   content: `
 ${viewerNavigation()}
-<div class="viewer-main">
+<main class="viewer-main" id="main-content" tabindex="-1">
 
   <div id="vd-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span class="sr-only">Loading your communities…</span></div>
   <div class="vd-head">
@@ -80,6 +81,6 @@ ${viewerNavigation()}
   <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
   </div>
   <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="${viewerHelpHref().replaceAll('&', '&amp;')}">Contact support</a></nav>
-</div>
+</main>
 `,
 });

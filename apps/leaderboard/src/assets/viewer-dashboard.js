@@ -233,6 +233,7 @@ async function load() {
   setStatus("vd-communities-status", "");
   try {
     const data = await api("GET", "/api/viewer/me");
+    if (lifetime.signal.aborted) return;
     if (!data.viewer) {
       renderLoggedOut();
       return;
@@ -247,7 +248,7 @@ async function load() {
     if (error.message === "unauthorized") renderLoggedOut();
     else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
-    setGlobalLoading(false);
+    if (!lifetime.signal.aborted) setGlobalLoading(false);
     if (!lifetime.signal.aborted && (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card")) {
       const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
       destination.focus({ preventScroll: true });
