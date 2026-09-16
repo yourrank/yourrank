@@ -249,7 +249,7 @@ The product demonstration and the user's state carry each screen. Decoration sta
 - Hairline dividers and shared outer boundaries instead of nested card stacks.
 - Compact identity, clear purpose, visible action, and readable state in the first viewport.
 - One coherent creator workspace with explicit account and selected-site context.
-- A persistent viewer sidebar and context bar, white center panel, membership rail and a wrapping mobile header.
+- A persistent viewer sidebar and context bar, white center panel, membership rail and a compact disclosed mobile header.
 - An account directory of separate memberships, with flat personal claims and activity records inside each community.
 
 ## Colors
@@ -316,9 +316,9 @@ Marketing and product education use a centered reading frame of approximately 11
 
 The authenticated workspace uses a 232px slate rail by default, a 64px white context bar, and a mineral working field with 40px default inline padding. The stylesheet retains a 248px rail adjustment between 981px and 1180px and a 44px collapsed desktop rail. At 980px the rail becomes a drawer. Home places a launch region above a two-value summary, then activity and player lists; at 700px its columns stack and material Home actions have 44px minimum targets. The target creator IA is Home → Community → Activities → People → Rewards → Insights → Settings, while current labels and URLs remain implementation truth until migrated deliberately. Account and selected-site context stay visibly distinct. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
 
-The community layout uses an 80px context bar, 228px navigation, flexible content, and an overview column, with 26px gutters. Home adds the creator banner below the context bar. Global account pages use a 252px YourRank navigation rail, 64px context bar, and full-width settings content. Below 1000px the community overview moves beneath the main content. Below 760px navigation wraps above a single-column layout. The controller preserves the layout container while replacing canonical server-rendered content and chrome; entering global `/me` always replaces the community chrome with the account shell. Full-page links remain a fallback.
+The community Viewer layout uses an 80px desktop context bar, 228px navigation, flexible content, and an overview column, with 26px gutters. Home adds the creator banner below the context bar. Global account pages use a 252px YourRank navigation rail, 64px context bar, and full-width settings content. Desktop chrome remains stable by shell; the secondary overview rail moves below the main content when the measured content-fit rule in the Shared Shell and Component Contract below fails. The controller preserves the layout container while replacing canonical server-rendered content and chrome; entering global `/me` always replaces the community chrome with the account shell. Full-page links remain a fallback.
 
-At narrow widths, marketing navigation becomes a disclosed menu while the primary Start free action remains visible; the creator workspace rail uses its separate drawer behavior. Wide data stays inside its own scroll container. Viewer primary controls and community destinations have at least 44px targets; compact viewer account links use a 40px minimum in the wrapping header.
+At narrow widths, marketing, creator Viewer, and platform document navigation use a named disclosed header targeted at 64px; the primary action or account affordance remains available and the creator workspace rail keeps its separate drawer behavior. Wide data stays inside its own scroll container. Viewer primary controls and community destinations have at least 44px targets. The existing wrapping Viewer navigation and 76px public header are known implementation gaps, not contract exceptions.
 
 **The First Viewport Rule.** Every primary route starts with compact identity, one decisive purpose, a visible next action, and enough real or explicitly illustrative product state to understand the surface.
 
@@ -424,6 +424,59 @@ Leaderboard rows, reward catalogs, KPI bands, workflow steps, and operational ta
 ### Named Rules
 
 **The State Before Action Rule.** When state affects a decision, show the truthful state immediately beside or before the action—published before Publish site, draft before Send, queued before Complete.
+
+## Shared Shell and Component Contract — YR-016
+
+This is the implementation contract for the existing stack, not a new theme, route registry, component package, or framework rewrite. Current route IDs, URLs, data models, and shell owners remain implementation truth; presentation labels may clarify scope without changing route identity.
+
+### Shell boundaries
+
+- **Creator community Viewer shell:** owns creator identity, community destinations, and selected-community Rewards and My Activity. The canonical owners are `packages/shared/src/site-render.ts`, `packages/shared/src/viewer-shell.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and `apps/leaderboard/src/assets/site-shell.css`/`site-shell.js`. `/<slug>/shop` remains Rewards and `/<slug>/me` remains My Activity.
+- **Global Viewer Account shell:** owns `/me`, the My communities directory, supported account settings, and return-to-community context. `apps/leaderboard/src/pages/viewer-dashboard.js` and `apps/leaderboard/src/assets/viewer-dashboard.js` own the account surface. It must not imply a global wallet, merged membership history, or global activity.
+- **Platform Public/document shell:** owns marketing, non-viewer Help/support, legal, and other platform documents. Worker owners (`packages/shared/src/page-shell.ts`, `packages/shared/src/shell-nav.ts`, and the legal helper) and Next/OpenNext owners (`apps/web/src/components/site-shell.tsx`) may remain separate across their runtime boundary; they share behavior and vocabulary rather than requiring a transport or framework rewrite.
+
+Shell identity, selected community, account scope, and site scope stay visible and distinct. Viewer Account, Membership, Leaderboard Player, creator account, and Telegram Subscriber identities remain separate. The creator workspace shell remains the authenticated operator surface: its sidebar owns section roots, local subnavigation owns tabs, and topbar owns context/search/actions.
+
+### Responsive chrome and layout
+
+- Viewer, public creator, and platform document families target a **64px mobile header** (within the required 56–64px range). It contains identity, one primary action or account affordance, and a named menu trigger; it does not stack the full desktop rail above the content. Desktop chrome remains stable by family: creator workspace rail/context bar, community Viewer rail/context bar, global account rail/context bar, and platform document header retain separate roles.
+- A mobile disclosure preserves all usable destinations, exposes truthful `aria-expanded`/`aria-controls`, supports keyboard operation and Escape, returns focus to its opener, and avoids obscuring content beneath a sticky header. The current wrapping Viewer navigation and 76px public header are known gaps for YR-017/YR-018, not alternate contract behavior.
+- Existing spacing and token authority remains canonical: workspace `--ws-*` tokens in `apps/leaderboard/src/assets/dashboard-v4.css`, viewer tokens in `apps/leaderboard/src/assets/viewer-shell.css`, and each existing shell's spacing scale. Do not introduce a second spacing or theme source.
+- A secondary rail may sit beside main content only when the **measured usable container** fits `minimum usable main width (640px) + minimum usable rail width (280px) + gutter (24px) + required outer padding`. If it does not fit, move the rail below the main content in reading order. This is a content-fit rule, not a viewport-width guess; never squeeze catalog cards, standings, forms, or primary actions below their usable minimums.
+
+### Vocabulary and semantics
+
+- **Sign in** authenticates a Viewer Account with an available provider. It never means joining, claiming, or receiving credits.
+- **Join community** is explicit opt-in that creates or activates Membership in the selected creator community; it is never a global join.
+- **Rewards** is the selected creator's configured reward catalog and redemption destination (`/<slug>/shop`). Creator-workspace Rewards routes retain their current paths and semantics.
+- **Reward credits** are free, site-scoped loyalty credits for that community's rewards. They have no cash value, purchase, or cashout; “credits” is a permitted short reference only when the community scope is already clear.
+- **My Activity** is selected-community history of supported credits, claims, and participation (`/<slug>/me`), not global account activity. **My communities** is the global `/me` directory of separate creator memberships.
+- Authentication never automatically claims a reward or silently joins a community. Explicit Sign in, Join community, and claim actions remain separate, and successful authentication must not be presented as a claim.
+
+### Reusable behavior boundaries
+
+These are conceptual contracts mapped to current owners, not unsupported universal components. Implementation is deferred to YR-017/YR-018 (responsive chrome), YR-038 (platform/legal convergence), and YR-039–YR-041 (broader action/component convergence) as applicable.
+
+- **Shell:** owns landmarks, identity/context, skip link, responsive chrome, and shell-level navigation.
+- **Navigation:** owns section roots, local tabs, current state (`aria-current`/`aria-selected`), unavailable destinations, and return context. Do not duplicate workspace roots in the topbar. Existing Viewer and workspace navigation remain canonical in `viewer-shell.ts`, `dashboard-nav.ts`, and `dashboard-chrome.ts`.
+- **Action:** uses the existing viewer, workspace, and public button/link semantics and styling; labels name the outcome and preserve the route's scope.
+- **Form/field:** uses native controls, visible labels, descriptions, field-local errors, preserved drafts, and practical 44px touch targets.
+- **Status:** represents truthful queued, pending, completed, unavailable, error, timeout, and retry states with text plus semantic announcement, never color alone. Pending controls preserve their footprint and expose `aria-busy`; a timeout becomes an explicit recoverable error rather than false completion, and completion/error/retry messages use the existing `role="status"`, alert, and live-region patterns.
+- **Dialog/drawer:** use native `<dialog>` where it is already canonical for Viewer actions and shared `window.YRDialog` from `apps/leaderboard/src/assets/dialog.js` for workspace overlays/drawers. Every modal/drawer has an accessible name, focus containment, Escape close, background inertness or equivalent, and focus return. Focus-visible styles and keyboard access are required across shells.
+
+Guests see one contextual Sign in or Join community prompt appropriate to the action, not repeated sign-in widgets. Members see real selected-community balance/history, including legitimate zero and empty states. Guest, signed-in non-member, member, blocked, unavailable, pending, error, and retry states remain distinct.
+
+### Route/width source review matrix
+
+The following source review covers the requested routes at 390px and 1440px. It is not browser evidence: every row is **NOT RUNTIME-VERIFIED**.
+
+| Surface | 390px contract review | 1440px contract review | Runtime status |
+|---|---|---|---|
+| Viewer Home `/<slug>` | **Contract fit:** identity, scoped rewards/standings, and 44px controls are represented. **Known gap:** current wrapping rail/header does not meet the disclosed-header contract. | **Contract fit:** Viewer rail, context, main content, and overview ownership match current source geometry. **Known gap:** secondary-rail eligibility still uses viewport breakpoints rather than measured content fit. | **NOT RUNTIME-VERIFIED** |
+| Viewer Rewards `/<slug>/shop` | **Contract fit:** real catalog/search/sort and stacked-card behavior have source hooks. **Known gap:** current wrapping navigation remains. | **Contract fit:** desktop catalog and Viewer chrome retain current owners. **Known gap:** rail fit is not content-measured. | **NOT RUNTIME-VERIFIED** |
+| Viewer Account `/me` | **Contract fit:** account return links, settings, and stacked content are represented in source CSS. **Known gap:** account navigation still wraps instead of using the compact disclosure. | **Contract fit:** separate 252px account rail and 64px context bar match current ownership. **Known gap:** runtime layout has not been rendered here. | **NOT RUNTIME-VERIFIED** |
+| Viewer Help `/help/support?audience=viewer…` | **Contract fit:** viewer help form, return context, practical fields, and status/error hooks are represented. **Known gap:** current wrapping Viewer chrome remains. | **Contract fit:** distinct viewer Help shell and account/community return ownership are represented. **Known gap:** Worker document boundary has not been browser-checked. | **NOT RUNTIME-VERIFIED** |
+| Platform legal `/terms` | **Contract fit:** platform document route and legal semantics exist. **Known gap:** legacy Worker header/responsive behavior needs later convergence. | **Contract fit:** platform document header/footer ownership exists while Worker and Next/OpenNext shells remain separate. **Known gap:** legal responsive convergence is deferred to YR-038. | **NOT RUNTIME-VERIFIED** |
 
 ## Authenticated Workspace Contract
 
@@ -560,9 +613,9 @@ Later migrations lower the ratchets as they touch each surface.
 
 ### Reward imagery and community events — 2026-09-08
 
-Reward shop uses the supplied two-column grid, a 135px art area (110px mobile), creator reward name and description, a tabular credit price and a full-width pill action. Uploaded art retains its canonical media pipeline; missing images use the gift icon. The creator fulfills each reward. Claims remain in the selected community activity page and its overview rail.
+Rewards uses the supplied two-column catalog grid, a 135px art area (110px mobile), creator reward name and description, a tabular credit price and a full-width pill action. Uploaded art retains its canonical media pipeline; missing images use the gift icon. The creator fulfills each reward. Claims remain in the selected-community My Activity page and its overview rail.
 
-The public brand link returns to that community's Home. Enabled, configured channels appear in the shared viewer navigation. Site settings uses the full workspace width, and its destination labels match Reward shop and My activity. Appearance labels use workspace text tokens; Insights uses readable section panels and prominent values.
+The public brand link returns to that community's Home. Enabled, configured channels appear in the shared Viewer navigation. Site settings uses the full workspace width, and its destination labels match Rewards and My Activity. Appearance labels use workspace text tokens; Insights uses readable section panels and prominent values.
 
 Leaderboard Setup includes independently saved event standings: name, players and points, public visibility, and delete. A labelled native select with a View leaderboard action switches between the main board and published events on the public Leaderboard page. Scores and players remain event-specific; memberships and rewards remain site-specific. Existing main leaderboard controls and ranking remain unchanged.
 
@@ -575,7 +628,7 @@ Leaderboard Setup includes independently saved event standings: name, players an
 - **Do** use shared outer boundaries, internal dividers, and readable state before introducing another container.
 - **Do** preserve visible focus, semantic status announcements, reduced-motion behavior, and 44px touch targets where practical.
 - **Do** keep creator identity accents separate from scoped viewer and workspace action colors.
-- **Do** preserve wrapping mobile viewer navigation and separate membership records.
+- **Do** preserve all viewer destinations through compact disclosed mobile navigation and separate membership records.
 
 Billing uses the owner-supplied pricing-card composition inside the mineral workspace: Free/Pro/Team columns, one recommended Pro border, aligned price/interval/CTA, checkmarked feature lists, and a labelled monthly/annual control. Prices and feature copy come from the shared plan catalog. Usage uses actual capacity meters with explicit account/site scope. Data gives export the primary surface and isolates account deletion. Insights uses a two-column community/rewards and participation composition with current operations spanning beneath it; it stacks with consistent insets on mobile. Expandable secondary panels use a visible surface, border, keyboard focus, and a directional chevron rather than unmarked text. These extend the existing Fira/mineral tokens; they do not create another theme.
 
