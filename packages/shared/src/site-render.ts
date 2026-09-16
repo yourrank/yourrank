@@ -532,7 +532,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
-  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null });
+  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: sectionUrl, shareTitle: rawTitleBase });
 
   // B-01: Dynamic font URL based on board's active font.
   const font = resolveFont(data);
@@ -614,7 +614,26 @@ function feedbackModal({ slug }) {
  * The footer owns the site map and the secondary links the old workspace rail
  * used to hold, so the drawer stays a narrow-width disclosure of the top bar.
  */
-function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl }) {
+/**
+ * Share controls for the page being viewed: a copy-link button (wired by the
+ * shell script) and an X intent link. Rendered only while the creator keeps the
+ * `share` block on; the URL is the page's own canonical address, never a guess.
+ */
+function shareBlock({ data, shareUrl, shareTitle }) {
+  if (data.sections?.share === false || !shareUrl) return "";
+  const intent = `https://x.com/intent/post?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareTitle)}`;
+  return `<div class="yr-share" data-share-block><span>Share</span><button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-share-copy data-share-url="${esc(shareUrl)}" data-share-title="${esc(shareTitle)}">Share link</button><a class="yr-btn yr-btn--sm yr-btn--ghost" href="${esc(intent)}" target="_blank" rel="noopener noreferrer">Share on X<span class="yr-sr"> (opens in a new tab)</span></a><span class="yr-share-status" data-share-status role="status" aria-live="polite"></span></div>`;
+}
+
+/** The creator's rules list; only string entries are shown, and only while the `rules` block is on. */
+function rulesBlock(data) {
+  if (data.sections?.rules === false) return "";
+  const rules = (Array.isArray(data.rules) ? data.rules : []).filter((rule) => typeof rule === "string" && rule.trim());
+  if (!rules.length) return "";
+  return `<section class="viewer-card viewer-rules" aria-labelledby="viewer-rules-title"><div class="viewer-card-head"><h2 id="viewer-rules-title">${viewerIcon('shield')}Rules</h2></div><ol class="viewer-rules-list">${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol></section>`;
+}
+
+function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl, shareUrl, shareTitle }) {
   const enabled = sectionList(siteSections);
   const legalHref = (page) => `${homeUrl}${siteSectionHref(page, slug, isCustomDomain)}`;
   const legalLinks = renderLegalSidebar(data, legalHref).split("\n").filter(Boolean).join("");
@@ -635,6 +654,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
 <p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
 <div class="yr-foot-links">${legalLinks}<button type="button" data-feedback-open>Send feedback</button></div>
 </div>
+${shareBlock({ data, shareUrl, shareTitle })}
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</nav>
 </footer>`;
 }
@@ -682,7 +702,7 @@ ${section === 'shop' ? `<section class="viewer-rail-panel"><div class="viewer-ra
 
 function leaderboardPreview(ctx) {
   const { data, b, slug, siteSections, isCustomDomain } = ctx;
-  if (siteSections.leaderboard === false) return '';
+  if (siteSections.leaderboard === false || data.sections?.leaderboard === false) return '';
   const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0,3);
   return `<section class="viewer-card"><div class="viewer-card-head"><h2>${viewerIcon('leaderboard')}Leaderboard</h2><a href="${siteSectionHref('leaderboard', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div><p>${esc(b.period || 'Current')} standings</p><div class="viewer-board-list">${players.map((player, i) => `<div class="viewer-board-row"><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span>${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('') || '<p>No standings yet. The creator publishes leaderboard scores.</p>'}</div></section>`;
 }
@@ -790,6 +810,12 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
 
   const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
   const switcher = events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '';
+  if (data.sections?.leaderboard === false) {
+    return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
+${panel({ title: "Standings", titleHidden: true, meta: "", body: emptyState(ICONS.trophy, "Standings are hidden", `${esc(b.name || slug)} is not showing the standings right now. Check back later.`), foot: notes })}
+${rulesBlock(data)}`;
+  }
+
   return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
 <div data-player-board${podium ? ` data-podium="${Math.min(players.length, 3)}"` : ""}>
 ${panel({
@@ -800,7 +826,8 @@ ${panel({
     // in shared chrome every other section has to carry.
     body: `${players.length ? `<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div>` : ""}${standings}`,
     foot: notes,
-  })}</div>`;
+  })}</div>
+${rulesBlock(data)}`;
 }
 
 /* ── Rewards ──────────────────────────────────────────────────────────── */
