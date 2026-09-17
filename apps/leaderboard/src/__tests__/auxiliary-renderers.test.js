@@ -370,8 +370,8 @@ describe("new-shell auxiliary renderers", () => {
     expect(html).toContain('data-preview-field="f_name">Demo Board</h1>');
     expect(html).toContain('class="viewer-switch"');
     expect(visible).not.toContain("Demo Board Demo Board");
-    expect(html).toContain("Send a suggestion to this site's owner.");
-    expect(html).toContain("There is no personal reply here.");
+    expect(html).toContain("Goes to this community's creator, not to YourRank.");
+    expect(html).toContain("There is no personal reply here;");
     expect(html).not.toContain("Tell Demo Board what works");
   });
 });

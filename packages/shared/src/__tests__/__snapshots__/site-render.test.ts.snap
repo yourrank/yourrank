@@ -74,16 +74,17 @@ FORM: The supplied images own the composition. Production routes and scoped reco
 <p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
-<div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Send feedback</button></div>
+<div class="yr-foot-links">            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/contact">Contact Us</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Feedback for this creator</button></div>
 </div>
 <div class="yr-share" data-share-block><span>Share</span><button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-share-copy data-share-url="https://example.test/board%20fixture/leaderboard" data-share-title="Ampersand &amp; Board">Share link</button><a class="yr-btn yr-btn--sm yr-btn--ghost" href="https://x.com/intent/post?url=https%3A%2F%2Fexample.test%2Fboard%2520fixture%2Fleaderboard&amp;text=Ampersand%20%26%20Board" target="_blank" rel="noopener noreferrer">Share on X<span class="yr-sr"> (opens in a new tab)</span></a><span class="yr-share-status" data-share-status role="status" aria-live="polite"></span></div>
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections"><a href="https://example.test/board%20fixture">Home</a><a href="https://example.test/board%20fixture/leaderboard">Leaderboard</a><a href="https://example.test/board%20fixture/shop">Rewards</a><a href="https://example.test/board%20fixture/me">My Activity</a></nav>
 </footer></div></div>
 <dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
-<h2 id="yr-feedback-title">Send feedback</h2>
-<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's <a href="/board%20fixture/contact">Contact page</a>.</p>
-<textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback"></textarea>
+<h2 id="yr-feedback-title">Feedback for this creator</h2>
+<p class="yr-note">Goes to this community's creator, not to YourRank. There is no personal reply here; if you need a response, use the creator's <a href="/board%20fixture/contact">Contact page</a>.</p>
+<textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback for the creator" aria-describedby="yr-feedback-hint"></textarea>
+<p class="yr-note yr-feedback-hint" id="yr-feedback-hint">10 to 2000 characters, not counting spaces at the start or end. <span id="yr-feedback-count">0 / 2000</span></p>
 <p class="yr-modal-status" id="yr-feedback-status" role="status" aria-live="polite"></p>
 <div class="yr-modal-acts">
 <button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" id="yr-feedback-close">Cancel</button>

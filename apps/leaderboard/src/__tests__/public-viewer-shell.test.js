@@ -54,6 +54,21 @@ describe("public viewer shell", () => {
     expect(custom).toContain('href="https://yourrank.site/help?audience=viewer&amp;return=%2Fcreator%2Fshop">How YourRank works');
   });
 
+  it("names the creator as the feedback recipient and exposes the trimmed 10-2000 rule", async () => {
+    const html = await render("home");
+    expect(html).toContain('data-feedback-open>Feedback for this creator</button>');
+    expect(html).toContain('<h2 id="yr-feedback-title">Feedback for this creator</h2>');
+    expect(html).toContain("Goes to this community's creator, not to YourRank.");
+    expect(html).toMatch(/<textarea name="message"[^>]*minlength="10" maxlength="2000"[^>]*aria-describedby="yr-feedback-hint"/);
+    expect(html).toContain('<p class="yr-note yr-feedback-hint" id="yr-feedback-hint">10 to 2000 characters, not counting spaces at the start or end. <span id="yr-feedback-count">0 / 2000</span></p>');
+    const shell = readFileSync(join(assets, 'site-shell.js'), 'utf8');
+    expect(shell).toContain('feedbackMessage.value.trim().length + " / " + max');
+    expect(shell).toContain('feedbackMessage.addEventListener("input", updateFeedbackCount)');
+    expect(shell).toMatch(/var message = form\.message\.value\.trim\(\);\s*if \(message\.length < 10\)/);
+    expect(shell).toContain('dialog.addEventListener("close", restoreFeedbackFocus)');
+    expect(shell).toContain('signal: AbortSignal.timeout(10000)');
+  });
+
   it("gives the shared viewer rail sole ownership of public chrome", async () => {
     const html = await render("home");
     expect((html.match(/class="viewer-rail"/g)||[]).length).toBe(1);
