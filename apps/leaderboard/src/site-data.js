@@ -13,6 +13,19 @@ export async function getShopItems(siteId, queryImpl = query) {
 }
 
 /**
+ * One reward for the public detail page, scoped to the community. Inactive
+ * rows are returned so the page can say the reward was withdrawn; deleted
+ * rows and other communities' rewards are indistinguishable from unknown ids.
+ */
+export async function getShopItem(siteId, rewardId, queryImpl = query) {
+  const rows = await queryImpl(
+    "SELECT id, name, description, cost, stock, active, cooldown_seconds, (image_key IS NOT NULL) AS has_image FROM shop_items WHERE site_id=$1 AND id::text=$2 AND deleted_at IS NULL LIMIT 1",
+    [siteId, rewardId]
+  );
+  return rows?.[0] || null;
+}
+
+/**
  * Participation is deliberately narrower than generic activity. A persisted
  * code_drop_claim is the only current free, viewer-linked success record with
  * an immutable event timestamp. Attempts and legacy mechanics are not read.

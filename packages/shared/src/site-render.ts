@@ -13,7 +13,8 @@ import {
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
 import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
 import { resolveViewerTemplate } from "./viewer-templates.js";
-import { guestGateHref, viewerIntentCopy, viewerIntentReturnTo } from "./viewer-intent.js";
+import { guestGateHref, rewardDetailHref, viewerIntentCopy, viewerIntentReturnTo } from "./viewer-intent.js";
+import { publicRewardDetail, rewardAvailabilityText } from "./reward-detail.js";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
 const SECTION_LABELS = {
@@ -429,7 +430,10 @@ function rewardImage(item, slug) {
   return image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="480" height="240" loading="lazy" decoding="async" />` : `<div class="yr-rwd-art" aria-hidden="true">${viewerIcon('gift')}</div>`;
 }
 
-function rewardRow({ item, viewer, member = !!viewer, balance, blocked, unavailable = false, membershipHref = "", slug = "" }) {
+/** The one claim decision shared by catalog cards and the detail page. The
+ *  control never deducts anything: Redeem opens the review dialog, and the
+ *  server re-checks membership, balance, stock and cooldown on submit. */
+function rewardAction({ item, viewer, member, balance, blocked, unavailable, membershipHref }) {
   const cost = Number(item.cost) || 0;
   const stock = item.stock === null || item.stock === undefined ? null : Number(item.stock);
   const inStock = stock === null || stock > 0;
@@ -439,7 +443,9 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, unavaila
 
   let state = "";
   let action;
-  if (!viewer) {
+  if (item.active === false) {
+    action = `<span class="yr-act yr-act--off" role="note">No longer offered</span>`;
+  } else if (!viewer) {
     action = `<a class="yr-act" href="${guestGateHref(membershipHref, "reward", String(item.id))}">Sign in to claim</a>`;
   } else if (unavailable) {
     state = "Membership could not load";
@@ -464,11 +470,17 @@ function rewardRow({ item, viewer, member = !!viewer, balance, blocked, unavaila
     if (stock !== null && stock <= 3) state = `${formatNumber(stock)} left`;
     action = `<button class="yr-act" type="button" data-redeem="${esc(item.id)}" data-reward-name="${esc(item.name)}" data-reward-cost="${cost}">Redeem</button>`;
   }
+  return { state, action, cost };
+}
+
+function rewardRow({ item, viewer, member = !!viewer, balance, blocked, unavailable = false, membershipHref = "", slug = "", isCustomDomain = false }) {
+  const { state, action, cost } = rewardAction({ item, viewer, member, balance, blocked, unavailable, membershipHref });
+  const detailHref = rewardDetailHref(siteSectionHref("shop", slug, isCustomDomain), String(item.id));
 
   return `<li class="yr-rwd" id="reward-${esc(item.id)}" tabindex="-1" data-reward-filter="${esc(String(item.name || '').toLowerCase())}" data-reward-sort-cost="${cost}">
 ${rewardImage(item, slug)}
 <div class="yr-rwd-main">
-<h3 class="yr-rwd-n">${esc(item.name)}</h3>
+<h3 class="yr-rwd-n"><a class="yr-rwd-link" href="${detailHref}">${esc(item.name)}</a></h3>
 ${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ""}
 </div>
 <div class="yr-rwd-side">
@@ -536,19 +548,25 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 
   // Pages rendered through contentHtml (player, legal, archive, profile) own their
   // own URL, so they pass it in rather than canonicalising to the creator home.
-  const sectionUrl = `${homeUrl}${opts.canonicalPath || siteSectionHref(section || "home", slug, isCustomDomain)}`;
+  const detailRewardId = section === "shop" && typeof opts.rewardId === "string" ? opts.rewardId : "";
+  const detailReward = detailRewardId && opts.reward && typeof opts.reward === "object" ? publicRewardDetail(opts.reward) : null;
+  const sectionUrl = `${homeUrl}${opts.canonicalPath || (detailRewardId ? `${siteSectionHref("shop", slug, isCustomDomain)}/${encodeURIComponent(detailRewardId)}` : siteSectionHref(section || "home", slug, isCustomDomain))}`;
   const canonicalUrl = esc(sectionUrl);
   const returnTo = sectionUrl;
 
   const rawTitleBase = String(b.name || slug || "YourRank");
   const titleBase = esc(rawTitleBase);
   const sectionTitle = esc(SECTION_LABELS[section] || section || "");
-  const title = opts.pageTitle || (section === "home"
-    ? `${titleBase} — ${esc(b.tagline || "Leaderboard & Rewards")}`
-    : `${sectionTitle} · ${titleBase}`);
-  const rawDesc = opts.pageDescription || (section === "home"
-    ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and claim rewards."}`
-    : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s public site.`);
+  const title = opts.pageTitle || (detailRewardId
+    ? `${detailReward ? esc(detailReward.name) : "Reward not available"} · ${sectionTitle} · ${titleBase}`
+    : section === "home"
+      ? `${titleBase} — ${esc(b.tagline || "Leaderboard & Rewards")}`
+      : `${sectionTitle} · ${titleBase}`);
+  const rawDesc = opts.pageDescription || (detailReward
+    ? `${detailReward.name} — ${detailReward.cost.toLocaleString("en-US")} credits in ${rawTitleBase}'s community rewards.${detailReward.description ? ` ${detailReward.description}` : ""}`
+    : section === "home"
+      ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and claim rewards."}`
+      : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s public site.`);
   const desc = esc(rawDesc);
   const ogImageUrl = logoUrl ? esc(logoUrl) : `${homeUrl}/og.png`;
 
@@ -558,11 +576,13 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     returnTo, nonce, watermark, isDemo: !!opts.isDemo,
     viewerAuthError: typeof opts.viewerAuthError === "string" ? opts.viewerAuthError : "",
     viewerIntent: opts.viewerIntent && typeof opts.viewerIntent === "object" ? opts.viewerIntent : { intent: "signin", rewardId: "" },
+    rewardId: typeof opts.rewardId === "string" ? opts.rewardId : "",
+    reward: opts.reward && typeof opts.reward === "object" ? opts.reward : null,
   };
 
   const mainInner = section == null && typeof opts.contentHtml === "string" ? opts.contentHtml : (section === "home" ? homeMain(ctx)
     : section === "leaderboard" ? boardMain(ctx)
-    : section === "shop" ? shopMain(ctx)
+    : section === "shop" ? (ctx.rewardId ? rewardDetailMain(ctx) : shopMain(ctx))
     : section === "games" ? gamesMain(ctx)
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
@@ -777,7 +797,7 @@ function rewardProgressCard(ctx) {
   const available = (viewerData?.shopItems || data.shopItems || []).filter(item => item.active !== false && (item.stock == null || Number(item.stock) > 0) && !Number(item.cooldownRemaining)).sort((a,b) => Number(a.cost) - Number(b.cost));
   const nextReward = available.find(item => Number(item.cost) > balance) || available[0];
   const progress = nextReward ? Math.min(100, Math.max(0, Math.floor(balance / Math.max(1, Number(nextReward.cost)) * 100))) : 0;
-  return `<section class="viewer-card viewer-next-reward"><div class="viewer-card-head"><h2>Your next reward</h2>${viewerIcon('gift')}</div>${blocked ? '<p>Claiming is unavailable for this membership. Contact the creator for help.</p>' : nextReward ? `<div class="viewer-reward-progress"><strong>${esc(nextReward.name)}</strong><span>${formatNumber(balance)} / ${formatNumber(nextReward.cost)} credits</span></div><progress max="100" value="${progress}" aria-label="Progress toward ${esc(nextReward.name)}">${progress}%</progress><p>${balance >= Number(nextReward.cost) ? 'You have enough credits for this reward.' : `${formatNumber(Number(nextReward.cost) - balance)} more credits needed. Use ${esc(b.name || slug)}'s channel-point rewards or redeem a community code to earn credits.`}</p><a class="yr-btn" href="${shopHref}">${balance >= Number(nextReward.cost) ? 'Choose a reward' : 'Explore rewards'} ${viewerIcon('arrow')}</a>` : '<p>No rewards are available right now. Check back after the creator adds more.</p>'}</section>`;
+  return `<section class="viewer-card viewer-next-reward"><div class="viewer-card-head"><h2>Your next reward</h2>${viewerIcon('gift')}</div>${blocked ? '<p>Claiming is unavailable for this membership. Contact the creator for help.</p>' : nextReward ? `<div class="viewer-reward-progress"><strong>${esc(nextReward.name)}</strong><span>${formatNumber(balance)} / ${formatNumber(nextReward.cost)} credits</span></div><progress max="100" value="${progress}" aria-label="Progress toward ${esc(nextReward.name)}">${progress}%</progress><p>${balance >= Number(nextReward.cost) ? 'You have enough credits for this reward.' : `${formatNumber(Number(nextReward.cost) - balance)} more credits needed. Use ${esc(b.name || slug)}'s channel-point rewards or redeem a community code to earn credits.`}</p><a class="yr-btn" href="${balance >= Number(nextReward.cost) ? rewardDetailHref(shopHref, String(nextReward.id)) : shopHref}">${balance >= Number(nextReward.cost) ? 'Choose a reward' : 'Explore rewards'} ${viewerIcon('arrow')}</a>` : '<p>No rewards are available right now. Check back after the creator adds more.</p>'}</section>`;
 }
 
 function recentCreditCard(ctx) {
@@ -795,7 +815,7 @@ function homeMain(ctx) {
   const shopHref = siteSectionHref('shop', slug, isCustomDomain);
   const item = (viewerData?.shopItems || data.shopItems || []).find(item => item.active !== false);
   return `${rewardProgressCard(ctx)}
-<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${item ? `<ul class="yr-rwds"><li class="yr-rwd">${rewardImage(item, slug)}<div class="yr-rwd-main"><h3 class="yr-rwd-n">${esc(item.name)}</h3>${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ''}</div><div class="yr-rwd-side"><p class="yr-rwd-c">${viewerIcon('coins')}${formatNumber(item.cost)} credits</p><a class="yr-act" href="${shopHref}">View reward</a></div></li></ul>` : '<p>No rewards yet. The creator will publish them here.</p>'}</section>` : ''}</div>`;
+<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${item ? `<ul class="yr-rwds"><li class="yr-rwd">${rewardImage(item, slug)}<div class="yr-rwd-main"><h3 class="yr-rwd-n">${esc(item.name)}</h3>${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ''}</div><div class="yr-rwd-side"><p class="yr-rwd-c">${viewerIcon('coins')}${formatNumber(item.cost)} credits</p><a class="yr-act" href="${rewardDetailHref(shopHref, String(item.id))}" aria-label="View ${esc(item.name)}">View reward</a></div></li></ul>` : '<p>No rewards yet. The creator will publish them here.</p>'}</section>` : ''}</div>`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
@@ -908,7 +928,7 @@ function shopMain(ctx) {
     : "";
 
   const list = items.length
-    ? `<section aria-label="All rewards"><div class="viewer-card-head"><h2>All rewards</h2><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
+    ? `<section aria-label="All rewards"><div class="viewer-card-head"><h2>All rewards</h2><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug, isCustomDomain })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
@@ -919,6 +939,71 @@ ${blockedNote}
 ${list}
 <p class="yr-fine">Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.</p>
 ${canOrder ? orderConfirmDialog() : ""}`;
+}
+
+/* ── Reward detail (/shop/<rewardId>) ─────────────────────────────────── */
+
+/**
+ * One reward, described before sign-in: cost, availability, fulfillment and
+ * where to ask the creator. The action is the same reviewed claim as the
+ * catalog — never a direct deduction — and a missing or withdrawn reward gets
+ * a plain recovery state with the way back to Rewards.
+ */
+function rewardDetailMain(ctx) {
+  const { b, slug, viewer, viewerData, isMember, balance, homeUrl, isCustomDomain, membershipStatus, viewerOnSite, rewardId, reward: raw } = ctx;
+  const creator = b.name || slug;
+  const shopHref = siteSectionHref("shop", slug, isCustomDomain);
+  const contactHref = isCustomDomain ? "/contact" : `/${encodeURIComponent(slug)}/contact`;
+  const back = `<a class="yr-sec-link viewer-reward-back" href="${shopHref}">${viewerIcon('arrow')}Back to Rewards</a>`;
+
+  if (!raw) {
+    return `<header class="viewer-page-intro"><div><h1>This reward isn't available</h1><p>There is no reward with this link in ${esc(creator)}'s community. It may have been removed, or the link may be for another community.</p></div></header><section class="viewer-card viewer-reward-missing" aria-label="Reward not found"><p>Everything ${esc(creator)} currently offers is listed on the Rewards page.</p><div class="member-actions"><a class="yr-btn" href="${shopHref}">See all rewards</a><a class="yr-sec-link" href="${esc(contactHref)}">Contact the creator</a></div></section>`;
+  }
+
+  const reward = publicRewardDetail(raw);
+  // Membership-specific state (cooldown) comes from the viewer's own catalog snapshot.
+  const snapshot = (viewerData?.shopItems || []).find((item) => String(item.id) === reward.id);
+  const item = { ...raw, cooldownRemaining: snapshot?.cooldownRemaining };
+  const blocked = !!viewerOnSite?.blocked;
+  const unavailable = !!viewer && membershipStatus === 'unavailable';
+  const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
+  const { state, action } = rewardAction({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref });
+
+  const eligibility = !viewer
+    ? `Members of ${esc(creator)}'s community can claim this with ${formatNumber(reward.cost)} credits. Sign in to see your balance.`
+    : !isMember
+      ? (unavailable ? 'Your membership could not load. Reload this page before claiming.' : `Join ${esc(creator)}'s community, then claim it with ${formatNumber(reward.cost)} credits.`)
+      : balance >= reward.cost
+        ? `You have ${formatNumber(balance)} credits — enough to claim this.`
+        : `You have ${formatNumber(balance)} of the ${formatNumber(reward.cost)} credits needed.`;
+
+  const cooldown = reward.cooldownSeconds > 0
+    ? `<div><dt>Claim limit</dt><dd>Once every ${esc(formatWaitSeconds(reward.cooldownSeconds))} per member.</dd></div>`
+    : '';
+  const withdrawn = reward.availability === 'inactive'
+    ? `<p class="yr-note yr-note--w" role="status">${esc(creator)} no longer offers this reward. It stays here so old links still explain what it was.</p>`
+    : '';
+
+  return `<header class="viewer-page-intro viewer-reward-intro"><div>${back}<h1>${esc(reward.name)}</h1><p class="yr-rwd-c">${viewerIcon('coins')}${formatNumber(reward.cost)} credits</p></div></header>
+${withdrawn}
+<p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
+<article class="viewer-reward-detail" id="reward-${esc(reward.id)}" aria-labelledby="viewer-reward-title">
+${rewardImage(raw, slug)}
+<div class="viewer-reward-body">
+<h2 id="viewer-reward-title">About this reward</h2>
+<p class="viewer-reward-desc${reward.description ? '' : ' is-missing'}">${reward.description ? esc(reward.description) : `${esc(creator)} hasn't added a description yet. Ask them what it includes before you claim.`}</p>
+<dl class="viewer-reward-facts">
+<div><dt>Cost</dt><dd>${formatNumber(reward.cost)} credits</dd></div>
+<div><dt>Availability</dt><dd>${esc(rewardAvailabilityText(reward))}</dd></div>
+${cooldown}
+<div><dt>Eligibility</dt><dd>${eligibility}</dd></div>
+<div><dt>Fulfillment</dt><dd>${esc(reward.fulfillment)}</dd></div>
+<div><dt>Questions</dt><dd><a href="${esc(contactHref)}">Contact ${esc(creator)}</a> about this reward.</dd></div>
+</dl>
+<div class="viewer-reward-claim">${state ? `<p class="yr-rwd-state">${esc(state)}</p>` : ''}${action}<p class="yr-fine">Claiming opens a review step first; nothing is deducted until you confirm, and the creator then completes it.</p></div>
+</div>
+</article>
+${viewer && isMember && !blocked && action.includes('data-redeem=') ? orderConfirmDialog() : ''}`;
 }
 
 /** One canonical viewer Claim: what it was, when it was submitted, and its audited outcome. */
@@ -1002,7 +1087,7 @@ function meMain(ctx) {
     const reward = viewerIntent.intent === "reward"
       ? (viewerData?.shopItems || data.shopItems || []).find((item) => String(item.id) === viewerIntent.rewardId)
       : null;
-    const intent = reward || viewerIntent.intent !== "reward" ? viewerIntent : { intent: "signin", rewardId: "" };
+    const intent = viewerIntent;
     const copy = viewerIntentCopy(intent, b.name || slug, reward?.name || "");
     const returnTo = `${homeUrl}${viewerIntentReturnTo(intent, { homeHref, meHref, shopHref })}`;
     const query = `returnTo=${encodeURIComponent(returnTo)}${intent.intent === "join" ? `&intent=join&site=${encodeURIComponent(slug)}` : ""}`;
