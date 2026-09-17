@@ -96,15 +96,38 @@ const accountViews = {
   "vd-data": ["Data & Account", "Manage your account information and control your data."],
 };
 let exportId = "";
+const DEFAULT_SUBTITLE = "Choose a community. Your rewards and claims stay with each community.";
+const LOGIN_LINKS = ["vd-login-kick", "vd-login-discord"];
+
+// A guest who follows an account-settings link lands on the sign-in card, which
+// names the requested section and sends the provider back to it after login.
+function applyGuestGate(requested) {
+  const label = requested ? accountViews[requested][0] : "";
+  $("vd-title").textContent = requested ? `Sign in to open ${label}` : "My communities";
+  $("vd-subtitle").textContent = requested
+    ? `${label} is part of your Viewer Account. Sign in and you'll come straight back to it.`
+    : DEFAULT_SUBTITLE;
+  for (const id of LOGIN_LINKS) {
+    const link = $(id);
+    if (!link) continue;
+    const base = link.dataset.loginBase || link.href;
+    if (!base) continue;
+    link.dataset.loginBase = base;
+    const target = new URL(base, window.location.href);
+    if (requested) target.searchParams.set("returnTo", `${accountPath()}#${requested}`);
+    link.setAttribute("href", `${target.pathname}${target.search}`);
+  }
+}
+
 function selectAccountView() {
   const hash = window.location.hash.slice(1);
-  const current = signedIn && Object.hasOwn(accountViews, hash) ? hash : "";
+  const requested = Object.hasOwn(accountViews, hash) ? hash : "";
+  const current = signedIn ? requested : "";
   Object.keys(accountViews).forEach(id => { $(id).hidden = id !== current; });
   $("vd-communities-card").hidden = !signedIn || !!current;
   $("vd-title").textContent = current ? accountViews[current][0] : "My communities";
-  $("vd-subtitle").textContent = current
-    ? accountViews[current][1]
-    : "Choose a community. Your rewards and claims stay with each community.";
+  $("vd-subtitle").textContent = current ? accountViews[current][1] : DEFAULT_SUBTITLE;
+  if (!signedIn) applyGuestGate(requested);
   $("vd-breadcrumb").hidden = !current;
   $("vd-breadcrumb-current").textContent = current ? accountViews[current][0] : "";
   const accountLink = $("viewer-account-link");
@@ -112,14 +135,15 @@ function selectAccountView() {
   if (current) { communitiesLink.removeAttribute("aria-current"); }
   else { accountLink.removeAttribute("aria-current"); communitiesLink.setAttribute("aria-current", "page"); }
   document.querySelectorAll('.viewer-destinations a').forEach(link => {
-    if (new URL(link.href, window.location.href).hash === `#${current}`) link.setAttribute("aria-current", "page");
+    if (requested && new URL(link.href, window.location.href).hash === `#${requested}`) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
-  $("viewer-top-title").textContent = current ? accountViews[current][0] : "My communities";
+  $("viewer-top-title").textContent = $("vd-title").textContent;
 }
 window.addEventListener("hashchange", () => {
   selectAccountView();
   if (signedIn) $("vd-title").focus();
+  else if (Object.hasOwn(accountViews, window.location.hash.slice(1))) $("vd-login-card").focus();
 }, { signal: lifetime.signal });
 
 function renderLoggedOut() {
@@ -250,9 +274,11 @@ async function load() {
     else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
     if (!lifetime.signal.aborted) setGlobalLoading(false);
-    if (!lifetime.signal.aborted && (window.location.hash === "#vd-profile" || window.location.hash === "#vd-login-card")) {
-      const destination = $("vd-profile").hidden ? $("vd-login-card") : $("vd-profile");
-      destination.focus({ preventScroll: true });
+    if (!lifetime.signal.aborted) {
+      const hash = window.location.hash.slice(1);
+      if (hash === "vd-login-card" || (!signedIn && Object.hasOwn(accountViews, hash))) $("vd-login-card").focus({ preventScroll: true });
+      else if (hash === "vd-profile") $("vd-profile").focus({ preventScroll: true });
+      else if (signedIn && Object.hasOwn(accountViews, hash)) $("vd-title").focus({ preventScroll: true });
     }
   }
 }

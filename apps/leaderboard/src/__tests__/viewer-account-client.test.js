@@ -160,6 +160,42 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities-card").hidden).toBe(true);
   });
 
+  it("gates account settings for a guest instead of focusing a hidden section", async () => {
+    const env = makeEnvironment({ response: { status: 401, body: { error: "unauthorized" } }, url: "https://yourrank.site/me?community=alpha#vd-data" });
+    env.$("vd-login-kick").setAttribute("href", "/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
+    env.$("vd-login-discord").setAttribute("href", "/api/viewer/auth/discord?returnTo=%2Fme%3Fcommunity%3Dalpha");
+    await env.ready();
+    const sections = ["vd-profile", "vd-connections", "vd-notifications", "vd-security", "vd-data"];
+    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    expect(env.$("vd-login-card").hidden).toBe(false);
+    expect(env.activeElement()).toBe(env.$("vd-login-card"));
+    expect(env.$("vd-title").textContent).toBe("Sign in to open Data & Account");
+    expect(env.$("vd-subtitle").textContent).toContain("come straight back to it");
+    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
+    expect(env.$("vd-login-discord").href).toBe("/api/viewer/auth/discord?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-data");
+    expect(env.navigation.filter(link => link.attributes["aria-current"] === "page").map(link => link.href)).toEqual(["/me#vd-data"]);
+
+    env.navigateHash("vd-security");
+    expect(sections.every(id => env.$(id).hidden)).toBe(true);
+    expect(env.$("vd-title").textContent).toBe("Sign in to open Privacy & Security");
+    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha%23vd-security");
+    expect(env.activeElement()).toBe(env.$("vd-login-card"));
+
+    env.navigateHash("");
+    expect(env.$("vd-title").textContent).toBe("My communities");
+    expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
+    expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
+  });
+
+  it("opens the requested section once the provider returns a signed-in member", async () => {
+    const env = makeEnvironment({ response: { body: ACCOUNT }, url: "https://yourrank.site/me#vd-connections" });
+    await env.ready();
+    expect(env.$("vd-connections").hidden).toBe(false);
+    expect(env.$("vd-login-card").hidden).toBe(true);
+    expect(env.$("vd-title").textContent).toBe("Connected Accounts");
+    expect(env.activeElement()).toBe(env.$("vd-title"));
+  });
+
   it("clears the previous account's memberships before another login", async () => {
     const env = makeEnvironment({
       response: (path, opts) => opts.method === "POST"
