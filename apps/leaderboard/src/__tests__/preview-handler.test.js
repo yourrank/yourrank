@@ -120,7 +120,7 @@ describe("handleDashboardPreview", () => {
 
   it("edits only the creator name and tagline, never the leaderboard heading", async () => {
     const home = await (await handleDashboardPreview(previewRequest("board=site-1&section=home&device=desktop", { brand: { name: "Northstar", tagline: "Our community" } }), {}, "nonce123", impls())).text();
-    expect(home).toContain('<p class="viewer-context-name" data-preview-field="f_name">Northstar</p>');
+    expect(home).toContain('<h1 class="viewer-context-name" id="viewer-home-title" data-preview-field="f_name">Northstar</h1>');
     expect(home).toContain('data-preview-field="f_tagline">Our community</p>');
     expect(home).not.toContain('yr_preview_update');
     expect(home).not.toContain('.yr-hero-r');

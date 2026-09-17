@@ -702,7 +702,9 @@ function viewerCommunityHeading(ctx) {
   const { b, slug, viewer, isMember, membershipStatus, siteSections, isCustomDomain, logoUrl } = ctx;
   const name = b.name || slug;
   const channel = streamerChannel(ctx);
-  return `<header class="viewer-home-banner">${creatorMark(logoUrl, 'yr-id-logo', 104, `<span class="viewer-avatar">${esc(Array.from(name)[0] || 'Y')}</span>`)}<div><p class="viewer-context-name" data-preview-field="f_name">${esc(name)}</p>${b.tagline ? `<p class="viewer-context-sub" data-preview-field="f_tagline">${esc(b.tagline)}</p>` : ''}<div class="viewer-banner-actions">${channel ? `<a class="yr-btn" href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(channel.label)}</a>` : ''}${siteSections.me !== false ? `<a class="yr-btn yr-btn--ghost" href="${viewer ? siteSectionHref('me', slug, isCustomDomain) : guestGateHref(siteSectionHref('me', slug, isCustomDomain), 'join')}">${viewerIcon(isMember ? 'check' : 'user')}${isMember ? 'My Activity' : viewer && membershipStatus === 'unavailable' ? 'Reload membership' : 'Join community'}</a>` : ''}<span>${isMember ? 'Community member' : 'Creator community'}</span></div></div></header>`;
+  // The only identity block on Home: one H1, kept out of <main> so the layout
+  // grid can span it, but not a <header> so the topbar stays the single banner.
+  return `<section class="viewer-home-banner" aria-labelledby="viewer-home-title">${creatorMark(logoUrl, 'yr-id-logo', 104, `<span class="viewer-avatar">${esc(Array.from(name)[0] || 'Y')}</span>`)}<div><h1 class="viewer-context-name" id="viewer-home-title" data-preview-field="f_name">${esc(name)}</h1>${b.tagline ? `<p class="viewer-context-sub" data-preview-field="f_tagline">${esc(b.tagline)}</p>` : ''}<div class="viewer-banner-actions">${channel ? `<a class="yr-btn" href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(channel.label)}</a>` : ''}${siteSections.me !== false ? `<a class="yr-btn yr-btn--ghost" href="${viewer ? siteSectionHref('me', slug, isCustomDomain) : guestGateHref(siteSectionHref('me', slug, isCustomDomain), 'join')}">${viewerIcon(isMember ? 'check' : 'user')}${isMember ? 'My Activity' : viewer && membershipStatus === 'unavailable' ? 'Reload membership' : 'Join community'}</a>` : ''}<span>${isMember ? 'Community member' : 'Creator community'}</span></div></div></section>`;
 }
 
 function streamerChannel(ctx) {
@@ -760,13 +762,10 @@ function recentCreditCard(ctx) {
 }
 
 function homeMain(ctx) {
-  const { b, slug, viewerData, data, siteSections, isCustomDomain, logoUrl } = ctx;
-  const name = b.name || slug;
+  const { slug, viewerData, data, siteSections, isCustomDomain } = ctx;
   const shopHref = siteSectionHref('shop', slug, isCustomDomain);
   const item = (viewerData?.shopItems || data.shopItems || []).find(item => item.active !== false);
-  const channel = streamerChannel(ctx);
-  return `<section class="viewer-card viewer-stream-card"><div class="viewer-channel-art">${creatorMark(logoUrl, 'yr-id-logo', 100, `<span class="viewer-avatar">${esc(Array.from(name)[0] || 'Y')}</span>`)}${channel ? `<p data-stream-status${channel.kick ? ` data-kick-channel="${esc(channel.kick)}"` : ''}>Live status unavailable</p>` : ''}</div><div class="viewer-stream-copy"><h1>${esc(name)}</h1><p>${esc(b.tagline || 'Follow the creator, explore rewards, and see your community activity.')}</p>${channel ? `<a class="yr-btn" href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(channel.label)} ${viewerIcon('external')}</a>` : ''}</div></section>
-${rewardProgressCard(ctx)}
+  return `${rewardProgressCard(ctx)}
 <div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community Rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${item ? `<ul class="yr-rwds"><li class="yr-rwd">${rewardImage(item, slug)}<div class="yr-rwd-main"><h3 class="yr-rwd-n">${esc(item.name)}</h3>${item.description ? `<p class="yr-rwd-p">${esc(item.description)}</p>` : ''}</div><div class="yr-rwd-side"><p class="yr-rwd-c">${viewerIcon('coins')}${formatNumber(item.cost)} credits</p><a class="yr-act" href="${shopHref}">View reward</a></div></li></ul>` : '<p>No rewards yet. The creator will publish them here.</p>'}</section>` : ''}</div>`;
 }
 

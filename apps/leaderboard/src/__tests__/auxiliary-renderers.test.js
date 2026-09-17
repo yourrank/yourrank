@@ -367,7 +367,7 @@ describe("new-shell auxiliary renderers", () => {
       .replace(/\s+/g, " ");
     // Three jobs: community context, home introduction, and copyright.
     // The visible responsive rail no longer duplicates identity in a drawer.
-    expect(html).toContain('data-preview-field="f_name">Demo Board</p>');
+    expect(html).toContain('data-preview-field="f_name">Demo Board</h1>');
     expect(html).toContain('class="viewer-switch"');
     expect(visible).not.toContain("Demo Board Demo Board");
     expect(html).toContain("Send a suggestion to this site's owner.");

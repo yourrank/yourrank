@@ -111,7 +111,7 @@ describe("public viewer shell", () => {
   it("keeps long creator names intact with wrapping in the context panel", async () => {
     const long = "Streamerwithaverylongsinglewordchannelname Extended Championship Board Season Finale";
     const html = await render("home", { data: { ...baseData, brand: { ...baseData.brand, name: long } } });
-    expect(html).toContain(`data-preview-field="f_name">${long}</p>`);
+    expect(html).toContain(`data-preview-field="f_name">${long}</h1>`);
     const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
     expect(css).toMatch(/\.viewer-context-name\{[^}]*overflow-wrap:anywhere/);
     expect(css).toMatch(/\.viewer-switch summary strong\{[^}]*overflow-wrap:anywhere/);
@@ -229,9 +229,20 @@ describe("public viewer shell", () => {
   it("uses the community home composition without inventing viewer statistics", async () => {
     const html = await render("home", { viewer, viewerData });
     for (const removed of ['yr-chart', 'yr-kpi', '7-day average', 'Lifetime', 'Pending orders']) expect(html).not.toContain(removed);
-    expect(html).toContain('<h1>Creator Name</h1>');
-    expect(html).toContain('class="viewer-home-banner"');
-    expect(html).toContain('class="viewer-card viewer-stream-card"');
+    // One identity block: the banner carries the only H1; no second avatar/name card follows it.
+    expect(html).toContain('<section class="viewer-home-banner" aria-labelledby="viewer-home-title">');
+    expect(html).toContain('<h1 class="viewer-context-name" id="viewer-home-title" data-preview-field="f_name">Creator Name</h1>');
+    expect((html.match(/<h1\b/g) || []).length).toBe(1);
+    expect(html).not.toContain('viewer-stream-card');
+    expect(html).not.toContain('Live status unavailable');
+    expect(html).not.toContain('<blockquote>');
+    // The topbar is the only banner landmark; the skip link still lands on main.
+    expect((html.match(/<header\b/g) || []).length).toBe(1);
+    expect(html).toContain('<header class="viewer-topbar">');
+    expect(html).toContain('<a class="yr-sr" href="#main-content">Skip to content</a>');
+    expect(html).toContain('<main class="viewer-main" id="main-content">');
+    // Identity is followed by useful content.
+    expect(html.indexOf('viewer-home-banner')).toBeLessThan(html.indexOf('Monthly standings'));
     expect(html).not.toContain('data-guide-');
   });
 
@@ -272,7 +283,7 @@ describe("public viewer shell", () => {
     const bare = { ...baseData, brand: { name: 'Bare Board' }, players: [], shopItems: [], socials: [], siteSections: { home: true, leaderboard: true, shop: false, games: false, me: false } };
     const html = await render('home', { data: bare });
     expect(html).toContain('No standings yet.');
-    expect(html).toContain('<h1>Bare Board</h1>');
+    expect(html).toContain('data-preview-field="f_name">Bare Board</h1>');
     expect(html).not.toContain('href="/creator/shop"');
     expect(html).not.toContain('href="/creator/me"');
     expect(html).not.toContain('Claim free code');
@@ -478,14 +489,13 @@ describe("public viewer shell", () => {
     expect(shell).toMatch(/!\/\^HTTP \/\.test\(message\)/);
   });
 
-  it("uses the configured creator identity in the rail, banner and channel card", async () => {
+  it("uses the configured creator identity once in the rail and once in the banner", async () => {
     const plain = await render('home');
-    expect(plain).toContain('data-preview-field="f_name">Creator Name</p>');
+    expect(plain).toContain('data-preview-field="f_name">Creator Name</h1>');
     const logo = await render('home', { data: { ...baseData, logoUrl: 'https://cdn.test/logo.png' } });
     for (const region of [
       logo.match(/<aside class="viewer-rail"[^]*?<\/aside>/)?.[0],
-      logo.match(/<header class="viewer-home-banner"[^]*?<\/header>/)?.[0],
-      logo.match(/<div class="viewer-channel-art"[^]*?<\/div>/)?.[0],
+      logo.match(/<section class="viewer-home-banner"[^]*?<\/section>/)?.[0],
     ]) {
       expect(region).toBeDefined();
       expect((region.match(/class="yr-id-logo"/g) || [])).toHaveLength(1);
