@@ -83,7 +83,7 @@ describe("brand identity", () => {
       "apps/leaderboard/src/middleware/seo.js",
       "apps/web/src/components/site-shell.tsx",
       "apps/web/src/components/home/workspace-preview.tsx",
-      "apps/leaderboard/src/pages/reviews.js",
+      "apps/leaderboard/src/pages/public-chrome.js",
     ];
     for (const rel of consumers) {
       const source = sources.find((s) => s.rel === rel);

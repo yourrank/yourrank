@@ -1,6 +1,7 @@
 // Shared legal page shell helper
 // NOTE: fill in company identity from Dashboard → Admin → Identity before going live.
 import { DEVIN_DESIGN_CONTRACT } from "@yourrank/shared/page-shell";
+import { publicHeader } from "./public-chrome.js";
 
 export function applyLegalIdentity(html, identity) {
   const i = identity || {};
@@ -22,14 +23,9 @@ export function applyLegalIdentity(html, identity) {
     .replace(/{{COMPANY_LINE}}/g, companyLine);
 }
 
-function platformHeader() {
-  return `<header class="topbar"><a class="brand" href="/">Your<b>Rank</b></a>
-<div class="topbar-right"><a href="/#loop">How it works</a><a href="/pricing">Pricing</a><a href="/login" class="btn btn--sm btn--ghost">Sign in</a><a href="/signup" class="btn btn--sm btn--accent">Create free page</a></div></header>`;
-}
-
 function platformFooter(pagePath) {
-  const active = (p) => p === pagePath ? " aria-current=" : "";
-  return `<footer class="ftr ftr--platform">
+  const active = (p) => p === pagePath ? ' aria-current="page"' : "";
+  return `<footer class="ftr ftr--platform"><div class="wrap">
 <div class="ftr-top">
   <div class="ftr-brand">
     <a class="brand" href="/">Your<b>Rank</b></a>
@@ -58,7 +54,7 @@ function platformFooter(pagePath) {
 <p class="ftr-affiliate">{{AFFILIATE_DISCLOSURE}}</p>
 <p class="ftr-copy">© {{YEAR}} {{COMPANY_NAME}} · <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a></p>
 <p class="ftr-fine">18+ · Community credits have no cash value. Participate responsibly.</p>
-</footer>`;
+</div></footer>`;
 }
 
 export const legal = (title, updated, body, pagePath, desc) => `<!DOCTYPE html><html lang="en"><head>
@@ -66,12 +62,13 @@ export const legal = (title, updated, body, pagePath, desc) => `<!DOCTYPE html><
 <title>${title} · YourRank</title>
 <meta name="description" content="${desc || title}" />
 <link rel="canonical" href="https://yourrank.site/${pagePath}" /><link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/assets/app.css" /><link rel="stylesheet" href="/assets/ui.css" /><link rel="stylesheet" href="/assets/devin-system.css" /></head><body>${DEVIN_DESIGN_CONTRACT}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/assets/ui.css" /><link rel="stylesheet" href="/assets/landing.css" /><link rel="stylesheet" href="/assets/devin-system.css" /></head><body class="marketing-page marketing-page--legal" data-identity="devin-reference">${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
-${platformHeader()}
-<main class="legal" id="main-content"><h1>${title}</h1><p class="legal-updated">Last updated: ${updated}</p>
+${publicHeader({ idPrefix: "yrLegal" })}
+<main class="wrap" id="main-content"><article class="legal"><h1>${title}</h1><p class="legal-updated">Last updated: ${updated}</p>
 ${body}
-</main>
+</article></main>
 ${platformFooter(pagePath)}
+<script src="/assets/landing.js?v=3"></script>
 </body></html>`;
