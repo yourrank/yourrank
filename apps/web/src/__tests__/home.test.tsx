@@ -92,6 +92,16 @@ describe("Home & Product components", () => {
     expect(html).not.toContain("200 active viewers");
   });
 
+  it("never promises immediate paid activation while checkout is closed", () => {
+    const html = renderToString(<PricingPlans />);
+    expect(html).not.toMatch(/Start Pro<|Start Team</);
+    expect(html).toContain("Start free, Pro selected");
+    expect(html).toContain("Pro checkout is not open yet.");
+    expect(html).toContain("Team checkout is not open yet.");
+    expect(html).toMatch(/<a aria-describedby="plan-pro-availability"[^>]*href="\/signup\?plan=pro&amp;interval=monthly"/);
+    expect(html).toMatch(/<a data-magnetic="true"[^>]*href="\/signup\?plan=free&amp;interval=monthly">Start free<\/a>/);
+  });
+
   it("renders ProductPage with content and steps", () => {
     const html = renderToString(
       <ProductPage

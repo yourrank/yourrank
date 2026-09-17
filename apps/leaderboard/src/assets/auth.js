@@ -174,7 +174,7 @@ if (mode === "signup" && PLAN_NAMES[planParam]) {
   if (banner) {
     banner.hidden = false;
     const isPaid = planParam !== "free";
-    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? " Review availability and complete payment from Billing after signing in. Creating an account does not activate or charge for this plan." : " You can review plan limits anytime from the dashboard."}`;
+    banner.innerHTML = `You selected <b>${PLAN_NAMES[planParam]}</b>.${isPaid ? ` Creating an account is free and does not charge you or activate ${PLAN_NAMES[planParam]}. Your account starts on Free; ${PLAN_NAMES[planParam]} becomes active only after a verified payment from Billing, once paid checkout is open.` : " You can review plan limits anytime from the dashboard."}`;
   }
 }
 if (mode === "login" || mode === "signup") {

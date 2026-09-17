@@ -217,7 +217,8 @@ export function PricingSnapshot() {
                     </li>
                   ))}
                 </ul>
-                <Link href={href} data-magnetic className={`mt-7 inline-flex min-h-11 items-center justify-center rounded-[2px] px-4 text-sm font-medium transition-colors ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
+                {plan.availability && <p className="mt-5 rounded-[8px] border border-devin-line bg-devin-secondary/35 px-3 py-2.5 text-xs leading-relaxed text-devin-ink" id={`home-plan-${tier}-availability`}>{plan.availability}</p>}
+                <Link href={href} aria-describedby={plan.availability ? `home-plan-${tier}-availability` : undefined} data-magnetic className={`mt-7 inline-flex min-h-11 items-center justify-center rounded-[2px] px-4 text-sm font-medium transition-colors ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
                   {plan.cta}
                 </Link>
               </article>

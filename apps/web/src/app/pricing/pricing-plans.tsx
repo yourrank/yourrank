@@ -118,7 +118,8 @@ export function PricingPlans() {
                       </li>
                     ))}
                   </ul>
-                  <Link href={`/signup?plan=${tier}&interval=${interval}`} data-magnetic className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
+                  {plan.availability && <p className="mt-6 rounded-[8px] border border-devin-line bg-devin-secondary/35 px-3.5 py-3 text-xs leading-relaxed text-devin-ink" id={`plan-${tier}-availability`}>{plan.availability}</p>}
+                  <Link href={`/signup?plan=${tier}&interval=${interval}`} aria-describedby={plan.availability ? `plan-${tier}-availability` : undefined} data-magnetic className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
                     {plan.cta}
                   </Link>
                 </article>
