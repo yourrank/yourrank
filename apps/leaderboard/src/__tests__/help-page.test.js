@@ -168,6 +168,19 @@ describe("help pages", () => {
     });
   }
 
+  it("states required vs optional fields, the email purpose, and associates inline errors", () => {
+    const html = render("helpSupport", user);
+    expect(html).toContain("Name, email and message are required. Subject is optional.");
+    expect(html).toContain('<label for="c_subject">Subject <span class="hint">(optional)</span></label>');
+    expect(html).toContain("id=\"c_email_hint\">We'll reply by email to this address; it isn't used for anything else.</p>");
+    expect(html).toContain('aria-describedby="c_email_hint c_email_err"');
+    expect(html).toContain('aria-describedby="c_message_hint c_message_err"');
+    expect(html).toContain('<p class="field-err" id="c_name_err"></p>');
+    expect(html).toContain('id="c_success" role="status" aria-live="polite" tabindex="-1" hidden');
+    expect(html).toContain('id="c_request_id" name="requestId" type="hidden"');
+    expect(html).toContain('autocomplete="email"');
+  });
+
   it("does not promise an unverified support response time", () => {
     const html = render("helpSupport", user);
     expect(html).toContain("We'll reply by email");
