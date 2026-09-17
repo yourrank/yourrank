@@ -203,4 +203,39 @@ describe("help pages", () => {
     expect(html).toContain('data-nav="settings"');
     expect(html).toContain('data-nav="engage"');
   });
+
+  // YR-018: viewer help shares the account page's compact chrome — one drawer
+  // rail, the community return link, the heading and the form before any
+  // supporting panels — instead of a settings rail ahead of the content.
+  describe("viewer help compact chrome", () => {
+    const viewerHelp = { returnTo: "/kickstream", community: { slug: "kickstream", name: "KickStream", href: "/kickstream" } };
+    const css = readFileSync(new URL("../assets/viewer-shell.css", import.meta.url), "utf8");
+
+    it("uses the viewer drawer rail and keeps the community return context", () => {
+      const html = render("helpSupport", null, "/help/support", viewerHelp);
+      expect(html).toContain('class="viewer-topbar"');
+      expect(html).toContain('id="viewer-menu"');
+      expect(html).toContain('id="viewer-rail-close"');
+      expect(html).toContain('href="/kickstream">Back to KickStream</a>');
+      expect(html).toContain('href="/me?community=kickstream"');
+      expect(html).not.toContain("gm-shell-nav");
+      expect((html.match(/<main\b/g) || []).length).toBe(1);
+    });
+
+    it("puts the heading and form before the supporting panels", () => {
+      const html = render("helpSupport", null, "/help/support", viewerHelp);
+      const order = ['id="viewer-rail"', 'id="contactTitle"', 'class="help-subnav"', 'id="contactForm"', 'class="viewer-overview"']
+        .map((marker) => html.indexOf(marker));
+      expect(order.every((index) => index >= 0)).toBe(true);
+      expect([...order].sort((a, b) => a - b)).toEqual(order);
+    });
+
+    it("keeps the help tabs on one row and the return link at 44px on small screens", () => {
+      const compact = css.slice(css.indexOf("@media(max-width:760px)"));
+      expect(compact).toContain(".viewer-help .help-subnav{flex-wrap:nowrap;");
+      expect(compact).toContain("overflow-x:auto");
+      expect(compact).toContain(".viewer-help .help-subnav-link{flex-shrink:0;white-space:nowrap;");
+      expect(css).toContain(".vd-return{margin-bottom:10px;gap:10px;min-height:44px}");
+    });
+  });
 });
