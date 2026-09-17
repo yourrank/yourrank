@@ -390,6 +390,38 @@ describe("public viewer shell", () => {
     expect(css).toContain(":focus-visible");
   });
 
+  it("lets a member read and change consent without developer tools, even when storage is blocked", async () => {
+    const js = readFileSync(join(assets, "cookie-consent.js"), "utf8");
+    const css = readFileSync(join(assets, "cookie-consent.css"), "utf8");
+    // Storage and cookies are read/written defensively and only known values count.
+    expect(js).toContain('const VALUES = new Set(["all", "essential"]);');
+    expect(js).toMatch(/function readStorage\(\) \{\s*try \{\s*return localStorage\.getItem\(KEY\)/);
+    expect(js).toMatch(/try \{\s*localStorage\.setItem\(KEY, value\);/);
+    expect(js).toMatch(/let current = normalize\(readStorage\(\)\) \|\| normalize\(readCookie\(KEY\)\);/);
+    expect(js).toContain('return current === "all";');
+    // Essential-only drops the analytics visitor cookie going forward.
+    expect(js).toMatch(/if \(value !== "all"\) \{\s*document\.cookie = `\$\{VISITOR_KEY\}=; Path=\/; Max-Age=0/);
+    // Accessible dialog: name, native modal focus containment/Escape, opener focus return, announced result.
+    expect(js).toContain('dialog.setAttribute("aria-labelledby", "yrConsentTitle")');
+    expect(js).toContain("d.showModal()");
+    expect(js).toContain('id="yrConsentStatus" role="status" aria-live="polite"');
+    expect(js).toMatch(/dialog\.addEventListener\("close", \(\) => \{[\s\S]*opener\.focus\(\);/);
+    expect(js).toContain('<input type="checkbox" name="essential" checked disabled>');
+    expect(js).toContain('id="yrConsentAnalytics"');
+    expect(js).toContain("Your browser blocks cookies and storage, so this choice cannot be saved.");
+    expect(js).not.toContain("erased");
+    expect(js).toContain('closest("[data-cookie-preferences]")');
+    expect(css).toMatch(/\.yr-consent-dialog \{/);
+    // Footer entries on viewer sites, legal pages, and the policy itself.
+    const html = await render("home");
+    expect(html).toContain('<button type="button" data-cookie-preferences>Cookie preferences</button>');
+    const legal = readFileSync(join(root, "apps/leaderboard/src/pages/legal-helper.js"), "utf8");
+    expect(legal).toContain('data-cookie-preferences>Cookie preferences</button>');
+    const policy = readFileSync(join(root, "apps/leaderboard/src/pages/cookies.js"), "utf8");
+    expect(policy).toContain("data-cookie-preferences");
+    expect(policy).not.toContain("localStorage entry");
+  });
+
   it("tells a viewer about their own failed claim without server vocabulary", () => {
     const shell = readFileSync(join(assets, "site-shell.js"), "utf8");
     expect(shell).toContain("recover(orderErrorText(r.data.error));");

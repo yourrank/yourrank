@@ -384,6 +384,9 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 .ftr-col{display:flex;flex-direction:column;gap:8px}
 .ftr-col b{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);margin-bottom:2px}
 .ftr-col a{color:var(--ink-soft);font-size:13px}
+.ftr-link-btn{background:none;border:0;padding:0;margin:0;color:var(--ink-soft);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.ftr-link-btn:hover{color:var(--accent)}
+.ftr-link-btn--inline{font-size:inherit;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
 .ftr-col a:hover{color:var(--accent)}
 .ftr-col a[aria-current]{color:var(--accent)}
 .legal-company{font-size:12px;color:var(--ink-mute);margin:12px 0 4px}
