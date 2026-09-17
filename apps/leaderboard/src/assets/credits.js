@@ -187,8 +187,8 @@ export function applyOAuthContext() {
 function setLoading(idOrEl, loading, text = "Loading…") {
   const el = typeof idOrEl === "string" ? $(idOrEl) : idOrEl;
   if (!el) return;
-  if (loading) { el.dataset.origText = el.textContent; el.disabled = true; el.setAttribute("aria-busy", "true"); el.classList.add("btn--loading"); el.textContent = text; }
-  else { el.disabled = false; el.removeAttribute("aria-busy"); el.classList.remove("btn--loading"); el.textContent = el.dataset.origText || el.textContent; delete el.dataset.origText; }
+  if (loading) { el.dataset.origText = el.textContent; el.disabled = true; el.setAttribute("aria-busy", "true"); el.textContent = text; }
+  else { el.disabled = false; el.removeAttribute("aria-busy"); el.textContent = el.dataset.origText || el.textContent; delete el.dataset.origText; }
 }
 function setGlobalLoading(loading) { if ($("cr-loading")) $("cr-loading").hidden = !loading; }
 function setCreditsPanelLoading(loading) {

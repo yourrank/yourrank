@@ -71,13 +71,11 @@ function setLoading(element, loading, text = "Loading…") {
     element.dataset.origText = element.textContent;
     element.disabled = true;
     element.setAttribute("aria-busy", "true");
-    element.classList.add("btn--loading");
     element.textContent = text;
     return;
   }
   element.disabled = false;
   element.removeAttribute("aria-busy");
-  element.classList.remove("btn--loading");
   element.textContent = element.dataset.origText || element.textContent;
   delete element.dataset.origText;
 }

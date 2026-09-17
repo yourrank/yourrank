@@ -27,6 +27,7 @@
   --devin-surface-2: #ebebe5;
   --devin-line: rgba(20, 20, 12, 0.16);
   --devin-line-soft: rgba(20, 20, 12, 0.1);
+  --devin-danger-ink: #c0163a;
   --devin-radius-card: 14px;
   --devin-radius-control: 8px;
   --devin-radius-small: 8px;
@@ -46,6 +47,7 @@
   --accent: var(--devin-primary);
   --accent-hover: var(--devin-primary-hover);
   --accent-ink: #ffffff;
+  --yr-red: var(--devin-danger-ink);
   --link: var(--devin-primary);
   --radius: var(--devin-radius-card);
   --radius-sm: var(--devin-radius-small);

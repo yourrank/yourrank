@@ -22,8 +22,11 @@
 /* Canonical internal control contract. Public templates do not load this
    sheet; their runtime branding and geometry remain independent. */
 :root {
-  --yr-control-height: 40px;
+  --yr-control-height: 44px;
   --yr-control-height-narrow: 44px;
+  --yr-form-action-height: 48px;
+  --yr-focus-ring: 2px solid var(--yr-accent, var(--accent));
+  --yr-focus-offset: 2px;
   --yr-control-radius: 8px;
   --yr-control-padding-x: 12px;
   --yr-shadow-sm: 0 1px 2px rgba(0, 0, 0, .05);
@@ -35,11 +38,6 @@
   --yr-fixed-action-top-z: 96;
 }
 
-@media (pointer: coarse) {
-  :root {
-    --yr-control-height: 44px;
-  }
-}
 
 /* ---- screen-reader-only content and the skip link --------------------------
    Every page in the product opens with `<a class="sr-only skip-link">`, but
@@ -88,6 +86,17 @@
 }
 
 /* ---- button ----------------------------------------------------------------
+   Shared action contract. Roles map to variants:
+     primary      .btn--accent   solid accent; one per view
+     secondary    .btn--outline  bordered, reads as an action, never competes
+     tertiary     .btn--ghost    quiet; toolbars, dismiss, "not now"
+     destructive  .btn--danger   red ink, confirms before it acts
+   States: :hover, :focus-visible (one outline treatment), :disabled /
+   [aria-disabled="true"] (dimmed, inert), [aria-busy="true"] (pending: spinner,
+   inert, label may change to a progressive verb). Links stay <a>, form actions
+   stay <button type="submit">; pending is expressed by aria-busy alone.
+   Height: 44px default, form submit actions 48px on narrow screens; the
+   workspace narrows the token to its own 40px scale.
    `.yr-ui button` covers the bot dashboard, whose markup uses bare <button>
    elements with .ghost/.danger modifiers rather than the .btn class. Both
    spellings resolve to the same component. */
@@ -118,7 +127,7 @@
   background-color: color-mix(in srgb, var(--yr-ink, var(--ink)) 5%, transparent);
 }
 .btn:focus-visible,
-.yr-ui button:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--yr-accent, var(--accent)) 40%, transparent), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.yr-ui button:focus-visible { outline: var(--yr-focus-ring); outline-offset: var(--yr-focus-offset); box-shadow: none; }
 .btn:active,
 .yr-ui button:active { transform: translateY(2px) scale(0.96); box-shadow: none; }
 
@@ -132,7 +141,11 @@
   opacity: .45;
   cursor: not-allowed;
   transform: none;
+  filter: none;
+  box-shadow: none;
 }
+.btn[aria-disabled="true"],
+.yr-ui button[aria-disabled="true"] { pointer-events: none; }
 
 /* A classless button is the primary action: the bot's older markup writes bare
    <button> elements with no variant to opt in with. It stops there. The rule
@@ -247,14 +260,17 @@
   .btn--sm,
   .btn--xs,
   .yr-ui button { min-height: var(--yr-control-height-narrow, 44px); }
+  form .btn[type="submit"],
+  .yr-ui form button[type="submit"] { min-height: var(--yr-form-action-height, 48px); }
 }
 
 .btn[aria-busy="true"],
-.yr-ui button[aria-busy="true"] { opacity: .65; cursor: wait; }
+.yr-ui button[aria-busy="true"] { opacity: .65; cursor: wait; pointer-events: none; }
 
-.btn--loading::before,
-.yr-ui button.btn--loading::before {
+.btn[aria-busy="true"]::before,
+.yr-ui button[aria-busy="true"]::before {
   content: "";
+  flex: none;
   width: 14px;
   height: 14px;
   border: 2px solid currentColor;
