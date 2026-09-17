@@ -275,7 +275,7 @@ try {
   assert.equal(balance, 1100);
   await page.locator('.viewer-destinations a[href="/nova"]').click();
   await page.waitForSelector('.viewer-next-reward progress');
-  assert.match(await page.locator('.viewer-next-reward').innerText(), /900 more Credits needed/);
+  assert.match(await page.locator('.viewer-next-reward').innerText(), /900 more credits needed/);
   await page.locator('#viewer-communities-link').click();
   await page.waitForSelector('.vd-card-row');
   assert.equal(await page.evaluate(() => window.shellIdentity.rail === document.querySelector('.viewer-rail')), true);

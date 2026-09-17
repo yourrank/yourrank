@@ -280,7 +280,7 @@ describe("public viewer shell", () => {
     expect(section).toContain('600 credits');
     expect(section).not.toContain('Overlay cameo');
     const noShop = await render("home", { data: { ...baseData, siteSections: { ...baseData.siteSections, shop: false } } });
-    expect(noShop).not.toContain('Community Rewards');
+    expect(noShop).not.toContain('Community rewards');
     expect(noShop).not.toContain('href="/creator/shop"');
   });
 
@@ -619,7 +619,7 @@ describe("public viewer shell", () => {
     expect(zero).toContain("No credit activity yet.");
     const active = await render("shop", { viewer, viewerData });
     expect(active).toContain("viewer-next-reward");
-    expect(active).toContain("How to Earn Credits");
+    expect(active).toContain("How to earn reward credits");
   });
 
   it("links the credits rail to local earning activity and gives standings one page heading", async () => {
@@ -628,7 +628,7 @@ describe("public viewer shell", () => {
     expect(credit).toContain('href="/creator/me?intent=activity">Sign in ');
     expect(credit).not.toContain('href="/me"');
     const memberCredit = (await render('home', { viewer, viewerData })).match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
-    expect(memberCredit).toContain('href="/creator/me#membership-code">Earn More Credits ');
+    expect(memberCredit).toContain('href="/creator/me#membership-code">Earn reward credits ');
     expect(credit).not.toContain('Browse rewards');
     const board = await render('leaderboard');
     expect((board.match(/<h1\b/g) || [])).toHaveLength(1);
