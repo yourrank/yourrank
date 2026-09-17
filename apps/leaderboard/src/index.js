@@ -1,4 +1,5 @@
-import { destroySession, cookieClear, readToken, RESERVED, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
+import { RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
+import { destroySession, cookieClear, readToken, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
 import { resolveViewerHelp, viewerCommunityParam, viewerReturnCommunity } from "@yourrank/shared/viewer-shell";
 import { withWorkerFetch } from "@yourrank/shared/with-worker";
@@ -70,7 +71,7 @@ import { safeNextPath } from "@yourrank/shared/safe-next";
  * public identity is exposed; it says nothing about membership.
  */
 async function viewerCommunityContext(env, slug) {
-  if (!slug || RESERVED.has(slug)) return null;
+  if (!slug || RESERVED_COMMUNITY_HANDLES.has(slug)) return null;
   const site = await getBySlug(env, slug).catch(() => null);
   if (!site || !site.published || site.is_draft) return null;
   return { slug: site.slug, name: site.name || site.slug, href: `/${encodeURIComponent(site.slug)}` };
@@ -1257,7 +1258,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           const overlayHtml = PAGES.overlay(demoLeaderboardData(), { ...overlayOpts, slug: "demo" });
           return new Response(overlayHtml, { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request, { limit: 100, offset: 0 });
         if (!r || r.suspended || r.requiresPassword) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const paid = r.plan !== "free";
@@ -1281,7 +1282,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/hall-of-fame$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
@@ -1301,7 +1302,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/embed$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
@@ -1313,7 +1314,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/(terms|privacy|responsible|cookies|refund|contact)$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const page = path.split("/").pop();
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
@@ -1334,7 +1335,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/player\/.+/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
@@ -1358,7 +1359,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/profile$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
@@ -1379,7 +1380,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && /^\/[^/]+\/credits$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
@@ -1394,7 +1395,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "POST" && /^\/[^/]+\/password$/.test(path)) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const site = await getBySlug(env, slug);
         if (!site || !site.published || !site.password_hash) {
           return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
@@ -1417,7 +1418,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && path.length > 1 && !path.includes(".")) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         // BUG-004: Reject paths with extra segments (e.g., /slug/widget).
         // /<slug>/overlay is handled above; anything else is a 404. When the
         // community itself is live, say so and point back into it.

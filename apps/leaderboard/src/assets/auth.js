@@ -1,3 +1,4 @@
+import { COMMUNITY_HANDLE_HOST, normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 /* Shared logic for login / signup / forgot / reset pages.
  * Mode is derived from the URL path so no inline <script> is needed (the
  * auth pages run under a strict CSP with script-src 'self', which blocks
@@ -159,14 +160,30 @@ const submit = document.getElementById("submit");
 const nameInput = document.getElementById("name");
 const slugInput = document.getElementById("slug");
 const slugPreview = document.getElementById("slugPreview");
-function slugify(s){return String(s||"").toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40);}
-function updateSlugPreview(){ const s = slugify(slugInput ? slugInput.value : nameInput?.value); if (slugPreview) slugPreview.textContent = s ? "yourrank.site/" + s : "yourrank.site/…"; }
+const slugNote = document.getElementById("slugNote");
+function updateHandlePreview() {
+  if (!slugPreview) return;
+  const typed = slugInput ? slugInput.value : "";
+  const result = normalizeCommunityHandle(typed.trim() ? typed : nameInput?.value);
+  slugPreview.textContent = result.handle ? `${COMMUNITY_HANDLE_HOST}/${result.handle}` : `${COMMUNITY_HANDLE_HOST}/…`;
+  if (slugNote) slugNote.textContent = typed.trim() && result.ok ? result.note || "" : "";
+}
 let userEditedSlug = false;
 if (nameInput && slugInput) {
-  nameInput.addEventListener("input", () => { if (!userEditedSlug) { slugInput.value = slugify(nameInput.value); updateSlugPreview(); } });
+  nameInput.addEventListener("input", () => { if (!userEditedSlug) { slugInput.value = normalizeCommunityHandle(nameInput.value).handle; updateHandlePreview(); } });
 }
 if (slugInput) {
-  slugInput.addEventListener("input", () => { userEditedSlug = true; updateSlugPreview(); clearFieldError("slug"); });
+  slugInput.addEventListener("input", () => { userEditedSlug = true; updateHandlePreview(); clearFieldError("slug"); });
+  slugInput.addEventListener("blur", () => {
+    const typed = slugInput.value.trim();
+    if (!typed) return;
+    const result = normalizeCommunityHandle(typed);
+    if (result.ok) {
+      if (slugInput.value !== result.handle) slugInput.value = result.handle;
+      updateHandlePreview();
+      if (slugNote && result.note) slugNote.textContent = result.note;
+    } else setFieldError("slug", result.error);
+  });
 }
 const PLAN_NAMES = { free: "Free", pro: "Pro", team: "Team" };
 if (mode === "signup" && PLAN_NAMES[planParam]) {
@@ -195,7 +212,11 @@ form.addEventListener("submit", async (e) => {
     payload = { email: document.getElementById("email").value.trim(), password: document.getElementById("password").value };
     if (mode === "signup") {
       if (nameInput) payload.name = nameInput.value.trim();
-      if (slugInput) payload.slug = slugify(slugInput.value) || slugify(nameInput?.value || "");
+      if (slugInput) {
+        const handle = normalizeCommunityHandle(slugInput.value.trim() ? slugInput.value : nameInput?.value || "");
+        payload.slug = handle.handle;
+        payload.slugError = handle.ok ? "" : handle.error;
+      }
     }
     const ref = new URLSearchParams(location.search).get("ref");
     if (mode === "signup" && ref) payload.ref = ref;
@@ -211,7 +232,8 @@ form.addEventListener("submit", async (e) => {
       if (passwordError) { setFieldError("password", passwordError); firstInvalid = firstInvalid || "password"; }
     }
     if (mode === "signup" && !(payload.name || "").trim()) { setFieldError("name", "Enter your name or handle"); firstInvalid = firstInvalid || "name"; }
-    if (mode === "signup" && !(payload.slug || "").trim()) { setFieldError("slug", "Enter a page URL"); firstInvalid = firstInvalid || "slug"; }
+    if (mode === "signup" && payload.slugError) { setFieldError("slug", payload.slugError); firstInvalid = firstInvalid || "slug"; }
+    delete payload.slugError;
     if (firstInvalid) {
       const el = document.getElementById(firstInvalid);
       if (el) { el.setAttribute("aria-invalid", "true"); el.focus(); }

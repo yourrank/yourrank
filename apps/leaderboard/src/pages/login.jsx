@@ -72,7 +72,7 @@ export function LoginPage() {
             </div>
           </main>
         </div>
-        <script src="/assets/auth.js?v=2"></script>
+        <script type="module" src="/assets/auth.js?v=4"></script>
       </body>
     </html>
   );

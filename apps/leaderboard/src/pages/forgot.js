@@ -15,4 +15,4 @@ export const forgotPage = `<!DOCTYPE html><html lang="en"><head>
 <form id="form" method="POST" action="/api/auth/forgot" novalidate><div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required /></div>
 <div class="err" id="err" role="alert" aria-live="assertive"></div><div class="msg" id="msg" hidden role="status" aria-live="polite"></div><button class="btn btn--accent w-full" type="submit" id="submit">Send reset link</button></form>
 <p class="foot"><a href="/login">Back to sign in</a></p></div></main></div>
-<script src="/assets/auth.js?v=2"></script></body></html>`;
+<script type="module" src="/assets/auth.js?v=4"></script></body></html>`;
