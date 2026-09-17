@@ -422,8 +422,10 @@ try {
   assert.equal(await page.locator('[data-credit-balance]').first().getAttribute('data-credit-balance'), memberBalance, 'cancelling deducts nothing');
   await page.goto(origin + '/nova');
   await page.evaluate(() => window.__yrViewerAppReady);
-  const homeView = page.locator('.viewer-home-columns .yr-rwd .yr-act');
-  assert.match(await homeView.getAttribute('href'), /\/nova\/shop\/[a-z]+$/, 'Home "View reward" targets one reward');
+  const homeViews = await page.locator('.viewer-home-columns .yr-rwd .yr-act').evaluateAll(links => links.map(link => link.getAttribute('href')));
+  assert.ok(homeViews.length >= 1 && homeViews.length <= 4, 'Home shows up to four rewards');
+  for (const href of homeViews) assert.match(href, /\/nova\/shop\/[a-z]+$/, 'Home "View reward" targets one reward');
+  assert.equal(new Set(homeViews).size, homeViews.length, 'each Home reward links to its own detail page');
   // Unknown, other-community and withdrawn ids recover instead of claiming or 500ing.
   for (const path of ['/nova/shop/nope', '/luna/shop/topic-from-nova']) {
     const res = await page.goto(origin + path);

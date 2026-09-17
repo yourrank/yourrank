@@ -279,10 +279,15 @@ describe("public viewer shell", () => {
   it("shows a community reward preview from actual configured rewards", async () => {
     const html = await render("home");
     const section = html.slice(html.indexOf('class="viewer-home-columns"'), html.indexOf('<footer class="viewer-panel-footer"'));
-    expect((section.match(/class="yr-rwd"/g) || [])).toHaveLength(1);
+    expect((section.match(/class="yr-rwd"/g) || [])).toHaveLength(4);
     expect(section).toContain('Song request');
     expect(section).toContain('600 credits');
-    expect(section).not.toContain('Overlay cameo');
+    expect(section).toContain('Overlay cameo');
+    const many = await render("home", { data: { ...baseData, shopItems: [...baseData.shopItems, { id: 5, name: "Fifth reward", cost: 50, active: true }, { id: 6, name: "Retired", cost: 10, active: false }] } });
+    const manySection = many.slice(many.indexOf('class="viewer-home-columns"'), many.indexOf('<footer class="viewer-panel-footer"'));
+    expect((manySection.match(/class="yr-rwd"/g) || [])).toHaveLength(4);
+    expect(manySection).not.toContain('Fifth reward');
+    expect(manySection).not.toContain('Retired');
     const noShop = await render("home", { data: { ...baseData, siteSections: { ...baseData.siteSections, shop: false } } });
     expect(noShop).not.toContain('Community rewards');
     expect(noShop).not.toContain('href="/creator/shop"');
@@ -550,8 +555,8 @@ describe("public viewer shell", () => {
     const stacked = css.match(/@media\(min-width:1001px\) and \(max-width:1300px\)\{([\s\S]*?)\n\}/)[1];
     expect(stacked).toContain('.viewer-layout,.viewer-shell[data-section="home"] .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr)}');
     expect(stacked).toMatch(/\.viewer-overview\{grid-column:2;display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
-    expect(css).toContain('@media(min-width:1400px){.viewer-shell[data-section="home"] .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 434px}}');
-    expect(css.match(/@media\(min-width:1251px\)\{([\s\S]*?)\n\}/)[1]).not.toContain('434px');
+    expect(css).toContain('@media(min-width:1400px){.viewer-shell[data-section="home"] .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 360px}}');
+    expect(css.match(/@media\(min-width:1251px\)\{([\s\S]*?)\n\}/)[1]).not.toContain('360px');
   });
 
   it("sizes reward cards from the catalog container instead of fixed viewport columns (YR-022)", () => {

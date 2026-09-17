@@ -13,6 +13,8 @@
       .then(function (data) {
         if (typeof data.isLive !== 'boolean' || data.error || pageLifetime.signal.aborted) return;
         streamState.textContent = data.isLive ? 'Live now' : 'Offline';
+        streamState.dataset.live = String(data.isLive);
+        streamState.hidden = false;
       }).catch(function () { /* Keep the explicit unavailable state. */ });
   }
   document.addEventListener("yr:viewer-unmount", function () {

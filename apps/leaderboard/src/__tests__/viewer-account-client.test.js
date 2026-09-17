@@ -309,7 +309,7 @@ describe("global Viewer Account ownership", () => {
 
   it("uses one replacement material owner and puts memberships before account maintenance", () => {
     expect(page).not.toContain('/assets/devin-system.css');
-    expect(page).toContain('Owner-supplied September 16 mockups');
+    expect(page).toContain('A creator destination, not an admin dashboard');
     expect(page.indexOf('id="vd-communities-card"')).toBeLessThan(page.indexOf('id="vd-profile"'));
     expect(page).toContain('<summary>Manage your login</summary>');
     expect(page).not.toContain('href="/dashboard"');

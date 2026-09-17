@@ -51,7 +51,7 @@ describe("public leaderboard standings", () => {
     const leaderboard = await render("leaderboard", { data: neutral });
 
     for (const html of [home, leaderboard]) {
-      expect(html).toContain(html === home ? "<span>42</span>" : "42 pts");
+      expect(html).toContain(html === home ? "<span class=\"viewer-board-score\">42</span>" : "42 pts");
       for (const restricted of ["wagered", "wager total", "casino", "paid in cash", "cash payout", "prize pool", "deposit", "rakeback", "odds", "betting"]) {
         expect(html.toLowerCase()).not.toContain(restricted);
       }

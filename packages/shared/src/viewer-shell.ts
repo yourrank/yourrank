@@ -3,10 +3,10 @@ import { brandMarkSvg } from './brand-assets.js';
 
 export const VIEWER_DESIGN_CONTRACT = `<!--
 THESIS: A viewer's community home.
-OWN-WORLD: Owner-supplied September 16 mockups: charcoal navigation, pale canvas, violet actions, bordered cards and a separate YourRank settings shell.
+OWN-WORLD: A creator destination, not an admin dashboard: the creator's identity leads a dark Home canvas with a podium leaderboard and product-style rewards; the other viewer pages keep their light surfaces until they migrate. A separate YourRank settings shell holds the account.
 STORY: Browse a creator's community, follow real standings, redeem rewards, and manage your global viewer identity.
-FIRST VIEWPORT: 228px community navigation, 80px context bar and a 320px supporting column. Home uses a 218px rail, 64px bar and 434px supporting column. Account navigation is 252px.
-FORM: The supplied images own the composition. Production routes and scoped records supply content and actions.
+FIRST VIEWPORT: 228px community navigation, 80px context bar and a 320px supporting column. Home uses a 218px rail, 64px bar and 360px supporting column. Account navigation is 252px.
+FORM: DESIGN.md owns the composition. Production routes and scoped records supply content and actions; nothing is invented to fill a layout.
 -->`;
 
 type Destination = { label: string; href: string; active?: boolean };
