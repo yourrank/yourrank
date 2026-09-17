@@ -6198,7 +6198,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-btn[aria-busy="true"] { cursor: wait;
 }
 
-.v3-dash[data-auth-workspace] .v3-btn.btn--loading::before { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: v3-btn-spin .7s linear infinite;
+.v3-dash[data-auth-workspace] .v3-btn[aria-busy="true"]::before { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: v3-btn-spin .7s linear infinite;
 }
 
 .v3-dash[data-auth-workspace] .v3-players[data-egroup="players"] {

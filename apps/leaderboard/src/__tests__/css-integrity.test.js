@@ -342,3 +342,56 @@ describe("the mobile drawer and touch targets", () => {
     }
   });
 });
+
+// One action contract across the three button families (ui.css `.btn`, the
+// public viewer's `.yr-btn`/`.yr-act`, the workspace `.v3-btn`): pending is
+// `aria-busy="true"` alone — no helper class a caller can forget — and a busy
+// or aria-disabled control is inert, dimmed, and keeps its footprint.
+describe("shared action contract", () => {
+  const ui = stripped(fs.readFileSync(path.join(assetsDir, "ui.css"), "utf8"));
+  const shell = stripped(fs.readFileSync(path.join(assetsDir, "site-shell.css"), "utf8"));
+  const viewer = stripped(fs.readFileSync(path.join(assetsDir, "viewer-shell.css"), "utf8"));
+  const dash = stripped(fs.readFileSync(path.join(assetsDir, "dashboard-v4.css"), "utf8"));
+  const scripts = fs.readdirSync(assetsDir).filter((f) => f.endsWith(".js")).map((f) => [f, fs.readFileSync(path.join(assetsDir, f), "utf8")]);
+
+  it("defaults controls to 44px and narrow-screen form submits to 48px", () => {
+    expect(ui).toMatch(/--yr-control-height:\s*44px/);
+    expect(ui).toMatch(/--yr-form-action-height:\s*48px/);
+    expect(ui).toMatch(/form \.btn\[type=""\],\s*\.yr-ui form button\[type=""\]\s*\{\s*min-height:\s*var\(--yr-form-action-height, 48px\)/);
+    expect(dash).toMatch(/--ws-control-h:\s*40px/);
+  });
+
+  it("names the four roles on the canonical variants", () => {
+    const raw = fs.readFileSync(path.join(assetsDir, "ui.css"), "utf8");
+    for (const [role, variant] of [["primary", "accent"], ["secondary", "outline"], ["tertiary", "ghost"], ["destructive", "danger"]]) {
+      expect(raw).toMatch(new RegExp(`${role}\\s+\\.btn--${variant}`));
+      expect(ui).toContain(`.btn--${variant},`);
+    }
+  });
+
+  it("uses one outline focus treatment instead of a box-shadow ring", () => {
+    expect(ui).toMatch(/\.btn:focus-visible,\s*\.yr-ui button:focus-visible\s*\{\s*outline:\s*var\(--yr-focus-ring\);\s*outline-offset:\s*var\(--yr-focus-offset\);\s*box-shadow:\s*none;?\s*\}/);
+    expect(ui).toMatch(/--yr-focus-ring:\s*2px solid var\(--yr-accent, var\(--accent\)\)/);
+    expect(shell).toMatch(/\.yr-btn:focus-visible, \.yr-act:focus-visible \{ outline: 2px solid var\(--yr-primary-hover\); outline-offset: 2px; \}/);
+    expect(viewer).toMatch(/\.viewer-shell \.btn:focus-visible\{outline:2px solid var\(--yr-primary-hover\);outline-offset:2px\}/);
+  });
+
+  it("renders the pending spinner from aria-busy alone and retires the helper class", () => {
+    for (const [name, css] of [["ui", ui], ["site-shell", shell], ["viewer-shell", viewer], ["dashboard-v4", dash]]) {
+      expect(css, name).toMatch(/\[aria-busy=""\]::before\s*\{[^}]*animation:/);
+      expect(css, name).not.toContain("btn--loading");
+    }
+    for (const [file, source] of scripts) expect(source, file).not.toContain("btn--loading");
+  });
+
+  it("makes busy and aria-disabled controls inert without collapsing them", () => {
+    expect(ui).toMatch(/\.btn\[aria-busy=""\],\s*\.yr-ui button\[aria-busy=""\]\s*\{[^}]*pointer-events:\s*none/);
+    expect(ui).toMatch(/\.btn\[aria-disabled=""\],\s*\.yr-ui button\[aria-disabled=""\]\s*\{\s*pointer-events:\s*none/);
+    expect(shell).toMatch(/\.yr-btn\[aria-busy=""\], \.yr-act\[aria-busy=""\] \{[^}]*pointer-events: none/);
+    expect(shell).toMatch(/\.yr-btn\[aria-disabled=""\], \.yr-act\[aria-disabled=""\] \{ pointer-events: none; \}/);
+    expect(viewer).toMatch(/\.viewer-shell \.btn\[aria-busy=""\]\{[^}]*pointer-events:none/);
+    // the spinner is a flex item that must not shrink the label or grow the control
+    expect(ui).toMatch(/\[aria-busy=""\]::before\s*\{[^}]*flex:\s*none/);
+    expect(ui).not.toMatch(/\[aria-busy=""\][^{]*\{[^}]*(?:display:\s*none|min-height:\s*0|height:\s*0)/);
+  });
+});

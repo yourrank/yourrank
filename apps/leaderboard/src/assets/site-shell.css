@@ -579,11 +579,12 @@
 .yr-act:hover { color: #fff; background: var(--yr-primary-hover); border-color: var(--yr-primary-hover); }
 .yr-btn:focus-visible, .yr-act:focus-visible { outline: 2px solid var(--yr-primary-hover); outline-offset: 2px; }
 .yr-btn:disabled, .yr-btn[aria-disabled="true"], .yr-btn[aria-busy="true"], .yr-act:disabled, .yr-act[aria-disabled="true"], .yr-act[aria-busy="true"] { opacity: 0.45; cursor: not-allowed; }
-.yr-btn[aria-busy="true"], .yr-act[aria-busy="true"] { cursor: wait; }
+.yr-btn[aria-disabled="true"], .yr-act[aria-disabled="true"] { pointer-events: none; }
+.yr-btn[aria-busy="true"], .yr-act[aria-busy="true"] { opacity: 0.65; cursor: wait; pointer-events: none; }
 .yr-act.is-success { color: #09251d; background: var(--yr-success); border-color: var(--yr-success); }
 .yr-act--off { color: var(--yr-faint); background: transparent; border-color: var(--yr-edge); cursor: not-allowed; }
 .yr-act--off:hover { color: var(--yr-faint); background: transparent; border-color: var(--yr-edge); }
-.yr-btn.btn--loading::before, .yr-act.btn--loading::before { content: ""; width: 14px; height: 14px; margin-right: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: yr-spin .7s linear infinite; }
+.yr-btn[aria-busy="true"]::before, .yr-act[aria-busy="true"]::before { content: ""; flex: none; width: 14px; height: 14px; margin-right: 8px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: yr-spin .7s linear infinite; }
 @keyframes yr-spin { to { transform: rotate(360deg); } }
 
 /* ── Tabs, tables, lists ─────────────────────────────────────────────── */
