@@ -16,9 +16,9 @@ const {
   safeEqual,
   isEmail,
   slugify,
-  RESERVED,
   readToken,
 } = await import("../auth.js");
+const { RESERVED_COMMUNITY_HANDLES: RESERVED } = await import("@yourrank/shared/community-handle");
 
 // ── hashPassword ───────────────────────────────────────────────────────────
 

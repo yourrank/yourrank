@@ -23,4 +23,4 @@ export const resetPage = `<!DOCTYPE html><html lang="en"><head>
   <span class="hint" id="pw-hint">Use all four requirements above.</span></div>
     <div class="err" id="err" role="alert" aria-live="assertive"></div><button class="btn btn--accent w-full" type="submit" id="submit">Save &amp; sign in</button></form>
   <p class="foot"><a href="/login">Back to sign in</a></p></div></main></div>
-  <script src="/assets/auth.js?v=2"></script></body></html>`;
+  <script type="module" src="/assets/auth.js?v=4"></script></body></html>`;

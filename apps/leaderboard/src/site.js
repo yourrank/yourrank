@@ -5,7 +5,8 @@ import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { rankEventPlayers } from "@yourrank/shared/event-leaderboards";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { detectTop3Changes, getRankChangedPlayerNames } from "@yourrank/shared/notifications";
-import { RESERVED, slugify, hashPassword } from "./auth.js";
+import { slugify, hashPassword } from "./auth.js";
+import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { logAudit } from "@yourrank/shared/audit";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
@@ -745,7 +746,7 @@ export async function createBoard(env, uid, { slug, name, casino = "", code = ""
   const existing = await dbOne("SELECT id FROM sites WHERE slug=$1", [slug]);
   if (existing) return { error: "That URL is already taken. Pick another.", code: "slug_taken" };
   // BIZ-004: Reject reserved slugs (api, login, dashboard, bot, etc.)
-  if (RESERVED.has(slug)) return { error: "That URL is reserved and cannot be used.", code: "slug_reserved" };
+  if (RESERVED_COMMUNITY_HANDLES.has(slug)) return { error: "That URL is reserved and cannot be used.", code: "slug_reserved" };
   const siteId = crypto.randomUUID();
   const cleanCasino = String(casino || "").trim().slice(0, 40);
   const cleanCode = String(code || "").trim().slice(0, 40);
@@ -1052,12 +1053,15 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   // slug rename here (reserved + uniqueness checked); ignore a no-op or blank.
   let slugRename = null;
   if (payload.slug != null) {
-    const next = slugify(payload.slug);
+    const handle = normalizeCommunityHandle(payload.slug);
+    const next = handle.handle;
+    if (!handle.ok && handle.reason !== "empty" && next !== site.slug) {
+      return { error: handle.error, code: handle.reason === "reserved" ? "slug_reserved" : "slug_invalid", field: "slug" };
+    }
     if (next && next !== site.slug) {
       if (site.user_id !== uid) {
         return { error: "Only the site owner can rename the site URL.", code: "forbidden" };
       }
-      if (RESERVED.has(next)) return { error: "That URL is reserved. Pick another.", code: "slug_reserved" };
       const taken = await one("SELECT id FROM sites WHERE slug=$1", [next]);
       if (taken && taken.id !== site.id) return { error: "That URL is already taken. Pick another.", code: "slug_taken" };
       slugRename = next;

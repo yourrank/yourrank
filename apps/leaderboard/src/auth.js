@@ -173,10 +173,6 @@ export const isEmail = (s) => typeof s === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]
 export function slugify(s) {
   return String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 }
-// Slugs a board can never take, because the Worker already serves that path.
-// `demo` belongs here: signup happily handed it out, and the new board then sat
-// behind the hardcoded demo tour at /demo, unreachable to its owner.
-export const RESERVED = new Set(["api", "assets", "login", "signup", "logout", "dashboard", "admin", "account", "billing", "favicon", "robots", "sitemap", "index", "forgot", "reset", "terms", "privacy", "responsible", "logo", "go", "stats", "bot", "hook", "r", "pb", "health", "demo", "invite"]);
 export const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 export const bad = (msg, status = 400, headers = {}) => json({ ok: false, error: msg }, status, headers);
 export const ok = (data = {}) => json({ ok: true, ...data });

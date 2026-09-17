@@ -1,5 +1,6 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
 import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
+import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
 import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
@@ -245,8 +246,9 @@ export async function handleCreateBoard(request, env) {
   if (!(await rateLimit(env, `createboard:${user.id}`, 5, 3600)).ok) return bad("Too many requests. Try again later.", 429);
   const body = await readJson(request);
   if (!body) return bad("Invalid request");
-  let slug = slugify(body.slug || "");
-  if (!slug) return bad("Enter a valid slug for the board URL.");
+  const handle = normalizeCommunityHandle(body.slug);
+  if (!handle.ok) return bad(handle.error);
+  const slug = handle.handle;
   const name = String(body.name || "").trim().slice(0, 80) || slug;
   // Sponsor / prize source is optional; empty values are stored as-is.
   const r = await createBoard(env, user.id, { slug, name, casino: body.casino, code: body.code }, request);

@@ -1,7 +1,8 @@
 import { withTransaction as defaultWithTransaction, one as defaultOne, exec as defaultExec } from "@yourrank/shared/db";
 // Authentication handlers for signup, login, logout, password reset
-import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, RESERVED, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, generateUniqueReferralCode } from "../auth.js";
+import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, generateUniqueReferralCode } from "../auth.js";
 import { hashToken } from "@yourrank/shared/crypto";
+import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { routeContext } from "../middleware/handler.js";
 import { trackActivation } from "@yourrank/shared/activation-funnel";
 import { createBoard, getUserBoardsList } from "../site.js";
@@ -106,15 +107,14 @@ export async function handleSignup(request, env) {
     // A URL the streamer typed is a choice, not a suggestion: signup used to
     // silently hand out `<slug>-2` (or a random suffix for reserved words), so
     // people learned their public URL only after their first share link failed.
-    const requestedSlug = slugify(body.slug || "");
-    let slug = requestedSlug || slugify(defaultName);
+    const requested = String(body.slug || "").trim() ? normalizeCommunityHandle(body.slug) : null;
     if (!isEmail(email)) return bad("Enter a valid email");
     const passwordCheck = validatePassword(password);
     if (!passwordCheck.ok) return bad(passwordCheck.message);
-    if (requestedSlug && RESERVED.has(requestedSlug)) {
-      return json({ ok: false, error: "That page URL is reserved. Pick another.", field: "slug" }, 400);
-    }
-    if (!slug || RESERVED.has(slug)) slug = `${slug || "site"}-${Math.random().toString(36).slice(2, 6)}`;
+    if (requested && !requested.ok) return json({ ok: false, error: requested.error, field: "slug" }, 400);
+    const requestedSlug = requested ? requested.handle : "";
+    let slug = requestedSlug || slugify(defaultName);
+    if (!slug || RESERVED_COMMUNITY_HANDLES.has(slug)) slug = `${slug || "site"}-${Math.random().toString(36).slice(2, 6)}`;
     const existing = await findUserByEmail(email);
     if (existing) return bad("If this email isn't already registered, check your inbox to confirm.");
     if (requestedSlug && await findSiteBySlug(requestedSlug)) {
