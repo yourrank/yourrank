@@ -325,7 +325,8 @@ describe("logged-out vs logged-in rendering", () => {
     const homeRes = await renderSiteRoute({ request: req("https://example.com/streamer"), env, ctx, nonce: "n", slug: "streamer", section: "home", isCustomDomain: false });
     expect(homeRes.status).toBe(200);
     const homeHtml = await homeRes.text();
-    expect(homeHtml).toContain("Sign in with Kick");
+    expect(homeHtml).toContain('href="/streamer/me">Sign in</a>');
+    expect(homeHtml).not.toContain("/api/viewer/auth/");
     expect(homeHtml).toContain("Credits");
     expect(homeHtml).toContain("TestStreamer");
 
@@ -333,7 +334,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(lbRes.status).toBe(200);
     const lbHtml = await lbRes.text();
     expect(lbHtml).toContain("Alice");
-    expect(lbHtml).toContain("Sign in with Kick");
+    expect(lbHtml).toContain('href="/streamer/me">Sign in</a>');
   });
 
   it("does not emit renderer comments inside leaderboard rows", async () => {
@@ -359,7 +360,9 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Shoutout");
-    expect(html).toContain("Sign in with Kick");
+    expect(html).toContain("/streamer/me?intent=reward&reward=");
+    expect(html).toContain("Sign in to claim");
+    expect(html).not.toContain("/api/viewer/auth/");
     expect(html).not.toContain(">Claim<");
   });
 
@@ -385,8 +388,19 @@ describe("logged-out vs logged-in rendering", () => {
     const html = await res.text();
     expect(html).toContain("My Activity");
     expect(html).toContain("Your claims and credit history in TestStreamer's community");
-    expect(html).toContain("Join community");
-    expect(html).toContain("/api/viewer/auth/kick?");
+    expect(html).toContain("Sign in to TestStreamer");
+    expect(html).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer">Sign in with Kick</a>');
+    expect(html).toContain('href="/streamer/me?intent=join">Join TestStreamer</a>');
+
+    const joinRes = await renderSiteRoute({ request: req("https://example.com/streamer/me?intent=join"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
+    const joinHtml = await joinRes.text();
+    expect(joinHtml).toContain("Join TestStreamer");
+    expect(joinHtml).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer%2Fme&intent=join&site=streamer">Join with Kick</a>');
+
+    const hostileRes = await renderSiteRoute({ request: req("https://example.com/streamer/me?intent=reward&reward=..%2F%2Fevil"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
+    const hostileHtml = await hostileRes.text();
+    expect(hostileHtml).toContain('data-viewer-intent="signin"');
+    expect(hostileHtml).not.toContain("evil");
   });
 
   it("shows controlled OAuth errors on creator-scoped My activity", async () => {
