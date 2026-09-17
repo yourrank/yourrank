@@ -30,6 +30,8 @@ const iconPaths: Record<string, string> = {
   external: '<path d="M14 3h7v7m0-7-11 11m0-11H3v18h18v-7"/>',
   chat: '<path d="M4 4h16v12H9l-5 4Z"/><path d="M8 9h.01M12 9h.01M16 9h.01"/>',
   back: '<path d="M20 12H4m6-6-6 6 6 6"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
 };
 export function viewerIcon(name: string): string {
   return `<svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconPaths[name] || iconPaths.arrow}</svg>`;
@@ -105,15 +107,21 @@ export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountH
     ['vd-security', 'Privacy & Security', 'shield'],
     ['vd-data', 'Data & Account', 'coins'],
   ];
+  // The menu trigger and the rail's close control only work with site-shell.js
+  // running, so the server ships them hidden; the footer's section map is the
+  // no-script fallback. The rail itself is the compact-width drawer.
   return `<header class="viewer-topbar">
+<button class="viewer-menu" id="viewer-menu" type="button" hidden aria-label="Open menu" aria-controls="viewer-rail" aria-expanded="false">${viewerIcon('menu')}</button>
 ${links.length && !home ? `<a class="viewer-top-community" href="${esc(homeHref)}">${mark}<span><strong data-preview-field="f_name">${esc(name)}</strong><small${tagline ? ' data-preview-field="f_tagline"' : ''}>${esc(tagline || communityStatus)}</small></span></a>` : ''}
 <span class="yr-sr" id="viewer-top-title">${esc(helpActive ? 'Help & contact' : links.find(link => link.active)?.label || 'My communities')}</span>
 <div class="viewer-top-actions">${watchHref && !home ? `<a class="viewer-watch" href="${esc(watchHref)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(watchLabel)}${viewerIcon('external')}</a>` : ''}
 <a class="viewer-icon-button" href="${esc(help)}" aria-label="Help and contact" title="Help and contact">${viewerIcon('help')}</a>
 <a class="viewer-user" id="viewer-top-avatar" href="${esc(accountHref)}#vd-profile" aria-label="Viewer account${viewerName ? `: ${esc(viewerName)}` : ''}" title="Open viewer account"><span class="viewer-user-avatar" id="viewer-top-mark">${viewerMark || viewerIcon('user')}</span><span><strong id="viewer-top-name">${esc(viewerName || 'Account')}</strong>${balance != null ? `<small data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${Number(balance).toLocaleString("en-US")}</span> credits</small>` : ''}</span>${viewerIcon('down')}</a></div></header>
-<aside class="viewer-rail" aria-label="Viewer navigation">
-${links.length ? `<details class="viewer-switch"><summary aria-label="Select community">${home ? mark : ''}<strong>${esc(name)}</strong>${viewerIcon('down')}</summary><div class="viewer-switch-menu"><p>Your selected community</p><a href="${esc(homeHref)}">${esc(name)}</a><a href="${esc(accountHref)}">Switch community ${viewerIcon('grid')}</a></div></details><nav class="viewer-destinations" aria-label="Community pages">${links.map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${viewerIcon(names[link.label] || 'arrow')}${esc(labels[link.label] || link.label)}</a>${link.label === 'Home' ? `<span class="viewer-nav-unavailable" aria-disabled="true" title="Public activities are not available yet">${viewerIcon('code')}<span>Activities<small>Not available yet</small></span></span>` : ''}`).join('')}</nav>` : `<a class="viewer-brand" href="${esc(accountHref)}"><span>${brandMarkSvg({ className: 'viewer-icon' })}</span><b>YourRank</b></a>${viewerCommunityReturnLink(community)}<a class="viewer-back" id="viewer-communities-link" href="${esc(accountHref)}"${accountActive ? ' aria-current="page"' : ''}>${viewerIcon('grid')}My Communities</a><p class="viewer-nav-caption">Account</p><nav class="viewer-destinations" aria-label="Account settings">${settings.map(([id, label, icon]) => `<a ${id === 'vd-profile' ? 'id="viewer-account-link" ' : ''}href="${esc(accountHref)}#${id}">${viewerIcon(icon)}${label}</a>`).join('')}</nav>`}
+<aside class="viewer-rail" id="viewer-rail" aria-label="Viewer navigation" tabindex="-1">
+<button class="viewer-rail-close" id="viewer-rail-close" type="button" hidden aria-label="Close menu">${viewerIcon('close')}</button>
+${links.length ? `<details class="viewer-switch"><summary aria-label="Select community">${home ? mark : ''}<strong>${esc(name)}</strong>${viewerIcon('down')}</summary><div class="viewer-switch-menu"><p>Your selected community</p><a href="${esc(homeHref)}">${esc(name)}</a><a href="${esc(accountHref)}">Switch community ${viewerIcon('grid')}</a></div></details><nav class="viewer-destinations" aria-label="Community pages">${links.map(link => `<a href="${esc(link.href)}"${link.active ? ' aria-current="page"' : ''}>${viewerIcon(names[link.label] || 'arrow')}${esc(labels[link.label] || link.label)}</a>`).join('')}</nav>` : `<a class="viewer-brand" href="${esc(accountHref)}"><span>${brandMarkSvg({ className: 'viewer-icon' })}</span><b>YourRank</b></a>${viewerCommunityReturnLink(community)}<a class="viewer-back" id="viewer-communities-link" href="${esc(accountHref)}"${accountActive ? ' aria-current="page"' : ''}>${viewerIcon('grid')}My Communities</a><p class="viewer-nav-caption">Account</p><nav class="viewer-destinations" aria-label="Account settings">${settings.map(([id, label, icon]) => `<a ${id === 'vd-profile' ? 'id="viewer-account-link" ' : ''}href="${esc(accountHref)}#${id}">${viewerIcon(icon)}${label}</a>`).join('')}</nav>`}
 ${socialLinks.length ? `<nav class="viewer-channels" aria-label="${esc(name)} channels"><p class="viewer-nav-caption">Community</p>${socialLinks.map(link => `<a href="${esc(link.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}<span>${esc(link.label)}</span>${viewerIcon('external')}<span class="yr-sr"> (opens in a new tab)</span></a>`).join('')}</nav>` : ''}
 <div class="viewer-sidebar-bottom">${links.length ? `<div class="viewer-rail-account">${sessionControl}<a id="viewer-communities-link" href="${esc(accountHref)}">${viewerIcon('grid')}My communities</a><a id="viewer-account-link" href="${esc(accountHref)}#vd-profile"${signedIn ? '' : ' hidden'}>${viewerIcon('user')}Viewer account</a></div>` : '<button type="button" id="vd-rail-logout" hidden>' + viewerIcon('logout') + 'Log out</button>'}<a href="${esc(help)}"${helpActive ? ' aria-current="page"' : ''}>${viewerIcon('help')}Help &amp; contact</a></div>
-</aside>`;
+</aside>
+<div class="viewer-scrim" id="viewer-scrim" hidden></div>`;
 }

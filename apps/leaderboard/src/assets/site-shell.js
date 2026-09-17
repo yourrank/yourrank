@@ -22,6 +22,7 @@
     clearInterval(countdownTimer);
     searchRequest++;
     pageRequest++;
+    closeSide();
   }, { once: true });
 
   var rewardList = document.getElementById("viewer-rewards");
@@ -94,15 +95,18 @@
     }
   }
 
-  var side = document.getElementById("yr-side");
-  var scrim = document.getElementById("yr-scrim");
-  var menu = document.getElementById("yr-menu");
-  var sideClose = document.getElementById("yr-side-close");
+  // The classic site drawer and the viewer rail share one drawer contract.
+  var side = document.getElementById("yr-side") || document.getElementById("viewer-rail");
+  var scrim = document.getElementById("yr-scrim") || document.getElementById("viewer-scrim");
+  var menu = document.getElementById("yr-menu") || document.getElementById("viewer-menu");
+  var sideClose = document.getElementById("yr-side-close") || document.getElementById("viewer-rail-close");
+  var menuLabels = side && side.classList.contains("viewer-rail") ? { open: "Open menu", close: "Close menu" } : { open: "Open sections", close: "Close sections" };
   // The drawer trigger is the one control on the page that cannot work without
   // this file, so the server ships it hidden and it is disclosed here. With the
   // script blocked the top bar has no dead control and the footer keeps every
   // section link; with the script running the drawer behaves exactly as before.
   if (menu && side) menu.hidden = false;
+  if (sideClose && side) sideClose.hidden = false;
   // Same contract for the footer's section map: it is server-rendered so a
   // viewer whose browser never ran this file can still reach every section,
   // and it is hidden by the stylesheet only once this flag says the bar and
@@ -125,7 +129,7 @@
     if (scrim) scrim.hidden = true;
     if (menu) {
       menu.setAttribute("aria-expanded", "false");
-      menu.setAttribute("aria-label", "Open sections");
+      menu.setAttribute("aria-label", menuLabels.open);
     }
     inertBackground.forEach(function (entry) { entry.el.inert = entry.inert; });
     inertBackground = [];
@@ -145,7 +149,7 @@
     if (scrim) scrim.hidden = false;
     if (menu) {
       menu.setAttribute("aria-expanded", "true");
-      menu.setAttribute("aria-label", "Close sections");
+      menu.setAttribute("aria-label", menuLabels.close);
     }
     var branch = side;
     while (branch && branch !== document.body) {
