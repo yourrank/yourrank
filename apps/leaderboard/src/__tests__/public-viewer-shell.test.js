@@ -136,7 +136,7 @@ describe("public viewer shell", () => {
       expect(html).not.toContain('/api/viewer/auth/');
       expect(html).toContain('href="/creator/me">Sign in</a>');
       expect(html).toContain('href="/creator/me?intent=join"');
-      expect(html).toContain('href="/creator/me?intent=activity">View activity ');
+      expect(html).toContain('href="/creator/me?intent=activity">Sign in ');
       expect(membership).toContain('data-viewer-intent="signin"');
       expect(membership).toContain('<h2>Sign in to Creator Name</h2>');
       expect(membership).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
@@ -186,7 +186,7 @@ describe("public viewer shell", () => {
 
   it("keeps sign-in and account navigation role-correct", async () => {
     const signedOut = await render("home");
-    expect(signedOut).toContain('href="/creator/me">Sign in ');
+    expect(signedOut).toContain('href="/creator/me">Sign in</a>');
     expect(signedOut).not.toContain('#membership-code');
     expect(signedOut).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
@@ -541,10 +541,42 @@ describe("public viewer shell", () => {
     expect(css).toContain('.viewer-rail-account{display:flex;flex-wrap:wrap');
   });
 
+  it("shows a guest one contextual prompt per page instead of repeated empty panels", async () => {
+    const signInRequests = html => (html.match(/<a [^>]*>Sign in(?: <svg|<\/a>)/g) || []).length;
+    for (const section of ["home", "leaderboard", "shop"]) {
+      const html = await render(section);
+      const rail = html.match(/<aside class="viewer-overview"[\s\S]*?<\/aside>/)[0];
+      expect((rail.match(/viewer-rail-panel/g) || [])).toHaveLength(1);
+      expect(rail).toContain('class="viewer-rail-panel viewer-guest-prompt"');
+      expect(rail).not.toContain("viewer-next-reward");
+      expect(rail).not.toContain("viewer-recent-activity");
+      expect(html).not.toContain("Sign in to see your reward progress");
+      expect(html).not.toContain("Join the community to keep your activity here");
+      expect(html).toContain("Credits and claims are kept separate for every community you join.");
+      expect(signInRequests(html)).toBe(2); // topbar + the one contextual prompt
+    }
+    const me = await render("me", { r: { viewerKickAuthEnabled: true } });
+    expect(me).not.toContain("viewer-guest-prompt");
+    expect(me).toContain('data-viewer-intent="signin"');
+
+    const nonMember = await render("shop", { viewer, viewerData: { membershipStatus: "absent", viewerOnSite: null, ledger: [], claims: [] } });
+    expect(nonMember).toContain("<h2>Join Creator Name</h2>");
+    expect(nonMember).toContain('href="/creator/me">Join community ');
+    expect(nonMember).not.toContain("viewer-next-reward");
+
+    const zero = await render("home", { viewer, viewerData: { ...viewerData, viewerOnSite: { balance: 0 } } });
+    expect(zero).toContain('data-credit-balance="0"');
+    expect(zero).toContain("data-credit-balance-num>0</strong>");
+    expect(zero).toContain("No credit activity yet.");
+    const active = await render("shop", { viewer, viewerData });
+    expect(active).toContain("viewer-next-reward");
+    expect(active).toContain("How to Earn Credits");
+  });
+
   it("links the credits rail to local earning activity and gives standings one page heading", async () => {
     const html = await render('home');
-    const credit = html.match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
-    expect(credit).toContain('href="/creator/me">Sign in ');
+    const credit = html.match(/<section class="viewer-rail-panel viewer-guest-prompt">[\s\S]*?<\/section>/)[0];
+    expect(credit).toContain('href="/creator/me?intent=activity">Sign in ');
     expect(credit).not.toContain('href="/me"');
     const memberCredit = (await render('home', { viewer, viewerData })).match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
     expect(memberCredit).toContain('href="/creator/me#membership-code">Earn More Credits ');

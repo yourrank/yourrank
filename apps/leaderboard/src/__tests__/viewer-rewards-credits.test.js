@@ -118,7 +118,9 @@ describe("a creator's Rewards page", () => {
     expect(html).not.toContain("/api/viewer/auth/");
     expect((html.match(/href="\/demo-board\/me">Sign in<\/a>/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
-    expect(html).toContain("Sign in to use your community credits.");
+    expect(html).not.toContain("Sign in to use your community credits.");
+    expect((html.match(/class="viewer-rail-panel viewer-guest-prompt"/g) || []).length).toBe(1);
+    expect(html).toContain("<h2>Claim rewards</h2>");
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
   });
 
@@ -256,7 +258,9 @@ describe("the creator home credit state", () => {
       viewerData: { viewerOnSite: { balance: 0, blocked: false }, shopItems: items },
       opts,
     });
-    expect(signedOutHtml).toContain("Sign in to see your reward progress.");
+    expect(signedOutHtml).not.toContain("Sign in to see your reward progress.");
+    expect(signedOutHtml).not.toContain("viewer-next-reward");
+    expect(signedOutHtml).toContain("<h2>Your status</h2>");
     expect(signedInHtml).toContain(">Explore rewards ");
     expect(signedOutHtml).toContain("Creator sticker pack");
   });
