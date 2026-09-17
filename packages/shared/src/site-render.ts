@@ -511,6 +511,10 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
   const viewerShell = section !== "games";
+  // Article pages (policies, contact) are read, not operated: they keep the
+  // shared navigation but drop the personal overview rail, the credits
+  // footer strip and the share controls.
+  const articleLayout = viewerShell && section == null && opts.layout === "article";
   const viewerTemplate = resolveViewerTemplate(viewerShell && r.plan !== "free" ? br.template : undefined);
 
   const casino = String(b.casino || "").trim();
@@ -563,7 +567,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
-  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: sectionUrl, shareTitle: rawTitleBase });
+  const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: articleLayout ? null : sectionUrl, shareTitle: rawTitleBase });
 
   // B-01: Dynamic font URL based on board's active font.
   const font = resolveFont(data);
@@ -607,15 +611,15 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     helpHref: viewerHelpHref(siteSectionHref(section || "home", slug, false), isCustomDomain ? "https://yourrank.site" : ""),
     links: sectionList(siteSections).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
-  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
+  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
 ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? viewerCommunityHeading(ctx) : ''}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="${viewerShell ? "viewer-main" : "yr-main"}" id="main-content">
 ${mainInner}
-${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
+${articleLayout ? "" : viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
 </main>
-${viewerShell ? `${viewerCommunityOverview(ctx)}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
+${viewerShell ? `${articleLayout ? "" : viewerCommunityOverview(ctx)}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug, isCustomDomain })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
 <script src="/assets/${viewerShell ? 'viewer-app' : 'site-shell'}.js" nonce="${nonce}" defer></script>

@@ -683,4 +683,32 @@ describe("public viewer shell", () => {
     expect(html).toContain('data-section="leaderboard"');
     expect(html).toContain('data-slug="creator"');
   });
+
+  it("renders article pages as reading layouts: shared nav, no overview rail, no share or credits strip", async () => {
+    const content = '<article class="viewer-article"><h1 class="yr-h1">Terms</h1></article>';
+    const base = { r: { slug: "creator", plan: "pro", data: baseData }, section: null, viewer, viewerData };
+    const article = await renderSite({ ...base, opts: { ...opts, contentHtml: content, canonicalPath: "/creator/terms", layout: "article" } });
+    const page = await renderSite({ ...base, opts: { ...opts, contentHtml: content, canonicalPath: "/creator/terms" } });
+
+    expect(article).toContain('<body class="yr-site viewer-shell viewer-article-page"');
+    expect(article).toContain('<aside class="viewer-rail" id="viewer-rail" aria-label="Viewer navigation"');
+    expect(article).toContain('id="viewer-menu"');
+    expect(article).toContain(content);
+    expect(article.match(/<h1/g).length).toBe(1);
+    expect(article).not.toContain('<aside class="viewer-overview"');
+    expect(article).not.toContain('<footer class="viewer-panel-footer"');
+    expect(article).not.toContain("data-share-block");
+    expect(article).toContain('<div class="viewer-site-footer"><footer class="yr-foot">');
+    expect(article).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
+
+    expect(page).not.toContain("viewer-article-page");
+    expect(page).toContain('<aside class="viewer-overview"');
+    expect(page).toContain("data-share-block");
+
+    const css = readFileSync(join(assets, "viewer-shell.css"), "utf8");
+    expect(css).toContain(".viewer-article-page .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr)}");
+    expect(css).toContain(".viewer-article{width:min(100%,700px)");
+    expect(css).toContain('.viewer-article-nav a[aria-current="page"]');
+    expect(css).toContain(".viewer-article-page .viewer-main,.viewer-article-page .viewer-site-footer{grid-column:1}");
+  });
 });
