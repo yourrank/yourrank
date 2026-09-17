@@ -124,6 +124,21 @@ export function notFoundPage(slug, nonce) {
   });
 }
 
+// A bad child path under a community that does exist. Keeps the community's
+// identity and points back into it instead of claiming nothing is published.
+export function missingSectionPage({ slug, name, path, isCustomDomain = false }, nonce) {
+  const label = esc(name || slug);
+  const home = isCustomDomain ? "/" : `/${encodeURIComponent(slug)}`;
+  const rewards = isCustomDomain ? "/shop" : `/${encodeURIComponent(slug)}/shop`;
+  return statusPage({
+    nonce,
+    title: "Page not found",
+    heading: `That page isn't part of ${name || slug}`,
+    body: `<p>${label} exists, but there is no page at <code>${esc(path)}</code>. The link may be mistyped or the page may have moved.</p>`,
+    actions: `<a class="btn btn--accent" href="${home}">${label} home</a><a class="btn" href="${rewards}">Rewards</a>`,
+  });
+}
+
 export function suspendedPage(nonce) {
   return statusPage({
     nonce,
