@@ -47,9 +47,11 @@ describe("public viewer shell", () => {
   it("keeps viewer support context and makes an empty shop discoverable", async () => {
     const html = await render("home", { data: { ...baseData, shopItems: [] } });
     expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
+    expect(html).toContain('href="/help?audience=viewer&amp;return=%2Fcreator">How YourRank works');
     expect(html).toMatch(/<nav class="viewer-destinations"[\s\S]*?href="\/creator\/shop"/);
     const custom = await render("shop", { custom: true });
     expect(custom).toContain('href="https://yourrank.site/help/support?audience=viewer&amp;return=%2Fcreator%2Fshop"');
+    expect(custom).toContain('href="https://yourrank.site/help?audience=viewer&amp;return=%2Fcreator%2Fshop">How YourRank works');
   });
 
   it("gives the shared viewer rail sole ownership of public chrome", async () => {

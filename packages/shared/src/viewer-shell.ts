@@ -39,7 +39,7 @@ export function viewerAccountOverview(): string {
   return `<aside class="viewer-overview" aria-label="Viewer account overview"><section class="viewer-rail-panel"><div class="viewer-rail-head"><h2>Your community memberships</h2>${viewerIcon('user')}</div><p>Select a community to see its rewards and your activity.</p></section><div class="viewer-scope-help">${viewerIcon('shield')}<p>Credits and claims stay with each community you join.</p></div></aside>`;
 }
 export function viewerHelpHref(returnTo = '/me', origin = '', tab = 'support'): string {
-  return `${origin}/help/${tab}?${new URLSearchParams({ audience: 'viewer', return: returnTo })}`;
+  return `${origin}/help${tab === 'help' ? '' : `/${tab}`}?${new URLSearchParams({ audience: 'viewer', return: returnTo })}`;
 }
 
 export const VIEWER_COMMUNITY_SLUG = /^[a-z0-9][a-z0-9_-]{0,62}$/;
