@@ -8,7 +8,7 @@ import { viewerNavigation, viewerAccountOverview, viewerHelpHref, viewerAccountH
 const TABS = [
   { key: "help", label: "Overview", href: "/help" },
   { key: "support", label: "Support", href: "/help/support" },
-  { key: "feedback", label: "Feedback", href: "/help/feedback" },
+  { key: "feedback", label: "YourRank feedback", href: "/help/feedback" },
 ];
 
 function esc(value) {
@@ -37,7 +37,7 @@ function contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder, include
         <input type="hidden" id="c_kind" name="kind" value="${kind}" />
         <input id="c_context" name="context" type="hidden" />
         <div class="field"><label for="c_subject">Subject</label><input id="c_subject" name="subject" type="text" maxlength="120" placeholder="${subjectPlaceholder}" /></div>
-        <div class="field"><label for="c_message">Message</label><textarea id="c_message" name="message" rows="6" required minlength="10" maxlength="4000" placeholder="${messagePlaceholder}"></textarea></div>
+        <div class="field"><label for="c_message">Message</label><textarea id="c_message" name="message" rows="6" required minlength="10" maxlength="4000" placeholder="${messagePlaceholder}" aria-describedby="c_message_hint"></textarea><p class="hint" id="c_message_hint">10 to 4000 characters.</p></div>
         <div class="err" id="c_err" role="alert" aria-live="assertive"></div>
         <button class="btn btn--accent w-full" type="submit" id="c_submit">Send message</button>
         <p class="hint text-accent" id="c_success" hidden>Message received. We'll reply by email.</p>
@@ -279,7 +279,7 @@ export const helpFeedbackPage = helpPage({
   description: "Share product feedback and feature requests for YourRank.",
   canonical: "https://yourrank.site/help/feedback",
   h1: "Give feedback",
-  intro: "Tell us what would make YourRank better. Every message reaches the product team.",
+  intro: "Product feedback about YourRank itself goes to the YourRank product team, not to any creator. We read everything and reply by email only when we have a follow-up question. For a problem that needs an answer, use Support instead. Feedback for a specific community's creator is sent from that community's pages.",
   kind: "feedback",
   subjectPlaceholder: "What could be better?",
   messagePlaceholder: "Share an idea, frustration, or feature request...",

@@ -628,9 +628,10 @@ function feedbackModal({ slug, isCustomDomain }) {
   // A-07: dialog now uses aria-labelledby to bind the heading correctly.
   return `<dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
-<h2 id="yr-feedback-title">Send feedback</h2>
-<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's <a href="${esc(isCustomDomain ? "/contact" : `/${encodeURIComponent(slug)}/contact`)}">Contact page</a>.</p>
-<textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback"></textarea>
+<h2 id="yr-feedback-title">Feedback for this creator</h2>
+<p class="yr-note">Goes to this community's creator, not to YourRank. There is no personal reply here; if you need a response, use the creator's <a href="${esc(isCustomDomain ? "/contact" : `/${encodeURIComponent(slug)}/contact`)}">Contact page</a>.</p>
+<textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback for the creator" aria-describedby="yr-feedback-hint"></textarea>
+<p class="yr-note yr-feedback-hint" id="yr-feedback-hint">10 to 2000 characters, not counting spaces at the start or end. <span id="yr-feedback-count">0 / 2000</span></p>
 <p class="yr-modal-status" id="yr-feedback-status" role="status" aria-live="polite"></p>
 <div class="yr-modal-acts">
 <button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" id="yr-feedback-close">Cancel</button>
@@ -683,7 +684,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
 <p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
-<div class="yr-foot-links">${legalLinks}<button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Send feedback</button></div>
+<div class="yr-foot-links">${legalLinks}<button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Feedback for this creator</button></div>
 </div>
 ${shareBlock({ data, shareUrl, shareTitle })}
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</nav>

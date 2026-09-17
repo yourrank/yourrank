@@ -757,6 +757,13 @@
   var statusEl = document.getElementById("yr-feedback-status");
   var feedbackOpener = null;
   var feedbackMessage = dialog && dialog.querySelector('textarea[name="message"]');
+  var feedbackCount = document.getElementById("yr-feedback-count");
+  var updateFeedbackCount = function () {
+    if (!feedbackCount || !feedbackMessage) return;
+    var max = Number(feedbackMessage.getAttribute("maxlength")) || 2000;
+    feedbackCount.textContent = feedbackMessage.value.trim().length + " / " + max;
+  };
+  if (feedbackMessage) { feedbackMessage.addEventListener("input", updateFeedbackCount); updateFeedbackCount(); }
   var restoreFeedbackFocus = function () {
     var opener = feedbackOpener;
     feedbackOpener = null;
@@ -784,7 +791,7 @@
       if (btn.disabled) return;
       var message = form.message.value.trim();
       if (message.length < 10) {
-        if (statusEl) statusEl.textContent = "Please write at least 10 characters.";
+        if (statusEl) statusEl.textContent = "Please write at least 10 characters (spaces at the start or end do not count).";
         return;
       }
       btn.disabled = true;
@@ -799,8 +806,8 @@
         .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
         .then(function (r) {
           if (r.ok && r.data.ok) {
-            if (statusEl) statusEl.textContent = "Your feedback was sent to the site owner.";
-            if (form.message.value.trim() === message) form.message.value = "";
+            if (statusEl) statusEl.textContent = "Your feedback was sent to this community's creator.";
+            if (form.message.value.trim() === message) { form.message.value = ""; updateFeedbackCount(); }
           } else {
             if (statusEl) statusEl.textContent = r.data.error || "Could not send feedback. Try again.";
           }
