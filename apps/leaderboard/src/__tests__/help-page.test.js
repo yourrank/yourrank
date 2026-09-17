@@ -61,6 +61,8 @@ describe("help pages", () => {
     expect(html).toContain('<h1 class="vd-h1" id="contactTitle">How YourRank works</h1>');
     expect(html).toContain("<h2>Earning and claiming</h2>");
     expect(html).toContain("signing in never claims a reward for you");
+    expect(html).toContain(`<a href="/creator/contact">Creator &amp; Co's Contact page</a>`);
+    expect(html).not.toContain("channel links on their community home page");
     expect(html).toContain('<a class="yr-sec-link" href="/creator">Back to Creator &amp; Co</a>');
     expect(html).toContain('href="/help?audience=viewer&amp;return=%2Fcreator" aria-current="page"');
     expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
