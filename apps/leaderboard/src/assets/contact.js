@@ -79,17 +79,28 @@ function getCsrf() {
   return m ? decodeURIComponent(m[1]) : "";
 }
 
+const REQUEST_TIMEOUT_MS = 15000;
+const TIMEOUT_MESSAGE = "No reply from the server after 15 seconds. Your message may or may not have been received, so we kept your draft. If no confirmation email arrives, send it again or use the email address below.";
+const NETWORK_MESSAGE = "Could not reach the server, so nothing was sent. Check your connection and try again; your draft is still here.";
+
+let pending = false;
+
 function setLoading(loading) {
+  pending = loading;
   submit.disabled = loading;
+  submit.setAttribute("aria-busy", loading ? "true" : "false");
   submit.textContent = loading ? "Sending..." : "Send message";
 }
 
 if (form) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (pending) return;
     err.textContent = "";
     success.hidden = true;
     const data = Object.fromEntries(new FormData(form));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     setLoading(true);
     try {
       const res = await fetch("/api/contact", {
@@ -99,6 +110,7 @@ if (form) {
           "x-csrf-token": getCsrf(),
         },
         body: JSON.stringify(data),
+        signal: controller.signal,
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -107,11 +119,12 @@ if (form) {
         form.reset();
         applyContext();
       } else {
-        err.textContent = body.error || "Something went wrong. Try again.";
+        err.textContent = body.error || "Something went wrong. Your draft is still here; try again.";
       }
-    } catch {
-      err.textContent = "Network error. Please try again.";
+    } catch (cause) {
+      err.textContent = controller.signal.aborted || cause?.name === "AbortError" ? TIMEOUT_MESSAGE : NETWORK_MESSAGE;
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   });
