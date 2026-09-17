@@ -788,11 +788,12 @@ function guestPrompt(ctx, meHref) {
 }
 
 function leaderboardPreview(ctx) {
-  const { data, b, slug, siteSections, isCustomDomain } = ctx;
+  const { data, b, slug, siteSections, isCustomDomain, section } = ctx;
   if (siteSections.leaderboard === false || data.sections?.leaderboard === false) return '';
-  const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0,10);
-  const podium = players.length >= 3 && players.slice(0,3).every((p, i) => Number(p.rank) === i + 1);
-  return `<section class="viewer-card viewer-home-board"><div class="viewer-card-head"><h2>${viewerIcon('leaderboard')}Leaderboard</h2><a href="${siteSectionHref('leaderboard', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div><p>${esc(b.period || 'Current')} standings</p><div class="viewer-board-list"${podium ? ' data-home-podium="3"' : ''}>${players.map((player, i) => `<div class="viewer-board-row"${podium && i < 3 ? ` data-home-slot="${i + 1}"` : ''}><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span class="viewer-board-score">${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('') || `<div class="viewer-home-empty">${viewerIcon('leaderboard')}<p>No standings yet. The creator publishes leaderboard scores.</p></div>`}</div></section>`;
+  const home = section === 'home';
+  const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0, home ? 10 : 3);
+  const podium = home && players.length >= 3 && players.slice(0,3).every((p, i) => Number(p.rank) === i + 1);
+  return `<section class="viewer-card${home ? ' viewer-home-board' : ''}"><div class="viewer-card-head"><h2>${viewerIcon('leaderboard')}Leaderboard</h2><a href="${siteSectionHref('leaderboard', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div><p>${esc(b.period || 'Current')} standings</p><div class="viewer-board-list"${podium ? ' data-home-podium="3"' : ''}>${players.map((player, i) => `<div class="viewer-board-row"${podium && i < 3 ? ` data-home-slot="${i + 1}"` : ''}><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span class="viewer-board-score">${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('') || (home ? `<div class="viewer-home-empty">${viewerIcon('leaderboard')}<p>No standings yet. The creator publishes leaderboard scores.</p></div>` : '<p>No standings yet. The creator publishes leaderboard scores.</p>')}</div></section>`;
 }
 
 function rewardProgressCard(ctx) {
