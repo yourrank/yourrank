@@ -137,10 +137,33 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + '/nova');
   await page.evaluate(() => window.__yrViewerAppReady);
-  await page.evaluate(() => { window.shellIdentity = { rail: document.querySelector('.viewer-rail'), top: document.querySelector('.viewer-topbar'), selector: document.querySelector('.viewer-switch') }; });
   assert.equal(await page.locator('[data-viewer-guide],[data-guide-restore]').count(), 0);
-  assert.match(await page.locator('.viewer-nav-unavailable').innerText(), /Activities.*Not available yet/s);
-  assert.equal(await page.locator('.viewer-nav-unavailable a').count(), 0);
+  assert.equal(await page.locator('.viewer-destinations a', { hasText: 'Activities' }).count(), 0, 'Unavailable destinations are omitted');
+  assert.equal(await page.locator('#viewer-menu').isVisible(), false, 'No menu trigger on wide screens');
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.locator('#viewer-rail').waitFor({ state: 'hidden', timeout: 2000 }).catch(() => assert.fail(`${width}: rail is a closed drawer`));
+    assert.equal(await page.locator('#viewer-menu').getAttribute('aria-expanded'), 'false');
+    await page.locator('#viewer-menu').click();
+    await page.waitForFunction(() => document.activeElement && document.activeElement.closest('#viewer-rail'));
+    assert.equal(await page.locator('#viewer-menu').getAttribute('aria-expanded'), 'true', `${width}: expanded state`);
+    assert.equal(await page.locator('#viewer-rail').getAttribute('role'), 'dialog');
+    assert.equal(await page.locator('.viewer-destinations a[href="/nova/shop"]').isVisible(), true, `${width}: destinations reachable`);
+    assert.equal(await page.locator('.viewer-sidebar-bottom a[href^="/help"]').isVisible(), true, `${width}: help reachable`);
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('viewer-rail')).transform === 'none' && document.getElementById('viewer-rail').getBoundingClientRect().left === 0);
+    await page.screenshot({ path: `${output}/nova-drawer-${width}.png` });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#viewer-rail').getAttribute('data-open'), null, `${width}: Escape closes`);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'viewer-menu', `${width}: focus returns to trigger`);
+    await page.locator('#viewer-menu').click();
+    await page.locator('.viewer-destinations a[href="/nova/shop"]').click();
+    await page.waitForSelector('[data-redeem="shoutout"]');
+    assert.equal(await page.locator('#viewer-rail').getAttribute('data-open'), null, `${width}: route change closes the menu`);
+    assert.equal(await page.evaluate(() => document.querySelector('.viewer-main').inert), false, `${width}: content usable after navigation`);
+    await page.goto(origin + '/nova'); await page.evaluate(() => window.__yrViewerAppReady);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.evaluate(() => { window.shellIdentity = { rail: document.querySelector('.viewer-rail'), top: document.querySelector('.viewer-topbar'), selector: document.querySelector('.viewer-switch') }; });
   await page.locator('.viewer-switch summary').click(); await page.keyboard.press('Escape');
   assert.equal(await page.locator('.viewer-switch').getAttribute('open'), null);
   await page.locator('.viewer-destinations a[href="/nova/shop"]').click();
@@ -273,6 +296,7 @@ try {
   });
   await page.goto(origin + '/me#vd-profile', { waitUntil: 'domcontentloaded' });
   await started;
+  await page.locator('#viewer-menu').click();
   await page.locator('.viewer-sidebar-bottom a').click();
   await page.waitForSelector('#contactForm');
   releaseAccount();

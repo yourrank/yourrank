@@ -84,7 +84,7 @@ describe("public viewer shell", () => {
     const html = await render("shop");
     const nav = html.match(/<nav class="viewer-destinations"[\s\S]*?<\/nav>/)[0];
     for(const label of ["Home","Leaderboard","Rewards","My Activity"]) expect(nav).toContain(">"+label+"</a>");
-    expect(nav).toContain('aria-disabled="true" title="Public activities are not available yet"');
+    expect(nav).not.toContain('Activities');
     expect(nav).not.toContain('href="/creator/activities"');
     expect(nav).not.toContain(">Games<");
     expect((html.match(/aria-current="page"/g)||[]).length).toBe(1);
@@ -326,15 +326,30 @@ describe("public viewer shell", () => {
     }
   });
 
-  it("uses the same server-rendered navigation on desktop and mobile", async () => {
+  it("uses the same server-rendered navigation on desktop and as a compact-width drawer", async () => {
     const html = await render('home');
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    const shellJs = readFileSync(join(assets, 'site-shell.js'), 'utf8');
     expect((html.match(/class="viewer-destinations"/g) || [])).toHaveLength(1);
     expect(html).not.toContain('id="yr-menu"');
     expect(html).not.toContain('id="yr-side"');
-    expect(css).toContain('.viewer-layout{display:flex;flex-direction:column');
-    expect(css).toContain('.viewer-destinations{display:flex;flex-wrap:wrap');
-    expect(css).not.toMatch(/\.viewer-rail\{[^}]*display:none/);
+    // Unavailable destinations are omitted rather than shown as dead entries.
+    expect(html).not.toContain('Activities');
+    // Script-only drawer controls ship hidden; the footer section map is the no-script path.
+    expect(html).toContain('<button class="viewer-menu" id="viewer-menu" type="button" hidden aria-label="Open menu" aria-controls="viewer-rail" aria-expanded="false">');
+    expect(html).toContain('<aside class="viewer-rail" id="viewer-rail" aria-label="Viewer navigation" tabindex="-1">');
+    expect(html).toContain('<button class="viewer-rail-close" id="viewer-rail-close" type="button" hidden aria-label="Close menu">');
+    expect(html).toContain('<div class="viewer-scrim" id="viewer-scrim" hidden></div>');
+    expect(html).toContain('class="yr-foot-links yr-foot-nav" aria-label="All sections"');
+    expect(css).toContain('.viewer-menu,.viewer-rail-close,.viewer-scrim{display:none}');
+    const compact = css.match(/@media\(max-width:1000px\)\{[\s\S]*?\n\}/)[0];
+    expect(compact).toContain('.viewer-rail{position:fixed;');
+    expect(compact).toContain('transform:translateX(-102%);visibility:hidden');
+    expect(compact).toContain('.viewer-rail[data-open]{transform:none;visibility:visible');
+    expect(compact).toContain('.viewer-menu{display:grid;');
+    expect(css).not.toMatch(/\.viewer-layout\{display:flex;flex-direction:column/);
+    expect(shellJs).toContain('document.getElementById("yr-side") || document.getElementById("viewer-rail")');
+    expect(shellJs).toContain('closeSide();\n  }, { once: true });');
   });
 
   it("keeps the viewer shell mounted while same-origin pages change", async () => {
@@ -402,7 +417,8 @@ describe("public viewer shell", () => {
     const html=await render("me",{viewer,viewerData});
     const nav=html.match(/<aside class="viewer-rail"[\s\S]*?<\/aside>/)[0];
     for(const href of ["/creator","/creator/shop","/creator/me","/me?community=creator","/me?community=creator#vd-profile"]) expect(nav).toContain('href="'+href+'"');
-    expect(nav).not.toContain("<button");
+    // The only button in the rail is the script-disclosed drawer close control.
+    expect(nav.match(/<button\b[^>]*>/g)).toEqual(['<button class="viewer-rail-close" id="viewer-rail-close" type="button" hidden aria-label="Close menu">']);
     expect(nav).not.toMatch(/<(?:aside|nav|a)[^>]*\shidden\b/);
   });
 
@@ -553,7 +569,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('href="/me?community=creator#vd-profile"');
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     expect(css).not.toMatch(/\.viewer-rail-account\{[^}]*display:none/);
-    expect(css).toContain('.viewer-rail-account{display:flex;flex-wrap:wrap');
+    expect(css).not.toMatch(/\.viewer-sidebar-bottom\{[^}]*display:none/);
   });
 
   it("shows a guest one contextual prompt per page instead of repeated empty panels", async () => {
