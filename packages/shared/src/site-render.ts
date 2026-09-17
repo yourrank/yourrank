@@ -588,7 +588,7 @@ ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? viewerCommunityHeading(ctx) : ''}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="${viewerShell ? "viewer-main" : "yr-main"}" id="main-content">
 ${mainInner}
-${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : ''))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
+${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
 </main>
 ${viewerShell ? `${viewerCommunityOverview(ctx)}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug })}

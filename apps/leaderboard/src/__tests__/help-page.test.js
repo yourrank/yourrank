@@ -55,6 +55,18 @@ describe("help pages", () => {
     expect(plain).toContain('id="viewer-communities-link" href="/me"');
   });
 
+  it("explains earning and claiming on the viewer guide with a route back to the community", () => {
+    const community = { slug: "creator", name: "Creator & Co", href: "/creator" };
+    const html = render("helpHub", null, "/help", { returnTo: "/creator", community });
+    expect(html).toContain('<h1 class="vd-h1" id="contactTitle">How YourRank works</h1>');
+    expect(html).toContain("<h2>Earning and claiming</h2>");
+    expect(html).toContain("signing in never claims a reward for you");
+    expect(html).toContain('<a class="yr-sec-link" href="/creator">Back to Creator &amp; Co</a>');
+    expect(html).toContain('href="/help?audience=viewer&amp;return=%2Fcreator" aria-current="page"');
+    expect(html).toContain('href="/help/support?audience=viewer&amp;return=%2Fcreator"');
+    expect(html).not.toContain("contactForm");
+  });
+
   it("renders the creator help hub in both shells", () => {
     const signedIn = render("helpHub", user, "/help");
     const signedOut = render("helpHub", null, "/help");

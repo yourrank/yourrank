@@ -22,7 +22,7 @@ function subnavHtml(active, workspace = false, viewerHelp = null) {
   const linkClass = workspace ? "v3-tab" : "help-subnav-link";
   const links = TABS.map((tab) => {
     const isActive = tab.key === active;
-    const href = viewerHelp ? (tab.key === "help" ? `/help?${new URLSearchParams({ audience: "viewer", return: viewerHelp.returnTo })}` : viewerHelpHref(viewerHelp.returnTo, "", tab.key)) : tab.href;
+    const href = viewerHelp ? viewerHelpHref(viewerHelp.returnTo, "", tab.key) : tab.href;
     return `<a class="${linkClass}${isActive ? " is-on" : ""}" href="${esc(href)}"${isActive ? ' aria-current="page"' : ""}>${tab.label}</a>`;
   }).join("");
   return workspace
@@ -215,8 +215,8 @@ function helpPage(opts) {
 
 function helpHubContent({ user, activePath, viewerHelp }) {
   if (viewerHelp) return viewerHelpContent({
-    active: "help", title: "Viewer help", intro: "Find your rewards, credits, and community activity.", viewerHelp,
-    body: `<section class="yr-prose"><h2>Finding your way</h2><p><b>Reward shop</b> lists what a creator offers for free credits. <b>My activity</b> shows your credits, reward claims, and participation in that community.</p><p><a href="/me">My communities</a> lists the communities you have joined. Your rewards and credits stay separate in each one.</p><h2>Need help with a reward?</h2><p>The creator handles their community rewards. Use the channel links on their community home page to contact them.</p><p>For account or website problems, choose Support above. Choose Feedback to share an idea.</p></section>`,
+    active: "help", title: "How YourRank works", intro: "Earn credits in a creator's community, then spend them on that creator's rewards.", viewerHelp,
+    body: `<section class="yr-prose"><h2>Earning and claiming</h2><p>Sign in with Kick or Discord and join a creator's community. You earn <b>credits</b> in that community by watching, taking part, and redeeming the creator's credit codes. Credits never cost money.</p><p>In the <b>Reward shop</b>, each reward shows its credit cost and availability. Claiming is always a separate, confirmed step: signing in never claims a reward for you. After you claim, the creator fulfils the reward and you can follow its status in <b>My activity</b>.</p><h2>Finding your way</h2><p><b>Reward shop</b> lists what a creator offers for free credits. <b>My activity</b> shows your credits, reward claims, and participation in that community.</p><p><a href="/me">My communities</a> lists the communities you have joined. Your rewards and credits stay separate in each one.</p><h2>Need help with a reward?</h2><p>The creator handles their community rewards. Use the channel links on their community home page to contact them.</p><p>For account or website problems, choose Support above. Choose Feedback to share an idea.</p></section>`,
   });
   const sections = hubSectionsHtml();
   if (!user) {
