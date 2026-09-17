@@ -1,5 +1,6 @@
 // Tests for the public contact/support endpoint.
 import { describe, it, expect, mock, beforeEach } from "bun:test";
+import fs from "node:fs";
 
 const mockExec = mock(() => Promise.resolve());
 
@@ -83,5 +84,30 @@ describe("handleContact", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toContain("Message");
+  });
+});
+
+describe("support form client (assets/contact.js)", () => {
+  const source = fs.readFileSync(new URL("../assets/contact.js", import.meta.url), "utf8");
+
+  it("bounds the request with a 15 second abort and clears the timer", () => {
+    expect(source).toContain("const REQUEST_TIMEOUT_MS = 15000;");
+    expect(source).toContain("setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)");
+    expect(source).toContain("signal: controller.signal");
+    expect(source).toMatch(/finally \{\s*clearTimeout\(timer\);\s*setLoading\(false\);/);
+  });
+
+  it("keeps the draft and explains uncertain delivery without blind retry", () => {
+    // form.reset() only runs on the success branch.
+    expect(source.match(/form\.reset\(\)/g)).toHaveLength(1);
+    expect(source).toMatch(/if \(res\.ok\) \{[\s\S]*?form\.reset\(\);[\s\S]*?\} else \{/);
+    expect(source).toContain("may or may not have been received");
+    expect(source).toContain("nothing was sent");
+    expect(source).not.toMatch(/retry\s*\(|attempts?\s*[<>]/i);
+  });
+
+  it("ignores duplicate submits while a request is pending", () => {
+    expect(source).toContain("if (pending) return;");
+    expect(source).toContain('submit.setAttribute("aria-busy", loading ? "true" : "false")');
   });
 });
