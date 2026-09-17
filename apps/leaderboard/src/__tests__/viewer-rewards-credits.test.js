@@ -128,6 +128,9 @@ describe("a creator's Rewards page", () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain('<ul class="yr-rwds" id="viewer-rewards" role="list">');
+    // The intro sentence is the only explanation; nothing decorative sits between the controls and the catalog.
+    expect(html).not.toContain("viewer-rewards-banner");
+    expect(html).toMatch(/<\/header>\s*(<p class="yr-note">[^<]*<\/p>\s*)?(<p class="yr-redeem-status"[^>]*><\/p>\s*)?<section aria-label="All rewards">/);
     // One action per reward row, and only the affordable in-stock ones can be claimed.
     expect((html.match(/<li class="yr-rwd" /g) || []).length).toBe(items.length);
     expect((html.match(/class="yr-act/g) || []).length).toBe(items.length);

@@ -187,6 +187,28 @@ try {
     }
     console.log(`${count} reward(s) columns x card width: ${report.join(' ')}`);
   }
+  // YR-023: no promotional banner between the rewards controls and the catalog; a real reward is on the first 390x844 screen.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(origin + '/nova/shop?signedout');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  assert.equal(await page.locator('.viewer-rewards-banner').count(), 0, 'generic rewards banner removed');
+  assert.deepEqual(await page.evaluate(() => [...document.querySelector('.viewer-main').children].map(el => el.className.split(' ')[0] || el.tagName.toLowerCase()).filter(name => !['yr-redeem-status', 'yr-note'].includes(name)).slice(0, 2)), ['viewer-page-intro', 'section'], 'search/sort controls sit immediately before the catalog');
+  assert.equal(await page.locator('#cookieReject').isVisible(), true, 'fresh guest sees the consent prompt');
+  await page.screenshot({ path: `${output}/nova-shop-guest-consent-390.png` });
+  for (const selector of ['#cookieReject', '#cookieAccept', '#viewer-menu', '.viewer-user', '#viewer-reward-search', '#viewer-rewards .yr-rwd .yr-act']) {
+    assert.equal(await page.locator(selector).first().isVisible(), true, `${selector} reachable while consent is shown`);
+  }
+  await page.locator('#cookieReject').click();
+  await page.locator('#cookieReject').waitFor({ state: 'hidden' });
+  const firstScreen = await page.evaluate(() => ({ title: Math.round(document.querySelector('.viewer-page-intro h1').getBoundingClientRect().top), reward: Math.round(document.querySelector('#viewer-rewards .yr-rwd').getBoundingClientRect().top), rewardBottom: Math.round(document.querySelector('#viewer-rewards .yr-rwd').getBoundingClientRect().bottom), hiddenAbove: [...document.querySelectorAll('.viewer-main > *')].filter(el => getComputedStyle(el).display === 'none' && !el.hidden && !el.matches(':empty')).length }));
+  await page.screenshot({ path: `${output}/nova-shop-guest-settled-390.png` });
+  console.log(`390x844 guest, consent dismissed: title top ${firstScreen.title}px, first reward ${firstScreen.reward}-${firstScreen.rewardBottom}px`);
+  assert.ok(firstScreen.title >= 60 && firstScreen.title <= 140, `title starts within the first ~140px (${firstScreen.title})`);
+  assert.ok(firstScreen.reward < 844 - 200, `a real reward is visible on the first screen (top ${firstScreen.reward})`);
+  assert.equal(firstScreen.hiddenAbove, 0, 'nothing is hidden to fake the measurement');
+  await page.context().addCookies([{ name: '__csrf', value: 'fixture-csrf', url: origin }]);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + '/nova');
   await page.evaluate(() => window.__yrViewerAppReady);

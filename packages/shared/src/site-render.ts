@@ -911,7 +911,6 @@ function shopMain(ctx) {
 
   return `${head}
 ${blockedNote}
-<section class="viewer-rewards-banner"><h2>Exclusive Rewards<br />for Real Supporters</h2><p>Use your community credits to redeem rewards configured by ${esc(b.name || slug)}.</p></section>
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
 ${list}
 <p class="yr-fine">Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.</p>
