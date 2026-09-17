@@ -92,3 +92,117 @@
     flex: 1 1 120px;
   }
 }
+
+.yr-consent-dialog {
+  box-sizing: border-box;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: var(--devin-radius-card, 14px);
+  background: var(--panel, #fcfcfc);
+  color: var(--ink, #191919);
+  font: 14px/1.5 var(--sans, Inter, system-ui, -apple-system, "Segoe UI", sans-serif);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+}
+
+.yr-consent-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.yr-consent-dialog__form {
+  display: grid;
+  gap: 14px;
+  padding: 22px 22px max(22px, env(safe-area-inset-bottom));
+}
+
+.yr-consent-dialog__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.yr-consent-dialog__intro,
+.yr-consent-dialog__note,
+.yr-consent-dialog__status {
+  margin: 0;
+  color: var(--ink-soft, var(--dim, #5c5c5c));
+  overflow-wrap: anywhere;
+}
+
+.yr-consent-dialog__intro a {
+  color: var(--accent, #2200ff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.yr-consent-dialog__group {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.yr-consent-dialog__option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: var(--devin-radius-control, 8px);
+  cursor: pointer;
+}
+
+.yr-consent-dialog__option input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--accent, #2200ff);
+}
+
+.yr-consent-dialog__option input:disabled {
+  cursor: not-allowed;
+}
+
+.yr-consent-dialog__option b {
+  display: block;
+  font-weight: 600;
+}
+
+.yr-consent-dialog__option small {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft, var(--dim, #5c5c5c));
+}
+
+.yr-consent-dialog__status:empty {
+  display: none;
+}
+
+.yr-consent-dialog__status {
+  font-weight: 500;
+  color: var(--ink, #191919);
+}
+
+.yr-consent-dialog .yr-consent__actions {
+  justify-content: flex-end;
+}
+
+.yr-consent-dialog__option input:focus-visible {
+  outline: 3px solid var(--accent, #2200ff);
+  outline-color: color-mix(in srgb, var(--accent, #2200ff) 40%, transparent);
+  outline-offset: 3px;
+}
+
+.yr-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

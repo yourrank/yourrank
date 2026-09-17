@@ -48,6 +48,7 @@ function platformFooter(pagePath) {
       <a href="/terms"${active("terms")}>Terms of Service</a>
       <a href="/privacy"${active("privacy")}>Privacy Policy</a>
       <a href="/cookies"${active("cookies")}>Cookie Policy</a>
+      <button type="button" class="ftr-link-btn" data-cookie-preferences>Cookie preferences</button>
       <a href="/refund"${active("refund")}>Refund Policy</a>
       <a href="/responsible"${active("responsible")}>Responsible Play</a>
     </div>

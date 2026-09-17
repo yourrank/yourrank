@@ -658,7 +658,7 @@ function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, wate
 <p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <div class="yr-foot-bar">
 <p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
-<div class="yr-foot-links">${legalLinks}<button type="button" data-feedback-open>Send feedback</button></div>
+<div class="yr-foot-links">${legalLinks}<button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Send feedback</button></div>
 </div>
 ${shareBlock({ data, shareUrl, shareTitle })}
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</nav>
