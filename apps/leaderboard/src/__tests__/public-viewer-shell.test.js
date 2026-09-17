@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { renderSite } from "@yourrank/shared/site-render";
 import { renderNewHallOfFame, renderNewLegalPage, renderNewPlayerProfile } from "../auxiliary-renderers.js";
-import { error500Page, notFoundPage, pendingVerificationPage, suspendedPage } from "../middleware/headers.js";
+import { error500Page, missingSectionPage, notFoundPage, pendingVerificationPage, suspendedPage } from "../middleware/headers.js";
 
 const root = join(import.meta.dir, "../../../../");
 const assets = join(root, "apps/leaderboard/src/assets");
@@ -334,7 +334,7 @@ describe("public viewer shell", () => {
   });
 
   it("keeps the public status pages part of the viewer product and free of internals", async () => {
-    const pages = [notFoundPage("creator", "n"), suspendedPage("n"), pendingVerificationPage("n"), error500Page("n")];
+    const pages = [notFoundPage("creator", "n"), missingSectionPage({ slug: "creator", name: "Creator", path: "/creator/widget" }, "n"), suspendedPage("n"), pendingVerificationPage("n"), error500Page("n")];
     for (const html of pages) {
       expect((html.match(/<h1\b/g) || []).length).toBe(1);
       expect((html.match(/<main\b/g) || []).length).toBe(1);
@@ -349,6 +349,24 @@ describe("public viewer shell", () => {
       expect(html).toMatch(/<a [^>]*href="\//);
     }
     expect(notFoundPage("creator", "n")).toContain("creator");
+  });
+
+  it("tells a bad child route apart from an unknown community", () => {
+    const child = missingSectionPage({ slug: "my creator", name: "Night <Crew>", path: "/my%20creator/widget" }, "n");
+    expect(child).toContain("That page isn&#39;t part of Night &lt;Crew&gt;");
+    expect(child).toContain('href="/my%20creator">Night &lt;Crew&gt; home</a>');
+    expect(child).toContain('href="/my%20creator/shop">Rewards</a>');
+    expect(child).not.toContain("Nothing is published");
+    expect(child).not.toContain('href="/demo"');
+    const custom = missingSectionPage({ slug: "creator", name: "", path: "/widget", isCustomDomain: true }, "n");
+    expect(custom).toContain('href="/">creator home</a>');
+    expect(custom).toContain('href="/shop">Rewards</a>');
+    const unknown = notFoundPage("ghost", "n");
+    expect(unknown).toContain("Nothing is published at <code>/ghost</code>");
+    expect(unknown).not.toContain("exists");
+    const worker = readFileSync(join(root, "apps/leaderboard/src/index.js"), "utf8");
+    expect(worker).toMatch(/if \(path !== `\/\$\{slug\}` && path !== `\/\$\{slug\}\/`\) \{\s*const parent = await getPublicSite\(env, slug, request\);\s*if \(parent && !parent\.suspended\)/);
+    expect(worker).toContain('name: parent.requiresPassword ? "" : parent.data?.branding?.name');
   });
 
   it("keeps genuine cookie choice with a keyboard-reachable decline", () => {

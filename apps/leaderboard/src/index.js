@@ -30,7 +30,7 @@ import {
   resolveCustomDomain, isCustomHost,
   serveStaticAsset,
   serveRobotsTxt, serveSitemapXml, serveFavicon,
-  HTML, SECURE_HTML, notFoundPage, suspendedPage, pendingVerificationPage, error500Page, withNonce
+  HTML, SECURE_HTML, notFoundPage, missingSectionPage, suspendedPage, pendingVerificationPage, error500Page, withNonce
 } from "./middleware/index.js";
 import { handlePublicApiPreflight } from "./middleware/public-api.js";
 import { findSiteLogoData, findSiteStatus, findUserTotpSecret } from "./data/sites.js";
@@ -605,7 +605,13 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
             if (!r || r.suspended) return new Response(notFoundPage(customSlug, nonce), { status: 404, headers: HTML_N });
             return new Response(renderNewEmbed(r.data, { nonce, slug: customSlug, plan: r.plan, isCustomDomain: true }), { headers: { ...HTML_N, "cache-control": "no-store" } });
           }
-          // Everything else on a custom domain → 404
+          // Everything else on a custom domain → 404 that still names the community
+          if (method === "GET" && !path.includes(".")) {
+            const r = await getPublicSite(env, customSlug, request);
+            if (r && !r.suspended) {
+              return new Response(missingSectionPage({ slug: customSlug, name: r.requiresPassword ? "" : r.data?.branding?.name, path, isCustomDomain: true }, nonce), { status: 404, headers: HTML_N });
+            }
+          }
           return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N });
         }
       }
@@ -1411,10 +1417,17 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       if (method === "GET" && path.length > 1 && !path.includes(".")) {
         let slug;
         try { slug = decodeURIComponent(path.slice(1).split("/")[0]).toLowerCase(); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        // BUG-004: Reject paths with extra segments (e.g., /slug/widget).
-        // /<slug>/overlay is handled above; anything else is a 404.
-        if (path !== `/${slug}` && path !== `/${slug}/`) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         if (RESERVED.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        // BUG-004: Reject paths with extra segments (e.g., /slug/widget).
+        // /<slug>/overlay is handled above; anything else is a 404. When the
+        // community itself is live, say so and point back into it.
+        if (path !== `/${slug}` && path !== `/${slug}/`) {
+          const parent = await getPublicSite(env, slug, request);
+          if (parent && !parent.suspended) {
+            return new Response(missingSectionPage({ slug, name: parent.requiresPassword ? "" : parent.data?.branding?.name, path }, nonce), { status: 404, headers: HTML_N });
+          }
+          return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+        }
         const r = await getPublicSite(env, slug, request);
         if (r && r.requiresPassword) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
