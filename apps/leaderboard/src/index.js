@@ -530,7 +530,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           // --- branded site sections (custom domain): /, /leaderboard, /shop, /games, /me ---
           const customSiteRoute = parseSitePath(path, true, customSlug);
           if (customSiteRoute) {
-            return renderSiteRoute({ request, env, ctx, nonce, slug: customSiteRoute.slug, section: customSiteRoute.section, isCustomDomain: true });
+            return renderSiteRoute({ request, env, ctx, nonce, slug: customSiteRoute.slug, section: customSiteRoute.section, rewardId: customSiteRoute.rewardId, isCustomDomain: true });
           }
           if (method === "GET" && path === "/hall-of-fame") {
             const r = await getPublicSite(env, customSlug, request);
@@ -1412,7 +1412,7 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
       // --- branded site sections: /<slug>, /<slug>/leaderboard, /shop, /games, /me ---
       const siteRoute = parseSitePath(path, false);
       if (siteRoute) {
-        return renderSiteRoute({ request, env, ctx, nonce, slug: siteRoute.slug, section: siteRoute.section, isCustomDomain: false });
+        return renderSiteRoute({ request, env, ctx, nonce, slug: siteRoute.slug, section: siteRoute.section, rewardId: siteRoute.rewardId, isCustomDomain: false });
       }
       // --- public leaderboard at /<slug> ---
       if (method === "GET" && path.length > 1 && !path.includes(".")) {

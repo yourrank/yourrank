@@ -186,15 +186,19 @@ describe("public viewer shell", () => {
     const reward = await render("me", { r, viewerIntent: { intent: "reward", rewardId: "2" } });
     expect(reward).toContain('data-viewer-intent="reward"');
     expect(reward).toContain('<h2>Review VIP badge</h2>');
-    expect(reward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fshop%23reward-2">Sign in with Kick</a>');
+    expect(reward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fshop%2F2">Sign in with Kick</a>');
     expect(reward).not.toContain('intent=join&site=');
 
     const unknownReward = await render("me", { r, viewerIntent: { intent: "reward", rewardId: "nope" } });
-    expect(unknownReward).toContain('data-viewer-intent="signin"');
-    expect(unknownReward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Kick</a>');
+    // The selected reward is kept through sign-in; its detail URL shows the
+    // explicit unavailable state if it is gone by then.
+    expect(unknownReward).toContain('data-viewer-intent="reward"');
+    expect(unknownReward).toContain('<h2>Review this reward</h2>');
+    expect(unknownReward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fshop%2Fnope">Sign in with Kick</a>');
 
     const shop = await render("shop", { r });
     expect(shop).toContain('id="reward-2" tabindex="-1"');
+    expect(shop).toContain('<a class="yr-rwd-link" href="/creator/shop/2">');
     expect(shop).toContain('href="https://example.test/creator/me?intent=reward&reward=2">Sign in to claim</a>');
     expect(shop).not.toContain('/api/viewer/auth/');
   });
@@ -288,7 +292,7 @@ describe("public viewer shell", () => {
     const html = await render("home", { viewer, viewerData });
     expect(html).toContain('data-credit-balance="1234"');
     expect(html).toContain('Only in Creator Name');
-    expect(html).toContain('href="/creator/shop">Choose a reward');
+    expect(html).toContain('href="/creator/shop/2">Choose a reward');
     expect(html).not.toContain('View my activity');
     expect(html).toContain('No purchase, no cash value, no cashout.');
     expect(html).toContain('href="/me?community=creator"');

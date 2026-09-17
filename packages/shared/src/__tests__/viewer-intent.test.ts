@@ -19,7 +19,7 @@ describe("viewer auth intent", () => {
     expect(viewerIntentReturnTo({ intent: "signin", rewardId: "" }, hrefs)).toBe("/creator");
     expect(viewerIntentReturnTo({ intent: "join", rewardId: "" }, hrefs)).toBe("/creator/me");
     expect(viewerIntentReturnTo({ intent: "activity", rewardId: "" }, hrefs)).toBe("/creator/me");
-    expect(viewerIntentReturnTo({ intent: "reward", rewardId: "7" }, hrefs)).toBe("/creator/shop#reward-7");
+    expect(viewerIntentReturnTo({ intent: "reward", rewardId: "7" }, hrefs)).toBe("/creator/shop/7");
   });
 
   it("builds gate links from the community's own /me page", () => {

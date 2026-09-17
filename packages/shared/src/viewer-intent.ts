@@ -8,6 +8,8 @@
  * `returnTo` derived from the validated intent — never from the raw URL.
  */
 
+import { REWARD_ID } from './reward-detail.js';
+
 export const VIEWER_INTENTS = ['signin', 'join', 'activity', 'reward'] as const;
 export type ViewerIntent = (typeof VIEWER_INTENTS)[number];
 
@@ -17,7 +19,6 @@ export interface ViewerAuthIntent {
   rewardId: string;
 }
 
-const REWARD_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const VALID_INTENTS: ReadonlySet<string> = new Set(VIEWER_INTENTS);
 
 export function isViewerIntent(value: unknown): value is ViewerIntent {
@@ -49,6 +50,11 @@ export interface ViewerIntentHrefs {
   shopHref: string;
 }
 
+/** The stable public URL of one reward inside a community's Rewards section. */
+export function rewardDetailHref(shopHref: string, rewardId: string): string {
+  return REWARD_ID.test(rewardId) ? `${shopHref}/${encodeURIComponent(rewardId)}` : shopHref;
+}
+
 /** Where a successful sign-in lands: the screen the visitor asked for, never an action. */
 export function viewerIntentReturnTo({ intent, rewardId }: ViewerAuthIntent, hrefs: ViewerIntentHrefs): string {
   switch (intent) {
@@ -56,7 +62,7 @@ export function viewerIntentReturnTo({ intent, rewardId }: ViewerAuthIntent, hre
     case 'activity':
       return hrefs.meHref;
     case 'reward':
-      return rewardId ? `${hrefs.shopHref}#reward-${rewardId}` : hrefs.shopHref;
+      return rewardId ? rewardDetailHref(hrefs.shopHref, rewardId) : hrefs.shopHref;
     default:
       return hrefs.homeHref;
   }

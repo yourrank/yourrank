@@ -30,6 +30,7 @@ const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
 export const KICK_VIEWER_STATE_PREFIX = "viewer_";
 const APEX_ORIGIN = `https://${PLATFORM_HOST}`;
 const CUSTOM_DOMAIN_RETURN_PATHS = new Set(["/", "/leaderboard", "/shop", "/games", "/me"]);
+const CUSTOM_DOMAIN_REWARD_RETURN = /^\/shop\/[A-Za-z0-9_-]{1,64}$/;
 
 function randomState() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -115,7 +116,7 @@ function safeCustomDomainReturnTo(raw, allowedOrigin) {
   try {
     const parsed = new URL(candidate, allowedOrigin);
     const path = parsed.pathname.replace(/\/+$/, "") || "/";
-    if (parsed.origin !== allowedOrigin || !CUSTOM_DOMAIN_RETURN_PATHS.has(path)) {
+    if (parsed.origin !== allowedOrigin || !(CUSTOM_DOMAIN_RETURN_PATHS.has(path) || CUSTOM_DOMAIN_REWARD_RETURN.test(path))) {
       return `${APEX_ORIGIN}/me`;
     }
     return `${path}${parsed.search}${parsed.hash}`;

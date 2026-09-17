@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { renderSite } from '../packages/shared/dist/site-render.js';
+import { parseViewerIntent } from '../packages/shared/dist/viewer-intent.js';
 import { viewerDashboardPage } from '../apps/leaderboard/src/pages/viewer-dashboard.js';
 import { execFileSync } from 'node:child_process';
 
@@ -82,13 +83,16 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/missing') { res.writeHead(404).end('Not found'); return; }
     const slug = url.pathname.split('/')[1] || 'nova';
     const section = url.pathname.split('/')[2] || 'home';
+    const rewardId = section === 'shop' ? url.pathname.split('/')[3] || '' : '';
     const signedOut = url.searchParams.has('signedout');
     const empty = url.searchParams.has('empty');
     const unavailable = url.searchParams.has('unavailable');
     const catalogSize = Number(url.searchParams.get('rewards')) || 0;
     const catalog = catalogSize ? Array.from({ length: catalogSize }, (_, i) => ({ ...rewards[i % rewards.length], id: `fixture-${i}`, cost: 250 + i * 150, name: i === 1 ? 'An unusually long reward name that wraps across several lines of the card heading' : rewards[i % rewards.length].name })) : rewards;
     const data = { brand: { name: slug === 'luna' ? 'Luna Lounge' : "Nova's community" }, socials: [{ name: 'Kick', url: 'https://kick.com/nova' }], branding: { template: url.searchParams.get('template') || 'cyber_arcade' }, rankBy: 'score', players: empty ? [] : players, siteSections: { home: true, leaderboard: true, shop: true, me: true }, shopItems: empty ? [] : catalog };
-    res.end(await renderSite({ r: { slug, plan: 'pro', data, viewerKickAuthEnabled: true }, section, viewer: signedOut ? null : viewer, viewerData: { membershipStatus: unavailable ? 'unavailable' : signedOut ? 'absent' : 'member', viewerOnSite: signedOut || unavailable ? null : { balance: slug === 'luna' ? 480 : balance, blocked: url.searchParams.has('blocked') }, shopItems: data.shopItems, claims: empty ? [] : claims, ledger: empty ? [] : [{ type: 'code_drop', amount: 100, created_at: '2026-09-12T12:00:00Z' }], participation: [] }, opts: { slug, homeUrl: origin, nonce: 'n', csrfToken: 'fixture-csrf' } }));
+    const reward = rewardId ? (rewardId === 'withdrawn' ? { id: 'withdrawn', name: 'Retired hoodie', description: '', cost: 900, stock: null, active: false } : catalog.find(item => item.id === rewardId) || null) : null;
+    if (rewardId && (!reward || reward.active === false)) res.statusCode = 404;
+    res.end(await renderSite({ r: { slug, plan: 'pro', data, viewerKickAuthEnabled: true }, section, viewer: signedOut ? null : viewer, viewerData: { membershipStatus: unavailable ? 'unavailable' : signedOut ? 'absent' : 'member', viewerOnSite: signedOut || unavailable ? null : { balance: slug === 'luna' ? 480 : balance, blocked: url.searchParams.has('blocked') }, shopItems: data.shopItems, claims: empty ? [] : claims, ledger: empty ? [] : [{ type: 'code_drop', amount: 100, created_at: '2026-09-12T12:00:00Z' }], participation: [] }, opts: { slug, homeUrl: origin, nonce: 'n', csrfToken: 'fixture-csrf', rewardId, reward, viewerIntent: section === 'me' ? parseViewerIntent(url) : null } }));
   } catch (error) { console.error(error); res.writeHead(500).end('Fixture server failed'); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -377,6 +381,73 @@ try {
   releaseAccount();
   await page.unrouteAll({ behavior: 'wait' });
   assert.equal(new URL(page.url()).pathname, '/help/support', 'Account reads do not prevent navigation');
+  // YR-011/012/013: one stable reward URL, readable before sign-in, honest when gone.
+  for (const [width, height] of [[1440, 1000], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto(origin + '/nova/shop/topic?signedout');
+    await page.evaluate(() => window.__yrViewerAppReady);
+    assert.equal(await page.locator('h1').innerText(), 'Suggest a stream topic', `${width}: detail names the reward`);
+    for (const text of ['500 credits', 'Share an idea', 'Fulfillment', 'Contact Nova']) {
+      assert.ok(await page.locator('main').textContent().then(t => t.includes(text)), `${width}: guest detail shows "${text}"`);
+    }
+    const gate = page.locator('.viewer-reward-claim a.yr-act');
+    assert.equal(await gate.innerText(), 'Sign in to claim');
+    assert.ok((await gate.getAttribute('href')).endsWith('/nova/me?intent=reward&reward=topic'), `${width}: gate carries the reward id`);
+    assert.equal(await page.locator('[data-redeem]').count(), 0, `${width}: guest detail has no claim button`);
+    const back = page.locator('.viewer-reward-back');
+    assert.ok(await back.isVisible(), `${width}: back link visible`);
+    const box = await page.locator('.viewer-reward-detail').boundingBox();
+    assert.ok(box.x >= 0 && box.x + box.width <= width + 1, `${width}: detail fits the viewport (${Math.round(box.x)}..${Math.round(box.x + box.width)})`);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${width}: no horizontal overflow`);
+    await back.click();
+    await page.waitForURL(/\/nova\/shop(\?|$)/);
+    assert.ok(await page.locator('#viewer-rewards').isVisible(), `${width}: back returns to the catalog`);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  // Catalog cards and Home reach the exact reward, and a member gets the review step, not a claim.
+  await page.goto(origin + '/nova/shop');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  await page.locator('#reward-emote .yr-rwd-link').click();
+  await page.waitForURL(/\/nova\/shop\/emote$/);
+  assert.equal(await page.locator('h1').innerText(), 'Choose a community emote');
+  assert.ok((await page.locator('main').innerText()).includes('You have'), 'member sees balance against cost');
+  await page.goto(origin + '/nova/shop/shoutout');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  const memberBalance = await page.locator('[data-credit-balance]').first().getAttribute('data-credit-balance');
+  await page.locator('.viewer-reward-claim [data-redeem]').click();
+  assert.ok(await page.locator('#yr-order-confirm[open]').isVisible(), 'claim opens the review dialog first');
+  assert.ok((await page.locator('#yr-order-confirm').innerText()).includes('Community shout-out'));
+  await page.locator('#yr-order-confirm [data-order-cancel], #yr-order-confirm button:has-text("Cancel")').first().click();
+  assert.equal(await page.locator('#yr-order-confirm[open]').count(), 0);
+  assert.equal(await page.locator('[data-credit-balance]').first().getAttribute('data-credit-balance'), memberBalance, 'cancelling deducts nothing');
+  await page.goto(origin + '/nova');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  const homeView = page.locator('.viewer-home-columns .yr-rwd .yr-act');
+  assert.match(await homeView.getAttribute('href'), /\/nova\/shop\/[a-z]+$/, 'Home "View reward" targets one reward');
+  // Unknown, other-community and withdrawn ids recover instead of claiming or 500ing.
+  for (const path of ['/nova/shop/nope', '/luna/shop/topic-from-nova']) {
+    const res = await page.goto(origin + path);
+    assert.equal(res.status(), 404, `${path} is a 404`);
+    assert.equal(await page.locator('h1').innerText(), "This reward isn't available", `${path} recovers`);
+    assert.ok(await page.locator('a.yr-btn:has-text("See all rewards")').isVisible());
+    assert.ok(await page.locator('.viewer-destinations').isVisible(), `${path} keeps the community shell`);
+  }
+  const gone = await page.goto(origin + '/nova/shop/withdrawn');
+  assert.equal(gone.status(), 404);
+  assert.equal(await page.locator('h1').innerText(), 'Retired hoodie');
+  assert.ok((await page.locator('main').innerText()).includes('No longer offered'), 'withdrawn reward says so');
+  assert.equal(await page.locator('[data-redeem]').count(), 0, 'withdrawn reward cannot be claimed');
+  assert.ok((await page.locator('main').innerText()).includes("hasn't added a description yet"), 'missing description stated honestly');
+  // Sign-in intent for two different rewards returns to each reward, including one that vanished meanwhile.
+  for (const [id, expectHeading] of [['topic', 'Suggest a stream topic'], ['withdrawn', 'Retired hoodie']]) {
+    await page.goto(origin + `/nova/me?intent=reward&reward=${id}&signedout`);
+    await page.evaluate(() => window.__yrViewerAppReady);
+    const gateLink = page.locator('.member-actions a[href*="returnTo="]').first();
+    const returnTo = decodeURIComponent(new URL(await gateLink.getAttribute('href'), origin).searchParams.get('returnTo'));
+    assert.equal(returnTo, `${origin}/nova/shop/${id}`, `sign-in returns to reward ${id}`);
+    await page.goto(returnTo);
+    assert.equal(await page.locator('h1').innerText(), expectHeading, `${id} restored after sign-in`);
+  }
   assert.deepEqual(errors, []);
   console.log('PASSED: desktop/mobile community and account pages, persistent shell through account/help routes and Back/Forward, account/community separation, failed navigation recovery, rewards and codes with CSRF/idempotency, repeat-code protection and signed-out/empty/unavailable/blocked states; no page errors.');
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

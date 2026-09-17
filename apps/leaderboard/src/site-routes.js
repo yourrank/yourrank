@@ -9,12 +9,13 @@ import { createQueueProducer as defaultCreateQueueProducer } from "@yourrank/sha
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { decideBoardView } from "@yourrank/shared/board-views";
 import { parseViewerIntent } from "@yourrank/shared/viewer-intent";
+import { isRewardId } from "@yourrank/shared/reward-detail";
 import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
 import { renderSite as defaultRenderSite } from "@yourrank/shared/site-render";
-import { getViewerSiteData as defaultGetViewerSiteData } from "./site-data.js";
+import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem } from "./site-data.js";
 import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
   cachedPublicBoardResponse,
@@ -33,18 +34,20 @@ export function parseSitePath(path, isCustomDomain, customSlug) {
   const clean = (path || "").replace(/\/$/, "") || "/";
   if (isCustomDomain) {
     if (clean === "/") return { slug: customSlug, section: "home" };
-    const seg = clean.slice(1).split("/")[0];
-    if (SECTIONS.has(seg) && clean === `/${seg}`) return { slug: customSlug, section: seg };
-    return null;
+    const [seg, rewardId, ...rest] = clean.slice(1).split("/");
+    if (!SECTIONS.has(seg) || rest.length) return null;
+    if (rewardId === undefined) return { slug: customSlug, section: seg };
+    return seg === "shop" && isRewardId(rewardId) ? { slug: customSlug, section: seg, rewardId } : null;
   }
   const parts = clean.split("/").filter(Boolean);
   if (parts.length === 0) return null;
   const slug = decodeURIComponent(parts[0]).toLowerCase();
   if (parts.length === 1) return { slug, section: "home" };
-  if (parts.length === 2) {
-    const section = parts[1].toLowerCase();
-    if (SECTIONS.has(section)) return { slug, section };
-  }
+  const section = parts[1].toLowerCase();
+  if (!SECTIONS.has(section)) return null;
+  if (parts.length === 2) return { slug, section };
+  // Only Rewards has a stable per-item URL: /<slug>/shop/<rewardId>.
+  if (parts.length === 3 && section === "shop" && isRewardId(parts[2])) return { slug, section, rewardId: parts[2] };
   return null;
 }
 
@@ -67,7 +70,7 @@ async function bumpView(env, ctx, request, siteId, slug, headers, deps) {
   }
 }
 
-export async function renderSiteRoute({ request, env, ctx, nonce, slug, section, isCustomDomain, deps = {} }) {
+export async function renderSiteRoute({ request, env, ctx, nonce, slug, section, rewardId = "", isCustomDomain, deps = {} }) {
   const {
     getPublicSite = defaultGetPublicSite,
     resolveViewer = defaultResolveViewer,
@@ -77,9 +80,10 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     renderPasswordGate = defaultRenderPasswordGate,
     renderSite = defaultRenderSite,
     getViewerSiteData = defaultGetViewerSiteData,
+    getShopItem = defaultGetShopItem,
   } = deps;
   const collaborators = { createQueueProducer, queueFallback, hashToken };
-  setRequestMetrics({ route: `/site/${section}`, site: slug });
+  setRequestMetrics({ route: rewardId ? "/site/shop/:rewardId" : `/site/${section}`, site: slug });
   const cacheableRequest = isPublicBoardCacheRequest(request, section);
   const HTML_N = withNonce(HTML, nonce);
   const respHeaders = new Headers({ ...HTML_N, "cache-control": "no-store" });
@@ -146,6 +150,15 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       viewerData = await getViewerSiteData(r.id, viewer.id, section === "games" ? {} : { shop: siteSections.shop !== false, claims: true });
     }
 
+    // The detail page reads its reward directly so a withdrawn (inactive) reward
+    // can still be described honestly instead of vanishing from the catalog list.
+    let reward = null;
+    let status = 200;
+    if (rewardId) {
+      reward = await getShopItem(r.id, rewardId);
+      if (!reward || reward.active === false) status = 404;
+    }
+
     if (section === "home" || section === "leaderboard") {
       await bumpView(env, ctx, request, r.id, slug, respHeaders, collaborators);
     }
@@ -196,6 +209,8 @@ ${gamesIslandHead()}
         isDemo,
         viewerAuthError: section === "me" ? url.searchParams.get("error") : null,
         viewerIntent: section === "me" ? parseViewerIntent(url) : null,
+        rewardId,
+        reward,
       },
     });
     const responseHeaders = cacheableSite
@@ -204,7 +219,7 @@ ${gamesIslandHead()}
         ...withNonce(HTML, PUBLIC_HTML_NONCE_PLACEHOLDER),
       })
       : respHeaders;
-    const response = new Response(html, { headers: responseHeaders });
+    const response = new Response(html, { status, headers: responseHeaders });
     setRequestMetrics({ payloadBytes: new TextEncoder().encode(html).byteLength });
     if (cacheableSite) {
       if (ctx?.waitUntil) ctx.waitUntil(putPublicBoardCache(request, response));

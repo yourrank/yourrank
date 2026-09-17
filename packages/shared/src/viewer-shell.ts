@@ -68,7 +68,7 @@ export function resolveViewerHelp(url: URL): { returnTo: string } | null {
     if (target.origin === url.origin && target.pathname === '/me') {
       return { returnTo: viewerAccountHref(viewerCommunityParam(target)) + target.hash };
     }
-    if (target.origin === url.origin && /^\/[a-z0-9][a-z0-9_-]*(?:\/(?:me|shop|leaderboard|contact))?$/.test(target.pathname) &&
+    if (target.origin === url.origin && /^\/[a-z0-9][a-z0-9_-]*(?:\/(?:me|shop(?:\/[A-Za-z0-9_-]{1,64})?|leaderboard|contact))?$/.test(target.pathname) &&
         !/^\/(?:dashboard|admin|auth|api|help|login|logout)(?:\/|$)/.test(target.pathname)) {
       return { returnTo: target.pathname + target.hash };
     }

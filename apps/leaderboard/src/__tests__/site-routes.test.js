@@ -105,6 +105,11 @@ const routeSite = {
 const routeSiteData = {
   calls: [],
   getShopItems: () => Promise.resolve(SHOP_ITEMS),
+  getShopItem: (siteId, rewardId) => {
+    routeSiteData.calls.push({ siteId, rewardId });
+    if (rewardId === "withdrawn") return Promise.resolve({ id: "withdrawn", name: "Old hoodie", description: "", cost: 900, stock: null, active: false });
+    return Promise.resolve(SHOP_ITEMS.find((item) => item.id === rewardId) || null);
+  },
   getViewerSiteData: (_siteId, viewerId, opts) => {
     routeSiteData.calls.push({ siteId: _siteId, viewerId, opts });
     if (!viewerId) {
@@ -129,6 +134,7 @@ const routeDeps = {
   bumpStat: () => Promise.resolve(),
   hashToken: async () => "hash",
   getViewerSiteData: routeSiteData.getViewerSiteData,
+  getShopItem: routeSiteData.getShopItem,
 };
 
 // ── Import after mocks ─────────────────────────────────────────────────
@@ -172,13 +178,24 @@ describe("parseSitePath", () => {
 
   it("rejects unknown sections and extra path segments", () => {
     expect(parseSitePath("/foo/unknown", false)).toBeNull();
-    expect(parseSitePath("/foo/shop/extra", false)).toBeNull();
+    expect(parseSitePath("/foo/leaderboard/extra", false)).toBeNull();
+    expect(parseSitePath("/foo/shop/extra/more", false)).toBeNull();
+    expect(parseSitePath("/foo/shop/not%20valid", false)).toBeNull();
+    expect(parseSitePath("/foo/shop/" + "x".repeat(65), false)).toBeNull();
+  });
+
+  it("maps /<slug>/shop/<rewardId> to the reward detail page (YR-012)", () => {
+    expect(parseSitePath("/foo/shop/item-1", false)).toEqual({ slug: "foo", section: "shop", rewardId: "item-1" });
+    expect(parseSitePath("/foo/shop/3f2b9c1e-4a5d-4e6f-8a9b-0c1d2e3f4a5b/", false)).toEqual({ slug: "foo", section: "shop", rewardId: "3f2b9c1e-4a5d-4e6f-8a9b-0c1d2e3f4a5b" });
+    expect(parseSitePath("/shop/item-1", true, "foo")).toEqual({ slug: "foo", section: "shop", rewardId: "item-1" });
+    expect(parseSitePath("/me/item-1", true, "foo")).toBeNull();
   });
 
   it("works on custom domains without a slug prefix", () => {
     expect(parseSitePath("/", true, "foo")).toEqual({ slug: "foo", section: "home" });
     expect(parseSitePath("/shop", true, "foo")).toEqual({ slug: "foo", section: "shop" });
     expect(parseSitePath("/unknown", true, "foo")).toBeNull();
+    expect(parseSitePath("/shop/a/b", true, "foo")).toBeNull();
   });
 
   it("passes only supported viewer auth, Join, and free code-drop claim paths through custom-domain routing", () => {
@@ -277,6 +294,50 @@ describe("section visibility", () => {
 
     const me = await renderSiteRoute({ request: req("https://example.com/disabled/me"), env, ctx, nonce: "n", slug: "disabled", section: "me", isCustomDomain: false });
     expect(me.status).toBe(404);
+  });
+
+  it("serves one reward at a stable URL for guests and members, and recovers from bad ids (YR-011/012)", async () => {
+    const detail = (path, extra = {}) => renderSiteRoute({ request: req(`https://example.com${path}`, extra), env, ctx, nonce: "n", slug: "streamer", section: "shop", rewardId: path.split("/")[3], isCustomDomain: false });
+
+    const guest = await detail("/streamer/shop/item-1");
+    expect(guest.status).toBe(200);
+    const guestHtml = await guest.text();
+    expect(guestHtml).toContain("<h1>Shoutout</h1>");
+    expect(guestHtml).toContain('<link rel="canonical" href="https://example.com/streamer/shop/item-1" />');
+    expect(guestHtml).toContain("<title>Shoutout · Rewards · ");
+    expect(guestHtml).toContain("The streamer says your name.");
+    expect(guestHtml).toContain("<dd>5 left.</dd>");
+    expect(guestHtml).toContain("<dt>Fulfillment</dt>");
+    expect(guestHtml).toContain('<a href="/streamer/contact">Contact ');
+    expect(guestHtml).toContain('href="/streamer/shop"');
+    // Guests are sent to the community gate with the reward identity, never straight to a claim.
+    expect(guestHtml).toContain('href="https://example.com/streamer/me?intent=reward&reward=item-1">Sign in to claim</a>');
+    expect(guestHtml).not.toContain("data-redeem=");
+    expect(guestHtml).not.toContain("sv-1");
+
+    const member = await detail("/streamer/shop/item-1", { viewer: { id: "v1", kick_username: "m" } });
+    const memberHtml = await member.text();
+    expect(memberHtml).toContain("You have 500 credits — enough to claim this.");
+    expect(memberHtml).toContain('data-redeem="item-1"');
+    expect(memberHtml).toContain('id="yr-order-confirm"');
+
+    const withdrawn = await detail("/streamer/shop/withdrawn");
+    expect(withdrawn.status).toBe(404);
+    const withdrawnHtml = await withdrawn.text();
+    expect(withdrawnHtml).toContain("<h1>Old hoodie</h1>");
+    expect(withdrawnHtml).toContain("No longer offered by the creator.");
+    expect(withdrawnHtml).toContain(">No longer offered</span>");
+    expect(withdrawnHtml).toContain("hasn't added a description yet");
+
+    const unknown = await detail("/streamer/shop/nope");
+    expect(unknown.status).toBe(404);
+    const unknownHtml = await unknown.text();
+    expect(unknownHtml).toContain("<h1>This reward isn't available</h1>");
+    expect(unknownHtml).toContain('<a class="yr-btn" href="/streamer/shop">See all rewards</a>');
+    expect(unknownHtml).toContain('class="viewer-destinations"');
+
+    // The lookup is always scoped to the resolved community.
+    expect(routeSiteData.calls.filter((c) => c.rewardId).every((c) => c.siteId === "site-1")).toBe(true);
   });
 
   it("returns 404 for a nonexistent site", async () => {
