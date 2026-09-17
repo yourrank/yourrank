@@ -29,17 +29,44 @@
     var rewardSearch = document.getElementById("viewer-reward-search");
     var rewardSort = document.getElementById("viewer-reward-sort");
     var rewardRows = Array.from(rewardList.children);
+    var rewardStatus = document.getElementById("viewer-reward-status");
+    var rewardEmpty = document.getElementById("viewer-reward-empty");
+    var rewardStatusTimer = null;
+    var lastRewardStatus = "";
     document.querySelectorAll(".viewer-reward-tools").forEach(function (tools) { tools.hidden = false; });
+    var rewardCount = function (count) {
+      return count === 1 ? "1 reward" : count.toLocaleString("en-US") + " rewards";
+    };
+    // Only settled results reach the live region: typing waits for a pause,
+    // and the same message is not re-announced. The no-results note is plain
+    // text, so an empty query never produces two announcements.
+    var announceRewards = function (message) {
+      clearTimeout(rewardStatusTimer);
+      rewardStatusTimer = window.setTimeout(function () {
+        if (!rewardStatus || message === lastRewardStatus) return;
+        lastRewardStatus = message;
+        rewardStatus.textContent = message;
+      }, 250);
+    };
     var filterRewards = function () {
       var query = rewardSearch.value.trim().toLowerCase();
-      rewardRows.forEach(function (row) { row.hidden = !row.dataset.rewardFilter.includes(query); });
-      document.getElementById("viewer-reward-empty").hidden = rewardRows.some(function (row) { return !row.hidden; });
+      var shown = 0;
+      rewardRows.forEach(function (row) {
+        row.hidden = !row.dataset.rewardFilter.includes(query);
+        if (!row.hidden) shown += 1;
+      });
+      rewardEmpty.hidden = shown > 0;
+      announceRewards(!query ? "" : shown ? rewardCount(shown) + " match \u201c" + query + "\u201d." : "No rewards match \u201c" + query + "\u201d.");
     };
+    pageLifetime.signal.addEventListener("abort", function () { clearTimeout(rewardStatusTimer); }, { once: true });
     rewardSearch.addEventListener("input", filterRewards, { signal: pageLifetime.signal });
     rewardSort.addEventListener("change", function () {
       rewardRows.sort(function (a, b) {
         return rewardSort.value === "name" ? a.dataset.rewardFilter.localeCompare(b.dataset.rewardFilter) : Number(a.dataset.rewardSortCost) - Number(b.dataset.rewardSortCost);
       }).forEach(function (row) { rewardList.appendChild(row); });
+      var visible = rewardRows.filter(function (row) { return !row.hidden; }).length;
+      var sortLabel = rewardSort.options[rewardSort.selectedIndex].textContent.toLowerCase();
+      announceRewards(rewardCount(visible) + " sorted by " + sortLabel + ".");
     }, { signal: pageLifetime.signal });
   }
 

@@ -776,6 +776,7 @@
 .yr-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 20; }
 .yr-search-status, .yr-redeem-status, .yr-join-status, .yr-code-drop-status { min-height: 20px; padding: 8px 24px; color: var(--yr-mute); font-size: 12px; line-height: 1.5; }
 .yr-join-status, .yr-code-drop-status { padding-inline: 0; }
+#viewer-reward-status { padding: 8px 0 0; }
 .yr-search-status:empty, .yr-redeem-status:empty, .yr-join-status:empty, .yr-code-drop-status:empty { display: none; }
 .yr-search-status.is-error, .yr-redeem-status.is-error, .yr-join-status.is-error, .yr-code-drop-status.is-error { color: var(--yr-warning-readable); }
 .yr-search-retry { margin-left: 12px; min-height: 44px; padding: 0 14px; border: 1px solid var(--yr-primary); border-radius: var(--yr-r-ctl); color: #fff; background: var(--yr-primary); font-size: 14px; font-weight: 600; }
