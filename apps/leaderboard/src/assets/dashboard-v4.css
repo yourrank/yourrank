@@ -6723,6 +6723,59 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .cr-drawer-actions { justify-content: flex-end;
 }
 
+.v3-dash[data-auth-workspace] .cr-shop-review {
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--ws-warning-line);
+  border-radius: 8px;
+  background: var(--ws-warning-soft);
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review h3 {
+  margin: 0 0 4px;
+  color: var(--ws-warning-text);
+  font: 650 var(--ws-type-body-size)/var(--ws-type-body-leading) var(--ws-sans);
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review .hint {
+  display: block;
+  margin: 0 0 8px;
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review-list li {
+  display: grid;
+  gap: 4px;
+  color: var(--ws-text);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review-fix {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ws-accent);
+  font: 600 var(--ws-type-meta-size)/var(--ws-type-meta-leading) var(--ws-sans);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.v3-dash[data-auth-workspace] .cr-shop-review-chip {
+  margin-inline-start: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
 .v3-dash[data-auth-workspace] #cr-claim-detail-drawer .cr-drawer-close {
   min-width: 44px;
   min-height: 44px;
