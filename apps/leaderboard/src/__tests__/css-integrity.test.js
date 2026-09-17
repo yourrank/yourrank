@@ -394,4 +394,15 @@ describe("shared action contract", () => {
     expect(ui).toMatch(/\[aria-busy=""\]::before\s*\{[^}]*flex:\s*none/);
     expect(ui).not.toMatch(/\[aria-busy=""\][^{]*\{[^}]*(?:display:\s*none|min-height:\s*0|height:\s*0)/);
   });
+
+  it("public form submits announce pending state through aria-busy, not disabled alone", () => {
+    const forms = ["auth.js", "verify-email.js", "contact.js"];
+    for (const [file, source] of scripts.filter(([f]) => forms.includes(f))) {
+      expect(source, file).toContain('setAttribute("aria-busy", "true")');
+      expect(source, file).toContain('removeAttribute("aria-busy")');
+      expect(source, file).not.toMatch(/aria-busy",\s*loading\s*\?/);
+      // every disabled=true assignment on a submit must go through the pending helper
+      expect(source, file).not.toMatch(/(?:submit|resendBtn)\.disabled = true/);
+    }
+  });
 });

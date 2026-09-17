@@ -177,6 +177,7 @@ describe("support form client (assets/contact.js)", () => {
 
   it("ignores duplicate submits while a request is pending", () => {
     expect(source).toContain("if (pending) return;");
-    expect(source).toContain('submit.setAttribute("aria-busy", loading ? "true" : "false")');
+    expect(source).toContain('if (loading) submit.setAttribute("aria-busy", "true");');
+    expect(source).toContain('else submit.removeAttribute("aria-busy");');
   });
 });

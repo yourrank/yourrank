@@ -197,10 +197,17 @@ if (mode === "signup" && PLAN_NAMES[planParam]) {
 if (mode === "login" || mode === "signup") {
   fetch("/api/auth/me").then(r => r.json()).then(d => { if (d && d.ok && d.user) location.href = nextPath || "/dashboard"; }).catch(() => {});
 }
+const PENDING_LABEL = { signup: "Creating…", login: "Signing in…", forgot: "Sending…", reset: "Saving…" };
+function setPending(loading, label) {
+  submit.disabled = loading;
+  if (loading) submit.setAttribute("aria-busy", "true");
+  else submit.removeAttribute("aria-busy");
+  submit.textContent = label;
+}
 form.addEventListener("submit", async (e) => {
-  e.preventDefault(); errEl.textContent = ""; submit.disabled = true;
+  e.preventDefault(); errEl.textContent = "";
   const orig = submit.textContent;
-  submit.textContent = { signup: "Creating…", login: "Signing in…", forgot: "Sending…", reset: "Saving…" }[mode] || "Working…";
+  setPending(true, PENDING_LABEL[mode] || "Working…");
   let endpoint = "/api/auth/" + mode;
   let payload;
   if (mode === "forgot") {
@@ -237,7 +244,7 @@ form.addEventListener("submit", async (e) => {
     if (firstInvalid) {
       const el = document.getElementById(firstInvalid);
       if (el) { el.setAttribute("aria-invalid", "true"); el.focus(); }
-      submit.disabled = false; submit.textContent = orig;
+      setPending(false, orig);
       return;
     }
   }
@@ -252,11 +259,12 @@ form.addEventListener("submit", async (e) => {
         document.getElementById(data.field)?.focus();
       }
       errEl.textContent = data.field ? "" : (data.error || "Something went wrong.");
-      submit.disabled = false; submit.textContent = orig; return;
+      setPending(false, orig); return;
     }
     if (mode === "forgot") {
       if (msgEl) { msgEl.hidden = false; msgEl.textContent = "Done. If that account exists, a reset link is on its way. Check spam too."; }
       form.querySelector("input").disabled = true;
+      submit.removeAttribute("aria-busy");
       submit.textContent = "Sent";
       return;
     }
@@ -274,5 +282,5 @@ form.addEventListener("submit", async (e) => {
     } else {
       location.href = nextPath || "/dashboard";
     }
-  } catch (_) { errEl.textContent = "Network error. Try again."; submit.disabled = false; submit.textContent = orig; }
+  } catch (_) { errEl.textContent = "Network error. Try again."; setPending(false, orig); }
 });
