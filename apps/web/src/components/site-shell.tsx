@@ -191,7 +191,32 @@ export function SiteFooter() {
   );
 }
 
+function useFragmentFocus() {
+  useEffect(() => {
+    const focusFragment = () => {
+      const fragment = window.location.hash.slice(1);
+      if (!fragment) return;
+
+      let id: string;
+      try {
+        id = decodeURIComponent(fragment);
+      } catch {
+        return;
+      }
+
+      const target = document.getElementById(id);
+      if (target instanceof HTMLElement) target.focus();
+    };
+
+    focusFragment();
+    window.addEventListener("hashchange", focusFragment);
+    return () => window.removeEventListener("hashchange", focusFragment);
+  }, []);
+}
+
 export function MarketingShell({ children, footer = true }: { children: ReactNode; footer?: boolean }) {
+  useFragmentFocus();
+
   return (
     <div className="min-h-screen bg-devin-surface text-devin-ink">
       <a
