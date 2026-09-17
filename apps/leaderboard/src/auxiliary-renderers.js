@@ -1,4 +1,4 @@
-import { formatMoney, prizeCurrency, renderSite } from "@yourrank/shared/site-render";
+import { formatMoney, prizeCurrency, renderSite, siteSectionHref } from "@yourrank/shared/site-render";
 import { safeUrl } from "@yourrank/shared/public-render-helpers";
 import { viewerHelpHref } from "@yourrank/shared/viewer-shell";
 
@@ -10,6 +10,8 @@ function esc(s) {
 
 // These pages live outside the section shell, so they own their canonical URL:
 // `/<page>` on a custom domain and `/<slug>/<page>` on the platform host.
+const ARROW_LEFT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>';
+
 function canonicalPathFor(page, slug, isCustomDomain) {
   return isCustomDomain ? `/${page}` : `/${encodeURIComponent(slug || "")}/${page}`;
 }
@@ -117,6 +119,9 @@ export function renderNewPlayerProfile(data, player, history, opts) {
   // renamed or promoted, and a hidden prize is simply absent rather than an
   // em dash the viewer has to interpret.
   const name = p.name || "Player";
+  const brandName = r.data.brand?.name || r.slug;
+  const period = String(r.data.brand?.period || "").trim();
+  const backHref = siteSectionHref("leaderboard", r.slug, !!opts.isCustomDomain);
   const rank = Number(p.rank) > 0 ? `#${Number(p.rank)}` : "Unranked";
   const standing = [
     { label: "Current rank", value: rank },
@@ -136,8 +141,9 @@ export function renderNewPlayerProfile(data, player, history, opts) {
         : `<span class="yr-hist-lbl">Wagered</span>${esc(formatMoney(currency, h.wagered))}`;
       return `<li class="yr-hist"><div class="yr-hist-main"><p class="yr-hist-n">${esc(h.label || "Archived")}</p><p class="yr-hist-p">${place}</p></div><div class="yr-hist-side"><p class="yr-hist-amt">${metric}</p>${prize}</div></li>`;
     }).join("")}</ul>`
-    : '<p class="yr-empty">No archived results yet.</p>';
-  const content = `<header class="yr-vhead"><span class="yr-cue">Player</span><h1 class="yr-h1">${esc(name)}</h1><p class="yr-vhead-lede">Where this player stands on ${esc(r.data.brand?.name || r.slug)} right now, and their archived results.</p></header><section class="yr-vsec" aria-labelledby="yr-player-standing"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-standing">Current standing</h2></div><ul class="yr-hists" role="list">${standing}</ul></section><section class="yr-vsec" aria-labelledby="yr-player-history"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-history">Archived results</h2></div>${rows}</section>`;
+    : `<p class="yr-note">No archived results yet. Past ${period ? `${esc(period.toLowerCase())} ` : ""}boards appear here once ${esc(brandName)} archives one.</p>`;
+  const historyCount = (history || []).length;
+  const content = `<header class="yr-vhead"><a class="yr-sec-link" href="${esc(backHref)}">${ARROW_LEFT}Back to leaderboard</a><span class="yr-cue">Player</span><h1 class="yr-h1">${esc(name)}</h1><p class="yr-vhead-lede">Where this player stands on ${esc(brandName)}${period ? ` in the ${esc(period.toLowerCase())} board` : ""} right now, and their archived results.</p></header><section class="yr-vsec${historyCount ? "" : " yr-vsec--empty"}" aria-labelledby="yr-player-standing"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-standing">Current standing</h2>${period ? `<span class="yr-panel-meta">${esc(period)} board</span>` : ""}</div><ul class="yr-hists" role="list">${standing}</ul></section><section class="yr-vsec${historyCount ? "" : " yr-vsec--empty"}" aria-labelledby="yr-player-history"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-player-history">Archived results</h2>${historyCount ? `<span class="yr-panel-meta">${historyCount} ${historyCount === 1 ? "board" : "boards"}</span>` : ""}</div>${rows}</section>`;
   return shell({ r, ...opts, contentHtml: content, canonicalPath: canonicalPathFor(`player/${encodeURIComponent(name)}`, r.slug, opts.isCustomDomain), title: `${name} · ${r.data.brand?.name || r.slug}`, description: `Player profile for ${name}.` });
 }
 

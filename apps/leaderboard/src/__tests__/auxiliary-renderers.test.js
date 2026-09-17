@@ -190,6 +190,34 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile).not.toMatch(/medal|trophy|achievement/i);
   });
 
+  it("gives the player page a way back, the current period and a modest archive empty state", async () => {
+    const empty = await renderNewPlayerProfile(record.data, { name: "Alex", rank: 3, wagered: 100, prize: 25 }, [], opts);
+    expect(empty).toContain('<header class="yr-vhead"><a class="yr-sec-link" href="/demo-board/leaderboard">');
+    expect(empty).toContain("Back to leaderboard</a>");
+    expect(empty).toContain("in the monthly board right now");
+    expect(empty).toContain('id="yr-player-standing">Current standing</h2><span class="yr-panel-meta">Monthly board</span>');
+    expect(empty).toContain('class="yr-vsec yr-vsec--empty" aria-labelledby="yr-player-history"');
+    expect(empty).toContain('<p class="yr-note">No archived results yet. Past monthly boards appear here once Demo Board archives one.</p>');
+    expect(empty).not.toContain('class="yr-empty"');
+
+    const two = await renderNewPlayerProfile(
+      record.data,
+      { name: "Alex", rank: 3, wagered: 100, prize: 25 },
+      [{ label: "August", rank: 1, wagered: 900, prize: 40 }, { label: "July", rank: 4, wagered: 300, prize: 0 }],
+      opts,
+    );
+    expect(two).toContain('id="yr-player-history">Archived results</h2><span class="yr-panel-meta">2 boards</span>');
+    expect(two).not.toContain("yr-vsec--empty");
+    expect(two.match(/<li class="yr-hist">/g)).toHaveLength(3 + 2);
+
+    const custom = await renderNewPlayerProfile(record.data, { name: "Alex", rank: 1 }, [], { ...opts, isCustomDomain: true, homeUrl: "https://board.example" });
+    expect(custom).toContain('<a class="yr-sec-link" href="/leaderboard">');
+    const noPeriod = await renderNewPlayerProfile({ ...record.data, brand: { ...record.data.brand, period: "" } }, { name: "Alex", rank: 1 }, [], opts);
+    expect(noPeriod).toContain("stands on Demo Board right now");
+    expect(noPeriod).toContain("No archived results yet. Past boards appear here");
+    expect(noPeriod).not.toContain("yr-panel-meta");
+  });
+
   it("names the field an archived row's leading value belongs to", async () => {
     const profile = await renderNewPlayerProfile(
       record.data,
