@@ -185,13 +185,29 @@ export function formatLeaderboardTiming(value, { now = Date.now() } = {}) {
   return { kind: "relative", text, iso };
 }
 
+/** Absolute wall-clock rendering of a leaderboard boundary, always in UTC. */
+export function formatAbsoluteUtc(iso) {
+  const t = iso ? new Date(iso).getTime() : NaN;
+  if (!Number.isFinite(t)) return "";
+  const text = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", hour12: false, timeZone: "UTC",
+  }).format(new Date(t));
+  return `${text} UTC`;
+}
+
+function absoluteTimeHtml(iso) {
+  const text = formatAbsoluteUtc(iso);
+  return text ? `<time class="yr-lbh-abs" datetime="${esc(iso)}">${esc(text)}</time>` : "";
+}
+
 function timingHtml(timing, { scheduled = false } = {}) {
-  if (!timing || timing.kind === "invalid" || timing.kind === "expired") return "";
+  if (!timing || timing.kind === "invalid") return "";
   const label = scheduled ? "Starts" : "Ends";
+  if (timing.kind === "expired") return `<span class="yr-lbh-timing">Ended ${absoluteTimeHtml(timing.iso)}</span>`;
   if (timing.kind === "calendar") {
-    return `<span data-countdown-mode="calendar">${label} <time datetime="${esc(timing.iso)}">${esc(timing.text)}</time></span>`;
+    return `<span class="yr-lbh-timing"><span data-countdown-mode="calendar">${label} <time datetime="${esc(timing.iso)}">${esc(timing.text)}</time></span> ${absoluteTimeHtml(timing.iso)}</span>`;
   }
-  return `<span data-countdown-mode="relative" data-countdown-complete="${scheduled ? "Started" : "Ended"}">${label} in <b data-ends-at="${esc(timing.iso)}">${esc(timing.text)}</b></span>`;
+  return `<span class="yr-lbh-timing"><span data-countdown-mode="relative" data-countdown-complete="${scheduled ? "Started" : "Ended"}">${label} in <b data-ends-at="${esc(timing.iso)}">${esc(timing.text)}</b></span> ${absoluteTimeHtml(timing.iso)}</span>`;
 }
 
 /* ── shell pieces ─────────────────────────────────────────────────────── */
@@ -770,7 +786,10 @@ function boardMain(ctx) {
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
   const prizeLabel = esc(data.prizes?.prizeLabel || "Prize");
   const poolLabel = esc(data.prizes?.prizePoolLabel || b.prizePoolLabel || "Prize pool");
+  const showPool = data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes;
   const showPrizes = data.sections?.payouts !== false && !hidePrizes && (hasConfiguredPrizePool(pool) || players.some((player) => Number(player.prize) > 0));
+  const sponsor = String(b.casino || "").trim();
+  const hasRules = data.sections?.rules !== false && (Array.isArray(data.rules) ? data.rules : []).some((rule) => typeof rule === "string" && rule.trim());
   const playerHref = (name) => isCustomDomain ? `/player/${encodeURIComponent(name)}` : `/${encodeURIComponent(slug)}/player/${encodeURIComponent(name)}`;
 
   const stateLabel = ended ? "Ended" : scheduled ? "Not started" : "Live";
@@ -779,8 +798,8 @@ function boardMain(ctx) {
     `<span class="yr-lbh-state ${stateClass}">${stateLabel}</span>`,
     `<span>${esc(period)} leaderboard</span>`,
 
-    !ended && data.sections?.countdown !== false ? timingHtml(cd, { scheduled }) : "",
-    data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
+    data.sections?.countdown !== false ? (ended ? timingHtml(formatLeaderboardTiming(data.endsAt)) : timingHtml(cd, { scheduled })) : "",
+    showPool ? `<span>${esc(pool)} ${poolLabel.toLowerCase()}</span>` : "",
   ].filter(Boolean).join("");
 
   const introHtml = `<section class="yr-lbh">
@@ -816,11 +835,11 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
-    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how to earn points on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.`);
+    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
-    data.sections?.payouts !== false && hasConfiguredPrizePool(pool) && !hidePrizes ? `<p class="yr-note yr-note--w">Paid in cash by the sponsor to the top ${wagerLabel.toLowerCase()} players. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
+    showPool ? `<p class="yr-note yr-note--w">${esc(pool)} ${poolLabel.toLowerCase()}, paid in cash by ${sponsor ? esc(sponsor) : "the sponsor"} to the top ${wagerLabel.toLowerCase()} players${hasRules ? ` under the <a href="#viewer-rules-title">payout rules</a>` : ""}. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
   ].filter(Boolean).join("");
 
   const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];

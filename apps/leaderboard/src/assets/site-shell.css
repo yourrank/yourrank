@@ -640,6 +640,8 @@
 .yr-lbh-meta > * { max-width: 100%; display: inline-flex; align-items: center; }
 .yr-lbh-meta > * + *::before { content: none; }
 .yr-lbh-meta b { font-family: var(--yr-mono); font-weight: 600; color: var(--yr-fog); font-variant-numeric: tabular-nums; }
+.yr-lbh-meta > .yr-lbh-timing { flex-wrap: wrap; gap: 4px 8px; }
+.yr-lbh-abs { font-family: var(--yr-mono); font-size: 12px; color: var(--yr-faint); font-variant-numeric: tabular-nums; }
 .yr-lbh-state {
   display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
   border: 1px solid var(--yr-edge); border-radius: 999px;
