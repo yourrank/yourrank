@@ -112,6 +112,8 @@ export const PLAN_META: Record<PlanTier, {
   highlight: boolean;
   features: string[];
   cta: string;
+  /** Shown inside a paid card while recurring checkout is not open; empty for Free. */
+  availability: string;
 }> = {
   free: {
     name: "Free",
@@ -125,6 +127,7 @@ export const PLAN_META: Record<PlanTier, {
       "30 days of accessible history",
     ],
     cta: "Start free",
+    availability: "",
   },
   pro: {
     name: "Pro",
@@ -138,7 +141,8 @@ export const PLAN_META: Record<PlanTier, {
       "Activity templates and scheduling",
       "12 months of accessible history",
     ],
-    cta: "Start Pro",
+    cta: "Start free, Pro selected",
+    availability: "Pro checkout is not open yet. Your account starts on Free at no charge; Pro activates from Billing only after a verified payment.",
   },
   team: {
     name: "Team",
@@ -152,7 +156,8 @@ export const PLAN_META: Record<PlanTier, {
       "Team-operated Activity automation",
       "24 months of accessible history",
     ],
-    cta: "Start Team",
+    cta: "Start free, Team selected",
+    availability: "Team checkout is not open yet. Your account starts on Free at no charge; Team activates from Billing only after a verified payment.",
   },
 };
 
