@@ -27,6 +27,8 @@ import { creatorExpansionRestriction } from "@yourrank/shared/plan-usage";
 import { deriveKickConnectionHealth } from "../connection-health.js";
 import { validateRewardImage } from "@yourrank/shared/reward-image";
 import { removeRewardImage } from "../reward-media.js";
+import { creatorContactLinks } from "../auxiliary-renderers.js";
+import { fromJsonb } from "@yourrank/shared/jsonb";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
 const creditsCreateRewardDefaults = {
@@ -366,6 +368,10 @@ export async function handleCreditsStatus(request, env) {
     },
     mappings: mappings || [],
     shopItems: items || [],
+    creatorContact: {
+      ready: creatorContactLinks(fromJsonb(site.extra_json)).length > 0,
+      editHref: "/dashboard/site#siteLinksCard",
+    },
     viewers: safeViewers,
     redemptions: safeRedemptions,
     usage: usage || {},

@@ -8,6 +8,7 @@ import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
 import { optimizeRewardImage } from "./reward-image.js";
+import { reviewRewardReadiness } from "@yourrank/shared/reward-readiness";
 
 const $ = (id) => document.getElementById(id);
 
@@ -297,6 +298,32 @@ function renderRedemptionRow(r) {
   ].filter(Boolean).join(" ");
   return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
 }
+// Advisory publish review (YR-014): findings are shown, linked to their edit
+// control and never block saving or rewrite a stored reward.
+function shopReview(reward) {
+  return reviewRewardReadiness(reward, { siblings: state.shopItems || [], contactReady: state.creatorContact?.ready !== false });
+}
+function contactEditHref() {
+  const base = state.creatorContact?.editHref || "/dashboard/site#siteLinksCard";
+  const siteId = siteQuery() || dashboardState.ACTIVE_SITE_ID || "";
+  if (!siteId) return base;
+  const [path, hash] = base.split("#");
+  return `${path}?board=${encodeURIComponent(siteId)}${hash ? `#${hash}` : ""}`;
+}
+function renderShopReview() {
+  const panel = $("cr-shop-review"); const list = $("cr-shop-review-list"); if (!panel || !list) return;
+  const active = $("cr-shop-active")?.checked !== false;
+  const review = shopReview({ id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value, description: $("cr-shop-desc").value });
+  if (!active || review.ready) { panel.hidden = true; list.innerHTML = ""; return; }
+  list.innerHTML = review.findings.map((f) => {
+    const fix = f.field === "contact"
+      ? `<a class="cr-shop-review-fix" href="${esc(contactEditHref())}">Add a contact channel</a>`
+      : `<button class="cr-shop-review-fix" type="button" data-review-focus="cr-shop-desc">Edit description</button>`;
+    return `<li data-review-code="${esc(f.code)}"><span>${esc(f.message)}</span> ${fix}</li>`;
+  }).join("");
+  list.querySelectorAll("[data-review-focus]").forEach((b) => b.addEventListener("click", () => $(b.dataset.reviewFocus)?.focus()));
+  panel.hidden = false;
+}
 function renderShopCards(items) {
   const root = $("cr-shop-list"); if (!root) return;
   ensureShopControls(items.length > 0);
@@ -330,7 +357,7 @@ function renderShopCards(items) {
     return `<article class="cr-shop-row${i.active ? "" : " is-inactive"}">
       <div class="cr-shop-row-main">
         ${i.has_image ? `<img class="cr-shop-thumbnail" src="${esc(sitePath(`/api/credits/shop/${encodeURIComponent(i.id)}/image`))}" alt="Picture for ${esc(i.name)}" width="60" height="40" loading="lazy" decoding="async" />` : ''}
-        <button class="cr-shop-row-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button>
+        <button class="cr-shop-row-title" type="button" data-edit-shop="${esc(i.id)}">${esc(i.name)}</button>${i.active && !shopReview(i).ready ? ` <button class="v3-chip v3-chip--pending cr-shop-review-chip" type="button" data-edit-shop="${esc(i.id)}" aria-label="Review ${esc(i.name)}: live with incomplete details">Needs review</button>` : ""}
         <p>${esc(i.description || "No description")}</p>
       </div>
       <dl class="cr-shop-row-facts">
@@ -689,6 +716,7 @@ function openShop(item, trigger) {
   drawerTrigger = trigger || $("cr-shop-new");
   $("cr-shop")?.classList.add("has-drawer");
   $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-cooldown").value = String(Number(item?.cooldown_seconds) || 0); $("cr-shop-active").checked = item?.active !== false;
+  renderShopReview();
   $("cr-shop-name").focus(); 
 }
 function closeShop() { rewardImageVersion++; rewardImageProcessing = false; $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
@@ -1221,6 +1249,7 @@ function wireActions() {
     catch (err) { if (err?.code === "kick_reconnect_required") markKickNeedsAttention(); setStatus("cr-reward-create-status", err.message, true); } finally { setLoading(btn, false); }
   });
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
+  $("cr-shop-desc")?.addEventListener("input", renderShopReview); $("cr-shop-active")?.addEventListener("change", renderShopReview);
 
   $("cr-shop-form")?.addEventListener("submit", async (e) => {
     e.preventDefault(); if (rewardImageProcessing) return; const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");

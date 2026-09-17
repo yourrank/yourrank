@@ -80,4 +80,35 @@ describe("server-rendered rewards pages", () => {
     expect(viewerClientSource).toContain("url.search");
     expect(viewerClientSource).not.toContain('"Login failed: " + urlParams.get("error")');
   });
+
+  it("reviews reward readiness in the existing shop editor without blocking or rewriting (YR-014)", () => {
+    const html = RewardsShopPage().toString();
+    // Advisory panel lives inside the existing editor form, after the Active toggle.
+    expect(html).toMatch(/id="cr-shop-active"[\s\S]*<section class="cr-shop-review" id="cr-shop-review"[^>]*hidden>/);
+    expect(html).toContain("These are warnings, not blockers: you can still save.");
+    expect(html).toContain('<ul class="cr-shop-review-list" id="cr-shop-review-list"></ul>');
+    expect(html).toMatch(/id="cr-shop-review"[\s\S]*id="cr-shop-submit"/);
+
+    // Client: same pure review for the editor and for already-published rows;
+    // findings link to the control that fixes them.
+    expect(rewardsClientSource).toContain('import { reviewRewardReadiness } from "@yourrank/shared/reward-readiness"');
+    expect(rewardsClientSource).toContain('contactReady: state.creatorContact?.ready !== false');
+    expect(rewardsClientSource).toContain('data-review-focus="cr-shop-desc"');
+    expect(rewardsClientSource).toContain("Add a contact channel</a>");
+    expect(rewardsClientSource).toContain('$("cr-shop-desc")?.addEventListener("input", renderShopReview)');
+    expect(rewardsClientSource).toContain('$("cr-shop-active")?.addEventListener("change", renderShopReview)');
+    expect(rewardsClientSource).toMatch(/i\.active && !shopReview\(i\)\.ready \? `[^`]*cr-shop-review-chip[^`]*data-edit-shop=/);
+    // The save payload is unchanged: the review never edits what is stored.
+    expect(rewardsClientSource).toContain('description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value)');
+    expect(rewardsClientSource).not.toMatch(/gibberish|looksLikeGibberish/i);
+
+    // Server: contact readiness reuses the public Contact page's rule.
+    const handlerSource = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
+    expect(handlerSource).toContain('import { creatorContactLinks } from "../auxiliary-renderers.js"');
+    expect(handlerSource).toContain("ready: creatorContactLinks(fromJsonb(site.extra_json)).length > 0");
+    expect(handlerSource).toContain('editHref: "/dashboard/site#siteLinksCard"');
+
+    expect(dashboardV4Source).toContain(".cr-shop-review {");
+    expect(dashboardV4Source).toContain(".cr-shop-review-chip {");
+  });
 });
