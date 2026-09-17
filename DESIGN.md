@@ -1,6 +1,6 @@
 ---
 name: YourRank Community Workspace
-description: A mineral creator workspace, the September 16 community/account mockups, and separately scoped marketing material.
+description: A mineral creator workspace, a creator-destination viewer experience, and separately scoped marketing material.
 colors:
   viewer-action: "#5024f5"
   viewer-action-hover: "#3e1bca"
@@ -236,7 +236,9 @@ components:
 
 The authenticated creator workspace uses a cool mineral canvas, white work surfaces, quiet slate navigation, indigo actions, Fira Sans interface text, and measured Fira Code data. It organizes community work around one next action and readable activity. This is the user-authorized replacement of the incumbent dashboard world, recorded from the canonical stylesheet and shared shell contract.
 
-The viewer world follows the owner-supplied September 16, 2026 screenshots: charcoal navigation and context bar, a pale canvas, violet controls, bordered white cards, and a separate global YourRank account layout. Home, Leaderboard, Rewards, My Activity, account settings, and viewer Help use the canonical renderer and navigation controller. Real Viewer Accounts and site-scoped memberships supply identity, balances, rewards, claims and standings. Screenshot-only records, imagery and unsupported controls are not production content.
+**Viewer North Star: "The Creator's Destination"**
+
+The viewer/public community experience is a creator destination, not an admin dashboard. The creator's identity — name, mark, imagery and local accent — dominates the page; composition and hierarchy carry the experience rather than a grid of interchangeable bordered white cards. Rewards read as desirable products, leaderboards read as competitive and visually important, and credits, rank and membership status are woven into the page instead of sitting in separate record tiles. Purple/violet remains a brand accent for actions and focus, not the whole design. Home, Leaderboard, Rewards, My Activity, account settings, and viewer Help use the canonical renderer and navigation controller. Real Viewer Accounts and site-scoped memberships supply identity, balances, rewards, claims and standings; invented records, imagery, analytics and unsupported controls are not production content. No screenshot or mockup is the canonical visual target for the viewer world — this direction and the shell contracts below are.
 
 Frontmatter keys prefixed `workspace-` describe the creator workspace and `viewer-` describe the supported viewer shell. Unprefixed keys retain the incumbent marketing and legacy material record; they do not govern the viewer world. Marketing keeps its near-white, ink-black, electric-violet language and Inter/Geist Mono stacks. Transparent OBS overlays and restricted legacy Games surfaces retain their existing scope.
 
@@ -249,12 +251,13 @@ The product demonstration and the user's state carry each screen. Decoration sta
 - Hairline dividers and shared outer boundaries instead of nested card stacks.
 - Compact identity, clear purpose, visible action, and readable state in the first viewport.
 - One coherent creator workspace with explicit account and selected-site context.
-- A persistent viewer sidebar and context bar, white center panel, membership rail and a compact disclosed mobile header.
+- A viewer shell led by strong creator identity, with fewer, more meaningful surfaces, persistent community navigation and a compact disclosed mobile header.
+- Rewards presented as products, leaderboards presented as competition, and credits/rank/membership status integrated into the page rather than boxed apart.
 - An account directory of separate memberships, with flat personal claims and activity records inside each community.
 
 ## Colors
 
-The authenticated palette uses indigo for action and focus, a mineral canvas behind white work surfaces, and a slate rail for navigation. Workspace-prefixed frontmatter tokens map to the canonical `--ws-*` CSS tokens. Viewer-prefixed tokens map to `viewer-shell.css`: violet actions, a pale canvas, dark text, and charcoal navigation. White bordered cards group related records. Readable amber and green label claim states. The color names below describe the retained marketing/legacy palette.
+The authenticated palette uses indigo for action and focus, a mineral canvas behind white work surfaces, and a slate rail for navigation. Workspace-prefixed frontmatter tokens map to the canonical `--ws-*` CSS tokens. Viewer-prefixed tokens map to `viewer-shell.css` and remain the baseline neutral, text, line and action values; they do not prescribe a pale-canvas-plus-white-card composition. Inside the viewer shell the creator's identity (mark, imagery and local accent) sets the dominant colour of hero, leaderboard and reward surfaces, with the viewer violet reserved for actions, focus and active navigation. Neutral tone shifts and shared boundaries group related records; repetitive bordered white cards are not the default grouping device. Readable amber and green label claim states. The color names below describe the retained marketing/legacy palette.
 
 ### Primary
 
@@ -280,7 +283,7 @@ The authenticated palette uses indigo for action and focus, a mineral canvas beh
 
 ### Named Rules
 
-**The Scoped Accent Rule.** Creator identity may retain its local accent; supported viewer actions use the mockup violet, marketing actions retain Electric Violet, and creator workspace actions use workspace indigo. Identity configuration does not own viewer layout or action colors.
+**The Scoped Accent Rule.** Creator identity leads viewer surfaces and may set the dominant tone of hero, leaderboard and reward compositions; supported viewer actions use the viewer violet, marketing actions retain Electric Violet, and creator workspace actions use workspace indigo. Identity configuration does not own viewer navigation semantics, action colors or text contrast, and every identity-tinted surface must keep readable-contrast text and controls.
 
 **The State, Not Decoration Rule.** Success, warning, and danger appear in status text, dots, narrow cue bands, and alerts—not as ornamental card themes.
 
@@ -316,7 +319,7 @@ Marketing and product education use a centered reading frame of approximately 11
 
 The authenticated workspace uses a 232px slate rail by default, a 64px white context bar, and a mineral working field with 40px default inline padding. The stylesheet retains a 248px rail adjustment between 981px and 1180px and a 44px collapsed desktop rail. At 980px the rail becomes a drawer. Home places a launch region above a two-value summary, then activity and player lists; at 700px its columns stack and material Home actions have 44px minimum targets. The target creator IA is Home → Community → Activities → People → Rewards → Insights → Settings, while current labels and URLs remain implementation truth until migrated deliberately. Account and selected-site context stay visibly distinct. Comparable operational data uses divided rows, tables, and 8/4 or 12-column modules rather than isolated metric tiles.
 
-The community Viewer layout uses an 80px desktop context bar, 228px navigation, flexible content, and an overview column, with 26px gutters. Home adds the creator banner below the context bar. Global account pages use a 252px YourRank navigation rail, 64px context bar, and full-width settings content. Desktop chrome remains stable by shell; the secondary overview rail moves below the main content when the measured content-fit rule in the Shared Shell and Component Contract below fails. The controller preserves the layout container while replacing canonical server-rendered content and chrome; entering global `/me` always replaces the community chrome with the account shell. Full-page links remain a fallback.
+The community Viewer layout uses an 80px desktop context bar, 228px navigation, flexible content, and an overview column, with 26px gutters. Home opens with a creator hero below the context bar that carries identity, membership status and, for members, the real balance and rank. Main content sizes from its measured container so large desktop screens fill with usable composition — wider reward and standings tracks, stronger hero and leaderboard scale — rather than a narrow centered column with dead margins; cap line length only for reading copy. Global account pages use a 252px YourRank navigation rail, 64px context bar, and full-width settings content. Desktop chrome remains stable by shell; the secondary overview rail moves below the main content when the measured content-fit rule in the Shared Shell and Component Contract below fails. The controller preserves the layout container while replacing canonical server-rendered content and chrome; entering global `/me` always replaces the community chrome with the account shell. Full-page links remain a fallback.
 
 At narrow widths, marketing, creator Viewer, and platform document navigation use a named disclosed header targeted at 64px; the primary action or account affordance remains available and the creator workspace rail keeps its separate drawer behavior. Wide data stays inside its own scroll container. Viewer primary controls and community destinations have at least 44px targets. The existing wrapping Viewer navigation and 76px public header are known implementation gaps, not contract exceptions.
 
@@ -351,7 +354,7 @@ One mark, one wordmark, one owner. `packages/shared/src/brand-assets.ts` is the 
 
 ## Shapes
 
-Creator controls retain their 8px radius and 14px modules. Viewer actions follow the supplied pill controls; inputs use 9px corners, center and overview panels use 18px corners, reward cards use 15px, and the welcome guide uses 20px. Membership and account lists are divided rows. Code entry uses a soft ice inset. Marketing and legacy guidance below remains separately scoped.
+Creator controls retain their 8px radius and 14px modules. Viewer controls use the viewer-control radius and reward/hero/leaderboard modules the viewer-module radius; a surface earns its own rounded boundary only when it is one of the page's few meaningful surfaces, not because it groups a record. Membership and account lists are divided rows. Code entry uses a soft ice inset. Marketing and legacy guidance below remains separately scoped.
 
 Geometry is restrained and role-based. Primary actions and compact controls are nearly square; fields and small identity marks receive a gentle curve; cards and substantial reading surfaces use the larger soft corner; pills are limited to statuses and compact navigation. Adjacent information in one workflow shares an outer boundary and internal dividers rather than accumulating nested rounded containers.
 
@@ -371,17 +374,18 @@ Community navigation names Home, Activities, Leaderboard, Rewards (`/<slug>/shop
 
 The viewer system is owned by `packages/shared/src/viewer-shell.ts`, `apps/leaderboard/src/assets/viewer-shell.css`, and `apps/leaderboard/src/assets/viewer-app.js`, with record, field, and dialog primitives inherited from `site-shell.css`. The supported body is `.yr-site.viewer-shell`; viewer-app mounts the page-specific site, account, or contact controller. The account directory/settings are rendered by `apps/leaderboard/src/pages/viewer-dashboard.js`; community content is rendered by `packages/shared/src/site-render.ts`. Restricted Games keeps its existing shell and is outside this replacement.
 
-Leaderboard podiums style the original top-three list rows, with rank 1 centered, rank 2 left and rank 3 right. Tied top ranks retain equally presented compact rows. Search shows matching compact rows; clearing search restores the original layout. Player records have no avatar field, so marks use name initials without implying a Viewer Account link. Stored template configuration continues to round-trip; supported viewer pages share the September 16 composition.
+Leaderboard podiums style the original top-three list rows, with rank 1 centered, rank 2 left and rank 3 right. Tied top ranks retain equally presented compact rows. Search shows matching compact rows; clearing search restores the original layout. Player records have no avatar field, so marks use name initials without implying a Viewer Account link. Stored template configuration continues to round-trip; supported viewer pages share one creator-led composition: identity hero, then the page's primary surface (catalog, standings or activity), with membership status, balance and rank integrated where the viewer acts on them.
 
 - **Navigation:** Pale violet marks the active community destination; global account navigation uses a saturated violet selection. Both use `aria-current="page"`. Missing Activities support is visible as unavailable, never a dead link.
-- **Home:** Creator identity, configured channels, real reward progress, standings preview, and recent ledger activity occupy the mockup's card positions. Unavailable stream status stays explicit until the existing Kick lookup returns a boolean.
-- **Rewards:** Configured reward imagery, or a gift icon when absent, heads each card. Search and sorting operate on actual configured items. Existing stock, cooldown, balance, membership, confirmation and redemption behavior remains canonical.
+- **Home:** A creator-identity hero leads; configured channels, real reward progress, a standings preview that reads as competition, and recent ledger activity follow as a few distinct surfaces with clear hierarchy rather than equal-weight cards. Unavailable stream status stays explicit until the existing Kick lookup returns a boolean.
+- **Rewards:** Each reward is presented as a desirable product — prominent configured imagery (or the gift icon when absent), the creator's reward name, a clear tabular credit price and one obvious action — not as a database row. Search and sorting operate on actual configured items. Existing stock, cooldown, balance, membership, confirmation and redemption behavior remains canonical.
+- **Leaderboard:** Standings are the page's dominant surface: a visually weighted top three, strong rank and score typography, and the viewer's own position emphasised when they are a member. Ranking logic and event selection remain unchanged.
 - **Membership:** Real balance and recent record counts precede credit history, claims, participation, and code entry. Record statuses and community scope remain explicit. Empty, signed-out, absent-membership, unavailable, and blocked states are distinct.
 - **Account:** Full-width settings cards replace the former account identity tile and community overview. Only supported identity/provider data and actions are rendered. Read-only gaps explain their unavailable state.
 
 **The Membership Scope Rule.** The account page is a directory of relationships. Credits, claims, and participation stay attached to their community; visual grouping must not imply a global wallet, merged identity, or new shared persistence model.
 
-Visual authority is the owner-supplied September 16 community and account screenshots, including the additional Rewards image. Exact artwork, platform identities, notifications and metrics absent from the product cannot be reproduced as real production content. Verification evidence must distinguish fixture behavior from deployed provider/database behavior.
+Visual authority is the Creator's Destination direction above together with the shell contracts below; earlier screenshots and mockups are historical input, not the canonical target. Artwork, platform identities, notifications, analytics and metrics absent from the product cannot be introduced as real production content. Verification evidence must distinguish fixture behavior from deployed provider/database behavior.
 
 The component descriptions below preserve the incumbent marketing/legacy guidance. Viewer tokens and the viewer components above take precedence inside the viewer shell; workspace tokens and the authenticated contract take precedence inside the dashboard shell.
 
@@ -613,7 +617,7 @@ Later migrations lower the ratchets as they touch each surface.
 
 ### Reward imagery and community events — 2026-09-08
 
-Rewards uses the supplied two-column catalog grid, a 135px art area (110px mobile), creator reward name and description, a tabular credit price and a full-width pill action. Uploaded art retains its canonical media pipeline; missing images use the gift icon. The creator fulfills each reward. Claims remain in the selected-community My Activity page and its overview rail.
+Rewards uses a container-sized catalog grid with product-style cards: prominent 4:3 reward art, creator reward name and description, a tabular credit price and one clear action. Uploaded art retains its canonical media pipeline; missing images use the gift icon. The creator fulfills each reward. Claims remain in the selected-community My Activity page and its overview rail.
 
 The public brand link returns to that community's Home. Enabled, configured channels appear in the shared Viewer navigation. Site settings uses the full workspace width, and its destination labels match Rewards and My Activity. Appearance labels use workspace text tokens; Insights uses readable section panels and prominent values.
 
@@ -634,7 +638,8 @@ Billing uses the owner-supplied pricing-card composition inside the mineral work
 
 ### Don't:
 
-- **Don't** introduce decorative gradients, glass effects, glow fields, or floating metric-card walls into normal product surfaces.
+- **Don't** introduce decorative gradients, glass effects, glow fields, or floating metric-card walls into normal product surfaces; creator-identity hero and leaderboard surfaces in the viewer shell may carry identity colour and imagery, but never fake analytics, fake content or decoration that hides state.
+- **Don't** rebuild viewer pages as walls of repetitive bordered white cards; use a few meaningful surfaces with clear hierarchy.
 - **Don't** use semantic colors as decoration or communicate state by color alone.
 - **Don't** hide the primary action or selected account/site context when the layout collapses.
 - **Don't** turn mono labels, uppercase captions, or numbered markers into decoration; each must encode actual state, scope, sequence, or data.
@@ -642,4 +647,4 @@ Billing uses the owner-supplied pricing-card composition inside the mineral work
 - **Don't** apply viewer-world rules to the creator workspace, marketing, OBS overlays, or restricted legacy Games.
 
 
-The September 16 screenshots supersede the earlier Channel guide HTML. Community pages use the charcoal rail and pale card canvas; global `/me` uses the distinct YourRank account layout. Account views share the existing account response. No aggregate credit balance is displayed.
+The Creator's Destination direction supersedes both the earlier Channel guide HTML and the September 16 screenshot direction for community pages; global `/me` keeps the distinct YourRank account layout. Account views share the existing account response. No aggregate credit balance is displayed.
