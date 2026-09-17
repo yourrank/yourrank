@@ -85,7 +85,9 @@ const server = createServer(async (req, res) => {
     const signedOut = url.searchParams.has('signedout');
     const empty = url.searchParams.has('empty');
     const unavailable = url.searchParams.has('unavailable');
-    const data = { brand: { name: slug === 'luna' ? 'Luna Lounge' : "Nova's community" }, socials: [{ name: 'Kick', url: 'https://kick.com/nova' }], branding: { template: url.searchParams.get('template') || 'cyber_arcade' }, rankBy: 'score', players: empty ? [] : players, siteSections: { home: true, leaderboard: true, shop: true, me: true }, shopItems: empty ? [] : rewards };
+    const catalogSize = Number(url.searchParams.get('rewards')) || 0;
+    const catalog = catalogSize ? Array.from({ length: catalogSize }, (_, i) => ({ ...rewards[i % rewards.length], id: `fixture-${i}`, cost: 250 + i * 150, name: i === 1 ? 'An unusually long reward name that wraps across several lines of the card heading' : rewards[i % rewards.length].name })) : rewards;
+    const data = { brand: { name: slug === 'luna' ? 'Luna Lounge' : "Nova's community" }, socials: [{ name: 'Kick', url: 'https://kick.com/nova' }], branding: { template: url.searchParams.get('template') || 'cyber_arcade' }, rankBy: 'score', players: empty ? [] : players, siteSections: { home: true, leaderboard: true, shop: true, me: true }, shopItems: empty ? [] : catalog };
     res.end(await renderSite({ r: { slug, plan: 'pro', data, viewerKickAuthEnabled: true }, section, viewer: signedOut ? null : viewer, viewerData: { membershipStatus: unavailable ? 'unavailable' : signedOut ? 'absent' : 'member', viewerOnSite: signedOut || unavailable ? null : { balance: slug === 'luna' ? 480 : balance, blocked: url.searchParams.has('blocked') }, shopItems: data.shopItems, claims: empty ? [] : claims, ledger: empty ? [] : [{ type: 'code_drop', amount: 100, created_at: '2026-09-12T12:00:00Z' }], participation: [] }, opts: { slug, homeUrl: origin, nonce: 'n', csrfToken: 'fixture-csrf' } }));
   } catch (error) { console.error(error); res.writeHead(500).end('Fixture server failed'); }
 });
@@ -158,6 +160,55 @@ try {
     assert.ok(widths[1301].main >= 640 && widths[1400].main >= 640, `${path}: overview appearing keeps the primary column >=640px`);
     console.log(`${path} main widths: ${Object.entries(widths).map(([w, m]) => `${w}:${m.main}`).join(' ')}`);
   }
+  // YR-022: reward cards size to the catalog container (>=240px tracks, one column below 600px, 4:3 media).
+  for (const count of [1, 4, 9]) {
+    await page.goto(`${origin}/nova/shop?rewards=${count}`);
+    await page.evaluate(() => window.__yrViewerAppReady);
+    const report = [];
+    for (const width of [320, 390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const m = await page.evaluate(() => {
+        const list = document.getElementById('viewer-rewards');
+        const cards = [...list.querySelectorAll('.yr-rwd')].map(card => card.getBoundingClientRect());
+        const media = list.querySelector('.yr-rwd-art, .yr-rwd-img').getBoundingClientRect();
+        const actions = [...list.querySelectorAll('.yr-rwd .yr-act')];
+        return { container: Math.round(list.getBoundingClientRect().width), cards: cards.map(c => Math.round(c.width)), columns: new Set(cards.map(c => Math.round(c.left))).size, ratio: media.width / media.height, overflow: document.documentElement.scrollWidth > innerWidth, clipped: actions.some(a => a.scrollWidth > a.clientWidth + 1), rowsAligned: cards.every((c, i) => cards.every((d, j) => j <= i || Math.round(c.top) !== Math.round(d.top) || Math.abs(actions[i].getBoundingClientRect().bottom - actions[j].getBoundingClientRect().bottom) < 1)) };
+      });
+      report.push(`${width}:${m.columns}x${m.cards[0]}`);
+      if (count === 4 && (width === 390 || width === 1440)) await page.screenshot({ path: `${output}/nova-shop-4-rewards-${width}.png`, fullPage: true });
+      assert.equal(m.overflow, false, `${count} rewards at ${width}: no overflow`);
+      assert.equal(m.clipped, false, `${count} rewards at ${width}: actions not clipped`);
+      assert.equal(m.rowsAligned, true, `${count} rewards at ${width}: cost/action rows align across each row`);
+      assert.ok(Math.abs(m.ratio - 4 / 3) < 0.02, `${count} rewards at ${width}: 4:3 media (${m.ratio.toFixed(2)})`);
+      if (width < 600) assert.equal(m.columns, 1, `${count} rewards at ${width}: one column`);
+      else assert.ok(m.cards.every(w => w >= 240), `${count} rewards at ${width}: every card >=240px (${m.cards.join(',')})`);
+      if (count === 1) assert.ok(m.cards[0] >= Math.min(m.container, 640) - 1, `lone reward at ${width}: fills the catalog up to 640px (${m.cards[0]} of ${m.container})`);
+      if (count === 4 && width >= 768) assert.ok(m.columns >= 2 && m.columns <= 4, `4 rewards at ${width}: ${m.columns} columns`);
+    }
+    console.log(`${count} reward(s) columns x card width: ${report.join(' ')}`);
+  }
+  // YR-023: no promotional banner between the rewards controls and the catalog; a real reward is on the first 390x844 screen.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.context().clearCookies();
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(origin + '/nova/shop?signedout');
+  await page.evaluate(() => window.__yrViewerAppReady);
+  assert.equal(await page.locator('.viewer-rewards-banner').count(), 0, 'generic rewards banner removed');
+  assert.deepEqual(await page.evaluate(() => [...document.querySelector('.viewer-main').children].map(el => el.className.split(' ')[0] || el.tagName.toLowerCase()).filter(name => !['yr-redeem-status', 'yr-note'].includes(name)).slice(0, 2)), ['viewer-page-intro', 'section'], 'search/sort controls sit immediately before the catalog');
+  assert.equal(await page.locator('#cookieReject').isVisible(), true, 'fresh guest sees the consent prompt');
+  await page.screenshot({ path: `${output}/nova-shop-guest-consent-390.png` });
+  for (const selector of ['#cookieReject', '#cookieAccept', '#viewer-menu', '.viewer-user', '#viewer-reward-search', '#viewer-rewards .yr-rwd .yr-act']) {
+    assert.equal(await page.locator(selector).first().isVisible(), true, `${selector} reachable while consent is shown`);
+  }
+  await page.locator('#cookieReject').click();
+  await page.locator('#cookieReject').waitFor({ state: 'hidden' });
+  const firstScreen = await page.evaluate(() => ({ title: Math.round(document.querySelector('.viewer-page-intro h1').getBoundingClientRect().top), reward: Math.round(document.querySelector('#viewer-rewards .yr-rwd').getBoundingClientRect().top), rewardBottom: Math.round(document.querySelector('#viewer-rewards .yr-rwd').getBoundingClientRect().bottom), hiddenAbove: [...document.querySelectorAll('.viewer-main > *')].filter(el => getComputedStyle(el).display === 'none' && !el.hidden && !el.matches(':empty')).length }));
+  await page.screenshot({ path: `${output}/nova-shop-guest-settled-390.png` });
+  console.log(`390x844 guest, consent dismissed: title top ${firstScreen.title}px, first reward ${firstScreen.reward}-${firstScreen.rewardBottom}px`);
+  assert.ok(firstScreen.title >= 60 && firstScreen.title <= 140, `title starts within the first ~140px (${firstScreen.title})`);
+  assert.ok(firstScreen.reward < 844 - 200, `a real reward is visible on the first screen (top ${firstScreen.reward})`);
+  assert.equal(firstScreen.hiddenAbove, 0, 'nothing is hidden to fake the measurement');
+  await page.context().addCookies([{ name: '__csrf', value: 'fixture-csrf', url: origin }]);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + '/nova');
   await page.evaluate(() => window.__yrViewerAppReady);

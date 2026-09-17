@@ -550,6 +550,15 @@ describe("public viewer shell", () => {
     expect(css.match(/@media\(min-width:1251px\)\{([\s\S]*?)\n\}/)[1]).not.toContain('434px');
   });
 
+  it("sizes reward cards from the catalog container instead of fixed viewport columns (YR-022)", () => {
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    expect(css).toContain('.viewer-shell .yr-rwds{display:grid;grid-template-columns:repeat(auto-fit,minmax(clamp(240px,(600px - 100%)*999,100%),1fr));gap:12px}');
+    expect(css).toMatch(/\.viewer-shell \.yr-rwd\{display:flex;max-width:640px;/);
+    expect(css).toMatch(/\.viewer-shell \.yr-rwd-img,\.viewer-shell \.yr-rwd-art\{[^}]*aspect-ratio:4\/3/);
+    expect(css.match(/\.viewer-shell \.yr-rwds\{grid-template-columns:repeat\(\d/g)).toBeNull();
+    expect(css).toContain('.viewer-home-columns .yr-rwds{grid-template-columns:1fr}');
+  });
+
   it("keeps leaderboard state badges readable on the dark season gradient", () => {
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     const season = css.match(/\.viewer-season\{([^}]*)\}/)[1];
