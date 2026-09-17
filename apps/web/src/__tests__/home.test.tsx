@@ -112,6 +112,14 @@ describe("Home & Product components", () => {
     expect(html).not.toContain('href="/games"');
   });
 
+  it("closes the mobile navigation on Escape and restores trigger focus", async () => {
+    const source = await Bun.file(new URL("../components/site-shell.tsx", import.meta.url)).text();
+    expect(source).toMatch(/event\.key !== "Escape"/);
+    expect(source).toContain("triggerRef.current?.focus()");
+    expect(source).toContain("ref={triggerRef}");
+    expect(source).toMatch(/useEffect\(\(\) => \{\s*setMobileOpen\(false\);\s*\}, \[pathname\]\);/);
+  });
+
   it("keeps restricted legacy mechanics out of primary launch marketing", async () => {
     const source = (await Promise.all(PRIMARY_MARKETING_SOURCES.map((url) => Bun.file(url).text()))).join("\n");
     expect(source).not.toMatch(/\b(?:games?|raffles?|predictions?|wager(?:ed|ing)?|casino)\b/i);

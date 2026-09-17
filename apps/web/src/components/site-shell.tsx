@@ -2,7 +2,7 @@
 
 import { PolicyLinks } from "./policy-links";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { brandLogoSvg } from "@yourrank/shared/brand-assets";
@@ -58,7 +58,24 @@ function CursorToggle() {
 export function SiteHeader() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const isCurrent = (href: string) => !href.includes("#") && pathname === href;
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setMobileOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [mobileOpen]);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-devin-line bg-devin-surface/95 backdrop-blur-sm">
@@ -104,6 +121,7 @@ export function SiteHeader() {
             Get started
           </a>
           <button
+            ref={triggerRef}
             type="button"
             className="inline-flex h-11 w-11 items-center justify-center rounded-[2px] border border-devin-line text-devin-ink md:hidden"
             aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
