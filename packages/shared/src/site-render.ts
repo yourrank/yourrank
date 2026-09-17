@@ -726,12 +726,36 @@ function viewerCommunityOverview(ctx) {
   const pending = claims.filter(claim => claim.status === 'submitted');
   const latest = pending[0] || claims[0];
   const meHref = siteSectionHref('me', slug, isCustomDomain);
-  return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>${section === 'home' ? 'Your Status' : 'Your Balance'}</h2>${section === 'home' && siteSections.me !== false ? `<a href="${viewer ? meHref : guestGateHref(meHref, 'activity')}">View activity ${viewerIcon('arrow')}</a>` : ''}</div>${isMember ? `<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}">${viewerIcon('coins')}<div><strong data-credit-balance-num>${formatNumber(balance)}</strong><p>credits</p></div></div><p>Only in ${esc(name)}</p>${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}` : `<p>${viewer && membershipStatus === 'unavailable' ? 'Your community credits could not load. Reload this page to try again.' : viewer ? 'Join this community to keep your rewards and credits here.' : 'Sign in to see your credits in this community.'}</p>`}${siteSections.me !== false && !viewerData?.viewerOnSite?.blocked && !(viewer && membershipStatus === 'unavailable') ? `<a class="yr-btn" href="${isMember ? `${meHref}#membership-code` : viewer ? meHref : guestGateHref(meHref, 'signin')}">${isMember ? 'Earn More Credits' : viewer ? 'Join community' : 'Sign in'} ${viewerIcon('arrow')}</a>` : ''}</section>
+  if (!isMember) {
+    return `<aside class="viewer-overview" aria-label="Selected community overview">${section === 'me' ? '' : guestPrompt(ctx, meHref)}
+${section === 'home' || section === 'leaderboard' || section === 'shop' ? '' : leaderboardPreview(ctx)}
+<div class="viewer-scope-help">${viewerIcon('shield')}<p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside>`;
+  }
+  return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>${section === 'home' ? 'Your Status' : 'Your Balance'}</h2>${section === 'home' && siteSections.me !== false ? `<a href="${meHref}">View activity ${viewerIcon('arrow')}</a>` : ''}</div><div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}">${viewerIcon('coins')}<div><strong data-credit-balance-num>${formatNumber(balance)}</strong><p>credits</p></div></div><p>Only in ${esc(name)}</p>${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}${siteSections.me !== false && !viewerData?.viewerOnSite?.blocked ? `<a class="yr-btn" href="${meHref}#membership-code">Earn More Credits ${viewerIcon('arrow')}</a>` : ''}</section>
 ${section !== 'home' ? rewardProgressCard(ctx) : ''}
-${section !== 'shop' && siteSections.me !== false && latest && isMember ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Latest claim</h3><span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span></div><ul class="viewer-claim-preview">${claimRow(latest)}</ul></section>` : ''}
+${section !== 'shop' && siteSections.me !== false && latest ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Latest claim</h3><span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span></div><ul class="viewer-claim-preview">${claimRow(latest)}</ul></section>` : ''}
 ${section === 'home' ? recentCreditCard(ctx) : section !== 'leaderboard' && section !== 'shop' ? leaderboardPreview(ctx) : ''}
 ${section === 'shop' ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h2>How to Earn Credits</h2></div><p>${viewerIcon('code')} Redeem community codes shared by ${esc(name)}.</p><p>Use the creator's channel-point rewards when available. Credits are recorded in My Activity.</p></section>` : ''}
 <div class="viewer-scope-help">${viewerIcon('shield')}<p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside>`;
+}
+
+/** The single rail prompt a non-member sees; the page's own content carries everything else. */
+function guestPrompt(ctx, meHref) {
+  const { b, slug, section, viewer, membershipStatus, siteSections } = ctx;
+  if (siteSections.me === false) return '';
+  const name = esc(b.name || slug);
+  if (viewer && membershipStatus === 'unavailable') {
+    return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Your membership</h2></div><p role="status">Your community credits could not load. Reload this page to try again.</p></section>`;
+  }
+  if (viewer) {
+    return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Join ${name}</h2></div><p>${section === 'shop' ? `Join to claim ${name}'s rewards with free credits earned here.` : `Join to keep your credits, claims and activity in ${name}.`}</p><a class="yr-btn" href="${meHref}">Join community ${viewerIcon('arrow')}</a></section>`;
+  }
+  const copy = section === 'shop'
+    ? { h: 'Claim rewards', p: `Sign in to check your balance and claim ${name}'s rewards. Credits are free and earned in this community.`, intent: 'signin' }
+    : section === 'leaderboard'
+      ? { h: 'Your standing', p: `Sign in to see your credits and claims alongside ${name}'s leaderboard.`, intent: 'signin' }
+      : { h: 'Your status', p: `Sign in to see your credits, claims and recent activity in ${name}.`, intent: 'activity' };
+  return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>${copy.h}</h2></div><p>${copy.p}</p><a class="yr-btn" href="${guestGateHref(meHref, copy.intent)}">Sign in ${viewerIcon('arrow')}</a></section>`;
 }
 
 function leaderboardPreview(ctx) {
@@ -742,21 +766,21 @@ function leaderboardPreview(ctx) {
 }
 
 function rewardProgressCard(ctx) {
-  const { b, slug, viewer, viewerData, data, siteSections, isCustomDomain, isMember, balance } = ctx;
-  if (siteSections.shop === false) return '';
+  const { b, slug, viewerData, data, siteSections, isCustomDomain, isMember, balance } = ctx;
+  if (siteSections.shop === false || !isMember) return '';
   const shopHref = siteSectionHref('shop', slug, isCustomDomain);
   const blocked = !!viewerData?.viewerOnSite?.blocked;
   const available = (viewerData?.shopItems || data.shopItems || []).filter(item => item.active !== false && (item.stock == null || Number(item.stock) > 0) && !Number(item.cooldownRemaining)).sort((a,b) => Number(a.cost) - Number(b.cost));
   const nextReward = available.find(item => Number(item.cost) > balance) || available[0];
   const progress = nextReward ? Math.min(100, Math.max(0, Math.floor(balance / Math.max(1, Number(nextReward.cost)) * 100))) : 0;
-  return `<section class="viewer-card viewer-next-reward"><div class="viewer-card-head"><h2>Your next reward</h2>${viewerIcon('gift')}</div>${blocked ? '<p>Claiming is unavailable for this membership. Contact the creator for help.</p>' : !isMember ? `<p>${viewer ? 'Join this community to start collecting credits for rewards.' : 'Sign in to see your reward progress.'}</p>` : nextReward ? `<div class="viewer-reward-progress"><strong>${esc(nextReward.name)}</strong><span>${formatNumber(balance)} / ${formatNumber(nextReward.cost)} Credits</span></div><progress max="100" value="${progress}" aria-label="Progress toward ${esc(nextReward.name)}">${progress}%</progress><p>${balance >= Number(nextReward.cost) ? 'You have enough credits for this reward.' : `${formatNumber(Number(nextReward.cost) - balance)} more Credits needed. Use ${esc(b.name || slug)}'s channel-point rewards or redeem a community code to earn credits.`}</p><a class="yr-btn" href="${shopHref}">${balance >= Number(nextReward.cost) ? 'Choose a reward' : 'Explore rewards'} ${viewerIcon('arrow')}</a>` : '<p>No rewards are available right now. Check back after the creator adds more.</p>'}</section>`;
+  return `<section class="viewer-card viewer-next-reward"><div class="viewer-card-head"><h2>Your next reward</h2>${viewerIcon('gift')}</div>${blocked ? '<p>Claiming is unavailable for this membership. Contact the creator for help.</p>' : nextReward ? `<div class="viewer-reward-progress"><strong>${esc(nextReward.name)}</strong><span>${formatNumber(balance)} / ${formatNumber(nextReward.cost)} Credits</span></div><progress max="100" value="${progress}" aria-label="Progress toward ${esc(nextReward.name)}">${progress}%</progress><p>${balance >= Number(nextReward.cost) ? 'You have enough credits for this reward.' : `${formatNumber(Number(nextReward.cost) - balance)} more Credits needed. Use ${esc(b.name || slug)}'s channel-point rewards or redeem a community code to earn credits.`}</p><a class="yr-btn" href="${shopHref}">${balance >= Number(nextReward.cost) ? 'Choose a reward' : 'Explore rewards'} ${viewerIcon('arrow')}</a>` : '<p>No rewards are available right now. Check back after the creator adds more.</p>'}</section>`;
 }
 
 function recentCreditCard(ctx) {
   const { viewerData, isMember, slug, isCustomDomain, siteSections } = ctx;
-  if (siteSections.me === false) return '';
+  if (siteSections.me === false || !isMember) return '';
   const recent = (viewerData?.ledger || []).slice(0,3);
-  return `<section class="viewer-card viewer-recent-activity"><div class="viewer-card-head"><h2>${viewerIcon('activity')}Recent Activity</h2><a href="${siteSectionHref('me', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div>${!isMember ? '<p>Join the community to keep your activity here.</p>' : recent.length ? `<ul>${recent.map(row => {
+  return `<section class="viewer-card viewer-recent-activity"><div class="viewer-card-head"><h2>${viewerIcon('activity')}Recent Activity</h2><a href="${siteSectionHref('me', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div>${recent.length ? `<ul>${recent.map(row => {
     const amount = ledgerDelta(row);
     return `<li><span>${esc(LEDGER_KIND[row.type] || 'Credit activity')}<small>${esc(formatDate(row.created_at))}</small></span><strong${amount < 0 ? ' class="is-negative"' : ''}>${amount >= 0 ? '+' : '−'}${formatNumber(Math.abs(amount))} Credits</strong></li>`;
   }).join('')}</ul>` : '<p>No credit activity yet. Redeem a code shared by the creator or use their channel-point rewards to get started.</p>'}</section>`;
@@ -873,7 +897,7 @@ function shopMain(ctx) {
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
   const unavailable = viewer && ctx.membershipStatus === 'unavailable';
-  const head = `<header class="viewer-page-intro"><div><h1>Rewards</h1><p>Redeem your credits for ${esc(b.name || slug)}'s community rewards.</p></div>${items.length ? '<div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div>' : ''}</header>${viewer && isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : viewer ? 'Join this community before claiming a reward.' : 'Sign in to use your community credits.'}</p>`}`;
+  const head = `<header class="viewer-page-intro"><div><h1>Rewards</h1><p>Redeem your credits for ${esc(b.name || slug)}'s community rewards.</p></div>${items.length ? '<div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div>' : ''}</header>${!viewer || isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : 'Join this community before claiming a reward.'}</p>`}`;
 
   const blockedNote = viewer && blocked
     ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
