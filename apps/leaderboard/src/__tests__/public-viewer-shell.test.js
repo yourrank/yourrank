@@ -30,13 +30,13 @@ const baseData = {
   siteSections: { home: true, leaderboard: true, shop: true, games: false, me: true },
 };
 
-function render(section, { data = baseData, viewer = null, viewerData = null, custom = false, r = {} } = {}) {
+function render(section, { data = baseData, viewer = null, viewerData = null, custom = false, r = {}, viewerIntent = null } = {}) {
   return renderSite({
     r: { slug: "creator", plan: "pro", data, ...r },
     section,
     viewer,
     viewerData,
-    opts: { ...opts, isCustomDomain: custom, logoUrl: data.logoUrl || null },
+    opts: { ...opts, isCustomDomain: custom, logoUrl: data.logoUrl || null, viewerIntent },
   });
 }
 
@@ -127,25 +127,65 @@ describe("public viewer shell", () => {
     expect(html).toContain(">credits</p>");
   });
 
-  it("keeps real OAuth continuation and local membership navigation without the obsolete guide", async () => {
+  it("routes every guest CTA through the community gate and starts OAuth only from it", async () => {
     for (const provider of ["Kick", "Discord"]) {
       const html = await render("home", { r: { [`viewer${provider}AuthEnabled`]: true } });
       const membership = await render("me", { r: { [`viewer${provider}AuthEnabled`]: true } });
-      expect((html.match(/\/api\/viewer\/auth\//g) || [])).toHaveLength(1);
-      expect(html).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
-      expect(membership).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join community</a>`);
+      expect(html).not.toContain('/api/viewer/auth/');
+      expect(html).toContain('href="/creator/me">Sign in</a>');
+      expect(html).toContain('href="/creator/me?intent=join"');
+      expect(html).toContain('href="/creator/me?intent=activity">View activity ');
+      expect(membership).toContain('data-viewer-intent="signin"');
+      expect(membership).toContain('<h2>Sign in to Creator Name</h2>');
+      expect(membership).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
+      expect(membership).not.toContain('intent=join&site=');
+      expect(membership).toContain('href="/creator/me?intent=join">Join Creator Name</a>');
+      expect(membership).toContain('href="/creator">Back to Creator Name</a>');
       expect(html).not.toContain('data-guide-base');
-      expect(html).toContain('href="/creator/me"');
     }
+    const both = await render("me", { r: { viewerKickAuthEnabled: true, viewerDiscordAuthEnabled: true } });
+    expect((both.match(/\/api\/viewer\/auth\//g) || [])).toHaveLength(2);
+    expect(both).toContain('Sign in with Kick</a><a class="yr-btn yr-btn--ghost" href="/api/viewer/auth/discord?');
     const member = await render("home", { viewer, viewerData });
     expect(member).not.toContain('/api/viewer/auth/');
     expect(member).not.toContain('data-guide-visit');
     expect(member).toContain('href="/creator/shop"');
   });
 
+  it("names the guest's intent on the gate and returns to the requested screen without acting on it", async () => {
+    const r = { viewerKickAuthEnabled: true, viewerDiscordAuthEnabled: true };
+    const join = await render("me", { r, viewerIntent: { intent: "join", rewardId: "" } });
+    expect(join).toContain('data-viewer-intent="join"');
+    expect(join).toContain('<h2>Join Creator Name</h2>');
+    expect(join).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join with Kick</a>');
+    expect(join).toContain('href="/api/viewer/auth/discord?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join with Discord</a>');
+    expect(join).not.toContain('Not a member yet?');
+
+    const activity = await render("me", { r, viewerIntent: { intent: "activity", rewardId: "" } });
+    expect(activity).toContain('<h2>See your activity</h2>');
+    expect(activity).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme">Sign in with Kick</a>');
+    expect(activity).not.toContain('intent=join&site=');
+
+    const reward = await render("me", { r, viewerIntent: { intent: "reward", rewardId: "2" } });
+    expect(reward).toContain('data-viewer-intent="reward"');
+    expect(reward).toContain('<h2>Review VIP badge</h2>');
+    expect(reward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fshop%23reward-2">Sign in with Kick</a>');
+    expect(reward).not.toContain('intent=join&site=');
+
+    const unknownReward = await render("me", { r, viewerIntent: { intent: "reward", rewardId: "nope" } });
+    expect(unknownReward).toContain('data-viewer-intent="signin"');
+    expect(unknownReward).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with Kick</a>');
+
+    const shop = await render("shop", { r });
+    expect(shop).toContain('id="reward-2" tabindex="-1"');
+    expect(shop).toContain('href="https://example.test/creator/me?intent=reward&reward=2">Sign in to claim</a>');
+    expect(shop).not.toContain('/api/viewer/auth/');
+  });
+
   it("keeps sign-in and account navigation role-correct", async () => {
     const signedOut = await render("home");
-    expect(signedOut).toContain('href="/creator/me#membership-code">Sign in ');
+    expect(signedOut).toContain('href="/creator/me">Sign in ');
+    expect(signedOut).not.toContain('#membership-code');
     expect(signedOut).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
     const signedIn = await render("home", { viewer, viewerData });
@@ -167,8 +207,13 @@ describe("public viewer shell", () => {
     expect(html).toContain('href="http://localhost:8787/demo/shop"');
     expect(html).toContain('href="http://localhost:8787/demo/leaderboard"');
     expect(html).toContain('href="http://localhost:8787/demo/terms"');
-    expect(html).toContain('returnTo=http%3A%2F%2Flocalhost%3A8787%2Fdemo');
     expect(html).not.toContain('https://yourrank.site/demo');
+    const gate = await renderSite({
+      r: { slug: "demo", plan: "pro", data: baseData, viewerKickAuthEnabled: true },
+      section: "me", viewer: null, viewerData: null,
+      opts: { slug: "demo", homeUrl: "http://localhost:8787", nonce: "n", isDemo: true },
+    });
+    expect(gate).toContain('returnTo=http%3A%2F%2Flocalhost%3A8787%2Fdemo"');
   });
 
   it("keeps local membership and global account destinations distinct on custom domains", async () => {
@@ -415,8 +460,10 @@ describe("public viewer shell", () => {
   it("links the credits rail to local earning activity and gives standings one page heading", async () => {
     const html = await render('home');
     const credit = html.match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
-    expect(credit).toContain('href="/creator/me#membership-code"');
+    expect(credit).toContain('href="/creator/me">Sign in ');
     expect(credit).not.toContain('href="/me"');
+    const memberCredit = (await render('home', { viewer, viewerData })).match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
+    expect(memberCredit).toContain('href="/creator/me#membership-code">Earn More Credits ');
     expect(credit).not.toContain('Browse rewards');
     const board = await render('leaderboard');
     expect((board.match(/<h1\b/g) || [])).toHaveLength(1);

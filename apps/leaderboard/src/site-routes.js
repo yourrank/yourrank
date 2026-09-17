@@ -8,6 +8,7 @@ import { resolveViewer as defaultResolveViewer } from "@yourrank/shared/viewer-s
 import { createQueueProducer as defaultCreateQueueProducer } from "@yourrank/shared/queue-producer";
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { decideBoardView } from "@yourrank/shared/board-views";
+import { parseViewerIntent } from "@yourrank/shared/viewer-intent";
 import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
@@ -194,6 +195,7 @@ ${gamesIslandHead()}
         botUsername: r.botUsername,
         isDemo,
         viewerAuthError: section === "me" ? url.searchParams.get("error") : null,
+        viewerIntent: section === "me" ? parseViewerIntent(url) : null,
       },
     });
     const responseHeaders = cacheableSite
