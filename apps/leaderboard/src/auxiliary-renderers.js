@@ -1,6 +1,7 @@
 import { formatMoney, prizeCurrency, renderSite, siteSectionHref } from "@yourrank/shared/site-render";
 import { safeUrl } from "@yourrank/shared/public-render-helpers";
 import { viewerHelpHref } from "@yourrank/shared/viewer-shell";
+import { renderCommunityArticle } from "@yourrank/shared/site-article";
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -16,7 +17,7 @@ function canonicalPathFor(page, slug, isCustomDomain) {
   return isCustomDomain ? `/${page}` : `/${encodeURIComponent(slug || "")}/${page}`;
 }
 
-function shell({ r, slug, homeUrl, nonce, contentHtml, title, description, logoUrl = null, isCustomDomain = false, canonicalPath = null }) {
+function shell({ r, slug, homeUrl, nonce, contentHtml, title, description, logoUrl = null, isCustomDomain = false, canonicalPath = null, layout = undefined }) {
   return renderSite({
     r,
     section: null,
@@ -32,9 +33,19 @@ function shell({ r, slug, homeUrl, nonce, contentHtml, title, description, logoU
       pageTitle: title,
       pageDescription: description,
       canonicalPath,
+      layout,
     },
   });
 }
+
+const LEGAL_PAGES = [
+  { key: "terms", label: "Terms of Service" },
+  { key: "privacy", label: "Privacy Policy" },
+  { key: "cookies", label: "Cookie Policy" },
+  { key: "refund", label: "Refund & Cancellation" },
+  { key: "contact", label: "Contact" },
+  { key: "responsible", label: "Responsible Play" },
+];
 
 function record(data, opts) {
   return data?.data ? data : {
@@ -87,19 +98,30 @@ function legalBody(data, page) {
 
 export function renderNewLegalPage(data, page, opts) {
   const r = record(data, opts);
-  const title = ({
-    terms: "Terms of Service", privacy: "Privacy Policy", responsible: "Responsible Play",
-    cookies: "Cookie Policy", refund: "Refund & Cancellation", contact: "Contact",
-  })[page] || page;
-  // The same page head as every other viewer surface, then one column of
-  // prose: a policy is something a viewer reads on a phone, not a mosaic of
-  // cards. `.yr-prose` is what gives the copy its paragraph rhythm and reading
-  // measure — the public shell resets paragraph margins, so this body was one
-  // undifferentiated block of text on every legal page.
-  const name = esc(r.data.brand?.name || r.slug);
+  const title = LEGAL_PAGES.find((p) => p.key === page)?.label || page;
+  const rawName = r.data.brand?.name || r.slug;
+  const name = esc(rawName);
+  const legal = r.data.legal || {};
+  // A policy is something a viewer reads: the shared article template gives it
+  // one heading, who publishes it and where it applies, the other enabled
+  // policies as siblings, the copy, and one support block. There is no
+  // per-policy timestamp in the site record, so no "last updated" is shown.
+  const nav = LEGAL_PAGES
+    .filter((p) => legal[`${p.key}Enabled`] !== false || p.key === page)
+    .map((p) => ({ label: p.label, href: canonicalPathFor(p.key, r.slug, opts.isCustomDomain), active: p.key === page }));
   const supportLink = `<p><a class="yr-sec-link" href="${esc(viewerHelpHref(`/${encodeURIComponent(r.slug)}/contact`, opts.isCustomDomain ? "https://yourrank.site" : ""))}">Contact YourRank support</a></p>`;
-  const content = `<header class="yr-vhead"><span class="yr-cue">Information</span><h1 class="yr-h1">${esc(title)}</h1><p class="yr-vhead-lede">${name} · public information and policies.</p></header><section class="yr-vsec" aria-labelledby="yr-legal-body"><h2 class="yr-sr" id="yr-legal-body">${esc(title)}</h2><div class="yr-prose">${legalBody(r.data, page)}</div></section><section class="yr-vsec" aria-labelledby="yr-legal-help"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-legal-help">Need help?</h2></div><h3 class="yr-sec-sub">Rewards and fulfilment</h3>${page === "contact" ? `<p class="yr-note">${name} handles these; see the contact details above.</p>` : creatorContactHtml(r.data, name)}<h3 class="yr-sec-sub">Website and account</h3>${supportLink}</section>`;
-  return shell({ r, ...opts, contentHtml: content, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
+  const support = `<h3 class="yr-sec-sub">Rewards and fulfilment</h3>${page === "contact" ? `<p class="yr-note">${name} handles these; see the contact details above.</p>` : creatorContactHtml(r.data, name)}<h3 class="yr-sec-sub">Website and account</h3>${supportLink}`;
+  const content = renderCommunityArticle({
+    cue: page === "contact" ? "Information" : "Policy",
+    title,
+    owner: rawName,
+    scope: `${rawName}'s community on YourRank`,
+    nav,
+    navLabel: "Community policies",
+    bodyHtml: legalBody(r.data, page) + (page === "cookies" ? `<p><button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-cookie-preferences>Cookie preferences</button></p>` : ""),
+    support: { title: "Need help?", html: support },
+  });
+  return shell({ r, ...opts, layout: "article", contentHtml: content, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${rawName}`, description: `${title} for ${rawName}.` });
 }
 
 export function renderNewPlayerProfile(data, player, history, opts) {

@@ -42,7 +42,7 @@ describe("new-shell auxiliary renderers", () => {
   it("renders legal and streamer pages in the site shell with honest empty states", async () => {
     const legal = await renderNewLegalPage(record.data, "privacy", opts);
     const profile = await renderNewStreamerProfile(record.data, opts);
-    expect(legal).toContain('class="yr-site viewer-shell"');
+    expect(legal).toContain('class="yr-site viewer-shell viewer-article-page"');
     expect(legal).toContain('aria-label="Viewer navigation"');
     expect(legal).not.toContain('/assets/devin-system.css');
     expect(legal).toContain("Privacy Policy");
@@ -108,7 +108,8 @@ describe("new-shell auxiliary renderers", () => {
     const legal = await renderNewLegalPage(record.data, "terms", { ...opts, plan: "free" });
     expect(legal).toContain("Powered by <a");
     expect(legal).not.toContain("Not configured");
-    expect(legal).not.toContain('aria-current="page"');
+    const rail = legal.match(/<aside class="viewer-rail"[\s\S]*?<\/aside>/)[0];
+    expect(rail).not.toContain('aria-current="page"');
   });
 
   it("uses the authoritative Responsible Play label", async () => {
@@ -116,7 +117,7 @@ describe("new-shell auxiliary renderers", () => {
     expect(legal).toContain(">Responsible Play<");
     expect(legal).not.toContain("Responsible Gaming");
     expect(legal).toContain("Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.");
-    const policyBody = legal.match(/<div class="yr-prose">([\s\S]*?)<\/div>/)?.[1] || "";
+    const policyBody = legal.match(/<div class="yr-prose viewer-article-body">([\s\S]*?)<\/div>/)[1];
     expect(policyBody).not.toMatch(/gambl|casino|wager/i);
   });
 
@@ -265,13 +266,40 @@ describe("new-shell auxiliary renderers", () => {
     expect(profile.match(/<main\b[\s\S]*?<\/main>/)?.[0]).not.toContain("—");
   });
 
-  it("gives legal pages the viewer heading, readable prose and a help region", async () => {
+  it("renders legal pages as one community article with readable prose and a help region", async () => {
     const legal = await renderNewLegalPage(record.data, "terms", opts);
-    expect(legal).toContain('class="yr-vhead"');
-    expect(legal).toContain('class="yr-prose"');
-    expect(legal).toContain('id="yr-legal-help">Need help?');
+    expect(legal).toContain('<article class="viewer-article">');
+    expect(legal).toContain('class="yr-prose viewer-article-body"');
+    expect(legal).toContain('id="viewer-article-support-title">Need help?');
     expect(legal.match(/<h1\b/g)).toHaveLength(1);
+    expect(legal).toContain("<dt>Published by</dt><dd>Demo Board</dd>");
+    expect(legal).toContain("<dt>Applies to</dt><dd>Demo Board&#39;s community on YourRank</dd>");
+    expect(legal).not.toContain("Last updated");
     expect(legal).not.toContain('class="yr-card"');
+    expect(legal).not.toContain('<aside class="viewer-overview"');
+    expect(legal).not.toContain("data-share-block");
+    expect(legal).not.toContain('<footer class="viewer-panel-footer"');
+  });
+
+  it("links the enabled sibling policies from every legal page and marks the current one", async () => {
+    const legal = await renderNewLegalPage({ ...record.data, legal: { refundEnabled: false } }, "privacy", opts);
+    const nav = legal.match(/<nav class="viewer-article-nav"[\s\S]*?<\/nav>/)[0];
+    expect(nav).toContain('<a href="/demo-board/privacy" aria-current="page">Privacy Policy</a>');
+    expect(nav).toContain('<a href="/demo-board/terms">Terms of Service</a>');
+    expect(nav).toContain('<a href="/demo-board/contact">Contact</a>');
+    expect(nav).not.toContain("Refund");
+    const custom = await renderNewLegalPage(record.data, "terms", { ...opts, isCustomDomain: true });
+    expect(custom).toContain('<a href="/privacy">Privacy Policy</a>');
+  });
+
+  it("lets the cookie policy open the consent preferences", async () => {
+    const cookies = await renderNewLegalPage(record.data, "cookies", opts);
+    const body = cookies.match(/<div class="yr-prose viewer-article-body">([\s\S]*?)<\/div>/)[1];
+    expect(body).toContain('<button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-cookie-preferences>Cookie preferences</button>');
+    const customCopy = await renderNewLegalPage({ ...record.data, legal: { cookies: "Our own cookie text." } }, "cookies", opts);
+    expect(customCopy).toContain("<p>Our own cookie text.</p>");
+    expect(customCopy).toContain("data-cookie-preferences>Cookie preferences</button>");
+    expect(cookies).toContain('<script src="/assets/cookie-consent.js"');
   });
 
   it("hides external new-tab disclosures with the public shell utility", async () => {
