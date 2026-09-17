@@ -16,6 +16,8 @@ const subjectInput = document.getElementById("c_subject");
 const messageInput = document.getElementById("c_message");
 const backWrap = document.getElementById("c_back_wrap");
 const back = document.getElementById("c_back");
+const requestIdInput = document.getElementById("c_request_id");
+const fields = [nameInput, emailInput, subjectInput, messageInput].filter(Boolean);
 
 const params = new URLSearchParams(location.search);
 const helpApp = document.getElementById("help-app");
@@ -80,8 +82,63 @@ function getCsrf() {
 }
 
 const REQUEST_TIMEOUT_MS = 15000;
-const TIMEOUT_MESSAGE = "No reply from the server after 15 seconds. Your message may or may not have been received, so we kept your draft. If no confirmation email arrives, send it again or use the email address below.";
+const TIMEOUT_MESSAGE = "No reply from the server after 15 seconds, so we kept your draft. Sending again is safe: the same message is stored once even if the first attempt did arrive.";
 const NETWORK_MESSAGE = "Could not reach the server, so nothing was sent. Check your connection and try again; your draft is still here.";
+const FIELD_LABELS = { c_name: "Name", c_email: "Email", c_subject: "Subject", c_message: "Message" };
+
+function fieldMessage(input) {
+  const label = FIELD_LABELS[input.id] || "This field";
+  const v = input.validity;
+  if (v.valueMissing) return `${label} is required.`;
+  if (v.typeMismatch) return "Enter an email address like name@example.com.";
+  if (v.tooShort) return `${label} must be at least ${input.minLength} characters (currently ${input.value.trim().length}).`;
+  if (v.tooLong) return `${label} must be ${input.maxLength} characters or fewer.`;
+  return input.validationMessage || `${label} is not valid.`;
+}
+
+function setFieldError(input, text) {
+  const el = document.getElementById(`${input.id}_err`);
+  if (el) el.textContent = text || "";
+  if (text) input.setAttribute("aria-invalid", "true");
+  else input.removeAttribute("aria-invalid");
+}
+
+function clearFieldErrors() {
+  fields.forEach((input) => setFieldError(input, ""));
+}
+
+// Native constraints stay the source of truth; the browser bubble is replaced
+// by a durable inline error tied to the field through aria-describedby.
+function showInvalidFields() {
+  const invalid = fields.filter((input) => !input.checkValidity());
+  invalid.forEach((input) => setFieldError(input, fieldMessage(input)));
+  if (!invalid.length) return false;
+  const count = invalid.length;
+  err.textContent = count === 1
+    ? `Fix the ${FIELD_LABELS[invalid[0].id] || "highlighted"} field to send your message.`
+    : `Fix ${count} fields to send your message: ${invalid.map((input) => FIELD_LABELS[input.id]).join(", ")}.`;
+  invalid[0].focus();
+  return true;
+}
+
+fields.forEach((input) => {
+  input.addEventListener("invalid", (e) => e.preventDefault());
+  input.addEventListener("input", () => {
+    if (input.getAttribute("aria-invalid") === "true" && input.checkValidity()) setFieldError(input, "");
+  });
+});
+
+// Each draft owns one request id; a retry after a timeout reuses it so the
+// server stores the message once. A successful send starts a fresh draft.
+function ensureRequestId() {
+  if (!requestIdInput) return "";
+  if (!requestIdInput.value) {
+    requestIdInput.value = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+  }
+  return requestIdInput.value;
+}
 
 let pending = false;
 
@@ -92,12 +149,30 @@ function setLoading(loading) {
   submit.textContent = loading ? "Sending..." : "Send message";
 }
 
+function showSuccess(body) {
+  const message = body.message || "Message received. We'll reply by email.";
+  const receipt = body.receiptId ? `<p class="hint">Reference: <code>${String(body.receiptId).slice(0, 8)}</code></p>` : "";
+  success.innerHTML = `<h3>Message sent</h3><p>${escapeHtml(message)}</p>${receipt}`;
+  success.hidden = false;
+  // Focus moves to the status region so the confirmation is read once, not
+  // announced a second time as a live-region update.
+  success.focus();
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 if (form) {
+  form.setAttribute("novalidate", "");
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (pending) return;
     err.textContent = "";
     success.hidden = true;
+    clearFieldErrors();
+    if (showInvalidFields()) return;
+    ensureRequestId();
     const data = Object.fromEntries(new FormData(form));
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -114,10 +189,14 @@ if (form) {
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
-        success.hidden = false;
-        success.textContent = body.message || "Message received. We'll reply by email.";
         form.reset();
+        if (requestIdInput) requestIdInput.value = "";
         applyContext();
+        showSuccess(body);
+      } else if (res.status === 429) {
+        err.textContent = body.error || "Too many messages from this connection. Wait a few minutes, then send again; your draft is still here.";
+      } else if (res.status >= 500) {
+        err.textContent = "The server could not save your message right now. Nothing was sent; your draft is still here, so try again in a moment.";
       } else {
         err.textContent = body.error || "Something went wrong. Your draft is still here; try again.";
       }

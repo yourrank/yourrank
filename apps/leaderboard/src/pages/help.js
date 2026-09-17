@@ -31,16 +31,18 @@ function subnavHtml(active, workspace = false, viewerHelp = null) {
 }
 
 function contactFormHtml({ kind, subjectPlaceholder, messagePlaceholder, includeReturn = true }) {
-  return `<form id="contactForm" class="card"><h2>Send us a message</h2>
-        <div class="field"><label for="c_name">Name</label><input id="c_name" name="name" type="text" autocomplete="name" required maxlength="120" /></div>
-        <div class="field"><label for="c_email">Email</label><input id="c_email" name="email" type="email" autocomplete="email" required maxlength="254" /></div>
+  return `<form id="contactForm" class="card" aria-describedby="c_required_hint"><h2>Send us a message</h2>
+        <p class="hint" id="c_required_hint">Name, email and message are required. Subject is optional.</p>
+        <div class="field"><label for="c_name">Name</label><input id="c_name" name="name" type="text" autocomplete="name" required maxlength="120" aria-describedby="c_name_err" /><p class="field-err" id="c_name_err"></p></div>
+        <div class="field"><label for="c_email">Email</label><input id="c_email" name="email" type="email" autocomplete="email" required maxlength="254" aria-describedby="c_email_hint c_email_err" /><p class="hint" id="c_email_hint">We'll reply by email to this address; it isn't used for anything else.</p><p class="field-err" id="c_email_err"></p></div>
         <input type="hidden" id="c_kind" name="kind" value="${kind}" />
         <input id="c_context" name="context" type="hidden" />
-        <div class="field"><label for="c_subject">Subject</label><input id="c_subject" name="subject" type="text" maxlength="120" placeholder="${subjectPlaceholder}" /></div>
-        <div class="field"><label for="c_message">Message</label><textarea id="c_message" name="message" rows="6" required minlength="10" maxlength="4000" placeholder="${messagePlaceholder}" aria-describedby="c_message_hint"></textarea><p class="hint" id="c_message_hint">10 to 4000 characters.</p></div>
+        <input id="c_request_id" name="requestId" type="hidden" />
+        <div class="field"><label for="c_subject">Subject <span class="hint">(optional)</span></label><input id="c_subject" name="subject" type="text" maxlength="120" placeholder="${subjectPlaceholder}" aria-describedby="c_subject_err" /><p class="field-err" id="c_subject_err"></p></div>
+        <div class="field"><label for="c_message">Message</label><textarea id="c_message" name="message" rows="6" required minlength="10" maxlength="4000" placeholder="${messagePlaceholder}" aria-describedby="c_message_hint c_message_err"></textarea><p class="hint" id="c_message_hint">10 to 4000 characters.</p><p class="field-err" id="c_message_err"></p></div>
         <div class="err" id="c_err" role="alert" aria-live="assertive"></div>
         <button class="btn btn--accent w-full" type="submit" id="c_submit">Send message</button>
-        <p class="hint text-accent" id="c_success" hidden>Message received. We'll reply by email.</p>
+        <div class="contact-success" id="c_success" role="status" aria-live="polite" tabindex="-1" hidden></div>
       </form>
       ${includeReturn ? '<p class="hint mt-18" id="c_back_wrap" hidden><a id="c_back" href="/">← Back</a></p>' : ''}
       <p class="hint mt-24">You can also email <a href="mailto:{{SUPPORT_EMAIL}}">{{SUPPORT_EMAIL}}</a> directly.</p>`;
