@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "approvedAt": "2026-09-17",
+  "fixture": "scripts/verify-viewer-audit.mjs",
+  "referenceDirectory": "docs/verification/yr-003-screenshots",
+  "hashAlgorithm": "sha256",
+  "runtime": {
+    "playwright": "1.55.0",
+    "chromium": "140.0.7339.16",
+    "executable": "Chromium executable supplied through CHROMIUM_EXECUTABLE (capture path intentionally not recorded; see yr-003-outcomes.json prerequisites)",
+    "captureEnvironment": "Debian 12 Linux"
+  },
+  "viewports": [320, 390, 768, 1024, 1440],
+  "fixtureData": "Deterministic in-process HTTP fixture; no deployed Worker, database, account, or external service is contacted.",
+  "updatePolicy": "Both fresh captures must first match each other, the approved PNGs, and this hash set. On a deliberate renderer, font, browser, operating-system, or visual change, review generated PNGs against docs/verification/yr-003-screenshots with the recorded runtime, then explicitly approve replacement PNGs and hashes; do not silently bless drift.",
+  "hashes": [
+    { "name": "board-1-1024.png", "sha256": "bcf5e71509e6f35650eab9b9c3b8e4ef00843fa6a27fc78395c8faadcaa2638c" },
+    { "name": "board-1-1440.png", "sha256": "6eed8c7565ecee341f26226aea09d14b2b20c07cd572b5907e396d48d16d15c2" },
+    { "name": "board-1-320.png", "sha256": "28f59ff94fbf5b7a70ccbcff9d1da0d1f7718a397c3a05dd697f4897a8199ad2" },
+    { "name": "board-1-390.png", "sha256": "2f774b4d104fd731053ee0f272f789c6aa5f662438ee23d13c120947f694bc35" },
+    { "name": "board-1-768.png", "sha256": "2bfec5834755aafc79d3beaac7ff9f95729b44f241b1d2acd80978833fc9e83f" },
+    { "name": "board-2-1024.png", "sha256": "2321d539abd0eb2e088a8e59adc0033679cc0f677afd5273791edec369eceae9" },
+    { "name": "board-2-1440.png", "sha256": "fe9bdbb0699775b8f0e2e715edb98573742b90dacae84a6ca17844d722dca2c7" },
+    { "name": "board-2-320.png", "sha256": "f74b8583c97ca6e6a5d774ba63581e4c3b009c38ce1a0e210642e0dd69f34066" },
+    { "name": "board-2-390.png", "sha256": "d0353b9cd9402677f8531d2f04f38621e0e95c2862ddee02df32ff190a3f9315" },
+    { "name": "board-2-768.png", "sha256": "6306f22e004b9d9600355215d529051cb331a5c8cf133a8d8791534186ce80d8" },
+    { "name": "board-3-1024.png", "sha256": "ba1c36b50365d704f28c75f1671ddde73f143b368afc608dfe6d0bc4b188570d" },
+    { "name": "board-3-1440.png", "sha256": "3b28d8abe3a81dbfe728f283a21d4a119409bab335c42abf9acb366815c0a3d1" },
+    { "name": "board-3-320.png", "sha256": "9129033bb810553b3d8549c6ee73a07f490fa9e914b4756d9bc82d9efd31ad05" },
+    { "name": "board-3-390.png", "sha256": "1dd8f2a53dfac3cb001f03b5b7ec938d29a9d0cf00013235c58bc820ab0fb2c7" },
+    { "name": "board-3-768.png", "sha256": "dbd3860522d6a0664b00cc0feb1fad2e0c9bb37ad22e7f3ba7fd4511417d17ee" }
+  ]
+}
