@@ -1,6 +1,6 @@
 // Reviews / Google Business Profile page
 import { DEVIN_DESIGN_CONTRACT } from "@yourrank/shared/page-shell";
-import { brandLogoSvg } from "@yourrank/shared/brand-assets";
+import { publicHeader } from "./public-chrome.js";
 
 const gbpStructuredData = JSON.stringify({
   "@context": "https://schema.org",
@@ -35,9 +35,7 @@ export const reviewsPage = `<!DOCTYPE html><html lang="en"><head>
 <script type="application/ld+json">${gbpStructuredData}</script>
 </head><body class="marketing-page marketing-page--reviews" data-identity="devin-reference">${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
-<header><nav class="top wrap"><a href="/" class="brand" aria-label="YourRank home"><span class="brand-icon-wrap" aria-hidden="true">${brandLogoSvg({ idPrefix: "yrRev" })}</span></a>
-<button class="nav-toggle" aria-label="Toggle menu" aria-expanded="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-<div class="links"><a href="/">Home</a><a href="/#products">Products</a><a href="/pricing">Pricing</a><a href="/faq">FAQ</a><a href="/login">Sign in</a><a href="/signup" class="btn btn--accent">Create your free page</a></div></nav></header>
+${publicHeader({ idPrefix: "yrRev" })}
 <main class="wrap pg-wrap pg-wrap--center" id="main-content">
 <h1 class="pg-title pg-title--center">Rate YourRank on Google</h1>
 <p class="prose-lead lead--center">If YourRank helped you run a leaderboard, Telegram bot, or reward your viewers, leave a review. It helps other streamers find us.</p>
