@@ -194,6 +194,25 @@ describe("a creator's Rewards page", () => {
     expect(await shop()).toContain('id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"');
   });
 
+  it("announces settled search and sort results without moving focus or doubling the no-results note", async () => {
+    const html = await shop();
+    expect(html).toContain('<input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" />');
+    expect(html).toContain('<select id="viewer-reward-sort" aria-controls="viewer-rewards">');
+    expect(html).toContain('<p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p>');
+    // The no-results note is plain text; the live region is the single announcer.
+    expect(html).toContain('<p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p>');
+    expect(html).not.toContain('id="viewer-reward-empty" class="yr-note" role="status"');
+
+    const block = shellSource.slice(shellSource.indexOf('getElementById("viewer-rewards")'), shellSource.indexOf('querySelector(".viewer-switch")'));
+    expect(block).toContain("var query = rewardSearch.value.trim().toLowerCase();");
+    expect(block).toContain("rewardStatusTimer = window.setTimeout(");
+    expect(block).toContain("message === lastRewardStatus) return;");
+    expect(block).toContain('count === 1 ? "1 reward" : count.toLocaleString("en-US") + " rewards"');
+    expect(block).toContain('announceRewards(!query ? "" : shown ? rewardCount(shown) + " match \\u201c" + query + "\\u201d." : "No rewards match \\u201c" + query + "\\u201d.");');
+    expect(block).toContain('announceRewards(rewardCount(visible) + " sorted by " + sortLabel + ".");');
+    expect(block).not.toContain(".focus(");
+  });
+
   it("keeps a long reward name, unicode and emoji intact and unclipped by JS", async () => {
     const html = await shop();
     expect(html).toContain(LONG_NAME);
