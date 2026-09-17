@@ -403,6 +403,28 @@ describe("public viewer shell", () => {
     expect(css).toContain('.viewer-overview{grid-column:3');
   });
 
+  it("keeps leaderboard state badges readable on the dark season gradient", () => {
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    const season = css.match(/\.viewer-season\{([^}]*)\}/)[1];
+    const token = (name) => season.match(new RegExp(`${name}:(#[0-9a-f]{6})`))[1];
+    const gradient = [...season.matchAll(/#[0-9a-f]{6}/g)].map((m) => m[0]).slice(-2);
+    const luminance = (hex) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a, b) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const shellToken = css.match(/\.viewer-shell\{[^}]*--yr-success-readable:(#[0-9a-f]{6})/)[1];
+    expect(Math.min(...gradient.map((bg) => contrast(shellToken, bg)))).toBeLessThan(4.5);
+    for (const name of ['--yr-success-readable', '--yr-warning-readable', '--yr-faint']) {
+      for (const bg of gradient) expect(contrast(token(name), bg)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(shellToken, '#ffffff')).toBeGreaterThanOrEqual(4.5);
+  });
+
   it("keeps account and community return links reachable on mobile", async () => {
     const html = await render('me', { viewer, viewerData });
     expect(html).toContain('href="/me?community=creator"');
