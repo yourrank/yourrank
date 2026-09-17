@@ -115,7 +115,8 @@ function zeroCredits() {
 describe("a creator's Rewards page", () => {
   it("uses the header as the only sign-in owner in the empty signed-out state", async () => {
     const html = await signedOut("shop");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).not.toContain("/api/viewer/auth/");
+    expect((html.match(/href="\/demo-board\/me">Sign in<\/a>/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
     expect(html).toContain("Sign in to use your community credits.");
     expect(html).toContain('<p class="yr-empty-t">No rewards yet</p>');
@@ -204,7 +205,7 @@ describe("a creator's Rewards page", () => {
 describe("the creator home credit state", () => {
   it("keeps empty rewards discoverable from the signed-out community home", async () => {
     const html = await signedOut("home");
-    expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
+    expect(html).not.toContain("/api/viewer/auth/");
     expect(html).toContain('class="viewer-home-banner"');
     expect(html).not.toContain("data-viewer-guide");
     expect(html).not.toContain("yr-vnote");
@@ -248,13 +249,11 @@ describe("a creator's My Community page", () => {
   it("explains the signed-out state without repeating the header sign-in action", async () => {
     const html = await signedOut("me");
     expect((html.match(/\/api\/viewer\/auth\/kick/g) || []).length).toBe(1);
-    expect(html).toContain('class="member-gate"');
-    expect(html).toContain("Join community</a>");
-    expect(html).toContain("intent=join");
-    expect(html).toContain("site=demo-board");
-    expect(html).toContain("follow your reward claims");
-    expect(html).toContain("Your credits stay with this community.");
-    expect(html).toContain("Back to my communities");
+    expect(html).toContain('class="member-gate" data-viewer-intent="signin"');
+    expect(html).toContain("Sign in with Kick</a>");
+    expect(html).not.toContain("intent=join&site=");
+    expect(html).toContain('href="/demo-board/me?intent=join">Join A Creator With A Very Long Channel Name Indeed</a>');
+    expect(html).toContain("My communities</a>");
     expect(html).not.toContain("data-code-drop-claim");
     expect(html).not.toContain("yr-kpi");
   });
