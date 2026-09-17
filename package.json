@@ -38,6 +38,7 @@
     "build": "cd apps/leaderboard && bun run build",
     "build:bot": "cd apps/bot && bun run build",
     "e2e": "cd e2e && bun run test",
+    "verify:yr-003": "bun run --cwd packages/shared build && bun run build && node scripts/test-yr-003-baseline-paths.mjs && node scripts/verify-yr-003-annual-totals.mjs && node scripts/validate-yr-003-outcomes.mjs && bun scripts/verify-yr-003-dashboard-behaviors.mjs && node scripts/verify-yr-003-baseline.mjs",
     "lint": "(cd apps/bot && bun run lint) && (cd apps/leaderboard && bun run lint) && bun run lint:consumer",
     "lint:consumer": "eslint apps/consumer/src --ext .js --no-eslintrc -c apps/leaderboard/.eslintrc.json",
     "build:brand-assets": "bun run --cwd packages/shared build && node scripts/build-brand-assets.mjs",

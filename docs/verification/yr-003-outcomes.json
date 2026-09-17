@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "issue": "YR-003",
+  "purpose": "Persistent, honest outcome record for the regression-baseline scope. A status of NOT VERIFIABLE is not a pass and must not be used as release evidence.",
+  "automatedEntryPoint": "PLAYWRIGHT_MODULE_PATH=<path-to-playwright>/playwright/index.mjs CHROMIUM_EXECUTABLE=<path-to-chromium-executable> bun run verify:yr-003 (set both variables to an installed, compatible Playwright/Chromium runtime before running)",
+  "outcomes": [
+    {
+      "behavior": "Public leaderboard search trims whitespace and ignores case",
+      "status": "PASSED",
+      "evidence": "Production renderer and bundled public viewer asset exercised by scripts/verify-viewer-audit.mjs with ‘  REMOTE PLAYER  ’."
+    },
+    {
+      "behavior": "Public leaderboard announces player-search results",
+      "status": "PASSED",
+      "evidence": "Browser assertion observes #yr-search-status as ‘1 player match “remote player”.’ after the normalized search."
+    },
+    {
+      "behavior": "Public reward sorting: Name",
+      "status": "PASSED",
+      "evidence": "Browser selects name and observes the deterministic Alpha, Bravo DOM order."
+    },
+    {
+      "behavior": "Public reward sorting: Credits low to high",
+      "status": "PASSED",
+      "evidence": "Browser selects cost and observes the deterministic Bravo, Alpha DOM order."
+    },
+    {
+      "behavior": "Public reward filtering result announcements (audit A04; follow-up YR-030)",
+      "status": "NOT VERIFIABLE",
+      "evidence": "YR-003 deliberately does not assert this as passing or implement YR-030. It remains separately scoped for runtime verification/fix."
+    },
+    {
+      "behavior": "Exact public copy-link fallback text",
+      "status": "PASSED",
+      "evidence": "Browser disables native share/clipboard before document scripts and observes the rendered status ‘Copy this link: <exact data-share-url>’."
+    },
+    {
+      "behavior": "Public skip-to-main keyboard focus transfer",
+      "status": "PASSED",
+      "evidence": "Browser focuses the canonical skip link, activates it with Enter, and observes focus on #main-content."
+    },
+    {
+      "behavior": "Public community selector Escape and focus return",
+      "status": "PASSED",
+      "evidence": "Browser opens .viewer-switch, presses Escape, and observes closed state plus focus on its summary."
+    },
+    {
+      "behavior": "Public feedback dialog focus and focus return",
+      "status": "PASSED",
+      "evidence": "Browser observes focus in the feedback textarea on open and focus on [data-feedback-open] after close."
+    },
+    {
+      "behavior": "Dashboard dirty-draft discard warning",
+      "status": "PASSED",
+      "evidence": "scripts/verify-yr-003-dashboard-behaviors.mjs renders canonical DashboardContent and bundled dashboard assets against deterministic in-process authenticated/auth/site fixtures, edits the actual form, invokes the real navigation guard, observes its visible warning, and discards/reloads the saved fixture state."
+    },
+    {
+      "behavior": "Dashboard validation focus recovery",
+      "status": "PASSED",
+      "evidence": "scripts/verify-yr-003-dashboard-behaviors.mjs sets an out-of-range period end on the canonical dashboard, clicks the actual save control, and observes the rendered error, aria-invalid state, and focus returning to #f_ends without a persistence request."
+    },
+    {
+      "behavior": "Canonical annual plan totals",
+      "status": "PASSED",
+      "evidence": "scripts/verify-yr-003-annual-totals.mjs executes compiled shared pricing API assertions for Pro $240 and Team $690."
+    },
+    {
+      "behavior": "Dashboard reduced-motion behavior",
+      "status": "PASSED",
+      "evidence": "scripts/verify-yr-003-dashboard-behaviors.mjs emulates prefers-reduced-motion: reduce in the canonical authenticated dashboard fixture and observes the real in-page navigation call request behavior: auto instead of smooth."
+    },
+    {
+      "behavior": "Responsive deterministic visual capture",
+      "status": "PASSED",
+      "evidence": "The baseline fixture captures 1-, 2-, and 3-player boards at 320, 390, 768, 1024, and 1440 CSS pixels; two fresh runs must match each other, the approved PNGs in docs/verification/yr-003-screenshots, and docs/verification/yr-003-screenshot-baseline.json."
+    }
+  ],
+  "knownLimitations": [
+    "The committed visual baseline is runtime-specific. Review and explicitly approve drift after a browser, font, operating-system, or renderer change.",
+    "The deterministic fixture exercises authenticated dashboard behavior with injected local dependencies; it is not live-environment authentication, deployment, or database-integration evidence."
+  ]
+}
