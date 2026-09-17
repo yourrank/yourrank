@@ -134,6 +134,30 @@ try {
       await page.screenshot({ path: `${output}/reference-${width}.png`, fullPage: true });
     }
   }
+  // YR-019: the overview rail never squeezes the primary column below ~640px;
+  // it wraps under the main column until the layout can afford both.
+  for (const path of ['/nova', '/nova/shop']) {
+    await page.goto(origin + path);
+    await page.evaluate(() => window.__yrViewerAppReady);
+    const widths = {};
+    for (const width of [320, 390, 768, 1000, 1001, 1024, 1200, 1300, 1301, 1399, 1400, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const metrics = await page.evaluate(() => {
+        const main = document.querySelector('.viewer-main').getBoundingClientRect();
+        const overview = document.querySelector('.viewer-overview').getBoundingClientRect();
+        return { main: Math.round(main.width - parseFloat(getComputedStyle(document.querySelector('.viewer-main')).paddingLeft)), beside: overview.top < main.bottom && overview.left >= main.right - 1, overflow: document.documentElement.scrollWidth > innerWidth };
+      });
+      widths[width] = metrics;
+      if (width === 1200) await page.screenshot({ path: `${output}/${path.slice(1).replace(/\//g, '-')}-${width}.png`, fullPage: true });
+      assert.equal(metrics.overflow, false, `${path} at ${width}: no horizontal overflow`);
+      if (width >= 1001) assert.ok(metrics.main >= 640, `${path} at ${width}: primary column ${metrics.main}px keeps >=640px`);
+      if (width <= 1300) assert.equal(metrics.beside, false, `${path} at ${width}: overview wraps under the main column`);
+      else assert.equal(metrics.beside, true, `${path} at ${width}: overview sits beside the main column`);
+    }
+    assert.ok(widths[1024].main >= widths[768].main, `${path}: primary column does not shrink from 768 to 1024 (${widths[768].main} -> ${widths[1024].main})`);
+    assert.ok(widths[1301].main >= 640 && widths[1400].main >= 640, `${path}: overview appearing keeps the primary column >=640px`);
+    console.log(`${path} main widths: ${Object.entries(widths).map(([w, m]) => `${w}:${m.main}`).join(' ')}`);
+  }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(origin + '/nova');
   await page.evaluate(() => window.__yrViewerAppReady);

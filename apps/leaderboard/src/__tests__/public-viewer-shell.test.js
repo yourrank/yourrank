@@ -541,6 +541,15 @@ describe("public viewer shell", () => {
     expect(css).toContain('.viewer-overview{grid-column:3');
   });
 
+  it("wraps the overview under the main column until a 640px primary area fits beside it (YR-019)", () => {
+    const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
+    const stacked = css.match(/@media\(min-width:1001px\) and \(max-width:1300px\)\{([\s\S]*?)\n\}/)[1];
+    expect(stacked).toContain('.viewer-layout,.viewer-shell[data-section="home"] .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr)}');
+    expect(stacked).toMatch(/\.viewer-overview\{grid-column:2;display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+    expect(css).toContain('@media(min-width:1400px){.viewer-shell[data-section="home"] .viewer-layout{grid-template-columns:var(--viewer-rail-width) minmax(0,1fr) 434px}}');
+    expect(css.match(/@media\(min-width:1251px\)\{([\s\S]*?)\n\}/)[1]).not.toContain('434px');
+  });
+
   it("keeps leaderboard state badges readable on the dark season gradient", () => {
     const css = readFileSync(join(assets, 'viewer-shell.css'), 'utf8');
     const season = css.match(/\.viewer-season\{([^}]*)\}/)[1];
