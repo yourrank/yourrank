@@ -145,7 +145,8 @@ let pending = false;
 function setLoading(loading) {
   pending = loading;
   submit.disabled = loading;
-  submit.setAttribute("aria-busy", loading ? "true" : "false");
+  if (loading) submit.setAttribute("aria-busy", "true");
+  else submit.removeAttribute("aria-busy");
   submit.textContent = loading ? "Sending..." : "Send message";
 }
 

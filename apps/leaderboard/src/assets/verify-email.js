@@ -15,15 +15,17 @@ function showError(text, showResend) {
   if (showResend) resendWrap.hidden = false;
 }
 
+function setResendPending(loading) {
+  resendBtn.disabled = loading;
+  if (loading) resendBtn.setAttribute("aria-busy", "true");
+  else resendBtn.removeAttribute("aria-busy");
+  resendBtn.textContent = loading ? "Sending…" : "Send again";
+}
+
 resendBtn?.addEventListener("click", async () => {
-  resendBtn.disabled = true;
-  resendBtn.textContent = "Sending…";
   const email = await showPromptModal("Resend verification link", "Enter your email address:", { confirmText: "Send", inputType: "email", placeholder: "you@example.com" });
-  if (!email || !email.includes("@")) {
-    resendBtn.disabled = false;
-    resendBtn.textContent = "Send again";
-    return;
-  }
+  if (!email || !email.includes("@")) return;
+  setResendPending(true);
   try {
     const r = await fetch("/api/auth/resend-verification", {
       method: "POST",
@@ -41,7 +43,6 @@ resendBtn?.addEventListener("click", async () => {
   } catch {
     showError("Network error. Try again.", true);
   } finally {
-    resendBtn.disabled = false;
-    resendBtn.textContent = "Send again";
+    setResendPending(false);
   }
 });
