@@ -803,6 +803,11 @@
 .yr-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 12px; }
 .yr-split { display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap; }
 .yr-note--w { max-width: 28rem; }
+.yr-sec-sub { margin: 18px 0 6px; font-family: var(--yr-sans); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--yr-faint); }
+.yr-sec-sub:first-of-type { margin-top: 6px; }
+.yr-contact-links { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.yr-contact-links a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--yr-edge); border-radius: 999px; color: var(--yr-fog); text-decoration: none; overflow-wrap: anywhere; }
+.yr-contact-links a:hover, .yr-contact-links a:focus-visible { border-color: var(--yr-fog); }
 .yr-table th.yr-w-auto { width: auto; }
 
 /* ── Breakpoints ─────────────────────────────────────────────────────── */

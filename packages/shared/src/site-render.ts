@@ -616,7 +616,7 @@ ${mainInner}
 ${viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
 </main>
 ${viewerShell ? `${viewerCommunityOverview(ctx)}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
-${feedbackModal({ slug })}
+${feedbackModal({ slug, isCustomDomain })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
 <script src="/assets/${viewerShell ? 'viewer-app' : 'site-shell'}.js" nonce="${nonce}" defer></script>
 </body></html>`;
@@ -624,12 +624,12 @@ ${feedbackModal({ slug })}
   return head + body;
 }
 
-function feedbackModal({ slug }) {
+function feedbackModal({ slug, isCustomDomain }) {
   // A-07: dialog now uses aria-labelledby to bind the heading correctly.
   return `<dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
 <h2 id="yr-feedback-title">Send feedback</h2>
-<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's contact channels.</p>
+<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's <a href="${esc(isCustomDomain ? "/contact" : `/${encodeURIComponent(slug)}/contact`)}">Contact page</a>.</p>
 <textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback"></textarea>
 <p class="yr-modal-status" id="yr-feedback-status" role="status" aria-live="polite"></p>
 <div class="yr-modal-acts">

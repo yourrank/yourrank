@@ -82,7 +82,7 @@ FORM: The supplied images own the composition. Production routes and scoped reco
 <dialog id="yr-feedback" class="yr-modal" aria-labelledby="yr-feedback-title">
 <form class="yr-modal-in" method="dialog">
 <h2 id="yr-feedback-title">Send feedback</h2>
-<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's contact channels.</p>
+<p class="yr-note">Send a suggestion to this site's owner. There is no personal reply here. If you need a response, use the creator's <a href="/board%20fixture/contact">Contact page</a>.</p>
 <textarea name="message" rows="5" minlength="10" maxlength="2000" placeholder="What's working? What's not?" required aria-label="Your feedback"></textarea>
 <p class="yr-modal-status" id="yr-feedback-status" role="status" aria-live="polite"></p>
 <div class="yr-modal-acts">

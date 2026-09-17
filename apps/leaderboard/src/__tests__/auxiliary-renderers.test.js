@@ -126,6 +126,37 @@ describe("new-shell auxiliary renderers", () => {
     expect(legal).not.toMatch(/cryptocurrency|blockchain|subscription payments/i);
   });
 
+  it("shows an honest missing-contact state and a separately labelled platform route", async () => {
+    const legal = await renderNewLegalPage(record.data, "contact", opts);
+    expect(legal).toContain("has not published a contact channel yet");
+    expect(legal).toContain("does not fulfil creator rewards or reply on Demo Board's behalf");
+    expect(legal).not.toMatch(/social channels shown|channel links on their profile/);
+    expect(legal).toContain("<h3 class=\"yr-sec-sub\">Rewards and fulfilment</h3>");
+    expect(legal).toContain("<h3 class=\"yr-sec-sub\">Website and account</h3>");
+    expect(legal).toContain('href="/help/support?audience=viewer&amp;return=%2Fdemo-board%2Fcontact">Contact YourRank support</a>');
+  });
+
+  it("lists only real, enabled creator contact links and ignores disabled or unsafe ones", async () => {
+    const data = {
+      ...record.data,
+      socials: [
+        { type: "kick", name: "Kick", url: "https://kick.com/demo" },
+        { type: "discord", url: "https://discord.gg/demo", enabled: false },
+        { type: "x", name: "X", url: "javascript:alert(1)" },
+      ],
+    };
+    const contact = await renderNewLegalPage(data, "contact", opts);
+    expect(contact).toContain("Reward, claim and prize questions go to Demo Board directly:");
+    expect(contact).toContain('<a href="https://kick.com/demo" target="_blank" rel="noopener noreferrer">Kick<span class="yr-sr"> (opens in a new tab)</span></a>');
+    expect(contact).not.toContain("discord.gg");
+    expect(contact).not.toContain("javascript:");
+    expect(contact).not.toContain("has not published a contact channel yet");
+    const terms = await renderNewLegalPage(data, "terms", opts);
+    expect(terms).toContain('href="https://kick.com/demo"');
+    const hidden = await renderNewLegalPage({ ...data, sections: { socials: false } }, "contact", opts);
+    expect(hidden).toContain("has not published a contact channel yet");
+  });
+
   it("formats player profile currency consistently", async () => {
     const profile = await renderNewPlayerProfile(
       record.data,

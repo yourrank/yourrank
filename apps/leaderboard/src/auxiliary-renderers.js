@@ -44,6 +44,23 @@ function record(data, opts) {
   };
 }
 
+// Same rule as the public shell's social strip: only enabled, absolute http(s)
+// links count as a way to reach the creator.
+export function creatorContactLinks(data) {
+  if (data?.sections?.socials === false) return [];
+  return (Array.isArray(data?.socials) ? data.socials : [])
+    .filter((s) => s && s.enabled !== false && /^https?:\/\//i.test(String(s.url || "")))
+    .map((s) => ({ label: s.name || s.brand || s.type || "Channel", href: String(s.url).trim() }));
+}
+
+function creatorContactHtml(data, name) {
+  const links = creatorContactLinks(data);
+  if (!links.length) {
+    return `<p role="status">${name} has not published a contact channel yet, so there is no direct way to reach them from this page.</p>`;
+  }
+  return `<p>Reward, claim and prize questions go to ${name} directly:</p><ul class="yr-contact-links">${links.map((l) => `<li><a href="${esc(l.href)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}<span class="yr-sr"> (opens in a new tab)</span></a></li>`).join("")}</ul>`;
+}
+
 function legalBody(data, page) {
   const b = data.brand || {};
   const custom = String(data.legal?.[page] || "").trim();
@@ -60,8 +77,8 @@ function legalBody(data, page) {
     privacy: `<p>${name} values your privacy. This page collects only the information needed to display the leaderboard, such as player names and scores.</p><p>Public pages are visible to anyone with the link. Do not share personal information you do not want made public.</p><p>We use essential cookies and basic analytics to keep the service running. You can contact ${name} through the Contact page for data questions.</p>`,
     responsible: `<p>${name} uses free community credits. Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.</p><p>Creator-provided rewards and promotion rules are the responsibility of ${name}. Read the published terms before participating, do not share account credentials, and contact the creator if a reward or claim needs attention.</p><p>This page is intended for adults 18 and older only.</p>`,
     cookies: `<p>${name} uses cookies and similar technologies to provide the leaderboard service and to understand how visitors use the page.</p><p>Essential cookies are required for the page to function. Analytics cookies help us improve the experience. You can adjust your browser settings to manage cookies.</p>`,
-    refund: `<p>YourRank does not currently offer recurring checkout on this page. ${name} sets the rules for creator-provided rewards and promotions.</p><p>If you have a question about a reward, claim, or creator promotion, contact ${name} through the Contact page. For a YourRank account or future platform-billing question, contact YourRank support.</p>`,
-    contact: `<p>For questions about this leaderboard, its rules, or prizes, please reach out to ${name} directly through the social channels shown on the leaderboard.</p><p>For platform issues with YourRank, email contact@yourrank.site.</p>`,
+    refund: `<p>YourRank does not currently offer recurring checkout on this page. ${name} sets the rules for creator-provided rewards and promotions.</p><p>If you have a question about a reward, claim, or creator promotion, contact ${name} directly (see Contact below). For a YourRank account or future platform-billing question, contact YourRank support.</p>`,
+    contact: `<p>${name} runs this community and fulfils its own rewards, rules and prizes.</p>${creatorContactHtml(data, name)}<p>For problems with the YourRank website or your account, use <b>Contact YourRank support</b> below. YourRank does not fulfil creator rewards or reply on ${name}'s behalf.</p>`,
   };
   return copy[page] || "<p>Nothing here yet.</p>";
 }
@@ -79,8 +96,8 @@ export function renderNewLegalPage(data, page, opts) {
   // undifferentiated block of text on every legal page.
   const name = esc(r.data.brand?.name || r.slug);
   const supportLink = `<p><a class="yr-sec-link" href="${esc(viewerHelpHref(`/${encodeURIComponent(r.slug)}/contact`, opts.isCustomDomain ? "https://yourrank.site" : ""))}">Contact YourRank support</a></p>`;
-  const content = `<header class="yr-vhead"><span class="yr-cue">Information</span><h1 class="yr-h1">${esc(title)}</h1><p class="yr-vhead-lede">${name} · public information and policies.</p></header><section class="yr-vsec" aria-labelledby="yr-legal-body"><h2 class="yr-sr" id="yr-legal-body">${esc(title)}</h2><div class="yr-prose">${legalBody(r.data, page)}</div></section><section class="yr-vsec" aria-labelledby="yr-legal-help"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-legal-help">Need help?</h2></div><p class="yr-note">Go back to the leaderboard, or reach ${name} through the channel links on their profile.</p></section>`;
-  return shell({ r, ...opts, contentHtml: content + supportLink, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
+  const content = `<header class="yr-vhead"><span class="yr-cue">Information</span><h1 class="yr-h1">${esc(title)}</h1><p class="yr-vhead-lede">${name} · public information and policies.</p></header><section class="yr-vsec" aria-labelledby="yr-legal-body"><h2 class="yr-sr" id="yr-legal-body">${esc(title)}</h2><div class="yr-prose">${legalBody(r.data, page)}</div></section><section class="yr-vsec" aria-labelledby="yr-legal-help"><div class="yr-sec-head"><h2 class="yr-sec-title" id="yr-legal-help">Need help?</h2></div><h3 class="yr-sec-sub">Rewards and fulfilment</h3>${page === "contact" ? `<p class="yr-note">${name} handles these; see the contact details above.</p>` : creatorContactHtml(r.data, name)}<h3 class="yr-sec-sub">Website and account</h3>${supportLink}</section>`;
+  return shell({ r, ...opts, contentHtml: content, canonicalPath: canonicalPathFor(page, r.slug, opts.isCustomDomain), title: `${title} · ${r.data.brand?.name || r.slug}`, description: `${title} for ${r.data.brand?.name || r.slug}.` });
 }
 
 export function renderNewPlayerProfile(data, player, history, opts) {
