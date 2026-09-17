@@ -57,8 +57,12 @@ describe("Home & Product components", () => {
     expect(html).toContain("Viewer credits");
   });
 
-  it("renders HowItWorks loop steps", () => {
+  it("renders HowItWorks as a meaningful keyboard fragment destination", () => {
     const html = renderToString(<HowItWorks />);
+    expect(html).toContain('id="loop"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('aria-labelledby="loop-heading"');
+    expect(html).toContain('<h2 id="loop-heading"');
     expect(html).toContain("Publish");
     expect(html).toContain("Activate");
     expect(html).toContain("Reward");

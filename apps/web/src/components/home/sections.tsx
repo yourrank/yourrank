@@ -75,11 +75,16 @@ const STEPS = [
 
 export function HowItWorks() {
   return (
-    <section id="loop" className="bg-devin-surface px-6 py-24 sm:py-32">
+    <section
+      id="loop"
+      tabIndex={-1}
+      aria-labelledby="loop-heading"
+      className="bg-devin-surface px-6 py-24 sm:py-32"
+    >
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
           <div>
-            <h2 className="max-w-[12ch] text-[clamp(2.5rem,5vw,4.5rem)] font-medium leading-[0.98] tracking-[-0.035em] text-devin-ink">
+            <h2 id="loop-heading" className="max-w-[12ch] text-[clamp(2.5rem,5vw,4.5rem)] font-medium leading-[0.98] tracking-[-0.035em] text-devin-ink">
               A loop your audience can feel.
             </h2>
             <p className="mt-6 max-w-md text-lg leading-relaxed text-devin-ink-soft">

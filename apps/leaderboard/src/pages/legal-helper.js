@@ -24,7 +24,7 @@ export function applyLegalIdentity(html, identity) {
 
 function platformHeader() {
   return `<header class="topbar"><a class="brand" href="/">Your<b>Rank</b></a>
-<div class="topbar-right"><a href="/#how">How it works</a><a href="/pricing">Pricing</a><a href="/login" class="btn btn--sm btn--ghost">Sign in</a><a href="/signup" class="btn btn--sm btn--accent">Create free page</a></div></header>`;
+<div class="topbar-right"><a href="/#loop">How it works</a><a href="/pricing">Pricing</a><a href="/login" class="btn btn--sm btn--ghost">Sign in</a><a href="/signup" class="btn btn--sm btn--accent">Create free page</a></div></header>`;
 }
 
 function platformFooter(pagePath) {
@@ -38,7 +38,7 @@ function platformFooter(pagePath) {
   <div class="ftr-cols">
     <div class="ftr-col">
       <b>Product</b>
-      <a href="/#how">How it works</a>
+      <a href="/#loop">How it works</a>
       <a href="/pricing">Pricing</a>
       <a href="/docs">For developers</a>
       <a href="/help/support">Contact</a>

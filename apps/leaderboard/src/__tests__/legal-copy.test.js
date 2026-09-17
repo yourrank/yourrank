@@ -13,4 +13,12 @@ describe("platform legal copy truth", () => {
     expect(copy).toContain("Community credits have no cash value.");
     expect(copy).not.toMatch(/sign up or deposit|cryptocurrency|blockchain/i);
   });
+
+  it("keeps legal navigation pointed at the marketing workflow fragment", () => {
+    const terms = applyLegalIdentity(termsPage, {});
+    const howItWorksTargets = [...terms.matchAll(/<a href="([^"]+)">How it works<\/a>/g)]
+      .map((match) => match[1]);
+
+    expect(howItWorksTargets).toEqual(["/#loop", "/#loop"]);
+  });
 });
