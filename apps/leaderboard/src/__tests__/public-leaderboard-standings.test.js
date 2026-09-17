@@ -121,12 +121,48 @@ describe("public leaderboard standings", () => {
     expect(invalid).not.toContain("Ends in");
   });
 
+  it("pairs every countdown with an absolute UTC boundary and dates an ended period", async () => {
+    const endsAt = "2030-03-05T14:30:00.000Z";
+    const live = await render("leaderboard", { data: { ...baseData, endsAt: new Date(Date.now() + 3 * 864e5).toISOString() } });
+    expect(live).toMatch(/Ends in <b data-ends-at="[^"]+">\dd \d+h<\/b><\/span> <time class="yr-lbh-abs" datetime="[^"]+">[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2} UTC<\/time>/);
+
+    const far = await render("leaderboard", { data: { ...baseData, endsAt } });
+    expect(far).toContain('data-countdown-mode="calendar"');
+    expect(far).toContain(`<time class="yr-lbh-abs" datetime="${endsAt}">Mar 5, 2030, 14:30 UTC</time>`);
+
+    const ended = await render("leaderboard", { data: { ...baseData, endsAt: "2024-01-31T23:59:00.000Z" } });
+    expect(ended).toContain('<span class="yr-lbh-timing">Ended <time class="yr-lbh-abs" datetime="2024-01-31T23:59:00.000Z">Jan 31, 2024, 23:59 UTC</time></span>');
+    expect(ended).not.toContain("Ends in");
+
+    const flagOnly = await render("leaderboard", { data: { ...baseData, ended: true } });
+    expect(flagOnly).not.toContain("yr-lbh-abs");
+    expect(flagOnly).not.toContain("Invalid Date");
+  });
+
+  it("names the payer, unit and rules for cash prizes without inventing any of them", async () => {
+    const plain = await render("leaderboard");
+    expect(plain).toContain("$500 prize pool, paid in cash by the sponsor to the top wagered players.");
+    expect(plain).not.toContain('href="#viewer-rules-title"');
+
+    const sponsored = await render("leaderboard", {
+      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Casino" }, rules: ["Minimum 18+", "Payouts within 7 days"] },
+    });
+    expect(sponsored).toContain('paid in cash by Acme Casino to the top wagered players under the <a href="#viewer-rules-title">payout rules</a>.');
+    expect(sponsored).toContain('<h2 id="viewer-rules-title">');
+
+    const euro = await render("leaderboard", { data: { ...baseData, prizes: { ...baseData.prizes, currency: "€" } } });
+    expect(euro).toContain('<span class="yr-sr">Prize: </span>€300</span>');
+    expect(euro).not.toContain("$300");
+  });
+
   it("says so plainly when the board has no players", async () => {
     const html = await render("leaderboard", { data: { ...baseData, players: [] } });
     // The empty board is a designed state: what is empty, and one line about
     // when it fills — not a sentence floating in a blank panel.
     expect(html).toContain('<p class="yr-empty-t">No players yet</p>');
-    expect(html).toContain('<p class="yr-empty-p">Ask');
+    expect(html).toContain('<p class="yr-empty-p">Ask Creator Name how wagered is counted on this leaderboard. Your first published entry puts you on the board. Leaderboard wagered is separate from Credits.</p>');
+    const points = await render("leaderboard", { data: { ...baseData, rankBy: "score", players: [] } });
+    expect(points).toContain("how points are counted on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.");
     expect(rowsOf(html).length).toBe(0);
     expect(html).not.toContain('id="yr-search"');
     expect(html).not.toContain("data-load-more");
