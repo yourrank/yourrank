@@ -140,7 +140,7 @@ describe("a creator's Rewards page", () => {
     for (const banned of ["Add to cart", "Wishlist", "Buy now", "quantity", "Limited time", "Hurry", "Bundle"]) {
       expect(html).not.toContain(banned);
     }
-    expect(html).toContain("Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.");
+    expect(html).toContain("Credits are community reward points earned through participation. They stay within each community and can be used to claim available rewards.");
   });
 
   it("says in words why a reward cannot be claimed", async () => {

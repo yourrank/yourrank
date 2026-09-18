@@ -30,7 +30,6 @@ export function renderLegalSidebar(data, legalHref) {
     { k: "cookies", l: "Cookie Policy" },
     { k: "refund", l: "Refund Policy" },
     { k: "contact", l: "Contact Us" },
-    { k: "responsible", l: "Responsible Play" },
   ];
   return links
     .filter((x) => l[`${x.k}Enabled`] !== false)
