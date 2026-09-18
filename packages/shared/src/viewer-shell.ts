@@ -108,7 +108,6 @@ export function viewerNavigation({ name = 'YourRank', homeHref = '/me', accountH
   const settings = [
     ['vd-profile', 'Profile', 'user'],
     ['vd-connections', 'Connected Accounts', 'link'],
-    ['vd-notifications', 'Notifications', 'bell'],
     ['vd-security', 'Privacy & Security', 'shield'],
     ['vd-data', 'Data & Account', 'coins'],
   ];
