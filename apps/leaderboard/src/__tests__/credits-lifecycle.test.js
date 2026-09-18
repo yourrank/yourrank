@@ -152,6 +152,7 @@ function earnEvent(overrides = {}) {
 // viewer rename update, username history, site_viewer existence check.
 function mockCommonPrefix({ existingSiteViewer = { id: "sv-1" } } = {}) {
   db.unsafeResponses.push([{ event_id: "msg-1" }]); // kick_reward_events insert
+  db.unsafeResponses.push([{ id: 7 }]); // integration_events insert
   db.oneResponses.push({ id: "site-1", user_id: "user-1" }); // site
   db.oneResponses.push({ plan: "pro", plan_expires_at: null, status: "active", email_verified: true }); // owner
   db.oneResponses.push({ id: "viewer-1", kick_username: "alice" }); // existing viewer
@@ -171,6 +172,7 @@ describe("processKickRewardRedemption earn path", () => {
     db.unsafeResponses.push([{ id: "sv-1", balance: 100, blocked: false, fraud_score: 0 }]); // site_viewer upsert
     db.queryResponses.push([], []); // alt-username history, peer usernames
     db.unsafeResponses.push([]); // kick_reward_events site update
+    db.unsafeResponses.push([]); // integration_events processed update
     db.unsafeResponses.push([{ id: "sv-1", balance: 125 }]); // credit grant
     db.unsafeResponses.push([]); // ledger earn insert
 
@@ -195,6 +197,7 @@ describe("processKickRewardRedemption earn path", () => {
     expect(ledger).toBeDefined();
     expect(ledger.params[1]).toBe(25);
     expect(ledger.params[4]).toBe("msg-1"); // kick_event_id links ledger to the event
+    expect(ledger.params[5]).toBe(7); // integration_event_id links the normalized envelope
   });
 
   it("ignores a replayed webhook without touching the balance (refresh/replay safe)", async () => {
@@ -207,6 +210,7 @@ describe("processKickRewardRedemption earn path", () => {
 
   it("rejects webhook routing unless the Site binding is verified and matches its owner identity", async () => {
     db.unsafeResponses.push([{ event_id: "msg-1" }]);
+    db.unsafeResponses.push([{ id: 7 }]); // integration_events insert
     db.oneResponses.push(null);
 
     const result = await processKickRewardRedemption(earnEvent());
@@ -238,6 +242,7 @@ describe("processKickRewardRedemption earn path", () => {
     db.queryResponses.push([], [{ kick_username: "alicf" }]); // no alt history, one look-alike peer
     db.unsafeResponses.push([{ id: "sv-1", balance: 100, blocked: false, fraud_score: 30 }]); // site_viewer upsert
     db.unsafeResponses.push([]); // kick_reward_events site update
+    db.unsafeResponses.push([]); // integration_events processed update
     db.unsafeResponses.push([{ id: "sv-1", balance: 125 }]); // credit grant
     db.unsafeResponses.push([]); // ledger earn insert
 
@@ -254,6 +259,7 @@ describe("processKickRewardRedemption earn path", () => {
     db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
     db.queryResponses.push([{ viewer_id: "viewer-9", seen_at: "2026-09-01" }], []);
     db.unsafeResponses.push([]); // kick_reward_events site update (blocked branch)
+    db.unsafeResponses.push([]); // integration_events processed update
     db.unsafeResponses.push([]); // blocked flag update
 
     const result = await processKickRewardRedemption(earnEvent());
@@ -270,6 +276,7 @@ describe("processKickRewardRedemption earn path", () => {
     db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
     db.queryResponses.push([], []);
     db.unsafeResponses.push([]); // kick_reward_events site update
+    db.unsafeResponses.push([]); // integration_events processed update
 
     const result = await processKickRewardRedemption(earnEvent());
 

@@ -10,6 +10,7 @@ import { requireUser, bad, json } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import { rateLimit } from "@yourrank/shared/ratelimit";
+import { linkedViewerIdentities, viewerDisplayName } from "@yourrank/shared/viewer-identity";
 import { routeContext } from "../middleware/handler.js";
 
 const peopleDefaults = {
@@ -29,18 +30,14 @@ const privateOk = (data) => json(
 );
 
 function displayName(row) {
-  return row.kick_username || row.discord_username || "Unnamed member";
+  return viewerDisplayName(row, "Unnamed member");
 }
 
 function linkedIdentities(row) {
-  const identities = [];
-  if (row.kick_linked_at) {
-    identities.push({ provider: "Kick", displayName: row.kick_username || null });
-  }
-  if (row.discord_linked_at) {
-    identities.push({ provider: "Discord", displayName: row.discord_username || null });
-  }
-  return identities;
+  return linkedViewerIdentities(row).map((identity) => ({
+    provider: identity.label,
+    displayName: identity.username,
+  }));
 }
 
 function memberSummary(row) {
