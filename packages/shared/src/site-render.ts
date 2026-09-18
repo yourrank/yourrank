@@ -426,9 +426,9 @@ function ledgerDelta(row) {
 const CLAIM_STATUS_NOTE = "Needs fulfillment means the creator still needs to complete your reward claim. Completed means it is complete. Cancelled means the credits went back to your balance.";
 
 
-function rewardImage(item, slug) {
+function rewardImage(item, slug, { eager = false } = {}) {
   const image = item.has_image ? `/api/public/${encodeURIComponent(slug)}/reward-images/${encodeURIComponent(item.id)}` : item.image_url || item.image || item.imageUrl;
-  return image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="480" height="240" loading="lazy" decoding="async" />` : `<div class="yr-rwd-art" aria-hidden="true">${viewerIcon('gift')}</div>`;
+  return image ? `<img class="yr-rwd-img" src="${esc(image)}" alt="" width="480" height="240"${eager ? ' fetchpriority="high"' : ' loading="lazy"'} decoding="async" />` : `<div class="yr-rwd-art" aria-hidden="true">${viewerIcon('gift')}</div>`;
 }
 
 /** The one claim decision shared by catalog cards and the detail page. The
@@ -588,7 +588,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
-  const darkShell = viewerShell && (section === "home" || section === "leaderboard" || section === "me" || (section === "shop" && !detailRewardId));
+  const darkShell = viewerShell && (section === "home" || section === "leaderboard" || section === "me" || section === "shop");
   const footerLead = darkShell ? `<p class="yr-foot-lead">${viewerIcon('shield')}<span>Your credits and claims stay with this community.</span> <a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></p>` : "";
   const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: articleLayout ? null : sectionUrl, shareTitle: rawTitleBase, lead: footerLead });
 
@@ -783,7 +783,7 @@ ${section === 'home' || section === 'leaderboard' || section === 'shop' ? '' : l
 <div class="viewer-scope-help">${viewerIcon('shield')}<p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside>`;
   }
   return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>${section === 'home' ? 'Your status' : section === 'leaderboard' ? 'Your standing' : 'Reward credits'}</h2>${(section === 'home' || section === 'leaderboard') && siteSections.me !== false ? `<a href="${meHref}">View activity ${viewerIcon('arrow')}</a>` : ''}</div>${section === 'home' || section === 'leaderboard' ? `<div class="viewer-status-who"><span class="viewer-avatar">${avatarHtml(viewer)}</span><div><strong>${esc(viewerName(viewer))}</strong><span>Member of ${esc(name)}</span></div></div>` : ''}<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}">${viewerIcon('coins')}<div><strong data-credit-balance-num>${formatNumber(balance)}</strong><p>credits</p></div></div><p>Only in ${esc(name)}</p>${section === 'home' || section === 'leaderboard' ? homeStatusFacts(ctx) : ''}${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}${siteSections.me !== false && !viewerData?.viewerOnSite?.blocked ? `<a class="yr-btn" href="${meHref}#membership-code">Earn reward credits ${viewerIcon('arrow')}</a>` : ''}${rewardClaimFine(section)}</section>
-${section === 'home' ? '' : rewardProgressCard(ctx)}
+${section === 'home' || (section === 'shop' && ctx.rewardId) ? '' : rewardProgressCard(ctx)}
 ${section !== 'shop' && section !== 'home' && siteSections.me !== false && latest ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Latest claim</h3><span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span></div><ul class="viewer-claim-preview">${claimRow(latest)}</ul></section>` : ''}
 ${section === 'home' || section === 'leaderboard' || section === 'shop' ? '' : leaderboardPreview(ctx)}
 ${section === 'shop' ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h2>How to earn reward credits</h2></div><p>${viewerIcon('code')} Redeem community codes shared by ${esc(name)}.</p><p>Use the creator's channel-point rewards when available. Credits are recorded in My Activity.</p></section>` : ''}
@@ -1059,8 +1059,13 @@ function rewardDetailMain(ctx) {
         ? `You have ${formatNumber(balance)} credits — enough to claim this.`
         : `You have ${formatNumber(balance)} of the ${formatNumber(reward.cost)} credits needed.`;
 
+  const fact = (icon, label, value) => `<div><dt>${viewerIcon(icon)}<span>${label}</span></dt><dd>${value}</dd></div>`;
   const cooldown = reward.cooldownSeconds > 0
-    ? `<div><dt>Claim limit</dt><dd>Once every ${esc(formatWaitSeconds(reward.cooldownSeconds))} per member.</dd></div>`
+    ? fact('activity', 'Claim limit', `Once every ${esc(formatWaitSeconds(reward.cooldownSeconds))} per member.`)
+    : '';
+  // The balance sits beside the claim control so the member sees at once whether it is enough.
+  const balanceLine = viewer && isMember && !blocked && !unavailable && reward.availability === 'available'
+    ? `<p class="viewer-reward-balance" data-credit-balance="${balance}" data-enough="${balance >= reward.cost}">${viewerIcon('coins')}<span>Your balance: <strong data-credit-balance-num>${formatNumber(balance)}</strong> credits</span>${balance >= reward.cost ? '<em>· Enough to claim</em>' : ''}</p>`
     : '';
   const withdrawn = reward.availability === 'inactive'
     ? `<p class="yr-note yr-note--w" role="status">${esc(creator)} no longer offers this reward. It stays here so old links still explain what it was.</p>`
@@ -1070,19 +1075,19 @@ function rewardDetailMain(ctx) {
 ${withdrawn}
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
 <article class="viewer-reward-detail" id="reward-${esc(reward.id)}" aria-labelledby="viewer-reward-title">
-${rewardImage(raw, slug)}
+<figure class="viewer-reward-media">${rewardImage(raw, slug, { eager: true })}</figure>
 <div class="viewer-reward-body">
 <h2 id="viewer-reward-title">About this reward</h2>
 <p class="viewer-reward-desc${reward.description ? '' : ' is-missing'}">${reward.description ? esc(reward.description) : `${esc(creator)} hasn't added a description yet. Ask them what it includes before you claim.`}</p>
 <dl class="viewer-reward-facts">
-<div><dt>Cost</dt><dd>${formatNumber(reward.cost)} credits</dd></div>
-<div><dt>Availability</dt><dd>${esc(rewardAvailabilityText(reward))}</dd></div>
+${fact('coins', 'Cost', `${formatNumber(reward.cost)} credits`)}
+${fact('gift', 'Availability', esc(rewardAvailabilityText(reward)))}
 ${cooldown}
-<div><dt>Eligibility</dt><dd>${eligibility}</dd></div>
-<div><dt>Fulfillment</dt><dd>${esc(reward.fulfillment)}</dd></div>
-<div><dt>Questions</dt><dd><a href="${esc(contactHref)}">Contact ${esc(creator)}</a> about this reward.</dd></div>
+${fact('user', 'Eligibility', eligibility)}
+${fact('check', 'Fulfillment', esc(reward.fulfillment))}
+${fact('chat', 'Questions', `<a href="${esc(contactHref)}">Contact ${esc(creator)}</a> about this reward.`)}
 </dl>
-<div class="viewer-reward-claim">${state ? `<p class="yr-rwd-state">${esc(state)}</p>` : ''}${action}<p class="yr-fine">Claiming opens a review step first; nothing is deducted until you confirm, and the creator then completes it.</p></div>
+<div class="viewer-reward-claim">${state ? `<p class="yr-rwd-state">${esc(state)}</p>` : ''}${action}${balanceLine}<p class="yr-fine">Claiming opens a review step first; nothing is deducted until you confirm, and the creator then completes it.</p></div>
 </div>
 </article>
 ${viewer && isMember && !blocked && action.includes('data-redeem=') ? orderConfirmDialog() : ''}`;
