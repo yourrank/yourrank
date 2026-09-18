@@ -31,7 +31,7 @@ const PUBLIC_ACCENT_DEFAULT = {
   value: "var(--yr-color-board-accent)",
   ink: "#000000",
 };
-const CREDITS_DISCLAIMER = "Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.";
+const CREDITS_DISCLAIMER = "Credits are community reward points earned through participation. They stay within each community and can be used to claim available rewards.";
 const REWARD_CLAIM_FINE = "Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.";
 
 // B-01: Build font URL dynamically from the board's active font choice so that

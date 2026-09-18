@@ -306,7 +306,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('Only in Creator Name');
     expect(html).toContain('href="/creator/shop/2">Choose a reward');
     expect(html).not.toContain('View my activity');
-    expect(html).toContain('No purchase, no cash value, no cashout.');
+    expect(html).toContain('Credits are community reward points earned through participation. They stay within each community and can be used to claim available rewards.');
     expect(html).toContain('href="/me?community=creator"');
   });
 
