@@ -2,9 +2,9 @@ name = "yourrank-bot"
 main = "src/worker.ts"
 compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
-# Dashboard APIs and webhook handlers perform sequential Hyperdrive reads.
-# Smart Placement reduces the repeated EU-origin round trips for those paths.
-placement = { mode = "smart" }
+# Dashboard APIs and webhook handlers perform sequential Hyperdrive reads
+# against the Supabase primary in eu-west-1; pin execution to that region.
+placement = { region = "aws:eu-west-1" }
 
 # Serve the bot Worker under the /bot, /hook, /r, /pb, /billing and
 # /dashboard/telegram prefixes on the main zone. More-specific routes win, so
