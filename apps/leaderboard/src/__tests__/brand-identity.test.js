@@ -92,7 +92,7 @@ describe("brand identity", () => {
     }
     const viewerPage = sources.find((s) => s.rel === "apps/leaderboard/src/pages/viewer-dashboard.js");
     expect(viewerPage.text).toContain('@yourrank/shared/viewer-shell');
-    expect(viewerPage.text).toContain('viewerNavigation({ accountHref, community })');
+    expect(viewerPage.text).toContain('viewerNavigation({ accountHref, community, signedIn');
   });
 
   it("serves the canonical mark as the favicon", () => {

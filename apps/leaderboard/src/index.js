@@ -2,6 +2,7 @@ import { RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { destroySession, cookieClear, readToken, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
 import { resolveViewerHelp, viewerCommunityParam, viewerReturnCommunity } from "@yourrank/shared/viewer-shell";
+import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { withWorkerFetch } from "@yourrank/shared/with-worker";
 import { RateLimiter } from "@yourrank/shared/rate-limiter-do";
 import { LiveBoard } from "./live-board.js";
@@ -1054,7 +1055,20 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       if (path === "/me" || path === "/me.html") {
         const community = await viewerCommunityContext(env, viewerCommunityParam(url));
         const viewerProviders = viewerOAuthAvailability(resolveViewerOAuthStatus(request, env));
-        return new Response(addCookieConsent(fillYear(viewerDashboardPage(community, viewerProviders))), { headers: { ...HTML_N, ...csrfHeader, "cache-control": "no-store, no-cache, must-revalidate" } });
+        // The document ships the resolved session so the first paint is already
+        // signed in or signed out; a failed lookup renders neither until the client resolves it.
+        let auth = { state: "unresolved", viewer: null };
+        let viewerCookie = null;
+        try {
+          const resolved = await resolveViewer(request, env);
+          auth = { state: resolved.viewer ? "authenticated" : "unauthenticated", viewer: resolved.viewer };
+          viewerCookie = resolved.cookie;
+        } catch (e) {
+          if (workerLog) workerLog.error("viewer_account_session_resolve_failed", { error: String(e?.message || e) });
+        }
+        const headers = new Headers({ ...HTML_N, ...csrfHeader, "cache-control": "private, no-store, no-cache, must-revalidate", vary: "Cookie" });
+        if (viewerCookie) headers.append("set-cookie", viewerCookie);
+        return new Response(addCookieConsent(fillYear(viewerDashboardPage(community, viewerProviders, auth))), { headers });
       }
       if (path === "/forgot") return new Response(addCookieConsent(await renderHtmlPage(PAGES.forgot)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       if (path === "/reset") {

@@ -5,12 +5,36 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }
 
+function viewerName(viewer) {
+  return viewer?.kick_username || viewer?.discord_username || "Member";
+}
+
+function viewerMark(viewer) {
+  if (viewer?.avatar_url) return `<img src="${esc(viewer.avatar_url)}" alt="" />`;
+  const initial = Array.from(viewerName(viewer).trim())[0]?.toUpperCase() || "Y";
+  return esc(initial);
+}
+
+/**
+ * Server-resolved session state for the account page. `unresolved` means the
+ * session could not be checked during render (e.g. a session-store error), so
+ * the page renders neither signed-in nor signed-out content until the client
+ * resolves it.
+ */
+export const VIEWER_AUTH_STATES = Object.freeze(["authenticated", "unauthenticated", "unresolved"]);
+
 /**
  * The global Viewer Account page. `community` is the published community the
  * viewer arrived from (`/me?community=<slug>`), so every account destination
- * keeps a way back to it.
+ * keeps a way back to it. `auth` is the session state resolved by the Worker so
+ * the first paint already matches the viewer's real state: the topbar account
+ * control and the main content come from the same source and cannot disagree.
  */
-export function viewerDashboardPage(community = null, providerAvailability = { kick: false, discord: false }) {
+export function viewerDashboardPage(community = null, providerAvailability = { kick: false, discord: false }, auth = { state: "unauthenticated", viewer: null }) {
+  const authState = VIEWER_AUTH_STATES.includes(auth?.state) ? auth.state : "unauthenticated";
+  const viewer = authState === "authenticated" && auth?.viewer ? auth.viewer : null;
+  const signedIn = !!viewer;
+  const unauthenticated = authState === "unauthenticated";
   const accountHref = viewerAccountHref(community?.slug || "");
   const helpHref = esc(viewerHelpHref(accountHref));
   const available = {
@@ -22,7 +46,7 @@ export function viewerDashboardPage(community = null, providerAvailability = { k
   return leaderboardPageHtml({
   title: "My communities · YourRank",
   canonical: "https://yourrank.site/me",
-  bodyClass: "yr-site viewer-shell viewer-account-page",
+  bodyClass: `yr-site viewer-shell viewer-account-page viewer-auth-${authState}`,
   mainClass: "viewer-layout",
   contentOwnsMain: true,
   nav: false,
@@ -33,10 +57,10 @@ export function viewerDashboardPage(community = null, providerAvailability = { k
     '<script src="/assets/viewer-app.js" defer></script>',
   ],
   content: `
-${viewerNavigation({ accountHref, community })}
+${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? viewerName(viewer) : "", viewerMark: signedIn ? viewerMark(viewer) : "", signInHref: unauthenticated ? `${accountHref}#vd-login-card` : "" })}
 <main class="viewer-main" id="main-content" tabindex="-1">
 
-  <div id="vd-loading" class="ui-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span class="sr-only">Loading your communities…</span></div>
+  <div id="vd-loading" class="vd-loading" role="status" aria-live="polite" aria-busy="true"${unauthenticated ? " hidden" : ""}><span class="sr-only">${signedIn ? "Loading your communities…" : "Checking your sign-in…"}</span><div class="vd-skeleton" aria-hidden="true"><span></span><span></span><span></span></div></div>
   ${viewerCommunityReturnLink(community, "yr-sec-link vd-return")}
   <div class="vd-head">
     <p class="vd-breadcrumb" id="vd-breadcrumb" hidden>Settings <span aria-hidden="true">›</span> <span id="vd-breadcrumb-current"></span></p>
@@ -44,7 +68,7 @@ ${viewerNavigation({ accountHref, community })}
     <p class="vd-sub" id="vd-subtitle">Choose a community. Your rewards and claims stay with each community.</p>
   </div>
 
-  <section id="vd-login-card" tabindex="-1">
+  <section id="vd-login-card" tabindex="-1"${unauthenticated ? "" : " hidden"}>
     <div class="vd-login-copy"><h2>Your communities, together.</h2>
     <p class="card-sub">Sign in to your Viewer Account with the provider you use in creator communities.</p>
     <p class="vd-login-note">One account. Separate memberships, rewards and credit balances.</p></div>

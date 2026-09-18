@@ -80,9 +80,24 @@ function setLoading(element, loading, text = "Loading…") {
   delete element.dataset.origText;
 }
 
+// Auth is resolved by the document: `viewer-auth-authenticated` or
+// `viewer-auth-unauthenticated` from the Worker's session lookup, otherwise
+// unresolved. Sign-in UI is only shown once the state is definitively signed out.
+function documentAuthState() {
+  if (document.body.classList.contains("viewer-auth-authenticated")) return "authenticated";
+  if (document.body.classList.contains("viewer-auth-unauthenticated")) return "unauthenticated";
+  return "unresolved";
+}
+
+function setDocumentAuthState(state) {
+  document.body.classList.remove("viewer-auth-authenticated", "viewer-auth-unauthenticated", "viewer-auth-unresolved");
+  document.body.classList.add(`viewer-auth-${state}`);
+}
+
+// The skeleton stands in for account content only while nothing definitive is on screen.
 function setGlobalLoading(loading) {
   const element = $("vd-loading");
-  if (element) element.hidden = !loading;
+  if (element) element.hidden = !loading || documentAuthState() === "unauthenticated";
 }
 
 let signedIn = false;
@@ -125,7 +140,7 @@ function selectAccountView() {
   $("vd-communities-card").hidden = !signedIn || !!current;
   $("vd-title").textContent = current ? accountViews[current][0] : "My communities";
   $("vd-subtitle").textContent = current ? accountViews[current][1] : DEFAULT_SUBTITLE;
-  if (!signedIn) applyGuestGate(requested);
+  if (!signedIn && documentAuthState() === "unauthenticated") applyGuestGate(requested);
   $("vd-breadcrumb").hidden = !current;
   $("vd-breadcrumb-current").textContent = current ? accountViews[current][0] : "";
   const accountLink = $("viewer-account-link");
@@ -141,11 +156,13 @@ function selectAccountView() {
 window.addEventListener("hashchange", () => {
   selectAccountView();
   if (signedIn) $("vd-title").focus();
-  else if (Object.hasOwn(accountViews, window.location.hash.slice(1))) $("vd-login-card").focus();
+  else if (documentAuthState() === "unauthenticated" && Object.hasOwn(accountViews, window.location.hash.slice(1))) $("vd-login-card").focus();
 }, { signal: lifetime.signal });
 
 function renderLoggedOut() {
   signedIn = false;
+  setDocumentAuthState("unauthenticated");
+  setGlobalLoading(false);
   exportId = "";
   $("vd-export-download").hidden = true;
   $("vd-export-check").hidden = true;
@@ -170,6 +187,7 @@ function renderLoggedOut() {
 
 function renderAccount(viewer) {
   signedIn = true;
+  setDocumentAuthState("authenticated");
   $("viewer-account-link").setAttribute("href", `${accountPath()}#vd-profile`);
   $("viewer-account-link").hidden = false;
   const name = viewer.displayName || "Member";
@@ -269,7 +287,7 @@ async function load() {
   } catch (error) {
     if (error.name === "AbortError") return;
     if (error.message === "unauthorized") renderLoggedOut();
-    else setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
+    else setStatus(documentAuthState() === "unauthenticated" ? "vd-login-status" : "vd-account-status", errorText(error.message, "We couldn't load your Viewer Account."), true, () => { load().catch(() => {}); });
   } finally {
     if (!lifetime.signal.aborted) setGlobalLoading(false);
     if (!lifetime.signal.aborted) {
@@ -389,7 +407,7 @@ if (loginError) {
 
 // Exposed so tests and runtime checks can await the first render.
 window.__yrViewerReady = load().catch((error) => {
-  setStatus("vd-login-status", errorText(error.message, "We couldn't load your Viewer Account. Try again."), true);
+  setStatus(documentAuthState() === "unauthenticated" ? "vd-login-status" : "vd-account-status", errorText(error.message, "We couldn't load your Viewer Account. Try again."), true);
 });
 return window.__yrViewerReady;
 })();

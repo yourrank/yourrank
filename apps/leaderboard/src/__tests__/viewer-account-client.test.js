@@ -34,10 +34,18 @@ function makeElement(document, id = "") {
   };
 }
 
-function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
+function makeEnvironment({ response, url = "https://yourrank.site/me", auth = "unauthenticated" }) {
   const elements = new Map();
   const navigation = [];
+  const bodyClasses = new Set(["viewer-shell", "viewer-account-page", `viewer-auth-${auth}`]);
   const document = {
+    body: {
+      classList: {
+        contains: (name) => bodyClasses.has(name),
+        add: (...names) => names.forEach((name) => bodyClasses.add(name)),
+        remove: (...names) => names.forEach((name) => bodyClasses.delete(name)),
+      },
+    },
     activeElement: null,
     cookie: "__csrf=token",
     createElement: () => makeElement(document),
@@ -64,7 +72,7 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
   const calls = [];
   const fetch = async (path, opts = {}) => {
     calls.push({ path, method: opts.method || "GET" });
-    const result = typeof response === "function" ? response(path, opts) : response;
+    const result = await (typeof response === "function" ? response(path, opts) : response);
     return {
       ok: (result.status || 200) < 400,
       status: result.status || 200,
@@ -83,6 +91,7 @@ function makeEnvironment({ response, url = "https://yourrank.site/me" }) {
   return {
     $: (id) => document.getElementById(id),
     activeElement: () => document.activeElement,
+    authState: () => ["authenticated", "unauthenticated", "unresolved"].find((state) => bodyClasses.has(`viewer-auth-${state}`)),
     calls,
     location,
     navigation,
@@ -149,6 +158,54 @@ describe("global Viewer Account client", () => {
     env.$("vd-avatar").onerror();
     expect(env.$("vd-avatar").hidden).toBe(true);
     expect(env.$("vd-avatar-fallback").hidden).toBe(false);
+  });
+
+  it("never shows sign-in UI while the session is still unresolved", async () => {
+    let resolve;
+    const env = makeEnvironment({
+      auth: "authenticated",
+      url: "https://yourrank.site/me#vd-data",
+      response: () => new Promise((done) => { resolve = done; }),
+    });
+    // Pre-resolution: the document is still exactly what the Worker rendered.
+    env.$("vd-login-card").hidden = true;
+    await Promise.resolve();
+    expect(env.$("vd-login-card").hidden).toBe(true);
+    expect(env.$("vd-loading").hidden).toBe(false);
+    expect(env.$("vd-title").textContent).not.toContain("Sign in");
+    expect(env.$("viewer-top-name").textContent).not.toBe("Sign in");
+    env.navigateHash("vd-security");
+    expect(env.$("vd-title").textContent).not.toContain("Sign in");
+    expect(env.activeElement()).not.toBe(env.$("vd-login-card"));
+    expect(env.$("vd-login-card").hidden).toBe(true);
+
+    resolve({ body: ACCOUNT });
+    await env.ready();
+    expect(env.authState()).toBe("authenticated");
+    expect(env.$("vd-loading").hidden).toBe(true);
+    expect(env.$("vd-login-card").hidden).toBe(true);
+    expect(env.$("vd-security").hidden).toBe(false);
+    expect(env.$("viewer-top-name").textContent).toBe("member");
+  });
+
+  it("reports a load failure on the account, not inside a hidden sign-in card, when the document is signed in", async () => {
+    const env = makeEnvironment({ auth: "authenticated", response: { status: 500, body: { error: "boom" } } });
+    env.$("vd-login-card").hidden = true;
+    await env.ready();
+    expect(env.authState()).toBe("authenticated");
+    expect(env.$("vd-login-card").hidden).toBe(true);
+    expect(env.$("vd-account-status").textContent).toContain("We couldn't load your Viewer Account.");
+    expect(env.$("vd-login-status").textContent).toBe("");
+  });
+
+  it("only resolves to sign-in once the session is definitively absent", async () => {
+    const env = makeEnvironment({ auth: "unresolved", response: { status: 401, body: { error: "unauthorized" } } });
+    env.$("vd-login-card").hidden = true;
+    await env.ready();
+    expect(env.authState()).toBe("unauthenticated");
+    expect(env.$("vd-login-card").hidden).toBe(false);
+    expect(env.$("vd-loading").hidden).toBe(true);
+    expect(env.$("viewer-top-name").textContent).toBe("Sign in");
   });
 
   it("shows sign-in when the Viewer Account session is absent", async () => {
@@ -248,6 +305,42 @@ describe("global Viewer Account client", () => {
     expect(env.$("vd-communities-card").hidden).toBe(false);
     expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
     expect(env.$("viewer-communities-link").attributes["aria-current"]).toBe("page");
+  });
+});
+
+describe("global Viewer Account first paint", () => {
+  const providers = { kick: true, discord: false };
+  const viewer = { id: "v1", kick_username: "member", avatar_url: null, created_at: "2026-01-02T00:00:00.000Z" };
+
+  it("ships a signed-in document with the topbar and content agreeing", () => {
+    const html = viewerDashboardPage(null, providers, { state: "authenticated", viewer });
+    expect(html).toContain('class="yr-site viewer-shell viewer-account-page viewer-auth-authenticated"');
+    expect(html).toContain('<strong id="viewer-top-name">member</strong>');
+    expect(html).toContain('id="viewer-top-mark">M</span>');
+    expect(html).toContain('<section id="vd-login-card" tabindex="-1" hidden>');
+    expect(html).toContain('id="viewer-account-link" href="/me#vd-profile">');
+    expect(html).not.toContain('<strong id="viewer-top-name">Sign in</strong>');
+    expect(html).toMatch(/<div id="vd-loading" class="vd-loading"[^>]*aria-busy="true">/);
+  });
+
+  it("ships a signed-out document that shows sign-in immediately", () => {
+    const html = viewerDashboardPage(null, providers, { state: "unauthenticated", viewer: null });
+    expect(html).toContain("viewer-auth-unauthenticated");
+    expect(html).toContain('<strong id="viewer-top-name">Sign in</strong>');
+    expect(html).toContain('<section id="vd-login-card" tabindex="-1">');
+    expect(html).toContain('id="vd-login-kick"');
+    expect(html).toMatch(/<div id="vd-loading" class="vd-loading"[^>]*aria-busy="true" hidden>/);
+    expect(viewerDashboardPage(null, providers)).toContain("viewer-auth-unauthenticated");
+  });
+
+  it("ships neither sign-in nor account content while the session is unresolved", () => {
+    const html = viewerDashboardPage(null, providers, { state: "unresolved", viewer: null });
+    expect(html).toContain("viewer-auth-unresolved");
+    expect(html).toContain('<section id="vd-login-card" tabindex="-1" hidden>');
+    expect(html).toContain('<strong id="viewer-top-name">Account</strong>');
+    expect(html).not.toContain('<strong id="viewer-top-name">Sign in</strong>');
+    expect(html).toMatch(/<div id="vd-loading" class="vd-loading"[^>]*aria-busy="true">/);
+    expect(html).toContain("Checking your sign-in…");
   });
 });
 
