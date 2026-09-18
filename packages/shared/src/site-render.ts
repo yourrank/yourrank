@@ -587,7 +587,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     : section === "me" ? meMain(ctx)
     : `<div class="yr-empty">Section not found</div>`);
 
-  const footerLead = viewerShell && (section === "home" || section === "leaderboard") ? `<p class="yr-foot-lead">${viewerIcon('shield')}<span>Your credits and claims stay with this community.</span> <a href="${esc(viewerHelpHref(siteSectionHref('home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></p>` : "";
+  const darkShell = viewerShell && (section === "home" || section === "leaderboard" || (section === "shop" && !detailRewardId));
+  const footerLead = darkShell ? `<p class="yr-foot-lead">${viewerIcon('shield')}<span>Your credits and claims stay with this community.</span> <a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></p>` : "";
   const footer = siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl: kickUrl ? safeUrl(kickUrl) : null, shareUrl: articleLayout ? null : sectionUrl, shareTitle: rawTitleBase, lead: footerLead });
 
   // B-01: Dynamic font URL based on board's active font.
@@ -633,13 +634,13 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     helpHref: viewerHelpHref(siteSectionHref(section || "home", slug, false), isCustomDomain ? "https://yourrank.site" : ""),
     links: sectionList(siteSections).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
-  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
+  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
 ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? viewerCommunityHeading(ctx) : ''}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}
 <main class="${viewerShell ? "viewer-main" : "yr-main"}" id="main-content">
 ${mainInner}
-${articleLayout || (viewerShell && (section === "home" || section === "leaderboard")) ? "" : viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
+${articleLayout || darkShell ? "" : viewerShell ? `<footer class="viewer-panel-footer"><span>${viewerIcon('shield')}Your credits and claims stay with this community.</span><a href="${esc(viewerHelpHref(siteSectionHref(section || 'home',slug,false),isCustomDomain ? 'https://yourrank.site' : '','help'))}">How YourRank works ${viewerIcon('arrow')}</a></footer>` : footer}
 </main>
 ${viewerShell ? `${articleLayout ? "" : viewerCommunityOverview(ctx)}${section === "home" ? `${isMember ? `<div class="viewer-home-strip">${rewardProgressCard(ctx)}${recentCreditCard(ctx)}</div>` : ''}${homePromo(ctx)}` : ""}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug, isCustomDomain })}
@@ -991,14 +992,16 @@ function shopMain(ctx) {
   const creditsHref = `${homeUrl}${siteSectionHref("me", slug, isCustomDomain)}`;
 
   const unavailable = viewer && ctx.membershipStatus === 'unavailable';
-  const head = `<header class="viewer-page-intro"><div><h1>Rewards</h1><p>Redeem your credits for ${esc(b.name || slug)}'s community rewards.</p></div>${items.length ? '<div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div>' : ''}</header>${!viewer || isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : 'Join this community before claiming a reward.'}</p>`}`;
+  // The hero carries the creator's identity the same way Home and Leaderboard do;
+  // the search and sort controls sit at the top of the catalog itself.
+  const head = `<header class="yr-lbh viewer-board-hero viewer-shop-hero"><div class="viewer-board-hero-copy"><p class="viewer-hero-kicker">${esc(b.name || slug)} · Creator community</p><h1 class="yr-h1 yr-lbh-title">Rewards</h1><p class="yr-lbh-note">Redeem your credits for ${esc(b.name || slug)}'s community rewards.</p></div><div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy viewer-shop-hero-gift">${ICONS.gift}</span></div><div class="viewer-shop-hero-aside">${viewerIcon('coins')}<p><strong>Earn, then claim.</strong>Credits are free, earned in this community, and spent only here.</p></div></header>${!viewer || isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : 'Join this community before claiming a reward.'}</p>`}`;
 
   const blockedNote = viewer && blocked
     ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
     : "";
 
   const list = items.length
-    ? `<section aria-label="All rewards"><div class="viewer-card-head"><h2>All rewards</h2><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug, isCustomDomain })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
+    ? `<section aria-label="All rewards"><div class="viewer-shop-tools"><h2 class="yr-sr">All rewards</h2><div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list" data-count="${Math.min(items.length, 3)}">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug, isCustomDomain })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
