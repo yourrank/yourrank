@@ -693,25 +693,30 @@ function rulesBlock(data) {
 function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl, shareUrl, shareTitle }) {
   const enabled = sectionList(siteSections);
   const legalHref = (page) => `${homeUrl}${siteSectionHref(page, slug, isCustomDomain)}`;
-  const legalLinks = renderLegalSidebar(data, legalHref).split("\n").filter(Boolean).join("");
+  const legalItems = renderLegalSidebar(data, legalHref).split("\n").filter(Boolean);
+  const contactLinks = legalItems.filter((x) => x.includes(">Contact Us<")).join("");
+  const legalLinks = legalItems.filter((x) => !x.includes(">Contact Us<")).join("");
   const secondary = [
     kickUrl && kickUrl !== "#" ? `<a href="${kickUrl}" target="_blank" rel="noopener noreferrer">Watch on Kick<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     hasCta && casino ? `<a href="${ctaHref}" target="_blank" rel="noopener noreferrer">Join ${esc(casino)}<span class="yr-sr"> (opens in a new tab)</span></a>` : "",
     viewer ? `<a href="${globalViewerAccountHref(isCustomDomain, slug)}">My communities</a>` : "",
   ].filter(Boolean).join("");
-  // What a viewer normally reads at the bottom is the creator's sign-off: the
-  // fine print, their copyright, the legal pages and one way to reach us. The
-  // section map below it is the fallback for a browser that never ran the shell
-  // script; it is always server-rendered and the stylesheet hides it only once
-  // the script reports ready, because from then on the bar and the drawer own
-  // navigation and a second copy of it is noise.
+  // What a viewer normally reads at the bottom is the creator's sign-off in
+  // three quiet zones: the fine print with their copyright, the legal pages,
+  // and the ways to reach us or share the page. The section map below it is
+  // the fallback for a browser that never ran the shell script; it is always
+  // server-rendered and the stylesheet hides it only once the script reports
+  // ready, because from then on the bar and the drawer own navigation and a
+  // second copy of it is noise.
   return `<footer class="yr-foot">
-<p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <div class="yr-foot-bar">
+<div class="yr-foot-zone yr-foot-zone--brand">
+<p class="yr-fine">${CREDITS_DISCLAIMER}</p>
 <p class="yr-foot-c">&copy; ${new Date().getFullYear()} ${esc(b.name || slug)}.${watermark ? ` Powered by <a href="${esc(homeUrl || "/")}" target="_blank" rel="noopener">YourRank</a>.` : ""}</p>
-<div class="yr-foot-links">${legalLinks}<button type="button" data-cookie-preferences>Cookie preferences</button><button type="button" data-feedback-open>Feedback for this creator</button></div>
 </div>
-${shareBlock({ data, shareUrl, shareTitle })}
+<div class="yr-foot-links yr-foot-zone yr-foot-zone--legal">${legalLinks}<button type="button" data-cookie-preferences>Cookie preferences</button></div>
+<div class="yr-foot-links yr-foot-zone yr-foot-zone--reach">${contactLinks}<button type="button" data-feedback-open>Feedback for this creator</button>${shareBlock({ data, shareUrl, shareTitle })}</div>
+</div>
 <nav class="yr-foot-links yr-foot-nav" aria-label="All sections">${enabled.map((s) => `<a href="${homeUrl}${siteSectionHref(s, slug, isCustomDomain)}">${esc(SECTION_LABELS[s])}</a>`).join("")}${secondary}</nav>
 </footer>`;
 }
