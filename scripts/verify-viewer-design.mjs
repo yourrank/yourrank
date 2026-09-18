@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { readFile, mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { renderSite } from '../packages/shared/dist/site-render.js';
+import { renderSite, siteSectionFromPath } from '../packages/shared/dist/site-render.js';
 import { parseViewerIntent } from '../packages/shared/dist/viewer-intent.js';
 import { viewerDashboardPage } from '../apps/leaderboard/src/pages/viewer-dashboard.js';
 import { execFileSync } from 'node:child_process';
@@ -82,7 +82,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/missing') { res.writeHead(404).end('Not found'); return; }
     const slug = url.pathname.split('/')[1] || 'nova';
-    const section = url.pathname.split('/')[2] || 'home';
+    const section = siteSectionFromPath(url.pathname.split('/')[2] || 'home');
     const rewardId = section === 'shop' ? url.pathname.split('/')[3] || '' : '';
     const signedOut = url.searchParams.has('signedout');
     const empty = url.searchParams.has('empty');
@@ -107,7 +107,7 @@ try {
   // Visual inspection is batched before the behavioral checks.
   for (const width of [1440, 900, 390]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const path of ['/nova', '/nova/shop', '/nova/me', '/nova/leaderboard', '/me', '/me#vd-profile', '/me#vd-connections', '/me#vd-notifications', '/me#vd-security', '/me#vd-data']) {
+    for (const path of ['/nova', '/nova/shop', '/nova/activity', '/nova/leaderboard', '/me', '/me#vd-profile', '/me#vd-connections', '/me#vd-notifications', '/me#vd-security', '/me#vd-data']) {
       await page.goto(origin + path); await page.evaluate(() => document.fonts.ready);
       await page.evaluate(() => window.__yrViewerAppReady);
       if (await page.locator('#cookieReject').isVisible()) await page.locator('#cookieReject').click();
@@ -258,7 +258,7 @@ try {
   assert.equal(mutations[0].body.slug, 'nova');
   assert.ok(mutations[0].body.idempotencyKey);
   assert.equal(mutations[0].csrf, 'fixture-csrf');
-  await page.locator('.viewer-destinations a[href="/nova/me"]').click();
+  await page.locator('.viewer-destinations a[href="/nova/activity"]').click();
   assert.match(await page.locator('#membership-claims').innerText(), /Community shout-out/);
   await page.locator('#yr-code-drop-code').fill('CODE_-719');
   assert.equal(await page.locator('#yr-code-drop-code').evaluate(input => input.checkValidity()), true);
@@ -271,7 +271,7 @@ try {
   assert.equal(balance, 1000);
   await page.locator('#yr-code-drop-code').fill('NOVA100');
   await page.locator('[data-code-drop-submit]').click();
-  await page.waitForURL('**/nova/me');
+  await page.waitForURL('**/nova/activity');
   await page.waitForFunction(() => document.querySelector('.viewer-credit-amount').dataset.creditBalance === '1100');
   await page.locator('#yr-code-drop-code').fill('NOVA100');
   await page.locator('[data-code-drop-submit]').click();
@@ -334,7 +334,7 @@ try {
   await page.locator('.vd-card-side a[href="/nova"]').click();
   assert.match(await page.locator('.viewer-context-name').innerText(), /Nova/);
   for (const state of ['signedout', 'empty', 'unavailable', 'blocked']) {
-    await page.goto(`${origin}/nova/me?${state}`);
+    await page.goto(`${origin}/nova/activity?${state}`);
     await page.evaluate(() => window.__yrViewerAppReady);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     if (state === 'signedout') assert.equal(await page.locator('[data-code-drop-claim]').count(), 0);
@@ -392,7 +392,7 @@ try {
     }
     const gate = page.locator('.viewer-reward-claim a.yr-act');
     assert.equal(await gate.innerText(), 'Sign in to claim');
-    assert.ok((await gate.getAttribute('href')).endsWith('/nova/me?intent=reward&reward=topic'), `${width}: gate carries the reward id`);
+    assert.ok((await gate.getAttribute('href')).endsWith('/nova/activity?intent=reward&reward=topic'), `${width}: gate carries the reward id`);
     assert.equal(await page.locator('[data-redeem]').count(), 0, `${width}: guest detail has no claim button`);
     const back = page.locator('.viewer-reward-back');
     assert.ok(await back.isVisible(), `${width}: back link visible`);
@@ -442,7 +442,7 @@ try {
   assert.ok((await page.locator('main').innerText()).includes("hasn't added a description yet"), 'missing description stated honestly');
   // Sign-in intent for two different rewards returns to each reward, including one that vanished meanwhile.
   for (const [id, expectHeading] of [['topic', 'Suggest a stream topic'], ['withdrawn', 'Retired hoodie']]) {
-    await page.goto(origin + `/nova/me?intent=reward&reward=${id}&signedout`);
+    await page.goto(origin + `/nova/activity?intent=reward&reward=${id}&signedout`);
     await page.evaluate(() => window.__yrViewerAppReady);
     const gateLink = page.locator('.member-actions a[href*="returnTo="]').first();
     const returnTo = decodeURIComponent(new URL(await gateLink.getAttribute('href'), origin).searchParams.get('returnTo'));

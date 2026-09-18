@@ -1,7 +1,7 @@
 // Global Viewer Account (/me): one identity and its community memberships.
 //
 // Per-community Rewards, credits and Claims stay on the creator-branded
-// /<slug>/me surface. This account page deliberately links there instead of
+// /<slug>/activity surface. This account page deliberately links there instead of
 // rebuilding a second copy of the creator's product.
 
 (function initViewerAccount() {

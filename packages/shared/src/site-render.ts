@@ -91,10 +91,24 @@ const ICONS = {
   gift: `<svg ${S}><rect x="3" y="8" width="18" height="12" rx="1"/><path d="M12 8v12M3 13h18"/><path d="M12 8S10.5 4 8.5 4a2 2 0 0 0 0 4z"/><path d="M12 8s1.5-4 3.5-4a2 2 0 0 1 0 4z"/></svg>`,
 };
 
+/** Public path segment per section id where the two differ; `me` stays the internal id. */
+export const SITE_SECTION_PATHS = Object.freeze({ me: "activity" });
+
+export function siteSectionPath(section) {
+  return SITE_SECTION_PATHS[section] || section;
+}
+
+/** The section id a public path segment resolves to, or the segment itself when it is not renamed. */
+export function siteSectionFromPath(segment) {
+  const found = Object.entries(SITE_SECTION_PATHS).find(([, path]) => path === segment);
+  return found ? found[0] : segment;
+}
+
 export function siteSectionHref(section, slug, isCustomDomain) {
   const s = encodeURIComponent(slug || "");
-  if (isCustomDomain) return section === "home" ? "/" : `/${section}`;
-  return section === "home" ? `/${s}` : `/${s}/${section}`;
+  const path = siteSectionPath(section);
+  if (isCustomDomain) return section === "home" ? "/" : `/${path}`;
+  return section === "home" ? `/${s}` : `/${s}/${path}`;
 }
 
 function globalViewerAccountHref(isCustomDomain, slug) {

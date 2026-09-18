@@ -14,7 +14,7 @@ import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
-import { renderSite as defaultRenderSite } from "@yourrank/shared/site-render";
+import { renderSite as defaultRenderSite, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
 import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem } from "./site-data.js";
 import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
@@ -29,25 +29,39 @@ import {
 import { setRequestMetrics } from "@yourrank/shared/request-id";
 
 const SECTIONS = new Set(["home", "leaderboard", "shop", "games", "me"]);
+// Former public segments; requests using them resolve to the section and carry
+// `redirectTo`, the canonical path, so old links and bookmarks keep working.
+const LEGACY_SEGMENTS = new Map([["me", "me"]]);
+
+function sectionRoute(seg, slug, isCustomDomain) {
+  const legacy = LEGACY_SEGMENTS.get(seg);
+  if (legacy) return { slug, section: legacy, redirectTo: siteSectionHref(legacy, slug, isCustomDomain) };
+  const section = siteSectionFromPath(seg);
+  // A renamed section answers only to its public segment, never its internal id.
+  if (!SECTIONS.has(section) || siteSectionPath(section) !== seg) return null;
+  return { slug, section };
+}
 
 export function parseSitePath(path, isCustomDomain, customSlug) {
   const clean = (path || "").replace(/\/$/, "") || "/";
   if (isCustomDomain) {
     if (clean === "/") return { slug: customSlug, section: "home" };
     const [seg, rewardId, ...rest] = clean.slice(1).split("/");
-    if (!SECTIONS.has(seg) || rest.length) return null;
-    if (rewardId === undefined) return { slug: customSlug, section: seg };
-    return seg === "shop" && isRewardId(rewardId) ? { slug: customSlug, section: seg, rewardId } : null;
+    if (rest.length) return null;
+    const route = sectionRoute(seg, customSlug, true);
+    if (!route) return null;
+    if (rewardId === undefined) return route;
+    return route.section === "shop" && isRewardId(rewardId) ? { ...route, rewardId } : null;
   }
   const parts = clean.split("/").filter(Boolean);
   if (parts.length === 0) return null;
   const slug = decodeURIComponent(parts[0]).toLowerCase();
   if (parts.length === 1) return { slug, section: "home" };
-  const section = parts[1].toLowerCase();
-  if (!SECTIONS.has(section)) return null;
-  if (parts.length === 2) return { slug, section };
+  const route = sectionRoute(parts[1].toLowerCase(), slug, false);
+  if (!route) return null;
+  if (parts.length === 2) return route;
   // Only Rewards has a stable per-item URL: /<slug>/shop/<rewardId>.
-  if (parts.length === 3 && section === "shop" && isRewardId(parts[2])) return { slug, section, rewardId: parts[2] };
+  if (parts.length === 3 && route.section === "shop" && isRewardId(parts[2])) return { ...route, rewardId: parts[2] };
   return null;
 }
 
