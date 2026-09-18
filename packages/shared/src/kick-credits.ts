@@ -16,6 +16,7 @@ export interface KickRewardPayload {
   };
   reward?: { id?: string; title?: string; cost?: number };
   status?: string;
+  created_at?: string;
 }
 
 export interface KickRewardEvent {
@@ -181,6 +182,24 @@ export async function processKickRewardRedemption(
     if (!eventRows || eventRows.length === 0) {
       return { duplicate: true };
     }
+    // Provider-neutral envelope, written alongside the legacy table until reads
+    // switch (docs/PROVIDER_PORTABILITY_PLAN.md).
+    const integrationRows = (await tx.unsafe(
+      `INSERT INTO integration_events
+         (provider, external_event_id, event_type, payload_type, external_actor_id, status, payload, occurred_at)
+       VALUES ('kick', $1, 'reward_redemption', $2, $3, $4, $5, $6)
+       ON CONFLICT (provider, external_event_id) DO UPDATE SET status = EXCLUDED.status
+       RETURNING id`,
+      [messageId, event.eventType, redeemerKickUserId, status, payload, payload.created_at || null]
+    )) as { id: string | number }[];
+    const integrationEventId = integrationRows[0]?.id ?? null;
+    const markProcessed = (siteId: string, viewerId: string | null) =>
+      tx.unsafe(
+        `UPDATE integration_events
+            SET site_id = $1, viewer_id = COALESCE($2, viewer_id), processed_at = now()
+          WHERE id = $3`,
+        [siteId, viewerId, integrationEventId]
+      );
 
     // Find the leaderboard site linked to this Kick channel and lock it.
     const site = await tx.one<{ id: string; user_id: string }>(
@@ -329,8 +348,8 @@ export async function processKickRewardRedemption(
 
       await tx.unsafe(
         `INSERT INTO credit_ledger
-           (site_viewer_id, type, amount, description, metadata, kick_event_id)
-         VALUES ($1, 'refund', $2, $3, $4, $5)`,
+           (site_viewer_id, type, amount, description, metadata, kick_event_id, integration_event_id)
+         VALUES ($1, 'refund', $2, $3, $4, $5, $6)`,
         [
           siteViewer.id,
           refundAmount,
@@ -344,8 +363,10 @@ export async function processKickRewardRedemption(
             original_ledger_id: originalEarn.id,
           },
           messageId,
+          integrationEventId,
         ]
       );
+      await markProcessed(site.id, viewerId);
 
       return { refunded: refundAmount, balance: updatedRows[0].balance };
     }
@@ -452,6 +473,7 @@ export async function processKickRewardRedemption(
         "UPDATE kick_reward_events SET site_id = $1 WHERE event_id = $2",
         [site.id, messageId]
       );
+      await markProcessed(site.id, viewerId);
       if (existingSiteViewer && fraudReasons.length > 0) {
         await tx.unsafe(
           `UPDATE site_viewers
@@ -511,6 +533,7 @@ export async function processKickRewardRedemption(
       "UPDATE kick_reward_events SET site_id = $1 WHERE event_id = $2",
       [site.id, messageId]
     );
+    await markProcessed(site.id, viewerId);
 
     // Grant credits and record ledger.
     const creditedRows = (await tx.unsafe(
@@ -527,8 +550,8 @@ export async function processKickRewardRedemption(
 
     await tx.unsafe(
       `INSERT INTO credit_ledger
-         (site_viewer_id, type, amount, description, metadata, kick_event_id)
-       VALUES ($1, 'earn', $2, $3, $4, $5)`,
+         (site_viewer_id, type, amount, description, metadata, kick_event_id, integration_event_id)
+       VALUES ($1, 'earn', $2, $3, $4, $5, $6)`,
       [
         siteViewerId,
         creditAmount,
@@ -541,6 +564,7 @@ export async function processKickRewardRedemption(
           kick_redemption_id: kickRedemptionId,
         },
         messageId,
+        integrationEventId,
       ]
     );
 
