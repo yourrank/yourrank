@@ -684,12 +684,13 @@ function shareBlock({ data, shareUrl, shareTitle }) {
   return `<div class="yr-share" data-share-block><span>Share</span><button type="button" class="yr-btn yr-btn--sm yr-btn--ghost" data-share-copy data-share-url="${esc(shareUrl)}" data-share-title="${esc(shareTitle)}">Share link</button><a class="yr-btn yr-btn--sm yr-btn--ghost" href="${esc(intent)}" target="_blank" rel="noopener noreferrer">Share on X<span class="yr-sr"> (opens in a new tab)</span></a><span class="yr-share-status" data-share-status role="status" aria-live="polite"></span></div>`;
 }
 
-/** The creator's rules list; only string entries are shown, and only while the `rules` block is on. */
-function rulesBlock(data) {
+/** The creator's rules list; only string entries are shown, and only while the `rules` block is on.
+ *  `payoutNote` (already-escaped HTML) is the prize-pool explanation, shown as a quiet lead inside the disclosure. */
+function rulesBlock(data, payoutNote = "") {
   if (data.sections?.rules === false) return "";
   const rules = (Array.isArray(data.rules) ? data.rules : []).filter((rule) => typeof rule === "string" && rule.trim());
   if (!rules.length) return "";
-  return `<details class="viewer-card viewer-rules" aria-labelledby="viewer-rules-title"><summary class="viewer-card-head"><h2 id="viewer-rules-title">${viewerIcon('shield')}Rules</h2><span class="viewer-fine">${rules.length} ${rules.length === 1 ? "rule" : "rules"}</span></summary><ol class="viewer-rules-list">${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol></details>`;
+  return `<details class="viewer-card viewer-rules" aria-labelledby="viewer-rules-title"><summary class="viewer-card-head"><h2 id="viewer-rules-title">${viewerIcon('shield')}Rules</h2><span class="viewer-fine">${rules.length} ${rules.length === 1 ? "rule" : "rules"}</span></summary>${payoutNote ? `<p class="viewer-rules-payout">${payoutNote}</p>` : ""}<ol class="viewer-rules-list">${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ol></details>`;
 }
 
 function siteFooter({ data, b, siteSections, slug, isCustomDomain, homeUrl, watermark, viewer, casino, ctaHref, hasCta, kickUrl, shareUrl, shareTitle, lead = "" }) {
@@ -953,17 +954,19 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
     : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
+  const payoutNote = showPool ? `${esc(pool)} ${poolLabel.toLowerCase()}, paid in cash by ${sponsor ? esc(sponsor) : "the sponsor"} to the top ${wagerLabel.toLowerCase()} players${hasRules ? " under these payout rules" : ""}. Separate from credits — credits can't be won here and cash can't be bought with credits.` : "";
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
-    showPool ? `<p class="yr-note yr-note--w">${esc(pool)} ${poolLabel.toLowerCase()}, paid in cash by ${sponsor ? esc(sponsor) : "the sponsor"} to the top ${wagerLabel.toLowerCase()} players${hasRules ? ` under the <a href="#viewer-rules-title">payout rules</a>` : ""}. Separate from credits — credits can't be won here and cash can't be bought with credits.</p>` : "",
+    payoutNote && !hasRules ? `<p class="yr-note yr-note--w">${payoutNote}</p>` : "",
   ].filter(Boolean).join("");
+  const rulesHtml = rulesBlock(data, payoutNote);
 
   const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
   const switcher = events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '';
   if (data.sections?.leaderboard === false) {
     return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
 ${panel({ title: "Standings", titleHidden: true, meta: "", body: emptyState(ICONS.trophy, "Standings are hidden", `${esc(b.name || slug)} is not showing the standings right now. Check back later.`), foot: notes })}
-${rulesBlock(data)}`;
+${rulesHtml}`;
   }
 
   return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
@@ -977,7 +980,7 @@ ${panel({
     body: `${players.length ? `<div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div>` : ""}${standings}`,
     foot: notes,
   })}</div>
-${rulesBlock(data)}`;
+${rulesHtml}`;
 }
 
 /* ── Rewards ──────────────────────────────────────────────────────────── */
