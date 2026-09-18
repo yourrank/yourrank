@@ -32,6 +32,7 @@ const PUBLIC_ACCENT_DEFAULT = {
   ink: "#000000",
 };
 const CREDITS_DISCLAIMER = "Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.";
+const REWARD_CLAIM_FINE = "Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.";
 
 // B-01: Build font URL dynamically from the board's active font choice so that
 // boards using Oswald, Playfair Display, Rajdhani or Bebas Neue actually load.
@@ -781,7 +782,7 @@ function viewerCommunityOverview(ctx) {
 ${section === 'home' || section === 'leaderboard' || section === 'shop' ? '' : leaderboardPreview(ctx)}
 <div class="viewer-scope-help">${viewerIcon('shield')}<p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside>`;
   }
-  return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>${section === 'home' ? 'Your status' : section === 'leaderboard' ? 'Your standing' : 'Reward credits'}</h2>${(section === 'home' || section === 'leaderboard') && siteSections.me !== false ? `<a href="${meHref}">View activity ${viewerIcon('arrow')}</a>` : ''}</div>${section === 'home' || section === 'leaderboard' ? `<div class="viewer-status-who"><span class="viewer-avatar">${avatarHtml(viewer)}</span><div><strong>${esc(viewerName(viewer))}</strong><span>Member of ${esc(name)}</span></div></div>` : ''}<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}">${viewerIcon('coins')}<div><strong data-credit-balance-num>${formatNumber(balance)}</strong><p>credits</p></div></div><p>Only in ${esc(name)}</p>${section === 'home' || section === 'leaderboard' ? homeStatusFacts(ctx) : ''}${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}${siteSections.me !== false && !viewerData?.viewerOnSite?.blocked ? `<a class="yr-btn" href="${meHref}#membership-code">Earn reward credits ${viewerIcon('arrow')}</a>` : ''}</section>
+  return `<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-credit-panel"><div class="viewer-rail-head"><h2>${section === 'home' ? 'Your status' : section === 'leaderboard' ? 'Your standing' : 'Reward credits'}</h2>${(section === 'home' || section === 'leaderboard') && siteSections.me !== false ? `<a href="${meHref}">View activity ${viewerIcon('arrow')}</a>` : ''}</div>${section === 'home' || section === 'leaderboard' ? `<div class="viewer-status-who"><span class="viewer-avatar">${avatarHtml(viewer)}</span><div><strong>${esc(viewerName(viewer))}</strong><span>Member of ${esc(name)}</span></div></div>` : ''}<div class="viewer-credit-amount" data-credit-balance="${Number(balance) || 0}">${viewerIcon('coins')}<div><strong data-credit-balance-num>${formatNumber(balance)}</strong><p>credits</p></div></div><p>Only in ${esc(name)}</p>${section === 'home' || section === 'leaderboard' ? homeStatusFacts(ctx) : ''}${viewerData?.viewerOnSite?.blocked ? '<p role="status">Claiming is unavailable for this membership. Contact the creator for help.</p>' : ''}${siteSections.me !== false && !viewerData?.viewerOnSite?.blocked ? `<a class="yr-btn" href="${meHref}#membership-code">Earn reward credits ${viewerIcon('arrow')}</a>` : ''}${rewardClaimFine(section)}</section>
 ${section === 'home' ? '' : rewardProgressCard(ctx)}
 ${section !== 'shop' && section !== 'home' && siteSections.me !== false && latest ? `<section class="viewer-rail-panel"><div class="viewer-rail-head"><h3>Latest claim</h3><span class="viewer-fine" data-viewer-claim-summary>${pending.length ? `${pending.length}${viewerData?.claimsTruncated ? '+' : ''} pending` : 'Recent activity'}</span></div><ul class="viewer-claim-preview">${claimRow(latest)}</ul></section>` : ''}
 ${section === 'home' || section === 'leaderboard' || section === 'shop' ? '' : leaderboardPreview(ctx)}
@@ -798,7 +799,7 @@ function guestPrompt(ctx, meHref) {
     return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Your membership</h2></div><p role="status">Your community credits could not load. Reload this page to try again.</p></section>`;
   }
   if (viewer) {
-    return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Join ${name}</h2></div><p>${section === 'shop' ? `Join to claim ${name}'s rewards with free credits earned here.` : `Join to keep your credits, claims and activity in ${name}.`}</p><a class="yr-btn" href="${meHref}">Join community ${viewerIcon('arrow')}</a></section>`;
+    return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Join ${name}</h2></div><p>${section === 'shop' ? `Join to claim ${name}'s rewards with free credits earned here.` : `Join to keep your credits, claims and activity in ${name}.`}</p><a class="yr-btn" href="${meHref}">Join community ${viewerIcon('arrow')}</a>${rewardClaimFine(section)}</section>`;
   }
   const copy = section === 'shop'
     ? { h: 'Claim rewards', p: `Sign in to check your balance and claim ${name}'s rewards. Credits are free and earned in this community.`, intent: 'signin' }
@@ -808,7 +809,12 @@ function guestPrompt(ctx, meHref) {
   if (section === 'home' || section === 'leaderboard') {
     return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>${copy.h}</h2></div><div class="viewer-status-who"><span class="viewer-avatar viewer-avatar--anon" aria-hidden="true">${viewerIcon('user')}</span><div><strong>Not signed in</strong><span>${copy.p}</span></div></div><a class="yr-btn" href="${guestGateHref(meHref, copy.intent)}">Sign in ${viewerIcon('arrow')}</a>${homeStatusFacts(ctx)}</section>`;
   }
-  return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>${copy.h}</h2></div><p>${copy.p}</p><a class="yr-btn" href="${guestGateHref(meHref, copy.intent)}">Sign in ${viewerIcon('arrow')}</a></section>`;
+  return `<section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>${copy.h}</h2></div><p>${copy.p}</p><a class="yr-btn" href="${guestGateHref(meHref, copy.intent)}">Sign in ${viewerIcon('arrow')}</a>${rewardClaimFine(section)}</section>`;
+}
+
+/** The credits/claim restrictions, shown once on Rewards inside the rail's claim panel. */
+function rewardClaimFine(section) {
+  return section === 'shop' ? `<p class="yr-fine viewer-rail-fine">${REWARD_CLAIM_FINE}</p>` : '';
 }
 
 /**
@@ -1014,7 +1020,6 @@ function shopMain(ctx) {
 ${blockedNote}
 <p class="yr-redeem-status" id="yr-redeem-status" role="status" aria-live="polite" tabindex="-1"></p>
 ${list}
-<p class="yr-fine">Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.</p>
 ${canOrder ? orderConfirmDialog() : ""}`;
 }
 

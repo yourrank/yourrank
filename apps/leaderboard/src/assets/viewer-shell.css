@@ -334,7 +334,7 @@
 .viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd-n{font-size:20px}
 .viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd-p{-webkit-line-clamp:4;font-size:14px}
 .viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd-side{align-self:end;padding:14px 20px 18px}
-.viewer-shell[data-section="shop"]:not([data-reward-detail]) .viewer-main>.yr-fine{margin:0;font-size:12.5px;color:var(--yr-faint)}
+.viewer-shell[data-section="shop"]:not([data-reward-detail]) .viewer-rail-panel>.viewer-rail-fine{margin:14px 0 0;padding-top:12px;border-top:1px solid var(--yr-edge);font-size:12px;line-height:1.5;color:var(--yr-faint)}
 .viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-vsec--empty{max-width:none}
 @media(max-width:1100px){.viewer-shell[data-section="shop"]:not([data-reward-detail]) .viewer-shop-hero-aside{display:none}}
 @media(max-width:640px){.viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="2"]{grid-template-columns:minmax(0,1fr)}.viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd{grid-template-columns:minmax(0,1fr)}.viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd-img,.viewer-shell[data-section="shop"]:not([data-reward-detail]) .yr-rwds[data-count="1"] .yr-rwd-art{grid-row:auto;height:auto;max-height:none;border-radius:13px 13px 0 0}}
