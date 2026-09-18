@@ -7,7 +7,7 @@ import { rateLimit } from "./ratelimit.js";
 import { reconcileAccountActiveViewerUsage } from "./plan-usage.js";
 import { findViewerByExternalIdentity, persistViewerIdentity } from "./viewer-identity.js";
 import { linkCommunityChannel, resolveVerifiedCommunityChannel } from "./provider-connections.js";
-import { findActiveRewardMapping } from "./reward-mappings.js";
+import { findActiveRewardMapping, type RewardMappingRow } from "./reward-mappings.js";
 
 export interface KickRewardPayload {
   id?: string;
@@ -339,7 +339,15 @@ export async function processKickRewardRedemption(
     // Creditable path from here.
 
     // Find the reward → credits mapping for this site.
-    const mapping = await findActiveRewardMapping((sql, params) => tx.unsafe(sql, params), site.id, "kick", rewardId);
+    const mapping = await findActiveRewardMapping(
+      async (sql, params) => {
+        const row = await tx.one<RewardMappingRow>(sql, params);
+        return row ? [row] : [];
+      },
+      site.id,
+      "kick",
+      rewardId,
+    );
     if (!mapping) {
       return { skipped: true };
     }

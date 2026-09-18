@@ -148,15 +148,17 @@ function earnEvent(overrides = {}) {
 }
 
 // Queue up the shared prefix of the creditable/reversible paths:
-// event insert, site lookup, site lock, owner lookup, viewer lookup,
-// viewer rename update, username history, site_viewer existence check.
+// event inserts, verified community-channel routing (locks the site), owner
+// lookup, generic viewer identity lookup, identity upsert + legacy mirror,
+// username history, site_viewer existence check.
 function mockCommonPrefix({ existingSiteViewer = { id: "sv-1" } } = {}) {
   db.unsafeResponses.push([{ event_id: "msg-1" }]); // kick_reward_events insert
   db.unsafeResponses.push([{ id: 7 }]); // integration_events insert
-  db.oneResponses.push({ id: "site-1", user_id: "user-1" }); // site
+  db.unsafeResponses.push([{ site_id: "site-1", user_id: "user-1" }]); // community_channels routing
   db.oneResponses.push({ plan: "pro", plan_expires_at: null, status: "active", email_verified: true }); // owner
-  db.oneResponses.push({ id: "viewer-1", kick_username: "alice" }); // existing viewer
-  db.unsafeResponses.push([]); // UPDATE viewers
+  db.unsafeResponses.push([{ viewer_id: "viewer-1", username: "alice" }]); // viewer_identities lookup
+  db.unsafeResponses.push([]); // INSERT viewer_identities ... ON CONFLICT
+  db.unsafeResponses.push([]); // UPDATE viewers (legacy mirror)
   db.unsafeResponses.push([]); // INSERT viewer_username_history (current name)
   db.oneResponses.push(existingSiteViewer); // existing site_viewer
 }
@@ -168,7 +170,7 @@ beforeEach(() => resetDb());
 describe("processKickRewardRedemption earn path", () => {
   it("grants exactly the mapped credits to balance AND total_earned, with a matching ledger row", async () => {
     mockCommonPrefix();
-    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 }); // reward mapping
+    db.oneResponses.push({ id: "map-1", credits: 25, external_reward_cost: 10 }); // reward mapping
     db.unsafeResponses.push([{ id: "sv-1", balance: 100, blocked: false, fraud_score: 0 }]); // site_viewer upsert
     db.queryResponses.push([], []); // alt-username history, peer usernames
     db.unsafeResponses.push([]); // kick_reward_events site update
@@ -211,21 +213,22 @@ describe("processKickRewardRedemption earn path", () => {
   it("rejects webhook routing unless the Site binding is verified and matches its owner identity", async () => {
     db.unsafeResponses.push([{ event_id: "msg-1" }]);
     db.unsafeResponses.push([{ id: 7 }]); // integration_events insert
-    db.oneResponses.push(null);
+    db.unsafeResponses.push([]); // no active+verified community_channels binding
 
     const result = await processKickRewardRedemption(earnEvent());
 
     expect(result).toEqual({ skipped: true });
-    const lookup = db.calls.find((call) => call.method === "one" && call.sql.includes("kick_channel_external_id"));
-    expect(lookup.sql).toContain("kick_channel_verified_at IS NOT NULL");
-    expect(lookup.sql).toContain("u.kick_user_id = s.kick_channel_external_id");
+    const lookup = db.calls.find((call) => call.method === "unsafe" && call.sql.includes("FROM community_channels ch"));
+    expect(lookup.sql).toContain("ch.status = 'active' AND ch.verified_at IS NOT NULL");
+    expect(lookup.sql).toContain("cc.status = 'active' AND cc.linked_at IS NOT NULL");
+    expect(lookup.sql).toContain("cc.external_user_id = ch.external_channel_id");
     expect(db.calls.some((call) => /INSERT INTO site_viewers/.test(call.sql))).toBe(false);
     expect(db.calls.some((call) => /INSERT INTO credit_ledger/.test(call.sql))).toBe(false);
   });
 
   it("skips a reward whose cost was tampered with after mapping", async () => {
     mockCommonPrefix();
-    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 }); // mapped at cost 10
+    db.oneResponses.push({ id: "map-1", credits: 25, external_reward_cost: 10 }); // mapped at cost 10
     const result = await processKickRewardRedemption(earnEvent({ reward: { id: "reward-1", title: "Hydrate", cost: 1 } }));
     expect(result.skipped).toBe(true);
     expect(result.reason).toMatch(/cost mismatch/i);
@@ -238,7 +241,7 @@ describe("processKickRewardRedemption earn path", () => {
     // A member already flagged for a look-alike username (score 30) keeps
     // earning; the same peer still exists, so the signal fires again.
     mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: false, fraud_score: 30, block_reason: "username similar to existing viewer" } });
-    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.oneResponses.push({ id: "map-1", credits: 25, external_reward_cost: 10 });
     db.queryResponses.push([], [{ kick_username: "alicf" }]); // no alt history, one look-alike peer
     db.unsafeResponses.push([{ id: "sv-1", balance: 100, blocked: false, fraud_score: 30 }]); // site_viewer upsert
     db.unsafeResponses.push([]); // kick_reward_events site update
@@ -256,7 +259,7 @@ describe("processKickRewardRedemption earn path", () => {
   it("still auto-blocks when distinct signals push the score over the threshold", async () => {
     // Persisted 50 (look-alike 30 + rate-limit penalties) plus a fresh alt-account signal (50) → 100.
     mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: false, fraud_score: 50, block_reason: "username similar to existing viewer" } });
-    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.oneResponses.push({ id: "map-1", credits: 25, external_reward_cost: 10 });
     db.queryResponses.push([{ viewer_id: "viewer-9", seen_at: "2026-09-01" }], []);
     db.unsafeResponses.push([]); // kick_reward_events site update (blocked branch)
     db.unsafeResponses.push([]); // integration_events processed update
@@ -273,7 +276,7 @@ describe("processKickRewardRedemption earn path", () => {
 
   it("does not create Membership or activity for a rejected blocked provider action", async () => {
     mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: true, fraud_score: 100 } });
-    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.oneResponses.push({ id: "map-1", credits: 25, external_reward_cost: 10 });
     db.queryResponses.push([], []);
     db.unsafeResponses.push([]); // kick_reward_events site update
     db.unsafeResponses.push([]); // integration_events processed update
