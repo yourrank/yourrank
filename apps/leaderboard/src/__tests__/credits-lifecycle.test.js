@@ -230,6 +230,41 @@ describe("processKickRewardRedemption earn path", () => {
     expect(db.calls.some((c) => /last_active_at\s*=\s*now\(\)/.test(c.sql))).toBe(false);
   });
 
+  it("scores each anti-fraud signal once per membership instead of on every earn event", async () => {
+    // A member already flagged for a look-alike username (score 30) keeps
+    // earning; the same peer still exists, so the signal fires again.
+    mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: false, fraud_score: 30, block_reason: "username similar to existing viewer" } });
+    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.queryResponses.push([], [{ kick_username: "alicf" }]); // no alt history, one look-alike peer
+    db.unsafeResponses.push([{ id: "sv-1", balance: 100, blocked: false, fraud_score: 30 }]); // site_viewer upsert
+    db.unsafeResponses.push([]); // kick_reward_events site update
+    db.unsafeResponses.push([{ id: "sv-1", balance: 125 }]); // credit grant
+    db.unsafeResponses.push([]); // ledger earn insert
+
+    const result = await processKickRewardRedemption(earnEvent());
+
+    expect(result).toEqual({ credited: 25, balance: 125, newViewer: false });
+    expect(db.calls.some((c) => /UPDATE site_viewers/.test(c.sql) && /fraud_score = GREATEST/.test(c.sql))).toBe(false);
+    expect(db.calls.some((c) => /blocked = true/.test(c.sql))).toBe(false);
+  });
+
+  it("still auto-blocks when distinct signals push the score over the threshold", async () => {
+    // Persisted 50 (look-alike 30 + rate-limit penalties) plus a fresh alt-account signal (50) → 100.
+    mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: false, fraud_score: 50, block_reason: "username similar to existing viewer" } });
+    db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });
+    db.queryResponses.push([{ viewer_id: "viewer-9", seen_at: "2026-09-01" }], []);
+    db.unsafeResponses.push([]); // kick_reward_events site update (blocked branch)
+    db.unsafeResponses.push([]); // blocked flag update
+
+    const result = await processKickRewardRedemption(earnEvent());
+
+    expect(result).toEqual({ blocked: true });
+    const flag = db.calls.find((c) => /UPDATE site_viewers/.test(c.sql) && /blocked = true/.test(c.sql));
+    expect(flag).toBeDefined();
+    expect(flag.params[0]).toBe(100);
+    expect(flag.params[1]).toBe("username reused by another Kick account; auto-blocked by fraud score");
+  });
+
   it("does not create Membership or activity for a rejected blocked provider action", async () => {
     mockCommonPrefix({ existingSiteViewer: { id: "sv-1", blocked: true, fraud_score: 100 } });
     db.oneResponses.push({ id: "map-1", credits: 25, kick_reward_cost: 10 });

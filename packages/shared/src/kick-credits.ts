@@ -262,8 +262,9 @@ export async function processKickRewardRedemption(
       balance: number;
       blocked: boolean;
       fraud_score: number;
+      block_reason: string | null;
     }>(
-      "SELECT id, balance, blocked, fraud_score FROM site_viewers WHERE site_id = $1 AND viewer_id = $2 LIMIT 1 FOR UPDATE",
+      "SELECT id, balance, blocked, fraud_score, block_reason FROM site_viewers WHERE site_id = $1 AND viewer_id = $2 LIMIT 1 FOR UPDATE",
       [site.id, viewerId]
     );
 
@@ -395,6 +396,15 @@ export async function processKickRewardRedemption(
     let fraudScore = Number(existingSiteViewer?.fraud_score || 0);
     let fraudReasons: string[] = [];
     let isBlocked = existingSiteViewer?.blocked || false;
+    // Each signal is scored once per membership: the conditions below persist
+    // across events, and the persisted score already includes any signal that
+    // is recorded in block_reason.
+    const recordedReasons = String(existingSiteViewer?.block_reason || "");
+    const flag = (points: number, reason: string) => {
+      if (recordedReasons.includes(reason)) return;
+      fraudScore += points;
+      fraudReasons.push(reason);
+    };
 
     if (newUsername) {
       // Detect username reuse by a different Kick account (alt swap).
@@ -406,8 +416,7 @@ export async function processKickRewardRedemption(
         [newUsername, viewerId]
       );
       if (altHistory.length > 0) {
-        fraudScore += 50;
-        fraudReasons.push("username reused by another Kick account");
+        flag(50, "username reused by another Kick account");
       }
 
       // Detect look-alike usernames on this site.
@@ -424,8 +433,7 @@ export async function processKickRewardRedemption(
         if (peerName === newUsername) continue;
         const dist = levenshtein(newUsername, peerName);
         if (dist <= 2) {
-          fraudScore += 30;
-          fraudReasons.push("username similar to existing viewer");
+          flag(30, "username similar to existing viewer");
           break;
         }
       }
