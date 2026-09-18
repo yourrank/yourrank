@@ -139,16 +139,27 @@ describe("public leaderboard standings", () => {
     expect(flagOnly).not.toContain("Invalid Date");
   });
 
-  it("names the payer, unit and rules for cash prizes without inventing any of them", async () => {
+  it("names the payer and rules for prizes in creator-neutral wording without inventing any of them", async () => {
     const plain = await render("leaderboard");
-    expect(plain).toContain("$500 prize pool, paid in cash by the sponsor to the top wagered players.");
+    expect(plain).toContain("$500 prize pool, awarded by Creator Name to the top-ranked players.");
+    expect(plain).not.toMatch(/casino|paid in cash|RTP/i);
     expect(plain).not.toContain('href="#viewer-rules-title"');
 
     const sponsored = await render("leaderboard", {
-      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Casino" }, rules: ["Minimum 18+", "Payouts within 7 days"] },
+      data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Sponsor" }, rules: ["Minimum 18+", "Payouts within 7 days"] },
     });
-    expect(sponsored).toContain('<p class="viewer-rules-payout">$500 prize pool, paid in cash by Acme Casino to the top wagered players under these payout rules.');
+    expect(sponsored).toContain('<p class="viewer-rules-payout">$500 prize pool, awarded by Acme Sponsor to the top-ranked players under these rules.');
     expect(sponsored).not.toContain('yr-note yr-note--w');
+
+    const custom = await render("leaderboard", {
+      data: { ...baseData, prizes: { ...baseData.prizes, payoutNote: "Top 3 <clippers> get a shout-out & merch." } },
+    });
+    expect(custom).toContain("Top 3 &lt;clippers&gt; get a shout-out &amp; merch.");
+    expect(custom).not.toContain("awarded by");
+
+    const hidden = await render("leaderboard", { data: { ...baseData, rules: ["Be kind"], sections: { ...baseData.sections, rules: false } } });
+    expect(hidden).not.toContain("viewer-rules-title");
+    expect(hidden).not.toContain("Be kind");
     expect(sponsored.indexOf('<h2 id="viewer-rules-title">')).toBeLessThan(sponsored.indexOf('viewer-rules-payout'));
 
     const euro = await render("leaderboard", { data: { ...baseData, prizes: { ...baseData.prizes, currency: "€" } } });

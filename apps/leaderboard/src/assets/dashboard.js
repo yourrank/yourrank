@@ -5,7 +5,7 @@ import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, set
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
 import { clearSession } from "./dashboard/session.js";
 import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.js";
-import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderSections, renderSocials, wirePublishAction, wireSiteIdentityActions } from "./dashboard/site.js";
+import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderRules, renderSections, renderSocials, wirePublishAction, wireSiteIdentityActions } from "./dashboard/site.js";
 import { loadEventLeaderboards } from "./dashboard/event-leaderboards.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
 import { maybeAutoStartTour } from "./dashboard/tour.js";
@@ -230,6 +230,7 @@ async function init() {
     renderArchives(p.archives || []);
     renderSocials();
     renderSections();
+    renderRules();
     loadEventLeaderboards();
     renderEmbedShare();
     const iframe = $("designPreview");

@@ -352,11 +352,13 @@ const DEFAULT_PRIZES = {
   wagerLabel: "Wagered",
   prizeLabel: "Prize",
   wagerTotalLabel: "Wager total",
+  payoutNote: "",
 };
 // C-01: Single source of truth for prize label sanitization.
 // Previously duplicated verbatim across parseTheme, saveSite, and updateSiteTheme.
 const PRIZE_LABEL_MAX = 40;
 const CURRENCY_MAX = 6;
+const PAYOUT_NOTE_MAX = 300;
 
 function parsePrizes(rawPrizes) {
   const raw = (rawPrizes && typeof rawPrizes === "object") ? rawPrizes : {};
@@ -369,6 +371,7 @@ function parsePrizes(rawPrizes) {
     wagerLabel:      String(raw.wagerLabel      || DEFAULT_PRIZES.wagerLabel).slice(0, PRIZE_LABEL_MAX),
     prizeLabel:      String(raw.prizeLabel      || DEFAULT_PRIZES.prizeLabel).slice(0, PRIZE_LABEL_MAX),
     wagerTotalLabel: String(raw.wagerTotalLabel || DEFAULT_PRIZES.wagerTotalLabel).slice(0, PRIZE_LABEL_MAX),
+    payoutNote:      String(raw.payoutNote || "").trim().slice(0, PAYOUT_NOTE_MAX),
   };
 }
 

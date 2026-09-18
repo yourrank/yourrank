@@ -192,6 +192,10 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
 <div id="sectionsBody"><div class="sections-editor" id="sectionsList"></div></div>
 <div class="empty upsell-card" id="sectionsLock" hidden>Page block controls are a Pro feature. <a href="/dashboard/settings/billing?from=sections" id="sectionsUpgrade">Upgrade to unlock them</a>.</div></div>
+<div class="card" data-egroup="design" id="rulesCard"><div class="d-flex gap-8 items-center justify-between"><h3>Rules</h3><label class="switch" title="Show the Rules block on your public leaderboard"><input type="checkbox" id="f_rules_enabled" role="switch" aria-label="Show Rules block" /><span class="switch-track"></span></label></div><p class="card-sub">Your own rules for this leaderboard, shown in the collapsible Rules block. One rule per line; leave empty to hide the block.</p>
+<div class="field"><label for="f_rules">Rules (one per line)</label><textarea id="f_rules" rows="5" maxlength="20000" placeholder="How players get on the board
+How ties are handled
+Who is eligible"></textarea></div></div>
 <div class="card" data-egroup="design" id="prizesCard"><h3>Prize labels <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Customize the text labels shown next to prizes and the countdown timer.</p>
 <div id="prizesBody">
 <div class="grid2">
@@ -200,6 +204,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="field"><label for="f_countdownLabel">Timer label</label><input type="text" id="f_countdownLabel" placeholder="Race ends in" /></div>
 <div class="field"><label for="f_currency">Currency symbol</label><input type="text" id="f_currency" placeholder="$ / € / £" maxlength="6" /></div>
 </div>
+<div class="field"><label for="f_payoutNote">Prize pool note</label><textarea id="f_payoutNote" rows="2" maxlength="300" placeholder="Shown with the prize pool. Leave empty for the default sentence."></textarea></div>
 <label class="hint chk"><input type="checkbox" id="f_hidePrizeAmounts" /> Hide exact prize amounts from visitors</label>
 </div>
 <div class="empty upsell-card" id="prizesLock" hidden>Prize customization is a Pro feature. <a href="/dashboard/settings/billing?from=prizes" id="prizesUpgrade">Upgrade to unlock it</a>.</div></div>

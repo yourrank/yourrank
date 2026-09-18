@@ -112,6 +112,7 @@ const prizesSchema = z
     currency: z.string().max(6).optional(),
     hidePrizeAmounts: z.boolean().optional(),
     payoutsLabel: z.string().max(40).optional(),
+    payoutNote: z.string().max(300).optional(),
   })
   .strict()
   .optional();
