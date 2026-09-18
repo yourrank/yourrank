@@ -334,7 +334,7 @@ describe("section visibility", () => {
     expect(guestHtml).toContain("<title>Shoutout · Rewards · ");
     expect(guestHtml).toContain("The streamer says your name.");
     expect(guestHtml).toContain("<dd>5 left.</dd>");
-    expect(guestHtml).toContain("<dt>Fulfillment</dt>");
+    expect(guestHtml).toContain("<span>Fulfillment</span></dt>");
     expect(guestHtml).toContain('<a href="/streamer/contact">Contact ');
     expect(guestHtml).toContain('href="/streamer/shop"');
     // Guests are sent to the community gate with the reward identity, never straight to a claim.
