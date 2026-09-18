@@ -626,7 +626,6 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     tagline: b.tagline || '',
     watchHref: channel?.href || '', watchLabel: channel?.label || '',
     communityStatus: channel?.label || 'Creator community', signedIn: !!viewer,
-    railCard: section === "home" && siteSections.me !== false ? `<div class="viewer-rail-card">${viewerIcon('crown')}<strong>${isMember ? `You're part of ${esc(rawTitleBase)}` : `Support ${esc(rawTitleBase)}`}</strong><p>${isMember ? 'Your credits, claims and rank live in My Activity.' : 'Earn credits, be part of the community and claim rewards.'}</p><a class="yr-btn yr-btn--sm" href="${viewer ? siteSectionHref('me', slug, isCustomDomain) : guestGateHref(siteSectionHref('me', slug, isCustomDomain), 'join')}">${isMember ? 'My Activity' : 'Join community'}</a></div>` : '',
     sessionControl: !viewer && section !== "me" ? `<a class="yr-btn yr-btn--sm" href="${guestGate({ siteSections, slug, isCustomDomain }, "signin")}">Sign in</a>` : "",
     signInHref: viewer ? "" : guestGate({ siteSections, slug, isCustomDomain }, "signin"),
     homeHref: siteSectionHref("home", slug, isCustomDomain),
