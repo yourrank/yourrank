@@ -13,6 +13,15 @@ export const PROVIDER_IDS: readonly ProviderId[] = Object.freeze([
   "shopify",
 ]);
 
+export const PROVIDER_LABELS: Readonly<Record<ProviderId, string>> = Object.freeze({
+  kick: "Kick",
+  discord: "Discord",
+  twitch: "Twitch",
+  youtube: "YouTube",
+  patreon: "Patreon",
+  shopify: "Shopify",
+});
+
 export function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && (PROVIDER_IDS as readonly string[]).includes(value);
 }

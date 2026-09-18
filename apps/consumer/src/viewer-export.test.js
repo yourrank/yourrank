@@ -30,8 +30,12 @@ describe("viewer export artifacts", () => {
       ],
     };
     const read = async (sql, params = []) => {
-      if (sql.includes("FROM viewers WHERE")) {
-        return database.viewers.filter((row) => row.id === params[0]).map((row) => ({ ...row, discord_access_token_enc: "OAUTH-SECRET" }));
+      if (sql.includes("FROM viewers v")) {
+        return database.viewers.filter((row) => row.id === params[0]).map((row) => ({
+          ...row,
+          discord_access_token_enc: "OAUTH-SECRET",
+          identities: [{ provider: "kick", externalUserId: row.kick_user_id, username: row.kick_username, avatarUrl: null, linkedAt: "2026-01-01" }],
+        }));
       }
       if (sql.includes("SELECT id FROM site_viewers")) return database.siteViewers.filter((row) => row.viewer_id === params[0]).map((row) => ({ id: row.id }));
       if (sql.includes("site_id AS id")) return [{ id: "site-1" }];
@@ -58,6 +62,10 @@ describe("viewer export artifacts", () => {
     expect(parsed[0].manifest.tables).toEqual(VIEWER_EXPORT_TABLES);
     expect(parsed.at(-1).trailer).toMatchObject({ exportId: "job-1", exportVersion: "viewer-export-v1", complete: true });
     expect(parsed.at(-1).trailer.rowCounts).toMatchObject({ viewer: 1, siteViewers: 1, gameRounds: 1 });
+    expect(parsed.find((line) => line.table === "viewer").row).toMatchObject({
+      kick_user_id: "kick-1", kick_username: "viewer-one", discord_user_id: null, discord_username: null,
+      identities: [{ provider: "kick", external_user_id: "kick-1", username: "viewer-one", linked_at: "2026-01-01" }],
+    });
     expect(JSON.stringify(parsed)).not.toContain("viewer-two");
     expect(JSON.stringify(parsed)).not.toContain("VIEWER-2-SECRET");
     expect(JSON.stringify(parsed)).not.toContain("OAUTH-SECRET");

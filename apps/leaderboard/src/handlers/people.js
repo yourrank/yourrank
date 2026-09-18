@@ -10,7 +10,7 @@ import { requireUser, bad, json } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import { rateLimit } from "@yourrank/shared/ratelimit";
-import { linkedViewerIdentities, viewerDisplayName } from "@yourrank/shared/viewer-identity";
+import { linkedViewerIdentities, viewerDisplayName, viewerIdentitiesSql } from "@yourrank/shared/viewer-identity";
 import { routeContext } from "../middleware/handler.js";
 
 const peopleDefaults = {
@@ -89,8 +89,7 @@ export async function handlePeopleMembers(request, env, injected = {}) {
   const rows = await deps.query(
     `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked,
             sv.last_earned_at, sv.last_seen_at, sv.created_at,
-            v.kick_username, v.discord_username, v.avatar_url,
-            v.kick_linked_at, v.discord_linked_at
+            v.avatar_url, ${viewerIdentitiesSql("v")} AS identities
        FROM site_viewers sv
        JOIN viewers v ON v.id = sv.viewer_id
       WHERE sv.site_id=$1
@@ -130,8 +129,7 @@ export async function handlePeopleMemberDetail(request, env, injected = {}) {
   const row = await deps.one(
     `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked,
             sv.block_reason, sv.last_earned_at, sv.last_seen_at,
-            v.kick_username, v.discord_username, v.avatar_url,
-            v.kick_linked_at, v.discord_linked_at
+            v.avatar_url, ${viewerIdentitiesSql("v")} AS identities
        FROM site_viewers sv
        JOIN viewers v ON v.id = sv.viewer_id
       WHERE sv.site_id=$1 AND sv.id=$2`,

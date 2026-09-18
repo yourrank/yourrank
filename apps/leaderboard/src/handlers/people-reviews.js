@@ -6,6 +6,7 @@
 // universal Review table. Only zero-entry-fee tournaments are eligible, and
 // score/raw-signal fields are never selected or returned.
 import { one, query, withTransaction } from "@yourrank/shared/db";
+import { linkedViewerIdentities, viewerIdentitiesSql } from "@yourrank/shared/viewer-identity";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { requireUser, bad, json, readJson } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
@@ -72,10 +73,7 @@ function reviewIdFromRequest(request) {
 }
 
 function linkedIdentities(row) {
-  const identities = [];
-  if (row.kick_linked_at) identities.push({ provider: "Kick", displayName: row.kick_username || null });
-  if (row.discord_linked_at) identities.push({ provider: "Discord", displayName: row.discord_username || null });
-  return identities;
+  return linkedViewerIdentities(row).map((identity) => ({ provider: identity.label, displayName: identity.username }));
 }
 
 function decisionForReviewAction(action) {
@@ -138,8 +136,7 @@ const REVIEW_SELECT = `
          te.status AS source_status, te.created_at, te.updated_at,
          t.id AS tournament_id, t.title AS tournament_title,
          sv.id AS membership_id,
-         v.kick_username, v.discord_username,
-         v.kick_linked_at, v.discord_linked_at,
+         ${viewerIdentitiesSql("v")} AS identities,
          review_decision.action AS review_action,
          review_decision.created_at AS review_resolved_at
     FROM tournament_entries te

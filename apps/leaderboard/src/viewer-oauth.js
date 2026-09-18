@@ -5,15 +5,28 @@
 // renderer should use this one decision so a database flag cannot advertise a
 // provider whose deployment is not actually ready.
 
-const KICK_CALLBACK_PATH = "/auth/kick/callback";
-const DISCORD_CALLBACK_PATH = "/api/viewer/auth/discord/callback";
+import { listProviders } from "@yourrank/shared/providers/registry";
+
 const PRODUCTION_ORIGIN = "https://yourrank.site";
 const STAGING_ORIGIN = "https://staging.yourrank.site";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const TRUE_VALUES = new Set(["1", "true", "yes", "on"]);
 const FALSE_VALUES = new Set(["0", "false", "no", "off"]);
 
-export const VIEWER_OAUTH_PROVIDERS = Object.freeze(["kick", "discord"]);
+// Deployment wiring per provider that offers viewer auth. Adding a provider
+// means registering its adapter and adding a row here; the readiness decision
+// below is the same for every provider.
+//   callbackOrigin: "canonical" = callback lives on the deployment origin (apex
+//   handoff relays to custom domains); "request" = callback must be on the
+//   requesting origin (no handoff), custom domains need an explicit redirect URI.
+const DEPLOYMENT = Object.freeze({
+  kick: Object.freeze({ envPrefix: "KICK", switchVar: "VIEWER_KICK_OAUTH_ENABLED", redirectVar: "KICK_REDIRECT_URI", callbackPath: "/auth/kick/callback", callbackOrigin: "canonical" }),
+  discord: Object.freeze({ envPrefix: "DISCORD", switchVar: "VIEWER_DISCORD_OAUTH_ENABLED", redirectVar: "DISCORD_REDIRECT_URI", callbackPath: "/api/viewer/auth/discord/callback", callbackOrigin: "request" }),
+});
+
+export const VIEWER_OAUTH_PROVIDERS = Object.freeze(
+  listProviders("viewerAuth").map((adapter) => adapter.id).filter((id) => id in DEPLOYMENT),
+);
 export const VIEWER_OAUTH_UNAVAILABLE_REASONS = Object.freeze([
   "disabled",
   "invalid_switch",
@@ -74,38 +87,27 @@ function requestOriginOf(request) {
   }
 }
 
-function credentialsPresent(env, provider) {
-  const prefix = provider === "kick" ? "KICK" : "DISCORD";
+function credentialsPresent(env, prefix) {
   return Boolean(String(env?.[`${prefix}_CLIENT_ID`] || "").trim() && String(env?.[`${prefix}_CLIENT_SECRET`] || "").trim());
 }
 
-function resolveKick(env) {
-  const switchValue = parseSwitch(env?.VIEWER_KICK_OAUTH_ENABLED);
-  const expectedOrigin = canonicalOrigin(env);
-  const configured = String(env?.KICK_REDIRECT_URI || "").trim();
-  const defaultCallback = expectedOrigin ? `${expectedOrigin}${KICK_CALLBACK_PATH}` : "";
-  const redirectUri = validCallbackUri(configured || defaultCallback, KICK_CALLBACK_PATH, expectedOrigin);
-  if (switchValue === "invalid") return unavailable("invalid_switch", redirectUri);
-  if (switchValue === false) return unavailable("disabled", redirectUri);
-  if (!credentialsPresent(env, "kick")) return unavailable("missing_credentials", redirectUri);
-  if (!redirectUri) return unavailable("invalid_callback");
-  return { available: true, reason: "available", redirectUri };
-}
-
-function resolveDiscord(env, requestOrigin) {
-  const switchValue = parseSwitch(env?.VIEWER_DISCORD_OAUTH_ENABLED);
+function resolveProvider(wiring, env, requestOrigin) {
+  const switchValue = parseSwitch(env?.[wiring.switchVar]);
   const deploymentOrigin = canonicalOrigin(env);
-  const configured = String(env?.DISCORD_REDIRECT_URI || "").trim();
-  // Discord has no apex handoff. Canonical deployment origins may use their
-  // request-origin callback by default; a custom domain must be configured
-  // explicitly with that exact request-origin callback.
-  const callback = deploymentOrigin && (configured || (requestOrigin === deploymentOrigin
-    ? `${requestOrigin}${DISCORD_CALLBACK_PATH}`
-    : ""));
-  const redirectUri = validCallbackUri(callback, DISCORD_CALLBACK_PATH, requestOrigin);
+  const configured = String(env?.[wiring.redirectVar] || "").trim();
+  let expectedOrigin = deploymentOrigin;
+  let callback = configured || (deploymentOrigin ? `${deploymentOrigin}${wiring.callbackPath}` : "");
+  if (wiring.callbackOrigin === "request") {
+    // Canonical deployment origins may use their request-origin callback by
+    // default; a custom domain must be configured explicitly with that exact
+    // request-origin callback.
+    expectedOrigin = requestOrigin;
+    callback = deploymentOrigin && (configured || (requestOrigin === deploymentOrigin ? `${requestOrigin}${wiring.callbackPath}` : ""));
+  }
+  const redirectUri = validCallbackUri(callback, wiring.callbackPath, expectedOrigin);
   if (switchValue === "invalid") return unavailable("invalid_switch", redirectUri);
   if (switchValue === false) return unavailable("disabled", redirectUri);
-  if (!credentialsPresent(env, "discord")) return unavailable("missing_credentials", redirectUri);
+  if (!credentialsPresent(env, wiring.envPrefix)) return unavailable("missing_credentials", redirectUri);
   if (!redirectUri) return unavailable("invalid_callback");
   return { available: true, reason: "available", redirectUri };
 }
@@ -116,23 +118,14 @@ function resolveDiscord(env, requestOrigin) {
  */
 export function resolveViewerOAuthStatus(request, env = {}) {
   const requestOrigin = requestOriginOf(request);
-  if (!requestOrigin) {
-    return {
-      kick: unavailable("invalid_callback"),
-      discord: unavailable("invalid_callback"),
-    };
-  }
-  return {
-    kick: resolveKick(env),
-    discord: resolveDiscord(env, requestOrigin),
-  };
+  return Object.fromEntries(VIEWER_OAUTH_PROVIDERS.map((id) => [
+    id,
+    requestOrigin ? resolveProvider(DEPLOYMENT[id], env, requestOrigin) : unavailable("invalid_callback"),
+  ]));
 }
 
 export function viewerOAuthAvailability(status) {
-  return {
-    kick: status?.kick?.available === true,
-    discord: status?.discord?.available === true,
-  };
+  return Object.fromEntries(VIEWER_OAUTH_PROVIDERS.map((id) => [id, status?.[id]?.available === true]));
 }
 
 export function viewerOAuthRedirect(status, provider) {

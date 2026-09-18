@@ -20,6 +20,8 @@ let oldUrl;
 let globalToken;
 let localToken;
 const states = [];
+// Readiness gate needs real-looking credentials; tokens are never exchanged (deps below stub the provider).
+const oauthEnv = { KICK_CLIENT_ID: "kick-test", KICK_CLIENT_SECRET: "kick-test", DISCORD_CLIENT_ID: "discord-test", DISCORD_CLIENT_SECRET: "discord-test" };
 const providerDeps = {
   rateLimit: async () => ({ ok: true }), clientIp: () => "127.0.0.1",
   buildKickViewerAuthorizeURL: (_env, state) => `https://provider.test/auth?state=${state}`,
@@ -34,7 +36,7 @@ const providerDeps = {
 };
 async function start(provider, host = "yourrank.site") {
   const response = await (provider === "kick" ? handleKickViewerAuthStart : handleDiscordViewerAuthStart)(
-    new Request(`https://${host}/api/viewer/auth/${provider}?returnTo=/me`), {}, providerDeps);
+    new Request(`https://${host}/api/viewer/auth/${provider}?returnTo=/me`), oauthEnv, providerDeps);
   const state = new URL(response.headers.get("location")).searchParams.get("state");
   expect(state).toBeTruthy();
   states.push(state);
@@ -122,28 +124,28 @@ describe("C08-C10 real database and browser proof boundary", () => {
       const stolen = await start(provider);
       const handler = provider === "kick" ? handleKickViewerAuthCallback : handleDiscordViewerAuthCallback;
       let exchanged = false;
-      const refused = await handler(callback(provider, stolen.state), {}, {
+      const refused = await handler(callback(provider, stolen.state), oauthEnv, {
         ...providerDeps,
         [provider === "kick" ? "exchangeKickViewerCode" : "exchangeDiscordCode"]: async () => { exchanged = true; throw new Error("must not exchange"); },
       });
       expect(refused.headers.get("location")).toContain(`${provider}_oauth_browser_mismatch`);
       expect(exchanged).toBe(false);
       const valid = await start(provider);
-      const accepted = await handler(callback(provider, valid.state, valid.cookie), {}, providerDeps);
+      const accepted = await handler(callback(provider, valid.state, valid.cookie), oauthEnv, providerDeps);
       expect(accepted.headers.get("location")).not.toContain("error=");
       expect(accepted.headers.getSetCookie().some((c) => c.startsWith("yr_viewer="))).toBe(true);
-      expect((await handler(callback(provider, valid.state, valid.cookie), {}, providerDeps)).headers.get("location")).toContain("oauth_state_expired");
+      expect((await handler(callback(provider, valid.state, valid.cookie), oauthEnv, providerDeps)).headers.get("location")).toContain("oauth_state_expired");
     });
   }
   integrationIt("Kick custom-domain relay has no authenticated side effects until original-host browser proof", async () => {
     const flow = await start("kick", hostname);
-    const relayed = await handleKickViewerAuthCallback(callback("kick", flow.state), {}, {
+    const relayed = await handleKickViewerAuthCallback(callback("kick", flow.state), oauthEnv, {
       ...providerDeps, exchangeKickViewerCode: async () => { throw new Error("relay must not exchange"); },
     });
     const target = relayed.headers.get("location");
     expect(target).toStartWith(`https://${hostname}/api/viewer/auth/kick/handoff?`);
     expect(relayed.headers.get("set-cookie")).toBeNull();
-    const accepted = await handleKickViewerAuthHandoff(new Request(target, { headers: { cookie: flow.cookie } }), {}, providerDeps);
+    const accepted = await handleKickViewerAuthHandoff(new Request(target, { headers: { cookie: flow.cookie } }), oauthEnv, providerDeps);
     expect(accepted.headers.get("location")).toBe(`https://${hostname}/me`);
     const token = decodeURIComponent(accepted.headers.getSetCookie().find((c) => c.startsWith("yr_viewer=")).split(";")[0].slice(10));
     expect((await requireViewer(request(token), {})).res.status).toBe(401);
@@ -151,9 +153,9 @@ describe("C08-C10 real database and browser proof boundary", () => {
   });
   integrationIt("a transferred custom-domain handoff cannot authenticate without its original nonce", async () => {
     const flow = await start("kick", hostname);
-    const relayed = await handleKickViewerAuthCallback(callback("kick", flow.state), {}, providerDeps);
+    const relayed = await handleKickViewerAuthCallback(callback("kick", flow.state), oauthEnv, providerDeps);
     let exchanged = false;
-    const refused = await handleKickViewerAuthHandoff(new Request(relayed.headers.get("location")), {}, {
+    const refused = await handleKickViewerAuthHandoff(new Request(relayed.headers.get("location")), oauthEnv, {
       ...providerDeps, exchangeKickViewerCode: async () => { exchanged = true; throw new Error("must not exchange"); },
     });
     expect(refused.headers.get("location")).toContain("kick_oauth_browser_mismatch");
@@ -163,7 +165,7 @@ describe("C08-C10 real database and browser proof boundary", () => {
   integrationIt("a domain reassignment during OAuth cannot redirect or upgrade the original local authority", async () => {
     const flow = await start("kick", hostname);
     await sql`UPDATE sites SET domain_auth_binding_id=gen_random_uuid() WHERE id=${siteId}`;
-    const response = await handleKickViewerAuthCallback(callback("kick", flow.state), {}, providerDeps);
+    const response = await handleKickViewerAuthCallback(callback("kick", flow.state), oauthEnv, providerDeps);
     expect(response.headers.get("location")).toContain("custom_domain_unverified");
     expect(response.headers.get("set-cookie")).toBeNull();
     await sql`UPDATE sites SET domain_auth_binding_id=${bindingId} WHERE id=${siteId}`;
