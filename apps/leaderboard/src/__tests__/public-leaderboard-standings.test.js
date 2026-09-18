@@ -147,8 +147,9 @@ describe("public leaderboard standings", () => {
     const sponsored = await render("leaderboard", {
       data: { ...baseData, brand: { ...baseData.brand, casino: "Acme Casino" }, rules: ["Minimum 18+", "Payouts within 7 days"] },
     });
-    expect(sponsored).toContain('paid in cash by Acme Casino to the top wagered players under the <a href="#viewer-rules-title">payout rules</a>.');
-    expect(sponsored).toContain('<h2 id="viewer-rules-title">');
+    expect(sponsored).toContain('<p class="viewer-rules-payout">$500 prize pool, paid in cash by Acme Casino to the top wagered players under these payout rules.');
+    expect(sponsored).not.toContain('yr-note yr-note--w');
+    expect(sponsored.indexOf('<h2 id="viewer-rules-title">')).toBeLessThan(sponsored.indexOf('viewer-rules-payout'));
 
     const euro = await render("leaderboard", { data: { ...baseData, prizes: { ...baseData.prizes, currency: "€" } } });
     expect(euro).toContain('<span class="yr-sr">Prize: </span>€300</span>');
