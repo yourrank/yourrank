@@ -13,6 +13,8 @@ type Destination = { label: string; href: string; active?: boolean };
 const iconPaths: Record<string, string> = {
   home: '<path d="m3 10 9-7 9 7v11h-7v-7H9v7H3Z"/>',
   leaderboard: '<path d="M8 3h8v7a4 4 0 0 1-8 0ZM8 5H4v3a4 4 0 0 0 4 4m8-7h4v3a4 4 0 0 1-4 4m-4 2v6m-4 1h8"/>',
+  crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z"/><path d="M5 19h14"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
   gift: '<rect x="3" y="7" width="18" height="5" rx="1.5"/><path d="M5 12v9h14v-9M12 7v14m0-14C7 8 4 3 7 2c3-1 5 5 5 5Zm0 0c5 1 8-4 5-5-3-1-5 5-5 5Z"/>',
   activity: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',

@@ -128,7 +128,7 @@
       if (oldToken) oldToken.remove();
       if (token) document.head.appendChild(token);
       syncTheme(source);
-      [".viewer-overview", ".viewer-home-banner"].forEach(function (selector) {
+      [".viewer-overview", ".viewer-home-promo", ".viewer-home-banner"].forEach(function (selector) {
         var old = document.querySelector(selector);
         var replacement = source.querySelector(selector);
         if (old) old.remove();
