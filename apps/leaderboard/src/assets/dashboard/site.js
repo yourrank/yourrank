@@ -158,7 +158,7 @@ async function wireObsTools() {
     });
   }
 }
-const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false };
+const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false, payoutNote: "" };
 
 export function isPro() {
   const plan = state.ME?.plan;
@@ -466,7 +466,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     rankBy: $("f_rank_by")?.value === "wagered" ? "wagered" : "score",
     partner: { blurb: $("f_blurb").value.trim(), chips: state.EXTRA.chips },
     whyStats: state.EXTRA.whyStats,
-    rules: state.EXTRA.rules,
+    rules: collectRules(),
     socials: state.EXTRA.socials,
     sections: normalizeSections(state.EXTRA.sections),
     playerFields: state.EXTRA.playerFields,
@@ -525,6 +525,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
         countdownLabel: $("f_countdownLabel")?.value.trim() || "",
         currency: $("f_currency")?.value.trim() || DEFAULT_PRIZES.currency,
         hidePrizeAmounts: $("f_hidePrizeAmounts")?.checked || false,
+        payoutNote: ($("f_payoutNote")?.value || "").trim().slice(0, 300),
       },
     };
   }
@@ -1376,6 +1377,39 @@ export function renderPrizes(prizes = {}) {
   $("f_countdownLabel").value = p.countdownLabel || "";
   $("f_currency").value = p.currency || "$";
   $("f_hidePrizeAmounts").checked = !!p.hidePrizeAmounts;
+  const note = $("f_payoutNote");
+  if (note) note.value = p.payoutNote || "";
+}
+
+/** Rules are the creator's own lines; legacy rows may still hold structured
+ *  items, which are left untouched in state and never shown in the textarea. */
+function ruleLines(rules) {
+  return (Array.isArray(rules) ? rules : []).filter((rule) => typeof rule === "string" && rule.trim());
+}
+
+function collectRules() {
+  const field = $("f_rules");
+  if (!field) return state.EXTRA.rules;
+  return field.value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 40).map((line) => line.slice(0, 500));
+}
+
+export function renderRules() {
+  const field = $("f_rules");
+  const toggle = $("f_rules_enabled");
+  if (!field || !toggle) return;
+  field.value = ruleLines(state.EXTRA.rules).join("\n");
+  toggle.checked = normalizeSections(state.EXTRA.sections).rules;
+  if (field.dataset.wired) return;
+  field.dataset.wired = "1";
+  field.addEventListener("input", () => {
+    state.EXTRA.rules = collectRules();
+    markDirty();
+  });
+  toggle.addEventListener("change", () => {
+    setSectionValue("rules", toggle.checked === true);
+    const row = $("sectionsList")?.querySelector('[data-section-toggle="rules"]');
+    if (row) row.checked = toggle.checked;
+  });
 }
 
 // The logo lives next to the field that changed it, so its outcome is reported
@@ -1633,6 +1667,8 @@ function collectSections() {
 function bindSectionToggle(input) {
   input.addEventListener("change", () => {
     setSectionValue(input.dataset.sectionToggle, input.checked === true);
+    const rulesToggle = $("f_rules_enabled");
+    if (rulesToggle && input.dataset.sectionToggle === "rules") rulesToggle.checked = input.checked;
   });
 }
 

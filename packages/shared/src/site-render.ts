@@ -954,7 +954,10 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
     : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
-  const payoutNote = showPool ? `${esc(pool)} ${poolLabel.toLowerCase()}, paid in cash by ${sponsor ? esc(sponsor) : "the sponsor"} to the top ${wagerLabel.toLowerCase()} players${hasRules ? " under these payout rules" : ""}. Separate from credits — credits can't be won here and cash can't be bought with credits.` : "";
+  const customPayoutNote = String(data.prizes?.payoutNote || "").trim();
+  const payoutNote = !showPool ? ""
+    : customPayoutNote ? esc(customPayoutNote)
+    : `${esc(pool)} ${poolLabel.toLowerCase()}, awarded by ${esc(sponsor || b.name || slug)} to the top-ranked players${hasRules ? " under these rules" : ""}. Prizes are separate from credits — credits can't be won here.`;
   const notes = [
     data.resetNote ? `<p class="yr-note">${esc(data.resetNote)}</p>` : "",
     payoutNote && !hasRules ? `<p class="yr-note yr-note--w">${payoutNote}</p>` : "",
