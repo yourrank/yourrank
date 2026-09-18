@@ -104,13 +104,33 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
     </div>
   </section>
 
-  <section class="vd-settings-card" id="vd-profile" tabindex="-1" hidden>
-    <div class="vd-setting-row"><div><h2>Profile Picture</h2><p>Your profile picture comes from your connected provider.</p></div><div class="vd-profile-head"><img id="vd-avatar" class="vd-avatar" alt="" hidden /><span id="vd-avatar-fallback" class="vd-avatar-fallback" aria-hidden="true">M</span><p>Photo uploads aren't available yet.</p></div></div>
-    <div class="vd-setting-row"><div><h2>Display Name</h2><p>Your identity across YourRank communities.</p></div><div><p class="vd-readonly" id="vd-username">Member</p><p>Profile editing isn't available yet.</p></div></div>
-    <div class="vd-setting-row"><div><h2>Connected Identity</h2><p>Provided by your sign-in account.</p></div><p id="vd-identity">Loading connected account…</p></div>
-    <div class="vd-setting-row"><div><h2>Member Since</h2><p>When your YourRank viewer account was created.</p></div><p id="vd-created"></p></div>
-    <details class="vd-account-actions" id="vd-wrong-account" hidden>
+  <section class="vd-profile" id="vd-profile" tabindex="-1" hidden>
+    <div class="vd-settings-card vd-identity-card">
+      <div class="vd-profile-head"><img id="vd-avatar" class="vd-avatar" alt="" hidden /><span id="vd-avatar-fallback" class="vd-avatar-fallback" aria-hidden="true">M</span></div>
+      <div class="vd-identity-copy">
+        <h2 id="vd-username">Member</h2>
+        <p class="vd-identity-line" id="vd-identity">Loading connected account…</p>
+        <p class="vd-note">${viewerIcon('shield')}Your picture and name come from your connected provider. Photo uploads and profile editing aren't available yet.</p>
+      </div>
+    </div>
+    <div class="vd-profile-grid">
+      <div class="vd-settings-card">
+        <h2>Connected account</h2>
+        <p>The provider you sign in with.</p>
+        <div id="vd-profile-providers"></div>
+      </div>
+      <div class="vd-settings-card">
+        <h2>Account information</h2>
+        <p>Your YourRank viewer account.</p>
+        <dl class="vd-facts">
+          <div><dt>Display name</dt><dd id="vd-profile-name"></dd></div>
+          <div><dt>Member since</dt><dd id="vd-created"></dd></div>
+        </dl>
+      </div>
+    </div>
+    <details class="vd-settings-card vd-account-actions" id="vd-wrong-account" hidden>
       <summary>Manage your login</summary>
+      <p>Sign out of this account or continue with a different login.</p>
       <div class="vd-profile-actions">
         <button class="btn btn--ghost btn--sm" id="vd-switch" type="button">Use a different login</button>
         <button class="btn btn--sm" id="vd-logout" type="button">Sign out</button>
@@ -124,7 +144,11 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
   <section id="vd-data" tabindex="-1" hidden><div class="vd-settings-card"><h2>Account Information</h2><p>Your basic YourRank account information.</p><div class="vd-setting-row"><div><h3>Display Name</h3><p id="vd-data-name"></p></div><p>Email management isn't available for viewer accounts.</p></div></div><div class="vd-settings-card"><h2>Export Your Data</h2><p>Download a copy of your YourRank viewer data.</p><div class="vd-export-row"><div><h3>What's included?</h3><p>Your viewer identity, provider connections, community memberships, credits, claims, and supported participation records.</p></div><div><button class="btn btn--accent" id="vd-export" type="button">Request Data Export</button><p>Keep this page open to check the export and download it when ready.</p><button class="btn" id="vd-export-check" type="button" hidden>Check export status</button><a class="btn" id="vd-export-download" hidden>Download data</a><p id="vd-export-status" class="status" role="status" aria-live="polite"></p></div></div></div><div class="vd-settings-card"><h2>Delete Account</h2><p>Self-service viewer account deletion isn't available yet. Contact support for account and data requests.</p><a class="btn" href="${helpHref}">Contact support ${viewerIcon('arrow')}</a></div></section>
   <p class="status" id="vd-account-status" role="status" aria-live="polite" tabindex="-1"></p>
   </div>
-  <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="${helpHref}">Contact support</a></nav>
+  <footer class="vd-footer">
+    <p class="vd-footer-brand"><b>YourRank</b> · One viewer account for every community you join.</p>
+    <nav class="viewer-legal" aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/cookies">Cookies</a><a href="${helpHref}">Contact support</a></nav>
+    <p class="vd-footer-copy">© ${new Date().getUTCFullYear()} YourRank</p>
+  </footer>
 </main>
 `,
   });

@@ -196,8 +196,10 @@ function renderAccount(viewer) {
   $("vd-rail-logout").hidden = false;
   $("vd-created").textContent = fmtDate(viewer.createdAt) || "Not available";
   $("vd-data-name").textContent = name;
+  $("vd-profile-name").textContent = name;
   const providers = (viewer.connections || []).map(connection => `<div class="vd-provider"><div><h3>${esc(connection.provider === "kick" ? "Kick" : connection.provider === "discord" ? "Discord" : connection.provider)}</h3><p>${connection.username ? `@${esc(connection.username)}` : 'Connected account'}${connection.linkedAt ? ` · Connected ${esc(fmtDate(connection.linkedAt))}` : ''}</p></div><span class="vd-connection-status">Connected</span></div>`).join("") || "<p>No connected providers were returned.</p>";
   $("vd-provider-list").innerHTML = providers;
+  $("vd-profile-providers").innerHTML = providers;
   $("vd-security-providers").innerHTML = providers;
   $("viewer-top-avatar").setAttribute("aria-label", `Viewer account: ${name}`);
   $("viewer-top-avatar").setAttribute("title", `Open ${name}'s viewer account`);
@@ -230,8 +232,7 @@ function renderAccount(viewer) {
     const username = connection.username ? ` as @${connection.username}` : "";
     return `${provider}${username}`;
   });
-  const accountAge = viewer.createdAt ? ` · Viewer Account since ${fmtDate(viewer.createdAt)}` : "";
-  $("vd-identity").textContent = `${connections.length ? `Connected to ${connections.join(" and ")}` : "Signed in to YourRank"}${accountAge}`;
+  $("vd-identity").textContent = connections.length ? `Connected to ${connections.join(" and ")}` : "Signed in to YourRank";
   $("vd-wrong-account").hidden = false;
   selectAccountView();
 }
