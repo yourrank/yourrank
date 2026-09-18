@@ -8,9 +8,11 @@ compatibility_date = "2025-07-01"
 # v1 (nodejs_compat) works; if you hit module-polyfill issues on deploy, bump
 # to nodejs_compat_v2 and a newer compatibility_date per Cloudflare's guidance.
 compatibility_flags = ["nodejs_compat"]
-# Dashboard and public routes perform several sequential Hyperdrive reads.
-# Smart Placement keeps this request path near the Supabase origin.
-placement = { mode = "smart" }
+# Dashboard and public routes perform several sequential Hyperdrive reads
+# against the Supabase primary in eu-west-1. Pinning the Worker to that region
+# turns each ~80-250 ms cross-region statement round trip into a few ms;
+# Smart Placement only forwards when its traffic analysis decides to.
+placement = { region = "aws:eu-west-1" }
 
 # This Worker owns the ROOT of the zone. The bot Worker claims the more-specific
 # /bot/*, /hook/*, /r/*, /pb/* prefixes; more-specific wins, so

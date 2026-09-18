@@ -177,10 +177,11 @@ document, an issue, or a commit.
 
 These are not action items:
 
-- **Smart Placement** is enabled for the leaderboard and bot Workers. It places
-  those request paths closer to the EU database, reducing repeated origin
-  round-trip time for viewers. It remains off for the asynchronous queue
-  consumer and the edge-local monitor.
+- **Region placement** (`aws:eu-west-1`) is set for the leaderboard and bot
+  Workers so those request paths run next to the Supabase database; each
+  statement round trip drops from ~80-250 ms cross-region to a few ms. The
+  asynchronous queue consumer and the edge-local monitor keep default
+  placement.
 - **Bounded analytics timeouts** apply only to the expensive analytics reads.
   They use a five-second transaction-local limit, so one slow tenant cannot
   hold a shared database connection for the server's roughly 120-second

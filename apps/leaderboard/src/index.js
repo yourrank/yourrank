@@ -468,8 +468,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
     const nonce = crypto.randomUUID().replace(/-/g, "");
     const HTML_N = withNonce(HTML, nonce);
     try {
-      // Load legal company identity once per isolate; cached for 60s.
-      await loadPlatformIdentity(env);
       // BE-004 / H-18: Reject oversized request bodies early, before any parsing.
       // 1 MB is generous for JSON payloads (site data, auth forms, etc.) while
       // blocking multi-MB abuse. Applies to all state-changing methods and checks
@@ -743,6 +741,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           result = result.replace(/{{GBP_PHOTO_URL}}/g, env.GBP_PHOTO_URL || "");
           return fillYear(result);
         };
+        // Legal company identity (60s per-isolate cache) is only consumed by
+        // pages rendered here, so API and viewer routes never pay for it.
+        await loadPlatformIdentity(env);
         if (typeof pageObj === "string") {
           let result = pageObj;
           if (navOpts) result = result.replace("<!--GM_NAV-->", shellNavHtml(navOpts));
