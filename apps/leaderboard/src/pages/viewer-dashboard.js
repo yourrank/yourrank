@@ -65,7 +65,7 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
   <div class="vd-head">
     <p class="vd-breadcrumb" id="vd-breadcrumb" hidden>Settings <span aria-hidden="true">›</span> <span id="vd-breadcrumb-current"></span></p>
     <h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>
-    <p class="vd-sub" id="vd-subtitle">Choose a community. Your rewards and claims stay with each community.</p>
+    <p class="vd-sub" id="vd-subtitle">Manage the communities connected to your account. Your rewards and claims stay with each community.</p>
   </div>
 
   <section id="vd-login-card" tabindex="-1"${unauthenticated ? "" : " hidden"}>
@@ -84,23 +84,21 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
 
   <div class="vd-layout">
   <section class="vd-sec" id="vd-communities-card" hidden>
+    <form id="vd-open-community" class="vd-community-entry" role="search">
+      <label for="vd-community-name" class="vd-visually-hidden">Community name or link</label>
+      <p id="vd-community-name-hint" class="vd-visually-hidden">Find a joined community by name, or enter a creator's handle or YourRank community link.</p>
+      <div class="vd-community-entry-controls">
+        ${viewerIcon('search')}<input id="vd-community-name" type="text" required maxlength="256" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Search communities by name or link…" aria-describedby="vd-community-name-hint vd-community-entry-status" />
+        <button class="btn btn--ghost btn--sm" type="submit">Open community</button>
+      </div>
+      <p id="vd-community-entry-status" class="status" role="status" aria-live="polite"></p>
+    </form>
     <div class="vd-directory-head"><h2 id="vd-communities-heading" tabindex="-1">Your memberships</h2><span id="vd-membership-count" class="vd-count"></span></div>
     <p class="status" id="vd-communities-status" role="status" aria-live="polite" tabindex="-1"></p>
     <div id="vd-communities" class="vd-community-list"></div>
     <div class="vd-community-empty" id="vd-communities-empty" hidden>
       <h3>You haven't joined any communities yet.</h3>
       <p>Visit a creator's YourRank site and choose Join community. Your membership will be waiting here when you come back.</p>
-    </div>
-    <div class="vd-find-community"><h3>Looking for another community?</h3>
-      <form id="vd-open-community" class="vd-community-entry">
-        <label for="vd-community-name">Community name or link</label>
-        <p id="vd-community-name-hint">Find a joined community by name, or enter a creator's handle or YourRank community link.</p>
-        <div class="vd-community-entry-controls">
-          <input id="vd-community-name" type="text" required maxlength="256" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Creator name or yourrank.site/community" aria-describedby="vd-community-name-hint vd-community-entry-status" />
-          <button class="btn btn--accent" type="submit">Open community</button>
-        </div>
-        <p id="vd-community-entry-status" class="status" role="status" aria-live="polite"></p>
-      </form>
     </div>
   </section>
 

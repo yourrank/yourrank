@@ -109,7 +109,7 @@ const accountViews = {
   "vd-data": ["Data & Account", "Manage your account information and control your data."],
 };
 let exportId = "";
-const DEFAULT_SUBTITLE = "Choose a community. Your rewards and claims stay with each community.";
+const DEFAULT_SUBTITLE = "Manage the communities connected to your account. Your rewards and claims stay with each community.";
 const LOGIN_LINKS = ["vd-login-kick", "vd-login-discord"];
 
 // A guest who follows an account-settings link lands on the sign-in card, which
@@ -141,8 +141,8 @@ function selectAccountView() {
   $("vd-title").textContent = current ? accountViews[current][0] : "My communities";
   $("vd-subtitle").textContent = current ? accountViews[current][1] : DEFAULT_SUBTITLE;
   if (!signedIn && documentAuthState() === "unauthenticated") applyGuestGate(requested);
-  $("vd-breadcrumb").hidden = !current;
-  $("vd-breadcrumb-current").textContent = current ? accountViews[current][0] : "";
+  $("vd-breadcrumb").hidden = !signedIn;
+  $("vd-breadcrumb-current").textContent = current ? accountViews[current][0] : "My communities";
   const accountLink = $("viewer-account-link");
   const communitiesLink = $("viewer-communities-link");
   if (current) { communitiesLink.removeAttribute("aria-current"); }
@@ -250,20 +250,21 @@ let memberships = [];
 function renderCommunities(communities) {
   memberships = communities;
   const list = $("vd-communities");
-  $("vd-membership-count").textContent = `${communities.length}`;
+  $("vd-membership-count").textContent = `${communities.length} ${communities.length === 1 ? "community" : "communities"}`;
   $("vd-communities-empty").hidden = communities.length > 0;
   list.innerHTML = communities.map((community) => {
     const name = community.name || community.slug;
     const href = `/${encodeURIComponent(community.slug)}`;
+    const summary = membershipSummary(community).split(" · ").map((part, index) => `<span class="${index === 0 ? "vd-membership-balance" : "vd-membership-state"}">${esc(part)}</span>`).join('<span class="vd-membership-dot" aria-hidden="true">·</span>');
     return `
       <article class="vd-card-row vd-community-row">
         <span class="vd-site-mark" aria-hidden="true">${esc(initial(name))}</span>
         <div class="vd-card-main">
           <h3 class="vd-card-title"><a href="${href}">${esc(name)}</a></h3>
-          <p class="vd-membership-summary">${esc(membershipSummary(community))}</p>
+          <p class="vd-membership-summary">${summary}</p>
         </div>
         <div class="vd-card-side">
-          <a class="btn btn--sm" href="${href}" aria-label="Open ${esc(name)}">Open community</a>
+          <a class="btn btn--accent btn--sm" href="${href}" aria-label="Open ${esc(name)}">Open</a>
         </div>
       </article>`;
   }).join("");
