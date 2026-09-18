@@ -32,7 +32,7 @@ describe("viewer credit activity", () => {
         opts: { slug: "community", homeUrl: "https://example.test", nonce: "test-nonce" },
       });
       expect(html).toContain(label);
-      expect(html).toContain(section === "home" ? `${delta} credits` : `${delta}<span class="yr-sr"> credits</span>`);
+      expect(html).toContain(section === "home" ? `${delta} credits` : `${delta}<span class="yr-hist-unit"> credits</span>`);
     }
   });
 });

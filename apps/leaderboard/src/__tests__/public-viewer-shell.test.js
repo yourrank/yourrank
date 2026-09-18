@@ -83,7 +83,10 @@ describe("public viewer shell", () => {
   it("renders enabled sections once in navigation with one current destination", async () => {
     const html = await render("shop");
     const nav = html.match(/<nav class="viewer-destinations"[\s\S]*?<\/nav>/)[0];
-    for(const label of ["Home","Leaderboard","Rewards","My Activity"]) expect(nav).toContain(">"+label+"</a>");
+    for(const label of ["Home","Leaderboard","Rewards"]) expect(nav).toContain(">"+label+"</a>");
+    expect(nav).not.toContain(">My Activity</a>");
+    const signedIn = await render("shop", { viewer: { kick_username: "alice" }, viewerData: { viewerOnSite: { balance: 0 }, ledger: [], participation: [], claims: [], shopItems: [] } });
+    expect(signedIn.match(/<nav class="viewer-destinations"[\s\S]*?<\/nav>/)[0]).toContain(">My Activity</a>");
     expect(nav).not.toContain('Activities');
     expect(nav).not.toContain('href="/creator/activities"');
     expect(nav).not.toContain(">Games<");

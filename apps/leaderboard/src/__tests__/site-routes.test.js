@@ -448,7 +448,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("My Activity");
-    expect(html).toContain("Your claims and credit history in TestStreamer's community");
+    expect(html).toContain("Your credits, claims and activity in TestStreamer");
     expect(html).toContain("Sign in to TestStreamer");
     expect(html).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer">Sign in with Kick</a>');
     expect(html).toContain('href="/streamer/me?intent=join">Join TestStreamer</a>');

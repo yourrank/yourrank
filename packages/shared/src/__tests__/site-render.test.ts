@@ -75,6 +75,49 @@ describe("shared public board renderer", () => {
     expect(html).not.toContain("Credits / 7d");
   });
 
+  it("hides My Activity from the signed-out rail but keeps the direct-URL sign-in gate", async () => {
+    const html = await renderSite({ r: fixture, section: "me", viewer: null, viewerData: null, opts });
+    expect(html).not.toContain(">My Activity</a>");
+    expect(html).toContain('class="member-gate"');
+    expect(html).toContain("Sign in to");
+    expect(html).not.toContain("viewer-me-stats");
+  });
+
+  it("shows only real personal stats on My Activity and omits rank without a standing", async () => {
+    const base = {
+      r: fixture,
+      section: "me",
+      viewer: { kick_username: "alice" },
+      opts,
+    };
+    const empty = await renderSite({
+      ...base,
+      viewerData: { viewerOnSite: { balance: 0 }, ledger: [], participation: [], claims: [], shopItems: [] },
+    });
+    expect(empty).toContain(">My Activity</a>");
+    expect(empty).toContain("viewer-me-stats");
+    expect(empty).toContain('data-credit-balance-num>0</span>');
+    expect(empty).not.toContain("Current rank");
+    expect(empty).toContain("No credit activity yet");
+    expect(empty).toContain("No claims yet");
+
+    const ranked = await renderSite({
+      ...base,
+      r: { ...fixture, data: { ...fixture.data, players: [{ rank: 1, name: "bob", score: 20 }, { rank: 2, name: "Alice", score: 10 }] } },
+      viewerData: {
+        viewerOnSite: { balance: 850 },
+        ledger: [{ id: 1, amount: 250, type: "spend", created_at: "2026-09-16T21:14:00Z" }],
+        participation: [],
+        claims: [],
+        shopItems: [],
+      },
+    });
+    expect(ranked).toContain("Current rank");
+    expect(ranked).toContain("<dd>#2</dd>");
+    expect(ranked).toContain('yr-hist-amt yr-neg');
+    expect(ranked).toContain("−250");
+  });
+
   it("contains a chosen creator typeface to display roles", async () => {
     const render = (branding) => renderSite({
       r: { ...fixture, data: { ...fixture.data, branding } },
