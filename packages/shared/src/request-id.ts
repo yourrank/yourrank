@@ -49,6 +49,14 @@ export interface Logger {
 export interface RequestMetrics {
   startedAt: number;
   dbQueries: number;
+  /** Wall time spent awaiting DB statements (overlapping statements are summed). */
+  dbMs: number;
+  /** Number of postgres clients (connections) opened during the request. */
+  dbClients: number;
+  dbSlowestMs: number;
+  dbSlowest?: string;
+  /** Time spent resolving the session + loading the user/viewer record. */
+  authMs?: number;
   route?: string;
   site?: string;
   cache?: "hit" | "miss" | "bypass";
@@ -140,7 +148,7 @@ export function runWithLogger<T>(logger: Logger, fn: () => T): T {
       releaseRequested: false,
       retired: new Map(),
     },
-  }, () => metricsStore.run({ startedAt: Date.now(), dbQueries: 0 }, fn));
+  }, () => metricsStore.run({ startedAt: Date.now(), dbQueries: 0, dbMs: 0, dbClients: 0, dbSlowestMs: 0 }, fn));
 }
 
 export function getRequestDbState(): RequestDbState | null {
@@ -160,7 +168,7 @@ export function getRequestMetrics(): RequestMetrics | null {
   return metricsStore.getStore() || null;
 }
 
-export function setRequestMetrics(fields: Partial<Omit<RequestMetrics, "startedAt" | "dbQueries">>): void {
+export function setRequestMetrics(fields: Partial<Omit<RequestMetrics, "startedAt" | "dbQueries" | "dbMs" | "dbClients" | "dbSlowestMs">>): void {
   const metrics = metricsStore.getStore();
   if (metrics) Object.assign(metrics, fields);
 }
@@ -168,6 +176,26 @@ export function setRequestMetrics(fields: Partial<Omit<RequestMetrics, "startedA
 export function incrementDbQueries(): void {
   const metrics = metricsStore.getStore();
   if (metrics) metrics.dbQueries += 1;
+}
+
+export function incrementDbClients(): void {
+  const metrics = metricsStore.getStore();
+  if (metrics) metrics.dbClients += 1;
+}
+
+export function recordDbStatement(text: string, ms: number): void {
+  const metrics = metricsStore.getStore();
+  if (!metrics) return;
+  metrics.dbMs += ms;
+  if (ms > metrics.dbSlowestMs) {
+    metrics.dbSlowestMs = ms;
+    metrics.dbSlowest = text.replace(/\s+/g, " ").trim().slice(0, 120);
+  }
+}
+
+export function addAuthMs(ms: number): void {
+  const metrics = metricsStore.getStore();
+  if (metrics) metrics.authMs = (metrics.authMs || 0) + ms;
 }
 
 function formatConsoleArgs(args: unknown[]): string {

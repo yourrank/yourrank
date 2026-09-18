@@ -59,6 +59,8 @@ export interface UserRecord {
 
 export const COOKIE_NAME = "yr_session";
 export const SESSION_TTL_S = 30 * 86400;    // 30 days
+/** Minimum gap between sliding-window TTL writes for the same session. */
+export const SESSION_REFRESH_INTERVAL_S = 3600;
 export const SESSION_ROTATE_AFTER_S = 86400; // 24 h
 export const SESSION_ROTATE_GRACE_S = 120;
 export const COOKIE_DOMAIN = ".yourrank.site";
@@ -222,11 +224,12 @@ export async function resolveSession(
   const row = await queryImpl(
     `SELECT user_id,
             extract(epoch FROM now() - created_at)::int AS age,
-            (token = $1) AS is_current
+            (token = $1) AS is_current,
+            (expires_at < now() + make_interval(secs => $3)) AS needs_refresh
        FROM sessions
       WHERE (token = $1 OR (previous_token = $1 AND rotated_at > now() - make_interval(secs => $2)))
         AND expires_at > now()`,
-    [tokenHash, SESSION_ROTATE_GRACE_S]
+    [tokenHash, SESSION_ROTATE_GRACE_S, SESSION_TTL_S - SESSION_REFRESH_INTERVAL_S]
   );
   if (!row || row.length === 0) return { userId: null, uid: null, cookie: null, rotatedCookie: null };
 
@@ -269,11 +272,15 @@ export async function resolveSession(
     }
   }
 
-  // Sliding-window TTL refresh (if we didn't rotate)
-  execImpl(
-    "UPDATE sessions SET expires_at = now() + make_interval(secs => $1) WHERE token = $2 OR previous_token = $2",
-    [SESSION_TTL_S, tokenHash]
-  ).catch(e => console.error("[session] TTL refresh failed:", e?.message));
+  // Sliding-window TTL refresh (if we didn't rotate), at most once per
+  // SESSION_REFRESH_INTERVAL_S so the write does not queue ahead of the
+  // request's own reads on every hit.
+  if (row[0].needs_refresh !== false) {
+    execImpl(
+      "UPDATE sessions SET expires_at = now() + make_interval(secs => $1) WHERE token = $2 OR previous_token = $2",
+      [SESSION_TTL_S, tokenHash]
+    ).catch(e => console.error("[session] TTL refresh failed:", e?.message));
+  }
 
   return { userId, uid: userId, cookie: null, rotatedCookie: null };
 }

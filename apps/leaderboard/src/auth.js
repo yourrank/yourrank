@@ -1,5 +1,6 @@
 // Auth helpers for the Worker.
 import { one, withTransaction } from "@yourrank/shared/db";
+import { addAuthMs } from "@yourrank/shared/request-id";
 import { rateLimit as kvRateLimit } from "@yourrank/shared/ratelimit";
 // SHARED cross-Worker session: same cookie (yr_session) + same Postgres
 // sessions table as the bot Worker. See packages/shared/src/session.ts
@@ -133,10 +134,12 @@ const loadUser = (env, uid) =>
 // When a session is rotated, the new Set-Cookie header is attached to
 // req._sessionCookies for the main handler to include in the response.
 export async function currentUser(req, env) {
+    const started = performance.now();
     const { userId, cookie } = await _resolveSession(req, env);
-    if (!userId) return null;
+    if (!userId) { addAuthMs(performance.now() - started); return null; }
 
     const u = await loadUser(env, userId);
+    addAuthMs(performance.now() - started);
     // SEC-AUDIT-01: suspended accounts cannot act through an existing session.
     if (!u || u.status === "suspended") return null;
 

@@ -21,7 +21,9 @@
 import postgres from "postgres";
 import {
   getRequestDbState,
+  incrementDbClients,
   incrementDbQueries,
+  recordDbStatement,
   registerRequestCleanup,
   type RequestDbClient,
   type RequestDbState,
@@ -47,6 +49,7 @@ function getDatabaseUrl(): string {
 
 function createSql(): ReturnType<typeof postgres> {
   const url = getDatabaseUrl();
+  incrementDbClients();
   return postgres(url, {
     max: 1,
     prepare: false,
@@ -54,6 +57,16 @@ function createSql(): ReturnType<typeof postgres> {
     connect_timeout: 10,
     debug: false,
   });
+}
+
+async function timed<T>(text: string, run: () => Promise<T>): Promise<T> {
+  incrementDbQueries();
+  const started = performance.now();
+  try {
+    return await run();
+  } finally {
+    recordDbStatement(text, performance.now() - started);
+  }
 }
 
 export interface DbDependencies {
@@ -183,8 +196,7 @@ export async function query<T = Record<string, unknown>>(
   for (let attempt = 0; attempt < 3; attempt++) {
     const { sql, state, cached } = acquireSql(dependencies.createSql ?? createSql);
     try {
-      incrementDbQueries();
-      const rows = await sql.unsafe(text, params as any[]);
+      const rows = await timed(text, () => sql.unsafe(text, params as any[]));
       return rows.map((r: any) => ({ ...r })) as unknown as T[];
     } catch (e: any) {
       lastErr = e;
@@ -253,8 +265,7 @@ export async function exec(
 ): Promise<any> {
   const { sql, state, cached } = acquireSql(dependencies.createSql ?? createSql);
   try {
-    incrementDbQueries();
-    const rows = await sql.unsafe(text, params as any[]);
+    const rows = await timed(text, () => sql.unsafe(text, params as any[]));
     return rows.map((r: any) => ({ ...r }));
   } catch (e: any) {
     if (isConnError(e)) discardSql(sql, state, cached);
@@ -299,18 +310,15 @@ export async function withTransaction<R>(fn: (tx: Tx) => Promise<R>): Promise<R>
       const result = await sql.begin(async (sqlTx: any) => {
         const tx: Tx = {
           async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-            incrementDbQueries();
-            const rows = (await sqlTx.unsafe(text, params as any[])) as unknown[];
+            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
             return rows.map((r) => ({ ...(r as Record<string, unknown>) })) as unknown as T[];
           },
           async one<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T | undefined> {
-            incrementDbQueries();
-            const rows = (await sqlTx.unsafe(text, params as any[])) as unknown[];
+            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
             return rows[0] ? ({ ...(rows[0] as Record<string, unknown>) } as T) : undefined;
           },
           async unsafe(text: string, params: unknown[] = []) {
-            incrementDbQueries();
-            const rows = (await sqlTx.unsafe(text, params as any[])) as any[];
+            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as any[];
             return rows.map((r) => ({ ...r }));
           },
         };

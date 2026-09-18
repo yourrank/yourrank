@@ -10,8 +10,9 @@
 //  separate cookie and session table.
 // ============================================================================
 
-import { one, exec, query, withTransaction } from "./db.js";
+import { one, exec, query } from "./db.js";
 import { hashToken } from "./crypto.js";
+import { addAuthMs } from "./request-id.js";
 
 export interface ViewerSessionEnv {
   SESSION_COOKIE_DOMAIN?: string;
@@ -36,6 +37,8 @@ export interface ViewerRecord {
 
 export const VIEWER_COOKIE_NAME = "yr_viewer";
 export const VIEWER_SESSION_TTL_S = 30 * 86400;    // 30 days
+/** Minimum gap between sliding-window TTL writes for the same session. */
+export const SESSION_REFRESH_INTERVAL_S = 3600;
 export const VIEWER_SESSION_ROTATE_AFTER_S = 86400; // 24 h
 export const VIEWER_SESSION_ROTATE_GRACE_S = 120;
 const VIEWER_COOKIE_DOMAIN = ".yourrank.site";
@@ -173,12 +176,15 @@ export async function resolveViewerSession(
   const platform = cookieDomainFromHostname(requestHost) === VIEWER_COOKIE_DOMAIN
     || (env.ENVIRONMENT === "development" && ["localhost", "127.0.0.1", "[::1]"].includes(requestHost));
   const tokenHash = await hashToken(platform ? token : `site:${requestHost}:${token}`);
-  const queryImpl = deps.query || ((text, params) => withTransaction((tx) => tx.query(text, params)));
+  // Runs on the request-scoped client: a dedicated transaction connection
+  // costs a second TCP + auth handshake per signed-in request.
+  const queryImpl = deps.query || query;
   const execImpl = deps.exec || exec;
   const row = await queryImpl(
     `SELECT vs.viewer_id, vs.authority, vs.site_id, vs.hostname, vs.domain_binding_id,
             extract(epoch FROM now() - vs.created_at)::int AS age,
-            (vs.token = $1) AS is_current
+            (vs.token = $1) AS is_current,
+            (vs.expires_at < now() + make_interval(secs => $6)) AS needs_refresh
        FROM viewer_sessions vs
        LEFT JOIN sites s ON s.id = vs.site_id
        LEFT JOIN users u ON u.id = s.user_id
@@ -208,6 +214,7 @@ export async function resolveViewerSession(
       platform,
       requestHost,
       deps.siteId || null,
+      VIEWER_SESSION_TTL_S - SESSION_REFRESH_INTERVAL_S,
     ]
   );
   if (!row || row.length === 0) return { viewerId: null, cookie: null, session: null };
@@ -246,11 +253,14 @@ export async function resolveViewerSession(
     }
   }
 
-  // Sliding-window TTL refresh.
-  execImpl(
-    "UPDATE viewer_sessions SET expires_at = now() + make_interval(secs => $1) WHERE token = $2 OR previous_token = $2",
-    [VIEWER_SESSION_TTL_S, tokenHash]
-  ).catch((e) => console.error("[viewer-session] TTL refresh failed:", (e as Error)?.message));
+  // Sliding-window TTL refresh, at most once per SESSION_REFRESH_INTERVAL_S so
+  // the write does not queue ahead of the request's own reads on every hit.
+  if (row[0].needs_refresh !== false) {
+    execImpl(
+      "UPDATE viewer_sessions SET expires_at = now() + make_interval(secs => $1) WHERE token = $2 OR previous_token = $2",
+      [VIEWER_SESSION_TTL_S, tokenHash]
+    ).catch((e) => console.error("[viewer-session] TTL refresh failed:", (e as Error)?.message));
+  }
 
   return { viewerId, cookie: null, session };
 }
@@ -274,8 +284,13 @@ export async function resolveViewer(
   env: ViewerSessionEnv,
   scope: { siteId?: string } = {},
 ): Promise<{ viewer: ViewerRecord | null; cookie: string | null; session: ViewerSessionContext | null }> {
-  const { viewerId, cookie, session } = await resolveViewerSession(req, env, scope);
-  if (!viewerId) return { viewer: null, cookie: null, session: null };
-  const viewer = await loadViewer(env, viewerId);
-  return { viewer, cookie, session };
+  const started = performance.now();
+  try {
+    const { viewerId, cookie, session } = await resolveViewerSession(req, env, scope);
+    if (!viewerId) return { viewer: null, cookie: null, session: null };
+    const viewer = await loadViewer(env, viewerId);
+    return { viewer, cookie, session };
+  } finally {
+    addAuthMs(performance.now() - started);
+  }
 }

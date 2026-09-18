@@ -21,19 +21,22 @@ function csvCell(value) {
 }
 
 async function onboardingForSite(env, site, userId, plan) {
-  const [bot, postback, players, firstView] = await Promise.all([
-    one("SELECT 1 FROM bots WHERE owner_id=$1 LIMIT 1", [userId]),
-    plan !== "free" ? one("SELECT 1 FROM postback_keys WHERE user_id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()) LIMIT 1", [userId]) : null,
-    one("SELECT COUNT(*)::int AS n FROM players WHERE site_id=$1", [site.id]),
-    one("SELECT 1 FROM site_stats WHERE site_id=$1 LIMIT 1", [site.id]),
-  ]);
+  // One round trip: the request DB client is single-connection, so separate
+  // statements would serialize anyway.
+  const row = await one(
+    `SELECT EXISTS (SELECT 1 FROM bots WHERE owner_id=$1) AS bot,
+            ($3 AND EXISTS (SELECT 1 FROM postback_keys WHERE user_id=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now()))) AS postback,
+            (SELECT COUNT(*)::int FROM players WHERE site_id=$2) AS n,
+            EXISTS (SELECT 1 FROM site_stats WHERE site_id=$2) AS first_view`,
+    [userId, site.id, plan !== "free"],
+  );
   const brand = site.data?.brand || site;
   return {
     brand: !!brand.name?.trim(),
-    players: (players?.n || 0) > 0 && !site.data?.samplePlayers,
-    botConnected: !!bot,
-    shared: !!site.published && !!firstView,
-    postback: !!postback,
+    players: (row?.n || 0) > 0 && !site.data?.samplePlayers,
+    botConnected: !!row?.bot,
+    shared: !!site.published && !!row?.first_view,
+    postback: !!row?.postback,
     isFree: plan === "free",
   };
 }
