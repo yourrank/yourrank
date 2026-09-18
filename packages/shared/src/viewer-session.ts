@@ -13,6 +13,7 @@
 import { one, exec, query } from "./db.js";
 import { hashToken } from "./crypto.js";
 import { addAuthMs } from "./request-id.js";
+import { viewerIdentitiesSql, type ViewerIdentity } from "./viewer-identity.js";
 
 export interface ViewerSessionEnv {
   SESSION_COOKIE_DOMAIN?: string;
@@ -25,6 +26,8 @@ export type ViewerSessionAuthority =
 
 export interface ViewerRecord {
   id: string;
+  /** Active provider identities (generic source). Legacy columns below stay for provider-specific callers. */
+  identities: ViewerIdentity[];
   kick_user_id: string | null;
   kick_username: string | null;
   discord_user_id: string | null;
@@ -268,9 +271,10 @@ export async function resolveViewerSession(
 export async function loadViewer(_env: ViewerSessionEnv, viewerId: string): Promise<ViewerRecord | null> {
   try {
     return (await one<ViewerRecord>(
-      `SELECT id, kick_user_id, kick_username, discord_user_id, discord_username,
-              avatar_url, kick_linked_at, discord_linked_at, created_at
-         FROM viewers WHERE id = $1`,
+      `SELECT v.id, v.kick_user_id, v.kick_username, v.discord_user_id, v.discord_username,
+              v.avatar_url, v.kick_linked_at, v.discord_linked_at, v.created_at,
+              ${viewerIdentitiesSql("v")} AS identities
+         FROM viewers v WHERE v.id = $1`,
       [viewerId]
     )) ?? null;
   } catch (e) {

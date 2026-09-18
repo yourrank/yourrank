@@ -41,8 +41,8 @@ describe("viewer membership display", () => {
     expect(creditsJs).toContain("No signed-in account");
     expect(creditsJs).toContain("No leaderboard player or subscriber record is assumed");
     expect(creditsPagesJs).toContain("Members in the selected site");
-    expect(peopleHandlerJs).toContain("v.kick_linked_at, v.discord_linked_at");
-    expect(peopleHandlerJs).not.toMatch(/v\.kick_user_id|v\.discord_user_id|fraud_score/);
+    expect(peopleHandlerJs).toContain('${viewerIdentitiesSql("v")} AS identities');
+    expect(peopleHandlerJs).not.toMatch(/v\.kick_user_id|v\.discord_user_id|v\.kick_username|v\.discord_username|fraud_score/);
   });
 
   it("cannot manufacture a member by entering a matching username", () => {

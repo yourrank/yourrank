@@ -1,6 +1,7 @@
 // Viewer-facing account API plus the site-scoped reward-claim action.
 
 import { one, query, withTransaction } from "@yourrank/shared/db";
+import { linkedViewerIdentities, viewerDisplayName } from "@yourrank/shared/viewer-identity";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { getPublicSite } from "../site.js";
 import { requireViewer } from "./viewer-auth.js";
@@ -77,22 +78,10 @@ export async function handleViewerMe(request, env, deps = {}) {
     claimingAvailable: !community.blocked,
   }));
 
-  const connections = [];
-  if (viewer.kick_linked_at) {
-    connections.push({
-      provider: "kick",
-      username: viewer.kick_username,
-      linkedAt: viewer.kick_linked_at,
-    });
-  }
-  if (viewer.discord_linked_at) {
-    connections.push({
-      provider: "discord",
-      username: viewer.discord_username,
-      linkedAt: viewer.discord_linked_at,
-    });
-  }
-  const displayName = connections.find((connection) => connection.username)?.username || "Member";
+  const connections = linkedViewerIdentities(viewer)
+    .filter((identity) => identity.linkedAt)
+    .map((identity) => ({ provider: identity.provider, username: identity.username, linkedAt: identity.linkedAt }));
+  const displayName = viewerDisplayName(viewer);
 
   return privateViewerJson({
     viewer: {
@@ -318,7 +307,7 @@ export async function handleViewerRedeem(request, env, deps = {}) {
       if (siteRow?.discord_webhook_url_enc) {
         const webhookUrl = await decryptCredential(siteRow.discord_webhook_url_enc);
         if (webhookUrl) {
-          const viewerName = viewer.kick_username || viewer.discord_username || "Viewer";
+          const viewerName = viewerDisplayName(viewer, "Viewer");
           const embed = buildRedemptionEmbed(r.name || slug, viewerName, txResult.itemName || "Shop Item", txResult.itemCost || 0);
           await sendDiscordWebhook(webhookUrl, embed);
         }

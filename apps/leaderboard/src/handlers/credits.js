@@ -288,7 +288,9 @@ export async function handleCreditsStatus(request, env) {
       [site.id]
     ),
     query(
-      `SELECT id, kick_reward_id, kick_reward_title, kick_reward_cost, credits, active
+      `SELECT id, kick_reward_id, kick_reward_title, kick_reward_cost, credits, active,
+              COALESCE(provider, 'kick') AS provider,
+              kick_reward_id AS external_reward_id, kick_reward_title AS external_reward_title, kick_reward_cost AS external_reward_cost
          FROM credit_reward_mappings
         WHERE site_id=$1 ORDER BY created_at DESC`,
       [site.id]

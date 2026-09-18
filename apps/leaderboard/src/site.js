@@ -18,7 +18,7 @@ import { invalidatePublicBoardCache } from "./public-html-cache.js";
 import { notifyLiveBoard } from "./live-board-config.js";
 import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
 import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
-import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
+import { VIEWER_OAUTH_PROVIDERS, resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 
 export { detectImageMime, validateLogoData };
 
@@ -522,15 +522,23 @@ export async function resolvePublicEvent(requestUrl, siteId, readEvent = one) {
   return { event, unavailable: !event, notFound: !event && isPlayerApi };
 }
 
+// Legacy per-site opt-in columns (compatibility phase); a provider without a
+// column is enabled for a site whenever the deployment offers it.
+const SITE_VIEWER_AUTH_COLUMNS = Object.freeze({
+  kick: "viewer_kick_auth_enabled",
+  discord: "viewer_discord_auth_enabled",
+});
+
 export function maskViewerAuthProviders(site, availability) {
     const deployment = viewerOAuthAvailability(availability);
-    const authProviders = {
-      kick: !!site?.viewer_kick_auth_enabled && deployment.kick,
-      discord: !!site?.viewer_discord_auth_enabled && deployment.discord,
-    };
+    const authProviders = Object.fromEntries(VIEWER_OAUTH_PROVIDERS.map((id) => {
+      const column = SITE_VIEWER_AUTH_COLUMNS[id];
+      const siteEnabled = column ? !!site?.[column] : true;
+      return [id, siteEnabled && deployment[id] === true];
+    }));
     return {
-      viewerKickAuthEnabled: authProviders.kick,
-      viewerDiscordAuthEnabled: authProviders.discord,
+      viewerKickAuthEnabled: authProviders.kick === true,
+      viewerDiscordAuthEnabled: authProviders.discord === true,
       viewerAuthProviders: authProviders,
     };
   }

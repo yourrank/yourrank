@@ -1,12 +1,13 @@
 import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, viewerCommunityReturnLink, VIEWER_DESIGN_CONTRACT } from "@yourrank/shared/viewer-shell";
 import { leaderboardPageHtml } from "@yourrank/shared/page-shell";
+import { viewerDisplayName } from "@yourrank/shared/viewer-identity";
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 }
 
 function viewerName(viewer) {
-  return viewer?.kick_username || viewer?.discord_username || "Member";
+  return viewerDisplayName(viewer);
 }
 
 function viewerMark(viewer) {

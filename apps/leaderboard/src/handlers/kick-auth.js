@@ -1,5 +1,12 @@
 // Kick OAuth 2.1 flow for streamers linking their Kick channel.
 import { currentUser, requireUser, ok, bad, readJson, rateLimit } from "../auth.js";
+import {
+  linkCommunityChannel,
+  linkCreatorConnection,
+  otherVerifiedChannelForCreator,
+  revokeCommunityChannel,
+  revokeCreatorConnection,
+} from "@yourrank/shared/provider-connections";
 import { one, withTransaction } from "@yourrank/shared/db";
 import { requireSiteCapability } from "../site-authorization.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
@@ -188,29 +195,23 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
       : null;
 
     await withTransactionImpl(async (tx) => {
-      await tx.unsafe(
-        `UPDATE users
-            SET kick_user_id = $1,
-                kick_username = $2,
-                kick_access_token_enc = $3,
-                kick_refresh_token_enc = $4,
-                kick_token_expires_at = $5,
-                kick_linked_at = now(),
-                updated_at = now()
-          WHERE id = $6`,
-        [kickUserId, kickUser.name || "", accessEnc, refreshEnc, expiresAt, user.id]
-      );
-
-      await tx.unsafe(
-        `UPDATE sites
-            SET kick_channel_external_id = $1,
-                kick_channel_name = $2,
-                kick_channel_linked_at = now(),
-                kick_channel_verified_at = now(),
-                updated_at = now()
-          WHERE id = $3`,
-        [kickChannelId, kickChannel.slug || "", stateData.siteId]
-      );
+      const run = (sql, params) => tx.unsafe(sql, params);
+      await linkCreatorConnection(run, {
+        userId: user.id,
+        provider: "kick",
+        externalUserId: kickUserId,
+        username: kickUser.name || "",
+        accessTokenEnc: accessEnc,
+        refreshTokenEnc: refreshEnc,
+        tokenExpiresAt: expiresAt,
+      });
+      await linkCommunityChannel(run, {
+        siteId: stateData.siteId,
+        provider: "kick",
+        externalChannelId: kickChannelId,
+        externalChannelName: kickChannel.slug || "",
+        verified: true,
+      });
     });
     void notifyLiveBoard(env, stateData.siteId);
 
@@ -243,43 +244,10 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
 
   const result = await withTransactionImpl(async (tx) => {
     await tx.unsafe("SELECT id FROM public.sites WHERE id=$1 FOR UPDATE", [site.id]);
-    const otherSite = await tx.one(
-      `SELECT id
-         FROM public.sites
-        WHERE user_id=$1
-          AND id<>$2
-          AND kick_channel_external_id IS NOT NULL
-          AND kick_channel_verified_at IS NOT NULL
-          AND kick_channel_external_id = (
-            SELECT kick_user_id FROM public.users WHERE id=$1 AND kick_linked_at IS NOT NULL
-          )
-        LIMIT 1`,
-      [user.id, site.id]
-    );
-    if (!otherSite) {
-      await tx.unsafe(
-        `UPDATE public.users
-            SET kick_user_id = null,
-                kick_username = null,
-                kick_access_token_enc = null,
-                kick_refresh_token_enc = null,
-                kick_token_expires_at = null,
-                kick_linked_at = null,
-                updated_at = now()
-          WHERE id = $1`,
-        [user.id]
-      );
-    }
-    await tx.unsafe(
-      `UPDATE public.sites
-          SET kick_channel_external_id = null,
-              kick_channel_name = null,
-              kick_channel_linked_at = null,
-              kick_channel_verified_at = null,
-              updated_at = now()
-        WHERE id = $1`,
-      [site.id]
-    );
+    const run = (sql, params) => tx.unsafe(sql, params);
+    const otherSite = await otherVerifiedChannelForCreator(run, user.id, "kick", site.id);
+    if (!otherSite) await revokeCreatorConnection(run, user.id, "kick");
+    await revokeCommunityChannel(run, site.id, "kick");
     return { accountDisconnected: !otherSite };
   });
   void notifyLiveBoard(env, site.id);

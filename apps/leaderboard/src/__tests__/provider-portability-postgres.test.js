@@ -90,17 +90,25 @@ describe("provider portability expand phase", () => {
     expect(await sql`SELECT count(*)::int AS n FROM credit_ledger WHERE kick_event_id=${e.messageId}`).toEqual([{ n: 1 }]);
   });
 
-  integrationIt("rejects a second viewer claiming the same external identity and revokes on unlink", async () => {
-    const other = crypto.randomUUID();
+  integrationIt("rejects a second viewer claiming the same active identity, then allows relinking after unlink", async () => {
+    const [{ id: viewerA }] = await sql`SELECT id FROM viewers WHERE kick_user_id=${viewerExt}`;
+    const [{ id: viewerB }] = await sql`INSERT INTO viewers (kick_user_id, kick_username) VALUES (NULL, '') RETURNING id`;
     let error = null;
     try {
-      await sql`INSERT INTO viewer_identities (viewer_id, provider, external_user_id) VALUES (${other}, 'kick', ${viewerExt})`;
+      await sql`INSERT INTO viewer_identities (viewer_id, provider, external_user_id) VALUES (${viewerB}, 'kick', ${viewerExt})`;
     } catch (err) { error = err; }
     expect(error?.code).toBe("23505");
 
-    await sql`UPDATE viewers SET kick_user_id=NULL, kick_username='' WHERE kick_user_id=${viewerExt}`;
-    const [row] = await sql`SELECT status FROM viewer_identities WHERE provider='kick' AND external_user_id=${viewerExt}`;
-    expect(row.status).toBe("revoked");
-    await sql`DELETE FROM viewers WHERE id IN (SELECT viewer_id FROM viewer_identities WHERE provider='kick' AND external_user_id=${viewerExt})`;
+    // Legacy unlink on A revokes its generic row but keeps it for audit.
+    await sql`UPDATE viewers SET kick_user_id=NULL, kick_username='' WHERE id=${viewerA}`;
+    const [revoked] = await sql`SELECT status, unlinked_at FROM viewer_identities WHERE viewer_id=${viewerA} AND provider='kick'`;
+    expect(revoked.status).toBe("revoked");
+    expect(revoked.unlinked_at).toBeTruthy();
+
+    // B may now take the identity; only one active owner exists.
+    await sql`INSERT INTO viewer_identities (viewer_id, provider, external_user_id, username) VALUES (${viewerB}, 'kick', ${viewerExt}, 'Port Viewer B')`;
+    const owners = await sql`SELECT viewer_id, status FROM viewer_identities WHERE provider='kick' AND external_user_id=${viewerExt} ORDER BY status`;
+    expect(owners).toEqual([{ viewer_id: viewerB, status: "active" }, { viewer_id: viewerA, status: "revoked" }]);
+    await sql`DELETE FROM viewers WHERE id IN (${viewerA}, ${viewerB})`;
   });
 });

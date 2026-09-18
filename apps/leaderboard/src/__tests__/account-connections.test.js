@@ -18,13 +18,27 @@ function dependencies({ identity = {}, sites = [] } = {}) {
     }),
     rateLimit: async () => ({ ok: true }),
     query: async () => sites,
-    one: async () => ({
-      kick_token_expires_at: "2026-09-30T00:00:00.000Z",
-      telegram_linked_at: "2026-08-02T00:00:00.000Z",
-      has_kick_access_token: true,
-      has_kick_refresh_token: true,
-      ...identity,
-    }),
+    one: async () => ({ telegram_linked_at: "2026-08-02T00:00:00.000Z" }),
+    // Creator identity is read from creator_connections, not users.kick_*.
+    loadCreatorConnection: async (_run, userId, provider) => {
+      expect(userId).toBe("owner-1");
+      expect(provider).toBe("kick");
+      const merged = {
+        kick_token_expires_at: "2026-09-30T00:00:00.000Z",
+        has_kick_access_token: true,
+        has_kick_refresh_token: true,
+        ...identity,
+      };
+      return {
+        provider: "kick",
+        externalUserId: "provider-user-secret",
+        username: "creator",
+        linkedAt: "2026-08-01T00:00:00.000Z",
+        tokenExpiresAt: merged.kick_token_expires_at,
+        hasAccessToken: merged.has_kick_access_token,
+        hasRefreshToken: merged.has_kick_refresh_token,
+      };
+    },
   };
 }
 

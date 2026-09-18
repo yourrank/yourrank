@@ -5,6 +5,9 @@
 import { one, query, exec, withTransaction } from "./db.js";
 import { rateLimit } from "./ratelimit.js";
 import { reconcileAccountActiveViewerUsage } from "./plan-usage.js";
+import { findViewerByExternalIdentity, persistViewerIdentity } from "./viewer-identity.js";
+import { linkCommunityChannel, resolveVerifiedCommunityChannel } from "./provider-connections.js";
+import { findActiveRewardMapping, type RewardMappingRow } from "./reward-mappings.js";
 
 export interface KickRewardPayload {
   id?: string;
@@ -202,20 +205,11 @@ export async function processKickRewardRedemption(
       );
 
     // Find the leaderboard site linked to this Kick channel and lock it.
-    const site = await tx.one<{ id: string; user_id: string }>(
-      `SELECT s.id, s.user_id
-         FROM sites s
-         JOIN users u ON u.id = s.user_id
-        WHERE s.kick_channel_external_id = $1
-          AND s.kick_channel_verified_at IS NOT NULL
-          AND u.kick_linked_at IS NOT NULL
-          AND u.kick_user_id = s.kick_channel_external_id
-        LIMIT 1 FOR UPDATE OF s FOR SHARE OF u`,
-      [channelExternalId]
-    );
-    if (!site) {
+    const binding = await resolveVerifiedCommunityChannel((sql, params) => tx.unsafe(sql, params), "kick", channelExternalId);
+    if (!binding) {
       return { skipped: true };
     }
+    const site = { id: binding.siteId, user_id: binding.userId };
 
     // Resolve effective plan for the streamer and reject suspended/unverified accounts.
     const owner = await tx.one<{ status: string; email_verified: boolean }>(
@@ -229,51 +223,22 @@ export async function processKickRewardRedemption(
     // Resolve or create the viewer, preserving the previous username in history
     // before overwriting it. This keeps old usernames reachable for audit and
     // anti-fraud even after a viewer changes their Kick name.
-    let viewerId: string;
-    const existingViewer = await tx.one<{ id: string; kick_username: string | null }>(
-      "SELECT id, kick_username FROM viewers WHERE kick_user_id = $1 FOR UPDATE",
-      [redeemerKickUserId]
+    const identityRun = (sql: string, params?: unknown[]) => tx.unsafe(sql, params);
+    const existingViewer = await findViewerByExternalIdentity(identityRun, "kick", redeemerKickUserId, { forUpdate: true });
+    const viewerId = await persistViewerIdentity(
+      identityRun,
+      {
+        provider: "kick",
+        externalUserId: redeemerKickUserId,
+        username: redeemer.username || "",
+        avatarUrl: redeemer.profile_picture || null,
+        accessTokenEnc: null,
+        refreshTokenEnc: null,
+        tokenExpiresAt: null,
+      },
+      existingViewer?.viewerId ?? null,
+      { previousUsername: existingViewer?.username ?? null, tokens: false },
     );
-    if (existingViewer) {
-      viewerId = existingViewer.id;
-      const oldUsername = String(existingViewer.kick_username || "").trim().toLowerCase();
-      if (oldUsername && oldUsername !== newUsername) {
-        await tx.unsafe(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, oldUsername]
-        );
-      }
-      await tx.unsafe(
-        `UPDATE viewers
-            SET kick_username = $1,
-                kick_avatar_url = $2,
-                updated_at = now()
-          WHERE id = $3`,
-        [redeemer.username || "", redeemer.profile_picture || "", viewerId]
-      );
-    } else {
-      const viewerRows = (await tx.unsafe(
-        `INSERT INTO viewers (kick_user_id, kick_username, kick_avatar_url)
-         VALUES ($1, $2, $3)
-         RETURNING id`,
-        [redeemerKickUserId, redeemer.username || "", redeemer.profile_picture || ""]
-      )) as { id: string }[];
-      viewerId = viewerRows[0].id;
-    }
-
-    if (newUsername) {
-      // Track the current username as well.
-      await tx.unsafe(
-        `INSERT INTO viewer_username_history (viewer_id, username)
-         VALUES ($1, $2)
-         ON CONFLICT (viewer_id, username)
-         DO UPDATE SET seen_at = now()`,
-        [viewerId, newUsername]
-      );
-    }
 
     // Check whether this viewer already existed on this site.
     const existingSiteViewer = await tx.one<{
@@ -374,23 +339,21 @@ export async function processKickRewardRedemption(
     // Creditable path from here.
 
     // Find the reward → credits mapping for this site.
-    const mapping = await tx.one<{
-      id: string;
-      credits: number;
-      kick_reward_cost: number;
-    }>(
-      `SELECT id, credits, kick_reward_cost
-         FROM credit_reward_mappings
-        WHERE site_id = $1 AND kick_reward_id = $2 AND active = true
-        LIMIT 1`,
-      [site.id, rewardId]
+    const mapping = await findActiveRewardMapping(
+      async (sql, params) => {
+        const row = await tx.one<RewardMappingRow>(sql, params);
+        return row ? [row] : [];
+      },
+      site.id,
+      "kick",
+      rewardId,
     );
     if (!mapping) {
       return { skipped: true };
     }
 
     // Anti-tamper: make sure the reward cost hasn't changed since mapping.
-    const expectedCost = Number(mapping.kick_reward_cost || 0);
+    const expectedCost = mapping.externalRewardCost;
     if (expectedCost !== 0 && expectedCost !== rewardCost) {
       return { skipped: true, reason: `Reward cost mismatch for ${rewardId}: expected ${expectedCost}, got ${rewardCost}` };
     }
@@ -629,18 +592,25 @@ export async function setSiteKickChannel(
   kickChannelExternalId: string,
   kickChannelName: string
 ): Promise<void> {
-  const rows = await exec(
-    `UPDATE sites s
-        SET kick_channel_external_id = $1,
-            kick_channel_name = $2,
-            kick_channel_linked_at = now(),
-            kick_channel_verified_at = u.kick_linked_at,
-            updated_at = now()
-       FROM users u
-      WHERE s.id = $3 AND u.id=s.user_id AND u.kick_user_id=$1
-        AND u.kick_linked_at IS NOT NULL
-      RETURNING s.id`,
-    [kickChannelExternalId, kickChannelName, siteId]
-  );
-  if (!rows?.length) throw new Error("Kick identity changed before binding");
+  await withTransaction(async (tx) => {
+    const run = (sql: string, params?: unknown[]) => tx.unsafe(sql, params);
+    // The site owner's active Kick creator connection must be the channel itself.
+    const owner = await tx.one<{ id: string }>(
+      `SELECT s.id
+         FROM sites s
+         JOIN creator_connections cc ON cc.user_id = s.user_id AND cc.provider = 'kick'
+        WHERE s.id = $1 AND cc.status = 'active' AND cc.linked_at IS NOT NULL
+          AND cc.external_user_id = $2
+        FOR UPDATE OF s`,
+      [siteId, kickChannelExternalId]
+    );
+    if (!owner) throw new Error("Kick identity changed before binding");
+    await linkCommunityChannel(run, {
+      siteId,
+      provider: "kick",
+      externalChannelId: kickChannelExternalId,
+      externalChannelName: kickChannelName,
+      verified: true,
+    });
+  });
 }

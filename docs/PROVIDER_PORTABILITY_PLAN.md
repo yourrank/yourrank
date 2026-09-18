@@ -120,14 +120,39 @@ Backfill runs in the same migration (`INSERT … SELECT … ON CONFLICT DO NOTHI
 
 `processKickRewardRedemption` additionally writes the normalized `integration_events` row and stamps `credit_ledger.integration_event_id` in the same transaction as the legacy `kick_reward_events` insert (both are needed until reads switch).
 
-### Switch reads/writes (next PRs, one seam per PR)
+### Switch reads/writes (Phase 2, shipped)
 
-1. Viewer OAuth callbacks: resolve/create the viewer via `viewer_identities` (`WHERE provider=$1 AND external_user_id=$2`) — the trigger keeps `viewers.kick_*` populated on the way back, so reads elsewhere stay valid. Kick and Discord callbacks collapse into one `completeViewerOAuth(adapter, …)`.
-2. `processKickRewardRedemption` → `processRewardRedemption(normalizedEvent)`: site lookup via `community_channels`, viewer via `viewer_identities`, idempotency via `integration_events`, mapping via `credit_reward_mappings WHERE provider=… AND external_reward_id=…`.
-3. Creator connect/unlink → `creator_connections` + `community_channels`; `account.js` connection card reads from them.
-4. `ViewerRecord` gains `identities: ViewerIdentity[]`; display-name/labels use `viewer-identity.ts` helpers (shipped now).
-5. `viewer-oauth.js` readiness becomes registry-driven (loop over `PROVIDER_IDS`); `sites.viewer_*_auth_enabled` folds into a `viewer_auth_providers text[]` column (expand + backfill first).
-6. Exports (`viewer-export.js`) read identities/events from the new tables.
+Migration `20260920000000_provider_portability_active_ownership.sql` replaces the unconditional
+`UNIQUE (provider, external_*_id)` constraints on `viewer_identities`, `creator_connections` and
+`community_channels` with non-unique indexes plus a `BEFORE INSERT OR UPDATE` trigger
+(`trg_provider_active_ownership`) that raises SQLSTATE `23505` only when a *different owner* holds
+the same external id in `status = 'active'`. Revoked rows are kept for audit (`unlinked_at`), so
+"A links X → A unlinks → B links X" works while two active owners remain impossible.
+`(owner, provider)` uniqueness is kept for `ON CONFLICT` reactivation.
+
+Application paths now on the generic tables (legacy columns kept mirrored by the same code paths):
+
+1. Viewer OAuth (Kick and Discord keep separate protocol code): lookup via
+   `findViewerByExternalIdentity`, persistence via `persistViewerIdentity`, unlink via
+   `revokeViewerIdentity` (`packages/shared/src/viewer-identity.ts`).
+2. Viewer reads — session `identities`, Viewer Account, people/member views, review linked accounts,
+   public display names, viewer export — use `viewerIdentitiesSql` / `linkedViewerIdentities`.
+3. Creator connect / reconnect / disconnect / account status → `creator_connections` via
+   `packages/shared/src/provider-connections.ts` (`users.kick_*` mirrored).
+4. Channel binding and event routing → `community_channels`; `resolveVerifiedCommunityChannel`
+   requires an active **and** verified binding whose external id matches the site owner's active
+   creator connection.
+5. `viewer-oauth.js` readiness and `maskViewerAuthProviders` iterate `listProviders("viewerAuth")`;
+   `sites.viewer_kick_auth_enabled` / `viewer_discord_auth_enabled` stay as the per-site opt-in
+   columns (a `viewer_auth_providers text[]` fold is deferred).
+6. Reward mappings are read through `packages/shared/src/reward-mappings.ts`
+   (`provider`, `externalRewardId`, `externalRewardTitle`, `externalRewardCost`) aliasing the
+   `kick_reward_*` columns; writes still target the legacy column names.
+
+Still legacy in Phase 2 (Phase 3): idempotency is `kick_reward_events` (`integration_events` is
+dual-written and linked from `credit_ledger.integration_event_id`); mapping writes and the dashboard
+mapping editor use `kick_reward_*`; the anti-fraud signals read `viewers.kick_username`; Kick creator
+token refresh reads `users.kick_*`.
 
 ### Verify
 

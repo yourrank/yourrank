@@ -1,5 +1,6 @@
 // Account-level API: postback keys, conversion log, profile data.
 import { json, bad, requireUser, rateLimit } from "../auth.js";
+import { loadCreatorConnection } from "@yourrank/shared/provider-connections";
 import { one, query } from "@yourrank/shared/db";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { handlePostback } from "./attribution.js";
@@ -170,7 +171,7 @@ export async function handleAccountConversions(request, env) {
 
 // GET /api/account/connected-accounts
 export async function handleAccountConnectedAccounts(request, env, injected = {}) {
-  const deps = { requireUser, rateLimit, query, one, ...injected };
+  const deps = { requireUser, rateLimit, query, one, loadCreatorConnection, ...injected };
   const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
   if (!(await deps.rateLimit(env, `account-connections:${user.id}`, 120, 60)).ok) {
@@ -178,10 +179,12 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   }
 
   const sites = await deps.query(
-    `SELECT s.id, s.name, s.slug, s.credits_enabled, s.kick_channel_external_id, s.kick_channel_name,
+    `SELECT s.id, s.name, s.slug, s.credits_enabled,
+            ch.external_channel_id AS kick_channel_external_id, ch.external_channel_name AS kick_channel_name,
             s.discord_webhook_url_enc, s.telegram_chat_id, s.telegram_notify,
             (SELECT count(*)::integer FROM credit_reward_mappings m WHERE m.site_id=s.id AND m.active=true) AS active_reward_mappings
        FROM sites s
+       LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'
       WHERE user_id = $1
       ORDER BY board_order ASC, id ASC`,
     [user.id]
@@ -192,25 +195,21 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
     ? [...sites].sort((left, right) => Number(right.id === selectedSiteId) - Number(left.id === selectedSiteId))
     : sites;
 
-  // loadUser() selects telegram_user_id (not telegram_id) and neither
-  // kick_token_expires_at nor telegram_linked_at — the old code read
-  // user.telegram_id, so the Telegram card never rendered at all.
-  const identity = await deps.one(
-    `SELECT kick_token_expires_at, telegram_linked_at,
-            kick_access_token_enc IS NOT NULL AS has_kick_access_token,
-            kick_refresh_token_enc IS NOT NULL AS has_kick_refresh_token
-       FROM users WHERE id = $1`,
-    [user.id]
-  );
+  // Creator connection state comes from creator_connections; loadUser() only
+  // carries telegram_user_id, so telegram_linked_at is read separately.
+  const [identity, kickConnection] = await Promise.all([
+    deps.one("SELECT telegram_linked_at FROM users WHERE id = $1", [user.id]),
+    deps.loadCreatorConnection((sql, params) => deps.query(sql, params), user.id, "kick"),
+  ]);
 
-  const accountKickIdentity = Boolean(user.kick_user_id && user.kick_linked_at);
-  const accountKick = deriveKickConnectionHealth({
-    requireChannel: false,
+  const accountKickIdentity = Boolean(kickConnection?.externalUserId && kickConnection?.linkedAt);
+  const kickHealthInputs = {
     accountLinked: accountKickIdentity,
-    hasAccessToken: Boolean(identity?.has_kick_access_token),
-    hasRefreshToken: Boolean(identity?.has_kick_refresh_token),
-    tokenExpiresAt: identity?.kick_token_expires_at || null,
-  });
+    hasAccessToken: Boolean(kickConnection?.hasAccessToken),
+    hasRefreshToken: Boolean(kickConnection?.hasRefreshToken),
+    tokenExpiresAt: kickConnection?.tokenExpiresAt || null,
+  };
+  const accountKick = deriveKickConnectionHealth({ requireChannel: false, ...kickHealthInputs });
   const accountTelegramLinked = Boolean(user.telegram_user_id && identity?.telegram_linked_at);
   const connections = [
     {
@@ -222,7 +221,7 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       detail: !accountKickIdentity
         ? "Connect your creator identity before linking site rewards."
         : accountKick.status === "authorized"
-          ? user.kick_username ? `Signed in as @${user.kick_username}.` : "Creator identity linked."
+          ? kickConnection?.username ? `Signed in as @${kickConnection.username}.` : "Creator identity linked."
           : accountKick.detail,
       action: {
         label: accountKickIdentity && accountKick.status === "authorized" ? "Manage" : accountKickIdentity ? "Reconnect" : "Connect",
@@ -249,10 +248,7 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
     const selectedSite = site.id === selectedSiteId;
     const kick = deriveKickConnectionHealth({
       channelLinked: Boolean(site.kick_channel_external_id),
-      accountLinked: Boolean(user.kick_user_id && user.kick_linked_at),
-      hasAccessToken: Boolean(identity?.has_kick_access_token),
-      hasRefreshToken: Boolean(identity?.has_kick_refresh_token),
-      tokenExpiresAt: identity?.kick_token_expires_at || null,
+      ...kickHealthInputs,
       activeRewardMappings: Number(site.active_reward_mappings) || 0,
       operationEnabled: Boolean(site.credits_enabled),
     });

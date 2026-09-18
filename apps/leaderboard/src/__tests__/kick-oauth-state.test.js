@@ -547,7 +547,7 @@ describe("Kick OAuth state integration seams", () => {
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
-      one: async () => ({ id: "viewer-1", kick_username: "viewer" }),
+      one: async () => ({ viewer_id: "viewer-1", username: "viewer" }),
       exec: async () => [],
       createViewerSession: async (_env, id, authority) => {
         expect(id).toBe("viewer-1");
@@ -647,10 +647,15 @@ describe("Kick OAuth state integration seams", () => {
 
     expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&siteId=site-1");
     expect(transactionCount).toBe(1);
-    expect(writes).toHaveLength(2);
-    expect(writes[0].sql).toContain("UPDATE users");
-    expect(writes[1].sql).toContain("kick_channel_verified_at = now()");
-    expect(writes[1].params).toEqual(["123", "owner", site.id]);
+    // Generic rows are written first, legacy users/sites mirrors afterwards, all in one transaction.
+    expect(writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean))).toEqual([
+      "creator_connections", "users", "community_channels", "sites",
+    ]);
+    expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);
+    expect(writes[1].sql).toContain("kick_linked_at = now()");
+    expect(writes[2].params).toEqual([site.id, "kick", "123", "owner", true]);
+    expect(writes[3].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
+    expect(writes[3].params).toEqual(["123", "owner", true, site.id]);
   });
 
   test("streamer callback rejects provider user/channel mismatches before persisting credentials", async () => {
@@ -707,20 +712,24 @@ describe("Kick OAuth state integration seams", () => {
       requireSiteCapability: ownerCapability,
       readJson: async () => ({}),
       withTransaction: async (fn) => fn({
-        unsafe: async (sql, params) => queries.push({ sql, params }),
-        one: async (sql, params) => {
+        unsafe: async (sql, params) => {
           queries.push({ sql, params });
-          return null;
+          return [];
         },
-        query: async () => [],
       }),
     });
 
     expect(response.status).toBe(200);
     expect(queries[0].params).toEqual(["site-2"]);
     expect(queries[1].sql).toContain("FOR UPDATE");
-    expect(queries[2].sql).toContain("kick_channel_external_id");
-    expect(queries[3].sql).toContain("kick_user_id = null");
+    expect(queries[2].sql).toContain("FROM community_channels");
+    expect(queries[2].params).toEqual([user.id, "kick", "site-2"]);
+    expect(queries[3].sql).toContain("UPDATE creator_connections");
+    expect(queries[3].sql).toContain("status = 'revoked'");
+    expect(queries[4].sql).toContain("kick_user_id = null");
+    expect(queries[5].sql).toContain("UPDATE community_channels");
+    expect(queries[6].sql).toContain("kick_channel_external_id = null");
+    expect(queries[6].params).toEqual(["site-2"]);
   });
 
   test("preserves the account link when another owned site remains connected", async () => {
@@ -734,17 +743,17 @@ describe("Kick OAuth state integration seams", () => {
       requireSiteCapability: ownerCapability,
       readJson: async () => ({}),
       withTransaction: async (fn) => fn({
-        unsafe: async (sql, params) => queries.push({ sql, params }),
-        one: async (sql, params) => {
+        unsafe: async (sql, params) => {
           queries.push({ sql, params });
-          return { id: "other-site" };
+          return sql.includes("FROM community_channels") ? [{ id: "other-site" }] : [];
         },
-        query: async () => [],
       }),
     });
 
     expect(response.status).toBe(200);
+    expect(queries.some((query) => query.sql.includes("creator_connections") && query.sql.includes("revoked"))).toBe(false);
     expect(queries.some((query) => query.sql.includes("kick_user_id = null"))).toBe(false);
-    expect(queries.at(-1).sql).toContain("kick_channel_external_id");
+    expect(queries.at(-2).sql).toContain("UPDATE community_channels");
+    expect(queries.at(-1).sql).toContain("kick_channel_external_id = null");
   });
 });

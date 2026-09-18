@@ -1,5 +1,6 @@
 import { query, exec } from "@yourrank/shared/db";
 import { logAudit } from "@yourrank/shared/audit";
+import { linkedViewerIdentities, viewerIdentitiesSql } from "@yourrank/shared/viewer-identity";
 
 const PAGE_SIZE = 500;
 const PART_SIZE = 8 * 1024 * 1024;
@@ -111,12 +112,19 @@ function safeGameOutcome(value) {
   return allowObject(value, GAME_OUTCOME_KEYS);
 }
 function safeViewer(row) {
+  // Identities come from viewer_identities; the kick_*/discord_* keys keep the
+  // export format stable and are derived from the same generic list.
+  const identities = linkedViewerIdentities(row);
+  const byProvider = (provider) => identities.find((identity) => identity.provider === provider);
   return {
     id: row.id,
-    kick_user_id: row.kick_user_id ?? null,
-    kick_username: row.kick_username ?? null,
-    discord_user_id: row.discord_user_id ?? null,
-    discord_username: row.discord_username ?? null,
+    identities: identities.map(({ provider, externalUserId, username, linkedAt }) => ({
+      provider, external_user_id: externalUserId, username, linked_at: linkedAt,
+    })),
+    kick_user_id: byProvider("kick")?.externalUserId ?? null,
+    kick_username: byProvider("kick")?.username ?? null,
+    discord_user_id: byProvider("discord")?.externalUserId ?? null,
+    discord_username: byProvider("discord")?.username ?? null,
     avatar_url: row.avatar_url ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -182,9 +190,9 @@ export async function processViewerExport(event, env, {
   const writer = new NdjsonWriter(env.ACCOUNT_EXPORTS, key);
   try {
     const viewerRows = await read(
-      `SELECT id, kick_user_id, kick_username, discord_user_id, discord_username,
-              avatar_url, created_at, updated_at
-         FROM viewers WHERE id=$1`,
+      `SELECT v.id, v.kick_user_id, v.avatar_url, v.created_at, v.updated_at,
+              ${viewerIdentitiesSql("v")} AS identities
+         FROM viewers v WHERE v.id=$1`,
       [viewerId]
     );
     const siteViewerIds = await collectIds(

@@ -14,6 +14,7 @@ import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
 import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
 import { resolveViewerTemplate } from "./viewer-templates.js";
 import { guestGateHref, rewardDetailHref, viewerIntentCopy, viewerIntentReturnTo } from "./viewer-intent.js";
+import { viewerDisplayName, type ViewerIdentityRow } from "./viewer-identity.js";
 import { publicRewardDetail, rewardAvailabilityText } from "./reward-detail.js";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
@@ -295,8 +296,8 @@ ${foot ? `<div class="yr-drawer-foot">${foot}</div>` : ""}
 <div class="yr-scrim" id="yr-scrim" aria-hidden="true" hidden></div>`;
 }
 
-function viewerName(viewer) {
-  return viewer?.kick_username || viewer?.discord_username || "Member";
+function viewerName(viewer: ViewerIdentityRow | null | undefined) {
+  return viewerDisplayName(viewer);
 }
 
 /**

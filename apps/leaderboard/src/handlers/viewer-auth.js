@@ -24,6 +24,7 @@ import { resolveVerifiedCustomDomain } from "../middleware/custom-domain.js";
 import { PLATFORM_HOST } from "../constants.js";
 import { applyOAuthJoinIntent, resolveJoinableCommunity } from "../viewer-membership.js";
 import { resolveViewerOAuthStatus } from "../viewer-oauth.js";
+import { findViewerByExternalIdentity, persistViewerIdentity } from "@yourrank/shared/viewer-identity";
 
 const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
@@ -31,6 +32,21 @@ export const KICK_VIEWER_STATE_PREFIX = "viewer_";
 const APEX_ORIGIN = `https://${PLATFORM_HOST}`;
 const CUSTOM_DOMAIN_RETURN_PATHS = new Set(["/", "/leaderboard", "/shop", "/games", "/activity", "/me"]);
 const CUSTOM_DOMAIN_REWARD_RETURN = /^\/shop\/[A-Za-z0-9_-]{1,64}$/;
+
+// Shared by every viewer provider: ownership lookup + persistence live in the
+// generic identity layer; protocol (token exchange, profile fetch) stays above.
+// Reads go through the retry-safe `one`, writes through `exec`.
+async function linkViewerIdentity({ one: oneImpl, exec: execImpl }, identity) {
+  const existing = await findViewerByExternalIdentity(
+    async (sql, params) => {
+      const row = await oneImpl(sql, params);
+      return row ? [row] : [];
+    },
+    identity.provider,
+    identity.externalUserId
+  );
+  return persistViewerIdentity(execImpl, identity, existing?.viewerId ?? null, { previousUsername: existing?.username ?? null });
+}
 
 function randomState() {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -371,60 +387,15 @@ async function completeKickViewerAuth(request, env, stateData, code, authority, 
     const kickUsername = kickUser.name || "";
     const avatarUrl = kickUser.profile_picture || null;
 
-    const existing = await oneImpl("SELECT id, kick_username FROM viewers WHERE kick_user_id=$1", [kickUserId]);
-    let viewerId;
-    if (existing) {
-      viewerId = existing.id;
-      const oldUsername = String(existing.kick_username || "").trim().toLowerCase();
-      const newUsername = kickUsername.trim().toLowerCase();
-      if (oldUsername && oldUsername !== newUsername) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, oldUsername]
-        );
-      }
-      await execImpl(
-        `UPDATE viewers
-            SET kick_username = $1,
-                kick_access_token_enc = $2,
-                kick_refresh_token_enc = $3,
-                kick_token_expires_at = $4,
-                kick_linked_at = now(),
-                avatar_url = COALESCE($5, avatar_url),
-                updated_at = now()
-          WHERE id = $6`,
-        [kickUsername, accessEnc, refreshEnc, expiresAt, avatarUrl, viewerId]
-      );
-      if (newUsername) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, newUsername]
-        );
-      }
-    } else {
-      const rows = await execImpl(
-        `INSERT INTO viewers (kick_user_id, kick_username, kick_access_token_enc, kick_refresh_token_enc, kick_token_expires_at, kick_linked_at, avatar_url)
-         VALUES ($1, $2, $3, $4, $5, now(), $6)
-         RETURNING id`,
-        [kickUserId, kickUsername, accessEnc, refreshEnc, expiresAt, avatarUrl]
-      );
-      viewerId = rows[0].id;
-      if (kickUsername.trim()) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, kickUsername.trim().toLowerCase()]
-        );
-      }
-    }
+    const viewerId = await linkViewerIdentity({ one: oneImpl, exec: execImpl }, {
+      provider: "kick",
+      externalUserId: kickUserId,
+      username: kickUsername,
+      avatarUrl,
+      accessTokenEnc: accessEnc,
+      refreshTokenEnc: refreshEnc,
+      tokenExpiresAt: expiresAt,
+    });
 
     const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
     if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
@@ -567,60 +538,15 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
     const discordUsername = discordUser.global_name || discordUser.username || "";
     const avatarUrl = discordAvatarUrlImpl(discordUser.id, discordUser.avatar);
 
-    const existing = await oneImpl("SELECT id, discord_username FROM viewers WHERE discord_user_id=$1", [discordUserId]);
-    let viewerId;
-    if (existing) {
-      viewerId = existing.id;
-      const oldUsername = String(existing.discord_username || "").trim().toLowerCase();
-      const newUsername = discordUsername.trim().toLowerCase();
-      if (oldUsername && oldUsername !== newUsername) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, oldUsername]
-        );
-      }
-      await execImpl(
-        `UPDATE viewers
-            SET discord_username = $1,
-                discord_access_token_enc = $2,
-                discord_refresh_token_enc = $3,
-                discord_token_expires_at = $4,
-                discord_linked_at = now(),
-                avatar_url = COALESCE($5, avatar_url),
-                updated_at = now()
-          WHERE id = $6`,
-        [discordUsername, accessEnc, refreshEnc, expiresAt, avatarUrl, viewerId]
-      );
-      if (newUsername) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, newUsername]
-        );
-      }
-    } else {
-      const rows = await execImpl(
-        `INSERT INTO viewers (discord_user_id, discord_username, discord_access_token_enc, discord_refresh_token_enc, discord_token_expires_at, discord_linked_at, avatar_url)
-         VALUES ($1, $2, $3, $4, $5, now(), $6)
-         RETURNING id`,
-        [discordUserId, discordUsername, accessEnc, refreshEnc, expiresAt, avatarUrl]
-      );
-      viewerId = rows[0].id;
-      if (discordUsername.trim()) {
-        await execImpl(
-          `INSERT INTO viewer_username_history (viewer_id, username)
-           VALUES ($1, $2)
-           ON CONFLICT (viewer_id, username)
-           DO UPDATE SET seen_at = now()`,
-          [viewerId, discordUsername.trim().toLowerCase()]
-        );
-      }
-    }
+    const viewerId = await linkViewerIdentity({ one: oneImpl, exec: execImpl }, {
+      provider: "discord",
+      externalUserId: discordUserId,
+      username: discordUsername,
+      avatarUrl,
+      accessTokenEnc: accessEnc,
+      refreshTokenEnc: refreshEnc,
+      tokenExpiresAt: expiresAt,
+    });
 
     const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
     if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
