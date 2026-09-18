@@ -74,7 +74,7 @@ describe("public viewer shell", () => {
     expect((html.match(/class="viewer-rail"/g)||[]).length).toBe(1);
     expect((html.match(/<main\b/g)||[]).length).toBe(1);
     expect((html.match(/<h1\b/g)||[]).length).toBe(1);
-    expect(html).toMatch(/<\/aside>(<section class="viewer-home-promo"[^]*?<\/section>)?<div class="viewer-site-footer"><footer/);
+    expect(html).toMatch(/<\/aside>(<div class="viewer-home-strip">[^]*?<\/div>)?(<section class="viewer-home-promo"[^]*?<\/section>)?(<p class="viewer-home-note">[^]*?<\/p>)?<div class="viewer-site-footer"><footer/);
     expect(html).not.toContain('</aside></div><div class="viewer-site-footer">');
     for (const legacy of ['class="yr-top"', 'id="yr-side"', 'id="yr-menu"', '/assets/devin-system.css', 'data-template=']) expect(html).not.toContain(legacy);
     expect(html).toContain('/assets/viewer-shell.css');
