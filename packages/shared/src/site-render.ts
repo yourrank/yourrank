@@ -820,9 +820,7 @@ function leaderboardPreview(ctx) {
   const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0, home ? 10 : 3);
   const podium = home && players.length >= 3 && players.slice(0,3).every((p, i) => Number(p.rank) === i + 1);
   const rows = players.map((player, i) => `<div class="viewer-board-row"${podium && i < 3 ? ` data-home-slot="${i + 1}"` : ''}><span class="viewer-rank">${player.rank || i + 1}</span><span class="viewer-avatar">${esc(Array.from(String(player.name || '?')).slice(0,2).join('').toUpperCase())}</span><span class="viewer-player-name">${esc(player.name)}</span><span class="viewer-board-score">${esc(data.rankBy === 'wagered' ? formatMoney(prizeCurrency(data), player.wagered) : formatNumber(player.score || 0))}</span></div>`).join('');
-  // Home keeps the podium silhouette when nothing is published yet, so the
-  // competition surface holds its shape without naming anyone.
-  const homeEmpty = `<div class="viewer-home-empty viewer-home-empty--podium"><div class="viewer-podium-ghost" aria-hidden="true"><span data-ghost="2"></span><span data-ghost="1"></span><span data-ghost="3"></span></div><div>${viewerIcon('leaderboard')}<p><strong>No standings yet.</strong> The creator publishes leaderboard scores; the first three places take the podium here.</p></div></div>`;
+  const homeEmpty = `<div class="viewer-home-empty viewer-home-empty--podium"><div>${viewerIcon('leaderboard')}<p><strong>No standings yet.</strong> The creator publishes leaderboard scores; the first three places take the podium here.</p></div></div>`;
   return `<section class="viewer-card${home ? ' viewer-home-board' : ''}"><div class="viewer-card-head"><h2>${viewerIcon(home ? 'crown' : 'leaderboard')}${home ? `${esc(b.period || 'Current')} leaderboard` : 'Leaderboard'}</h2><a href="${siteSectionHref('leaderboard', slug, isCustomDomain)}">View all ${viewerIcon('arrow')}</a></div><p${home ? ' class="yr-sr"' : ''}>${esc(b.period || 'Current')} standings</p><div class="viewer-board-list"${podium ? ' data-home-podium="3"' : ''}>${rows || (home ? homeEmpty : '<p>No standings yet. The creator publishes leaderboard scores.</p>')}</div></section>`;
 }
 
@@ -865,7 +863,7 @@ function homeMain(ctx) {
   // Empty shelves keep the product grid's shape so the page reads the same
   // before the creator publishes anything; nothing on them is for sale.
   const emptyRewards = `<div class="viewer-home-empty viewer-home-empty--shelf"><div class="viewer-shelf-ghost" aria-hidden="true"><span></span><span></span><span></span><span></span></div><div>${viewerIcon('gift')}<p><strong>No rewards yet.</strong> The creator will publish them here; credits you earn in ${name} stay ready for them.</p></div></div>`;
-  return `<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card viewer-home-rewards"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${items.length ? `<ul class="yr-rwds">${rewardCards}</ul>` : emptyRewards}</section>` : ''}</div>`;
+  return `<div class="viewer-home-columns">${leaderboardPreview(ctx)}${siteSections.shop !== false ? `<section class="viewer-card viewer-home-rewards"><div class="viewer-card-head"><h2>${viewerIcon('gift')}Community rewards</h2><a href="${shopHref}">View all ${viewerIcon('arrow')}</a></div>${items.length ? `<ul class="yr-rwds" data-count="${Math.min(items.length, 3)}">${rewardCards}</ul>` : emptyRewards}</section>` : ''}</div>`;
 }
 
 /* ── Leaderboard / Ranks ──────────────────────────────────────────────── */
