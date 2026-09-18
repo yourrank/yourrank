@@ -70,7 +70,7 @@ describe("demo credibility invariants", () => {
       expect(html).toContain(`data-section="${section}"`);
       if (section === "home") expect(html).toContain(`<h1 class="viewer-context-name" id="viewer-home-title" data-preview-field="f_name">${demoLeaderboardData().brand.name}</h1>`);
       else if (section === "me") expect(html).toContain('<h1>My Activity</h1>');
-      else if (section === "shop") expect(html).toContain('<h1>Rewards</h1>');
+      else if (section === "shop") expect(html).toContain('<h1 class="yr-h1 yr-lbh-title">Rewards</h1>');
       else if (section !== "leaderboard") expect(html).toContain(`<h1 class="yr-h1">${label}</h1>`);
       if (section !== "games") expect(html).toContain(`id="viewer-top-title">${label}</span>`);
     }

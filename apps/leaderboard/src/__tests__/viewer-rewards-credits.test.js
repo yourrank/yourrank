@@ -127,7 +127,7 @@ describe("a creator's Rewards page", () => {
   it("lists real rewards with one action each and no commerce controls", async () => {
     const html = await shop();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
-    expect(html).toContain('<ul class="yr-rwds" id="viewer-rewards" role="list">');
+    expect(html).toContain('<ul class="yr-rwds" id="viewer-rewards" role="list" data-count="');
     // The intro sentence is the only explanation; nothing decorative sits between the controls and the catalog.
     expect(html).not.toContain("viewer-rewards-banner");
     expect(html).toMatch(/<\/header>\s*(<p class="yr-note">[^<]*<\/p>\s*)?(<p class="yr-redeem-status"[^>]*><\/p>\s*)?<section aria-label="All rewards">/);
