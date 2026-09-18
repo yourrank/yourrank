@@ -209,7 +209,11 @@ describe("public viewer shell", () => {
     expect(signedOut).not.toContain('#membership-code');
     expect(signedOut).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
+    expect(signedOut).toContain('id="viewer-top-avatar" href="/creator/me" aria-label="Sign in to your viewer account"');
+    expect(signedOut).toContain('<strong id="viewer-top-name">Sign in</strong>');
+    expect(signedOut).not.toContain('<strong id="viewer-top-name">Account</strong>');
     const signedIn = await render("home", { viewer, viewerData });
+    expect(signedIn).toContain('id="viewer-top-avatar" href="/me?community=creator#vd-profile" aria-label="Viewer account');
     expect(signedIn).toContain('data-credit-balance-num>1,234</strong>');
     expect(signedIn).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile"');
     expect(signedIn).not.toContain('>Sign in<');
