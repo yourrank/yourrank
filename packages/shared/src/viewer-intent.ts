@@ -2,7 +2,7 @@
  * Guest authentication intent for a community site.
  *
  * Every guest CTA on a public community page (rail, hero, rewards, activity)
- * points at the community's own `/me` page with an `intent` query parameter.
+ * points at the community's own `/activity` page with an `intent` query parameter.
  * That page is the single sign-in gate: it names what the visitor was doing,
  * offers every available provider, and only then starts OAuth with a
  * `returnTo` derived from the validated intent — never from the raw URL.
@@ -36,7 +36,7 @@ export function parseViewerIntent(url: URL): ViewerAuthIntent {
   return { intent, rewardId: '' };
 }
 
-/** Href of the community gate page (`meHref` is the community's `/me` section). */
+/** Href of the community gate page (`meHref` is the community's `/activity` section). */
 export function guestGateHref(meHref: string, intent: ViewerIntent, rewardId = ''): string {
   if (intent === 'signin') return meHref;
   const query = new URLSearchParams({ intent });

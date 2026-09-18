@@ -152,14 +152,14 @@ describe("public viewer shell", () => {
       const html = await render("home", { r: { [`viewer${provider}AuthEnabled`]: true } });
       const membership = await render("me", { r: { [`viewer${provider}AuthEnabled`]: true } });
       expect(html).not.toContain('/api/viewer/auth/');
-      expect(html).toContain('href="/creator/me">Sign in</a>');
-      expect(html).toContain('href="/creator/me?intent=join"');
-      expect(html).toContain('href="/creator/me?intent=activity">Sign in ');
+      expect(html).toContain('href="/creator/activity">Sign in</a>');
+      expect(html).toContain('href="/creator/activity?intent=join"');
+      expect(html).toContain('href="/creator/activity?intent=activity">Sign in ');
       expect(membership).toContain('data-viewer-intent="signin"');
       expect(membership).toContain('<h2>Sign in to Creator Name</h2>');
       expect(membership).toContain(`href="/api/viewer/auth/${provider.toLowerCase()}?returnTo=https%3A%2F%2Fexample.test%2Fcreator">Sign in with ${provider}</a>`);
       expect(membership).not.toContain('intent=join&site=');
-      expect(membership).toContain('href="/creator/me?intent=join">Join Creator Name</a>');
+      expect(membership).toContain('href="/creator/activity?intent=join">Join Creator Name</a>');
       expect(membership).toContain('href="/creator">Back to Creator Name</a>');
       expect(html).not.toContain('data-guide-base');
     }
@@ -177,13 +177,13 @@ describe("public viewer shell", () => {
     const join = await render("me", { r, viewerIntent: { intent: "join", rewardId: "" } });
     expect(join).toContain('data-viewer-intent="join"');
     expect(join).toContain('<h2>Join Creator Name</h2>');
-    expect(join).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join with Kick</a>');
-    expect(join).toContain('href="/api/viewer/auth/discord?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme&intent=join&site=creator">Join with Discord</a>');
+    expect(join).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Factivity&intent=join&site=creator">Join with Kick</a>');
+    expect(join).toContain('href="/api/viewer/auth/discord?returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Factivity&intent=join&site=creator">Join with Discord</a>');
     expect(join).not.toContain('Not a member yet?');
 
     const activity = await render("me", { r, viewerIntent: { intent: "activity", rewardId: "" } });
     expect(activity).toContain('<h2>See your activity</h2>');
-    expect(activity).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Fme">Sign in with Kick</a>');
+    expect(activity).toContain('returnTo=https%3A%2F%2Fexample.test%2Fcreator%2Factivity">Sign in with Kick</a>');
     expect(activity).not.toContain('intent=join&site=');
 
     const reward = await render("me", { r, viewerIntent: { intent: "reward", rewardId: "2" } });
@@ -202,17 +202,17 @@ describe("public viewer shell", () => {
     const shop = await render("shop", { r });
     expect(shop).toContain('id="reward-2" tabindex="-1"');
     expect(shop).toContain('<a class="yr-rwd-link" href="/creator/shop/2">');
-    expect(shop).toContain('href="https://example.test/creator/me?intent=reward&reward=2">Sign in to claim</a>');
+    expect(shop).toContain('href="https://example.test/creator/activity?intent=reward&reward=2">Sign in to claim</a>');
     expect(shop).not.toContain('/api/viewer/auth/');
   });
 
   it("keeps sign-in and account navigation role-correct", async () => {
     const signedOut = await render("home");
-    expect(signedOut).toContain('href="/creator/me">Sign in</a>');
+    expect(signedOut).toContain('href="/creator/activity">Sign in</a>');
     expect(signedOut).not.toContain('#membership-code');
     expect(signedOut).toContain('id="viewer-account-link" href="/me?community=creator#vd-profile" hidden');
     expect(signedOut).not.toContain('data-credit-balance="1234"');
-    expect(signedOut).toContain('id="viewer-top-avatar" href="/creator/me" aria-label="Sign in to your viewer account"');
+    expect(signedOut).toContain('id="viewer-top-avatar" href="/creator/activity" aria-label="Sign in to your viewer account"');
     expect(signedOut).toContain('<strong id="viewer-top-name">Sign in</strong>');
     expect(signedOut).not.toContain('<strong id="viewer-top-name">Account</strong>');
     const signedIn = await render("home", { viewer, viewerData });
@@ -246,10 +246,10 @@ describe("public viewer shell", () => {
 
   it("keeps local membership and global account destinations distinct on custom domains", async () => {
     const html = await render("me", { viewer, viewerData, custom: true });
-    expect(html).toMatch(/href="\/me" aria-current="page">[\s\S]*?My Activity<\/a>/);
+    expect(html).toMatch(/href="\/activity" aria-current="page">[\s\S]*?My Activity<\/a>/);
     expect(html).toContain('id="viewer-account-link" href="https://yourrank.site/me?community=creator#vd-profile"');
     expect(html).toContain('href="https://yourrank.site/me?community=creator"');
-    expect(html).not.toContain('href="/creator/me"');
+    expect(html).not.toContain('href="/creator/activity"');
   });
 
   it("uses the community home composition without inventing viewer statistics", async () => {
@@ -316,7 +316,7 @@ describe("public viewer shell", () => {
     expect(html).toContain('No standings yet.');
     expect(html).toContain('data-preview-field="f_name">Bare Board</h1>');
     expect(html).not.toContain('href="/creator/shop"');
-    expect(html).not.toContain('href="/creator/me"');
+    expect(html).not.toContain('href="/creator/activity"');
     expect(html).not.toContain('Claim free code');
     expect(html).not.toContain('data-guide-total');
   });
@@ -432,7 +432,7 @@ describe("public viewer shell", () => {
   it("keeps navigation and return paths available without JavaScript", async () => {
     const html=await render("me",{viewer,viewerData});
     const nav=html.match(/<aside class="viewer-rail"[\s\S]*?<\/aside>/)[0];
-    for(const href of ["/creator","/creator/shop","/creator/me","/me?community=creator","/me?community=creator#vd-profile"]) expect(nav).toContain('href="'+href+'"');
+    for(const href of ["/creator","/creator/shop","/creator/activity","/me?community=creator","/me?community=creator#vd-profile"]) expect(nav).toContain('href="'+href+'"');
     // The only button in the rail is the script-disclosed drawer close control.
     expect(nav.match(/<button\b[^>]*>/g)).toEqual(['<button class="viewer-rail-close" id="viewer-rail-close" type="button" hidden aria-label="Close menu">']);
     expect(nav).not.toMatch(/<(?:aside|nav|a)[^>]*\shidden\b/);
@@ -626,7 +626,7 @@ describe("public viewer shell", () => {
 
     const nonMember = await render("shop", { viewer, viewerData: { membershipStatus: "absent", viewerOnSite: null, ledger: [], claims: [] } });
     expect(nonMember).toContain("<h2>Join Creator Name</h2>");
-    expect(nonMember).toContain('href="/creator/me">Join community ');
+    expect(nonMember).toContain('href="/creator/activity">Join community ');
     expect(nonMember).not.toContain("viewer-next-reward");
 
     const zero = await render("home", { viewer, viewerData: { ...viewerData, viewerOnSite: { balance: 0 } } });
@@ -641,10 +641,10 @@ describe("public viewer shell", () => {
   it("links the credits rail to local earning activity and gives standings one page heading", async () => {
     const html = await render('home');
     const credit = html.match(/<section class="viewer-rail-panel viewer-guest-prompt">[\s\S]*?<\/section>/)[0];
-    expect(credit).toContain('href="/creator/me?intent=activity">Sign in ');
+    expect(credit).toContain('href="/creator/activity?intent=activity">Sign in ');
     expect(credit).not.toContain('href="/me"');
     const memberCredit = (await render('home', { viewer, viewerData })).match(/<section class="viewer-rail-panel viewer-credit-panel">[\s\S]*?<\/section>/)[0];
-    expect(memberCredit).toContain('href="/creator/me#membership-code">Earn reward credits ');
+    expect(memberCredit).toContain('href="/creator/activity#membership-code">Earn reward credits ');
     expect(credit).not.toContain('Browse rewards');
     const board = await render('leaderboard');
     expect((board.match(/<h1\b/g) || [])).toHaveLength(1);

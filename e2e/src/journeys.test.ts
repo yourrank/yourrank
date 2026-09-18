@@ -559,7 +559,7 @@ describe("release-gate journeys", () => {
     expect(claim.json?.ok).toBe(true);
     expect(claim.json?.pointsAwarded).toBe(25);
 
-    const history = await viewer.get(`/${slug}/me`);
+    const history = await viewer.get(`/${slug}/activity`);
     expect(history.status).toBe(200);
     expect(history.body).toContain("Claimed a code drop");
     expect(history.body).toContain(">Claimed</span>");

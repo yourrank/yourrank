@@ -48,7 +48,7 @@ import { logLegacyDashboardRedirect } from "@yourrank/shared/dashboard-legacy-te
 
 // Sections the virtual /demo board renders. `games` is off in the demo data,
 // so its shell never links there.
-const DEMO_SECTIONS = new Set(["leaderboard", "shop", "me"]);
+const DEMO_SECTIONS = new Map([["leaderboard", "leaderboard"], ["shop", "shop"], ["activity", "me"], ["me", "me"]]);
 import { renderPasswordGate } from "./password-gate.js";
 import {
   renderNewEmbed,
@@ -86,7 +86,7 @@ async function withViewerCommunity(env, viewerHelp) {
 const LEGAL_PAGES = new Set(["terms", "privacy", "responsible", "cookies", "refund", "contact"]);
 const MARKETING_PAGES = new Set(["/", "/index.html", "/sites", "/telegram", "/credits", "/pricing", "/overlays", "/games", "/switch", "/docs", "/faq", "/about", "/changelog", "/brand", "/status"]);
 const PUBLIC_API_OPERATIONS = new Set(["standings", "players", "stream", "rank", "data", "stats"]);
-const SITE_SECTIONS = new Set(["home", "leaderboard", "shop", "games", "me"]);
+const SITE_SECTIONS = new Set(["home", "leaderboard", "shop", "games", "activity", "me"]);
 const CUSTOM_VIEWER_AUTH_PATHS = new Set([
   "/api/viewer/auth/kick",
   "/api/viewer/auth/kick/callback",
@@ -152,6 +152,12 @@ function redirectKeepingSearch(pathname, url, status = 302) {
   const target = new URL(pathname, url);
   target.search = url.search;
   return redirectResponse(target, status);
+}
+
+// A public section segment that moved (e.g. `/me` → `/activity`): the rename is
+// permanent, and browsers carry the fragment (`#membership-claims`) across.
+function legacySectionRedirect(pathname, url) {
+  return redirectKeepingSearch(pathname, url, 301);
 }
 
 function redirectFromManifest(url, legacy, source) {
@@ -527,9 +533,10 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400" },
             });
           }
-          // --- branded site sections (custom domain): /, /leaderboard, /shop, /games, /me ---
+          // --- branded site sections (custom domain): /, /leaderboard, /shop, /games, /activity ---
           const customSiteRoute = parseSitePath(path, true, customSlug);
           if (customSiteRoute) {
+            if (customSiteRoute.redirectTo) return legacySectionRedirect(customSiteRoute.redirectTo, url);
             return renderSiteRoute({ request, env, ctx, nonce, slug: customSiteRoute.slug, section: customSiteRoute.section, rewardId: customSiteRoute.rewardId, isCustomDomain: true });
           }
           if (method === "GET" && path === "/hall-of-fame") {
@@ -1159,7 +1166,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // --- permanent demo leaderboard (always works, no DB needed) ---
       // The demo board is virtual (no DB row), so the sections and legal pages
       // its own shell links to have to be served here too — otherwise
-      // /demo/leaderboard, /demo/shop, /demo/me and every footer legal link
+      // /demo/leaderboard, /demo/shop, /demo/activity and every footer legal link
       // 404 and the demo tour is a dead end.
       const demoSub = method === "GET" && path.startsWith("/demo/")
         ? trimTrailingSlashes(path.slice("/demo/".length))
@@ -1177,7 +1184,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         }), { headers: { ...HTML_N, "cache-control": "no-store" } });
       }
       if (method === "GET" && (path === "/demo" || DEMO_SECTIONS.has(demoSub))) {
-        const demoSection = path === "/demo" ? "home" : demoSub;
+        if (demoSub === "me") return legacySectionRedirect("/demo/activity", url);
+        const demoSection = path === "/demo" ? "home" : DEMO_SECTIONS.get(demoSub);
         return new Response(
           await renderSite({
             r: {
@@ -1409,9 +1417,10 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
         const cookie = boardPasswordSetCookieHeader(site, token, { isCustomDomain: false });
         return new Response(null, { status: 302, headers: { "location": `/${slug}`, "set-cookie": cookie } });
       }
-      // --- branded site sections: /<slug>, /<slug>/leaderboard, /shop, /games, /me ---
+      // --- branded site sections: /<slug>, /<slug>/leaderboard, /shop, /games, /activity ---
       const siteRoute = parseSitePath(path, false);
       if (siteRoute) {
+        if (siteRoute.redirectTo) return legacySectionRedirect(siteRoute.redirectTo, url);
         return renderSiteRoute({ request, env, ctx, nonce, slug: siteRoute.slug, section: siteRoute.section, rewardId: siteRoute.rewardId, isCustomDomain: false });
       }
       // --- public leaderboard at /<slug> ---

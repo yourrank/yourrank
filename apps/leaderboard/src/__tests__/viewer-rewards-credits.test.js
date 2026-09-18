@@ -116,7 +116,7 @@ describe("a creator's Rewards page", () => {
   it("uses the header as the only sign-in owner in the empty signed-out state", async () => {
     const html = await signedOut("shop");
     expect(html).not.toContain("/api/viewer/auth/");
-    expect((html.match(/href="\/demo-board\/me">Sign in<\/a>/g) || []).length).toBe(1);
+    expect((html.match(/href="\/demo-board\/activity">Sign in<\/a>/g) || []).length).toBe(1);
     expect(html).not.toContain('class="yr-vhead-aside"');
     expect(html).not.toContain("Sign in to use your community credits.");
     expect((html.match(/class="viewer-rail-panel viewer-guest-prompt"/g) || []).length).toBe(1);
@@ -278,7 +278,7 @@ describe("a creator's My Community page", () => {
     expect(html).toContain('class="member-gate" data-viewer-intent="signin"');
     expect(html).toContain("Sign in with Kick</a>");
     expect(html).not.toContain("intent=join&site=");
-    expect(html).toContain('href="/demo-board/me?intent=join">Join A Creator With A Very Long Channel Name Indeed</a>');
+    expect(html).toContain('href="/demo-board/activity?intent=join">Join A Creator With A Very Long Channel Name Indeed</a>');
     expect(html).toContain("My communities</a>");
     expect(html).not.toContain("data-code-drop-claim");
     expect(html).not.toContain("yr-kpi");

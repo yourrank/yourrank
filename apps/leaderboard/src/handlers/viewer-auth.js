@@ -29,7 +29,7 @@ const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
 export const KICK_VIEWER_STATE_PREFIX = "viewer_";
 const APEX_ORIGIN = `https://${PLATFORM_HOST}`;
-const CUSTOM_DOMAIN_RETURN_PATHS = new Set(["/", "/leaderboard", "/shop", "/games", "/me"]);
+const CUSTOM_DOMAIN_RETURN_PATHS = new Set(["/", "/leaderboard", "/shop", "/games", "/activity", "/me"]);
 const CUSTOM_DOMAIN_REWARD_RETURN = /^\/shop\/[A-Za-z0-9_-]{1,64}$/;
 
 function randomState() {

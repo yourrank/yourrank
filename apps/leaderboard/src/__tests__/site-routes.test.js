@@ -173,7 +173,14 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/foo/leaderboard", false)).toEqual({ slug: "foo", section: "leaderboard" });
     expect(parseSitePath("/foo/shop", false)).toEqual({ slug: "foo", section: "shop" });
     expect(parseSitePath("/foo/games", false)).toEqual({ slug: "foo", section: "games" });
-    expect(parseSitePath("/foo/me", false)).toEqual({ slug: "foo", section: "me" });
+    expect(parseSitePath("/foo/activity", false)).toEqual({ slug: "foo", section: "me" });
+  });
+
+  it("resolves the legacy /me segment to My Activity and names the canonical /activity path", () => {
+    expect(parseSitePath("/foo/me", false)).toEqual({ slug: "foo", section: "me", redirectTo: "/foo/activity" });
+    expect(parseSitePath("/me", true, "foo")).toEqual({ slug: "foo", section: "me", redirectTo: "/activity" });
+    expect(parseSitePath("/foo/activity", false).redirectTo).toBeUndefined();
+    expect(parseSitePath("/activity", true, "foo")).toEqual({ slug: "foo", section: "me" });
   });
 
   it("rejects unknown sections and extra path segments", () => {
@@ -188,7 +195,7 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/foo/shop/item-1", false)).toEqual({ slug: "foo", section: "shop", rewardId: "item-1" });
     expect(parseSitePath("/foo/shop/3f2b9c1e-4a5d-4e6f-8a9b-0c1d2e3f4a5b/", false)).toEqual({ slug: "foo", section: "shop", rewardId: "3f2b9c1e-4a5d-4e6f-8a9b-0c1d2e3f4a5b" });
     expect(parseSitePath("/shop/item-1", true, "foo")).toEqual({ slug: "foo", section: "shop", rewardId: "item-1" });
-    expect(parseSitePath("/me/item-1", true, "foo")).toBeNull();
+    expect(parseSitePath("/activity/item-1", true, "foo")).toBeNull();
   });
 
   it("works on custom domains without a slug prefix", () => {
@@ -211,6 +218,26 @@ describe("parseSitePath", () => {
     expect(isCustomViewerApiPath("GET", "/api/events/drops/claim")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/events/raffles")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
+  });
+
+  it("redirects the legacy /me section permanently to /activity, keeping the query string", async () => {
+    const custom = await handleRequest(
+      req("https://streamer.example/me?intent=join"),
+      {},
+      ctx,
+      {},
+      { resolveCustomDomain: async () => "streamer" },
+    );
+    expect(custom.status).toBe(301);
+    expect(custom.headers.get("location")).toBe("https://streamer.example/activity?intent=join");
+
+    const primary = await handleRequest(req("https://yourrank.site/streamer/me"), {}, ctx, {}, { resolveCustomDomain: async () => null });
+    expect(primary.status).toBe(301);
+    expect(primary.headers.get("location")).toBe("https://yourrank.site/streamer/activity");
+
+    const demo = await handleRequest(req("https://yourrank.site/demo/me"), {}, ctx, {}, { resolveCustomDomain: async () => null });
+    expect(demo.status).toBe(301);
+    expect(demo.headers.get("location")).toBe("https://yourrank.site/demo/activity");
   });
 
   it("routes the custom-domain viewer handoff through the normal handler", async () => {
@@ -292,7 +319,7 @@ describe("section visibility", () => {
     const games = await renderSiteRoute({ request: req("https://example.com/disabled/games"), env, ctx, nonce: "n", slug: "disabled", section: "games", isCustomDomain: false });
     expect(games.status).toBe(404);
 
-    const me = await renderSiteRoute({ request: req("https://example.com/disabled/me"), env, ctx, nonce: "n", slug: "disabled", section: "me", isCustomDomain: false });
+    const me = await renderSiteRoute({ request: req("https://example.com/disabled/activity"), env, ctx, nonce: "n", slug: "disabled", section: "me", isCustomDomain: false });
     expect(me.status).toBe(404);
   });
 
@@ -311,7 +338,7 @@ describe("section visibility", () => {
     expect(guestHtml).toContain('<a href="/streamer/contact">Contact ');
     expect(guestHtml).toContain('href="/streamer/shop"');
     // Guests are sent to the community gate with the reward identity, never straight to a claim.
-    expect(guestHtml).toContain('href="https://example.com/streamer/me?intent=reward&reward=item-1">Sign in to claim</a>');
+    expect(guestHtml).toContain('href="https://example.com/streamer/activity?intent=reward&reward=item-1">Sign in to claim</a>');
     expect(guestHtml).not.toContain("data-redeem=");
     expect(guestHtml).not.toContain("sv-1");
 
@@ -386,7 +413,7 @@ describe("logged-out vs logged-in rendering", () => {
     const homeRes = await renderSiteRoute({ request: req("https://example.com/streamer"), env, ctx, nonce: "n", slug: "streamer", section: "home", isCustomDomain: false });
     expect(homeRes.status).toBe(200);
     const homeHtml = await homeRes.text();
-    expect(homeHtml).toContain('href="/streamer/me">Sign in</a>');
+    expect(homeHtml).toContain('href="/streamer/activity">Sign in</a>');
     expect(homeHtml).not.toContain("/api/viewer/auth/");
     expect(homeHtml).toContain("Credits");
     expect(homeHtml).toContain("TestStreamer");
@@ -395,7 +422,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(lbRes.status).toBe(200);
     const lbHtml = await lbRes.text();
     expect(lbHtml).toContain("Alice");
-    expect(lbHtml).toContain('href="/streamer/me">Sign in</a>');
+    expect(lbHtml).toContain('href="/streamer/activity">Sign in</a>');
   });
 
   it("does not emit renderer comments inside leaderboard rows", async () => {
@@ -421,7 +448,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("Shoutout");
-    expect(html).toContain("/streamer/me?intent=reward&reward=");
+    expect(html).toContain("/streamer/activity?intent=reward&reward=");
     expect(html).toContain("Sign in to claim");
     expect(html).not.toContain("/api/viewer/auth/");
     expect(html).not.toContain(">Claim<");
@@ -444,28 +471,28 @@ describe("logged-out vs logged-in rendering", () => {
   });
 
   it("My activity explains membership when logged out", async () => {
-    const res = await renderSiteRoute({ request: req("https://example.com/streamer/me"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
+    const res = await renderSiteRoute({ request: req("https://example.com/streamer/activity"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("My Activity");
     expect(html).toContain("Your credits, claims and activity in TestStreamer");
     expect(html).toContain("Sign in to TestStreamer");
     expect(html).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer">Sign in with Kick</a>');
-    expect(html).toContain('href="/streamer/me?intent=join">Join TestStreamer</a>');
+    expect(html).toContain('href="/streamer/activity?intent=join">Join TestStreamer</a>');
 
-    const joinRes = await renderSiteRoute({ request: req("https://example.com/streamer/me?intent=join"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
+    const joinRes = await renderSiteRoute({ request: req("https://example.com/streamer/activity?intent=join"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     const joinHtml = await joinRes.text();
     expect(joinHtml).toContain("Join TestStreamer");
-    expect(joinHtml).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer%2Fme&intent=join&site=streamer">Join with Kick</a>');
+    expect(joinHtml).toContain('href="/api/viewer/auth/kick?returnTo=https%3A%2F%2Fexample.com%2Fstreamer%2Factivity&intent=join&site=streamer">Join with Kick</a>');
 
-    const hostileRes = await renderSiteRoute({ request: req("https://example.com/streamer/me?intent=reward&reward=..%2F%2Fevil"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
+    const hostileRes = await renderSiteRoute({ request: req("https://example.com/streamer/activity?intent=reward&reward=..%2F%2Fevil"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     const hostileHtml = await hostileRes.text();
     expect(hostileHtml).toContain('data-viewer-intent="signin"');
     expect(hostileHtml).not.toContain("evil");
   });
 
   it("shows controlled OAuth errors on creator-scoped My activity", async () => {
-    const res = await renderSiteRoute({ request: req("https://streamer.example/me?error=not-a-real-provider-error"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
+    const res = await renderSiteRoute({ request: req("https://streamer.example/activity?error=not-a-real-provider-error"), env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain("We couldn&#39;t complete sign-in. Try again.");
@@ -485,7 +512,7 @@ describe("logged-out vs logged-in rendering", () => {
 
   it("logged-in viewers see site-scoped Participation, credits and canonical Claims in My activity", async () => {
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
-    const request = req("https://example.com/streamer/me", { viewer });
+    const request = req("https://example.com/streamer/activity", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: false });
     expect(res.status).toBe(200);
     const html = await res.text();
@@ -500,7 +527,7 @@ describe("logged-out vs logged-in rendering", () => {
   it("uses the same site-scoped history composition on a custom domain", async () => {
     routeSiteData.calls.length = 0;
     const viewer = { id: "v1", kick_username: "viewer1", avatar_url: null };
-    const request = req("https://streamer.example/me", { viewer });
+    const request = req("https://streamer.example/activity", { viewer });
     const res = await renderSiteRoute({ request, env, ctx, nonce: "n", slug: "streamer", section: "me", isCustomDomain: true });
     const html = await res.text();
 
@@ -516,13 +543,13 @@ describe("logged-out vs logged-in rendering", () => {
   });
 
   it("never carries one Viewer Account's history into the next signed-in response", async () => {
-    const viewerARequest = req("https://example.com/streamer/me", { viewer: { id: "v1", kick_username: "viewer1" } });
+    const viewerARequest = req("https://example.com/streamer/activity", { viewer: { id: "v1", kick_username: "viewer1" } });
     const viewerAResponse = await renderSiteRoute({ request: viewerARequest, env, ctx, nonce: "a", slug: "streamer", section: "me", isCustomDomain: false });
     const viewerAHtml = await viewerAResponse.text();
     expect(viewerAHtml).toContain("Claimed a code drop");
     expect(viewerAHtml.match(/<section[^>]*id="membership-claims"[^]*?<\/section>/)?.[0]).toContain("Shoutout");
 
-    const viewerBRequest = req("https://example.com/streamer/me", { viewer: { id: "v2", kick_username: "viewer2" } });
+    const viewerBRequest = req("https://example.com/streamer/activity", { viewer: { id: "v2", kick_username: "viewer2" } });
     const viewerBResponse = await renderSiteRoute({ request: viewerBRequest, env, ctx, nonce: "b", slug: "streamer", section: "me", isCustomDomain: false });
     const viewerBHtml = await viewerBResponse.text();
     expect(viewerBResponse.headers.get("cache-control")).toContain("private");
