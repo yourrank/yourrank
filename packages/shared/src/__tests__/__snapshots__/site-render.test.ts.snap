@@ -41,10 +41,15 @@ FORM: DESIGN.md owns the composition. Production routes and scoped records suppl
 </aside>
 <div class="viewer-scrim" id="viewer-scrim" hidden></div>
 <main class="viewer-main" id="main-content">
-<section class="yr-lbh">
+<section class="yr-lbh viewer-board-hero">
+<div class="viewer-board-hero-copy">
+<p class="viewer-hero-kicker">Ampersand &amp; Board · Creator community</p>
 <h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>
 <p class="yr-lbh-note">Ranked by wagered. Tied players share a rank.</p>
-</section><section class="viewer-season"><h2>Q&amp;A Leaderboard</h2><p>Standings for Ampersand &amp; Board</p><p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span></p></section>
+<p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Q&amp;A leaderboard</span></p>
+</div>
+<div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/></svg></span></div>
+</section>
 <div data-player-board>
 <div class="yr-panel yr-lb">
 <div class="yr-panel-head yr-panel-head--quiet"><h2 class="yr-sr">Standings</h2><span class="yr-panel-meta"><span data-player-count-badge>2 players</span></span></div>
@@ -66,14 +71,14 @@ FORM: DESIGN.md owns the composition. Production routes and scoped records suppl
 
 </div></div>
 
-<footer class="viewer-panel-footer"><span><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg>Your credits and claims stay with this community.</span><a href="/help?audience=viewer&amp;return=%2Fboard%2520fixture%2Fleaderboard">How YourRank works <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a></footer>
+
 </main>
-<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Your standing</h2></div><p>Sign in to see your credits and claims alongside Ampersand &amp; Board's leaderboard.</p><a class="yr-btn" href="/board%20fixture/me">Sign in <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a></section>
+<aside class="viewer-overview" aria-label="Selected community overview"><section class="viewer-rail-panel viewer-guest-prompt"><div class="viewer-rail-head"><h2>Your standing</h2></div><div class="viewer-status-who"><span class="viewer-avatar viewer-avatar--anon" aria-hidden="true"><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span><div><strong>Not signed in</strong><span>Sign in to see your credits and claims alongside Ampersand &amp; Board's leaderboard.</span></div></div><a class="yr-btn" href="/board%20fixture/me">Sign in <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a><dl class="viewer-status-facts"><div><dt><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5Z"/><path d="M5 19h14"/></svg>Your rank</dt><dd>—<span class="yr-sr"> sign in to see it</span></dd></div><div><dt><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 4 16 4 16 0V6M4 12v6c0 4 16 4 16 0v-6"/></svg>Credits</dt><dd>—<span class="yr-sr"> sign in to see them</span></dd></div><div><dt><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="5" rx="1.5"/><path d="M5 12v9h14v-9M12 7v14m0-14C7 8 4 3 7 2c3-1 5 5 5 5Zm0 0c5 1 8-4 5-5-3-1-5 5-5 5Z"/></svg>Latest claim</dt><dd>—<span class="yr-sr"> sign in to see it</span></dd></div></dl></section>
 
 <div class="viewer-scope-help"><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><p><strong>Your membership, your history.</strong>Credits and claims are kept separate for every community you join.</p></div></aside><div class="viewer-site-footer"><footer class="yr-foot">
 <div class="yr-foot-bar">
 <div class="yr-foot-zone yr-foot-zone--brand">
-<p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
+<p class="yr-foot-lead"><svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><span>Your credits and claims stay with this community.</span> <a href="/help?audience=viewer&amp;return=%2Fboard%2520fixture">How YourRank works <svg class="viewer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></a></p><p class="yr-fine">Credits are free loyalty points earned from channel-point rewards. No purchase, no cash value, no cashout.</p>
 <p class="yr-foot-c">&copy; 2026 Ampersand &amp; Board.</p>
 </div>
 <div class="yr-foot-links yr-foot-zone yr-foot-zone--legal"><p class="yr-foot-h">Legal</p>            <a href="https://example.test/board%20fixture/terms">Terms of Service</a>            <a href="https://example.test/board%20fixture/privacy">Privacy Policy</a>            <a href="https://example.test/board%20fixture/cookies">Cookie Policy</a>            <a href="https://example.test/board%20fixture/refund">Refund Policy</a>            <a href="https://example.test/board%20fixture/responsible">Responsible Play</a><button type="button" data-cookie-preferences>Cookie preferences</button></div>
