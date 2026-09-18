@@ -88,6 +88,16 @@ function renderDashboardLoadState(mode, {
 async function init() {
   renderDashboardLoadState("loader");
   startLoadingCopy();
+  const urlParams = new URLSearchParams(location.search);
+  // Plan and billing live in the account settings document; a `?plan=` on the
+  // dashboard is an old checkout link.
+  const planParam = urlParams.get("plan");
+  const requestedSiteId = urlParams.get("board") || null;
+  const apiUrl = requestedSiteId ? `/api/site?siteId=${encodeURIComponent(requestedSiteId)}` : "/api/site";
+  // The board request does not depend on the auth response, so both are issued
+  // together; the auth result is still applied first and gates everything else.
+  const sitePromise = planParam ? null : fetchDashboardJson(apiUrl, { credentials: "same-origin" });
+  sitePromise?.catch(() => {});
   let me;
   try {
     ({ body: me } = await fetchDashboardJson("/api/auth/me", { credentials: "same-origin" }));
@@ -117,16 +127,10 @@ async function init() {
   const hasEditor = hasSection("board");
   const hasBoardSettings = hasSection("site");
 
-  const urlParams = new URLSearchParams(location.search);
-  // Plan and billing live in the account settings document; a `?plan=` on the
-  // dashboard is an old checkout link.
-  const planParam = urlParams.get("plan");
   if (planParam) {
     await requestDashboardRoute("settings", "plan", { query: `plan=${encodeURIComponent(planParam)}`, reload: true });
     return;
   }
-  const requestedSiteId = urlParams.get("board") || null;
-  const apiUrl = requestedSiteId ? `/api/site?siteId=${encodeURIComponent(requestedSiteId)}` : "/api/site";
   const renderSiteLoadError = (message) => {
     const detail = message || "The board service returned an unexpected response.";
     renderDashboardLoadState("error", { title: "Couldn't load your board.", detail });
@@ -140,7 +144,7 @@ async function init() {
   };
   let p;
   try {
-    ({ body: p } = await fetchDashboardJson(apiUrl, { credentials: "same-origin" }));
+    ({ body: p } = await sitePromise);
     if (!p?.ok) throw new DashboardRequestError(p?.error || "The board service returned an unexpected response.", { code: "REQUEST_FAILED" });
   } catch (err) {
     logError("site", err);

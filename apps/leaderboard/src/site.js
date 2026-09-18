@@ -288,12 +288,7 @@ export async function getSiteById(env, siteId) {
 
 // Public "hub": the owner's published boards, so a visitor on one board's page
 // can tab across to the streamer's other sponsor leaderboards.
-async function getPublicBoards(env, uid) {
-  const rows = await query(
-    // Defensive ceiling above the highest current plan's board limit.
-    "SELECT slug, name FROM sites WHERE user_id=$1 AND published=true AND is_draft=false ORDER BY board_order ASC, id ASC LIMIT 128",
-    [uid]
-  );
+function shapePublicBoards(rows) {
   return (rows || []).map((r) => ({ slug: r.slug, name: r.name || r.slug }));
 }
 
@@ -551,10 +546,19 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
     // PERF-005: has_logo is now part of SITE_COLUMNS (computed from logo_data).
     // Eliminated redundant re-query of sites table. Owner query remains separate
     // since it's from the users table (indexed by id, ~0.1ms).
-    // DB-003-v8: Resolve plan first, then fetch only needed archives
+    // DB-003-v8: Resolve plan first, then fetch only needed archives. The
+    // plan-independent per-owner/per-site lists (bot, boards, event boards) ride
+    // along in the same statement: the request client is single-connection, so
+    // separate statements would each cost a round trip.
     const owner = await one(
-      "SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status, email_verified FROM users WHERE id=$1",
-      [site.user_id]
+      `SELECT u.plan, (EXTRACT(EPOCH FROM u.plan_expires_at) * 1000)::double precision AS plan_expires_at, u.status, u.email_verified,
+              (SELECT b.username FROM bots b WHERE b.owner_id=u.id LIMIT 1) AS bot_username,
+              (SELECT COALESCE(json_agg(json_build_object('slug', ps.slug, 'name', ps.name) ORDER BY ps.board_order ASC, ps.id ASC), '[]'::json)
+                 FROM (SELECT slug, name, board_order, id FROM sites WHERE user_id=u.id AND published=true AND is_draft=false ORDER BY board_order ASC, id ASC LIMIT 128) ps) AS public_boards,
+              (SELECT COALESCE(json_agg(json_build_object('id', e.id, 'name', e.name) ORDER BY e.created_at, e.id), '[]'::json)
+                 FROM app_private.site_event_leaderboards e WHERE e.site_id=$2 AND e.published=true) AS event_boards
+         FROM users u WHERE u.id=$1`,
+      [site.user_id, site.id]
     );
     // Gate the board for suspended owners and for owners who have not confirmed
     // their email — but keep the two states distinct so the public page can say
@@ -568,17 +572,16 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
     const matchCountPromise = boundedPlayers && String(playerOptions.search || "").trim()
       ? getPlayerCount(site.id, playerOptions.search)
       : totalCountPromise;
-    const [players, playerCount, playerMatchCount, archives, boards, bot] = await Promise.all([
+    const [players, playerCount, playerMatchCount, archives] = await Promise.all([
       getPlayers(env, site.id, { ...(boundedPlayers ? playerOptions : {}), rankBy: site.rank_by }),
       totalCountPromise,
       matchCountPromise,
       getArchives(env, site.id, archiveLimit, HISTORY_DAYS[plan]), // DB-003-v8: fetch only entitled history
-      getPublicBoards(env, site.user_id),
-      one("SELECT username FROM bots WHERE owner_id=$1 LIMIT 1", [site.user_id]),
     ]);
+    const boards = shapePublicBoards(fromJsonb(owner?.public_boards) || []);
     const data = publicShape(site, players, archives, !!site.has_logo, playerCount);
     if (boundedPlayers) data.playerMatchCount = playerMatchCount;
-    data.eventBoards = await query('SELECT id, name FROM app_private.site_event_leaderboards WHERE site_id=$1 AND published=true ORDER BY created_at, id', [site.id]);
+    data.eventBoards = fromJsonb(owner?.event_boards) || [];
     const requestUrl = request ? new URL(request.url) : null;
     const selection = await resolvePublicEvent(requestUrl, site.id);
     if (selection.notFound) return null;
@@ -607,7 +610,7 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       data,
       plan,
       boards,
-      botUsername: bot?.username || null,
+      botUsername: owner?.bot_username || null,
       // Database flags express creator intent; deployment readiness is the
       // trusted upper bound exposed to public renderers and auth metadata.
       ...viewerAuth,

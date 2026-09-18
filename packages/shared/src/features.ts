@@ -71,11 +71,22 @@ export async function listFeatureFlags(): Promise<FeatureFlag[]> {
 /** Return the set of feature keys enabled for a user (or globally when userId is omitted). */
 export async function getEnabledFeatureKeys(userId?: string): Promise<string[]> {
   const flags = await listFeatureFlags();
+  if (flags.length === 0) return [];
+  // Same precedence as isFeatureEnabled (user override > env > default), with
+  // one overrides read instead of two statements per flag.
+  const overrides = new Map<string, boolean>();
+  if (userId) {
+    const rows = await query<{ feature_key: string; enabled: boolean }>(
+      `SELECT feature_key, enabled FROM user_feature_overrides WHERE user_id = $1`,
+      [userId]
+    );
+    for (const row of rows) overrides.set(row.feature_key, row.enabled);
+  }
   const enabled: string[] = [];
   for (const flag of flags) {
-    if (await isFeatureEnabled(flag.key, userId, flag.defaultValue)) {
-      enabled.push(flag.key);
-    }
+    const override = overrides.get(flag.key);
+    const on = override !== undefined ? override : (envValue(flag.key) ?? flag.defaultValue);
+    if (on) enabled.push(flag.key);
   }
   return enabled;
 }
