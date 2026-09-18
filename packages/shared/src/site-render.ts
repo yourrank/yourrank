@@ -632,6 +632,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     homeHref: siteSectionHref("home", slug, isCustomDomain),
     accountHref: globalViewerAccountHref(isCustomDomain, slug),
     helpHref: viewerHelpHref(siteSectionHref(section || "home", slug, false), isCustomDomain ? "https://yourrank.site" : ""),
+    title: section === "me" ? SECTION_LABELS.me : "",
     links: sectionList(siteSections).filter(key => key !== "me" || viewer).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
   const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
