@@ -314,11 +314,30 @@ describe("a creator's My Community page", () => {
   it("keeps a signed-in zero balance and empty activity compact", async () => {
     const html = await zeroCredits();
     expect(html).toContain('data-credit-balance="0"');
-    expect(html).toContain('class="viewer-tabs" aria-label="Activity sections"');
+    expect(html).toContain('class="viewer-tabs" role="tablist" aria-label="Activity sections"');
     expect(html.indexOf('id="membership-history"')).toBeLessThan(html.indexOf('id="membership-claims"'));
     expect((html.match(/class="member-empty"/g) || []).length).toBe(3);
     expect((html.match(/class="member-section"/g) || []).length).toBe(3);
     expect(html).toContain("No participation history yet");
+  });
+
+  it("renders My Activity sections as hash-addressed tabs with one selected panel", async () => {
+    const html = await zeroCredits();
+    const tablist = html.match(/<div class="viewer-tabs" role="tablist"[\s\S]*?<\/div>/)?.[0] || "";
+    const tabs = tablist.match(/<a role="tab"[^>]*>/g) || [];
+    expect(tabs.length).toBe(4);
+    expect(tabs[0]).toContain('id="membership-tab-history" href="#membership-history" aria-controls="membership-history" aria-selected="true"');
+    expect(tabs[1]).toContain('href="#membership-claims" aria-controls="membership-claims" aria-selected="false"');
+    expect(tabs[2]).toContain('href="#membership-participation" aria-controls="membership-participation" aria-selected="false"');
+    expect(tabs[3]).toContain('href="#membership-code" aria-controls="membership-code" aria-selected="false"');
+    for (const key of ["history", "claims", "participation"]) {
+      expect(html).toContain(`id="membership-${key}" role="tabpanel" aria-labelledby="membership-tab-${key}" tabindex="0"`);
+    }
+    expect(html).toContain('id="membership-code" role="tabpanel" aria-labelledby="membership-tab-code" tabindex="0"');
+    expect(shellSource).toContain('.viewer-tabs[role="tablist"]');
+    expect(shellSource).toContain('window.addEventListener("hashchange"');
+    expect(shellSource).toContain('event.key === "ArrowRight"');
+    expect(shellSource).toContain('event.key === "ArrowLeft"');
   });
 
   it("does not invent a zero-balance membership when persistence is unavailable", async () => {

@@ -1201,23 +1201,30 @@ function meMain(ctx) {
   const participationRows = participation.map(row => `<li class="yr-part"><div class="yr-part-main"><p class="yr-part-n">${esc(row.title || "Community participation")}</p><p class="yr-part-p">${esc(formatDate(row.participatedAt))}</p></div><span class="yr-tag yr-tag--done">${esc(row.statusLabel || "Claimed")}</span></li>`).join("");
   return `${heading}${authError}
 ${blocked ? '<p class="yr-note yr-note--w" role="status">Claiming is currently unavailable for this membership.</p>' : ""}
-<nav class="viewer-tabs" aria-label="Activity sections"><a href="#membership-history" aria-current="location">Credit activity</a><a href="#membership-claims">Claims</a><a href="#membership-participation">Participation</a>${blocked ? '' : '<a href="#membership-code">Redeem code</a>'}</nav>
-<section class="member-section" id="membership-history" aria-labelledby="member-history-title"><div class="member-section-head"><h2 id="member-history-title">Credit activity</h2><p>${formatNumber(ledger.length)} recent</p></div>${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<div class="member-empty"><div><h3>No credit activity yet</h3><p>Credits you earn in ${creator} and spend on rewards will show up here.</p></div></div>`}</section>
-<section class="member-section" id="membership-claims" aria-labelledby="member-claims-title">
+<div class="viewer-tabs" role="tablist" aria-label="Activity sections">${membershipTab("history", "Credit activity", true)}${membershipTab("claims", "Claims")}${membershipTab("participation", "Participation")}${blocked ? '' : membershipTab("code", "Redeem code")}</div>
+<section class="member-section" id="membership-history" role="tabpanel" aria-labelledby="membership-tab-history" tabindex="0"><div class="member-section-head"><h2 id="member-history-title">Credit activity</h2><p>${formatNumber(ledger.length)} recent</p></div>${historyRows ? `<ul class="yr-hists" role="list">${historyRows}</ul>` : `<div class="member-empty"><div><h3>No credit activity yet</h3><p>Credits you earn in ${creator} and spend on rewards will show up here.</p></div></div>`}</section>
+<section class="member-section" id="membership-claims" role="tabpanel" aria-labelledby="membership-tab-claims" tabindex="0">
 <div class="member-section-head"><h2 id="member-claims-title">Your claims</h2><p>${claims.length ? `${formatNumber(claims.length)} recent` : "Reward status, in one place"}</p></div>
 ${claims.length
   ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}`
   : `<div class="member-empty"><div><h3>No claims yet</h3><p>${blocked ? 'Claiming is unavailable for this membership.' : 'Choose a reward in the Reward shop. Its status will appear here after you claim it.'}</p></div></div>`}
 </section>
-<section class="member-section" id="membership-participation" aria-labelledby="member-participation-title"><div class="member-section-head"><h2 id="member-participation-title">Participation</h2><p>${formatNumber(participation.length)} recent</p></div>${participationRows ? `<ul class="yr-parts" role="list">${participationRows}</ul>${viewerData.participationTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.participationLimit || participation.length)} most recent participation records.</p>` : ""}` : '<div class="member-empty"><p>No participation history yet. Successful free code-drop claims will appear here.</p></div>'}</section>
-${blocked ? "" : codeDropClaimSection({slug,creator})}
+<section class="member-section" id="membership-participation" role="tabpanel" aria-labelledby="membership-tab-participation" tabindex="0"><div class="member-section-head"><h2 id="member-participation-title">Participation</h2><p>${formatNumber(participation.length)} recent</p></div>${participationRows ? `<ul class="yr-parts" role="list">${participationRows}</ul>${viewerData.participationTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.participationLimit || participation.length)} most recent participation records.</p>` : ""}` : '<div class="member-empty"><p>No participation history yet. Successful free code-drop claims will appear here.</p></div>'}</section>
+${blocked ? "" : codeDropClaimSection({slug,creator,asTabPanel:true})}
 `;
 }
-function codeDropClaimSection({ slug, creator, joinsMembership = false }) {
+
+/** One My Activity tab; the href keeps the panel reachable as a plain anchor when the shell script is unavailable. */
+function membershipTab(key, label, selected = false) {
+  return `<a role="tab" id="membership-tab-${key}" href="#membership-${key}" aria-controls="membership-${key}" aria-selected="${selected ? "true" : "false"}">${label}</a>`;
+}
+
+function codeDropClaimSection({ slug, creator, joinsMembership = false, asTabPanel = false }) {
   const membershipNote = joinsMembership
     ? " A successful claim joins this community and records the participation on your Membership."
     : " A successful claim appears in Participation on this Membership.";
-  return `<section class="member-code yr-code-drop" id="membership-code" aria-label="Redeem a community code">
+  const panelAttrs = asTabPanel ? ' role="tabpanel" aria-labelledby="membership-tab-code" tabindex="0"' : ' aria-label="Redeem a community code"';
+  return `<section class="member-code yr-code-drop" id="membership-code"${panelAttrs}>
 <h2>Have a community code?</h2>
 <p class="yr-note" id="yr-code-drop-help">Enter a code shared by ${creator}.${membershipNote} Each code can be claimed once while it is active.</p>
 <form class="yr-code-drop-form" data-code-drop-claim data-site-slug="${esc(slug)}">

@@ -97,6 +97,44 @@
     }
   }
 
+  // My Activity tabs. Each tab is a hash anchor to its panel, so the URL stays
+  // the selection state: clicks and Back/Forward change the hash and the
+  // matching panel is shown; every other panel is hidden.
+  var activityTabs = document.querySelector('.viewer-tabs[role="tablist"]');
+  if (activityTabs) {
+    var tabs = Array.from(activityTabs.querySelectorAll('[role="tab"]'));
+    var panelOf = function (tab) { return document.getElementById(tab.getAttribute("aria-controls")); };
+    var selectTab = function (selected) {
+      tabs.forEach(function (tab) {
+        var on = tab === selected;
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+        tab.tabIndex = on ? 0 : -1;
+        var panel = panelOf(tab);
+        if (panel) panel.hidden = !on;
+      });
+    };
+    var tabForHash = function () {
+      var id = window.location.hash.slice(1);
+      try { id = decodeURIComponent(id); } catch (_) { /* Use the literal anchor. */ }
+      return tabs.find(function (tab) { return tab.getAttribute("aria-controls") === id; }) || tabs[0];
+    };
+    selectTab(tabForHash());
+    window.addEventListener("hashchange", function () { selectTab(tabForHash()); }, { signal: pageLifetime.signal });
+    activityTabs.addEventListener("keydown", function (event) {
+      var index = tabs.indexOf(document.activeElement);
+      if (index < 0) return;
+      var next = null;
+      if (event.key === "ArrowRight") next = tabs[(index + 1) % tabs.length];
+      else if (event.key === "ArrowLeft") next = tabs[(index - 1 + tabs.length) % tabs.length];
+      else if (event.key === "Home") next = tabs[0];
+      else if (event.key === "End") next = tabs[tabs.length - 1];
+      if (!next) return;
+      event.preventDefault();
+      next.focus();
+      next.click();
+    }, { signal: pageLifetime.signal });
+  }
+
   // The classic site drawer and the viewer rail share one drawer contract.
   var side = document.getElementById("yr-side") || document.getElementById("viewer-rail");
   var scrim = document.getElementById("yr-scrim") || document.getElementById("viewer-scrim");
