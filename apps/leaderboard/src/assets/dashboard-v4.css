@@ -5713,7 +5713,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-availability .lb-live-link { min-width: 44px; padding-inline: 10px; font-size: 0; line-height: 0;
   }
 
-  .v3-dash[data-auth-workspace] .lb-availability .lb-live-link::after { content: "↗"; font-size: 15px; line-height: 1;
+  .v3-dash[data-auth-workspace] .lb-availability .lb-live-link::after { content: "↗"; font-size: var(--ws-type-body-size); line-height: 1;
   }
 
   .v3-dash[data-auth-workspace] .lb-topbar-actions .gm-profile-trigger { min-width: 44px; padding-left: 6px; padding-right: 6px;
