@@ -4275,7 +4275,14 @@ body:has(.v3-dash[data-auth-workspace]) > .modal .modal-card p {
 .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(2) { width: 160px; }
 .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(3) { width: 180px; }
 .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(4) { width: 110px; text-align: right; }
-.v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(5) { width: auto; }
+.v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(5) { width: auto; min-width: 200px; }
+.v3-dash[data-auth-workspace] .cr-history-feed table td:nth-child(2) { overflow-wrap: anywhere; }
+@media (max-width: 1180px) and (min-width: 701px) {
+  .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(1) { width: 96px; }
+  .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(2) { width: 150px; }
+  .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(3) { width: 104px; }
+  .v3-dash[data-auth-workspace] .cr-history-feed table th:nth-child(4) { width: 80px; }
+}
 .v3-dash[data-auth-workspace] .cr-history-feed .v3-empty,
 .v3-dash[data-auth-workspace] #cr-history-feed-empty {
   padding: 48px 24px;
@@ -4598,9 +4605,10 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-board-select-row { width: 100%; min-width: 0; }
   .v3-dash[data-auth-workspace] .lb-board-select { width: 100%; min-width: 84px; min-height: 38px; }
   .v3-dash[data-auth-workspace] .lb-board-new { width: 38px; min-width: 38px; height: 38px; }
+  .v3-dash[data-auth-workspace] .lb-topbar-hud { min-width: 96px; }
   .v3-dash[data-auth-workspace] .lb-topbar-actions,
-  .v3-dash[data-auth-workspace] .lb-availability { gap: 6px; }
-  .v3-dash[data-auth-workspace] .lb-copy-link { display: none; }
+  .v3-dash[data-auth-workspace] .lb-availability { gap: 6px; flex: 0 1 auto; min-width: 0; }
+  .v3-dash[data-auth-workspace] .lb-availability .lb-copy-link { display: none; }
   .v3-dash[data-auth-workspace] .lb-new-btn { min-height: 44px; padding-inline: 10px; }
   .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 10px; }
   .v3-dash[data-auth-workspace] .lb-publish-action { min-height: 44px; padding-inline: 9px; font-size: 11px; }
@@ -5487,6 +5495,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] .v3-table .num {text-align:right;font-family:var(--ws-mono); font-family: var(--ws-mono);
 }
 
+.v3-dash[data-auth-workspace] .v3-table td.num .hint { margin: 0 0 0 var(--ws-space-1); }
+
 .v3-dash[data-auth-workspace] .v3-analytics-page .metric-glossary {margin-top:24px;
 }
 
@@ -5696,6 +5706,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   }
 
   .v3-dash[data-auth-workspace] .lb-pub-lbl::after { content: "Publish"; font-size: 12px;
+  }
+
+  /* Same trick as .lb-pub-lbl: the link keeps its text for assistive tech
+     but only the arrow is drawn. */
+  .v3-dash[data-auth-workspace] .lb-availability .lb-live-link { min-width: 44px; padding-inline: 10px; font-size: 0; line-height: 0;
+  }
+
+  .v3-dash[data-auth-workspace] .lb-availability .lb-live-link::after { content: "↗"; font-size: 15px; line-height: 1;
   }
 
   .v3-dash[data-auth-workspace] .lb-topbar-actions .gm-profile-trigger { min-width: 44px; padding-left: 6px; padding-right: 6px;
@@ -6533,7 +6551,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 .v3-dash[data-auth-workspace] .v3-section-head h2 { margin: 0; font-size: var(--ws-type-section-size); line-height: var(--ws-type-section-leading);
 }
 
-.v3-dash[data-auth-workspace] .cr-table-scroll .v3-table { min-width: 760px;
+.v3-dash[data-auth-workspace] .cr-table-scroll .v3-table { min-width: 720px;
 }
 
 .v3-dash[data-auth-workspace] .cr-status-card { margin-bottom: 20px;
@@ -7022,6 +7040,19 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 .v3-dash[data-auth-workspace] .cr-list-card .btn--sm { min-height: 26px; padding: 4px 9px; font-size: 11px;
+}
+
+.v3-dash[data-auth-workspace] #cr-redemptions .v3-table td.ta-r .btn,
+.v3-dash[data-auth-workspace] #cr-rewards .v3-table td.ta-r .btn { margin-block: 2px; vertical-align: middle; }
+
+@media (min-width: 701px) {
+  .v3-dash[data-auth-workspace] #cr-redemptions .v3-table th:nth-child(1) { width: 26%; }
+  .v3-dash[data-auth-workspace] #cr-redemptions .v3-table th:nth-child(2) { width: 30%; }
+  .v3-dash[data-auth-workspace] #cr-redemptions .v3-table td:nth-child(1) b { overflow-wrap: anywhere; }
+}
+
+@media (min-width: 1181px) {
+  .v3-dash[data-auth-workspace] #cr-redemptions .v3-table td.ta-r { white-space: nowrap; }
 }
 
 .v3-dash[data-auth-workspace] .v3-settings .v3-head-sub a { color: var(--ws-accent);
@@ -7923,19 +7954,19 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 .v3-dash[data-auth-workspace] .cr-member-list .v3-table th:nth-child(2) {
-  width: 30%;
+  width: 28%;
 }
 
 .v3-dash[data-auth-workspace] .cr-member-list .v3-table th:nth-child(3) {
-  width: 18%;
+  width: 16%;
 }
 
 .v3-dash[data-auth-workspace] .cr-member-list .v3-table th:nth-child(4) {
-  width: 20%;
+  width: 18%;
 }
 
 .v3-dash[data-auth-workspace] .cr-member-list .v3-table th:nth-child(5) {
-  width: 16%;
+  width: 22%;
 }
 
 .v3-dash[data-auth-workspace] .cr-member-list > .v3-section-head > .status:empty {
@@ -8025,6 +8056,10 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   font-size: var(--ws-type-meta-size);
   line-height: var(--ws-type-meta-leading);
   overflow-wrap: anywhere;
+}
+
+@media (min-width: 981px) {
+  .v3-dash[data-auth-workspace] .cr-member-credits > b { white-space: nowrap; }
 }
 
 .v3-dash[data-auth-workspace] .cr-member-action-row {
