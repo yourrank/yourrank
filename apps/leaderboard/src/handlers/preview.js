@@ -7,6 +7,13 @@ import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed"
 import { redirectResponse } from "../login-redirect.js";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
+// The width each preview device renders at; the dashboard's device tabs
+// declare the same widths so the frame is scaled from a page laid out at them.
+export const PREVIEW_DEVICE_WIDTHS = { desktop: 1100, tablet: 820, mobile: 390 };
+
+export function previewDeviceFromParam(value) {
+  return Object.hasOwn(PREVIEW_DEVICE_WIDTHS, value || "") ? value : "desktop";
+}
 const DATA_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 
 /**
@@ -45,7 +52,7 @@ export async function handleDashboardPreview(request, env, nonce, {
   const accentA = url.searchParams.get("accentA");
   const accentB = url.searchParams.get("accentB");
   const font = url.searchParams.get("font");
-  const device = url.searchParams.get("device") === "mobile" ? "mobile" : "desktop";
+  const device = previewDeviceFromParam(url.searchParams.get("device"));
   // Site settings previews are read-only viewer previews: the creator edits in
   // the form beside them, so the editor's in-canvas text editing is opted out.
   const editable = url.searchParams.get("edit") !== "0";
@@ -123,7 +130,7 @@ ${gamesIslandHead()}
     },
   });
 
-  const previewMinWidth = device === "mobile" ? 390 : 1100;
+  const previewMinWidth = PREVIEW_DEVICE_WIDTHS[device];
   const editableSelectors = "[data-preview-field]";
   const editableCss = editable ? `
     ${editableSelectors} { cursor: text; transition: outline 0.15s ease, outline-offset 0.15s ease; }

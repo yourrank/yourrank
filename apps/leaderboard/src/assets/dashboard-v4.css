@@ -1741,7 +1741,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 
 .v3-dash[data-auth-workspace] .team-role-compare thead th {
   color: var(--ws-text-soft);
-  font-size: 11px;
+  font-size: var(--ws-type-meta-size);
   text-transform: uppercase;
   letter-spacing: .04em;
 }
@@ -2349,7 +2349,10 @@ button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left:
 .v3-dash[data-auth-workspace] .ov-card-empty .v3-empty--compact-heading .v3-empty-actions { grid-column: 2; grid-row: 1 / 3; margin: 0; }
 
 /* Editor and content management */
-.v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { display: grid; grid-template-columns: minmax(0, 8fr) minmax(360px, 4fr); gap: 24px; align-items: start; }
+/* The preview column gets real width (~45%) so a desktop page reads at a
+   legible scale instead of a miniature; below 1360px the two columns split
+   evenly, and below 1180px the preview stacks under the controls. */
+.v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { display: grid; grid-template-columns: minmax(0, 11fr) minmax(480px, 9fr); gap: 24px; align-items: start; }
 .v3-dash[data-auth-workspace] section[data-page="board"] .design-controls { display: grid; gap: 24px; min-width: 0; }
 .v3-dash[data-auth-workspace] section[data-page="board"] .design-preview { position: sticky; top: calc(var(--ws-topbar-h) + 24px); min-width: 0;
   height: calc(100vh - 72px);
@@ -2417,11 +2420,28 @@ button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left:
   font-size: 11px;
   font-weight: 600;
 }
-.v3-dash[data-auth-workspace] .preview-frame {
-  overflow: hidden;
+.v3-dash[data-auth-workspace] .preview-frame,
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
+  overflow: auto;
   border: 1px solid var(--ws-line);
   border-radius: 0 0 10px 10px;
   background: var(--ws-text);
+}
+.v3-dash[data-auth-workspace] .preview-publication {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ws-line);
+  background: var(--ws-surface, #ffffff);
+  color: var(--ws-text-soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.v3-dash[data-auth-workspace] .preview-publication:empty { display: none; }
+.v3-dash[data-auth-workspace] .preview-publication[data-state="dirty"] {
+  border-color: var(--ws-warning-line);
+  background: var(--ws-warning-fill);
+  color: var(--ws-warning-text);
 }
 .v3-dash[data-auth-workspace] .preview-tabs {
   display: flex;
@@ -4419,7 +4439,11 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] { --ws-sidebar-w: 248px; }
   .v3-dash[data-auth-workspace] { --ws-main-pad-inline: 24px; }
   .v3-dash[data-auth-workspace] .lb-site-path { display: none; }
-  .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: minmax(0, 7fr) minmax(340px, 5fr); }
+  .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: 1fr; }
+  .v3-dash[data-auth-workspace] section[data-page="board"] .design-preview { position: static; height: auto; max-height: none; margin: 0; }
+}
+@media (max-width: 1360px) and (min-width: 1181px) {
+  .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: minmax(0, 1fr) minmax(440px, 1fr); }
 }
 
 @media (max-width: 1050px) and (min-width: 981px) {
@@ -6179,6 +6203,61 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-frame {
   background: var(--ws-chrome-raised);
   border-color: var(--ws-chrome-line);
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-publication {
+  border-color: var(--ws-chrome-line);
+  background: var(--ws-chrome-raised);
+  color: var(--ws-chrome-text);
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-publication[data-state="dirty"] {
+  border-color: var(--ws-warning);
+  background: var(--ws-warning);
+  color: var(--ws-accent-text);
+}
+
+.v3-dash[data-auth-workspace] section[data-page="board"] .preview-expand {
+  border-color: var(--ws-chrome-line);
+  color: var(--ws-chrome-text);
+}
+
+/* Large preview: the same mount pattern in a dialog that takes the viewport. */
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal { padding: 24px; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-modal-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  padding: 20px 24px 24px;
+  overflow: hidden;
+}
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-header p { margin: 0; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-sync { white-space: normal; text-transform: none; letter-spacing: 0; line-height: 1.35; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-sync-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ws-line);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--ws-surface-soft);
+  color: var(--ws-text-soft);
+  font: 600 11px var(--ws-sans);
+}
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-sync-strip span { display: inline-flex; align-items: center; gap: 8px; }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-sync-strip i { width: 7px; height: 7px; border-radius: 50%; background: var(--ws-accent); }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-sync-strip small { margin-left: auto; font: 400 11px var(--ws-sans); }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-publication[data-state="dirty"] { color: var(--ws-warning-text); }
+body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 1 1 auto; min-height: 0; }
+@media (max-width: 700px) {
+  body:has(.v3-dash[data-auth-workspace]) > .preview-modal { padding: 8px; }
+  body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-modal-card { padding: 12px; }
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] .preview-live-link {

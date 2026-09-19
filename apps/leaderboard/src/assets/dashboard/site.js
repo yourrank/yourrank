@@ -724,6 +724,12 @@ function renderColorPresets() {
 
 const PREVIEW_TIMEOUT_MS = 8000;
 const PREVIEW_DEBOUNCE_MS = 300;
+// Below this scale body copy on the public page stops being legible; a frame
+// narrower than `deviceWidth * PREVIEW_MIN_SCALE` scrolls instead of shrinking.
+const PREVIEW_MIN_SCALE = 0.62;
+const PREVIEW_MIN_FRAME_HEIGHT = 420;
+const PREVIEW_DEVICE_WIDTHS = { desktop: 1100, tablet: 820, mobile: 390 };
+export const PREVIEW_DEVICES = Object.keys(PREVIEW_DEVICE_WIDTHS);
 
 // Every preview surface — the leaderboard editor and Site settings — renders
 // the real public site through /dashboard/preview, which POSTs the current
@@ -748,14 +754,112 @@ function previewParts(mount) {
 
 /** Don't waste CPU/network rendering a preview whose section isn't on screen. */
 function previewVisible(mount) {
+  if (mount.dataset.previewPaused) return false;
   const section = mount.closest("section[data-page]");
   return (!section || section.classList.contains("is-on")) &&
     !mount.closest("[hidden]") && mount.getClientRects().length > 0;
 }
 
+const PREVIEW_DEVICE_LABELS = { desktop: "Desktop", tablet: "Tablet", mobile: "Mobile" };
+
+function previewTabsMarkup(active) {
+  return PREVIEW_DEVICES.map((device) => {
+    const on = device === active;
+    return `<button class="preview-tab${on ? " is-active" : ""}" data-width="${PREVIEW_DEVICE_WIDTHS[device]}" data-device="${device}" type="button" role="tab" aria-selected="${on}" tabindex="${on ? 0 : -1}">${PREVIEW_DEVICE_LABELS[device]}</button>`;
+  }).join("");
+}
+
+/**
+ * "Open large preview": the same draft, the same /dashboard/preview render and
+ * the same device, in a dialog that gets the viewport instead of a rail. It is
+ * a second preview surface, not a second preview — the dialog only declares a
+ * mount and the shared pipeline renders it. The rail mount is paused while the
+ * dialog is open so one draft change costs one render, and on close the rail
+ * takes over the device chosen in the dialog and re-renders if it fell behind.
+ */
+export function openLargePreview(source) {
+  if ($("previewLargeModal")) return null;
+  const device = previewDevice(source);
+  const overlay = document.createElement("div");
+  overlay.className = "modal preview-modal";
+  overlay.id = "previewLargeModal";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "previewLargeTitle");
+  overlay.innerHTML = `<div class="modal-card preview-modal-card preview-mount" role="document" data-preview-mount="board-large" data-preview-target="designPreviewLarge" data-preview-label-syncing="Updating" data-preview-label-synced="Up to date" data-preview-column data-preview-reserve="16">
+    <div class="preview-header">
+      <div class="preview-header-text"><h3 id="previewLargeTitle">Draft preview</h3><p class="preview-sub">Your unsaved changes, rendered exactly as visitors would see them after you publish.</p></div>
+      <div class="preview-actions">
+        <div class="preview-tabs" role="tablist" aria-label="Preview device">${previewTabsMarkup(device)}</div>
+        <span class="v3-chip v3-chip--pro preview-sync" data-preview-status role="status" aria-live="polite">Preparing preview…</span>
+        <button class="btn btn--sm btn--ghost" type="button" data-preview-close aria-label="Close large preview">Close</button>
+      </div>
+    </div>
+    <div class="preview-sync-strip"><span><i aria-hidden="true"></i> Draft preview</span><span class="preview-publication" data-preview-publication></span><small data-preview-time>Last updated —</small></div>
+    <div class="preview-frame" data-preview-frame><div class="preview-stage" data-preview-stage><iframe name="designPreviewLarge" loading="eager" title="Large draft preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" data-preview-error role="status" aria-live="polite" hidden><p><span data-preview-error-message>Preview could not load. Retry to try again.</span> <button class="btn btn--sm" type="button" data-preview-retry>Retry</button></p></div></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.documentElement.classList.add("yr-modal-open");
+  source.dataset.previewPaused = "1";
+  const mount = overlay.querySelector("[data-preview-mount]");
+  renderPreviewPublicationState(mount);
+  const release = window.YRDialog ? window.YRDialog.trap(overlay, close) : null;
+  function close() {
+    if (!overlay.isConnected) return;
+    const chosen = previewDevice(mount);
+    clearTimeout(mount._yrPreview?.timeout);
+    clearTimeout(mount._yrPreview?.watchdog);
+    mount._yrPreview?.form?.remove();
+    release?.();
+    overlay.remove();
+    document.documentElement.classList.remove("yr-modal-open");
+    delete source.dataset.previewPaused;
+    const sourceTab = [...source.querySelectorAll(".preview-tab")].find((tab) => tab.dataset.device === chosen);
+    if (sourceTab && !sourceTab.classList.contains("is-active")) sourceTab.click();
+    else fitDesignPreview();
+    source.querySelector("[data-preview-expand]")?.focus();
+  }
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay || event.target.closest("[data-preview-close]")) close();
+  });
+  const wired = typeof window.matchMedia === "function"
+    ? import("./preview-tabs.js").then(({ setupPreviewTabs }) => setupPreviewTabs()).catch(() => {})
+    : Promise.resolve();
+  // The tab controller re-renders on wiring; the immediate render after it
+  // cancels that debounce so the dialog opens on the current draft at once.
+  wired.then(() => { if (overlay.isConnected) renderPreviewMount(mount, { immediate: true }); });
+  return { overlay, mount, close, ready: wired };
+}
+
 function previewLocalState(mount) {
-  if (!mount._yrPreview) mount._yrPreview = { timeout: null, watchdog: null, form: null, syncedAt: null, revision: 0 };
+  if (!mount._yrPreview) mount._yrPreview = { timeout: null, watchdog: null, form: null, syncedAt: null, revision: 0, draftRevision: -1 };
   return mount._yrPreview;
+}
+
+/** The device the mount's active tab selects; every surface defaults to desktop. */
+export function previewDevice(mount) {
+  const device = previewParts(mount).device?.dataset.device;
+  return PREVIEW_DEVICES.includes(device) ? device : "desktop";
+}
+
+function previewDeviceWidth(mount) {
+  const { device } = previewParts(mount);
+  const declared = parseInt(device?.dataset.width || "", 10);
+  return declared > 0 ? declared : PREVIEW_DEVICE_WIDTHS[previewDevice(mount)];
+}
+
+/**
+ * The strip under the preview header answers two different questions, and
+ * conflating them is how a loaded frame gets mistaken for a published site:
+ * the chip says whether the frame shows the current draft, this label says
+ * whether visitors see that draft yet. It speaks the save bar's language.
+ */
+function renderPreviewPublicationState(mount) {
+  const label = mount.querySelector("[data-preview-publication]");
+  if (!label) return;
+  const copy = publicationCopy();
+  label.textContent = copy.footerLabel;
+  label.dataset.state = copy.draftChanges ? "dirty" : boardStatus().live ? "published" : "offline";
 }
 
 function setPreviewSyncStatus(mount, phase, detail = "") {
@@ -909,7 +1013,10 @@ function wirePreviewMount(mount) {
   if (mount._previewWired) return;
   mount._previewWired = true;
   mount.addEventListener("click", (event) => {
-    if (!event.target.closest("[data-preview-retry]")) return;
+    if (!event.target.closest("[data-preview-retry]")) {
+      if (event.target.closest("[data-preview-expand]")) openLargePreview(mount);
+      return;
+    }
     const { error } = previewParts(mount);
     if (error) error.hidden = true;
     // Clear the previous reason so a failed retry cannot leave a stale message
@@ -928,8 +1035,10 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
   clearTimeout(local.watchdog);
   const { iframe } = previewParts(mount);
   if (!iframe) return;
+  renderPreviewPublicationState(mount);
   // A section that is scrolled away or hidden does no work and says nothing —
-  // it is not a failure, so it must not paint an error.
+  // it is not a failure, so it must not paint an error. `draftRevision` stays
+  // behind, so the mount is known-stale and renders when it is next shown.
   if (!previewVisible(mount)) return;
   // No active site is a real, explainable state: the preview has no board to
   // render. Say so instead of leaving the chip on "Updating preview…" forever.
@@ -940,15 +1049,18 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
   setPreviewSyncStatus(mount, "syncing");
   // Debounce so typing doesn't repeatedly re-render the same draft.
   local.timeout = setTimeout(() => {
+    local.timeout = null;
     if (!previewVisible(mount)) return;
-    const { error, device } = previewParts(mount);
+    const { error } = previewParts(mount);
     try {
       const { payload: draft, invalid } = collect({ reportPlayerErrors: false });
       // Render even when fields fail validation: a blank frame tells the
       // creator nothing, while the draft render plus the invalid chip shows
       // both what they have and what still needs fixing before saving.
       local.lastInvalid = invalid;
-      const params = { board: state.ACTIVE_SITE_ID, device: device?.dataset.device || "desktop" };
+      local.draftRevision = state.DRAFT_REVISION;
+      local.device = previewDevice(mount);
+      const params = { board: state.ACTIVE_SITE_ID, device: local.device };
       if (mount.dataset.previewSection) params.section = mount.dataset.previewSection;
       // Site settings previews what viewers see, so the editor's
       // click-to-edit overlay stays with the editor that owns those fields.
@@ -986,14 +1098,41 @@ function renderPreviewMount(mount, { immediate = false } = {}) {
 }
 
 /**
- * Scale a preview iframe so a `deviceWidth`-wide page fits its stage: the
- * iframe renders at the device width and is transform-scaled down, so the stage
- * is sized in unscaled pixels and the frame in scaled ones.
+ * Pure sizing rule for a preview frame, exported so it can be pinned without a
+ * layout engine. The page renders at `deviceWidth` and is transform-scaled to
+ * the frame, but never below PREVIEW_MIN_SCALE: a rail too narrow for the
+ * desktop page scrolls sideways instead of turning the copy into a miniature,
+ * and a page taller than the frame scrolls inside it instead of being cut off.
  */
+export function previewFit({ deviceWidth, frameWidth, contentHeight, maxHeight }) {
+  const scale = Math.min(1, Math.max(PREVIEW_MIN_SCALE, frameWidth / deviceWidth));
+  const scaledWidth = Math.ceil(deviceWidth * scale);
+  const scaledHeight = Math.ceil(contentHeight * scale);
+  return {
+    scale,
+    scaledWidth,
+    scaledHeight,
+    frameHeight: Math.min(scaledHeight, Math.max(PREVIEW_MIN_FRAME_HEIGHT, maxHeight)),
+    overflowsWidth: scaledWidth > frameWidth,
+  };
+}
+
+/** Frame height the mount's column can give the page before the column itself scrolls. */
+function previewMaxHeight(mount, frame) {
+  const column = mount.closest("[data-preview-column]");
+  if (column && typeof column.getBoundingClientRect === "function" && typeof frame.getBoundingClientRect === "function") {
+    const top = frame.getBoundingClientRect().top - column.getBoundingClientRect().top + (column.scrollTop || 0);
+    const reserve = parseInt(column.dataset.previewReserve || "0", 10) || 0;
+    const available = column.clientHeight - top - reserve;
+    if (available > 0) return Math.floor(available);
+  }
+  return Math.floor(window.innerHeight * 0.75);
+}
+
 function fitPreviewMount(mount) {
-  const { iframe, stage, frame, device } = previewParts(mount);
+  const { iframe, stage, frame } = previewParts(mount);
   if (!iframe || !stage || !frame) return;
-  const deviceWidth = parseInt(device?.dataset.width || "1100", 10) || 1100;
+  const deviceWidth = previewDeviceWidth(mount);
   const cw = frame.clientWidth;
   if (!cw) return;
   const doc = iframe.contentDocument;
@@ -1003,21 +1142,39 @@ function fitPreviewMount(mount) {
     const body = doc.body;
     contentHeight = Math.max(680, html.scrollHeight, body ? body.scrollHeight : 0, html.offsetHeight, body ? body.offsetHeight : 0);
   }
-  const scale = cw / deviceWidth;
-  const maxHeight = Math.min(720, Math.floor(window.innerHeight * 0.75));
-  stage.style.width = deviceWidth + "px";
-  stage.style.height = contentHeight + "px";
-  stage.style.setProperty("--preview-scale", String(scale));
-  frame.style.height = Math.min(contentHeight * scale, maxHeight) + "px";
+  const fit = previewFit({ deviceWidth, frameWidth: cw, contentHeight, maxHeight: previewMaxHeight(mount, frame) });
+  stage.style.width = fit.scaledWidth + "px";
+  stage.style.height = fit.scaledHeight + "px";
+  stage.style.setProperty("--preview-scale", String(fit.scale));
+  stage.style.setProperty("--preview-device-width", deviceWidth + "px");
+  stage.style.setProperty("--preview-content-height", contentHeight + "px");
+  frame.classList.toggle("is-overflowing", fit.overflowsWidth);
+  frame.style.height = fit.frameHeight + "px";
 }
 
 export function updateDesignPreview() {
   for (const mount of previewMounts()) renderPreviewMount(mount);
 }
 
+/**
+ * A mount that skipped a draft change while hidden (its section was off, or
+ * the large preview was closed) still shows the older draft. Re-render it as
+ * soon as it is on screen again; a mount that already rendered this revision on
+ * this device is left alone so showing it costs nothing.
+ */
+function renderStalePreviewMount(mount, options) {
+  const local = previewLocalState(mount);
+  if (!previewVisible(mount)) return false;
+  if (local.draftRevision === state.DRAFT_REVISION && local.device === previewDevice(mount) && !local.timeout) return false;
+  renderPreviewMount(mount, options);
+  return true;
+}
+
 export function fitDesignPreview() {
   for (const mount of previewMounts()) {
-    if (previewVisible(mount)) fitPreviewMount(mount);
+    if (!previewVisible(mount)) continue;
+    if (renderStalePreviewMount(mount)) continue;
+    fitPreviewMount(mount);
   }
 }
 
@@ -1346,6 +1503,9 @@ subscribe((keys) => {
     // A disabled button is not an explanation; the strip says why it is quiet.
     setSaveStatusText(state._dirty ? "You have unsaved changes." : cleanSaveStatusText());
     syncSettingsSaveBar();
+  }
+  if (keys.includes("_dirty") || keys.includes("PUBLISHED")) {
+    for (const mount of previewMounts()) renderPreviewPublicationState(mount);
   }
   if (keys.includes("draft")) updateDesignPreview();
 });

@@ -251,16 +251,17 @@ Who is eligible"></textarea></div></div>
 </section>
 <div class="editor-savebar savebar" id="savebar" hidden><span class="savebar-hint">Unsaved changes</span><span class="savebar-ts" id="editorTimestamp"></span><button class="btn btn--ghost" id="discard" type="button">Discard changes</button><button class="btn btn--accent" id="save" type="button">Save changes</button></div>
 </div>
-<div class="design-preview">
+<div class="design-preview" data-preview-column data-preview-reserve="56">
 <div class="card preview-mount" data-preview-mount="board" data-preview-target="designPreview" data-preview-label-syncing="Updating" data-preview-label-synced="Up to date">
 <div class="preview-header">
-<div class="preview-header-text"><h2>Viewer preview</h2><p class="preview-sub">The same renderer visitors see on your public site.</p></div>
+<div class="preview-header-text"><h2>Draft preview</h2><p class="preview-sub">Your current edits, rendered by the same renderer visitors see. Publish to put them live.</p></div>
 <div class="preview-actions">
-<div class="preview-tabs" role="tablist" aria-label="Preview device" data-preview-default-device="auto"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
+<div class="preview-tabs" role="tablist" aria-label="Preview device" data-preview-default-device="auto"><button class="preview-tab is-active" data-width="1100" data-device="desktop" type="button" role="tab" aria-selected="true">Desktop</button><button class="preview-tab" data-width="820" data-device="tablet" type="button" role="tab" aria-selected="false">Tablet</button><button class="preview-tab" data-width="390" data-device="mobile" type="button" role="tab" aria-selected="false">Mobile</button></div>
 <span class="v3-chip v3-chip--pro preview-sync" id="previewSyncStatus" data-preview-status role="status" aria-live="polite">Preparing preview…</span>
+<button class="btn btn--sm btn--ghost preview-expand" id="previewExpand" type="button" data-preview-expand>Open large preview</button>
 </div>
 </div>
-<div class="preview-sync-strip"><span><i aria-hidden="true"></i> Draft preview</span><small id="previewSyncTime" data-preview-time>Last updated —</small></div>
+<div class="preview-sync-strip"><span><i aria-hidden="true"></i> Draft preview</span><span class="preview-publication" id="previewPublication" data-preview-publication></span><small id="previewSyncTime" data-preview-time>Last updated —</small></div>
 <div class="preview-frame" id="previewFrame" data-preview-frame><div class="preview-stage" id="previewStage" data-preview-stage>{/* SEC-005-v8: allow-same-origin is required so the parent can read the preview document (diagnosePreviewDocument) and receive postMessage edits from the draft. The preview source is the same origin, so this combination is the intended architecture, not a sandbox escape risk. */}<iframe id="designPreview" name="designPreview" loading="eager" title="Live preview" sandbox="allow-scripts allow-same-origin allow-popups-to-escape-sandbox"></iframe></div><div class="preview-error" id="previewError" data-preview-error role="status" aria-live="polite" hidden><p><span data-preview-error-message>Preview could not load. Retry to try again.</span> <button class="btn btn--sm" id="previewRetry" type="button" data-preview-retry>Retry</button></p></div></div>
 <a class="preview-live-link" id="previewLiveLink" href="#" target="_blank" rel="noopener noreferrer">Open live page ↗</a>
 </div>
