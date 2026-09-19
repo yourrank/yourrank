@@ -1048,14 +1048,15 @@ ${canOrder ? orderConfirmDialog() : ""}`;
  * a plain recovery state with the way back to Rewards.
  */
 function rewardDetailMain(ctx) {
-  const { b, slug, viewer, viewerData, isMember, balance, homeUrl, isCustomDomain, membershipStatus, viewerOnSite, rewardId, reward: raw } = ctx;
+  const { data, b, slug, viewer, viewerData, isMember, balance, homeUrl, isCustomDomain, membershipStatus, viewerOnSite, rewardId, reward: raw } = ctx;
   const creator = b.name || slug;
   const shopHref = siteSectionHref("shop", slug, isCustomDomain);
+  const canContact = hasCreatorContactMethod(data);
   const contactHref = isCustomDomain ? "/contact" : `/${encodeURIComponent(slug)}/contact`;
   const back = `<a class="yr-sec-link viewer-reward-back" href="${shopHref}">${viewerIcon('arrow')}Back to Rewards</a>`;
 
   if (!raw) {
-    return `<header class="viewer-page-intro"><div><h1>This reward isn't available</h1><p>There is no reward with this link in ${esc(creator)}'s community. It may have been removed, or the link may be for another community.</p></div></header><section class="viewer-card viewer-reward-missing" aria-label="Reward not found"><p>Everything ${esc(creator)} currently offers is listed on the Rewards page.</p><div class="member-actions"><a class="yr-btn" href="${shopHref}">See all rewards</a><a class="yr-sec-link" href="${esc(contactHref)}">Contact the creator</a></div></section>`;
+    return `<header class="viewer-page-intro"><div><h1>This reward isn't available</h1><p>There is no reward with this link in ${esc(creator)}'s community. It may have been removed, or the link may be for another community.</p></div></header><section class="viewer-card viewer-reward-missing" aria-label="Reward not found"><p>Everything ${esc(creator)} currently offers is listed on the Rewards page.</p><div class="member-actions"><a class="yr-btn" href="${shopHref}">See all rewards</a>${canContact ? `<a class="yr-sec-link" href="${esc(contactHref)}">Contact the creator</a>` : ''}</div></section>`;
   }
 
   const reward = publicRewardDetail(raw);
@@ -1101,7 +1102,7 @@ ${fact('gift', 'Availability', esc(rewardAvailabilityText(reward)))}
 ${cooldown}
 ${fact('user', 'Eligibility', eligibility)}
 ${fact('check', 'Fulfillment', esc(reward.fulfillment))}
-${fact('chat', 'Questions', `<a href="${esc(contactHref)}">Contact ${esc(creator)}</a> about this reward.`)}
+${fact('chat', 'Questions', canContact ? `<a href="${esc(contactHref)}">Contact ${esc(creator)}</a> about this reward.` : `<span class="viewer-fine">${esc(creator)} hasn't provided a contact method.</span>`)}
 </dl>
 <div class="viewer-reward-claim">${state ? `<p class="yr-rwd-state">${esc(state)}</p>` : ''}${action}${balanceLine}<p class="yr-fine">Claiming opens a review step first; nothing is deducted until you confirm, and the creator then completes it.</p></div>
 </div>

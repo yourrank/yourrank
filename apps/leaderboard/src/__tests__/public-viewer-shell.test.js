@@ -700,6 +700,75 @@ describe("public viewer shell", () => {
     expect(html).toContain('data-slug="creator"');
   });
 
+  describe("reward detail creator-contact CTA", () => {
+    const reward = { id: "2", name: "VIP badge", cost: 250, active: true };
+    const detail = (contact, { rewardId = "2", reward: row = reward, custom = false } = {}) =>
+      renderSite({
+        r: { slug: "creator", plan: "pro", data: { ...baseData, contact } },
+        section: "shop",
+        viewer: null,
+        viewerData: null,
+        opts: { ...opts, isCustomDomain: custom, rewardId, reward: row },
+      });
+    const noContact = { email: "", discord: "", social: "", url: "" };
+    const questions = (html) => html.match(/<span>Questions<\/span><\/dt><dd>([\s\S]*?)<\/dd>/)?.[1] ?? "";
+    const recovery = (html) => html.match(/<section class="viewer-card viewer-reward-missing"[\s\S]*?<\/section>/)?.[0] ?? "";
+
+    it("links to the creator contact page when the creator has an email", async () => {
+      const html = await detail({ email: "creator@example.com" });
+      expect(html).toContain('<span>Questions</span></dt><dd><a href="/creator/contact">Contact Creator Name</a> about this reward.</dd>');
+      expect(html).toContain('data-creator-contact="true"');
+    });
+
+    it("links to the creator contact page when the creator has Discord (custom domain path)", async () => {
+      const html = await detail({ discord: "https://discord.gg/creator" }, { custom: true });
+      expect(html).toContain('<a href="/contact">Contact Creator Name</a> about this reward.');
+    });
+
+    it("shows a quiet explanation instead of a dead link when no contact method is configured", async () => {
+      const html = await detail(noContact);
+      expect(questions(html)).toBe('<span class="viewer-fine">Creator Name hasn\'t provided a contact method.</span>');
+      expect(questions(html)).not.toContain("<a ");
+      expect(html).not.toContain("Contact Creator Name");
+      expect(html).toContain('data-creator-contact="false"');
+    });
+
+    it("does not count social links as a contact method", async () => {
+      const html = await detail(undefined);
+      expect(questions(html)).not.toContain("<a ");
+      expect(questions(html)).toContain("hasn't provided a contact method.");
+    });
+
+    it("offers Contact the creator on a missing reward only when contact exists", async () => {
+      const withContact = await detail({ email: "creator@example.com" }, { rewardId: "nope", reward: null });
+      expect(withContact).toContain('<a class="yr-btn" href="/creator/shop">See all rewards</a><a class="yr-sec-link" href="/creator/contact">Contact the creator</a>');
+
+      const without = await detail(noContact, { rewardId: "nope", reward: null });
+      expect(recovery(without)).toContain('<a class="yr-btn" href="/creator/shop">See all rewards</a></div>');
+      expect(recovery(without)).not.toContain("Contact the creator");
+      expect(recovery(without)).not.toContain("/contact");
+    });
+
+    it("keeps the built-in claim-support CTA independent of creator contact availability", async () => {
+      const html = await renderSite({
+        r: { slug: "creator", plan: "pro", data: { ...baseData, contact: noContact } },
+        section: "me",
+        viewer: { kick_username: "alice" },
+        viewerData: {
+          viewerOnSite: { balance: 500 },
+          ledger: [],
+          participation: [],
+          claims: [{ id: "redemption:1", reward: { name: "VIP badge", cost: 250 }, status: "submitted", statusLabel: "Needs fulfillment", submittedAt: new Date().toISOString() }],
+          shopItems: [],
+        },
+        opts,
+      });
+      expect(html).toContain('data-claim-support="redemption:1"');
+      expect(html).toContain("Need help with this claim?");
+      expect(html.match(/<li class="yr-ord"[\s\S]*?<\/li>/)?.[0]).not.toContain("/contact");
+    });
+  });
+
   it("renders article pages as reading layouts: shared nav, no overview rail, no share or credits strip", async () => {
     const content = '<article class="viewer-article"><h1 class="yr-h1">Terms</h1></article>';
     const base = { r: { slug: "creator", plan: "pro", data: baseData }, section: null, viewer, viewerData };
