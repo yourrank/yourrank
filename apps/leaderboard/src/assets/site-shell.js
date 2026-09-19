@@ -878,8 +878,7 @@
       if (supportReplyForm) supportReplyForm.hidden = !open;
       if (supportResolvedNote) supportResolvedNote.hidden = open;
       if (supportResolvedActs) supportResolvedActs.hidden = open;
-      var row = document.querySelector('[data-claim-id="' + supportClaimId.replace(/"/g, "") + '"]');
-      if (row) {
+      document.querySelectorAll('[data-claim-id="' + supportClaimId.replace(/"/g, "") + '"]').forEach(function (row) {
         var trigger = row.querySelector("[data-claim-support]");
         if (trigger) trigger.textContent = "View support conversation";
         var tags = row.querySelector(".yr-ord-tags");
@@ -889,7 +888,7 @@
           tag.className = "yr-tag" + (open ? " yr-tag--pending" : "");
           tag.textContent = open ? "Support open" : "Support resolved";
         }
-      }
+      });
       if (open) startSupportPolling(); else stopSupportPolling();
     };
     var loadSupport = function (silent) {
