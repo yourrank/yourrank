@@ -161,4 +161,40 @@ describe("handleDashboardPreview", () => {
     expect(html).toContain("min-width: 390px");
     expect(html).not.toContain("min-width: 1100px");
   });
+
+  it("removes the leaderboard from the draft preview the moment Show Leaderboard turns off", async () => {
+    const res = await handleDashboardPreview(
+      previewRequest("board=site-1&section=home&device=desktop", { sections: { leaderboard: false } }),
+      {},
+      "nonce123",
+      impls(),
+    );
+    const html = await res.text();
+    expect(res.status).toBe(200);
+    expect(html).not.toContain(">Leaderboard</a>");
+    expect(html).not.toContain('href="/actual-board/leaderboard"');
+    expect(html).not.toContain("viewer-home-board");
+    expect(html).toContain(">Home</a>");
+  });
+
+  it("keeps the published leaderboard in previews that carry no draft change", async () => {
+    const res = await handleDashboardPreview(previewRequest("board=site-1&section=home&device=desktop", {}), {}, "nonce123", impls());
+    const html = await res.text();
+    expect(html).toContain(">Leaderboard</a>");
+    expect(html).toContain("viewer-home-board");
+    expect(html).toContain("Actual Player");
+  });
+
+  it("restores the leaderboard in the draft preview when toggled back on", async () => {
+    const res = await handleDashboardPreview(
+      previewRequest("board=site-1&section=home&device=desktop", { sections: { leaderboard: true } }),
+      {},
+      "nonce123",
+      impls(),
+    );
+    const html = await res.text();
+    expect(html).toContain(">Leaderboard</a>");
+    expect(html).toContain("viewer-home-board");
+    expect(html).toContain("Actual Player");
+  });
 });

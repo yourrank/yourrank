@@ -92,6 +92,13 @@ const routeSite = {
     if (slug === "password") return { id: "site-p", slug, requiresPassword: true, name: "Private Board", data: {} };
     if (slug === "error") throw new Error("render failure");
     if (slug === "disabled") return makeSite("disabled", { home: true, leaderboard: true, shop: false, games: false, me: false });
+    // Show Leaderboard = OFF: the sections block toggle is false while the
+    // legacy siteSections.leaderboard flag stays stale-true.
+    if (slug === "nolb") {
+      const s = makeSite("nolb");
+      s.data.sections = { leaderboard: false };
+      return s;
+    }
     return makeSite(slug || "streamer");
   },
   getBySlug: () => Promise.resolve(null),
@@ -573,5 +580,52 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).toContain('class="viewer-main"');
     expect(html).not.toContain('class="yr-drawer"');
     expect(html).toContain("Leaderboard");
+  });
+});
+
+// ── Show Leaderboard toggle: public section visibility ─────────────────
+
+describe("Show Leaderboard visibility", () => {
+  it("redirects /{slug}/leaderboard to home instead of exposing standings when disabled", async () => {
+    const res = await renderSiteRoute({ request: req("https://example.com/nolb/leaderboard"), env, ctx, nonce: "n", slug: "nolb", section: "leaderboard", isCustomDomain: false });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/nolb");
+    expect(await res.text()).not.toContain("Alice");
+  });
+
+  it("redirects a custom-domain /leaderboard to / when disabled", async () => {
+    const res = await renderSiteRoute({ request: req("https://nolb.example/leaderboard"), env, ctx, nonce: "n", slug: "nolb", section: "leaderboard", isCustomDomain: true });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/");
+  });
+
+  it("drops Leaderboard from navigation and the Home preview block when disabled", async () => {
+    const res = await renderSiteRoute({ request: req("https://example.com/nolb"), env, ctx, nonce: "n", slug: "nolb", section: "home", isCustomDomain: false });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain(">Leaderboard</a>");
+    expect(html).not.toContain('href="/nolb/leaderboard"');
+    expect(html).not.toContain("viewer-home-board");
+    expect(html).toContain(">Home</a>");
+    expect(html).toContain(">Rewards</a>");
+  });
+
+  it("keeps Rewards and My Activity routes working when the leaderboard is disabled", async () => {
+    const shop = await renderSiteRoute({ request: req("https://example.com/nolb/shop"), env, ctx, nonce: "n", slug: "nolb", section: "shop", isCustomDomain: false });
+    expect(shop.status).toBe(200);
+    expect(await shop.text()).toContain("Shoutout");
+    const me = await renderSiteRoute({ request: req("https://example.com/nolb/activity"), env, ctx, nonce: "n", slug: "nolb", section: "me", isCustomDomain: false });
+    expect(me.status).toBe(200);
+  });
+
+  it("serves the leaderboard again with its stored standings when re-enabled", async () => {
+    // "streamer" is the same fixture with the toggle on: players come back
+    // from the stored rows, proving the OFF state never touched the data.
+    const res = await renderSiteRoute({ request: req("https://example.com/streamer/leaderboard"), env, ctx, nonce: "n", slug: "streamer", section: "leaderboard", isCustomDomain: false });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Alice");
+    expect(html).toContain("Bob");
+    expect(html).toContain(">Leaderboard</a>");
   });
 });

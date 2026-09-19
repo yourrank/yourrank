@@ -473,6 +473,7 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
     countdownLabel: theme.prizes.countdownLabel,
     payoutsLabel: theme.prizes.payoutsLabel,
   };
+  const sections = normalizeSections(m.sections || DEFAULT_EXTRA.sections);
   return {
     brand,
     prizes: { ...theme.prizes },
@@ -498,10 +499,12 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
       rank: Number(p.rank) || i + 1,
       streak: playerStreak(p, i, archives),
     })),
-    sections: normalizeSections(m.sections || DEFAULT_EXTRA.sections),
+    sections,
     siteSections: {
       home: true,
-      leaderboard: true,
+      // The Appearance "Show Leaderboard" toggle owns whether the public
+      // leaderboard exists; there is no second leaderboard flag.
+      leaderboard: sections.leaderboard,
       shop: !!site.shop_enabled,
       games: !!site.games_enabled,
       me: !!site.credits_enabled,
@@ -1196,7 +1199,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     : site.telegram_chat_id;
   const telegramNotify = notify.telegram_notify !== undefined ? !!notify.telegram_notify : !!site.telegram_notify;
 
-  // Site section visibility toggles (home and leaderboard are always on).
+  // Site section visibility toggles. Home is always on; leaderboard
+  // visibility is owned by the Appearance "Show Leaderboard" block toggle
+  // (payload.sections.leaderboard), not by this payload.
   const sectionPayload = payload.siteSections && typeof payload.siteSections === "object" ? payload.siteSections : {};
   const shopEnabled = typeof sectionPayload.shop === "boolean" ? sectionPayload.shop : !!site.shop_enabled;
   const creditsEnabled = typeof sectionPayload.credits === "boolean" ? sectionPayload.credits : !!site.credits_enabled;

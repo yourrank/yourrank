@@ -14,7 +14,7 @@ import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
-import { renderSite as defaultRenderSite, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
+import { renderSite as defaultRenderSite, effectivePublicSections, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
 import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem } from "./site-data.js";
 import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
@@ -127,8 +127,17 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
     }
 
-    const siteSections = r.data?.siteSections || { home: true, leaderboard: true, shop: true, games: false, me: true };
+    const siteSections = effectivePublicSections(r.data);
     if (!siteSections[section] && !(section === "games" && isDemo)) {
+      // A disabled leaderboard is not a public section at all: send visitors
+      // (and stale bookmarks) to Home rather than rendering standings or
+      // answering a bare 404. Other disabled sections keep the 404 contract.
+      if (section === "leaderboard") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: siteSectionHref("home", slug, isCustomDomain), "cache-control": "no-store" },
+        });
+      }
       return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
     }
 

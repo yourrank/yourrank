@@ -141,6 +141,37 @@ function formatDate(d) {
   return Number.isNaN(dt.getTime()) ? "—" : dt.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+/**
+ * The one canonical read of which sections exist on the public site.
+ *
+ * `home` is always available. `leaderboard` derives from the creator's
+ * Appearance → "Show Leaderboard" toggle (`data.sections.leaderboard`,
+ * normalized with default-on semantics): that toggle is the single source of
+ * truth for whether the public leaderboard exists, so a legacy or stale
+ * `data.siteSections.leaderboard` value is deliberately not consulted.
+ * `shop`, `games` and `me` keep their own toggles in `data.siteSections`.
+ *
+ * Every public navigation surface (top bar, drawer, footer, viewer rail) and
+ * the public route guard must read sections through this helper rather than
+ * re-deriving flags locally.
+ */
+export function effectivePublicSections(data) {
+  const raw = (data && typeof data === "object" ? data.siteSections : null) || {};
+  const sections = (data && typeof data === "object" ? data.sections : null) || {};
+  return {
+    home: true,
+    leaderboard: sections.leaderboard !== false,
+    shop: raw.shop !== false,
+    games: raw.games === true,
+    me: raw.me !== false,
+  };
+}
+
+/** One-off predicate form of effectivePublicSections(). */
+export function isPublicSectionEnabled(data, section) {
+  return effectivePublicSections(data)[section] === true;
+}
+
 function sectionList(sections) {
   return ["home", "leaderboard", "shop", "me"].filter((s) => sections[s] !== false);
 }
@@ -530,7 +561,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const data = r.data || {};
   const b = data.brand || {};
   const br = data.branding || {};
-  const siteSections = data.siteSections || { home: true, leaderboard: true, shop: true, games: false, me: true };
+  const siteSections = effectivePublicSections(data);
   const nonce = opts.nonce;
   const slug = opts.slug || "";
   const isCustomDomain = !!opts.isCustomDomain;
@@ -851,7 +882,9 @@ function homeStatusFacts(ctx) {
 
 function leaderboardPreview(ctx) {
   const { data, b, slug, siteSections, isCustomDomain, section } = ctx;
-  if (siteSections.leaderboard === false || data.sections?.leaderboard === false) return '';
+  // siteSections.leaderboard already derives from the "Show Leaderboard"
+  // toggle via effectivePublicSections(); this is the only check needed.
+  if (siteSections.leaderboard === false) return '';
   const home = section === 'home';
   const players = (data.players || []).slice().sort((a,b) => (a.rank || 0) - (b.rank || 0)).slice(0, home ? 10 : 3);
   const podium = home && players.length >= 3;
