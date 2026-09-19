@@ -17,7 +17,7 @@ exports[`shared public board renderer keeps the fixed fixture HTML stable 1`] = 
 
 <meta name="viewer-accent" content="var(--yr-color-board-accent)" /><meta name="viewer-accent-ink" content="#000000" />
 
-</head><body class="yr-site viewer-shell" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-currency="$" data-rank-by="wagered">
+</head><body class="yr-site viewer-shell" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-creator-contact="false" data-currency="$" data-rank-by="wagered">
 <!--
 THESIS: A viewer's community home.
 OWN-WORLD: A creator destination, not an admin dashboard: the creator's identity leads a dark Home canvas with a podium leaderboard and product-style rewards; the other viewer pages keep their light surfaces until they migrate. A separate YourRank settings shell holds the account.

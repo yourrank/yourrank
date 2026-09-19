@@ -16,6 +16,7 @@ import { resolveViewerTemplate } from "./viewer-templates.js";
 import { guestGateHref, rewardDetailHref, viewerIntentCopy, viewerIntentReturnTo } from "./viewer-intent.js";
 import { viewerDisplayName, type ViewerIdentityRow } from "./viewer-identity.js";
 import { publicRewardDetail, rewardAvailabilityText } from "./reward-detail.js";
+import { hasCreatorContactMethod } from "./creator-contact.js";
 
 // C-02: SECTION_TITLES was an exact duplicate of SECTION_LABELS — removed.
 const SECTION_LABELS = {
@@ -651,7 +652,7 @@ ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />`
     title: section === "me" ? SECTION_LABELS.me : "",
     links: sectionList(siteSections).filter(key => key !== "me" || viewer).map(key => ({ label: SECTION_LABELS[key], href: siteSectionHref(key, slug, isCustomDomain), active: key === section })),
   }) : '';
-  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
+  const body = `<body class="yr-site${viewerShell ? " viewer-shell" : ""}${articleLayout ? " viewer-article-page" : ""}"${viewerTemplate.value === "spotlight" ? ' data-viewer-template="spotlight"' : ""}${viewerShell ? "" : ` data-template="${esc(template)}"`} data-section="${esc(section)}"${detailRewardId ? " data-reward-detail" : ""}${data.eventId ? ` data-event-id="${esc(data.eventId)}"` : ""} data-slug="${esc(slug)}" data-custom-domain="${isCustomDomain ? "true" : "false"}" data-creator-contact="${hasCreatorContactMethod(data) ? "true" : "false"}" data-currency="${esc(prizeCurrency(data))}" data-rank-by="${data.rankBy === "wagered" ? "wagered" : "score"}">
 ${viewerShell ? VIEWER_DESIGN_CONTRACT : ""}
 <a class="yr-sr" href="#main-content">Skip to content</a>
 ${viewerShell ? `<div class="viewer-layout">${navigation}${section === 'home' ? viewerCommunityHeading(ctx) : ''}` : topbar({ r, b, viewer, balance, returnTo, section, siteSections, homeUrl, slug, isCustomDomain, logoUrl, isMember })}

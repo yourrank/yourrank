@@ -5,7 +5,7 @@ import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, set
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
 import { clearSession } from "./dashboard/session.js";
 import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.js";
-import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderRules, renderSections, renderSocials, wirePublishAction, wireSiteIdentityActions } from "./dashboard/site.js";
+import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderContact, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderRules, renderSections, renderSocials, wirePublishAction, wireSiteIdentityActions } from "./dashboard/site.js";
 import { loadEventLeaderboards } from "./dashboard/event-leaderboards.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
 import { maybeAutoStartTour } from "./dashboard/tour.js";
@@ -172,7 +172,7 @@ async function init() {
   if (hasSection("boards")) renderBoardsPage();
   const d = p.data || {};
   const b = d.brand || {};
-  state.EXTRA = { chips: d.partner?.chips, whyStats: d.whyStats, rules: d.rules, socials: p.socials || d.socials || [], sections: d.sections, siteSections: d.siteSections || {}, playerFields: d.playerFields || {}, text: (d.branding && d.branding.text) || {}, legal: d.legal || {} };
+  state.EXTRA = { chips: d.partner?.chips, whyStats: d.whyStats, rules: d.rules, socials: p.socials || d.socials || [], sections: d.sections, siteSections: d.siteSections || {}, playerFields: d.playerFields || {}, text: (d.branding && d.branding.text) || {}, legal: d.legal || {}, contact: d.contact || {} };
   state.CURRENT_BRANDING = d.branding || state.CURRENT_BRANDING;
   state.PLAYERS = Array.isArray(d.players) ? d.players : [];
   state.SAVED_PLAYERS = state.PLAYERS.map((player) => ({ ...player }));
@@ -268,6 +268,7 @@ async function init() {
     renderDomain();
     renderNotifications(p.notify || {});
     renderLegal();
+    renderContact();
     if (p.customDomain !== undefined) $("f_domain").value = p.customDomain || "";
     if (p.domainStatus) renderDomainStatus(p.domainStatus, "");
   }

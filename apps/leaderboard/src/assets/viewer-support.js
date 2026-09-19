@@ -89,7 +89,9 @@
    */
   function communityContact(returnTo) {
     var body = document.body;
-    if (body.dataset.customDomain === "true" && body.dataset.slug) return { href: "/contact" };
+    var known = body.dataset.creatorContact;
+    var available = known === "true" ? true : known === "false" ? false : null;
+    if (body.dataset.customDomain === "true" && body.dataset.slug) return { slug: body.dataset.slug, href: "/contact", available: available };
     var slug = body.dataset.slug || "";
     if (!slug && returnTo) {
       var target;
@@ -99,7 +101,40 @@
       else if (match && match[1] !== "help") slug = match[1];
     }
     if (!/^[a-z0-9][a-z0-9_-]{0,62}$/.test(slug)) return null;
-    return { href: "/" + slug + "/contact" };
+    return { slug: slug, href: "/" + slug + "/contact", available: body.dataset.slug ? available : null };
+  }
+
+  /**
+   * The creator link is only offered when the community has a real contact
+   * method. Community pages state that on the body; account pages only know
+   * the slug, so the note asks the public site record and fills in after.
+   */
+  function rewardNoteHtml(contact) {
+    var head = "<b>Reward or claim issue?</b>";
+    if (!contact) return '<aside class="yr-support-note" data-support-reward-note="none">' + ICON_INFO + "<div>" + head + "<p>Rewards are managed by the community creator, not YourRank.</p></div></aside>";
+    if (contact.available === true) {
+      return '<aside class="yr-support-note" data-support-reward-note="available">' + ICON_INFO + "<div>" + head + "<p>Rewards are managed by the community creator.</p>" +
+        '<a href="' + esc(contact.href) + '" data-support-creator>Contact creator ' + ICON_ARROW + "</a></div></aside>";
+    }
+    if (contact.available === false) {
+      return '<aside class="yr-support-note" data-support-reward-note="unavailable">' + ICON_INFO + "<div>" + head + "<p>This creator hasn't provided a contact method yet.</p></div></aside>";
+    }
+    return '<aside class="yr-support-note" data-support-reward-note="pending" data-support-contact-slug="' + esc(contact.slug) + '">' + ICON_INFO + "<div>" + head + "<p>Rewards are managed by the community creator, not YourRank.</p></div></aside>";
+  }
+
+  function resolveRewardNote(root, contact) {
+    var note = root.querySelector('[data-support-reward-note="pending"]');
+    if (!note || !contact) return;
+    fetch("/api/public/" + encodeURIComponent(contact.slug), { credentials: "same-origin", headers: { accept: "application/json" } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!note.isConnected) return;
+        var known = data && typeof data.contactAvailable === "boolean" ? data.contactAvailable : null;
+        var resolved = { slug: contact.slug, href: contact.href, available: known };
+        if (resolved.available === null) { note.setAttribute("data-support-reward-note", "unknown"); return; }
+        note.outerHTML = rewardNoteHtml(resolved);
+      })
+      .catch(function () { if (note.isConnected) note.setAttribute("data-support-reward-note", "unknown"); });
   }
 
   function formHtml(mode, options) {
@@ -123,12 +158,7 @@
           '<input type="checkbox" name="diagnostics" role="switch"><i aria-hidden="true"></i></label>'
         : "") +
       '<p class="yr-support-status" role="alert" aria-live="assertive"></p>' +
-      (contact
-        ? '<aside class="yr-support-note">' + ICON_INFO + "<div><b>Reward or claim issue?</b><p>Rewards are managed by the community creator, not YourRank.</p>" +
-          '<a href="' + esc(contact.href) + '" data-support-creator>Contact creator ' + ICON_ARROW + "</a></div></aside>"
-        : mode.rewardNote
-          ? '<aside class="yr-support-note">' + ICON_INFO + "<div><b>Reward or claim issue?</b><p>Rewards are managed by the community creator, not YourRank. Use the Contact page of that community.</p></div></aside>"
-          : "") +
+      (mode.rewardNote ? rewardNoteHtml(contact) : "") +
       '<div class="yr-support-actions"><button type="button" class="btn btn--ghost" data-support-close>Cancel</button>' +
       '<button type="submit" class="btn btn--accent" data-support-submit>' + esc(mode.submit) + "</button></div></form>";
   }
@@ -270,6 +300,7 @@
     currentMode = mode;
     opener = opts.opener || document.activeElement;
     el.innerHTML = formHtml(mode, opts);
+    if (mode.rewardNote) resolveRewardNote(el, communityContact(opts.returnTo));
     document.body.classList.add("yr-support-open");
     if (typeof el.showModal === "function") el.showModal(); else el.setAttribute("open", "");
     var first = el.querySelector('input[name="category"]:checked') || el.querySelector("[data-support-close]");

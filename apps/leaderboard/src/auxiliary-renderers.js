@@ -2,6 +2,7 @@ import { formatMoney, prizeCurrency, renderSite, siteSectionHref } from "@yourra
 import { safeUrl } from "@yourrank/shared/public-render-helpers";
 import { viewerHelpHref } from "@yourrank/shared/viewer-shell";
 import { renderCommunityArticle } from "@yourrank/shared/site-article";
+import { creatorContactMethods } from "@yourrank/shared/creator-contact";
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
@@ -43,7 +44,6 @@ const LEGAL_PAGES = [
   { key: "privacy", label: "Privacy Policy" },
   { key: "cookies", label: "Cookie Policy" },
   { key: "refund", label: "Refund & Cancellation" },
-  { key: "contact", label: "Contact" },
   { key: "responsible", label: "Responsible Play" },
 ];
 
@@ -57,21 +57,44 @@ function record(data, opts) {
   };
 }
 
-// Same rule as the public shell's social strip: only enabled, absolute http(s)
-// links count as a way to reach the creator.
-export function creatorContactLinks(data) {
-  if (data?.sections?.socials === false) return [];
-  return (Array.isArray(data?.socials) ? data.socials : [])
-    .filter((s) => s && s.enabled !== false && /^https?:\/\//i.test(String(s.url || "")))
-    .map((s) => ({ label: s.name || s.brand || s.type || "Channel", href: String(s.url).trim() }));
+// Only validated creator contact methods (shared creator-contact helper) are
+// ever rendered: `mailto:` for email, `https:` links for everything else.
+function contactMethodLink(m, cls) {
+  const external = m.external ? ' target="_blank" rel="noopener noreferrer"' : "";
+  const sr = m.external ? '<span class="yr-sr"> (opens in a new tab)</span>' : "";
+  return `<a class="${cls}" href="${esc(m.href)}" data-contact-method="${esc(m.type)}"${external}>${esc(m.label)}${sr}</a>`;
 }
 
 function creatorContactHtml(data, name) {
-  const links = creatorContactLinks(data);
-  if (!links.length) {
-    return `<p role="status">${name} has not published a contact channel yet, so there is no direct way to reach them from this page.</p>`;
+  const { available, methods } = creatorContactMethods(data);
+  if (!available) {
+    return `<p role="status">${name} hasn't provided a contact method yet.</p>`;
   }
-  return `<p>Reward, claim and prize questions go to ${name} directly:</p><ul class="yr-contact-links">${links.map((l) => `<li><a href="${esc(l.href)}" target="_blank" rel="noopener noreferrer">${esc(l.label)}<span class="yr-sr"> (opens in a new tab)</span></a></li>`).join("")}</ul>`;
+  return `<p>Reward, claim and prize questions go to ${name} directly:</p><ul class="yr-contact-links">${methods.map((m) => `<li>${contactMethodLink(m, "")}</li>`).join("")}</ul>`;
+}
+
+function yourrankSupportHref(slug, isCustomDomain) {
+  return viewerHelpHref(`/${encodeURIComponent(slug)}/contact`, isCustomDomain ? "https://yourrank.site" : "");
+}
+
+/**
+ * `/contact` is a product page, not a policy: who fulfils rewards here, the
+ * ways to reach them, and where YourRank account/website problems go instead.
+ */
+export function renderCreatorContactPage(data, opts) {
+  const r = record(data, opts);
+  const rawName = r.data.brand?.name || r.slug;
+  const name = esc(rawName);
+  const { available, methods } = creatorContactMethods(r.data);
+  const supportHref = esc(yourrankSupportHref(r.slug, opts.isCustomDomain));
+  const creatorBlock = available
+    ? `<section class="yr-contact-card" aria-labelledby="yr-contact-creator-title" data-contact-state="available"><h2 id="yr-contact-creator-title">Need help with a reward or claim?</h2><p>This creator handles their own reward fulfillment.</p><div class="yr-contact-methods">${methods.map((m) => contactMethodLink(m, "yr-btn yr-contact-method")).join("")}</div></section>`
+    : `<section class="yr-contact-card yr-contact-card--empty" aria-labelledby="yr-contact-creator-title" data-contact-state="unavailable"><h2 id="yr-contact-creator-title" class="yr-sr">Creator contact</h2><p role="status">This creator hasn't provided a contact method yet.</p></section>`;
+  const supportBlock = available
+    ? `<section class="yr-contact-card yr-contact-card--support" aria-labelledby="yr-contact-support-title"><h2 id="yr-contact-support-title">YourRank account or website issue?</h2><p><a class="yr-sec-link" href="${supportHref}" data-yourrank-support>Contact YourRank support</a></p></section>`
+    : `<section class="yr-contact-card yr-contact-card--support" aria-labelledby="yr-contact-support-title"><h2 id="yr-contact-support-title">For YourRank account or website problems:</h2><p><a class="yr-btn yr-btn--ghost" href="${supportHref}" data-yourrank-support>Contact YourRank support</a></p></section>`;
+  const content = `<article class="viewer-article yr-contact-page"><header class="viewer-article-head"><p class="yr-cue">Contact</p><h1 class="yr-h1">Contact ${name}</h1></header>${creatorBlock}${supportBlock}</article>`;
+  return shell({ r, ...opts, layout: "article", contentHtml: content, canonicalPath: canonicalPathFor("contact", r.slug, opts.isCustomDomain), title: `Contact · ${rawName}`, description: `How to reach ${rawName} about rewards and claims.` });
 }
 
 function legalBody(data, page) {
@@ -91,12 +114,12 @@ function legalBody(data, page) {
     responsible: `<p>${name} uses free community credits. Credits cannot be purchased, withdrawn, transferred between communities, or exchanged for cash.</p><p>Creator-provided rewards and promotion rules are the responsibility of ${name}. Read the published terms before participating, do not share account credentials, and contact the creator if a reward or claim needs attention.</p><p>This page is intended for adults 18 and older only.</p>`,
     cookies: `<p>${name} uses cookies and similar technologies to provide the leaderboard service and to understand how visitors use the page.</p><p>Essential cookies are required for the page to function. Analytics cookies help us improve the experience. You can adjust your browser settings to manage cookies.</p>`,
     refund: `<p>YourRank does not currently offer recurring checkout on this page. ${name} sets the rules for creator-provided rewards and promotions.</p><p>If you have a question about a reward, claim, or creator promotion, contact ${name} directly (see Contact below). For a YourRank account or future platform-billing question, contact YourRank support.</p>`,
-    contact: `<p>${name} runs this community and fulfils its own rewards, rules and prizes.</p>${creatorContactHtml(data, name)}<p>For problems with the YourRank website or your account, use <b>Contact YourRank support</b> below. YourRank does not fulfil creator rewards or reply on ${name}'s behalf.</p>`,
   };
   return copy[page] || "<p>Nothing here yet.</p>";
 }
 
 export function renderNewLegalPage(data, page, opts) {
+  if (page === "contact") return renderCreatorContactPage(data, opts);
   const r = record(data, opts);
   const title = LEGAL_PAGES.find((p) => p.key === page)?.label || page;
   const rawName = r.data.brand?.name || r.slug;
@@ -109,10 +132,10 @@ export function renderNewLegalPage(data, page, opts) {
   const nav = LEGAL_PAGES
     .filter((p) => legal[`${p.key}Enabled`] !== false || p.key === page)
     .map((p) => ({ label: p.label, href: canonicalPathFor(p.key, r.slug, opts.isCustomDomain), active: p.key === page }));
-  const supportLink = `<p><a class="yr-sec-link" href="${esc(viewerHelpHref(`/${encodeURIComponent(r.slug)}/contact`, opts.isCustomDomain ? "https://yourrank.site" : ""))}">Contact YourRank support</a></p>`;
-  const support = `<h3 class="yr-sec-sub">Rewards and fulfilment</h3>${page === "contact" ? `<p class="yr-note">${name} handles these; see the contact details above.</p>` : creatorContactHtml(r.data, name)}<h3 class="yr-sec-sub">Website and account</h3>${supportLink}`;
+  const supportLink = `<p><a class="yr-sec-link" href="${esc(yourrankSupportHref(r.slug, opts.isCustomDomain))}">Contact YourRank support</a></p>`;
+  const support = `<h3 class="yr-sec-sub">Rewards and fulfilment</h3>${creatorContactHtml(r.data, name)}<h3 class="yr-sec-sub">Website and account</h3>${supportLink}`;
   const content = renderCommunityArticle({
-    cue: page === "contact" ? "Information" : "Policy",
+    cue: "Policy",
     title,
     owner: rawName,
     scope: `${rawName}'s community on YourRank`,

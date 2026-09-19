@@ -1,4 +1,4 @@
-import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
+import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError, showToast } from "./dashboard/utils.js";
 import { requestDashboardRoute } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
@@ -298,13 +298,16 @@ function renderRedemptionRow(r) {
   ].filter(Boolean).join(" ");
   return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
 }
-// Advisory publish review (YR-014): findings are shown, linked to their edit
-// control and never block saving or rewrite a stored reward.
+// Publish review (YR-014): findings are linked to their edit control and
+// never rewrite a stored reward. Only a missing contact method blocks a new
+// activation; description findings stay advisory.
+const REVIEW_INTRO_ADVISORY = "These are warnings, not blockers: you can still save. Fix them so members know what they get and how to reach you.";
+const REVIEW_INTRO_CONTACT = "A contact method is required before a new reward goes live. Rewards that are already active stay active.";
 function shopReview(reward) {
   return reviewRewardReadiness(reward, { siblings: state.shopItems || [], contactReady: state.creatorContact?.ready !== false });
 }
 function contactEditHref() {
-  const base = state.creatorContact?.editHref || "/dashboard/site#siteLinksCard";
+  const base = state.creatorContact?.editHref || "/dashboard/site#siteContactCard";
   const siteId = siteQuery() || dashboardState.ACTIVE_SITE_ID || "";
   if (!siteId) return base;
   const [path, hash] = base.split("#");
@@ -315,9 +318,11 @@ function renderShopReview() {
   const active = $("cr-shop-active")?.checked !== false;
   const review = shopReview({ id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value, description: $("cr-shop-desc").value });
   if (!active || review.ready) { panel.hidden = true; list.innerHTML = ""; return; }
+  const intro = $("cr-shop-review-intro");
+  if (intro) intro.textContent = review.findings.some((f) => f.field === "contact") ? REVIEW_INTRO_CONTACT : REVIEW_INTRO_ADVISORY;
   list.innerHTML = review.findings.map((f) => {
     const fix = f.field === "contact"
-      ? `<a class="cr-shop-review-fix" href="${esc(contactEditHref())}">Add a contact channel</a>`
+      ? `<a class="cr-shop-review-fix" href="${esc(contactEditHref())}">Add a contact method</a>`
       : `<button class="cr-shop-review-fix" type="button" data-review-focus="cr-shop-desc">Edit description</button>`;
     return `<li data-review-code="${esc(f.code)}"><span>${esc(f.message)}</span> ${fix}</li>`;
   }).join("");
@@ -1061,8 +1066,9 @@ async function updateRedemption(id, status, trigger) {
 async function toggleShop(id, trigger) {
   const item = state.shopItems.find((i) => i.id === id); if (!item) return;
   setLoading(trigger, true, "Saving…");
-  try { await api("POST", sitePath("/api/credits/shop"), { ...item, active: trigger.checked }); await load(); }
-  catch (err) { trigger.checked = item.active; setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
+  const payload = { id: item.id, name: item.name, description: item.description || "", cost: item.cost, stock: item.stock ?? null, cooldownSeconds: Number(item.cooldown_seconds) || 0, active: trigger.checked };
+  try { await api("POST", sitePath("/api/credits/shop"), payload); await load(); }
+  catch (err) { trigger.checked = item.active; showToast(err.message, "error"); } finally { setLoading(trigger, false); }
 }
 async function toggleReward(id, trigger) {
   const m = state.mappings.find((x) => x.id === id); if (!m) return;

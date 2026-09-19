@@ -94,7 +94,8 @@ describe("server-rendered rewards pages", () => {
     expect(rewardsClientSource).toContain('import { reviewRewardReadiness } from "@yourrank/shared/reward-readiness"');
     expect(rewardsClientSource).toContain('contactReady: state.creatorContact?.ready !== false');
     expect(rewardsClientSource).toContain('data-review-focus="cr-shop-desc"');
-    expect(rewardsClientSource).toContain("Add a contact channel</a>");
+    expect(rewardsClientSource).toContain("Add a contact method</a>");
+    expect(rewardsClientSource).toContain("A contact method is required before a new reward goes live.");
     expect(rewardsClientSource).toContain('$("cr-shop-desc")?.addEventListener("input", renderShopReview)');
     expect(rewardsClientSource).toContain('$("cr-shop-active")?.addEventListener("change", renderShopReview)');
     expect(rewardsClientSource).toMatch(/i\.active && !shopReview\(i\)\.ready \? `[^`]*cr-shop-review-chip[^`]*data-edit-shop=/);
@@ -104,9 +105,9 @@ describe("server-rendered rewards pages", () => {
 
     // Server: contact readiness reuses the public Contact page's rule.
     const handlerSource = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
-    expect(handlerSource).toContain('import { creatorContactLinks } from "../auxiliary-renderers.js"');
-    expect(handlerSource).toContain("ready: creatorContactLinks(fromJsonb(site.extra_json)).length > 0");
-    expect(handlerSource).toContain('editHref: "/dashboard/site#siteLinksCard"');
+    expect(handlerSource).toContain('import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact"');
+    expect(handlerSource).toContain("ready: hasCreatorContactMethod(fromJsonb(site.extra_json))");
+    expect(handlerSource).toContain('editHref: "/dashboard/site#siteContactCard"');
 
     expect(dashboardV4Source).toContain(".cr-shop-review {");
     expect(dashboardV4Source).toContain(".cr-shop-review-chip {");
