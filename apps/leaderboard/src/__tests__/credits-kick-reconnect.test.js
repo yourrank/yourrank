@@ -44,6 +44,7 @@ const deps = {
     unsafe: async (sql, params) => {
       executed.push({ sql, params });
       if (sql.includes("INSERT INTO credit_reward_mappings")) return [{ id: "mapping-1" }];
+      if (sql.includes("FROM creator_connections cc")) return [{ id: "conn-1" }];
       return [];
     },
     query: async () => [],
@@ -105,14 +106,38 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
 
   it("marks the provider-derived channel binding verified before saving the reward mapping", async () => {
     seedTokenRows();
-    deps.oneResponses.push({ count: 0 }, null);
+    deps.oneResponses.push(
+      { creator_connection_id: "conn-1", external_user_id: "chan-1" }, // site owner's active Kick creator connection
+      { count: 0 },
+      null,
+    );
 
     const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
 
     expect(res.status).toBe(200);
-    const binding = executed.find((call) => call.sql.includes("UPDATE sites"));
-    expect(binding.sql).toContain("kick_channel_verified_at = now()");
-    expect(binding.sql).toContain("kick_channel_linked_at = now()");
+    const channelIdx = executed.findIndex((call) => call.sql.includes("INSERT INTO community_channels"));
+    const mirrorIdx = executed.findIndex((call) => call.sql.includes("UPDATE sites"));
+    const mappingIdx = executed.findIndex((call) => call.sql.includes("INSERT INTO credit_reward_mappings"));
+    expect(channelIdx).toBeGreaterThanOrEqual(0);
+    expect(mirrorIdx).toBeGreaterThan(channelIdx);
+    expect(mappingIdx).toBeGreaterThan(mirrorIdx);
+    // generic binding: [siteId, provider, channelId, name, verified, creatorConnectionId]
+    expect(executed[channelIdx].params).toEqual(["site-1", "kick", "chan-1", "testchannel", true, "conn-1"]);
+    expect(executed[mirrorIdx].sql).toContain("kick_channel_linked_at = now()");
+    expect(executed[mirrorIdx].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
+    expect(executed[mirrorIdx].params).toEqual(["chan-1", "testchannel", true, "site-1"]);
+  });
+
+  it("refuses to bind when the site owner has no matching active Kick creator connection", async () => {
+    seedTokenRows();
+    deps.oneResponses.push(null);
+
+    await expect(
+      handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps),
+    ).rejects.toThrow("Kick identity changed before binding");
+
+    expect(executed.some((call) => call.sql.includes("INSERT INTO community_channels"))).toBe(false);
+    expect(executed.some((call) => call.sql.includes("INSERT INTO credit_reward_mappings"))).toBe(false);
   });
 
   it("returns 409 kick_reconnect_required when the token refresh hits invalid_grant", async () => {

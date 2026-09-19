@@ -9,6 +9,8 @@ import type { NormalizedEvent, ProviderAdapter, WebhookRequest } from "./types.j
 
 export const KICK_REWARD_EVENT = "channel.reward.redemption.updated";
 
+export { kickCreatorOwnsChannel } from "./kick-ownership.js";
+
 interface KickWebhookEnv {
   KICK_WEBHOOK_PUBLIC_KEY?: string;
 }

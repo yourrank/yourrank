@@ -93,6 +93,63 @@ export function linkedViewerIdentities(row: ViewerIdentityRow | null | undefined
   return identities.map((identity) => ({ ...identity, label: PROVIDER_LABELS[identity.provider] }));
 }
 
+/** Redirect error codes the OAuth link (connect-provider) flow can end with. */
+export const VIEWER_LINK_ERROR_CODES = Object.freeze({
+  identity_owned_by_other_viewer: "link_identity_in_use",
+  provider_already_connected: "link_provider_already_connected",
+  viewer_not_found: "link_session_mismatch",
+  session_mismatch: "link_session_mismatch",
+  signin_required: "link_requires_signin",
+} as const);
+
+export type ViewerLinkErrorCode = (typeof VIEWER_LINK_ERROR_CODES)[keyof typeof VIEWER_LINK_ERROR_CODES];
+
+export type ConnectedAccountState = "connected" | "available" | "unavailable";
+
+/** One row of the Connected Accounts surface for a viewer. */
+export interface ConnectedAccount {
+  provider: ProviderId;
+  label: string;
+  state: ConnectedAccountState;
+  username: string | null;
+  linkedAt: string | Date | null;
+  /** Start URL of the connect (link-mode OAuth) flow; null unless `available`. */
+  connectUrl: string | null;
+}
+
+/**
+ * Connected Accounts for a viewer: every provider that offers viewer auth,
+ * marked connected (has an active identity), available (this deployment can
+ * start its OAuth flow) or unavailable. `connectPath(provider)` yields the
+ * provider's viewer OAuth start path; link mode is requested with `intent=link`.
+ */
+export function describeConnectedAccounts(
+  row: ViewerIdentityRow | null | undefined,
+  availability: Readonly<Partial<Record<ProviderId, boolean>>>,
+  connectPath: (provider: ProviderId) => string,
+  returnTo = "/me",
+): ConnectedAccount[] {
+  const linked = new Map(linkedViewerIdentities(row).filter((identity) => identity.linkedAt).map((identity) => [identity.provider, identity]));
+  return PROVIDER_IDS
+    .filter((provider) => provider in availability || linked.has(provider))
+    .map((provider) => {
+      const identity = linked.get(provider);
+      if (identity) {
+        return { provider, label: PROVIDER_LABELS[provider], state: "connected", username: identity.username, linkedAt: identity.linkedAt, connectUrl: null };
+      }
+      const available = availability[provider] === true;
+      const params = new URLSearchParams({ intent: "link", returnTo });
+      return {
+        provider,
+        label: PROVIDER_LABELS[provider],
+        state: available ? "available" : "unavailable",
+        username: null,
+        linkedAt: null,
+        connectUrl: available ? `${connectPath(provider)}?${params}` : null,
+      };
+    });
+}
+
 /** First non-empty linked username in provider order, else `fallback`. */
 export function viewerDisplayName(row: ViewerIdentityRow | null | undefined, fallback = "Member"): string {
   const identities = parseIdentities(row?.identities);
@@ -119,6 +176,16 @@ export interface ExternalViewerIdentity {
 export interface ResolvedViewerIdentity {
   viewerId: string;
   username: string | null;
+}
+
+/**
+ * Serialize on the same advisory key the `provider_active_ownership` trigger
+ * uses, so two concurrent first logins for one external identity queue here and
+ * the second one observes the first one's committed viewer instead of racing it.
+ * Must run inside the caller's transaction (xact-scoped lock).
+ */
+export async function lockExternalIdentity(run: SqlRunner, provider: ProviderId, externalUserId: string): Promise<void> {
+  await run("SELECT pg_advisory_xact_lock(hashtext('viewer_identities:' || $1 || ':' || $2))", [provider, externalUserId]);
 }
 
 /** Active owner of `(provider, externalUserId)`, or null. Revoked rows never match. */
@@ -229,6 +296,58 @@ export async function persistViewerIdentity(
 
   await recordUsername(run, id, newUsername);
   return id;
+}
+
+export type ViewerIdentityLinkMode =
+  /** Provider sign-in: resolve the existing owner or create a new Viewer Account. */
+  | { mode: "signin" }
+  /** Authenticated viewer connects another provider: attach to that viewer, never create one. */
+  | { mode: "link"; viewerId: string };
+
+export type ViewerIdentityLinkResult =
+  | { ok: true; viewerId: string; created: boolean; relinked: boolean }
+  /** Another viewer actively owns this external identity; both accounts are left untouched. */
+  | { ok: false; reason: "identity_owned_by_other_viewer" }
+  /** The linking viewer already has a different active identity for this provider. */
+  | { ok: false; reason: "provider_already_connected"; externalUserId: string }
+  | { ok: false; reason: "viewer_not_found" };
+
+/**
+ * Resolve-and-persist for a provider OAuth callback. `run` MUST execute inside
+ * one transaction: the advisory lock, the ownership lookup, the viewer insert,
+ * the identity upsert, the legacy mirror and the username history commit or
+ * roll back together (no orphan `viewers`, no half-mirrored identity).
+ *
+ * Ownership is decided only by `(provider, external_user_id)`; usernames,
+ * avatars or display names never merge accounts.
+ */
+export async function linkExternalViewerIdentity(
+  run: SqlRunner,
+  identity: ExternalViewerIdentity,
+  link: ViewerIdentityLinkMode,
+): Promise<ViewerIdentityLinkResult> {
+  await lockExternalIdentity(run, identity.provider, identity.externalUserId);
+  const existing = await findViewerByExternalIdentity(run, identity.provider, identity.externalUserId, { forUpdate: true });
+
+  if (link.mode === "signin") {
+    const viewerId = await persistViewerIdentity(run, identity, existing?.viewerId ?? null, { previousUsername: existing?.username ?? null });
+    return { ok: true, viewerId, created: !existing, relinked: Boolean(existing) };
+  }
+
+  if (existing && existing.viewerId !== link.viewerId) return { ok: false, reason: "identity_owned_by_other_viewer" };
+  const viewerRows = (await run("SELECT id FROM viewers WHERE id = $1 FOR UPDATE", [link.viewerId])) as { id: string }[] | undefined;
+  if (!viewerRows?.[0]) return { ok: false, reason: "viewer_not_found" };
+  const current = (await run(
+    `SELECT external_user_id FROM viewer_identities
+      WHERE viewer_id = $1 AND provider = $2 AND status = 'active' LIMIT 1`,
+    [link.viewerId, identity.provider],
+  )) as { external_user_id: string }[] | undefined;
+  const currentExternalId = current?.[0]?.external_user_id;
+  if (currentExternalId && currentExternalId !== identity.externalUserId) {
+    return { ok: false, reason: "provider_already_connected", externalUserId: currentExternalId };
+  }
+  await persistViewerIdentity(run, identity, link.viewerId, { previousUsername: existing?.username ?? null });
+  return { ok: true, viewerId: link.viewerId, created: false, relinked: Boolean(existing) };
 }
 
 /** Unlink a provider identity from a viewer. The row is kept (revoked) for audit; legacy mirror columns are cleared. */

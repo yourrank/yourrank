@@ -185,6 +185,19 @@ function renderLoggedOut() {
   $("vd-communities-empty").hidden = true;
 }
 
+function renderConnectedAccounts(accounts) {
+  if (!Array.isArray(accounts) || !accounts.length) return;
+  $("vd-provider-list").innerHTML = accounts.map((account) => {
+    const detail = account.state === "connected"
+      ? `${account.username ? `@${esc(account.username)}` : "Connected account"}${account.linkedAt ? ` · Connected ${esc(fmtDate(account.linkedAt))}` : ""}`
+      : account.state === "available" ? "Not connected" : "Not available on this deployment";
+    const action = account.state === "connected"
+      ? '<span class="vd-connection-status">Connected</span>'
+      : account.connectUrl ? `<a class="btn" href="${esc(account.connectUrl)}">Connect ${esc(account.label)}</a>` : '<span class="vd-connection-status">Unavailable</span>';
+    return `<div class="vd-provider"><div><h3>${esc(account.label)}</h3><p>${detail}</p></div>${action}</div>`;
+  }).join("");
+}
+
 function renderAccount(viewer) {
   signedIn = true;
   setDocumentAuthState("authenticated");
@@ -285,6 +298,7 @@ async function load() {
     $("vd-profile").hidden = false;
     $("vd-communities-card").hidden = false;
     renderAccount(data.viewer);
+    renderConnectedAccounts(data.connectedAccounts);
     renderCommunities(data.communities || []);
   } catch (error) {
     if (error.name === "AbortError") return;
@@ -399,11 +413,28 @@ const LOGIN_ERROR_MESSAGES = Object.freeze({
   discord_oauth_browser_mismatch: "Discord sign-in must finish in the browser where it started.",
 });
 
+const LINK_RESULT_MESSAGES = Object.freeze({
+  link_requires_signin: "Sign in first, then connect another provider from Connected Accounts.",
+  link_session_mismatch: "Connecting a provider must finish in the same signed-in browser session where it started. Try again.",
+  link_identity_in_use: "That provider account is already connected to a different YourRank account. Both accounts were left unchanged.",
+  link_provider_already_connected: "Your account already has a different account connected for that provider.",
+});
+
 const url = new URL(window.location.href);
 const loginError = url.searchParams.get("error");
-if (loginError) {
+const connectedProvider = url.searchParams.get("connected");
+if (loginError && LINK_RESULT_MESSAGES[loginError]) {
+  setStatus("vd-account-status", LINK_RESULT_MESSAGES[loginError], true);
+  url.searchParams.delete("error");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+} else if (loginError) {
   setStatus("vd-login-status", LOGIN_ERROR_MESSAGES[loginError] || "We couldn't complete sign-in. Try again.", true);
   url.searchParams.delete("error");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+if (connectedProvider) {
+  setStatus("vd-account-status", "Provider connected to your account.", false);
+  url.searchParams.delete("connected");
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 

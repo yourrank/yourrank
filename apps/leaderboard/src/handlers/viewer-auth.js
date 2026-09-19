@@ -1,7 +1,7 @@
 // Viewer OAuth login: Kick and Discord.
 // Separate from streamer OAuth so viewers get their own /me dashboard.
 
-import { one, exec } from "@yourrank/shared/db";
+import { one, withTransaction } from "@yourrank/shared/db";
 import { generatePKCE, encryptKickToken, buildKickViewerAuthorizeURL, exchangeKickViewerCode, fetchKickCurrentUser } from "@yourrank/shared/kick-oauth";
 import {
   buildDiscordAuthorizeURL,
@@ -24,7 +24,7 @@ import { resolveVerifiedCustomDomain } from "../middleware/custom-domain.js";
 import { PLATFORM_HOST } from "../constants.js";
 import { applyOAuthJoinIntent, resolveJoinableCommunity } from "../viewer-membership.js";
 import { resolveViewerOAuthStatus } from "../viewer-oauth.js";
-import { findViewerByExternalIdentity, persistViewerIdentity } from "@yourrank/shared/viewer-identity";
+import { linkExternalViewerIdentity, VIEWER_LINK_ERROR_CODES } from "@yourrank/shared/viewer-identity";
 
 const KICK_VIEWER_HANDOFF_PROVIDER = "kick_viewer_handoff";
 const KICK_VIEWER_HANDOFF_TTL_SECONDS = 90;
@@ -35,17 +35,80 @@ const CUSTOM_DOMAIN_REWARD_RETURN = /^\/shop\/[A-Za-z0-9_-]{1,64}$/;
 
 // Shared by every viewer provider: ownership lookup + persistence live in the
 // generic identity layer; protocol (token exchange, profile fetch) stays above.
-// Reads go through the retry-safe `one`, writes through `exec`.
-async function linkViewerIdentity({ one: oneImpl, exec: execImpl }, identity) {
-  const existing = await findViewerByExternalIdentity(
-    async (sql, params) => {
-      const row = await oneImpl(sql, params);
-      return row ? [row] : [];
-    },
-    identity.provider,
-    identity.externalUserId
-  );
-  return persistViewerIdentity(execImpl, identity, existing?.viewerId ?? null, { previousUsername: existing?.username ?? null });
+// One transaction covers lock, lookup, viewer insert, identity upsert, legacy
+// mirror and username history, so a failure between writes leaves nothing.
+async function persistExternalIdentity(deps, identity, link) {
+  const {
+    withTransaction: withTransactionImpl = withTransaction,
+    linkExternalViewerIdentity: linkExternalViewerIdentityImpl = linkExternalViewerIdentity,
+  } = deps;
+  return withTransactionImpl((tx) => linkExternalViewerIdentityImpl((sql, params) => tx.unsafe(sql, params), identity, link));
+}
+
+const LINK_INTENT = "link";
+
+/**
+ * Connect-provider mode: an authenticated viewer attaches another provider to
+ * the Viewer Account it is signed in as. The state records the initiating
+ * viewer and session authority; the callback re-resolves the viewer from the
+ * same browser and refuses to proceed for anyone else.
+ */
+async function explicitLinkState(request, env, url, originInfo, deps) {
+  if (url.searchParams.get("intent") !== LINK_INTENT) return {};
+  const resolveViewerImpl = deps.resolveViewer || resolveViewer;
+  const scope = originInfo.isCustomDomain && originInfo.siteId ? { siteId: originInfo.siteId } : {};
+  const { viewer, session } = await resolveViewerImpl(request, env, scope);
+  const authority = sessionAuthority(originInfo);
+  if (!viewer || !session || !sameAuthority(authority, session)) return null;
+  return { intent: LINK_INTENT, linkViewerId: viewer.id, linkAuthority: authority };
+}
+
+function isLinkState(stateData) {
+  return stateData?.intent === LINK_INTENT;
+}
+
+async function verifyLinkInitiator(request, env, stateData, originInfo, authority, deps) {
+  const resolveViewerImpl = deps.resolveViewer || resolveViewer;
+  if (typeof stateData.linkViewerId !== "string" || !stateData.linkViewerId || !sameAuthority(stateData.linkAuthority, authority)) return null;
+  const scope = originInfo.isCustomDomain && originInfo.siteId ? { siteId: originInfo.siteId } : {};
+  const { viewer, session } = await resolveViewerImpl(request, env, scope);
+  if (!viewer || !session || viewer.id !== stateData.linkViewerId || !sameAuthority(authority, session)) return null;
+  return viewer.id;
+}
+
+// Completes a viewer OAuth callback once the provider identity is known.
+// Sign-in mode resolves/creates the Viewer Account and issues a session; link
+// mode attaches the identity to the already-authenticated viewer and never
+// creates a Viewer Account or a session.
+async function completeViewerIdentity(request, env, { stateData, identity, authority, originInfo, browserState, returnLocation }, deps) {
+  const {
+    one: oneImpl = one,
+    createViewerSession: createViewerSessionImpl = createViewerSession,
+    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
+  } = deps;
+  const targetOrigin = stateData.origin;
+  const clearBrowserCookie = (response) => {
+    response.headers.append("set-cookie", oauthBrowserCookie(request, browserState, "", 0));
+    return response;
+  };
+
+  if (isLinkState(stateData)) {
+    const linkViewerId = await verifyLinkInitiator(request, env, stateData, originInfo, authority, deps);
+    if (!linkViewerId) return clearBrowserCookie(errorRedirect(VIEWER_LINK_ERROR_CODES.session_mismatch, targetOrigin));
+    const result = await persistExternalIdentity(deps, identity, { mode: "link", viewerId: linkViewerId });
+    if (!result.ok) return clearBrowserCookie(errorRedirect(VIEWER_LINK_ERROR_CODES[result.reason], targetOrigin));
+    const location = new URL(returnLocation, targetOrigin);
+    location.searchParams.set("connected", identity.provider);
+    return clearBrowserCookie(redirect(location.toString()));
+  }
+
+  const result = await persistExternalIdentity(deps, identity, { mode: "signin" });
+  const viewerId = result.viewerId;
+  const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
+  if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
+
+  const sessionToken = await createViewerSessionImpl(env, viewerId, authority);
+  return clearBrowserCookie(redirect(returnLocation, { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) }));
 }
 
 function randomState() {
@@ -270,7 +333,9 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
   if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = oauth.redirectUri;
-  const joinState = await explicitJoinState(request, env, url, deps);
+  const linkState = await explicitLinkState(request, env, url, originInfo, deps);
+  if (!linkState) return errorRedirect(VIEWER_LINK_ERROR_CODES.signin_required, origin);
+  const joinState = linkState.intent ? {} : await explicitJoinState(request, env, url, deps);
   if (!joinState) return errorRedirect("join_unavailable", origin);
 
   const { codeVerifier, codeChallenge } = await generatePKCEImpl();
@@ -288,6 +353,7 @@ export async function handleKickViewerAuthStart(request, env, deps = {}) {
     origin,
     redirectUri,
     ...joinState,
+    ...linkState,
   });
 
   let authorizeURL;
@@ -355,18 +421,14 @@ export async function handleKickViewerAuthCallback(request, env, deps = {}) {
     handoffUrl.searchParams.set("handoff", handoff);
     return redirect(handoffUrl.toString());
   }
-  return completeKickViewerAuth(request, env, { ...stateData, browserState: state }, code, authority, deps);
+  return completeKickViewerAuth(request, env, { ...stateData, browserState: state }, code, authority, targetOriginInfo, deps);
 }
 
-async function completeKickViewerAuth(request, env, stateData, code, authority, deps) {
+async function completeKickViewerAuth(request, env, stateData, code, authority, originInfo, deps) {
   const {
     exchangeKickViewerCode: exchangeKickViewerCodeImpl = exchangeKickViewerCode,
     fetchKickCurrentUser: fetchKickCurrentUserImpl = fetchKickCurrentUser,
     encryptKickToken: encryptKickTokenImpl = encryptKickToken,
-    one: oneImpl = one,
-    exec: execImpl = exec,
-    createViewerSession: createViewerSessionImpl = createViewerSession,
-    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
   } = deps;
   const targetOrigin = stateData.origin;
   try {
@@ -387,23 +449,22 @@ async function completeKickViewerAuth(request, env, stateData, code, authority, 
     const kickUsername = kickUser.name || "";
     const avatarUrl = kickUser.profile_picture || null;
 
-    const viewerId = await linkViewerIdentity({ one: oneImpl, exec: execImpl }, {
-      provider: "kick",
-      externalUserId: kickUserId,
-      username: kickUsername,
-      avatarUrl,
-      accessTokenEnc: accessEnc,
-      refreshTokenEnc: refreshEnc,
-      tokenExpiresAt: expiresAt,
-    });
-
-    const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
-    if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
-
-    const sessionToken = await createViewerSessionImpl(env, viewerId, authority);
-    const response = redirect(viewerReturnLocation(stateData, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
-    response.headers.append("set-cookie", oauthBrowserCookie(request, stateData.browserState, "", 0));
-    return response;
+    return await completeViewerIdentity(request, env, {
+      stateData,
+      authority,
+      originInfo,
+      browserState: stateData.browserState,
+      returnLocation: viewerReturnLocation(stateData, targetOrigin),
+      identity: {
+        provider: "kick",
+        externalUserId: kickUserId,
+        username: kickUsername,
+        avatarUrl,
+        accessTokenEnc: accessEnc,
+        refreshTokenEnc: refreshEnc,
+        tokenExpiresAt: expiresAt,
+      },
+    }, deps);
   } catch (err) {
     console.error("[viewer-auth] kick callback failed:", err?.message || err);
     return errorRedirect("kick_auth_failed", targetOrigin);
@@ -433,7 +494,7 @@ export async function handleKickViewerAuthHandoff(request, env, deps = {}) {
   if (!await browserTransactionMatchesImpl(request, stateData.browserState, stateData.browserNonceHash)) {
     return errorRedirect("kick_oauth_browser_mismatch", url.origin);
   }
-  return completeKickViewerAuth(request, env, stateData, stateData.code, authority, deps);
+  return completeKickViewerAuth(request, env, stateData, stateData.code, authority, originInfo, deps);
 }
 
 // --- Discord ---
@@ -455,7 +516,9 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
   if (!originInfo.origin || !sessionAuthority(originInfo)) return errorRedirect("custom_domain_unverified");
   const returnTo = safeReturnTo(url.searchParams.get("returnTo"), origin);
   const redirectUri = oauth.redirectUri;
-  const joinState = await explicitJoinState(request, env, url, deps);
+  const linkState = await explicitLinkState(request, env, url, originInfo, deps);
+  if (!linkState) return errorRedirect(VIEWER_LINK_ERROR_CODES.signin_required, origin);
+  const joinState = linkState.intent ? {} : await explicitJoinState(request, env, url, deps);
   if (!joinState) return errorRedirect("join_unavailable", origin);
 
   const state = randomState();
@@ -471,6 +534,7 @@ export async function handleDiscordViewerAuthStart(request, env, deps = {}) {
     origin,
     redirectUri,
     ...joinState,
+    ...linkState,
   });
 
   let authorizeURL;
@@ -489,10 +553,6 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
     fetchDiscordCurrentUser: fetchDiscordCurrentUserImpl = fetchDiscordCurrentUser,
     encryptDiscordToken: encryptDiscordTokenImpl = encryptDiscordToken,
     discordAvatarUrl: discordAvatarUrlImpl = discordAvatarUrl,
-    one: oneImpl = one,
-    exec: execImpl = exec,
-    createViewerSession: createViewerSessionImpl = createViewerSession,
-    viewerCookieSet: viewerCookieSetImpl = viewerCookieSet,
     resolveVerifiedCustomDomain: resolveCustomDomainImpl = resolveVerifiedCustomDomain,
     browserTransactionMatches: browserTransactionMatchesImpl = browserTransactionMatches,
   } = deps;
@@ -538,23 +598,22 @@ export async function handleDiscordViewerAuthCallback(request, env, deps = {}) {
     const discordUsername = discordUser.global_name || discordUser.username || "";
     const avatarUrl = discordAvatarUrlImpl(discordUser.id, discordUser.avatar);
 
-    const viewerId = await linkViewerIdentity({ one: oneImpl, exec: execImpl }, {
-      provider: "discord",
-      externalUserId: discordUserId,
-      username: discordUsername,
-      avatarUrl,
-      accessTokenEnc: accessEnc,
-      refreshTokenEnc: refreshEnc,
-      tokenExpiresAt: expiresAt,
-    });
-
-    const join = await applyOAuthJoinIntent(viewerId, stateData, { oneImpl });
-    if (join.attempted && !join.membership) return errorRedirect("join_failed", targetOrigin);
-
-    const sessionToken = await createViewerSessionImpl(env, viewerId, authority);
-    const response = redirect(safeReturnTo(stateData.returnTo, targetOrigin), { "set-cookie": viewerCookieSetImpl(sessionToken, env, request) });
-    response.headers.append("set-cookie", oauthBrowserCookie(request, state, "", 0));
-    return response;
+    return await completeViewerIdentity(request, env, {
+      stateData,
+      authority,
+      originInfo: targetOriginInfo,
+      browserState: state,
+      returnLocation: safeReturnTo(stateData.returnTo, targetOrigin),
+      identity: {
+        provider: "discord",
+        externalUserId: discordUserId,
+        username: discordUsername,
+        avatarUrl,
+        accessTokenEnc: accessEnc,
+        refreshTokenEnc: refreshEnc,
+        tokenExpiresAt: expiresAt,
+      },
+    }, deps);
   } catch (err) {
     console.error("[viewer-auth] discord callback failed:", err?.message || err);
     return errorRedirect("discord_auth_failed", targetOrigin);

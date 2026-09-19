@@ -5,7 +5,8 @@ import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { hashToken } from "@yourrank/shared/crypto";
-import { setSiteKickChannel } from "@yourrank/shared/kick-credits";
+import { bindSiteKickChannel, setSiteKickChannel } from "@yourrank/shared/kick-credits";
+import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
 import { notifyLiveBoard } from "../live-board-config.js";
 import {
   getValidKickAccessToken,
@@ -44,6 +45,7 @@ const creditsCreateRewardDefaults = {
   createKickChannelReward,
   fetchKickCurrentChannel,
   creatorExpansionRestriction,
+  bindSiteKickChannel,
 };
 
 const creditsConnectDefaults = {
@@ -420,7 +422,7 @@ export async function handleCreditsConnect(request, env, deps = creditsConnectDe
     [site.user_id]
   );
   const verifiedExternalId = String(providerIdentity?.kick_user_id || "");
-  if (!providerIdentity?.kick_linked_at || externalId !== verifiedExternalId) {
+  if (!providerIdentity?.kick_linked_at || !kickCreatorOwnsChannel(verifiedExternalId, externalId)) {
     return bad("Kick channel must match the Site owner's verified Kick account. Reconnect Kick to continue.", 403);
   }
 
@@ -622,7 +624,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   if (!kickChannelId) {
     return bad("Kick channel ID missing from current channel response", 500);
   }
-  if (!tokenRow.kick_linked_at || kickChannelId !== String(tokenRow.kick_user_id || "")) {
+  if (!tokenRow.kick_linked_at || !kickCreatorOwnsChannel(tokenRow.kick_user_id, kickChannelId)) {
     return bad("Kick channel does not match the connected provider identity. Reconnect Kick to continue.", 409);
   }
 
@@ -641,16 +643,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
   const txResult = await deps.withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
 
-    await tx.unsafe(
-      `UPDATE sites
-          SET kick_channel_external_id = $1,
-              kick_channel_name = $2,
-              kick_channel_linked_at = now(),
-              kick_channel_verified_at = now(),
-              updated_at = now()
-        WHERE id = $3`,
-      [kickChannelId, kickChannelName, site.id]
-    );
+    await (deps.bindSiteKickChannel || bindSiteKickChannel)(tx, site.id, kickChannelId, kickChannelName);
 
     const countRow = await tx.one(
       "SELECT count(*)::int AS count FROM credit_reward_mappings WHERE site_id=$1 AND active=true",

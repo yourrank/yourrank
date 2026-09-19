@@ -136,12 +136,19 @@ describe("provider portability active ownership", () => {
   });
 
   integrationIt("community channel: link A, reject B, unlink A, relink B; routing needs active+verified+owned", async () => {
-    // Site A's owner (userA) no longer owns the channel; binding is allowed but must not route.
-    await linkCommunityChannel(run, { siteId: siteA, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: true });
+    // Site A's owner (userA) no longer holds a creator connection, so no
+    // verification can name one: a verified binding is refused outright and an
+    // unverified binding is allowed but must not route.
+    const connectionB = (await loadCreatorConnection(run, userB, "kick")).id;
+    const unproven = await attempt(() => linkCommunityChannel(run, { siteId: siteA, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: true }));
+    expect(unproven?.message).toContain("requires the verifying creator connection");
+    const hijack = await attempt(() => linkCommunityChannel(run, { siteId: siteA, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", creatorConnectionId: connectionB, verified: true }));
+    expect(hijack?.message).toContain("does not belong to the site owner");
+    await linkCommunityChannel(run, { siteId: siteA, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: false });
     expect((await loadCommunityChannel(run, siteA, "kick"))?.externalChannelId).toBe(channel);
     expect(await sql.begin((tx) => resolveVerifiedCommunityChannel((t, p) => tx.unsafe(t, p), "kick", channel))).toBeNull();
 
-    const dup = await attempt(() => linkCommunityChannel(run, { siteId: siteB, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: true }));
+    const dup = await attempt(() => linkCommunityChannel(run, { siteId: siteB, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", creatorConnectionId: connectionB, verified: true }));
     expect(dup?.code).toBe("23505");
     expect((await sql`SELECT kick_channel_external_id FROM sites WHERE id=${siteB}`)[0].kick_channel_external_id).toBeNull();
 
@@ -158,8 +165,9 @@ describe("provider portability active ownership", () => {
     await linkCommunityChannel(run, { siteId: siteB, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: false });
     expect(await sql.begin((tx) => resolveVerifiedCommunityChannel((t, p) => tx.unsafe(t, p), "kick", channel))).toBeNull();
 
-    await linkCommunityChannel(run, { siteId: siteB, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", verified: true });
+    await linkCommunityChannel(run, { siteId: siteB, provider: "kick", externalChannelId: channel, externalChannelName: "Rebind", creatorConnectionId: connectionB, verified: true });
     expect(await sql.begin((tx) => resolveVerifiedCommunityChannel((t, p) => tx.unsafe(t, p), "kick", channel))).toEqual({ siteId: siteB, userId: userB });
+    expect((await loadCommunityChannel(run, siteB, "kick"))?.creatorConnectionId).toBe(connectionB);
     const owners = await sql`SELECT site_id, status FROM community_channels WHERE provider='kick' AND external_channel_id=${channel} ORDER BY status`;
     expect(owners).toEqual([{ site_id: siteB, status: "active" }, { site_id: siteA, status: "revoked" }]);
   });

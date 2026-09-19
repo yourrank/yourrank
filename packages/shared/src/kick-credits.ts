@@ -2,11 +2,12 @@
 // queue consumer. Keeps webhook verification and credit-grant processing in
 // one place so the architecture can scale without duplicating code.
 
-import { one, query, exec, withTransaction } from "./db.js";
+import { one, query, exec, withTransaction, type Tx } from "./db.js";
 import { rateLimit } from "./ratelimit.js";
 import { reconcileAccountActiveViewerUsage } from "./plan-usage.js";
 import { findViewerByExternalIdentity, persistViewerIdentity } from "./viewer-identity.js";
 import { linkCommunityChannel, resolveVerifiedCommunityChannel } from "./provider-connections.js";
+import { kickCreatorOwnsChannel } from "./providers/kick-ownership.js";
 import { findActiveRewardMapping, type RewardMappingRow } from "./reward-mappings.js";
 
 export interface KickRewardPayload {
@@ -587,30 +588,44 @@ export async function upsertCreditRewardMapping(
   return rows[0].id;
 }
 
+/**
+ * Kick-specific channel binding inside the caller's transaction: the site
+ * owner's active Kick creator connection must be the channel's broadcaster
+ * (`kickCreatorOwnsChannel`); the generic binding then records that connection
+ * as the verifier. Locks the site row.
+ */
+export async function bindSiteKickChannel(
+  tx: Tx,
+  siteId: string,
+  kickChannelExternalId: string,
+  kickChannelName: string
+): Promise<void> {
+  const run = (sql: string, params?: unknown[]) => tx.unsafe(sql, params);
+  const owner = await tx.one<{ creator_connection_id: string; external_user_id: string }>(
+    `SELECT cc.id AS creator_connection_id, cc.external_user_id
+       FROM sites s
+       JOIN creator_connections cc ON cc.user_id = s.user_id AND cc.provider = 'kick'
+      WHERE s.id = $1 AND cc.status = 'active' AND cc.linked_at IS NOT NULL
+      FOR UPDATE OF s`,
+    [siteId]
+  );
+  if (!owner || !kickCreatorOwnsChannel(owner.external_user_id, kickChannelExternalId)) {
+    throw new Error("Kick identity changed before binding");
+  }
+  await linkCommunityChannel(run, {
+    siteId,
+    provider: "kick",
+    externalChannelId: kickChannelExternalId,
+    externalChannelName: kickChannelName,
+    creatorConnectionId: owner.creator_connection_id,
+    verified: true,
+  });
+}
+
 export async function setSiteKickChannel(
   siteId: string,
   kickChannelExternalId: string,
   kickChannelName: string
 ): Promise<void> {
-  await withTransaction(async (tx) => {
-    const run = (sql: string, params?: unknown[]) => tx.unsafe(sql, params);
-    // The site owner's active Kick creator connection must be the channel itself.
-    const owner = await tx.one<{ id: string }>(
-      `SELECT s.id
-         FROM sites s
-         JOIN creator_connections cc ON cc.user_id = s.user_id AND cc.provider = 'kick'
-        WHERE s.id = $1 AND cc.status = 'active' AND cc.linked_at IS NOT NULL
-          AND cc.external_user_id = $2
-        FOR UPDATE OF s`,
-      [siteId, kickChannelExternalId]
-    );
-    if (!owner) throw new Error("Kick identity changed before binding");
-    await linkCommunityChannel(run, {
-      siteId,
-      provider: "kick",
-      externalChannelId: kickChannelExternalId,
-      externalChannelName: kickChannelName,
-      verified: true,
-    });
-  });
+  await withTransaction((tx) => bindSiteKickChannel(tx, siteId, kickChannelExternalId, kickChannelName));
 }
