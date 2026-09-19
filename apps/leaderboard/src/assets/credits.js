@@ -83,6 +83,7 @@ let claimDetailRequest = 0;
 let claimDetailLoading = false;
 let claimFilter = "all";
 let claimSupportTimer = 0;
+const CLAIM_EMPTY_SPEC = { kind: "empty", title: "No claims yet", body: "Claims will appear after a member redeems a shop item.", compact: true };
 let claimSupportBusy = false;
 const CLAIM_SUPPORT_POLL_MS = 15000;
 let shopItemsView = [];
@@ -476,8 +477,8 @@ function render() {
   if (current === "redemptions") {
     const redemptions = filterClaims(state.redemptions || []);
     if (!redemptionCtrl) {
-      wireClaimFilters(); redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No claims yet", body: "Claims will appear after a member redeems a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
-    else redemptionCtrl.setItems(redemptions);
+      wireClaimFilters(); redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: CLAIM_EMPTY_SPEC, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
+    else applyClaimFilter();
   }
   if (current === "history") {
     const typeSelect = $("cr-history-type");
@@ -709,8 +710,20 @@ function wireClaimFilters() {
       item.classList.toggle("is-active", active);
       item.setAttribute("aria-pressed", String(active));
     });
-    redemptionCtrl?.setItems(filterClaims(state.redemptions || []));
+    applyClaimFilter();
   }));
+}
+const CLAIM_FILTER_EMPTY = {
+  pending: { title: "No pending claims", body: "Every claim has been completed or cancelled." },
+  needs_attention: { title: "Nothing needs attention", body: "No pending claims and no open support requests." },
+  completed: { title: "No completed claims yet", body: "Completed claims will appear here." },
+};
+function applyClaimFilter() {
+  if (!redemptionCtrl) return;
+  const all = state.redemptions || [];
+  const spec = all.length && CLAIM_FILTER_EMPTY[claimFilter];
+  redemptionCtrl.emptySpec = spec ? { kind: "empty", compact: true, ...spec } : CLAIM_EMPTY_SPEC;
+  redemptionCtrl.setItems(filterClaims(all));
 }
 function mountListControls(root, toolbar, foot) {
   const controls = root?.querySelector(":scope > .list-controls");
@@ -1070,7 +1083,7 @@ async function resolveClaimSupport(button) {
     if (id !== claimDetailId) return;
     renderClaimSupport(data.support);
     const local = (state.redemptions || []).find((item) => String(item.id) === String(id));
-    if (local) { local.support_status = "resolved"; redemptionCtrl?.setItems(filterClaims(state.redemptions || [])); }
+    if (local) { local.support_status = "resolved"; applyClaimFilter(); }
   } catch (error) {
     if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
   } finally {

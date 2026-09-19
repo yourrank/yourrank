@@ -6789,7 +6789,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   display: flex;
   flex-wrap: wrap;
   gap: var(--ws-space-2);
-  flex: 0 0 auto;
+  padding: 12px 16px 0;
 }
 
 .v3-dash[data-auth-workspace] .cr-claim-filters .is-active {
