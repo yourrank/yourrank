@@ -221,7 +221,9 @@ describe("processKickRewardRedemption earn path", () => {
     const lookup = db.calls.find((call) => call.method === "unsafe" && call.sql.includes("FROM community_channels ch"));
     expect(lookup.sql).toContain("ch.status = 'active' AND ch.verified_at IS NOT NULL");
     expect(lookup.sql).toContain("cc.status = 'active' AND cc.linked_at IS NOT NULL");
-    expect(lookup.sql).toContain("cc.external_user_id = ch.external_channel_id");
+    expect(lookup.sql).toContain("JOIN creator_connections cc ON cc.id = ch.creator_connection_id");
+    expect(lookup.sql).toContain("cc.provider = ch.provider AND cc.user_id = s.user_id");
+    expect(lookup.sql).not.toContain("cc.external_user_id = ch.external_channel_id");
     expect(db.calls.some((call) => /INSERT INTO site_viewers/.test(call.sql))).toBe(false);
     expect(db.calls.some((call) => /INSERT INTO credit_ledger/.test(call.sql))).toBe(false);
   });
