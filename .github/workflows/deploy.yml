@@ -176,7 +176,18 @@ jobs:
             echo "::error::SUPABASE_DB_PASSWORD not set — cannot run migrations. Set it in repo secrets."
             exit 1
           fi
-          if supabase link --project-ref lygcqzjxlqbvymkfjvel --password "$SUPABASE_DB_PASSWORD"; then
+          LINKED=0
+          for attempt in 1 2 3; do
+            if supabase link --project-ref lygcqzjxlqbvymkfjvel --password "$SUPABASE_DB_PASSWORD"; then
+              LINKED=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "supabase link failed (attempt $attempt/3); retrying in 20s..."
+              sleep 20
+            fi
+          done
+          if [ "$LINKED" -eq 1 ]; then
             if OUTPUT=$(supabase db push --include-all 2>&1); then
               printf '%s\n' "$OUTPUT"
             else
@@ -191,7 +202,7 @@ jobs:
             fi
             echo "Migrations applied successfully"
           else
-            echo "::error::supabase link failed — check SUPABASE_DB_PASSWORD and project ref"
+            echo "::error::supabase link failed after 3 attempts — check SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD and project ref"
             exit 1
           fi
 
