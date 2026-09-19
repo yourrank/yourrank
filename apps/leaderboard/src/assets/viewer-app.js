@@ -78,7 +78,19 @@
       else document.body.style.removeProperty("--yr-" + name);
     });
   }
+  // Viewer help links open the support/feedback modal; the /help pages remain
+  // the no-JS fallback and deep link.
+  function supportLinkMode(target) {
+    if (target.searchParams.get("audience") !== "viewer") return null;
+    return target.pathname === "/help/support" ? "support" : target.pathname === "/help/feedback" ? "feedback" : null;
+  }
+  function openSupport(mode, target, link) {
+    return loadAsset("/assets/viewer-support.js", "YRInitViewerSupport", false).then(function () {
+      window.YRViewerSupport.open({ mode: mode, returnTo: target.searchParams.get("return") || "", opener: link });
+    }).catch(function () { location.assign(target.href); });
+  }
   function hasPendingAction() {
+    if (window.YRViewerSupport && window.YRViewerSupport.isPending()) return true;
     return Array.from(document.querySelectorAll('.viewer-main button[aria-busy="true"], #c_submit:disabled')).some(function (element) {
       return !element.hidden && element.getClientRects().length > 0;
     });
@@ -176,6 +188,8 @@
     if (target.origin !== location.origin || /^\/(?:api|dashboard|login|logout|auth)(?:\/|$)/.test(target.pathname)) return;
     if (!link.closest('.viewer-layout,.viewer-site-footer')) return;
     event.preventDefault();
+    var supportMode = supportLinkMode(target);
+    if (supportMode) { openSupport(supportMode, target, link); return; }
     if (hasPendingAction()) {
       notice.textContent = "Wait for the current action to finish."; notice.hidden = false; return;
     }
