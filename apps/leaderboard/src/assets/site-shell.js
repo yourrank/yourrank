@@ -804,6 +804,211 @@
     });
   });
 
+  // ── Claim support dialog ────────────────────────────────────────────
+  // The viewer <-> creator thread for one claim. Messages load when the dialog
+  // opens, after each send, when the tab becomes visible again and on a light
+  // poll while it is open; everything is tied to the dialog and page lifetime.
+  var supportDialog = document.getElementById("yr-claim-support");
+  if (supportDialog && supportDialog.showModal) {
+    var SUPPORT_POLL_MS = 15000;
+    var supportClaimId = "";
+    var supportOpener = null;
+    var supportTimer = 0;
+    var supportBusy = false;
+    var supportNewForm = supportDialog.querySelector("[data-claim-support-new]");
+    var supportThreadWrap = supportDialog.querySelector("[data-claim-support-thread-wrap]");
+    var supportThread = supportDialog.querySelector("[data-claim-support-thread]");
+    var supportReplyForm = supportDialog.querySelector("[data-claim-support-reply]");
+    var supportResolvedNote = supportDialog.querySelector("[data-claim-support-resolved]");
+    var supportResolvedActs = supportDialog.querySelector("[data-claim-support-resolved-acts]");
+    var supportRewardEl = supportDialog.querySelector("[data-claim-support-reward]");
+    var supportClaimStatusEl = supportDialog.querySelector("[data-claim-support-claim-status]");
+    var supportStateEl = supportDialog.querySelector("[data-claim-support-state]");
+    var setSupportStatus = function (message, isError) {
+      supportDialog.querySelectorAll("[data-claim-support-status]").forEach(function (el) {
+        el.textContent = message || "";
+        el.classList.toggle("is-error", !!isError);
+      });
+    };
+    var supportApi = function (method, path, body) {
+      return fetch(path, {
+        method: method,
+        credentials: "same-origin",
+        signal: AbortSignal.timeout(10000),
+        headers: body ? { "content-type": "application/json", "x-csrf-token": readCsrfToken() } : { "x-csrf-token": readCsrfToken() },
+        body: body ? JSON.stringify(body) : undefined,
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+      });
+    };
+    var supportPath = function (suffix) {
+      return "/api/viewer/claims/" + encodeURIComponent(supportClaimId) + "/support" + (suffix || "");
+    };
+    var formatWhen = function (iso) {
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    };
+    var renderSupport = function (support) {
+      var hasThread = !!support;
+      if (supportNewForm) supportNewForm.hidden = hasThread;
+      if (supportThreadWrap) supportThreadWrap.hidden = !hasThread;
+      if (!hasThread) {
+        if (supportStateEl) supportStateEl.textContent = "";
+        return;
+      }
+      var open = support.status === "open";
+      if (supportStateEl) supportStateEl.textContent = "Support: " + (open ? "Open" : "Resolved") + " · " + (support.issueLabel || "Other");
+      if (supportThread) {
+        supportThread.innerHTML = "";
+        (support.messages || []).forEach(function (m) {
+          var li = document.createElement("li");
+          li.className = m.senderType === "viewer" ? "is-viewer" : "is-creator";
+          var who = document.createElement("strong");
+          who.textContent = m.senderType === "viewer" ? "You" : (m.senderName || "Creator");
+          var text = document.createElement("p");
+          text.textContent = m.message || "";
+          var when = document.createElement("time");
+          when.dateTime = m.createdAt || "";
+          when.textContent = formatWhen(m.createdAt);
+          li.appendChild(who); li.appendChild(text); li.appendChild(when);
+          supportThread.appendChild(li);
+        });
+        supportThread.scrollTop = supportThread.scrollHeight;
+      }
+      if (supportReplyForm) supportReplyForm.hidden = !open;
+      if (supportResolvedNote) supportResolvedNote.hidden = open;
+      if (supportResolvedActs) supportResolvedActs.hidden = open;
+      document.querySelectorAll('[data-claim-id="' + supportClaimId.replace(/"/g, "") + '"]').forEach(function (row) {
+        var trigger = row.querySelector("[data-claim-support]");
+        if (trigger) trigger.textContent = "View support conversation";
+        var tags = row.querySelector(".yr-ord-tags");
+        if (tags) {
+          var tag = tags.querySelector("[data-support-tag]");
+          if (!tag) { tag = document.createElement("span"); tag.setAttribute("data-support-tag", ""); tags.appendChild(tag); }
+          tag.className = "yr-tag" + (open ? " yr-tag--pending" : "");
+          tag.textContent = open ? "Support open" : "Support resolved";
+        }
+      });
+      if (open) startSupportPolling(); else stopSupportPolling();
+    };
+    var loadSupport = function (silent) {
+      if (!supportClaimId || !supportDialog.open) return Promise.resolve();
+      var id = supportClaimId;
+      return supportApi("GET", supportPath()).then(function (r) {
+        if (id !== supportClaimId || !supportDialog.open) return;
+        if (r.ok && r.data.ok) {
+          if (r.data.claim && supportClaimStatusEl) supportClaimStatusEl.textContent = "Claim status: " + (r.data.claim.statusLabel || "");
+          renderSupport(r.data.support);
+        } else if (!silent) {
+          setSupportStatus(r.data.error || "Couldn't load this conversation.", true);
+        }
+      }).catch(function () {
+        if (!silent && id === supportClaimId) setSupportStatus("Couldn't load this conversation. Check your connection.", true);
+      });
+    };
+    var onSupportVisibility = function () {
+      if (document.visibilityState === "visible") loadSupport(true);
+    };
+    var stopSupportPolling = function () {
+      if (supportTimer) clearInterval(supportTimer);
+      supportTimer = 0;
+      document.removeEventListener("visibilitychange", onSupportVisibility);
+    };
+    var startSupportPolling = function () {
+      if (supportTimer) return;
+      supportTimer = window.setInterval(function () {
+        if (document.visibilityState === "visible" && !supportBusy) loadSupport(true);
+      }, SUPPORT_POLL_MS);
+      document.addEventListener("visibilitychange", onSupportVisibility);
+    };
+    pageLifetime.signal.addEventListener("abort", function () {
+      stopSupportPolling();
+      if (supportDialog.open) supportDialog.close();
+    }, { once: true });
+
+    document.querySelectorAll("[data-claim-support]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        supportOpener = btn;
+        supportClaimId = btn.dataset.claimSupport || "";
+        if (supportRewardEl) supportRewardEl.textContent = btn.dataset.claimName || "Reward claim";
+        if (supportClaimStatusEl) supportClaimStatusEl.textContent = "Claim status: " + (btn.dataset.claimStatus || "");
+        if (supportStateEl) supportStateEl.textContent = "";
+        setSupportStatus("Loading…");
+        if (supportNewForm) supportNewForm.hidden = true;
+        if (supportThreadWrap) supportThreadWrap.hidden = true;
+        closeSide();
+        supportDialog.showModal();
+        loadSupport(false).then(function () {
+          if (!supportDialog.open) return;
+          setSupportStatus("");
+          var focusTarget = supportNewForm && !supportNewForm.hidden
+            ? supportNewForm.querySelector('input[name="issueType"]')
+            : supportReplyForm && !supportReplyForm.hidden ? supportReplyForm.querySelector("textarea") : supportDialog.querySelector("[data-claim-support-close]");
+          if (focusTarget) window.setTimeout(function () { focusTarget.focus(); }, 0);
+        });
+      }, { signal: pageLifetime.signal });
+    });
+    supportDialog.querySelectorAll("[data-claim-support-close]").forEach(function (b) {
+      b.addEventListener("click", function () { supportDialog.close(); });
+    });
+    supportDialog.addEventListener("close", function () {
+      stopSupportPolling();
+      supportClaimId = "";
+      var opener = supportOpener;
+      supportOpener = null;
+      if (opener && typeof opener.focus === "function") opener.focus();
+    });
+    var sendSupport = function (form, path, body, sentLabel) {
+      var btn = form.querySelector('button[type="submit"]');
+      if (supportBusy || !btn) return;
+      var textarea = form.querySelector("textarea");
+      var label = btn.textContent;
+      supportBusy = true;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.textContent = "Sending…";
+      var id = supportClaimId;
+      supportApi("POST", path, body).then(function (r) {
+        if (id !== supportClaimId) return;
+        if ((r.ok || r.status === 409) && r.data.support) {
+          if (textarea && r.ok) textarea.value = "";
+          renderSupport(r.data.support);
+          setSupportStatus(r.ok ? sentLabel : (r.data.error || "This request already has an open conversation."), !r.ok);
+          var replyBox = supportReplyForm && !supportReplyForm.hidden ? supportReplyForm.querySelector("textarea") : null;
+          if (replyBox) replyBox.focus();
+        } else {
+          setSupportStatus(r.data.error || "Couldn't send your message. Try again.", true);
+          if (r.status === 409) loadSupport(true);
+        }
+      }).catch(function () {
+        setSupportStatus("Couldn't confirm delivery. Your message is still here; check your connection and try again.", true);
+      }).then(function () {
+        supportBusy = false;
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.textContent = label;
+      });
+    };
+    if (supportNewForm) {
+      supportNewForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var issue = supportNewForm.querySelector('input[name="issueType"]:checked');
+        var message = supportNewForm.message.value.trim();
+        if (!issue) { setSupportStatus("Choose what the issue is.", true); return; }
+        if (!message) { setSupportStatus("Tell the creator what happened.", true); supportNewForm.message.focus(); return; }
+        sendSupport(supportNewForm, supportPath(), { issueType: issue.value, message: message }, "Sent to the creator. Replies will show up here.");
+      });
+    }
+    if (supportReplyForm) {
+      supportReplyForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var message = supportReplyForm.message.value.trim();
+        if (!message) { setSupportStatus("Write a reply first.", true); supportReplyForm.message.focus(); return; }
+        sendSupport(supportReplyForm, supportPath("/messages"), { message: message }, "Reply sent.");
+      });
+    }
+  }
+
   // ── Feedback dialog ─────────────────────────────────────────────────
   var dialog = document.getElementById("yr-feedback");
   var statusEl = document.getElementById("yr-feedback-status");

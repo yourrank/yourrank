@@ -319,7 +319,9 @@ export async function handleCreditsStatus(request, env) {
     query(
       `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at,
               v.kick_user_id, v.kick_username,
-              v.discord_user_id, v.discord_username, i.name AS item_name
+              v.discord_user_id, v.discord_username, i.name AS item_name,
+              (SELECT q.status FROM claim_support_requests q WHERE q.claim_id = r.id
+                ORDER BY CASE WHEN q.status = 'open' THEN 0 ELSE 1 END, q.created_at DESC LIMIT 1) AS support_status
          FROM redemptions r
          JOIN site_viewers sv ON sv.id = r.site_viewer_id
          JOIN viewers v ON v.id = sv.viewer_id

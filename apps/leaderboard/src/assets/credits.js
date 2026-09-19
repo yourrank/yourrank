@@ -81,6 +81,11 @@ let claimDetailRelease;
 let claimDetailTrigger;
 let claimDetailRequest = 0;
 let claimDetailLoading = false;
+let claimFilter = "all";
+let claimSupportTimer = 0;
+const CLAIM_EMPTY_SPEC = { kind: "empty", title: "No claims yet", body: "Claims will appear after a member redeems a shop item.", compact: true };
+let claimSupportBusy = false;
+const CLAIM_SUPPORT_POLL_MS = 15000;
 let shopItemsView = [];
 let shopSearch = "";
 let shopSort = "cost";
@@ -296,7 +301,8 @@ function renderRedemptionRow(r) {
     r.status === "pending" ? `<button class="btn btn--sm" type="button" data-cancel="${esc(r.id)}">Cancel</button>` : "",
     r.status === "pending" ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(r.id)}">Complete</button>` : "",
   ].filter(Boolean).join(" ");
-  return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+  const support = r.support_status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
+  return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}${support}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
 }
 // Publish review (YR-014): findings are linked to their edit control and
 // never rewrite a stored reward. Only a missing contact method blocks a new
@@ -474,9 +480,10 @@ function render() {
     if ($("cr-analytics")) renderAnalytics();
   }
   if (current === "redemptions") {
-    const redemptions = state.redemptions || [];
-    if (!redemptionCtrl) { redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: { kind: "empty", title: "No claims yet", body: "Claims will appear after a member redeems a shop item.", compact: true }, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
-    else redemptionCtrl.setItems(redemptions);
+    const redemptions = filterClaims(state.redemptions || []);
+    if (!redemptionCtrl) {
+      wireClaimFilters(); redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: CLAIM_EMPTY_SPEC, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
+    else applyClaimFilter();
   }
   if (current === "history") {
     const typeSelect = $("cr-history-type");
@@ -691,6 +698,38 @@ function ensureShopControls(hasItems = false) {
   controls.querySelector("[data-shop-next]").addEventListener("click", () => { shopPage++; renderShopCards(shopItemsView); });
 }
 let shopPage = 1;
+function claimNeedsAttention(r) {
+  return r.status === "pending" || r.support_status === "open";
+}
+function filterClaims(items) {
+  if (claimFilter === "pending") return items.filter((r) => r.status === "pending");
+  if (claimFilter === "needs_attention") return items.filter(claimNeedsAttention);
+  if (claimFilter === "completed") return items.filter((r) => r.status === "fulfilled");
+  return items;
+}
+function wireClaimFilters() {
+  document.querySelectorAll("[data-claim-filter]").forEach((button) => button.addEventListener("click", () => {
+    claimFilter = button.dataset.claimFilter;
+    document.querySelectorAll("[data-claim-filter]").forEach((item) => {
+      const active = item === button;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-pressed", String(active));
+    });
+    applyClaimFilter();
+  }));
+}
+const CLAIM_FILTER_EMPTY = {
+  pending: { title: "No pending claims", body: "Every claim has been completed or cancelled." },
+  needs_attention: { title: "Nothing needs attention", body: "No pending claims and no open support requests." },
+  completed: { title: "No completed claims yet", body: "Completed claims will appear here." },
+};
+function applyClaimFilter() {
+  if (!redemptionCtrl) return;
+  const all = state.redemptions || [];
+  const spec = all.length && CLAIM_FILTER_EMPTY[claimFilter];
+  redemptionCtrl.emptySpec = spec ? { kind: "empty", compact: true, ...spec } : CLAIM_EMPTY_SPEC;
+  redemptionCtrl.setItems(filterClaims(all));
+}
 function mountListControls(root, toolbar, foot) {
   const controls = root?.querySelector(":scope > .list-controls");
   if (!controls) return;
@@ -926,6 +965,9 @@ function closeClaimDetail() {
   claimDetailRelease = null;
   claimDetailLoading = false;
   claimDetailId = "";
+  stopClaimSupportPolling();
+  const support = $("cr-claim-support");
+  if (support) support.hidden = true;
   document.documentElement.classList.remove("yr-modal-open");
   if (claimDetailTrigger) {
     claimDetailTrigger.setAttribute("aria-expanded", "false");
@@ -967,6 +1009,93 @@ function renderClaimDetail(data) {
     actions.appendChild(complete);
   }
 }
+function renderClaimSupport(support) {
+  const section = $("cr-claim-support");
+  if (!section) return;
+  if (!support) { section.hidden = true; stopClaimSupportPolling(); return; }
+  section.hidden = false;
+  const open = support.status === "open";
+  $("cr-claim-support-state").innerHTML = `<span class="v3-chip v3-chip--${open ? "pending" : "fulfilled"}">${esc(support.statusLabel || (open ? "Open" : "Resolved"))}</span>`;
+  $("cr-claim-support-issue").textContent = `Issue: ${support.issueLabel || "Other"}`;
+  $("cr-claim-support-thread").innerHTML = (support.messages || []).map((m) => `<li class="cr-claim-support-msg cr-claim-support-msg--${esc(m.senderType)}"><div><strong>${esc(m.senderType === "creator" ? "You" : m.senderName)}</strong><span>${esc(m.message)}</span></div><time datetime="${esc(m.createdAt)}" title="${esc(fmtDate(m.createdAt))}">${esc(relative(m.createdAt))}</time></li>`).join("");
+  const form = $("cr-claim-support-form");
+  form.hidden = !open;
+  if (!open) {
+    setStatus("cr-claim-support-status", support.resolvedAt ? `Resolved ${relative(support.resolvedAt)}. Replies are closed.` : "Resolved. Replies are closed.");
+    stopClaimSupportPolling();
+  } else {
+    startClaimSupportPolling();
+  }
+}
+async function loadClaimSupport({ silent = false } = {}) {
+  if (!claimDetailId) return;
+  const id = claimDetailId;
+  try {
+    const data = await api("GET", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support`));
+    if (id !== claimDetailId) return;
+    renderClaimSupport(data.support);
+  } catch (error) {
+    if (id !== claimDetailId) return;
+    logError("load-claim-support", error);
+    if (!silent) setStatus("cr-claim-support-status", "Couldn't load the support conversation.", true);
+  }
+}
+function stopClaimSupportPolling() {
+  if (claimSupportTimer) clearInterval(claimSupportTimer);
+  claimSupportTimer = 0;
+  document.removeEventListener("visibilitychange", onClaimSupportVisibility);
+}
+function onClaimSupportVisibility() {
+  if (document.visibilityState === "visible") loadClaimSupport({ silent: true });
+}
+function startClaimSupportPolling() {
+  if (claimSupportTimer) return;
+  claimSupportTimer = setInterval(() => {
+    if (document.visibilityState === "visible" && !claimSupportBusy) loadClaimSupport({ silent: true });
+  }, CLAIM_SUPPORT_POLL_MS);
+  document.addEventListener("visibilitychange", onClaimSupportVisibility);
+}
+async function submitClaimSupportReply(event) {
+  event.preventDefault();
+  if (claimSupportBusy || !claimDetailId) return;
+  const textarea = $("cr-claim-support-message");
+  const message = textarea.value.trim();
+  if (!message) { setStatus("cr-claim-support-status", "Write a reply first.", true); textarea.focus(); return; }
+  const button = $("cr-claim-support-send");
+  const id = claimDetailId;
+  claimSupportBusy = true;
+  setLoading(button, true, "Sending…");
+  try {
+    const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/messages`), { message });
+    if (id !== claimDetailId) return;
+    textarea.value = "";
+    renderClaimSupport(data.support);
+    setStatus("cr-claim-support-status", "Reply sent.");
+  } catch (error) {
+    if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
+  } finally {
+    claimSupportBusy = false;
+    setLoading(button, false);
+  }
+}
+async function resolveClaimSupport(button) {
+  if (claimSupportBusy || !claimDetailId) return;
+  const id = claimDetailId;
+  claimSupportBusy = true;
+  setLoading(button, true, "Resolving…");
+  try {
+    const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/resolve`));
+    if (id !== claimDetailId) return;
+    renderClaimSupport(data.support);
+    const local = (state.redemptions || []).find((item) => String(item.id) === String(id));
+    if (local) { local.support_status = "resolved"; applyClaimFilter(); }
+  } catch (error) {
+    if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
+  } finally {
+    claimSupportBusy = false;
+    setLoading(button, false);
+  }
+}
 async function loadClaimDetail() {
   if (claimDetailLoading || !claimDetailId) return;
   const request = claimDetailRequest;
@@ -977,6 +1106,7 @@ async function loadClaimDetail() {
     if (request !== claimDetailRequest) return;
     renderClaimDetail(data);
     setStatus("cr-claim-detail-status", "Claim details loaded.");
+    await loadClaimSupport();
   } catch (error) {
     if (request !== claimDetailRequest) return;
     logError("load-claim-detail", error);
@@ -1298,6 +1428,8 @@ function wireActions() {
   $("cr-member-history-backdrop")?.addEventListener("click", closeMemberHistory);
   $("cr-claim-detail-close")?.addEventListener("click", closeClaimDetail);
   $("cr-claim-detail-backdrop")?.addEventListener("click", closeClaimDetail);
+  $("cr-claim-support-form")?.addEventListener("submit", submitClaimSupportReply);
+  $("cr-claim-support-resolve")?.addEventListener("click", (event) => resolveClaimSupport(event.currentTarget));
   $("cr-member-history-tip")?.addEventListener("click", () => {
     if (!memberDetail) return;
     const { id } = memberDetail;

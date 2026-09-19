@@ -19,7 +19,7 @@ import {
 const CLAIM_LIMIT = 100;
 const MEMBERSHIP_CLAIM_LIMIT = 50;
 const PRIVATE_CACHE = "private, no-store, no-cache, must-revalidate";
-const CREATOR_FILTERS = new Set(["action_required", "submitted", "completed", "cancelled", "all"]);
+const CREATOR_FILTERS = new Set(["action_required", "submitted", "needs_attention", "completed", "cancelled", "all"]);
 const VIEWER_FILTERS = new Set(["submitted", "completed", "cancelled", "all"]);
 
 const claimsDefaults = {
@@ -35,7 +35,7 @@ const claimsDefaults = {
   transitionRedemptionClaimStatus,
 };
 
-function privateResponse(response) {
+export function privateResponse(response) {
   if (!response) return response;
   const headers = new Headers(response.headers);
   headers.set("cache-control", PRIVATE_CACHE);
@@ -59,7 +59,7 @@ function getSite(env, user, url, deps) {
   return siteId ? deps.getBoardById(env, user.id, siteId) : deps.getByUser(env, user.id);
 }
 
-function claimIdFromRequest(request) {
+export function claimIdFromRequest(request) {
   const contextId = routeContext(request).slug;
   if (contextId) return contextId;
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
@@ -72,7 +72,7 @@ function claimIdFromRequest(request) {
   }
 }
 
-function sourceIdFromClaimId(claimId) {
+export function sourceIdFromClaimId(claimId) {
   const value = String(claimId || "");
   if (!value.startsWith(CLAIM_SOURCE_PREFIX)) return "";
   const sourceId = value.slice(CLAIM_SOURCE_PREFIX.length);
@@ -87,7 +87,7 @@ function claimStatusFromRedemption(status) {
   return { status: "submitted", statusLabel: "Needs fulfillment", actionRequired: true, terminal: false };
 }
 
-function claimSummary(row) {
+export function claimSummary(row) {
   const state = claimStatusFromRedemption(row.source_status);
   const completedAt = row.source_status === "fulfilled" && row.terminal_action === "claim_completed"
     ? row.terminal_at
@@ -128,10 +128,11 @@ function claimSummary(row) {
     updatedAt: row.updated_at,
     completedAt,
     cancelledAt,
+    support: row.support_status ? { status: row.support_status, issueType: row.support_issue_type } : null,
   };
 }
 
-function viewerClaimSummary(row) {
+export function viewerClaimSummary(row) {
   const claim = claimSummary(row);
   return {
     id: claim.id,
@@ -151,6 +152,7 @@ function viewerClaimSummary(row) {
     submittedAt: claim.submittedAt,
     completedAt: claim.completedAt,
     cancelledAt: claim.cancelledAt,
+    support: claim.support,
   };
 }
 
@@ -181,13 +183,14 @@ function viewerClaimDetail(row) {
   };
 }
 
-const CLAIM_SELECT = `
+export const CLAIM_SELECT = `
   SELECT r.id AS source_id, r.status AS source_status, r.cost, r.created_at, r.updated_at,
-         sv.id AS site_viewer_id,
+         sv.id AS site_viewer_id, sv.viewer_id,
          COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'Member') AS display_name,
          i.id AS shop_item_id, i.name AS item_name,
          s.id AS site_id, s.slug AS site_slug, s.name AS site_name,
-         terminal_event.action AS terminal_action, terminal_event.created_at AS terminal_at
+         terminal_event.action AS terminal_action, terminal_event.created_at AS terminal_at,
+         support.status AS support_status, support.issue_type AS support_issue_type
     FROM redemptions r
     JOIN site_viewers sv ON sv.id = r.site_viewer_id
     JOIN viewers v ON v.id = sv.viewer_id
@@ -201,9 +204,16 @@ const CLAIM_SELECT = `
          AND a.action IN ('claim_completed', 'claim_cancelled')
        ORDER BY a.created_at DESC, a.id DESC
        LIMIT 1
-    ) terminal_event ON true`;
+    ) terminal_event ON true
+    LEFT JOIN LATERAL (
+      SELECT q.status, q.issue_type
+        FROM claim_support_requests q
+       WHERE q.claim_id = r.id
+       ORDER BY CASE WHEN q.status = 'open' THEN 0 ELSE 1 END, q.created_at DESC
+       LIMIT 1
+    ) support ON true`;
 
-async function creatorAccess(request, env, deps) {
+export async function creatorAccess(request, env, deps) {
   const { user, res } = await deps.requireUser(request, env);
   if (res) return { res: privateResponse(res) };
   const site = await getSite(env, user, new URL(request.url), deps);
@@ -241,10 +251,12 @@ export async function handleCreatorClaims(request, env, injected = {}) {
         AND (
           $2 = 'all'
           OR ($2 IN ('action_required', 'submitted') AND r.status = 'pending')
+          OR ($2 = 'needs_attention' AND (r.status = 'pending' OR support.status = 'open'))
           OR ($2 = 'completed' AND r.status = 'fulfilled')
           OR ($2 = 'cancelled' AND r.status = 'cancelled')
         )
       ORDER BY
+        CASE WHEN support.status = 'open' THEN 0 ELSE 1 END,
         CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END,
         CASE WHEN r.status = 'pending' THEN r.created_at END ASC,
         CASE WHEN r.status != 'pending' THEN r.updated_at END DESC,
@@ -257,7 +269,10 @@ export async function handleCreatorClaims(request, env, injected = {}) {
     `SELECT
        count(*) FILTER (WHERE r.status = 'pending')::integer AS action_required,
        count(*) FILTER (WHERE r.status = 'fulfilled')::integer AS completed,
-       count(*) FILTER (WHERE r.status = 'cancelled')::integer AS cancelled
+       count(*) FILTER (WHERE r.status = 'cancelled')::integer AS cancelled,
+       count(*) FILTER (WHERE r.status = 'pending' OR EXISTS (
+         SELECT 1 FROM claim_support_requests q WHERE q.claim_id = r.id AND q.status = 'open'
+       ))::integer AS needs_attention
        FROM redemptions r
        JOIN site_viewers sv ON sv.id = r.site_viewer_id
       WHERE sv.site_id=$1`,
@@ -268,12 +283,15 @@ export async function handleCreatorClaims(request, env, injected = {}) {
     submitted: Number(countRow?.action_required) || 0,
     completed: Number(countRow?.completed) || 0,
     cancelled: Number(countRow?.cancelled) || 0,
+    needsAttention: Number(countRow?.needs_attention) || 0,
   };
   const selectedCount = filter === "all"
     ? counts.submitted + counts.completed + counts.cancelled
     : filter === "action_required"
       ? counts.actionRequired
-      : counts[filter] || 0;
+      : filter === "needs_attention"
+        ? counts.needsAttention
+        : counts[filter] || 0;
 
   return privateOk({
     site: { id: site.id, name: site.name || site.slug, slug: site.slug },
@@ -285,7 +303,7 @@ export async function handleCreatorClaims(request, env, injected = {}) {
   });
 }
 
-async function loadCreatorClaim(siteId, sourceId, deps) {
+export async function loadCreatorClaim(siteId, sourceId, deps) {
   return deps.one(
     `${CLAIM_SELECT}
       WHERE sv.site_id=$1 AND r.id=$2`,
@@ -468,7 +486,7 @@ export async function getViewerClaimsForMembership(
   };
 }
 
-async function loadViewerClaim(viewerId, sourceId, deps) {
+export async function loadViewerClaim(viewerId, sourceId, deps) {
   return deps.one(
     `${CLAIM_SELECT}
      JOIN users u ON u.id = s.user_id

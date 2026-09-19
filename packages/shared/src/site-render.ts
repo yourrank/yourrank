@@ -1116,13 +1116,59 @@ function claimRow(row) {
   const tagCls = status === "submitted" ? "yr-tag yr-tag--pending" : status === "completed" ? "yr-tag yr-tag--done" : "yr-tag";
   const terminalAt = status === "completed" ? row.completedAt : status === "cancelled" ? row.cancelledAt : null;
   const terminalLabel = status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : "";
-  return `<li class="yr-ord">
+  const support = row.support && (row.support.status === "open" || row.support.status === "resolved") ? row.support : null;
+  const supportTag = support ? `<span class="yr-tag${support.status === "open" ? " yr-tag--pending" : ""}" data-support-tag>${support.status === "open" ? "Support open" : "Support resolved"}</span>` : "";
+  const supportAction = `<button class="yr-sec-link yr-ord-help" type="button" data-claim-support="${esc(String(row.id || ""))}" data-claim-name="${esc(row.reward?.name || "Reward claim")}" data-claim-status="${esc(label)}">${support ? "View support conversation" : "Need help with this claim?"}</button>`;
+  return `<li class="yr-ord" data-claim-id="${esc(String(row.id || ""))}">
 <div class="yr-ord-main">
 <p class="yr-ord-n">${esc(row.reward?.name || "Reward claim")}</p>
 <p class="yr-ord-p">${formatNumber(row.reward?.cost)} credits · Submitted ${esc(formatDate(row.submittedAt))}${terminalAt ? ` · ${terminalLabel} ${esc(formatDate(terminalAt))}` : ""}</p>
+${supportAction}
 </div>
-<span class="${tagCls}">${esc(label)}</span>
+<span class="yr-ord-tags"><span class="${tagCls}">${esc(label)}</span>${supportTag}</span>
 </li>`;
+}
+
+/** Claim support: a creator <-> viewer thread attached to one claim. Same
+ *  native <dialog> as the claim confirmation; the shell script fills it. */
+function claimSupportDialog(creator) {
+  return `<dialog class="yr-modal yr-claim-support" id="yr-claim-support" aria-labelledby="yr-claim-support-t">
+<div class="yr-modal-in">
+<h2 id="yr-claim-support-t">Get help with this claim</h2>
+<p class="yr-ord-n" data-claim-support-reward></p>
+<p class="yr-fine"><span data-claim-support-claim-status></span><span data-claim-support-state></span></p>
+<form class="yr-claim-support-new" data-claim-support-new hidden>
+<fieldset class="yr-claim-support-issues"><legend class="yr-sec-sub">What's the issue?</legend>
+<label><input type="radio" name="issueType" value="reward_not_received" required /><span>Reward not received</span></label>
+<label><input type="radio" name="issueType" value="wrong_or_invalid_reward" /><span>Wrong / invalid reward</span></label>
+<label><input type="radio" name="issueType" value="taking_too_long" /><span>Taking too long</span></label>
+<label><input type="radio" name="issueType" value="other" /><span>Other</span></label>
+</fieldset>
+<label class="yr-sec-sub" for="yr-claim-support-message">Tell the creator more</label>
+<textarea id="yr-claim-support-message" name="message" rows="4" maxlength="2000" placeholder="What happened?" required aria-describedby="yr-claim-support-hint"></textarea>
+<p class="yr-note" id="yr-claim-support-hint">This message goes to ${creator}, not YourRank support.</p>
+<p class="yr-modal-status" data-claim-support-status role="status" aria-live="polite"></p>
+<div class="yr-modal-acts">
+<button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-claim-support-close>Cancel</button>
+<button class="yr-btn yr-btn--sm" type="submit">Send to creator</button>
+</div>
+</form>
+<div class="yr-claim-support-thread-wrap" data-claim-support-thread-wrap hidden>
+<ol class="yr-claim-support-thread" data-claim-support-thread role="list" aria-live="polite"></ol>
+<form class="yr-claim-support-reply" data-claim-support-reply>
+<label class="yr-claim-support-sr" for="yr-claim-support-reply-message">Your reply</label>
+<textarea id="yr-claim-support-reply-message" name="message" rows="3" maxlength="2000" placeholder="Write a reply…" required></textarea>
+<p class="yr-modal-status" data-claim-support-status role="status" aria-live="polite"></p>
+<div class="yr-modal-acts">
+<button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-claim-support-close>Close</button>
+<button class="yr-btn yr-btn--sm" type="submit">Reply</button>
+</div>
+</form>
+<p class="yr-note" data-claim-support-resolved hidden>This request is resolved. The conversation stays here, but new replies are closed.</p>
+<div class="yr-modal-acts" data-claim-support-resolved-acts hidden><button class="yr-btn yr-btn--ghost yr-btn--sm" type="button" data-claim-support-close>Close</button></div>
+</div>
+</div>
+</dialog>`;
 }
 
 /* ── Games ────────────────────────────────────────────────────────────── */
@@ -1227,7 +1273,7 @@ ${blocked ? '<p class="yr-note yr-note--w" role="status">Claiming is currently u
 <section class="member-section" id="membership-claims" role="tabpanel" aria-labelledby="membership-tab-claims" tabindex="0">
 <div class="member-section-head"><h2 id="member-claims-title">Your claims</h2><p>${claims.length ? `${formatNumber(claims.length)} recent` : "Reward status, in one place"}</p></div>
 ${claims.length
-  ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}`
+  ? `<ul class="yr-ords" role="list">${claims.map(claimRow).join("")}</ul><p class="yr-fine">${esc(CLAIM_STATUS_NOTE)}</p>${viewerData.claimsTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.claimsLimit || claims.length)} most recent Claims.</p>` : ""}${claimSupportDialog(creator)}`
   : `<div class="member-empty"><div><h3>No claims yet</h3><p>${blocked ? 'Claiming is unavailable for this membership.' : 'Choose a reward in the Reward shop. Its status will appear here after you claim it.'}</p></div></div>`}
 </section>
 <section class="member-section" id="membership-participation" role="tabpanel" aria-labelledby="membership-tab-participation" tabindex="0"><div class="member-section-head"><h2 id="member-participation-title">Participation</h2><p>${formatNumber(participation.length)} recent</p></div>${participationRows ? `<ul class="yr-parts" role="list">${participationRows}</ul>${viewerData.participationTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.participationLimit || participation.length)} most recent participation records.</p>` : ""}` : '<div class="member-empty"><p>No participation history yet. Successful free code-drop claims will appear here.</p></div>'}</section>

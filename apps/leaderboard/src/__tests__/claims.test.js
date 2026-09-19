@@ -55,7 +55,7 @@ function dependencies(overrides = {}) {
     },
     one: async (sql, params) => {
       calls.one.push({ sql: String(sql), params });
-      if (String(sql).includes("FILTER")) return { action_required: 1, completed: 0, cancelled: 0 };
+      if (String(sql).includes("FILTER")) return { action_required: 1, completed: 0, cancelled: 0, needs_attention: 1 };
       return claimRow();
     },
     withTransaction: async (callback) => callback({}),
@@ -77,7 +77,7 @@ describe("canonical Claims adapter", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(body.filter).toBe("action_required");
-    expect(body.counts).toEqual({ actionRequired: 1, submitted: 1, completed: 0, cancelled: 0 });
+    expect(body.counts).toEqual({ actionRequired: 1, submitted: 1, completed: 0, cancelled: 0, needsAttention: 1 });
     expect(body.claims).toEqual([expect.objectContaining({
       id: CLAIM_ID,
       type: "reward_redemption",
