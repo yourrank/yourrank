@@ -1,21 +1,189 @@
-# Provider portability: audit and migration plan
+# Provider portability: architecture and migration record
 
-Status: **expand phase shipped** (this document's "Now" section). Everything else
-is a plan, not a commitment to build features. Kick stays the first and only
-live provider; Twitch is the expected second one.
+Status: **Phases 1, 2 and 2.5 shipped; architecture accepted as the base for the
+next provider.** Kick is the only live creator provider; Discord is a viewer
+sign-in provider only. Twitch is the expected second creator provider and is
+not wired anywhere yet. The contract (column-drop) phase is deliberately unshipped.
 
-Goal: adding a provider should mean writing a provider adapter plus mapping
-rows — not redesigning viewer identity, community identity, event storage,
-rewards, or auth.
+Goal: adding a provider means writing a provider module plus mapping rows — not
+redesigning viewer identity, community identity, event storage, rewards, or auth.
 
-## 1. Current coupling map (as of `main`, September 2026)
+Sections §A–§E describe **current HEAD**, verified against the code at the time
+of writing. §1–§9 are the original audit and phase-by-phase record; they are kept
+for history and are marked as such — where a statement there conflicts with §A–§E,
+§A–§E wins.
+
+## A. Current architecture (what production code uses now)
+
+### Identity: Viewer Account and its provider identities
+
+- `viewers` is the Viewer Account; `viewer_identities (viewer_id, provider, external_user_id, …)`
+  is the **source of truth** for which external identities a viewer owns. One viewer may own
+  one active identity per provider; one external identity may have exactly one *active* owner
+  (`provider_active_ownership` trigger, SQLSTATE `23505`; revoked rows are kept for audit).
+- `packages/shared/src/viewer-identity.ts` is the only writer:
+  `linkExternalViewerIdentity(run, identity, { mode: "signin" } | { mode: "link", viewerId })`.
+  Sign-in resolves the active owner or creates a viewer; link attaches to the initiating viewer,
+  never creates one, and returns `identity_owned_by_other_viewer` /
+  `provider_already_connected` / `viewer_not_found` without writing. No merge ever happens on
+  username, email, display name, avatar or provider metadata.
+- Every identity write (`viewers`, `viewer_identities`, the legacy `viewers.kick_*`/`discord_*`
+  mirror, `viewer_username_history`) runs in one `withTransaction()` that first takes
+  `pg_advisory_xact_lock(hashtext('viewer_identities:<provider>:<external_id>'))` and reads the
+  owning row `FOR UPDATE`. Concurrent first logins therefore yield exactly one Viewer Account.
+- Readers use `viewerIdentitiesSql()` / `linkedViewerIdentities()` / `viewerDisplayName()`:
+  viewer session (`ViewerRecord.identities`), `/api/viewer/me` (`connectedAccounts[]` via
+  `describeConnectedAccounts()`), people/member views, review linked accounts, viewer export.
+- Viewer OAuth (`apps/leaderboard/src/handlers/viewer-auth.js`): Kick and Discord start/callback
+  handlers; `?intent=link` stores `intent`, `linkViewerId` and the session authority
+  (`global` or `site:<id>`) in the single-use `oauth_states` row and the callback re-validates
+  nonce, callback URI, origin, freshness, authority and that the *current* session resolves to
+  the same viewer. Link callbacks never mint a session.
+
+### Creator connections and community channels
+
+- `creator_connections (user_id, provider, external_user_id, …)` is the source of truth for a
+  creator's provider login; `packages/shared/src/provider-connections.ts` writes it
+  (connect / reconnect / disconnect) and `account.js` reads it (`loadCreatorConnection`).
+- `community_channels (site_id, provider, external_channel_id, creator_connection_id, verified_at,
+  status)` is the source of truth for which provider resource a community owns.
+  `creator_connection_id` records **which** creator connection verified the binding.
+  `linkCommunityChannel({ verified: true })` refuses to run without it and checks the connection
+  is active, same provider, and belongs to the site owner.
+- Generic routing (`resolveVerifiedCommunityChannel`) checks only: provider match,
+  `ch.status='active'`, `ch.verified_at IS NOT NULL`, `cc.id = ch.creator_connection_id`,
+  `cc.status='active'`, `cc.linked_at IS NOT NULL`, `cc.user_id = s.user_id`. It never compares
+  `external_user_id` with `external_channel_id`; the creator identity and the channel id are
+  independent values (`user-123` may own `channel-999`).
+- Revoking a creator connection or re-linking it as a different external identity clears
+  `verified_at` and `creator_connection_id` on dependent channels
+  (`creator_connection_invalidates_channels` trigger), so a stale ownership proof never routes;
+  rebinding re-verifies through provider code.
+- Reward redemption (`processKickRewardRedemption`) resolves the community through
+  `resolveVerifiedCommunityChannel`, resolves/creates the redeeming viewer through
+  `findViewerByExternalIdentity` / `persistViewerIdentity`, and dual-writes
+  `integration_events` + `credit_ledger.integration_event_id` next to the legacy
+  `kick_reward_events` row.
+
+### Provider registry
+
+`packages/shared/src/providers/registry.ts` lists provider modules with optional capabilities
+(`viewerAuth`, `creatorAuth`, `webhooks`, `rewards`). `kick` has all four; `discord` is
+`viewerAuth` only. `apps/leaderboard/src/viewer-oauth.js` derives `VIEWER_OAUTH_PROVIDERS` from
+`listProviders("viewerAuth")`.
+
+### Access model
+
+The four generic tables have `GRANT ALL` to `yourrank_app` and `service_role`. Row-level security
+is **not** enabled on them (same as the other post-baseline expand tables); tenant scoping is
+enforced in application SQL, as for the rest of the schema.
+
+### CI enforcement
+
+The `Migration Dry-Run` job in `.github/workflows/pr-check.yml` applies every migration to a fresh
+Postgres 16 service container and then runs `bun run verify:portability-postgres`
+(`scripts/verify-portability-postgres.mjs`). That wrapper requires `AUDIT_TEST_DATABASE_URL`,
+refuses non-local/non-test databases, runs each suite in its own process and fails the job when a
+suite has any failure, any skip, or zero executed tests. Mandatory suites
+(`apps/leaderboard/src/__tests__/`):
+
+| Suite | Guarantees |
+|---|---|
+| `viewer-link-postgres` | Kick sign-in → Connect Discord → same viewer, no Viewer B; identity owned by Viewer B rejected with both accounts intact; second identity for one provider rejected; sign-in vs link mode; stale/forged/wrong-session/wrong-viewer states write nothing; custom-domain link via handoff |
+| `provider-neutral-postgres` | rollback of viewer/identity/mirror/username-history on failure and on a DB error; 8 concurrent first logins → 1 viewer; racing links → 1 owner; `user-123`/`channel-999` verified binding routes; unverified, foreign-connection, hijack (`23505`), revoked connection, re-linked identity and revoked channel do not route; unlink → rebind by another creator routes |
+| `provider-rebind-postgres` | A owns channel → unlink → B legitimately binds; late events for A are skipped |
+| `provider-portability-postgres` | legacy `sites.kick_channel_*` mirror stays consistent with the generic binding |
+| `provider-binding-postgres` | Kick creator callback → generic binding; unverified binding never routes |
+| `viewer-authority-postgres` | viewer session authority (global vs custom domain) for Kick and Discord flows |
+
+The same files self-skip in the database-free `Test` job; that skip is not verification and the
+Dry-Run job is the required gate.
+
+## B. Legacy compatibility (retained on purpose, temporary)
+
+All of these are still written and still readable; none is the source of truth for routing or
+identity ownership.
+
+- `viewers.kick_*` / `discord_*` identity + token columns — mirrored from `persistViewerIdentity`
+  and by the `mirror_viewer_identities` trigger (legacy → generic, idempotent) so an N-1 Worker
+  writing only legacy columns still produces correct generic rows.
+- `users.kick_*` creator columns — mirrored by `provider-connections.ts` and
+  `mirror_creator_connections`. Kick creator **token refresh** in `credits.js` still reads and
+  writes `users.kick_*_token_enc` directly.
+- `sites.kick_channel_external_id / _name / _linked_at / _verified_at` — mirrored by
+  `linkCommunityChannel` and by `mirror_community_channels`, `mirror_community_channels_status`,
+  `mirror_community_channels_zz_ownership` (the last derives `creator_connection_id` with the Kick
+  rule for legacy writers).
+- `sites.viewer_kick_auth_enabled` / `viewer_discord_auth_enabled` per-site opt-in booleans.
+- `kick_reward_events` — still the idempotency ledger for redemptions; `integration_events` is
+  dual-written and linked from `credit_ledger.integration_event_id`.
+- `credit_ledger.kick_event_id`, `credit_reward_mappings.kick_reward_*` (read through
+  `reward-mappings.ts` as `externalReward*`; writes still target the `kick_reward_*` names).
+- Remaining inline `kick_username || discord_username` fallbacks: `assets/credits.js` (dashboard
+  member/redemption rows), `feedback.js` (persists `kick_username` into `viewer_feedback`),
+  `duels.js` (legacy games scope, out of bounds).
+
+## C. Provider-specific code (correctly provider-specific)
+
+- Kick OAuth/PKCE (`kick-oauth.ts`), Discord OAuth (`discord-oauth.ts`), and the per-provider
+  viewer start/callback/handoff handlers in `viewer-auth.js`.
+- Kick ownership rule "broadcaster user id = channel id":
+  `packages/shared/src/providers/kick-ownership.ts` (`kickCreatorOwnsChannel`), applied only by
+  `bindSiteKickChannel`, the Kick creator callback (`kick-auth.js`) and the legacy mirror trigger —
+  always *before* `linkCommunityChannel`, never inside generic routing.
+- Kick webhook signature verification and the `kick-redemption` queue message
+  (`kick-webhook.js`, `consumer/worker.js`).
+- Kick anti-fraud signals (look-alike `viewers.kick_username`, alt history) in `kick-credits.ts`.
+- "Log in with Kick" / "Sign in with Discord" buttons and provider labels.
+
+## D. Deferred contract cleanup (intentionally not done)
+
+A separate `-- yourrank:migration-phase: contract` release, only after one full release has run
+on the generic tables with parity confirmed (§9 query): drop the mirror triggers, then
+`viewers.kick_*`/`discord_*`, `users.kick_*`, `sites.kick_channel_*`, `kick_reward_events`,
+`credit_ledger.kick_event_id`; rename `credit_reward_mappings.kick_reward_*` →
+`external_reward_*`; fold `sites.viewer_*_auth_enabled` into `viewer_auth_providers text[]`;
+switch redemption idempotency to `integration_events`. Also deferred: a generic
+`/api/viewer/auth/:provider` router (the shared link/sign-in logic is factored, the routes are
+still per provider), `shop_items.fulfillment_type`, entitlements, organizations above
+`site_members`, and any Twitch/YouTube/Patreon/Shopify module.
+
+## E. Exact work required to begin Twitch
+
+1. `packages/shared/src/providers/twitch.ts` registered in `registry.ts` with `viewerAuth`,
+   `creatorAuth` and (if channel-point redemptions are in scope) `webhooks` + `rewards`
+   capabilities; Twitch OAuth + EventSub signature verification live only in that module.
+2. A Twitch ownership check (broadcaster lookup, optionally editor role) that calls
+   `linkCommunityChannel({ provider: "twitch", creatorConnectionId, verified: true })`.
+   No schema change: `creator_connections`, `community_channels.creator_connection_id` and
+   `resolveVerifiedCommunityChannel` already accept any provider.
+3. Viewer sign-in / Connect Twitch: either the generic `/api/viewer/auth/:provider` router or a
+   third handler pair in `viewer-auth.js` reusing `linkExternalViewerIdentity` and the same
+   link-state validation.
+4. Per-site opt-in: `viewer_auth_providers` fold, or a `sites.viewer_twitch_auth_enabled` column
+   plus a `describeConnectedAccounts` / `maskViewerAuthProviders` entry.
+5. Only if Twitch redemptions are in scope: switch reward-mapping writes to
+   `provider` + `external_reward_*` and idempotency to `integration_events`.
+6. Extend `verify-portability-postgres.mjs` suites with a Twitch fixture
+   (creator `twitch-user-…`, channel `twitch-channel-…`) so the generic guarantees are proven for a
+   second creator provider before launch.
+
+---
+
+## Historical record (Phases 1–2.5)
+
+> Everything below this line describes the audit and each phase **as it was written**. Statements
+> such as "not shipped", "legacy columns remain the read source" or "switch phase" refer to the
+> state at that phase, not to HEAD. See §A–§E for current truth.
+
+## 1. Coupling map at audit time (`main`, September 2026, before Phase 1)
 
 Production data volume at audit time: 4 viewers (all Kick, 0 Discord), 2 creator
 users with Kick linked, 2 sites with a Kick channel, 0 `kick_reward_events`,
 2 `credit_reward_mappings`. Backfill cost is negligible; the risk is code paths,
 not data volume.
 
-### Schema
+### Schema (as of the audit)
 
 | Concept | Where it lives today | Provider-specific? |
 |---|---|---|
@@ -32,7 +200,7 @@ not data volume.
 | Ownership | `sites.user_id` owner + `site_members(site_id, user_id, role)` | Already multi-user per site; no organization entity |
 | Billing events | `provider_events(provider, provider_reference, event_kind, …)` | **Name collision**: this is the payment-provider ledger (Polar), not creator-platform events |
 
-### Code
+### Code (as of the audit; most items below have since moved — see §A/§B)
 
 Writers of provider columns (every one must keep working unchanged):
 
@@ -64,7 +232,7 @@ buttons (one per provider, `site-render.ts` `viewerAuthButtons`, `pages/viewer-d
 Kick OAuth/PKCE in `kick-oauth.ts`, Discord OAuth in `discord-oauth.ts`,
 "Watch on Kick" footer link (derived from the creator's socials, already handles Twitch/YouTube hosts).
 
-## 2. Highest-risk technical debt (ranked)
+## 2. Highest-risk technical debt at audit time (ranked; items 1 and 3 resolved, 2/4/5/6/7 partially — see §B/§D)
 
 1. **`viewers.kick_user_id` UNIQUE as the identity key.** Every event, OAuth callback and export resolves a viewer through a provider column. A second provider means a second nullable column set or a rewrite of every resolver. Two Kick/Discord callback functions already duplicate ~60 lines each.
 2. **`kick_reward_events` is the idempotency ledger and `credit_ledger.kick_event_id` the audit link.** A Twitch event has nowhere to land; loyalty code would have to learn a second table.
@@ -95,11 +263,11 @@ Rules:
 - Adapters expose *optional* capabilities; callers check `hasCapability(adapter, "rewards")` instead of `if (provider === "kick")`.
 - Organizations: keep `sites.user_id` + `site_members`. A future `organizations` table would sit above `sites`; nothing added now assumes `1 user = 1 site` (the new tables key on `user_id`/`site_id`, not on each other).
 
-## 4. Schema migration plan (expand → backfill → switch → verify → contract)
+## 4. Schema migration record (expand → backfill → switch → verify → contract)
 
-### Expand + backfill (shipped: `supabase/migrations/20260919000000_provider_portability_expand.sql`)
+### Phase 1 — Expand + backfill (shipped: `supabase/migrations/20260919000000_provider_portability_expand.sql`)
 
-New tables, all additive, RLS-enabled with the standard `yourrank_app` / `service_role` policies:
+New tables, all additive, granted to `yourrank_app` / `service_role` (RLS not enabled; see §A "Access model"):
 
 - `viewer_identities(id, viewer_id → viewers, provider, external_user_id, username, avatar_url, access_token_enc, refresh_token_enc, token_expires_at, scopes, status, linked_at, metadata, created_at, updated_at)`
   UNIQUE `(provider, external_user_id)`, UNIQUE `(viewer_id, provider)`.
@@ -116,11 +284,11 @@ New tables, all additive, RLS-enabled with the standard `yourrank_app` / `servic
 
 Backfill runs in the same migration (`INSERT … SELECT … ON CONFLICT DO NOTHING`) from `viewers.kick_*`/`discord_*`, `users.kick_*`, `sites.kick_channel_*`. `kick_reward_events` had 0 rows in production; the backfill statement is included anyway for staging/local copies.
 
-**Dual-write is done in the database, not in application code.** Triggers on `viewers`, `users`, and `sites` mirror every legacy-column write into the new tables (upsert when the external id is present, mark `revoked` / `verified_at = NULL` when it is cleared — e.g. Kick unlink — so history stays auditable). This means every existing writer (`viewer-auth.js`, `kick-credits.ts`, `kick-auth.js`, `credits.js`) is covered without touching it, the new tables cannot drift while both exist, and rollback is "drop the triggers".
+**Phase 1 dual-write was done in the database, not in application code.** Triggers on `viewers`, `users`, and `sites` mirror every legacy-column write into the new tables (upsert when the external id is present, mark `revoked` / `verified_at = NULL` when it is cleared — e.g. Kick unlink — so history stays auditable). In Phase 1 this covered every existing writer without touching it. Since Phase 2 the application writes the generic tables first and mirrors the legacy columns itself; the triggers remain as the N-1 safety net (§B).
 
 `processKickRewardRedemption` additionally writes the normalized `integration_events` row and stamps `credit_ledger.integration_event_id` in the same transaction as the legacy `kick_reward_events` insert (both are needed until reads switch).
 
-### Switch reads/writes (Phase 2, shipped)
+### Phase 2 — Switch reads/writes (shipped)
 
 Migration `20260920000000_provider_portability_active_ownership.sql` replaces the unconditional
 `UNIQUE (provider, external_*_id)` constraints on `viewer_identities`, `creator_connections` and
@@ -149,12 +317,12 @@ Application paths now on the generic tables (legacy columns kept mirrored by the
    (`provider`, `externalRewardId`, `externalRewardTitle`, `externalRewardCost`) aliasing the
    `kick_reward_*` columns; writes still target the legacy column names.
 
-Still legacy in Phase 2 (Phase 3): idempotency is `kick_reward_events` (`integration_events` is
-dual-written and linked from `credit_ledger.integration_event_id`); mapping writes and the dashboard
-mapping editor use `kick_reward_*`; the anti-fraud signals read `viewers.kick_username`; Kick creator
-token refresh reads `users.kick_*`.
+Still legacy after Phase 2 (unchanged at HEAD, tracked in §B/§D): idempotency is `kick_reward_events`
+(`integration_events` is dual-written and linked from `credit_ledger.integration_event_id`); mapping
+writes and the dashboard mapping editor use `kick_reward_*`; the anti-fraud signals read
+`viewers.kick_username`; Kick creator token refresh reads `users.kick_*`.
 
-### Phase 2.5 — remaining portability blockers (shipped)
+### Phase 2.5 — remaining portability blockers (shipped; PR #793)
 
 Migration `20260921000000_provider_portability_channel_ownership.sql` (expand-safe: one nullable
 column, one index, a backfill, two triggers).
@@ -220,58 +388,53 @@ Still provider-specific after Phase 2.5 (deliberate, not blockers):
   reading `viewers.kick_username`, Kick creator token refresh reading `users.kick_*`.
 - Legacy Kick mirror columns and their triggers (contract phase).
 
-Exact work before Twitch: (1) a Twitch provider module (OAuth, `viewerAuth` + `creatorAuth`
-capabilities, EventSub webhook verification) registered in `providers/registry.ts`; (2) a Twitch
-ownership check (broadcaster lookup / editor role) that calls `linkCommunityChannel` with the
-creator connection id — no schema change needed; (3) generic OAuth start/callback routes keyed by
-provider, or a third copy of the handler pair; (4) a `viewer_auth_providers` fold or a
-`viewer_twitch_auth_enabled` column; (5) reward mapping writes and idempotency switched to
-`integration_events` / `external_reward_*` if Twitch channel-point redemptions are in scope.
+Exact work before Twitch: see §E.
 
-### Verify
+### Verify (ongoing)
 
-Row-count and content parity between legacy columns and new tables (query in §8), all Kick journeys green in staging, `integration_events` count == `kick_reward_events` count for new events.
+Row-count and content parity between legacy columns and new tables (query in §9), all Kick journeys green in staging, `integration_events` count == `kick_reward_events` count for new events. The database-level guarantees are enforced on every PR by the mandatory suites in §A "CI enforcement".
 
-### Contract (much later, separate release, `-- yourrank:migration-phase: contract`)
+### Contract (not shipped; see §D)
 
-Drop triggers, then `viewers.kick_*`/`discord_*` token+identity columns, `users.kick_*`, `sites.kick_channel_*`, `kick_reward_events`, `credit_ledger.kick_event_id`; rename `credit_reward_mappings.kick_reward_*` → `external_reward_*`. Only after every reader in §1 has switched and one full release has run on the new tables.
+Drop triggers, then `viewers.kick_*`/`discord_*` token+identity columns, `users.kick_*`, `sites.kick_channel_*`, `kick_reward_events`, `credit_ledger.kick_event_id`; rename `credit_reward_mappings.kick_reward_*` → `external_reward_*`. Only after one full release has run on the new tables.
 
-## 5. Exact files / tables / functions affected
+## 5. Files / tables / functions affected by Phase 1 (historical)
 
-Shipped now:
+Shipped in Phase 1:
 
 - `supabase/migrations/20260919000000_provider_portability_expand.sql` (new)
 - `packages/shared/src/providers/types.ts`, `registry.ts`, `kick.ts` (new adapter boundary; Kick adapter delegates to existing `kick-oauth.ts` / `kick-credits.ts`)
-- `packages/shared/src/viewer-identity.ts` (new: `linkedViewerIdentities`, `viewerDisplayName` — read legacy columns today, the only place to change when reads move to `viewer_identities`)
+- `packages/shared/src/viewer-identity.ts` (new in Phase 1 with `linkedViewerIdentities`, `viewerDisplayName` reading legacy columns; since Phase 2 it reads/writes `viewer_identities` and owns `linkExternalViewerIdentity`)
 - `packages/shared/src/kick-credits.ts` — `processKickRewardRedemption` dual-writes `integration_events` and `credit_ledger.integration_event_id`
-- `apps/leaderboard/src/handlers/people.js` — `displayName` / `linkedIdentities` delegate to the shared helpers (same output). The remaining inline `kick_username || discord_username` ternaries (`site-render.ts`, `pages/viewer-dashboard.js`, `handlers/viewer-dashboard.js`, `assets/credits.js`) are switch-phase work listed in §1.
+- `apps/leaderboard/src/handlers/people.js` — `displayName` / `linkedIdentities` delegate to the shared helpers (same output). Inline `kick_username || discord_username` ternaries were removed from `site-render.ts`, `pages/viewer-dashboard.js` and `handlers/viewer-dashboard.js` in Phase 2; the ones still present are listed in §B.
 - Tests: `apps/leaderboard/src/__tests__/provider-portability-postgres.test.js` (runs with `AUDIT_TEST_DATABASE_URL`, like `provider-binding-postgres.test.js`), `packages/shared/src/__tests__/providers.test.ts`, `credits-lifecycle.test.js` (ledger now carries `integration_event_id`)
 
-Switch phase (not shipped): `viewer-auth.js`, `kick-auth.js`, `credits.js`, `account.js`, `viewer-oauth.js`, `viewer-session.ts`, `viewer-export.js`, `kick-webhook.js`, `consumer/worker.js`, `feedback.js`.
+Switched in Phase 2 / 2.5 (historically listed here as "switch phase, not shipped"): `viewer-auth.js`, `kick-auth.js`, `credits.js` (channel binding), `account.js`, `viewer-oauth.js`, `viewer-session.ts`, `viewer-export.js`. Still on legacy columns: `credits.js` token refresh, `kick-webhook.js` / `consumer/worker.js` (Kick-specific by design), `feedback.js` (§B).
 
-## 6. Compatibility strategy
+## 6. Compatibility strategy (Phase 1 wording; current state in §B)
 
 - No column is renamed, dropped, or made NOT NULL. All existing SQL keeps working.
-- Legacy columns remain the read source for every current route; new tables are populated but not yet read by product code.
+- *Phase 1:* legacy columns were the read source for every route and the new tables were populated but not read. *Since Phase 2:* the generic tables are the read/write source for identity, connections and channel routing (§A); legacy columns are mirrors.
 - Triggers make the new tables a faithful projection of the legacy columns, so a partially deployed Worker fleet (N-1) writing only legacy columns still produces correct new-table rows.
 - `integration_events` insert uses `ON CONFLICT DO NOTHING`; a failure there would abort the whole redemption transaction, so it runs after the legacy idempotency check and cannot double-credit.
 - Rollback: drop the three trigger functions; leave tables in place (additive records are harmless).
 - Public URLs, `/api/*` shapes, cookies, session semantics: unchanged.
 
-## 7. What changes now vs. what is postponed
+## 7. What each phase changed vs. what was postponed (historical)
 
-Now (this PR): the expand migration, DB-level dual-write, normalized event dual-write, adapter types + registry + Kick adapter wrapper, shared label/handle helpers, verification tests, this document.
+Phase 1: the expand migration, DB-level dual-write, normalized event dual-write, adapter types + registry + Kick adapter wrapper, shared label/handle helpers, verification tests, this document.
+Phase 2: active-ownership trigger, generic reads/writes for viewer identity, creator connections and channel binding, registry-driven `viewer-oauth.js`.
+Phase 2.5: link mode, transactional + advisory-locked identity persistence, `community_channels.creator_connection_id`, generic routing without the Kick equality rule, Connected Accounts API, mandatory CI Postgres gate.
 
-Explicitly postponed:
+Still postponed at HEAD (see §D):
 
-- Twitch/YouTube/Discord-automation/Patreon/Shopify adapters (only `kick` is registered; `discord` has an *identity-only* capability entry so the existing viewer login is representable, no new behavior).
-- Switching any read path to the new tables (§4 switch list).
-- `viewer_auth_providers` column, generic `viewer-oauth.js`, unified OAuth callback.
+- Twitch/YouTube/Discord-automation/Patreon/Shopify modules (only `kick` and identity-only `discord` are registered).
+- `viewer_auth_providers` column, generic `/api/viewer/auth/:provider` router.
 - `shop_items.fulfillment_type` — rewards are manual today; the enum is a one-line expand later and nothing now assumes "manual forever" except the fixed copy in `reward-detail.ts`.
 - Entitlements (`subscriber`, `vip`, Patreon tier), XP/badges/streak generalization, quests, CRM, sponsor campaigns, commerce, organizations/teams above `site_members`.
 - Contract migrations.
 
-## 8. Migration risks
+## 8. Migration risks (Phase 1 table; still accurate for the retained triggers)
 
 | Risk | Mitigation |
 |---|---|
@@ -283,9 +446,9 @@ Explicitly postponed:
 | Name confusion with billing `provider_events` | New table is `integration_events`; documented here and in table comment. |
 | Migration policy gate | Migration is marked `-- yourrank:migration-phase: expand`, contains no DROP/RENAME/NOT NULL, and is newer than the recorded baseline. |
 
-## 9. Tests required before rollout
+## 9. Tests
 
-Shipped (run with `AUDIT_TEST_DATABASE_URL` pointing at a disposable local DB with all migrations applied):
+All suites below run with `AUDIT_TEST_DATABASE_URL` pointing at a disposable local DB with all migrations applied (`bun run verify:portability-postgres` runs the mandatory set; the CI gate is described in §A):
 
 - Backfill parity: every `viewers.kick_user_id` / `discord_user_id`, `users.kick_user_id`, `sites.kick_channel_external_id` has exactly one matching new-table row with the same username/verified time.
 - Trigger dual-write: inserting/updating/clearing legacy columns creates/updates/deletes the mirrored row; credentials are copied encrypted-as-is.
@@ -297,7 +460,7 @@ Shipped (run with `AUDIT_TEST_DATABASE_URL` pointing at a disposable local DB wi
 
 Existing suites that must stay green: `kick-oauth-state.test.js`, `provider-binding-postgres.test.js`, `credits-lifecycle.test.js`, `credits-loop.test.js`, `viewer-oauth-readiness.test.js`, `viewer-account-client.test.js`, `site-routes.test.js`, full `bun run test`.
 
-Before the *switch* phase additionally: staging Kick viewer login + hard refresh, creator Kick connect/unlink, a real webhook redemption end to end, `SELECT count(*) FROM kick_reward_events` == `SELECT count(*) FROM integration_events WHERE provider='kick'`.
+Before the *contract* phase additionally: staging Kick viewer login + hard refresh, creator Kick connect/unlink, a real webhook redemption end to end, `SELECT count(*) FROM kick_reward_events` == `SELECT count(*) FROM integration_events WHERE provider='kick'`.
 
 Parity query (verify step):
 
