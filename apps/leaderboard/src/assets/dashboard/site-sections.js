@@ -29,7 +29,7 @@ function renderSections() {
   const current = siteSections();
   list.innerHTML = `
     <div class="v3-setting-row">
-      <div><strong>Home &amp; Leaderboard</strong><span>Core experience. Always visible.</span></div>
+      <div><strong>Home</strong><span>The public home page. Always visible.</span></div>
       <span class="v3-chip v3-chip--always">ALWAYS ON</span>
     </div>
     ${SITE_SECTION_ROWS.map(([key, title, description, note]) => `
