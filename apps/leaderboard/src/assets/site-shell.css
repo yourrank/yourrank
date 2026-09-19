@@ -807,6 +807,37 @@
 }
 .yr-modal-acts { display: flex; justify-content: flex-end; gap: 12px; }
 .yr-modal-status { font-size: 11px; color: var(--yr-mute); min-height: 16px; }
+.yr-modal-status.is-error { color: var(--yr-warning-readable); }
+
+/* Claim support: the conversation between a viewer and the creator about one
+   claim. Lives in the same modal as the claim confirmation. */
+.yr-ord-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.yr-ord-help { margin-top: 4px; min-height: 36px; font-size: 13px; }
+.yr-claim-support { width: min(520px, calc(100% - 32px)); }
+.yr-claim-support .yr-modal-in > .yr-fine { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: -8px; }
+.yr-claim-support-new, .yr-claim-support-reply { display: flex; flex-direction: column; gap: 12px; }
+.yr-claim-support-issues { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.yr-claim-support-issues legend { padding: 0; margin: 0 0 4px; }
+.yr-claim-support-issues label {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--yr-edge); border-radius: var(--yr-r-ctl); background: var(--yr-ink);
+  font-family: var(--yr-sans); font-size: 14px; color: var(--yr-fog); cursor: pointer;
+}
+.yr-claim-support-issues label:has(input:checked) { border-color: var(--yr-primary); }
+.yr-claim-support-issues label:has(input:focus-visible) { outline: 2px solid var(--yr-primary-hover); outline-offset: 2px; }
+.yr-claim-support-issues input { accent-color: var(--yr-primary); margin: 0; }
+.yr-claim-support-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.yr-claim-support-thread { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.yr-claim-support-thread li {
+  display: flex; flex-direction: column; gap: 4px; max-width: 88%; padding: 10px 12px;
+  border: 1px solid var(--yr-edge); border-radius: 10px; background: var(--yr-ink); align-self: flex-start;
+}
+.yr-claim-support-thread li.is-viewer { align-self: flex-end; border-color: var(--yr-primary); }
+.yr-claim-support-thread li strong { font-family: var(--yr-sans); font-size: 12px; font-weight: 700; color: var(--yr-faint); }
+.yr-claim-support-thread li p { font-family: var(--yr-sans); font-size: 14px; line-height: 1.5; color: var(--yr-fog); white-space: pre-wrap; overflow-wrap: anywhere; }
+.yr-claim-support-thread li time { font-family: var(--yr-mono); font-size: 11px; color: var(--yr-mute); }
+.yr-claim-support-thread-wrap { display: flex; flex-direction: column; gap: 14px; }
+.yr-claim-support .yr-modal-in textarea { min-height: 88px; }
 
 
 /* Utility classes replace inline style attributes: the site's CSP uses a

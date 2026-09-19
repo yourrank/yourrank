@@ -6785,6 +6785,88 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   min-height: 44px;
 }
 
+.v3-dash[data-auth-workspace] .cr-claim-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ws-space-2);
+  flex: 0 0 auto;
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-filters .is-active {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-3);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread {
+  display: grid;
+  margin: var(--ws-space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--ws-space-4);
+  padding: var(--ws-space-3) 0;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread li:first-child {
+  border-top: 1px solid var(--ws-line);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread li > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--ws-space-1);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread strong {
+  color: var(--ws-text);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-msg--creator strong {
+  color: var(--ws-accent);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread span {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--ws-text);
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-thread time {
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+  white-space: nowrap;
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-reply {
+  display: grid;
+  gap: var(--ws-space-3);
+  margin-top: var(--ws-space-3);
+}
+
+.v3-dash[data-auth-workspace] .cr-claim-support-reply textarea {
+  width: 100%;
+  min-height: 72px;
+}
+
 .v3-dash[data-auth-workspace] .cr-shop-layout > .v3-section-head { padding-left: 0; padding-right: 0;
 }
 

@@ -163,6 +163,14 @@ import {
   handleViewerClaims,
 } from "./handlers/claims.js";
 import {
+  handleCreatorClaimSupport,
+  handleCreatorClaimSupportReply,
+  handleCreatorClaimSupportResolve,
+  handleViewerClaimSupport,
+  handleViewerClaimSupportCreate,
+  handleViewerClaimSupportReply,
+} from "./handlers/claim-support.js";
+import {
   handlePeopleMemberDetail,
   handlePeopleMembers,
 } from "./handlers/people.js";
@@ -401,6 +409,9 @@ export const ROUTES = [
   { path: "/api/claims", method: "GET", handler: withHandler(handleCreatorClaims) },
   { path: "/api/claims/:id", method: "GET", handler: withHandler(handleCreatorClaimDetail) },
   { path: "/api/claims/:id/transition", method: "POST", handler: withHandler(handleCreatorClaimTransition) },
+  { path: "/api/claims/:id/support", method: "GET", handler: withHandler(handleCreatorClaimSupport) },
+  { path: "/api/claims/:id/support/messages", method: "POST", handler: withHandler(handleCreatorClaimSupportReply) },
+  { path: "/api/claims/:id/support/resolve", method: "POST", handler: withHandler(handleCreatorClaimSupportResolve) },
 
   // People uses the current site_viewers relationship without exposing the
   // broader Credits configuration or raw external identity identifiers.
@@ -426,6 +437,9 @@ export const ROUTES = [
   { path: "/api/viewer/membership/join", method: "POST", handler: withHandler(handleViewerJoin) },
   { path: "/api/viewer/claims", method: "GET", handler: withHandler(handleViewerClaims) },
   { path: "/api/viewer/claims/:id", method: "GET", handler: withHandler(handleViewerClaimDetail) },
+  { path: "/api/viewer/claims/:id/support", method: "GET", handler: withHandler(handleViewerClaimSupport) },
+  { path: "/api/viewer/claims/:id/support", method: "POST", handler: withHandler(handleViewerClaimSupportCreate) },
+  { path: "/api/viewer/claims/:id/support/messages", method: "POST", handler: withHandler(handleViewerClaimSupportReply) },
   { path: "/api/viewer/redeem", method: "POST", handler: withHandler(handleViewerRedeem) },
   { path: "/api/viewer/export", method: "POST", handler: withHandler(handleCreateViewerExportJob) },
   { path: "/api/viewer/export/:id/status", method: "GET", handler: withHandler(handleViewerExportStatus) },
