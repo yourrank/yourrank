@@ -187,6 +187,18 @@ Points that cost time and are likely to recur:
   shell (grouped navigation hrefs) and it primes CSRF from `/`, which is proxied to
   the absent `MARKETING` binding locally (503). Use `/login` to seed `__csrf`.
 
+## Viewer-account support fixtures
+
+For viewer-account support checks, use a **global** viewer session rather than
+assuming a community-scoped session can access `/me`. In a disposable local DB,
+create a viewer and insert a `viewer_sessions` row with
+`authority='global'`, `viewer_id`, a SHA-256 hashed random token, and a short
+expiry; install the raw token as the secure HttpOnly `yr_viewer` browser cookie.
+Exercise `/me?community=<slug>` and `/me` separately: they intentionally carry
+different creator-support context. This is test-fixture setup, not a substitute
+for testing real login when login itself is in scope. No additional Devin secrets
+are required for the local fixture.
+
 ## Verifying that an API refusal is actually visible to the user
 
 Reading the JSON error or the Worker log is not enough: several dashboard pages
