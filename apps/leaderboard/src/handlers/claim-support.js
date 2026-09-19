@@ -7,12 +7,13 @@
 // a creator only through a claim of a site they may manage claims for
 // (creatorAccess + loadCreatorClaim). Support request ids are never accepted
 // from the client.
-import { exec, one, query, withTransaction } from "@yourrank/shared/db";
+import { one, query, withTransaction } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { requireUser, bad, json, readJson } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import { requireViewer } from "./viewer-auth.js";
+import { claimNotificationSpec, insertViewerNotificationTx } from "./viewer-notifications.js";
 import {
   claimIdFromRequest,
   claimSummary,
@@ -35,7 +36,6 @@ const PRIVATE_CACHE = "private, no-store, no-cache, must-revalidate";
 const MESSAGE_LIMIT = 200;
 
 const supportDefaults = {
-  exec,
   one,
   query,
   withTransaction,
@@ -144,17 +144,25 @@ async function creatorClaimAccess(request, env, deps, bucket, limit) {
 
 // Appends a message to the open request of this claim, inside a transaction so
 // a concurrent "Mark resolved" cannot slip a reply into a resolved thread.
-async function appendMessage(deps, { sourceId, senderType, senderId, message }) {
+// A creator reply also notifies the claim's viewer in the same transaction.
+async function appendMessage(deps, { sourceId, senderType, senderId, message, claimRow }) {
   return deps.withTransaction(async (tx) => {
     const open = await tx.one(
       `SELECT id FROM claim_support_requests WHERE claim_id=$1 AND status='open' FOR UPDATE`,
       [sourceId],
     );
     if (!open) return { error: "This support request is resolved. New replies are disabled.", status: 409 };
-    await tx.unsafe(
-      `INSERT INTO claim_support_messages (support_request_id, sender_type, sender_id, message) VALUES ($1, $2, $3, $4)`,
+    const inserted = await tx.one(
+      `INSERT INTO claim_support_messages (support_request_id, sender_type, sender_id, message) VALUES ($1, $2, $3, $4) RETURNING id`,
       [open.id, senderType, senderId, message],
     );
+    if (senderType === "creator" && claimRow && inserted?.id) {
+      await insertViewerNotificationTx(tx, claimNotificationSpec("claim_support_reply", claimRow, {
+        supportRequestId: open.id,
+        messageId: inserted.id,
+        message,
+      }));
+    }
     return { ok: true };
   });
 }
@@ -247,7 +255,7 @@ export async function handleCreatorClaimSupportReply(request, env, injected = {}
 
   const parsed = readMessage(await readJson(request));
   if (parsed.error) return privateBad(parsed.error);
-  const result = await appendMessage(deps, { sourceId, senderType: "creator", senderId: user.id, message: parsed.message });
+  const result = await appendMessage(deps, { sourceId, senderType: "creator", senderId: user.id, message: parsed.message, claimRow: row });
   if (result.error) return privateBad(result.error, result.status);
   return privateOk({ support: await loadSupport(sourceId, row, deps) });
 }
@@ -258,13 +266,17 @@ export async function handleCreatorClaimSupportResolve(request, env, injected = 
   if (access.res) return access.res;
   const { sourceId, row } = access;
 
-  const updatedRows = await deps.exec(
-    `UPDATE claim_support_requests SET status='resolved', resolved_at=now()
-      WHERE claim_id=$1 AND status='open'
-      RETURNING id`,
-    [sourceId],
-  );
-  const updated = (updatedRows || []).length > 0;
+  const updated = await deps.withTransaction(async (tx) => {
+    const resolved = await tx.one(
+      `UPDATE claim_support_requests SET status='resolved', resolved_at=now()
+        WHERE claim_id=$1 AND status='open'
+        RETURNING id`,
+      [sourceId],
+    );
+    if (!resolved) return false;
+    await insertViewerNotificationTx(tx, claimNotificationSpec("claim_support_resolved", row, { supportRequestId: resolved.id }));
+    return true;
+  });
   const support = await loadSupport(sourceId, row, deps);
   if (!updated && !support) return privateBad("No support request for this claim.", 404);
   return privateOk({ resolved: updated, support });

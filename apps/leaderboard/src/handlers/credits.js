@@ -4,6 +4,7 @@ import { getByUser, getBoardById, getPublicSite } from "../site.js";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
+import { claimNotificationSpec, insertViewerNotificationTx } from "./viewer-notifications.js";
 import { hashToken } from "@yourrank/shared/crypto";
 import { bindSiteKickChannel, setSiteKickChannel } from "@yourrank/shared/kick-credits";
 import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
@@ -124,7 +125,11 @@ export async function transitionRedemptionClaimStatus(tx, { siteId, userId, sour
       [sourceId, siteId]
     );
     if (!existing) return { error: "Claim not found.", status: 404 };
-    if (existing.status === nextStatus) return { id: existing.id, status: nextStatus, replayed: true };
+    if (existing.status === nextStatus) {
+      // The dedupe key makes this a no-op when the notification already exists.
+      await notifyClaimTransition(tx, sourceId, nextStatus);
+      return { id: existing.id, status: nextStatus, replayed: true };
+    }
     return { error: "This claim has already been resolved.", status: 409, currentStatus: existing.status };
   }
 
@@ -166,7 +171,25 @@ export async function transitionRedemptionClaimStatus(tx, { siteId, userId, sour
     ]
   );
 
+  await notifyClaimTransition(tx, sourceId, nextStatus);
   return { id: redemption.id, status: nextStatus, replayed: false };
+}
+
+async function notifyClaimTransition(tx, sourceId, nextStatus) {
+  const claim = await tx.one(
+    `SELECT r.id AS source_id, sv.viewer_id, s.id AS site_id, s.slug AS site_slug, s.name AS site_name, i.name AS item_name
+       FROM redemptions r
+       JOIN site_viewers sv ON sv.id = r.site_viewer_id
+       JOIN sites s ON s.id = sv.site_id
+       JOIN shop_items i ON i.id = r.shop_item_id
+      WHERE r.id=$1`,
+    [sourceId]
+  );
+  if (!claim) return;
+  await insertViewerNotificationTx(
+    tx,
+    claimNotificationSpec(nextStatus === "fulfilled" ? "claim_completed" : "claim_cancelled", claim)
+  );
 }
 
 const LEDGER_DIRECTIONS = Object.freeze({
