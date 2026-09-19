@@ -1,4 +1,4 @@
-import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError } from "./dashboard/utils.js";
+import { showConfirmModal, showPromptModal, ListController, logError, clearLoadError, showToast } from "./dashboard/utils.js";
 import { requestDashboardRoute } from "./dashboard/shell.js";
 import { setState, state as dashboardState } from "./dashboard/state.js";
 import { clearSession } from "./dashboard/session.js";
@@ -1068,7 +1068,7 @@ async function toggleShop(id, trigger) {
   setLoading(trigger, true, "Saving…");
   const payload = { id: item.id, name: item.name, description: item.description || "", cost: item.cost, stock: item.stock ?? null, cooldownSeconds: Number(item.cooldown_seconds) || 0, active: trigger.checked };
   try { await api("POST", sitePath("/api/credits/shop"), payload); await load(); }
-  catch (err) { trigger.checked = item.active; setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
+  catch (err) { trigger.checked = item.active; showToast(err.message, "error"); } finally { setLoading(trigger, false); }
 }
 async function toggleReward(id, trigger) {
   const m = state.mappings.find((x) => x.id === id); if (!m) return;
