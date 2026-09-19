@@ -260,7 +260,7 @@ describe("dashboard overview quick actions", () => {
     // section (and trips the unsaved-changes guard).
     expect(html).toContain('class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit="true">Edit site identity</button>');
     expect(html).not.toContain('href="/dashboard/site">Edit site identity</a>');
-    expect(html).toContain("The same renderer visitors see on your public site.");
+    expect(html).toContain("Your current edits, rendered by the same renderer visitors see. Publish to put them live.");
   });
 
   it("keeps Games terminology and status copy singular", () => {
