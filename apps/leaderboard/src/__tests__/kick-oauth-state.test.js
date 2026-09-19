@@ -27,6 +27,15 @@ function request(path, init) {
 }
 
 const browserTransactionMatches = async () => true;
+// Viewer identity persistence runs inside one transaction; `unsafe` is the
+// runner the generic identity layer receives. `existing` answers the
+// (provider, external id) ownership lookup.
+const identityTransaction = (exec, { existing = null } = {}) => async (fn) => fn({
+  unsafe: async (sql, params) => {
+    if (sql.includes("FROM viewer_identities") && sql.includes("FOR UPDATE")) return existing ? [existing] : [];
+    return exec(sql, params);
+  },
+});
 const verifiedDomain = async () => ({
   site_id: "site-custom",
   slug: "streamer",
@@ -267,7 +276,7 @@ describe("Kick OAuth state integration seams", () => {
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
       one: async () => null,
-      exec: async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-1" }] : [],
+      withTransaction: identityTransaction(async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-1" }] : []),
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}; Domain=.yourrank.site`,
     });
@@ -289,11 +298,10 @@ describe("Kick OAuth state integration seams", () => {
         queries.push(sql);
         return sql.includes("FROM sites") ? { id: "site-1" } : null;
       },
-      exec: async (sql, params) => {
-        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
+      withTransaction: identityTransaction(async (sql, params) => {        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
         if (sql.includes("INSERT INTO site_viewers")) memberships.push({ sql, params });
         return [];
-      },
+      }),
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
     });
@@ -312,11 +320,10 @@ describe("Kick OAuth state integration seams", () => {
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
       one: async () => null,
-      exec: async (sql) => {
-        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
+      withTransaction: identityTransaction(async (sql) => {        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
         if (sql.includes("INSERT INTO site_viewers")) memberships.push(sql);
         return [];
-      },
+      }),
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
     });
@@ -333,11 +340,10 @@ describe("Kick OAuth state integration seams", () => {
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
       one: async (sql) => sql.includes("FROM sites") ? { id: "site-custom" } : null,
-      exec: async (sql, params) => {
-        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
+      withTransaction: identityTransaction(async (sql, params) => {        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-1" }];
         if (sql.includes("INSERT INTO site_viewers")) memberships.push(params);
         return [];
-      },
+      }),
       resolveCustomDomain: async () => "custom-slug",
       storeOAuthState: async () => {},
     });
@@ -362,11 +368,10 @@ describe("Kick OAuth state integration seams", () => {
         encryptDiscordToken: async (value) => `enc:${value}`,
         discordAvatarUrl: () => null,
         one: async (sql) => sql.includes("FROM sites") ? { id: "site-discord" } : null,
-        exec: async (sql, params) => {
-          if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-discord" }];
+        withTransaction: identityTransaction(async (sql, params) => {          if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-discord" }];
           if (sql.includes("INSERT INTO site_viewers")) memberships.push(params);
           return [];
-        },
+        }),
         createViewerSession: async () => "session-token",
         viewerCookieSet: (token) => `yr_viewer=${token}`,
       },
@@ -406,7 +411,7 @@ describe("Kick OAuth state integration seams", () => {
       }
       return null;
     };
-    const exec = async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-joined" }] : [];
+    const withTransaction = identityTransaction(async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-joined" }] : []);
     const kick = await handleKickViewerAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
       stateData: kickViewerState({
         codeVerifier: "verifier", origin: "https://yourrank.site", returnTo: "/beta/me",
@@ -416,7 +421,7 @@ describe("Kick OAuth state integration seams", () => {
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
-      one, exec,
+      one, withTransaction,
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
     });
@@ -431,7 +436,7 @@ describe("Kick OAuth state integration seams", () => {
       fetchDiscordCurrentUser: async () => ({ id: "discord-1", username: "viewer", global_name: "Viewer", avatar: null }),
       encryptDiscordToken: async (value) => `enc:${value}`,
       discordAvatarUrl: () => null,
-      one, exec,
+      one, withTransaction,
       createViewerSession: async () => "session-token",
       viewerCookieSet: (token) => `yr_viewer=${token}`,
     });
@@ -461,11 +466,10 @@ describe("Kick OAuth state integration seams", () => {
         if (sql.includes("SELECT s.id, s.slug")) return null;
         return null;
       },
-      exec: async (sql) => {
-        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-joined" }];
+      withTransaction: identityTransaction(async (sql) => {        if (sql.includes("INSERT INTO viewers")) return [{ id: "viewer-joined" }];
         if (sql.includes("site_viewers")) joined.push(sql);
         return [];
-      },
+      }),
     });
     expect(response.headers.get("location")).toContain("error=join_failed");
     expect(joined).toHaveLength(0);
@@ -478,7 +482,7 @@ describe("Kick OAuth state integration seams", () => {
       resolveVerifiedCustomDomain: verifiedDomain,
       exchangeKickViewerCode: async () => { throw new Error("must not exchange before browser proof"); },
       one: async () => { throw new Error("must not read identity before browser proof"); },
-      exec: async () => { throw new Error("must not mutate before browser proof"); },
+      withTransaction: async () => { throw new Error("must not mutate before browser proof"); },
       resolveCustomDomain: async () => "streamer",
       storeOAuthState: async (...args) => { handoffArgs = args; },
     });
@@ -506,7 +510,7 @@ describe("Kick OAuth state integration seams", () => {
         fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
         encryptKickToken: async (value) => `enc:${value}`,
         one: async () => null,
-        exec: async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-1" }] : [],
+        withTransaction: identityTransaction(async (sql) => sql.includes("INSERT INTO viewers") ? [{ id: "viewer-1" }] : []),
         resolveCustomDomain: async () => "streamer",
         storeOAuthState: async (...args) => { handoffArgs = args; },
       },
@@ -547,8 +551,8 @@ describe("Kick OAuth state integration seams", () => {
       exchangeKickViewerCode: async () => ({ access_token: "access" }),
       fetchKickCurrentUser: async () => ({ user_id: 42, name: "viewer" }),
       encryptKickToken: async (value) => `enc:${value}`,
-      one: async () => ({ viewer_id: "viewer-1", username: "viewer" }),
-      exec: async () => [],
+      one: async () => null,
+      withTransaction: identityTransaction(async () => [], { existing: { viewer_id: "viewer-1", username: "viewer" } }),
       createViewerSession: async (_env, id, authority) => {
         expect(id).toBe("viewer-1");
         expect(authority).toEqual({ authority: "site", siteId: "site-custom", hostname: "streamer.example", domainBindingId: "binding-1" });
@@ -641,7 +645,11 @@ describe("Kick OAuth state integration seams", () => {
       encryptKickToken: async (token) => `encrypted:${token}`,
       withTransaction: async (fn) => {
         transactionCount += 1;
-        return fn({ unsafe: async (sql, params) => writes.push({ sql, params }) });
+        return fn({ unsafe: async (sql, params) => {
+          if (/^\s*SELECT/.test(sql)) return [{ id: "cc-1" }];
+          writes.push({ sql, params });
+          return [{ id: "cc-1" }];
+        } });
       },
     });
 
@@ -653,7 +661,8 @@ describe("Kick OAuth state integration seams", () => {
     ]);
     expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);
     expect(writes[1].sql).toContain("kick_linked_at = now()");
-    expect(writes[2].params).toEqual([site.id, "kick", "123", "owner", true]);
+    // The verified binding records the creator connection that proved ownership.
+    expect(writes[2].params).toEqual([site.id, "kick", "123", "owner", true, "cc-1"]);
     expect(writes[3].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
     expect(writes[3].params).toEqual(["123", "owner", true, site.id]);
   });
@@ -723,7 +732,7 @@ describe("Kick OAuth state integration seams", () => {
     expect(queries[0].params).toEqual(["site-2"]);
     expect(queries[1].sql).toContain("FOR UPDATE");
     expect(queries[2].sql).toContain("FROM community_channels");
-    expect(queries[2].params).toEqual([user.id, "kick", "site-2"]);
+    expect(queries[2].params).toEqual(["kick", user.id, "site-2"]);
     expect(queries[3].sql).toContain("UPDATE creator_connections");
     expect(queries[3].sql).toContain("status = 'revoked'");
     expect(queries[4].sql).toContain("kick_user_id = null");

@@ -140,8 +140,8 @@ Application paths now on the generic tables (legacy columns kept mirrored by the
 3. Creator connect / reconnect / disconnect / account status → `creator_connections` via
    `packages/shared/src/provider-connections.ts` (`users.kick_*` mirrored).
 4. Channel binding and event routing → `community_channels`; `resolveVerifiedCommunityChannel`
-   requires an active **and** verified binding whose external id matches the site owner's active
-   creator connection.
+   requires an active **and** verified binding whose `creator_connection_id` points at an active
+   creator connection of the site owner for the same provider (Phase 2.5, below).
 5. `viewer-oauth.js` readiness and `maskViewerAuthProviders` iterate `listProviders("viewerAuth")`;
    `sites.viewer_kick_auth_enabled` / `viewer_discord_auth_enabled` stay as the per-site opt-in
    columns (a `viewer_auth_providers text[]` fold is deferred).
@@ -153,6 +153,80 @@ Still legacy in Phase 2 (Phase 3): idempotency is `kick_reward_events` (`integra
 dual-written and linked from `credit_ledger.integration_event_id`); mapping writes and the dashboard
 mapping editor use `kick_reward_*`; the anti-fraud signals read `viewers.kick_username`; Kick creator
 token refresh reads `users.kick_*`.
+
+### Phase 2.5 — remaining portability blockers (shipped)
+
+Migration `20260921000000_provider_portability_channel_ownership.sql` (expand-safe: one nullable
+column, one index, a backfill, two triggers).
+
+**Cross-platform Viewer Account linking.** `linkExternalViewerIdentity(run, identity, mode)` in
+`packages/shared/src/viewer-identity.ts` is the single generic entry point for a provider callback:
+
+- `{ mode: "signin" }` (logged out): resolve the viewer that actively owns
+  `(provider, external_user_id)` or create a new Viewer Account. Never merges on username, email,
+  display name, avatar or provider metadata.
+- `{ mode: "link", viewerId }` (logged in, "Connect <provider>"): attach the identity to that
+  viewer. Never creates a viewer. Returns `identity_owned_by_other_viewer` when Viewer B actively
+  owns the identity (both accounts untouched), `provider_already_connected` when the viewer already
+  has a different active identity for the provider, `viewer_not_found` when the viewer is gone.
+
+OAuth link mode (`apps/leaderboard/src/handlers/viewer-auth.js`, Kick and Discord): the start route
+accepts `?intent=link`, requires an authenticated viewer, and stores `intent`, `linkViewerId` and the
+session authority (`global` or `site:<id>`) in the single-use `oauth_states` row alongside the
+existing callback URI, origin and browser-nonce hash. The callback (or, on custom domains, the Kick
+handoff on the site host) re-validates all of those and additionally requires the *current* viewer
+session to resolve to the same viewer id under the same authority; any mismatch redirects with a
+stable error code (`link_requires_signin`, `link_session_mismatch`, `link_identity_in_use`,
+`link_provider_already_connected`) and persists nothing. Link callbacks do not mint a new session.
+
+**Atomicity and concurrency.** All identity persistence runs inside one `withTransaction()`:
+`viewers` insert/update, `viewer_identities` upsert, the legacy `viewers.kick_*`/`discord_*` mirror
+and `viewer_username_history`. The transaction first takes
+`pg_advisory_xact_lock(hashtext('viewer_identities:<provider>:<external_id>'))` and reads the
+owning row `FOR UPDATE`, so concurrent first logins serialize on the database and produce exactly
+one Viewer Account; the active-ownership trigger (`23505`) remains the last line of defence.
+
+**Connected Accounts API.** `GET /api/viewer/me` returns `connectedAccounts[]`
+(`{ provider, label, state: connected|available|unavailable, username, linkedAt, connectUrl }`),
+built by `describeConnectedAccounts()` from the generic identities and the per-site provider
+readiness; `connectUrl` is `/api/viewer/auth/<provider>?intent=link`. The Viewer Account page renders
+it and surfaces `?connected=<provider>` / `?error=link_*` results.
+
+**Provider-neutral channel ownership.** `community_channels.creator_connection_id` records WHICH
+creator connection verified a binding. `linkCommunityChannel({ verified: true })` refuses to run
+without it and checks that the connection exists, is active, has the same provider and belongs to
+the site owner. Generic routing (`resolveVerifiedCommunityChannel`) checks only: provider match,
+`ch.status='active'`, `ch.verified_at IS NOT NULL`, `cc.id = ch.creator_connection_id`,
+`cc.status='active'`, `cc.linked_at IS NOT NULL`, `cc.user_id = s.user_id`. It never compares
+`external_user_id` with `external_channel_id`. The Kick rule "broadcaster user id = channel id"
+lives only in `packages/shared/src/providers/kick-ownership.ts` (`kickCreatorOwnsChannel`) and is
+applied by Kick-specific code before binding (`bindSiteKickChannel`, the Kick creator callback,
+the legacy `sites.kick_channel_*` mirror trigger). A DB trigger
+(`creator_connection_invalidates_channels`) clears `verified_at`/`creator_connection_id` when the
+referenced connection is revoked or re-linked as a different external identity, so a stale proof
+never routes; rebinding re-verifies through provider code.
+
+Compatibility retained: every legacy column and mirror trigger from Phases 1–2; `sites.kick_channel_*`
+still written and mirrored (the mirror derives `creator_connection_id` with the Kick rule); the
+sign-in-only OAuth flow is byte-for-byte the old flow with persistence moved into the transaction.
+
+Still provider-specific after Phase 2.5 (deliberate, not blockers):
+
+- Kick and Discord keep separate OAuth protocol handlers (`handleKickViewerAuth*`,
+  `handleDiscordViewerAuth*`); the shared link/sign-in logic is factored but a generic
+  `/api/viewer/auth/:provider` router does not exist yet.
+- `sites.viewer_kick_auth_enabled` / `viewer_discord_auth_enabled` per-site opt-in columns.
+- Reward idempotency (`kick_reward_events`), `credit_reward_mappings.kick_reward_*` writes, anti-fraud
+  reading `viewers.kick_username`, Kick creator token refresh reading `users.kick_*`.
+- Legacy Kick mirror columns and their triggers (contract phase).
+
+Exact work before Twitch: (1) a Twitch provider module (OAuth, `viewerAuth` + `creatorAuth`
+capabilities, EventSub webhook verification) registered in `providers/registry.ts`; (2) a Twitch
+ownership check (broadcaster lookup / editor role) that calls `linkCommunityChannel` with the
+creator connection id — no schema change needed; (3) generic OAuth start/callback routes keyed by
+provider, or a third copy of the handler pair; (4) a `viewer_auth_providers` fold or a
+`viewer_twitch_auth_enabled` column; (5) reward mapping writes and idempotency switched to
+`integration_events` / `external_reward_*` if Twitch channel-point redemptions are in scope.
 
 ### Verify
 
@@ -218,6 +292,8 @@ Shipped (run with `AUDIT_TEST_DATABASE_URL` pointing at a disposable local DB wi
 - Uniqueness: a second viewer with the same `(provider, external_user_id)` is rejected.
 - Redemption: `processKickRewardRedemption` writes `kick_reward_events` **and** `integration_events`, stamps `credit_ledger.integration_event_id`, and stays idempotent on replay.
 - Registry: `getProvider("kick")` exposes `viewerAuth`, `creatorAuth`, `webhooks`, `rewards`; `hasCapability(kick, "roles")` is false; unknown providers return `undefined`.
+- Phase 2.5, `viewer-link-postgres.test.js` (real OAuth handlers, stubbed provider HTTP): logged-out Discord sign-in; Kick login → Connect Discord → one viewer owns both, no Viewer B; identity owned by Viewer B rejected with both accounts intact; second identity for the same provider rejected; link mode requires sign-in and stays distinct from sign-in; stale, forged, wrong-session and wrong-viewer link states fail without writes; custom-domain (site authority) link via the Kick handoff.
+- Phase 2.5, `provider-neutral-postgres.test.js`: rollback of viewers/identities/mirror/username history on a failure before commit and on a DB error in the last write; 8 concurrent first logins → exactly one Viewer Account; two viewers racing to link one identity → one owner, both accounts kept; `user-123` creator connection verifying `channel-999`: unverified never routes, verified without a connection refused, another owner's connection refused, hijack rejected (`23505`), revoked connection / re-linked-as-other-identity / revoked channel stop routing, unlink then rebind by another creator routes.
 
 Existing suites that must stay green: `kick-oauth-state.test.js`, `provider-binding-postgres.test.js`, `credits-lifecycle.test.js`, `credits-loop.test.js`, `viewer-oauth-readiness.test.js`, `viewer-account-client.test.js`, `site-routes.test.js`, full `bun run test`.
 

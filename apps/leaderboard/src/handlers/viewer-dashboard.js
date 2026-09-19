@@ -1,7 +1,7 @@
 // Viewer-facing account API plus the site-scoped reward-claim action.
 
 import { one, query, withTransaction } from "@yourrank/shared/db";
-import { linkedViewerIdentities, viewerDisplayName } from "@yourrank/shared/viewer-identity";
+import { describeConnectedAccounts, linkedViewerIdentities, viewerDisplayName } from "@yourrank/shared/viewer-identity";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { getPublicSite } from "../site.js";
 import { requireViewer } from "./viewer-auth.js";
@@ -39,6 +39,8 @@ export function cooldownRemainingSeconds(lastAt, cooldownSeconds, nowMs = Date.n
   if (!Number.isFinite(last)) return 0;
   return Math.max(0, Math.ceil(cooldown - (nowMs - last) / 1000));
 }
+
+export const viewerAuthStartPath = (provider) => `/api/viewer/auth/${provider}`;
 
 export async function handleViewerMe(request, env, deps = {}) {
   const requireViewerImpl = deps.requireViewer || requireViewer;
@@ -82,6 +84,7 @@ export async function handleViewerMe(request, env, deps = {}) {
     .filter((identity) => identity.linkedAt)
     .map((identity) => ({ provider: identity.provider, username: identity.username, linkedAt: identity.linkedAt }));
   const displayName = viewerDisplayName(viewer);
+  const connectedAccounts = describeConnectedAccounts(viewer, authProviders, viewerAuthStartPath);
 
   return privateViewerJson({
     viewer: {
@@ -91,6 +94,7 @@ export async function handleViewerMe(request, env, deps = {}) {
       connections,
     },
     authProviders,
+    connectedAccounts,
     communities: safeCommunities,
   });
 }

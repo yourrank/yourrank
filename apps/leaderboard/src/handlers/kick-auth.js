@@ -8,6 +8,7 @@ import {
   revokeCreatorConnection,
 } from "@yourrank/shared/provider-connections";
 import { one, withTransaction } from "@yourrank/shared/db";
+import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
 import { requireSiteCapability } from "../site-authorization.js";
 import { consumeOAuthState, storeOAuthState } from "@yourrank/shared/oauth-state";
 import {
@@ -177,7 +178,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
     }
     const kickUserId = String(kickUser.user_id || "");
     const kickChannelId = String(kickChannel.broadcaster_user_id || "");
-    if (!kickUserId || !kickChannelId || kickUserId !== kickChannelId) {
+    if (!kickCreatorOwnsChannel(kickUserId, kickChannelId)) {
       throw new Error("Kick user and channel ownership did not match");
     }
 
@@ -196,7 +197,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
 
     await withTransactionImpl(async (tx) => {
       const run = (sql, params) => tx.unsafe(sql, params);
-      await linkCreatorConnection(run, {
+      const creatorConnectionId = await linkCreatorConnection(run, {
         userId: user.id,
         provider: "kick",
         externalUserId: kickUserId,
@@ -210,6 +211,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
         provider: "kick",
         externalChannelId: kickChannelId,
         externalChannelName: kickChannel.slug || "",
+        creatorConnectionId,
         verified: true,
       });
     });
