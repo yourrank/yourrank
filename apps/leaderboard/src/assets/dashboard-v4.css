@@ -2599,6 +2599,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
   word-break: break-all;
 }
 .v3-dash[data-auth-workspace] .embed-code-block .embed-copy-btn {
+  position: static;
   flex-shrink: 0;
   min-height: 30px;
   padding: 0 12px;
@@ -2615,14 +2616,20 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
   border-color: var(--ws-line-strong);
   background: var(--ws-surface-soft);
 }
+.v3-dash[data-auth-workspace] .card > .share-section-title {
+  margin: var(--ws-space-6) 0 var(--ws-space-3);
+  font-size: var(--ws-type-body-size);
+  line-height: var(--ws-type-body-leading);
+}
 .v3-dash[data-auth-workspace] .share-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 .v3-dash[data-auth-workspace] .share-card {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -2637,12 +2644,21 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
+.v3-dash[data-auth-workspace] .share-card span {
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .share-card svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  flex-shrink: 0;
+}
 .v3-dash[data-auth-workspace] .share-card:hover {
   border-color: var(--ws-line-strong);
   background: var(--ws-surface-soft);
 }
 .v3-dash[data-auth-workspace] .share-card--x {
-  color: var(--ws-chrome);
+  color: var(--ws-text);
 }
 .v3-dash[data-auth-workspace] .share-card--discord {
   color: #5865f2;
@@ -2652,6 +2668,15 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
 }
 .v3-dash[data-auth-workspace] .share-card--copy {
   color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] details.api-access-details {
+  margin-top: var(--ws-space-6);
+}
+.v3-dash[data-auth-workspace] details.api-access-details .api-access {
+  margin: var(--ws-space-4);
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 .v3-dash[data-auth-workspace] .api-access {
   display: flex;
@@ -3351,7 +3376,8 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
 .v3-dash[data-auth-workspace] details.editor-more > div {
   padding: 16px 16px 0;
 }
-.v3-dash[data-auth-workspace] details.editor-more .field:last-child { margin-bottom: 16px; }
+.v3-dash[data-auth-workspace] details.editor-more .field:last-child,
+.v3-dash[data-auth-workspace] details.editor-more > .d-flex:last-child { margin-bottom: 16px; }
 
 /* Referrals Link Row & Tiles */
 .v3-dash[data-auth-workspace] .v3-ref-link-row {
