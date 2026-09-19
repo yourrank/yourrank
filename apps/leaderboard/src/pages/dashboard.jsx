@@ -462,6 +462,10 @@ function BoardSettingsSection({ active } = {}) {
           <div class="socials-editor" id="socialsList"></div>
           </div>
         </details>
+        <div class="v3-settings-card" id="siteContactCard">
+          <div class="v3-settings-card-head"><div><h2>Contact methods</h2><p>How members reach you about rewards and claims. You handle reward fulfillment; YourRank handles account and website issues. At least one method is required to publish a reward.</p></div></div>
+          <div class="grid2" id="siteContactFields"></div>
+        </div>
         <div class="v3-settings-card" id="sitePublicAddressCard">
           <div class="v3-settings-card-head"><div><h2>Public address</h2><p>This is where viewers find your site.</p></div></div>
           <div class="v3-settings-address">

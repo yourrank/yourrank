@@ -127,35 +127,67 @@ describe("new-shell auxiliary renderers", () => {
     expect(legal).not.toMatch(/cryptocurrency|blockchain|subscription payments/i);
   });
 
-  it("shows an honest missing-contact state and a separately labelled platform route", async () => {
-    const legal = await renderNewLegalPage(record.data, "contact", opts);
-    expect(legal).toContain("has not published a contact channel yet");
-    expect(legal).toContain("does not fulfil creator rewards or reply on Demo Board's behalf");
-    expect(legal).not.toMatch(/social channels shown|channel links on their profile/);
-    expect(legal).toContain("<h3 class=\"yr-sec-sub\">Rewards and fulfilment</h3>");
-    expect(legal).toContain("<h3 class=\"yr-sec-sub\">Website and account</h3>");
-    expect(legal).toContain('href="/help/support?audience=viewer&amp;return=%2Fdemo-board%2Fcontact">Contact YourRank support</a>');
+  it("renders /contact as a product page with an honest no-contact state and a separate YourRank route", async () => {
+    const page = await renderNewLegalPage(record.data, "contact", opts);
+    expect(page).toContain('<h1 class="yr-h1">Contact Demo Board</h1>');
+    expect(page).toContain('data-contact-state="unavailable"');
+    expect(page).toContain("This creator hasn't provided a contact method yet.");
+    expect(page).toContain("For YourRank account or website problems:");
+    expect(page).toContain('href="/help/support?audience=viewer&amp;return=%2Fdemo-board%2Fcontact" data-yourrank-support>Contact YourRank support</a>');
+    expect(page).not.toContain("data-contact-method=");
+    expect(page).not.toContain("Need help with a reward or claim?");
+    // Not a policy: no policy cue, no sibling policy navigation.
+    expect(page).not.toContain('<p class="yr-cue">Policy</p>');
+    expect(page).not.toContain("viewer-article-nav");
+    // Socials are not contact methods any more.
+    const socialsOnly = await renderNewLegalPage({ ...record.data, socials: [{ type: "kick", name: "Kick", url: "https://kick.com/demo", enabled: true }] }, "contact", opts);
+    expect(socialsOnly).toContain('data-contact-state="unavailable"');
+    expect(socialsOnly).not.toContain("data-contact-method=");
+    // Policy pages no longer list Contact as a sibling policy.
+    const terms = await renderNewLegalPage(record.data, "terms", opts);
+    expect(terms).not.toMatch(/<a[^>]*href="\/demo-board\/contact"[^>]*>Contact<\/a>/);
   });
 
-  it("lists only real, enabled creator contact links and ignores disabled or unsafe ones", async () => {
-    const data = {
+  it("renders only configured, validated creator contact methods with safe hrefs", async () => {
+    const one = await renderNewLegalPage({ ...record.data, contact: { email: "creator@example.com" } }, "contact", opts);
+    expect(one).toContain('data-contact-state="available"');
+    expect(one).toContain("Need help with a reward or claim?");
+    expect(one).toContain("This creator handles their own reward fulfillment.");
+    expect(one).toContain('<a class="yr-btn yr-contact-method" href="mailto:creator@example.com" data-contact-method="email">Email creator</a>');
+    expect(one).not.toContain('data-contact-method="discord"');
+    expect(one).toContain("YourRank account or website issue?");
+    expect(one).toContain("data-yourrank-support>Contact YourRank support</a>");
+
+    const discordOnly = await renderNewLegalPage({ ...record.data, contact: { discord: "https://discord.gg/demo" } }, "contact", opts);
+    expect(discordOnly).toContain('<a class="yr-btn yr-contact-method" href="https://discord.gg/demo" data-contact-method="discord" target="_blank" rel="noopener noreferrer">Discord<span class="yr-sr"> (opens in a new tab)</span></a>');
+    expect(discordOnly).not.toContain("mailto:");
+
+    const all = await renderNewLegalPage({
       ...record.data,
-      socials: [
-        { type: "kick", name: "Kick", url: "https://kick.com/demo" },
-        { type: "discord", url: "https://discord.gg/demo", enabled: false },
-        { type: "x", name: "X", url: "javascript:alert(1)" },
-      ],
-    };
-    const contact = await renderNewLegalPage(data, "contact", opts);
-    expect(contact).toContain("Reward, claim and prize questions go to Demo Board directly:");
-    expect(contact).toContain('<a href="https://kick.com/demo" target="_blank" rel="noopener noreferrer">Kick<span class="yr-sr"> (opens in a new tab)</span></a>');
-    expect(contact).not.toContain("discord.gg");
-    expect(contact).not.toContain("javascript:");
-    expect(contact).not.toContain("has not published a contact channel yet");
-    const terms = await renderNewLegalPage(data, "terms", opts);
-    expect(terms).toContain('href="https://kick.com/demo"');
-    const hidden = await renderNewLegalPage({ ...data, sections: { socials: false } }, "contact", opts);
-    expect(hidden).toContain("has not published a contact channel yet");
+      contact: { email: "a@b.co", discord: "https://discord.com/invite/x", social: "https://x.com/demo", url: "https://demo.example/contact?a=1&b=2" },
+    }, "contact", opts);
+    expect(all.match(/data-contact-method="/g)).toHaveLength(4);
+    expect(all).toContain('href="https://x.com/demo" data-contact-method="social" target="_blank" rel="noopener noreferrer">X<');
+    expect(all).toContain('href="https://demo.example/contact?a=1&amp;b=2" data-contact-method="url" target="_blank" rel="noopener noreferrer">Contact website<');
+
+    const unsafe = await renderNewLegalPage({
+      ...record.data,
+      contact: { email: "not an email<script>", discord: "https://evil.example/discord.gg", social: "javascript:alert(1)", url: "http://plain.example" },
+    }, "contact", opts);
+    expect(unsafe).toContain('data-contact-state="unavailable"');
+    expect(unsafe).not.toContain("javascript:");
+    expect(unsafe).not.toContain("evil.example");
+    expect(unsafe).not.toContain("plain.example");
+    expect(unsafe).not.toContain("<script>");
+
+    const escaped = await renderNewLegalPage({
+      ...record.data,
+      brand: { ...record.data.brand, name: 'Demo <b>"Board"</b>' },
+      contact: { url: 'https://demo.example/"><img src=x onerror=alert(1)>' },
+    }, "contact", opts);
+    expect(escaped).toContain("Contact Demo &lt;b&gt;&quot;Board&quot;&lt;/b&gt;</h1>");
+    expect(escaped).not.toContain("<img src=x");
+    expect(escaped).toContain("&quot;&gt;&lt;img");
   });
 
   it("formats player profile currency consistently", async () => {
@@ -286,7 +318,7 @@ describe("new-shell auxiliary renderers", () => {
     const nav = legal.match(/<nav class="viewer-article-nav"[\s\S]*?<\/nav>/)[0];
     expect(nav).toContain('<a href="/demo-board/privacy" aria-current="page">Privacy Policy</a>');
     expect(nav).toContain('<a href="/demo-board/terms">Terms of Service</a>');
-    expect(nav).toContain('<a href="/demo-board/contact">Contact</a>');
+    expect(nav).not.toContain('/demo-board/contact');
     expect(nav).not.toContain("Refund");
     const custom = await renderNewLegalPage(record.data, "terms", { ...opts, isCustomDomain: true });
     expect(custom).toContain('<a href="/privacy">Privacy Policy</a>');

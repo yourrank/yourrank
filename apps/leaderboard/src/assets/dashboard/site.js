@@ -13,6 +13,7 @@ import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from 
 import { currentRoute, requestDashboardRoute, requestBillingRedirect } from "./shell.js";
 import { activeViewerUsageMarkup } from "./plan-usage.js";
 import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
+import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
 export const DEFAULT_SECTIONS = {
   hero: true,
@@ -482,9 +483,10 @@ export function collect({ reportPlayerErrors = true } = {}) {
       cookiesEnabled: $("f_legal_cookies_enabled")?.checked ?? true,
       refund: ($("f_legal_refund")?.value || "").trim(),
       refundEnabled: $("f_legal_refund_enabled")?.checked ?? true,
-      contact: ($("f_legal_contact")?.value || "").trim(),
-      contactEnabled: $("f_legal_contact_enabled")?.checked ?? true,
+      contact: String(state.EXTRA?.legal?.contact || "").trim(),
+      contactEnabled: state.EXTRA?.legal?.contactEnabled !== false,
     },
+    contact: collectContact(),
   };
   const pubToggle = $("pubToggle");
   if (pubToggle) out.published = pubToggle.checked;
@@ -558,7 +560,47 @@ function brandInvalid() {
   // A field the creator is still filling in is not yet a field they got wrong,
   // so the message waits for a blur or a save attempt to mark it touched.
   setFieldError(nameInput, missingName && isTouched(nameInput) ? "Enter a site name." : "");
-  return [...invalid, ...socialInvalid()];
+  return [...invalid, ...socialInvalid(), ...contactInvalid()];
+}
+
+const CONTACT_PLACEHOLDERS = {
+  email: "you@example.com",
+  discord: "https://discord.gg/yourserver",
+  social: "https://x.com/yourhandle",
+  url: "https://yoursite.com/contact",
+};
+
+function collectContact() {
+  const out = {};
+  for (const type of CREATOR_CONTACT_TYPES) out[type] = ($(`f_contact_${type}`)?.value || "").trim();
+  return out;
+}
+
+/** Same verdict as the Worker: one shared validator decides what the public page may render. */
+function contactInvalid() {
+  if (!$("siteContactFields")) return [];
+  const { errors } = validateCreatorContact(collectContact());
+  const invalid = [];
+  for (const type of CREATOR_CONTACT_TYPES) {
+    const input = $(`f_contact_${type}`);
+    if (!input) continue;
+    const message = errors.find((e) => e.field === type)?.message || "";
+    setFieldError(input, message && isTouched(input) ? message : "");
+    if (message) invalid.push({ label: CREATOR_CONTACT_FIELD_LABELS[type], input, message });
+  }
+  return invalid;
+}
+
+export function renderContact() {
+  const wrap = $("siteContactFields");
+  if (!wrap) return;
+  const contact = state.EXTRA?.contact || {};
+  wrap.innerHTML = CREATOR_CONTACT_TYPES.map((type) => {
+    const id = `f_contact_${type}`;
+    const isEmail = type === "email";
+    return `<div class="field"><label for="${id}">${esc(CREATOR_CONTACT_FIELD_LABELS[type])}</label>
+<input id="${id}" class="contact-method" type="${isEmail ? "email" : "url"}" inputmode="${isEmail ? "email" : "url"}" autocomplete="${isEmail ? "email" : "url"}" maxlength="254" placeholder="${esc(CONTACT_PLACEHOLDERS[type])}" aria-describedby="${id}_error" value="${esc(String(contact[type] || ""))}" /><span class="field-err" id="${id}_error" data-field-error="${id}" role="alert" hidden></span></div>`;
+  }).join("");
 }
 
 function isTouched(input) {
@@ -605,7 +647,7 @@ function scheduleInvalid({ reportErrors = true } = {}) {
 
 document.addEventListener("blur", (event) => {
   const input = event.target;
-  if (!input || typeof input.matches !== "function" || !input.matches("#f_name, .social-url, #f_starts, #f_ends")) return;
+  if (!input || typeof input.matches !== "function" || !input.matches("#f_name, .social-url, .contact-method, #f_starts, #f_ends")) return;
   input.dataset.touched = "1";
   if (input.matches("#f_starts, #f_ends")) scheduleInvalid();
   else brandInvalid();
@@ -1701,7 +1743,6 @@ export function renderLegal() {
     { key: "responsible", label: "Responsible Play" },
     { key: "cookies", label: "Cookie Policy" },
     { key: "refund", label: "Refund Policy" },
-    { key: "contact", label: "Contact" },
   ];
   list.innerHTML = pages.map((p) => {
     const enabled = legal[`${p.key}Enabled`] !== false;

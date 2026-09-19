@@ -28,7 +28,7 @@ import { creatorExpansionRestriction } from "@yourrank/shared/plan-usage";
 import { deriveKickConnectionHealth } from "../connection-health.js";
 import { validateRewardImage } from "@yourrank/shared/reward-image";
 import { removeRewardImage } from "../reward-media.js";
-import { creatorContactLinks } from "../auxiliary-renderers.js";
+import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 
 // Injectable seams for tests (see handlers/auth.js defaultDependencies).
@@ -96,6 +96,7 @@ async function effectiveSitePlan(site, user, oneImpl = one) {
 }
 
 export const CLAIM_SOURCE_PREFIX = "redemption:";
+export const REWARD_CONTACT_REQUIRED_MESSAGE = "Add a contact method in Site settings before publishing a reward. Members who claim it need a way to reach you.";
 
 export async function transitionRedemptionClaimStatus(tx, { siteId, userId, sourceId, nextStatus }) {
   if (!["fulfilled", "cancelled"].includes(nextStatus)) {
@@ -373,8 +374,8 @@ export async function handleCreditsStatus(request, env) {
     mappings: mappings || [],
     shopItems: items || [],
     creatorContact: {
-      ready: creatorContactLinks(fromJsonb(site.extra_json)).length > 0,
-      editHref: "/dashboard/site#siteLinksCard",
+      ready: hasCreatorContactMethod(fromJsonb(site.extra_json)),
+      editHref: "/dashboard/site#siteContactCard",
     },
     viewers: safeViewers,
     redemptions: safeRedemptions,
@@ -753,6 +754,9 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
       ? await deps.one("SELECT active FROM shop_items WHERE id=$1 AND site_id=$2", [id, site.id])
       : null;
     if (!existingItem?.active) {
+      if (!hasCreatorContactMethod(fromJsonb(site.extra_json))) {
+        return bad(REWARD_CONTACT_REQUIRED_MESSAGE, 400);
+      }
       const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
       if (expansion.restricted) {
         return bad("New shop items are paused while this Free account remains above its active-viewer allowance after grace. Existing orders and items remain available.", 403);

@@ -272,6 +272,15 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
       sections: z.record(z.boolean()).optional(),
       playerFields: z.record(z.boolean()).optional(),
       legal: z.record(z.union([z.string().max(MAX_LONG_TEXT), z.boolean()])).optional(),
+      contact: z
+        .object({
+          email: z.string().max(254).optional(),
+          discord: z.string().max(254).optional(),
+          social: z.string().max(254).optional(),
+          url: z.string().max(254).optional(),
+        })
+        .strict()
+        .optional(),
       passwordProtected: z.boolean().optional(),
       password: z.string().max(100).optional(),
       autoReset: z

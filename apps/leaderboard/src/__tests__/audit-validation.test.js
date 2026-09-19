@@ -129,6 +129,49 @@ describe("saveSite referral/CTA URL validation", () => {
   });
 });
 
+describe("saveSite creator contact validation", () => {
+  const SITE = { id: "site-1", slug: "x", user_id: "user-1", cta_url: "", published: true, updated_at: null, extra_json: JSON.stringify({ contact: { email: "old@example.com" } }) };
+  beforeEach(() => { mockOne.mockReset(); mockQuery.mockReset(); mockExec.mockReset(); });
+  const storedExtra = () => {
+    const call = mockQuery.mock.calls.find(([sql]) => String(sql).startsWith("UPDATE sites SET slug="));
+    const extra = call[1][13];
+    return typeof extra === "string" ? JSON.parse(extra) : extra;
+  };
+
+  it("rejects an invalid email with the field named", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const r = await saveSite(mockEnv(), USER_ROW, { contact: { email: "creator@" } }, "site-1");
+    expect(r.code).toBe("invalid_contact");
+    expect(r.field).toBe("email");
+  });
+
+  it("rejects non-https and non-Discord links", async () => {
+    mockOne.mockResolvedValue(SITE);
+    expect((await saveSite(mockEnv(), USER_ROW, { contact: { url: "javascript:alert(1)" } }, "site-1")).field).toBe("url");
+    expect((await saveSite(mockEnv(), USER_ROW, { contact: { social: "http://x.com/creator" } }, "site-1")).field).toBe("social");
+    expect((await saveSite(mockEnv(), USER_ROW, { contact: { discord: "https://x.com/creator" } }, "site-1")).field).toBe("discord");
+  });
+
+  it("stores trimmed valid methods and keeps the existing contact when none is sent", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const r = await saveSite(mockEnv(), USER_ROW, { contact: { email: " new@example.com ", discord: "https://discord.gg/abc", social: "", url: "" } }, "site-1");
+    expect(r.ok).toBe(true);
+    expect(storedExtra().contact).toEqual({ email: "new@example.com", discord: "https://discord.gg/abc", social: "", url: "" });
+
+    mockQuery.mockReset();
+    const kept = await saveSite(mockEnv(), USER_ROW, { brand: { tagline: "hi" } }, "site-1");
+    expect(kept.ok).toBe(true);
+    expect(storedExtra().contact).toEqual({ email: "old@example.com", discord: "", social: "", url: "" });
+  });
+
+  it("lets a creator clear every method", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const r = await saveSite(mockEnv(), USER_ROW, { contact: { email: "", discord: "", social: "", url: "" } }, "site-1");
+    expect(r.ok).toBe(true);
+    expect(storedExtra().contact).toEqual({ email: "", discord: "", social: "", url: "" });
+  });
+});
+
 describe("updateSiteTheme validation and plan behavior", () => {
   const SITE = {
     id: "site-1",

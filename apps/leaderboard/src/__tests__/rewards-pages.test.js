@@ -104,9 +104,9 @@ describe("server-rendered rewards pages", () => {
 
     // Server: contact readiness reuses the public Contact page's rule.
     const handlerSource = readFileSync(new URL("../handlers/credits.js", import.meta.url), "utf8");
-    expect(handlerSource).toContain('import { creatorContactLinks } from "../auxiliary-renderers.js"');
-    expect(handlerSource).toContain("ready: creatorContactLinks(fromJsonb(site.extra_json)).length > 0");
-    expect(handlerSource).toContain('editHref: "/dashboard/site#siteLinksCard"');
+    expect(handlerSource).toContain('import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact"');
+    expect(handlerSource).toContain("ready: hasCreatorContactMethod(fromJsonb(site.extra_json))");
+    expect(handlerSource).toContain('editHref: "/dashboard/site#siteContactCard"');
 
     expect(dashboardV4Source).toContain(".cr-shop-review {");
     expect(dashboardV4Source).toContain(".cr-shop-review-chip {");

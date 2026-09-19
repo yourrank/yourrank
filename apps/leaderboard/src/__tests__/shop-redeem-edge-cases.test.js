@@ -33,6 +33,7 @@ const siteFixture = {
   viewerKickAuthEnabled: true,
   viewerDiscordAuthEnabled: false,
   viewerPublicRedeemEnabled: true,
+  extra_json: JSON.stringify({ contact: { email: "creator@example.com" } }),
 };
 let boardResult = siteFixture;
 

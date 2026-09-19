@@ -19,6 +19,7 @@ import { notifyLiveBoard } from "./live-board-config.js";
 import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
 import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
 import { VIEWER_OAUTH_PROVIDERS, resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
+import { EMPTY_CREATOR_CONTACT, hasCreatorContactMethod, normalizeCreatorContact, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
 export { detectImageMime, validateLogoData };
 
@@ -89,6 +90,7 @@ export const DEFAULT_EXTRA = {
     refund: "",       refundEnabled: false,
     contact: "",      contactEnabled: false,
   },
+  contact: { ...EMPTY_CREATOR_CONTACT },
 };
 
 /**
@@ -505,6 +507,8 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
       me: !!site.credits_enabled,
     },
     legal: m.legal || DEFAULT_EXTRA.legal,
+    contact: normalizeCreatorContact(m.contact),
+    contactAvailable: hasCreatorContactMethod(m.contact),
     playerFields: { ...DEFAULT_EXTRA.playerFields, ...(m.playerFields || {}) },
     samplePlayers: m.samplePlayers === true,
   };
@@ -1146,6 +1150,14 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     // (the old coercion turned a saved `false` back into the default `true`).
     legal[k] = typeof v === "boolean" ? v : (typeof v === "string" ? v.trim() : (legalDefaults[k] ?? ""));
   }
+  let contact = normalizeCreatorContact(existingExtra.contact);
+  if (payload.contact && typeof payload.contact === "object") {
+    const contactCheck = validateCreatorContact(payload.contact);
+    if (contactCheck.errors.length) {
+      return { error: contactCheck.errors[0].message, code: "invalid_contact", field: contactCheck.errors[0].field };
+    }
+    contact = contactCheck.contact;
+  }
   const incomingFields = payload.playerFields && typeof payload.playerFields === "object" ? payload.playerFields : {};
   const existingFields = existingExtra.playerFields || {};
   const playerFields = {};
@@ -1163,6 +1175,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     // string "false" or a missing key must not be able to make a block look on.
     sections: normalizeSections({ ...(existingExtra.sections || DEFAULT_EXTRA.sections), ...incomingSections }),
     legal,
+    contact,
     playerFields,
     samplePlayers: Array.isArray(payload.players) ? false : !!existingExtra.samplePlayers,
   };

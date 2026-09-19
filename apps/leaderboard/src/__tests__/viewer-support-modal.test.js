@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Window } from "happy-dom";
 import { renderSite } from "@yourrank/shared/site-render";
+import { hasCreatorContactMethod } from "@yourrank/shared/creator-contact";
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
 import { helpSupportPage } from "../pages/help.js";
 
@@ -37,21 +38,22 @@ async function accountHtml(community) {
   const html = await viewerDashboardPage(community, me.authProviders, { state: "authenticated", viewer: null });
   return typeof html === "string" ? html : await html.text();
 }
-function communityHtml() {
+function communityHtml(contact) {
   return renderSite({
-    r: { slug: "creator", plan: "pro", data: siteData }, section: "home", viewer: { kick_username: "viewer_one" },
+    r: { slug: "creator", plan: "pro", data: { ...siteData, contact } }, section: "home", viewer: { kick_username: "viewer_one" },
     viewerData: { viewerOnSite: { balance: 10, blocked: false }, ledger: [], claims: [], participation: [] },
     opts: { slug: "creator", homeUrl: ORIGIN, nonce: "n", isCustomDomain: false },
   });
 }
 
 /** A viewer-shell browser: the real scripts and a scripted /api/contact. */
-async function openBrowser({ page = "account", community = null, contact = () => ({ status: 200, body: { ok: true, receiptId: "r-1" } }) } = {}) {
+async function openBrowser({ page = "account", community = null, siteContact = undefined, publicSite = "ok", contact = () => ({ status: 200, body: { ok: true, receiptId: "r-1" } }) } = {}) {
   const url = page === "account" ? `${ORIGIN}/me${community ? `?community=${community.slug}` : ""}` : `${ORIGIN}/creator`;
   const window = new Window({ url, settings: { disableJavaScriptEvaluation: true, disableCSSFileLoading: true, disableErrorCapturing: true, handleDisabledFileLoadingAsSuccess: true } });
   const { document } = window;
-  document.documentElement.innerHTML = page === "account" ? await accountHtml(community) : await communityHtml();
+  document.documentElement.innerHTML = page === "account" ? await accountHtml(community) : await communityHtml(siteContact);
   const calls = [];
+  const lookups = [];
   const json = (status, body) => new window.Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   window.fetch = async (input, init = {}) => {
     const requested = new URL(String(input), ORIGIN);
@@ -60,6 +62,11 @@ async function openBrowser({ page = "account", community = null, contact = () =>
       const result = await contact(calls.length);
       if (result instanceof Error) throw result;
       return json(result.status, result.body);
+    }
+    if (requested.pathname === "/api/public/creator") {
+      lookups.push(requested.pathname);
+      if (publicSite === "error") return json(500, {});
+      return json(200, { ...siteData, contact: siteContact, contactAvailable: hasCreatorContactMethod(siteContact) });
     }
     if (requested.pathname.startsWith("/api/")) return json(200, me);
     if (requested.pathname.startsWith("/assets/")) return new window.Response("", { status: 200, headers: { "content-type": "text/javascript" } });
@@ -78,7 +85,7 @@ async function openBrowser({ page = "account", community = null, contact = () =>
   run(sources["viewer-app.js"]);
   await window.__yrViewerAppReady;
   await settle(window);
-  return { window, document, calls };
+  return { window, document, calls, lookups };
 }
 
 async function settle(window) {
@@ -155,16 +162,37 @@ describe("viewer support modal", () => {
     expect(dialog.querySelector('input[name="category"]:checked').value).toBe("account");
   });
 
-  it("routes reward/claim issues to the creator when a community is in context", async () => {
-    browser = await openBrowser({ community: COMMUNITY });
+  it("routes reward/claim issues to the creator only once the community's contact method is confirmed", async () => {
+    browser = await openBrowser({ community: COMMUNITY, siteContact: { email: "creator@example.com" } });
     const { dialog } = await openFrom(browser, HELP_LINK);
     const note = dialog.querySelector(".yr-support-note");
+    expect(note.getAttribute("data-support-reward-note")).toBe("available");
     expect(note.textContent).toContain("Reward or claim issue?");
-    expect(note.textContent).toContain("Rewards are managed by the community creator, not YourRank.");
+    expect(note.textContent).toContain("Rewards are managed by the community creator.");
     const action = note.querySelector("a[data-support-creator]");
     expect(action.textContent.trim()).toBe("Contact creator");
     expect(action.getAttribute("href")).toBe("/creator/contact");
     expect(dialog.textContent).not.toContain("Go to reward");
+    expect(browser.lookups).toHaveLength(1);
+  });
+
+  it("shows a non-clickable message when the community has no contact method", async () => {
+    browser = await openBrowser({ community: COMMUNITY, siteContact: { email: "", discord: "" } });
+    const { dialog } = await openFrom(browser, HELP_LINK);
+    const note = dialog.querySelector(".yr-support-note");
+    expect(note.getAttribute("data-support-reward-note")).toBe("unavailable");
+    expect(note.textContent).toContain("Reward or claim issue?");
+    expect(note.textContent).toContain("This creator hasn't provided a contact method yet.");
+    expect(note.querySelector("a")).toBeNull();
+    expect(dialog.querySelector("a[data-support-creator]")).toBeNull();
+  });
+
+  it("never offers the creator link when availability cannot be confirmed", async () => {
+    browser = await openBrowser({ community: COMMUNITY, publicSite: "error" });
+    const { dialog } = await openFrom(browser, HELP_LINK);
+    const note = dialog.querySelector(".yr-support-note");
+    expect(note.getAttribute("data-support-reward-note")).toBe("unknown");
+    expect(note.querySelector("a")).toBeNull();
   });
 
   it("hides the creator action when no community is in context", async () => {
@@ -172,12 +200,22 @@ describe("viewer support modal", () => {
     const { dialog } = await openFrom(browser, HELP_LINK);
     expect(dialog.querySelector("a[data-support-creator]")).toBeNull();
     expect(dialog.querySelector(".yr-support-note").textContent).toContain("Reward or claim issue?");
+    expect(browser.lookups).toHaveLength(0);
   });
 
-  it("uses the community page's own slug for the creator action", async () => {
-    browser = await openBrowser({ page: "community" });
+  it("reads availability from the community page itself without a second request", async () => {
+    browser = await openBrowser({ page: "community", siteContact: { discord: "https://discord.gg/creator" } });
+    expect(browser.document.body.dataset.creatorContact).toBe("true");
     const { dialog } = await openFrom(browser, HELP_LINK);
     expect(dialog.querySelector("a[data-support-creator]").getAttribute("href")).toBe("/creator/contact");
+    expect(browser.lookups).toHaveLength(0);
+
+    await browser.window.happyDOM.close();
+    browser = await openBrowser({ page: "community" });
+    expect(browser.document.body.dataset.creatorContact).toBe("false");
+    const empty = await openFrom(browser, HELP_LINK);
+    expect(empty.dialog.querySelector("a[data-support-creator]")).toBeNull();
+    expect(empty.dialog.querySelector(".yr-support-note").textContent).toContain("This creator hasn't provided a contact method yet.");
   });
 
   it("reveals diagnostics only for Technical issue", async () => {
