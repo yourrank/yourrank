@@ -100,6 +100,20 @@ describe("Connected Accounts provider presentation", () => {
     expect(card.textContent).not.toContain("separate viewer account");
   });
 
+  it("Privacy & Security: Authentication uses the provider row + neutral note, Privacy keeps the policy action without placeholder copy", async () => {
+    browser = await openAccountPage();
+    const [auth, privacy] = browser.document.querySelectorAll("#vd-security .vd-settings-card");
+    expect(auth.querySelector("h2").textContent).toBe("Authentication");
+    expect(auth.querySelector('#vd-security-providers .vd-provider .vd-provider-logo[data-provider="kick"]')).not.toBeNull();
+    expect(auth.querySelector(".vd-info")).toBeNull();
+    expect(auth.querySelector(".vd-note").textContent.trim()).toBe("Sign-in security is managed by your connected provider.");
+    expect(auth.textContent).not.toMatch(/two-factor|session management|aren't available/i);
+    expect(privacy.querySelector("h2").textContent).toBe("Privacy");
+    expect(privacy.querySelector("p").textContent).toBe("Your YourRank account identifies you across communities. Credits, claims and activity stay scoped to each community.");
+    expect(privacy.textContent).not.toMatch(/aren't available/i);
+    expect(privacy.querySelector('a.btn[href="/privacy"]').textContent).toContain("Privacy policy");
+  });
+
   it("reuses the same provider row (with logo) for the Profile and Authentication summaries", async () => {
     browser = await openAccountPage();
     for (const id of ["vd-profile-providers", "vd-security-providers"]) {
