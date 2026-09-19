@@ -55,6 +55,12 @@ The `yr_session` cookie is HttpOnly; keep `/tmp/yr-cookies.txt` for `curl -b` ca
 
 ## Driving the UI
 
+### Viewer/creator conversation sessions
+
+- Prefer separate browser profiles for creator and viewer actors on the same origin. Dashboard document navigation rotates `__csrf`, while the published viewer shell uses its page's meta token; sharing cookies can make an otherwise valid viewer write fail CSRF. If profiles are shared, reload the viewer page after creator navigation before sending, and report that setup limitation rather than bypassing CSRF.
+- Published viewer claim support is in `/{slug}/activity#membership-claims`; creator claim details are under `/dashboard/rewards/redemptions`. Provision membership and credits locally, but create the reward claim and conversation transitions through the UI.
+- Check both the primary claim row and the secondary Latest claim card after support creation and resolution. Resolve the last open request while Needs attention is selected, then confirm filters remain usable and All restores existing claims.
+
 - The `computer` tool coordinate space (1024x768) can miss small buttons; fall back to CDP `Runtime.evaluate` or `javascript:` URLs in the omnibox for precise clicks.
 - Public site uses `data-redeem` buttons and native `confirm()`; `/me` uses `showConfirmModal`.
 - `/me` IDs to script: `vd-login-card`, `vd-boards`, `vd-site-card`, `vd-site-balance`, `vd-shop-list`, `vd-redemptions-list`, `vd-drop-claim`, `vd-drop-code`, `vd-drop-claim-btn`, `vd-drop-status`.
