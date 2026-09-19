@@ -30,6 +30,8 @@ export const overlayPage = (data, opts = {}) => {
   const dataJson = JSON.stringify({ players, endsAt, rankBy }).replace(/</g, "\\u003c");
   const isTicker = opts.layout === "ticker" || opts.layout === "bar";
   const canvas = opts.canvas === true;
+  // Animation is on unless the designer encoded animate=0 in the URL.
+  const animate = opts.animate !== false;
   const cx = clampNum(opts.x, 0, 100, 50);
   const cy = clampNum(opts.y, 0, 100, 50);
   const cs = clampNum(opts.scale, 0.5, 2, 1);
@@ -95,10 +97,11 @@ html,body{${isTicker ? "width:100%;height:52px;" : "width:320px;"}overflow:hidde
 .ov-ticker-timer{display:flex;align-items:center;gap:6px;flex-shrink:0;font-size:11px;color:rgba(255,255,255,0.6)}
 .ov-ticker-timer b{font-family:'JetBrains Mono',monospace;color:${accentA};font-weight:700}
 
+body.ov-static .ov-row,body.ov-static .ov-ticker-item{transition:none !important;animation:none !important}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
 </style>
 ${canvasCss ? `<style nonce="${opts.nonce || ""}">${canvasCss}</style>` : ""}
-</head><body>
+</head><body${animate ? "" : ' class="ov-static"'}>
 ${isTicker ? `
 <div class="ov-ticker-bar">
   <div class="ov-ticker-brand">
@@ -130,7 +133,7 @@ ${endsAt ? `<p class="ov-timer-label">${esc(b.prizePool || "")} resets in</p>
 <span class="ov-powered">YourRank</span>
 </div>
 </div>`}
-<div id="ov-config" data-slug="${esc(opts.slug || "")}" data-layout="${esc(opts.layout || "card")}" data-theme="${esc(opts.theme || 'default')}" data-sponsor="${esc(opts.sponsor || "")}" data-sponsor-url="${esc(opts.sponsorUrl || "")}" data-json='${dataJson.replace(/'/g, "&#39;")}' hidden></div>
+<div id="ov-config" data-slug="${esc(opts.slug || "")}" data-layout="${esc(opts.layout || "card")}" data-theme="${esc(opts.theme || 'default')}" data-animate="${animate ? "1" : "0"}" data-sponsor="${esc(opts.sponsor || "")}" data-sponsor-url="${esc(opts.sponsorUrl || "")}" data-json='${dataJson.replace(/'/g, "&#39;")}' hidden></div>
 <script src="/assets/overlay.js?v=3"></script>
 </body></html>`;
 };

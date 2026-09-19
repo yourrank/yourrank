@@ -10,7 +10,8 @@ import { renderPerformance, renderPerformanceLoading } from "./performance.js";
 import { clearPlayersDraft, collectPlayers, commitDraftMutation, renderPlayers, renumber, toggleEmpty } from "./players.js";
 import { requestPublicationChange } from "./publication.js";
 import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from "./request.js";
-import { currentRoute, requestDashboardRoute, requestBillingRedirect } from "./shell.js";
+import { requestBillingRedirect } from "./shell.js";
+import { effectiveBoardRole } from "./role-preview.js";
 import { activeViewerUsageMarkup } from "./plan-usage.js";
 import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
@@ -32,138 +33,160 @@ export const DEFAULT_SECTIONS = {
 };
 
 const PLAN_ORDER = ["free", "pro", "team"];
-let obsSlug = "";
-
-// P4-3: alert sound presets shared with the overlay page (handlers/overlays.js).
-// The same Web Audio recipes play here so "Test sound" previews exactly what
-// the OBS browser source will stream.
-export const ALERT_SOUND_PRESETS = ["chime", "ding", "fanfare", "none"];
-
-export function readAlertSoundConfig() {
-  const presets = new Set(ALERT_SOUND_PRESETS);
-  const pick = (el, min, max, dflt) => {
-    const n = Number(el?.value);
-    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
-  };
-  const requested = String($("ovAlertSound")?.value || "chime").toLowerCase();
-  return {
-    sound: presets.has(requested) ? requested : "chime",
-    vol: pick($("ovAlertVol"), 0, 100, 30),
-    gap: pick($("ovAlertGap"), 0, 300, 0),
-  };
-}
-
-export function playAlertPreset(preset, volume) {
-  if (preset === "none" || typeof window === "undefined") return;
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    const now = ctx.currentTime;
-    const master = ctx.createGain();
-    master.gain.value = Math.max(0, Math.min(1, volume / 100)) * 0.85;
-    master.connect(ctx.destination);
-    const tone = (type, freqs, endAt) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type;
-      freqs.forEach((f) => osc.frequency.setValueAtTime(f.value, now + (f.at || 0)));
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.35, now + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + endAt);
-      osc.connect(gain);
-      gain.connect(master);
-      osc.start(now);
-      osc.stop(now + endAt);
-    };
-    if (preset === "ding") {
-      tone("sine", [{ value: 1318.5 }], 0.5);
-    } else if (preset === "fanfare") {
-      tone("square", [{ value: 523.25 }, { value: 659.25, at: 0.12 }, { value: 783.99, at: 0.24 }], 0.7);
-      tone("triangle", [{ value: 1046.5 }, { value: 1318.5, at: 0.3 }], 0.9);
-    } else {
-      tone("sine", [{ value: 523.25 }, { value: 659.25, at: 0.1 }, { value: 783.99, at: 0.2 }, { value: 1046.5, at: 0.3 }], 0.8);
-    }
-  } catch {
-    /* audio unavailable — the copy flow still works */
-  }
-}
-
-async function wireObsTools() {
-  const buttons = [
-    ["ov-btn-copy-pred-hud", (slug) => `${location.origin}/overlay/prediction?site=${slug}`, "OBS Live Prediction HUD URL copied to clipboard!"],
-    ["ov-btn-copy-alerts", (slug) => {
-      const cfg = readAlertSoundConfig();
-      const params = new URLSearchParams({ site: slug, sound: cfg.sound, vol: String(cfg.vol), gap: String(cfg.gap) });
-      return `${location.origin}/overlay/alerts?${params.toString()}`;
-    }, "OBS Stream Alerts & Chimes URL copied to clipboard!"],
-    ["ov-btn-copy-ticker", (slug) => `${location.origin}/${slug}/overlay?layout=ticker`, "OBS Leaderboard Ticker URL copied to clipboard!"],
-  ];
-  if (!buttons.some(([id]) => $(id))) return;
-  const siteSelect = $("obsSiteSelect");
-  const siteHint = $("obsSiteHint");
-  try {
-    const response = await fetch("/api/site/list", { credentials: "include" });
-    const payload = await response.json().catch(() => ({}));
-    const sites = response.ok ? payload.sites || payload.boards || [] : [];
-    const selectedId = new URLSearchParams(location.search).get("siteId");
-    const site = sites.find((item) => String(item.id || item.siteId) === String(selectedId)) || sites[0];
-    if (siteSelect) {
-      siteSelect.innerHTML = sites.map((item) => {
-        const id = item.id || item.siteId;
-        return `<option value="${esc(id)}"${String(id) === String(site?.id || site?.siteId) ? " selected" : ""}>${esc(item.name || item.slug || "Site")}</option>`;
-      }).join("");
-      siteSelect.disabled = !sites.length;
-      if (!siteSelect._wired) {
-        siteSelect._wired = true;
-        siteSelect.addEventListener("change", () => {
-          // Switching the overlay's site reloads the current route with the
-          // new siteId; the entry point owns the destination and the reload.
-          const next = new URL(location.href);
-          next.searchParams.set("siteId", siteSelect.value);
-          const route = currentRoute();
-          requestDashboardRoute(route.page, route.tab, { query: next.search, reload: true });
-        });
-      }
-    }
-    obsSlug = site?.slug || "";
-    if (siteHint) siteHint.textContent = site ? `Links below use ${site.name || site.slug || "this site"}.` : "Create a site before copying an overlay link.";
-  } catch (error) {
-    logError("load-obs-site", error);
-    if (siteHint) siteHint.textContent = "Could not load your sites. Try again before copying an overlay link.";
-  }
-  buttons.forEach(([id, makeUrl, message]) => {
-    const button = $(id);
-    if (!button || button._wired) return;
-    button._wired = true;
-    button.addEventListener("click", async () => {
-      if (!obsSlug) {
-        showToast("Select a site before copying an OBS link.");
-        return;
-      }
-      const copied = await copyToClipboard(makeUrl(obsSlug));
-      flashButton(button, copied ? "Copied!" : "Copy failed");
-      if (copied) showToast(message, "success");
-    });
-  });
-  const testBtn = $("ovAlertTest");
-  if (testBtn && !testBtn._wired) {
-    testBtn._wired = true;
-    testBtn.addEventListener("click", () => {
-      const cfg = readAlertSoundConfig();
-      if (cfg.sound === "none") {
-        showToast("Silent is selected — the overlay will show cards without sound.");
-        return;
-      }
-      playAlertPreset(cfg.sound, cfg.vol);
-    });
-  }
-}
 const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false, payoutNote: "" };
 
 export function isPro() {
   const plan = state.ME?.plan;
   return plan === "pro" || plan === "team";
+}
+
+// Postback keys belong to the signed-in account and only authorize boards that
+// account owns, so the key is only useful (and only shown) to the board owner.
+export function canManageApiKey(boards = state.BOARDS, activeSiteId = state.ACTIVE_SITE_ID) {
+  const board = (boards || []).find((entry) => entry.id === activeSiteId) || null;
+  return effectiveBoardRole(board) === "owner";
+}
+
+const API_KEY_MASK = "•".repeat(20);
+let apiKey = "";
+let apiKeyRevealed = false;
+let apiKeyLoading = null;
+
+function paintApiKey() {
+  const value = $("apiKeyValue");
+  const reveal = $("apiKeyReveal");
+  if (value) {
+    value.textContent = apiKey ? (apiKeyRevealed ? apiKey : API_KEY_MASK) : "No key yet";
+    value.dataset.masked = apiKeyRevealed ? "0" : "1";
+  }
+  if (reveal) {
+    reveal.textContent = apiKeyRevealed ? "Hide" : "Reveal";
+    reveal.setAttribute("aria-pressed", apiKeyRevealed ? "true" : "false");
+    reveal.disabled = !apiKey;
+  }
+  const copy = $("apiKeyCopy");
+  if (copy) copy.disabled = !apiKey;
+}
+
+// GET returns the account's active postback key; the first rotate creates one.
+// Reuses the postback_keys infrastructure shared with deposit tracking.
+async function loadApiKey() {
+  if (apiKeyLoading) return apiKeyLoading;
+  apiKeyLoading = (async () => {
+    const hint = $("apiKeyHint");
+    apiKeyRevealed = false;
+    try {
+      const r = await fetch("/api/account/postbacks", { credentials: "include" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) throw new Error(d.error || `postbacks ${r.status}`);
+      if (d.postback?.key) {
+        apiKey = d.postback.key;
+        if (hint) hint.textContent = "";
+      } else {
+        const created = await fetch("/api/account/postbacks/rotate", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+        const cd = await created.json().catch(() => ({}));
+        if (!created.ok || !cd.ok || !cd.postback?.key) throw new Error(cd.error || `postbacks ${created.status}`);
+        apiKey = cd.postback.key;
+        if (hint) hint.textContent = "Key created. Keep it secret — anyone holding it can post scores to your boards.";
+      }
+      const details = $("apiAccessDetails");
+      if (details) details._apiLoaded = true;
+    } catch (err) {
+      logError("load-api-key", err);
+      apiKey = "";
+      if (hint) hint.textContent = "Could not load your API key. Reload to try again.";
+    } finally {
+      apiKeyLoading = null;
+      paintApiKey();
+    }
+  })();
+  return apiKeyLoading;
+}
+
+async function rotateApiKey(button) {
+  const confirmed = await showConfirmModal(
+    "Rotate API key",
+    "The current key stops working immediately. Update any system that posts scores with the new key.",
+    "Rotate",
+    true,
+  );
+  if (!confirmed) return;
+  button.disabled = true;
+  const hint = $("apiKeyHint");
+  try {
+    const r = await fetch("/api/account/postbacks/rotate", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok || !d.postback?.key) throw new Error(d.error || `rotate ${r.status}`);
+    apiKey = d.postback.key;
+    apiKeyRevealed = false;
+    if (hint) hint.textContent = "Key rotated. The previous key has been revoked.";
+    showToast("API key rotated.", "success");
+  } catch (err) {
+    logError("rotate-api-key", err);
+    showToast(err.message || "Could not rotate the key.", "error");
+  } finally {
+    button.disabled = false;
+    paintApiKey();
+  }
+}
+
+export function renderApiAccess() {
+  const apiEl = $("apiAccess");
+  if (!apiEl) return;
+  const unlocked = isPro();
+  const owner = canManageApiKey();
+  apiEl.classList.toggle("locked", !unlocked);
+  const lockedNote = $("apiLockedNote");
+  if (lockedNote) lockedNote.hidden = unlocked;
+  const badge = $("apiLockBadge");
+  if (badge) badge.hidden = unlocked;
+  const roleNote = $("apiRoleNote");
+  if (roleNote) roleNote.hidden = !unlocked || owner;
+  const setup = $("apiSetup");
+  if (setup) setup.hidden = !unlocked || !owner;
+  const upgrade = $("apiUpgrade");
+  if (upgrade && !upgrade._wired) {
+    upgrade._wired = true;
+    upgrade.addEventListener("click", (event) => {
+      event.preventDefault();
+      checkout("pro", event.currentTarget);
+    });
+  }
+  if (!unlocked || !owner) return;
+
+  const reveal = $("apiKeyReveal");
+  if (reveal && !reveal._wired) {
+    reveal._wired = true;
+    reveal.addEventListener("click", () => {
+      apiKeyRevealed = !apiKeyRevealed;
+      paintApiKey();
+    });
+  }
+  const copy = $("apiKeyCopy");
+  if (copy && !copy._wired) {
+    copy._wired = true;
+    copy.addEventListener("click", async () => {
+      if (!apiKey) return;
+      const ok = await copyToClipboard(apiKey);
+      flashButton(copy, ok ? "Copied!" : "Copy failed");
+    });
+  }
+  const rotate = $("apiKeyRotate");
+  if (rotate && !rotate._wired) {
+    rotate._wired = true;
+    rotate.addEventListener("click", () => rotateApiKey(rotate));
+  }
+  paintApiKey();
+  // Fetch (or create) the key only once the creator opens Developer tools.
+  const details = $("apiAccessDetails");
+  const ensureKey = () => { if (details?.open && (!apiKey || !details._apiLoaded)) loadApiKey(); };
+  if (details && !details._apiWired) {
+    details._apiWired = true;
+    details.addEventListener("toggle", ensureKey);
+  }
+  // Account or board switches re-render; refetch so the key shown is the caller's.
+  if (details) details._apiLoaded = false;
+  ensureKey();
 }
 
 let billingInterval = "monthly";
@@ -2746,7 +2769,6 @@ $("discard")?.addEventListener("click", async () => {
 export function renderEmbedShare() {
     const slug = state.SLUG;
     if (!slug) return;
-    wireObsTools();
     const origin = location.origin;
     const publicUrl = origin + "/" + slug;
 
@@ -2762,10 +2784,9 @@ export function renderEmbedShare() {
       });
     }
 
-    // The server exposes overlays for every non-Free effective plan.
-    const obsUrl = origin + "/" + slug + "/overlay";
+    // The server exposes overlays for every non-Free effective plan; the
+    // designer card is the one place to compose and copy the OBS link.
     const overlayAccess = state.ME?.plan !== "free";
-    const obsBox = $("embedObsUrl")?.closest(".embed-obs-box");
     const obsLock = $("embedObsLock");
     if (obsLock) {
       obsLock.hidden = overlayAccess;
@@ -2777,17 +2798,6 @@ export function renderEmbedShare() {
           checkout("pro", event.currentTarget);
         });
       }
-    }
-    if (obsBox) obsBox.hidden = !overlayAccess;
-    const obsLink = $("embedObsUrl");
-    if (obsLink) obsLink.textContent = overlayAccess ? obsUrl : "";
-    const obsCopy = $("embedObsCopy");
-    if (overlayAccess && obsCopy && !obsCopy._wired) {
-      obsCopy._wired = true;
-      obsCopy.addEventListener("click", async () => {
-        const ok = await copyToClipboard(obsUrl);
-        flashButton(obsCopy, ok ? "Copied!" : "Copy failed");
-      });
     }
 
     // Embed code
@@ -2836,11 +2846,7 @@ export function renderEmbedShare() {
       });
     }
 
-    // API access (unlock for Pro)
-    const apiEl = $("apiAccess");
-    if (apiEl) {
-      apiEl.classList.toggle("locked", !isPro());
-    }
+    renderApiAccess();
   }
 
 export async function loadStats() {

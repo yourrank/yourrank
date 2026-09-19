@@ -269,6 +269,17 @@ describe("handleScores — payload validation", () => {
     expect(body.players).toBe(2);
   });
 
+  test("valid team request returns 200 with player count", async () => {
+    _ownerRow = { plan: "team", plan_expires_at: Date.now() + 86_400_000 * 30, status: "active" };
+    const players = [{ name: "Alice", wagered: 5000, prize: 100 }];
+    const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players } });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.players).toBe(1);
+  });
+
   test("accepts name and score without requiring wagered", async () => {
     const req = makeRequest({
       headers: { "x-postback-key": "key" },

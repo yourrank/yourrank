@@ -62,10 +62,11 @@ async function signQueryString(secret, payload) {
 }
 
 // GET /api/account/postbacks
-export async function handleAccountPostbacks(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleAccountPostbacks(request, env, injected = {}) {
+  const deps = { requireUser, rateLimit, getActivePostbackKey, loadActivePostbackStatus, loadConversions, ...injected };
+  const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
-  if (!(await rateLimit(env, `account-postbacks:${user.id}`, 120, 60)).ok) {
+  if (!(await deps.rateLimit(env, `account-postbacks:${user.id}`, 120, 60)).ok) {
     return bad("Too many requests. Try again later.", 429);
   }
 
@@ -75,9 +76,9 @@ export async function handleAccountPostbacks(request, env) {
     return json({ ok: true, postback: null, upgrade: true, canRotate: false, conversions: [] });
   }
 
-  const key = await getActivePostbackKey(user.id);
-  const statusRow = key ? await loadActivePostbackStatus(user.id) : null;
-  const conversions = await loadConversions(user.id);
+  const key = await deps.getActivePostbackKey(user.id);
+  const statusRow = key ? await deps.loadActivePostbackStatus(user.id) : null;
+  const conversions = await deps.loadConversions(user.id);
 
   let status = "not_configured";
   if (key) {
@@ -95,15 +96,17 @@ export async function handleAccountPostbacks(request, env) {
 }
 
 // POST /api/account/postbacks/rotate
-export async function handleAccountPostbacksRotate(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleAccountPostbacksRotate(request, env, injected = {}) {
+  const deps = { requireUser, rateLimit, createPostbackKey, ...injected };
+  const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
   if (effectivePlan(user) === "free") return bad("Postbacks require a paid plan.", 402);
-  if (!(await rateLimit(env, `postback-rotate:${user.id}`, 10, 60)).ok) {
+  if (!(await deps.rateLimit(env, `postback-rotate:${user.id}`, 10, 60)).ok) {
     return bad("Too many rotations. Try again later.", 429);
   }
 
-  const key = await createPostbackKey(user.id, { label: "account", revokeOthers: true });
+  // revokeOthers: the previous active key stops working the moment the new one exists.
+  const key = await deps.createPostbackKey(user.id, { label: "account", revokeOthers: true });
   const url = new URL(request.url);
   return json({ ok: true, postback: postbackObject(url, key) });
 }

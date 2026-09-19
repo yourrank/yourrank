@@ -118,10 +118,15 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysSource).not.toContain('fallbackId');
   });
 
-  it("keeps OBS copy ownership in the sharing module", () => {
-    for (const id of ["ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
+  it("keeps the single OBS copy action in the overlay designer, not the shell", () => {
+    const designerSource = readFileSync(new URL("../assets/dashboard/overlay-designer.js", import.meta.url), "utf8");
+    expect(designerSource).toContain('$("odCopy")');
+    for (const id of ["odCopy", "ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
       expect(shellSource).not.toContain(id);
-      expect(siteSource).toContain(id);
+    }
+    // The standalone HUD/alerts/ticker copy cards left the Share page.
+    for (const id of ["ov-btn-copy-pred-hud", "ov-btn-copy-alerts", "ov-btn-copy-ticker"]) {
+      expect(siteSource).not.toContain(id);
     }
   });
 

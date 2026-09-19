@@ -70,7 +70,7 @@ describe("tour steps", () => {
       NO_TARGET,
       "#ovSetup",
       "#ovTopPlayers",
-      ".ov-obs-suite-card",
+      "#overlayDesignerCard",
       NO_TARGET,
     ]);
     const kick = TOUR_STEPS[TOUR_STEPS.length - 1];
@@ -97,7 +97,7 @@ describe("tour steps", () => {
       new URL("../pages/dashboard.jsx", import.meta.url),
       "utf8",
     );
-    for (const selector of ["#ovSetup", "#ovTopPlayers", ".ov-obs-suite-card"]) {
+    for (const selector of ["#ovSetup", "#ovTopPlayers", "#overlayDesignerCard"]) {
       const needle = selector.startsWith("#")
         ? `id="${selector.slice(1)}"`
         : selector.slice(1);

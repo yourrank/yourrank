@@ -447,6 +447,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   x: [{ classification: "feature", context: "public overlay rendering", where: "Overlay designer canvas X position on /<slug>/overlay; render option, not navigation." }],
   y: [{ classification: "feature", context: "public overlay rendering", where: "Overlay designer canvas Y position on /<slug>/overlay; render option, not navigation." }],
   scale: [{ classification: "feature", context: "public overlay rendering", where: "Overlay designer widget scale on /<slug>/overlay; render option, not navigation." }],
+  animate: [{ classification: "feature", context: "public overlay rendering", where: "Overlay designer animation toggle (1/0) on /<slug>/overlay; render option, not navigation." }],
   sound: [{ classification: "feature", context: "public overlay rendering", where: "Alert sound preset on /overlay/alerts; render option composed by the OBS tools card." }],
   vol: [{ classification: "feature", context: "public overlay rendering", where: "Alert volume percent on /overlay/alerts; render option composed by the OBS tools card." }],
   gap: [{ classification: "feature", context: "public overlay rendering", where: "Alert quiet period seconds on /overlay/alerts; render option composed by the OBS tools card." }],

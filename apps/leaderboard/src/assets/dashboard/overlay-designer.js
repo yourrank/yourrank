@@ -2,14 +2,15 @@
 // drag the overlay (or use arrow keys / numeric inputs) to position it, pick
 // widget and scale, and copy the composed OBS browser-source URL. The preview
 // frame renders the real overlay page, so what you arrange is what streams.
-// Position/scale travel in the URL (x/y/scale params), so nothing has to be
-// persisted server-side — the copied link is the whole configuration.
+// Position/scale/animation travel in the URL (x/y/scale/animate params), so
+// nothing has to be persisted server-side — the copied link is the whole
+// configuration.
 import { $, copyToClipboard, showToast } from "./utils.js";
 import { state } from "./state.js";
 
 const STORAGE_KEY = "yr-overlay-designer";
 
-export const OVERLAY_DESIGN_DEFAULT = { layout: "card", x: 50, y: 50, scale: 1 };
+export const OVERLAY_DESIGN_DEFAULT = { layout: "card", x: 50, y: 50, scale: 1, animate: true };
 export const OVERLAY_SCALE_STEPS = [0.75, 1, 1.25, 1.5];
 
 /** Validate/clamp a stored or user-provided design object. */
@@ -20,12 +21,14 @@ export function normalizeOverlayDesign(input) {
   const scale = safeNumber(clamp(src.scale, 0.5, 2, 1), 1);
   const x = safeNumber(clamp(src.x, 5, 95, 50), 50);
   const y = safeNumber(clamp(src.y, 5, 95, 50), 50);
+  const animate = !(src.animate === false || src.animate === 0 || src.animate === "0");
   return {
     layout,
     // The ticker bar spans the full canvas width; only the height applies.
     x: layout === "ticker" ? 50 : x,
     y,
     scale,
+    animate,
   };
 }
 
@@ -42,6 +45,7 @@ export function buildOverlayPath(slug, design) {
   params.set("x", String(Math.round(d.x * 10) / 10));
   params.set("y", String(Math.round(d.y * 10) / 10));
   params.set("scale", String(d.scale));
+  params.set("animate", d.animate ? "1" : "0");
   return `/${encodeURIComponent(slug || "demo")}/overlay?${params.toString()}`;
 }
 
@@ -79,6 +83,8 @@ export function initOverlayDesigner() {
   const handle = $("odHandle");
   const layoutSel = $("odLayout");
   const scaleSel = $("odScale");
+  const animateCb = $("odAnimate");
+  const animateState = $("odAnimateState");
   const xInput = $("odX");
   const yInput = $("odY");
   const copyBtn = $("odCopy");
@@ -109,6 +115,8 @@ export function initOverlayDesigner() {
     design = normalizeOverlayDesign(design);
     if (layoutSel) layoutSel.value = design.layout;
     if (scaleSel) scaleSel.value = String(design.scale);
+    if (animateCb) animateCb.checked = design.animate;
+    if (animateState) animateState.textContent = design.animate ? "On" : "Off";
     if (xInput) xInput.value = String(Math.round(design.x));
     if (yInput) yInput.value = String(Math.round(design.y));
     handle.classList.toggle("is-ticker", design.layout === "ticker");
@@ -161,6 +169,10 @@ export function initOverlayDesigner() {
   });
   scaleSel?.addEventListener("change", () => {
     design.scale = Number(scaleSel.value) || 1;
+    render();
+  });
+  animateCb?.addEventListener("change", () => {
+    design.animate = animateCb.checked;
     render();
   });
   xInput?.addEventListener("change", () => {
