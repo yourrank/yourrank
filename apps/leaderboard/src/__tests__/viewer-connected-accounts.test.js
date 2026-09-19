@@ -26,7 +26,8 @@ async function openAccountPage(payload = me) {
   const { document } = window;
   const html = await viewerDashboardPage(null, payload.authProviders, { state: "authenticated", viewer: null });
   document.documentElement.innerHTML = typeof html === "string" ? html : await html.text();
-  window.fetch = async () => new window.Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
+  const json = (body) => new window.Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  window.fetch = async (path) => json(path === "/api/viewer/export" ? { ok: true, exportId: "exp-1" } : payload);
   const globals = ["window", "document", "location", "history", "fetch", "Event", "URL", "AbortController"];
   new Function(...globals, dashboardSource)(window, document, window.location, window.history, window.fetch, window.Event, window.URL, window.AbortController);
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -112,6 +113,33 @@ describe("Connected Accounts provider presentation", () => {
     expect(privacy.querySelector("p").textContent).toBe("Your YourRank account identifies you across communities. Credits, claims and activity stay scoped to each community.");
     expect(privacy.textContent).not.toMatch(/aren't available/i);
     expect(privacy.querySelector('a.btn[href="/privacy"]').textContent).toContain("Privacy policy");
+  });
+
+  it("Data & Account: compact key/value info, export instructions only after requesting, subtle danger delete card", async () => {
+    browser = await openAccountPage();
+    const [info, exportCard, del] = browser.document.querySelectorAll("#vd-data .vd-settings-card");
+    expect(info.textContent).not.toContain("Email management");
+    const facts = [...info.querySelectorAll(".vd-facts div")].map((row) => [row.querySelector("dt").textContent, row.querySelector("dd").textContent]);
+    expect(facts).toEqual([["Display name", "36_ates"], ["Member since", "Sep 1, 2026"]]);
+
+    expect(exportCard.querySelector(".vd-export-row > p").textContent).toContain("Your viewer identity, provider connections");
+    expect(exportCard.querySelector("h3")).toBeNull();
+    expect(exportCard.querySelector("#vd-export-progress").hidden).toBe(true);
+    expect(exportCard.querySelector(".vd-export-actions #vd-export")).not.toBeNull();
+    exportCard.querySelector("#vd-export").click();
+    for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(exportCard.querySelector("#vd-export-progress").hidden).toBe(false);
+    expect(exportCard.querySelector("#vd-export-progress").textContent).toContain("Keep this page open");
+    expect(exportCard.querySelector("#vd-export-status").textContent).toContain("being prepared");
+    expect(exportCard.querySelector("#vd-export-check").hidden).toBe(false);
+
+    expect(del.classList.contains("vd-danger-card")).toBe(true);
+    expect(del.textContent).not.toContain("isn't available");
+    expect(del.textContent).toContain("Permanently delete your YourRank account and associated account data.");
+    expect(del.textContent).toContain("Contact support to request account deletion.");
+    const cta = del.querySelector("a.btn");
+    expect(cta.classList.contains("btn--danger")).toBe(true);
+    expect(cta.classList.contains("btn--accent")).toBe(false);
   });
 
   it("reuses the same provider row (with logo) for the Profile and Authentication summaries", async () => {

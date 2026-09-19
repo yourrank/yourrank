@@ -166,6 +166,7 @@ function renderLoggedOut() {
   exportId = "";
   $("vd-export-download").hidden = true;
   $("vd-export-check").hidden = true;
+  $("vd-export-progress").hidden = true;
   setStatus("vd-export-status", "");
   $("vd-rail-logout").hidden = true;
   $("viewer-top-name").textContent = "Sign in";
@@ -223,6 +224,7 @@ function renderAccount(viewer) {
   $("vd-rail-logout").hidden = false;
   $("vd-created").textContent = fmtDate(viewer.createdAt) || "Not available";
   $("vd-data-name").textContent = name;
+  $("vd-data-created").textContent = fmtDate(viewer.createdAt) || "Not available";
   $("vd-profile-name").textContent = name;
   const providers = (viewer.connections || []).map((connection) => providerRow({ ...connection, state: "connected" })).join("") || "<p>No connected providers were returned.</p>";
   $("vd-provider-list").innerHTML = providers;
@@ -359,6 +361,7 @@ $("vd-export")?.addEventListener("click", async () => {
   const button = $("vd-export");
   setLoading(button, true, "Requesting export…");
   $("vd-export-download").hidden = true;
+  $("vd-export-progress").hidden = false;
   try {
     const data = await api("POST", "/api/viewer/export");
     exportId = data.exportId || "";
