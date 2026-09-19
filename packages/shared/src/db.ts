@@ -288,6 +288,28 @@ export interface Tx {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T[]>;
   one<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<T | undefined>;
   unsafe(text: string, params?: unknown[]): Promise<any[]>;
+  /** Run `fn` under a SAVEPOINT: a throw rolls back only `fn`'s statements and re-throws. */
+  savepoint?<T>(fn: (tx: Tx) => Promise<T>): Promise<T>;
+}
+
+function wrapTx(sqlTx: any): Tx {
+  return {
+    async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
+      const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
+      return rows.map((r) => ({ ...(r as Record<string, unknown>) })) as unknown as T[];
+    },
+    async one<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T | undefined> {
+      const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
+      return rows[0] ? ({ ...(rows[0] as Record<string, unknown>) } as T) : undefined;
+    },
+    async unsafe(text: string, params: unknown[] = []) {
+      const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as any[];
+      return rows.map((r) => ({ ...r }));
+    },
+    savepoint<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+      return sqlTx.savepoint((inner: any) => fn(wrapTx(inner))) as Promise<T>;
+    },
+  };
 }
 
 /**
@@ -307,23 +329,7 @@ export async function withTransaction<R>(fn: (tx: Tx) => Promise<R>): Promise<R>
   for (let attempt = 0; attempt < 3; attempt++) {
     const sql = createSql();
     try {
-      const result = await sql.begin(async (sqlTx: any) => {
-        const tx: Tx = {
-          async query<T = Record<string, unknown>>(text: string, params: unknown[] = []) {
-            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
-            return rows.map((r) => ({ ...(r as Record<string, unknown>) })) as unknown as T[];
-          },
-          async one<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T | undefined> {
-            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as unknown[];
-            return rows[0] ? ({ ...(rows[0] as Record<string, unknown>) } as T) : undefined;
-          },
-          async unsafe(text: string, params: unknown[] = []) {
-            const rows = (await timed(text, () => sqlTx.unsafe(text, params as any[]))) as any[];
-            return rows.map((r) => ({ ...r }));
-          },
-        };
-        return fn(tx);
-      });
+      const result = await sql.begin((sqlTx: any) => fn(wrapTx(sqlTx)));
       return result as unknown as R;
     } catch (err) {
       if (isConnError(err) && attempt < 2) {

@@ -43,6 +43,10 @@
   async function mount(ticket) {
     await loadAsset("/assets/site-shell.js", "YRInitSitePage", false);
     if (ticket !== sequence) return;
+    if (document.getElementById("viewer-notify")) {
+      await loadAsset("/assets/viewer-notifications.js", "YRInitViewerNotifications", false).catch(function () { /* The bell stays hidden. */ });
+      if (ticket !== sequence) return;
+    }
     if (document.getElementById("vd-profile")) {
       await loadAsset("/assets/viewer-dashboard.js", "YRInitViewerAccount", true);
       if (ticket !== sequence) return;

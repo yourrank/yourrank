@@ -171,6 +171,11 @@ import {
   handleViewerClaimSupportReply,
 } from "./handlers/claim-support.js";
 import {
+  handleViewerNotifications,
+  handleViewerNotificationRead,
+  handleViewerNotificationsReadAll,
+} from "./handlers/viewer-notifications.js";
+import {
   handlePeopleMemberDetail,
   handlePeopleMembers,
 } from "./handlers/people.js";
@@ -440,6 +445,9 @@ export const ROUTES = [
   { path: "/api/viewer/claims/:id/support", method: "GET", handler: withHandler(handleViewerClaimSupport) },
   { path: "/api/viewer/claims/:id/support", method: "POST", handler: withHandler(handleViewerClaimSupportCreate) },
   { path: "/api/viewer/claims/:id/support/messages", method: "POST", handler: withHandler(handleViewerClaimSupportReply) },
+  { path: "/api/viewer/notifications", method: "GET", handler: withHandler(handleViewerNotifications) },
+  { path: "/api/viewer/notifications/read-all", method: "POST", handler: withHandler(handleViewerNotificationsReadAll) },
+  { path: "/api/viewer/notifications/:id/read", method: "POST", handler: withHandler(handleViewerNotificationRead) },
   { path: "/api/viewer/redeem", method: "POST", handler: withHandler(handleViewerRedeem) },
   { path: "/api/viewer/export", method: "POST", handler: withHandler(handleCreateViewerExportJob) },
   { path: "/api/viewer/export/:id/status", method: "GET", handler: withHandler(handleViewerExportStatus) },

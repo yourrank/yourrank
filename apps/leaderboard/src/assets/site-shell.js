@@ -1009,6 +1009,30 @@
     }
   }
 
+  // Notification deep links: ?claim=<id> highlights that claim in My Activity
+  // and ?support=1 also opens its support conversation. The parameters are
+  // consumed once so a reload or Back does not reopen the dialog.
+  (function openClaimDeepLink() {
+    var url = new URL(window.location.href);
+    var claimId = url.searchParams.get("claim") || "";
+    if (!claimId) return;
+    var wantSupport = url.searchParams.get("support") === "1";
+    url.searchParams.delete("claim");
+    url.searchParams.delete("support");
+    var matching = function (root) {
+      return Array.from(root.querySelectorAll("[data-claim-id]")).filter(function (row) { return row.dataset.claimId === claimId; });
+    };
+    var row = matching(document.getElementById("membership-claims") || document)[0] || matching(document)[0];
+    if (!row) return;
+    history.replaceState(history.state, "", url.href);
+    row.classList.add("is-highlighted");
+    row.setAttribute("tabindex", "-1");
+    // Focusing the row brings it into view; the dialog then takes focus itself.
+    row.focus();
+    var trigger = wantSupport && row.querySelector("[data-claim-support]");
+    if (trigger) trigger.click();
+  })();
+
   // ── Feedback dialog ─────────────────────────────────────────────────
   var dialog = document.getElementById("yr-feedback");
   var statusEl = document.getElementById("yr-feedback-status");
