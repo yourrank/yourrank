@@ -7,6 +7,9 @@
   const SLUG = _cfg?.dataset?.slug ?? window.__OVERLAY_SLUG__;
   const TOP_N = 5;
   const TRANSITION_MS = 600;
+  // animate=0 in the overlay URL: rows update in place with no FLIP, entry,
+  // or score-flash motion.
+  const ANIMATE = (_cfg?.dataset?.animate ?? "1") !== "0";
 
   // Theme support (Phase 7.3)
   const THEME = _cfg?.dataset?.theme ?? "default";
@@ -79,7 +82,7 @@
 
     // Record old positions (FLIP: First)
     const oldPositions = {};
-    container.querySelectorAll(".ov-row").forEach((el) => {
+    if (ANIMATE) container.querySelectorAll(".ov-row").forEach((el) => {
       const name = el.dataset.name;
       const rect = el.getBoundingClientRect();
       oldPositions[name] = rect.top;
@@ -94,9 +97,9 @@
       const scoreChanged = prevWagers[p.name] !== undefined && prevWagers[p.name] !== metricValue;
       const movedUp = prevRanks[p.name] && prevRanks[p.name] > rank;
       const movedDown = prevRanks[p.name] && prevRanks[p.name] < rank;
-      const dirClass = movedUp ? "ov-moved-up" : movedDown ? "ov-moved-down" : "";
-      const flashClass = scoreChanged ? "ov-score-flash" : "";
-      const entryClass = isNew ? "ov-enter" : "";
+      const dirClass = ANIMATE && movedUp ? "ov-moved-up" : ANIMATE && movedDown ? "ov-moved-down" : "";
+      const flashClass = ANIMATE && scoreChanged ? "ov-score-flash" : "";
+      const entryClass = ANIMATE && isNew ? "ov-enter" : "";
       return `<div class="ov-row ${dirClass} ${flashClass} ${entryClass}" data-name="${esc(p.name)}">
         <span class="ov-medal">${medal}</span>
         <span class="ov-name">${esc(p.name)}</span>
@@ -115,7 +118,7 @@
     container.innerHTML = html + emptyHtml;
 
     // FLIP: Last + Invert + Play
-    container.querySelectorAll(".ov-row").forEach((el) => {
+    if (ANIMATE) container.querySelectorAll(".ov-row").forEach((el) => {
       const name = el.dataset.name;
       if (oldPositions[name] !== undefined) {
         const newRect = el.getBoundingClientRect();

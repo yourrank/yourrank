@@ -101,18 +101,17 @@ describe("cooldown surface wiring", () => {
     expect(src).toContain("cooldownRemaining");
   });
 
-  it("the dashboard composes the alert URL from the sound controls", () => {
-    const src = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
-    expect(src).toContain("readAlertSoundConfig()");
-    expect(src).toContain('new URLSearchParams({ site: slug, sound: cfg.sound, vol: String(cfg.vol), gap: String(cfg.gap) })');
-    expect(src).toContain('$("ovAlertTest")');
-    expect(src).toContain("playAlertPreset(cfg.sound, cfg.vol)");
+  it("the alerts overlay route keeps honoring sound, volume, and quiet-period params", () => {
+    const src = readFileSync(new URL("../handlers/overlays.js", import.meta.url), "utf8");
+    for (const param of ["sound", "vol", "gap"]) {
+      expect(src.includes(`"${param}"`), param).toBe(true);
+    }
   });
 
-  it("the OBS tools card exposes sound, volume, and quiet-period controls", () => {
+  it("the Share page no longer carries the standalone Stream Alerts card", () => {
     const jsx = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
-    for (const id of ['id="ovAlertSound"', 'id="ovAlertVol"', 'id="ovAlertGap"', 'id="ovAlertTest"']) {
-      expect(jsx.includes(id), id).toBe(true);
+    for (const id of ['id="ovAlertSound"', 'id="ovAlertVol"', 'id="ovAlertGap"', 'id="ovAlertTest"', "ov-btn-copy-alerts"]) {
+      expect(jsx.includes(id), id).toBe(false);
     }
   });
 });

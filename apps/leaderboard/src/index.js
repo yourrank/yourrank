@@ -1269,7 +1269,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // Canvas mode: x/y/scale place the widget inside a full stream canvas.
         // The overlay designer composes these; clamped server-side too.
         const clampNum = (v, min, max, dflt) => { if (v === null || v === "") return dflt; const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt; };
-        const overlayOpts = { slug, nonce, layout };
+        // animate=0 turns off rank/entry/score motion; anything else keeps it on.
+        const overlayOpts = { slug, nonce, layout, animate: url.searchParams.get("animate") !== "0" };
         if (url.searchParams.has("x") || url.searchParams.has("y")) {
           overlayOpts.canvas = true;
           overlayOpts.x = clampNum(url.searchParams.get("x"), 0, 100, 50);
