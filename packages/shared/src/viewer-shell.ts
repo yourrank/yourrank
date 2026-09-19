@@ -20,6 +20,7 @@ const iconPaths: Record<string, string> = {
   grid: '<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 4.2 1.5C13 11.2 12 11.5 12 13m0 3h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
