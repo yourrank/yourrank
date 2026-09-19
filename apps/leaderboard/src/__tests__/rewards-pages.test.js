@@ -94,7 +94,8 @@ describe("server-rendered rewards pages", () => {
     expect(rewardsClientSource).toContain('import { reviewRewardReadiness } from "@yourrank/shared/reward-readiness"');
     expect(rewardsClientSource).toContain('contactReady: state.creatorContact?.ready !== false');
     expect(rewardsClientSource).toContain('data-review-focus="cr-shop-desc"');
-    expect(rewardsClientSource).toContain("Add a contact channel</a>");
+    expect(rewardsClientSource).toContain("Add a contact method</a>");
+    expect(rewardsClientSource).toContain("A contact method is required before a new reward goes live.");
     expect(rewardsClientSource).toContain('$("cr-shop-desc")?.addEventListener("input", renderShopReview)');
     expect(rewardsClientSource).toContain('$("cr-shop-active")?.addEventListener("change", renderShopReview)');
     expect(rewardsClientSource).toMatch(/i\.active && !shopReview\(i\)\.ready \? `[^`]*cr-shop-review-chip[^`]*data-edit-shop=/);
