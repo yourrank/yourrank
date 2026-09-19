@@ -1066,7 +1066,8 @@ async function updateRedemption(id, status, trigger) {
 async function toggleShop(id, trigger) {
   const item = state.shopItems.find((i) => i.id === id); if (!item) return;
   setLoading(trigger, true, "Saving…");
-  try { await api("POST", sitePath("/api/credits/shop"), { ...item, active: trigger.checked }); await load(); }
+  const payload = { id: item.id, name: item.name, description: item.description || "", cost: item.cost, stock: item.stock ?? null, cooldownSeconds: Number(item.cooldown_seconds) || 0, active: trigger.checked };
+  try { await api("POST", sitePath("/api/credits/shop"), payload); await load(); }
   catch (err) { trigger.checked = item.active; setStatus("cr-shop-status", err.message, true); } finally { setLoading(trigger, false); }
 }
 async function toggleReward(id, trigger) {
