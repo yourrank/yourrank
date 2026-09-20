@@ -1,7 +1,14 @@
-// Kick webhook handler for channel-point reward redemptions.
+// Kick webhook handler for channel-point reward redemptions and chat messages.
 // Keeps the request thread thin: verify the signature, filter the event, then
-// drop it onto the shared events queue. The consumer durably grants credits.
+// drop redemptions onto the shared events queue (the consumer durably grants
+// credits) and turn chat messages into chat-giveaway entries inline.
 import { json, bad } from "../auth.js";
+import { query } from "@yourrank/shared/db";
+import {
+  KICK_CHAT_MESSAGE_EVENT,
+  ingestChatGiveawayMessage,
+  kickChatMessageToIngestInput,
+} from "@yourrank/shared/chat-giveaways";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import {
   verifyKickWebhookSignature,
@@ -21,7 +28,11 @@ async function processFallback(event, env) {
   return result;
 }
 
-export async function handleKickWebhook(request, env) {
+async function ingestKickChatMessage(payload) {
+  return ingestChatGiveawayMessage((sql, params) => query(sql, params), kickChatMessageToIngestInput(payload));
+}
+
+export async function handleKickWebhook(request, env, { ingestChatMessage = ingestKickChatMessage } = {}) {
   const rawBody = await request.text();
   const messageId = request.headers.get("Kick-Event-Message-Id");
   const timestamp = request.headers.get("Kick-Event-Message-Timestamp");
@@ -54,7 +65,7 @@ export async function handleKickWebhook(request, env) {
   }
 
   // Acknowledge any event we don't care about so Kick doesn't retry.
-  if (eventType !== KICK_REWARD_EVENT) {
+  if (eventType !== KICK_REWARD_EVENT && eventType !== KICK_CHAT_MESSAGE_EVENT) {
     return json({ ok: true, ignored: eventType });
   }
 
@@ -63,6 +74,16 @@ export async function handleKickWebhook(request, env) {
     payload = JSON.parse(rawBody);
   } catch {
     return bad("Invalid JSON body", 400);
+  }
+
+  if (eventType === KICK_CHAT_MESSAGE_EVENT) {
+    try {
+      const outcome = await ingestChatMessage(payload, env);
+      return json({ ok: true, chat: outcome });
+    } catch (err) {
+      console.error("[kick-webhook] chat ingest failed:", err?.message || err);
+      return bad("Chat event processing failed", 500);
+    }
   }
 
   // Queue creditable completions and reversible cancellations/refunds.

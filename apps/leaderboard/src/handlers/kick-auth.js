@@ -18,8 +18,16 @@ import {
   fetchKickCurrentUser,
   fetchKickCurrentChannel,
   subscribeKickWebhookEvent,
+  ensureKickWebhookSubscriptions,
+  listKickWebhookSubscriptions,
   encryptKickToken,
 } from "@yourrank/shared/kick-oauth";
+import {
+  KICK_CHAT_MESSAGE_EVENT,
+  KICK_CREATOR_WEBHOOK_EVENTS,
+  markChannelChatSubscription,
+  stopActiveChatGiveaways,
+} from "@yourrank/shared/chat-giveaways";
 import { notifyLiveBoard } from "../live-board-config.js";
 import { handleKickViewerAuthCallback, KICK_VIEWER_STATE_PREFIX } from "./viewer-auth.js";
 
@@ -115,6 +123,8 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
     fetchKickCurrentUser: fetchKickCurrentUserImpl = fetchKickCurrentUser,
     fetchKickCurrentChannel: fetchKickCurrentChannelImpl = fetchKickCurrentChannel,
     subscribeKickWebhookEvent: subscribeKickWebhookEventImpl = subscribeKickWebhookEvent,
+    ensureKickWebhookSubscriptions: ensureKickWebhookSubscriptionsImpl = ensureKickWebhookSubscriptions,
+    listKickWebhookSubscriptions: listKickWebhookSubscriptionsImpl = listKickWebhookSubscriptions,
     encryptKickToken: encryptKickTokenImpl = encryptKickToken,
     stateData: injectedStateData = null,
     viewerCallback: viewerCallbackImpl = handleKickViewerAuthCallback,
@@ -182,12 +192,17 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
       throw new Error("Kick user and channel ownership did not match");
     }
 
-    // Subscribe to the channel-point reward redemption event.
-    try {
-      await subscribeKickWebhookEventImpl(tokens.access_token, "channel.reward.redemption.updated");
-    } catch (subErr) {
-      console.warn("[kick-auth] event subscription failed:", subErr?.message || subErr);
+    // Rewards + chat webhooks; existing subscriptions are reused. Each event
+    // is reported on its own so the chat-giveaway readiness stored below is
+    // truthful even when only part of the wiring succeeded.
+    const subscriptions = await ensureKickWebhookSubscriptionsImpl(tokens.access_token, KICK_CREATOR_WEBHOOK_EVENTS, {
+      list: listKickWebhookSubscriptionsImpl,
+      subscribe: subscribeKickWebhookEventImpl,
+    });
+    for (const failure of subscriptions.failed) {
+      console.warn(`[kick-auth] event subscription failed for ${failure.event}:`, failure.error);
     }
+    const chatSubscribed = subscriptions.subscribed.includes(KICK_CHAT_MESSAGE_EVENT);
 
     const accessEnc = await encryptKickTokenImpl(tokens.access_token);
     const refreshEnc = tokens.refresh_token ? await encryptKickTokenImpl(tokens.refresh_token) : null;
@@ -214,10 +229,13 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
         creatorConnectionId,
         verified: true,
       });
+      await markChannelChatSubscription(run, stateData.siteId, "kick", chatSubscribed);
     });
     void notifyLiveBoard(env, stateData.siteId);
 
-    return redirect(channelRedirect({ kick_connected: "1" }, stateData.siteId));
+    const params = { kick_connected: "1" };
+    if (!chatSubscribed) params.kick_chat_events = "failed";
+    return redirect(channelRedirect(params, stateData.siteId));
   } catch (err) {
     console.error("[kick-auth] callback failed:", err?.message || err);
     return redirect(channelRedirect({ error: "kick_auth_failed" }, stateData.siteId));
@@ -249,6 +267,7 @@ export async function handleKickAuthDisconnect(request, env, deps = {}) {
     const run = (sql, params) => tx.unsafe(sql, params);
     const otherSite = await otherVerifiedChannelForCreator(run, user.id, "kick", site.id);
     if (!otherSite) await revokeCreatorConnection(run, user.id, "kick");
+    await stopActiveChatGiveaways(run, site.id);
     await revokeCommunityChannel(run, site.id, "kick");
     return { accountDisconnected: !otherSite };
   });
