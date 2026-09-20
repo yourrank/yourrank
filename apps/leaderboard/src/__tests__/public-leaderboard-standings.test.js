@@ -419,12 +419,12 @@ describe("Main / Loyalty boards (shared renderer)", () => {
 
   it("switches the metric header between Main and Loyalty and marks the active tab", async () => {
     const main = await renderBoard(loyal, "main", loyaltyRows);
-    expect(main).toContain('data-board="main" aria-current="page">Main</a>');
+    expect(main).toContain('data-board="main" aria-current="page">Main leaderboard</a>');
     expect(main).toContain('>Player</span><span class="yr-r">Wagered</span>');
     expect(main).not.toContain("Viewer A");
 
     const loyalty = await renderBoard(loyal, "loyalty", loyaltyRows);
-    expect(loyalty).toContain('data-board="loyalty" aria-current="page">Loyalty</a>');
+    expect(loyalty).toContain('data-board="loyalty" aria-current="page">Loyalty leaderboard</a>');
     expect(loyalty).toContain('>Viewer</span><span class="yr-r">Credits earned</span>');
     expect(loyalty).toContain("Ranked by lifetime credits earned");
     const rows = rowsOf(loyalty);
