@@ -61,7 +61,7 @@ import {
   handleChatGiveawayDraw,
   handleChatGiveawayRemoveEntry,
 } from "./handlers/chat-giveaways.js";
-import { handleGetActivities } from "./handlers/activities.js";
+import { handleGetActivities, handleCloseActivity } from "./handlers/activities.js";
 import {
   handleCreateActivityTemplate,
   handleUpdateActivityTemplate,
@@ -333,6 +333,7 @@ export const ROUTES = [
 
   // Safe Activities foundation (existing free-workflow adapters only)
   { path: "/api/activities", method: "GET", handler: withHandler(handleGetActivities) },
+  { path: "/api/activities/close", method: "POST", handler: withHandler(handleCloseActivity) },
   { path: "/api/activities/templates", method: "POST", handler: withHandler(handleCreateActivityTemplate) },
   { path: "/api/activities/templates", method: "PUT", handler: withHandler(handleUpdateActivityTemplate) },
   { path: "/api/activities/templates/delete", method: "POST", handler: withHandler(handleDeleteActivityTemplate) },

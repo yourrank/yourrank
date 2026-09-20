@@ -7,6 +7,8 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 import { handleCreatorClaims, handleCreatorClaimTransition } from "../handlers/claims.js";
 import { handlePeopleMembers } from "../handlers/people.js";
+import { handleCloseActivity, handleGetActivities } from "../handlers/activities.js";
+import { handleClaimCodeDrop } from "../handlers/events.js";
 
 const databaseUrl = process.env.AUDIT_TEST_DATABASE_URL || "";
 const integrationIt = (name, fn) => (databaseUrl ? it : it.skip)(name, fn, 60000);
@@ -21,6 +23,9 @@ const site = { id: siteId, user_id: ownerId, slug: `dl-${suffix}`, name: "List s
 const otherSite = { id: otherSiteId, user_id: otherOwnerId, slug: `dl-other-${suffix}`, name: "Other site" };
 const MEMBERS = 130;
 const CLAIMS = 130;
+const DROPS = 63;
+const dropIds = [];
+const otherDropId = crypto.randomUUID();
 const viewerIds = [];
 const membershipIds = [];
 const redemptionIds = [];
@@ -42,6 +47,25 @@ const claims = (params = "", ownSite = site) =>
   handleCreatorClaims(get(`/api/claims?siteId=${ownSite.id}${params}`), {}, creatorDeps(ownSite));
 const members = (params = "", ownSite = site) =>
   handlePeopleMembers(get(`/api/people/members?siteId=${ownSite.id}${params}`), {}, creatorDeps(ownSite));
+const activities = (params = "", ownSite = site) =>
+  handleGetActivities(get(`/api/activities?siteId=${ownSite.id}${params}`), {}, creatorDeps(ownSite));
+const closeActivity = (activityId, ownSite = site) =>
+  handleCloseActivity(new Request("https://yourrank.site/api/activities/close", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ siteId: ownSite.id, activityId }),
+  }), {}, creatorDeps(ownSite));
+const claimDrop = (code, viewerId, ownSite = site) =>
+  handleClaimCodeDrop(new Request("https://yourrank.site/api/events/drops/claim", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ site: ownSite.slug, code }),
+  }), {}, {
+    rateLimit: async () => ({ ok: true }),
+    requireViewer: async () => ({ viewer: { id: viewerId }, res: null }),
+    resolveJoinableCommunity: async (_request, _env, slug) => (slug === ownSite.slug ? ownSite : null),
+    markActive: async () => {},
+  });
 
 const viewerRow = (id, overrides) => ({
   id, kick_user_id: null, kick_username: null, kick_linked_at: null,
@@ -121,6 +145,19 @@ beforeAll(async () => {
   await sql`INSERT INTO site_viewers ${sql(memberships)}`;
   redemptions.push({ id: otherRedemptionId, site_viewer_id: otherMembershipId, shop_item_id: otherItemId, cost: 10, status: "pending", created_at: new Date() });
   await sql`INSERT INTO redemptions ${sql(redemptions)}`;
+  // Drops share created_at timestamps in bunches so the id tie-breaker matters.
+  const drops = [];
+  for (let i = 0; i < DROPS; i++) {
+    const id = crypto.randomUUID();
+    dropIds.push(id);
+    drops.push({
+      id, site_id: siteId, code: `DROP${String(i).padStart(3, "0")}`, points_reward: 10, max_claims: 5,
+      claimed_count: i % 6, status: i % 9 === 8 ? "exhausted" : "active",
+      created_at: new Date(Date.UTC(2026, 2, 1, 0, Math.floor(i / 4))),
+    });
+  }
+  drops.push({ id: otherDropId, site_id: otherSiteId, code: "OTHER", points_reward: 10, max_claims: 5, claimed_count: 0, status: "active", created_at: new Date() });
+  await sql`INSERT INTO code_drops ${sql(drops)}`;
 
   oldUrl = process.env.DATABASE_URL;
   const worker = new URL(databaseUrl);
@@ -263,5 +300,90 @@ describe("people members list (Postgres)", () => {
     const other = await (await members("", otherSite)).json();
     expect(other.members.map((m) => m.id)).toEqual([otherMembershipId]);
     expect(JSON.stringify(other)).not.toMatch(/viewer_id|kick_user_id|fraud/);
+  });
+});
+
+describe("activities history list (Postgres)", () => {
+  integrationIt("reaches every activity beyond the first page, newest first, without duplicates or skips", async () => {
+    const first = await (await activities("&limit=5")).json();
+    expect(first.activities).toHaveLength(5);
+    expect(first.total).toBe(DROPS);
+    expect(first.page).toMatchObject({ limit: 5, hasMore: true });
+    expect(first.automation).toBeDefined();
+
+    const walked = await collect((cursor) => activities(`&limit=5${cursor ? `&cursor=${cursor}` : ""}`), "activities");
+    expect(walked.pages).toBe(Math.ceil(DROPS / 5));
+    expect(walked.ids).toHaveLength(DROPS);
+    expect(walked.unique).toBe(DROPS);
+    expect(new Set(walked.ids)).toEqual(new Set(dropIds.map((id) => `drop:${id}`)));
+    expect(walked.ids).not.toContain(`drop:${otherDropId}`);
+
+    const expected = await sql`SELECT id FROM code_drops WHERE site_id=${siteId} ORDER BY created_at DESC, id DESC`;
+    expect(walked.ids).toEqual(expected.map((row) => `drop:${row.id}`));
+
+    // The default page still covers the old 50-row window and reports more.
+    const defaults = await (await activities()).json();
+    expect(defaults.activities).toHaveLength(50);
+    expect(defaults.page.hasMore).toBe(true);
+    const rest = await (await activities(`&cursor=${defaults.page.nextCursor}`)).json();
+    expect(rest.activities).toHaveLength(DROPS - 50);
+    expect(rest.page).toEqual({ limit: 50, hasMore: false, nextCursor: null });
+    expect(rest.automation).toBeUndefined();
+  });
+
+  integrationIt("keeps drop states and rejects foreign, expired or malformed cursors", async () => {
+    const all = await collect((cursor) => activities(`&limit=100${cursor ? `&cursor=${cursor}` : ""}`), "activities");
+    expect(all.pages).toBe(1);
+    const page = await (await activities("&limit=100")).json();
+    expect(page.activities.filter((a) => a.stateLabel === "Claimed out")).toHaveLength(dropIds.filter((_, i) => i % 9 === 8).length);
+
+    expect((await activities(`&cursor=${otherDropId}`)).status).toBe(410);
+    expect((await activities(`&cursor=${crypto.randomUUID()}`)).status).toBe(410);
+    expect((await activities("&cursor=oops")).status).toBe(400);
+    const other = await (await activities("", otherSite)).json();
+    expect(other.activities.map((a) => a.id)).toEqual([`drop:${otherDropId}`]);
+    expect(other.total).toBe(1);
+  });
+});
+
+describe("creator-controlled Code Drop closure (Postgres)", () => {
+  integrationIt("ends an open drop, keeps earlier claims, and rejects claims after closure", async () => {
+    const dropId = dropIds[0];
+    const before = await claimDrop("DROP000", viewerIds[1]);
+    expect(before.status).toBe(200);
+
+    const closed = await (await closeActivity(`drop:${dropId}`)).json();
+    expect(closed).toMatchObject({ changed: true, activity: { state: "completed", stateLabel: "Ended by creator", actions: { canEnd: false } } });
+    expect(closed.activity.progress.claimed).toBe(1);
+
+    const after = await claimDrop("DROP000", viewerIds[2]);
+    expect(after.status).toBe(400);
+    expect((await after.json()).error).toBe("This drop has ended.");
+
+    const [row] = await sql`SELECT status, claimed_count::int AS claimed_count, closed_at FROM code_drops WHERE id=${dropId}`;
+    expect(row).toMatchObject({ status: "expired", claimed_count: 1 });
+    expect(row.closed_at).toBeTruthy();
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM code_drop_claims WHERE code_drop_id=${dropId}`;
+    expect(n).toBe(1);
+    const [audit] = await sql`SELECT entity_id FROM audit_log WHERE action='code_drop_close' AND entity_id=${dropId}`;
+    expect(audit?.entity_id).toBe(dropId);
+
+    const listed = await (await activities("&limit=100")).json();
+    expect(listed.activities.find((a) => a.id === `drop:${dropId}`)).toMatchObject({ stateLabel: "Ended by creator", actions: { canEnd: false } });
+  });
+
+  integrationIt("is idempotent, refuses exhausted drops, and never crosses sites", async () => {
+    const again = await closeActivity(`drop:${dropIds[0]}`);
+    expect(again.status).toBe(200);
+    expect((await again.json()).changed).toBe(false);
+
+    const exhausted = await closeActivity(dropIds[8]);
+    expect(exhausted.status).toBe(409);
+    expect((await exhausted.json()).activity.stateLabel).toBe("Claimed out");
+
+    expect((await closeActivity(`drop:${otherDropId}`)).status).toBe(404);
+    expect((await closeActivity(dropIds[1], otherSite)).status).toBe(404);
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM code_drops WHERE id IN (${otherDropId}, ${dropIds[1]}) AND status='active'`;
+    expect(n).toBe(2);
   });
 });

@@ -314,6 +314,14 @@ jobs:
             -c "ALTER ROLE yourrank_worker WITH PASSWORD 'test'"
           bun run verify:portability-postgres
 
+      # Dashboard lists: canonical claims, members and activities keyset
+      # pagination over >100 rows, plus creator Code Drop closure. Connects as
+      # yourrank_worker (password reset by the step above).
+      - name: Dashboard list and Code Drop closure tests (against migrated schema)
+        env:
+          AUDIT_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: bun test apps/leaderboard/src/__tests__/dashboard-lists-postgres.test.js
+
       # Claim support conversations: viewer/creator ownership, one open request
       # per claim, Needs attention, resolve -> read-only. Connects as
       # yourrank_worker (password reset by the step above).

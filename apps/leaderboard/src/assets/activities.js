@@ -4,13 +4,11 @@ import { clearSession } from "./dashboard/session.js";
 import {
   DEFAULT_PAGE_SIZE,
   PAGE_SIZE_OPTIONS,
-  clampPage,
   normalizePageSize,
-  pageCount,
-  pageSlice,
   pageWindow,
   rangeLabel,
 } from "./pagination.js";
+import { ServerPages } from "./activity-pages.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -24,13 +22,14 @@ let automation = { templates: [], schedules: [], entitlement: { canAutomate: fal
 let _activitiesEnter = null;
 let _activitiesLeave = null;
 
-// Pagination state for the "Live and past Activities" list. `items` holds the
-// whole dataset returned by the API (which caps at 50 rows server-side), so
-// paging is a pure client concern and never costs a round trip. `pageSize` is a
-// deliberate user preference and survives reloads; `page` is reset to 1 whenever
-// the dataset changes so a new/shortened list can never strand the viewer on a
-// page that no longer exists.
-const activityPaging = { items: [], page: 1, pageSize: DEFAULT_PAGE_SIZE };
+// Pagination state for the "Live and past Activities" list. Pages come from
+// /api/activities one server page at a time (keyset cursor, `pageSize` rows
+// each) and are cached in `pages`, so the browser never holds more history than
+// the creator has actually paged through. `pageSize` is a deliberate user
+// preference and survives reloads; `page` is reset to 1 whenever the dataset is
+// reloaded so a new/shortened list can never strand the viewer on a page that
+// no longer exists.
+const activityPaging = { pages: new ServerPages(DEFAULT_PAGE_SIZE), page: 1, pageLoading: false };
 
 export function enter() { _activitiesEnter?.(); }
 export function leave() { _activitiesLeave?.(); }
@@ -98,7 +97,7 @@ if (!window.__yrSpaShell) {
       <div class="act-row__fact act-row__reward"><span>Member reward</span><strong>${credits.toLocaleString()} credits</strong></div>
       <div class="act-row__fact act-row__progress"><span>Claims</span><strong>${claimed.toLocaleString()} of ${capacity.toLocaleString()}</strong></div>
       <div class="act-row__fact act-row__end"><span>Ends</span><strong>${esc(formatDate(activity.endsAt))}</strong></div>
-      <span class="act-state act-state--${state}">${esc(activity.stateLabel)}</span>
+      <div class="act-schedule-action"><span class="act-state act-state--${state}">${esc(activity.stateLabel)}</span>${activity.actions?.canEnd ? `<div class="act-row-actions"><button class="btn btn--sm act-destructive" type="button" data-activity-end="${esc(activity.id)}">End now</button></div>` : ""}</div>
     </article>`;
   }
 
@@ -113,7 +112,7 @@ if (!window.__yrSpaShell) {
         .map((size) => `<option value="${size}">${size}</option>`)
         .join("");
     }
-    select.value = String(activityPaging.pageSize);
+    select.value = String(activityPaging.pages.pageSize);
     select.setAttribute("aria-label", "Activities per page");
   }
 
@@ -137,15 +136,17 @@ if (!window.__yrSpaShell) {
   function renderPager() {
     const pager = $("act-pager");
     if (!pager) return;
-    const total = activityPaging.items.length;
-    const totalPages = pageCount(total, activityPaging.pageSize);
-    activityPaging.page = clampPage(activityPaging.page, total, activityPaging.pageSize);
+    const { pages } = activityPaging;
+    const total = pages.total;
+    // Pages reachable right now: everything fetched plus the next server page.
+    const totalPages = pages.reachableCount();
+    activityPaging.page = pages.clamp(activityPaging.page);
 
     pager.hidden = total === 0;
     if (total === 0) return;
 
     const range = $("act-pager-range");
-    if (range) range.textContent = rangeLabel(total, activityPaging.page, activityPaging.pageSize);
+    if (range) range.textContent = rangeLabel(total, activityPaging.page, pages.pageSize);
 
     renderPageSizeOptions();
     renderPageNumbers(totalPages);
@@ -154,26 +155,73 @@ if (!window.__yrSpaShell) {
     // bar keeps a stable width and the affordance stays discoverable.
     const previous = $("act-pager-prev");
     const next = $("act-pager-next");
-    if (previous) previous.disabled = activityPaging.page <= 1;
-    if (next) next.disabled = activityPaging.page >= totalPages;
+    if (previous) previous.disabled = activityPaging.pageLoading || activityPaging.page <= 1;
+    if (next) next.disabled = activityPaging.pageLoading || activityPaging.page >= totalPages;
   }
 
   // Repaint only the visible rows for the current page.
   function renderActivityRows() {
     const list = $("act-list");
     if (!list) return;
-    if (!activityPaging.items.length) {
+    const rows = activityPaging.pages.rows(activityPaging.page);
+    if (!rows.length) {
       list.hidden = true;
       list.replaceChildren();
       return;
     }
     list.hidden = false;
-    list.innerHTML = pageSlice(activityPaging.items, activityPaging.page, activityPaging.pageSize)
-      .map(activityRowHtml)
-      .join("");
+    list.innerHTML = rows.map(activityRowHtml).join("");
   }
 
-  function renderActivities(activities) {
+  // Creator ends an open drop. The server row is authoritative: the returned
+  // activity replaces the cached one whether the close happened now, already
+  // happened (idempotent), or the drop had ended on its own (409 + activity).
+  async function endActivity(id, token = lifecycleToken) {
+    const rows = activityPaging.pages.rows(activityPaging.page);
+    const current = rows.find((row) => row.id === id);
+    if (!current) return false;
+    const confirmed = window.YRDialog?.confirm
+      ? await window.YRDialog.confirm({
+          title: `End "${current.title}" now?`,
+          body: "Members can no longer claim it. Existing claims are kept.",
+          confirmText: "End now",
+          danger: true,
+        })
+      : window.confirm(`End "${current.title}" now? Members can no longer claim it; existing claims are kept.`);
+    if (!confirmed) return false;
+    const button = document.querySelector(`[data-activity-end="${id}"]`);
+    if (button) button.disabled = true;
+    setStatus("act-form-status", "Ending activity…");
+    try {
+      const body = await api(sitePath("/api/activities/close", activeSiteId), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ siteId: activeSiteId, activityId: id }),
+      });
+      if (token !== lifecycleToken) return false;
+      activityPaging.pages.replace(body.activity);
+      setStatus("act-form-status", body.changed ? "Activity ended." : "That activity had already ended.");
+      renderActivityRows();
+      return true;
+    } catch (error) {
+      if (token !== lifecycleToken) return false;
+      if (error?.status === 409 || error?.status === 404) await loadActivities();
+      setStatus("act-form-status", error?.message || "The activity could not be ended.", true);
+      if (button) button.disabled = false;
+      return false;
+    }
+  }
+
+  function activitiesQuery(cursor) {
+    const query = new URLSearchParams({ limit: String(activityPaging.pages.pageSize) });
+    if (cursor) query.set("cursor", cursor);
+    const base = sitePath("/api/activities", activeSiteId);
+    return `${base}${base.includes("?") ? "&" : "?"}${query}`;
+  }
+
+  // First page of a fresh dataset. A reload invalidates every cached page: the
+  // viewer expects to land on the start of the new list, and any previous page
+  // may now be out of range.
+  function renderActivities(data) {
     const empty = $("act-empty");
     const loading = $("act-loading");
     const error = $("act-error");
@@ -182,27 +230,49 @@ if (!window.__yrSpaShell) {
     loading.hidden = true;
     error.hidden = true;
 
-    const next = Array.isArray(activities) ? activities : [];
-    // A fresh dataset invalidates the current page: the viewer expects to land
-    // on the start of the new list, and any previous page may now be out of range.
-    activityPaging.items = next;
+    const next = Array.isArray(data?.activities) ? data.activities : [];
+    activityPaging.pages.reset();
+    activityPaging.pages.store(1, next, data?.page, data?.total ?? next.length);
     activityPaging.page = 1;
 
-    count.textContent = String(next.length);
-    empty.hidden = next.length > 0;
+    count.textContent = String(activityPaging.pages.total);
+    empty.hidden = activityPaging.pages.total > 0;
 
     renderActivityRows();
     renderPager();
   }
 
-  // Move to `target`, clamped to the available range. Returns true only when the
-  // page actually changed, so callers can skip redundant repaints.
-  function goToPage(target) {
-    const total = activityPaging.items.length;
-    const next = clampPage(target, total, activityPaging.pageSize);
-    if (next === activityPaging.page) return false;
-    activityPaging.page = next;
-    return true;
+  // Move to `target`, clamped to the reachable range, fetching the next server
+  // page when it is not cached yet. Resolves true only when the page actually
+  // changed, so callers can skip redundant repaints.
+  async function goToPage(target, token = lifecycleToken) {
+    const { pages } = activityPaging;
+    const next = pages.clamp(target);
+    if (next === activityPaging.page || activityPaging.pageLoading) return false;
+    if (pages.isLoaded(next)) {
+      activityPaging.page = next;
+      return true;
+    }
+    const cursor = pages.cursorFor(next);
+    if (cursor === undefined) return false;
+    activityPaging.pageLoading = true;
+    renderPager();
+    try {
+      const data = await api(activitiesQuery(cursor));
+      if (token !== lifecycleToken) return false;
+      pages.store(next, Array.isArray(data.activities) ? data.activities : [], data.page, data.total);
+      activityPaging.page = next;
+      return true;
+    } catch (error) {
+      if (token !== lifecycleToken) return false;
+      // A stale cursor (410) means the list changed underneath us: reload from
+      // the first page rather than showing a page that no longer exists.
+      if (error?.status === 410) { await loadActivities(token); return false; }
+      setStatus("act-form-status", error?.message || "Older activities could not be loaded.", true);
+      return false;
+    } finally {
+      if (token === lifecycleToken) { activityPaging.pageLoading = false; renderPager(); }
+    }
   }
 
   // Re-slice a single page: rows + pager only. Scrolls the panel back into view
@@ -288,9 +358,9 @@ if (!window.__yrSpaShell) {
   async function loadActivities(token = lifecycleToken) {
     if ($("act-loading")) $("act-loading").hidden = false;
     try {
-      const data = await api(sitePath("/api/activities", activeSiteId));
+      const data = await api(activitiesQuery(null));
       if (token !== lifecycleToken) return;
-      renderActivities(Array.isArray(data.activities) ? data.activities : []);
+      renderActivities(data);
       renderAutomation(data.automation);
     } catch (error) {
       if (token !== lifecycleToken) return;
@@ -462,26 +532,28 @@ if (!window.__yrSpaShell) {
     $("act-schedule-new")?.addEventListener("click", () => openScheduleForm());
     $("act-schedule-form-cancel")?.addEventListener("click", closeScheduleForm);
     $("act-schedule-form")?.addEventListener("submit", submitSchedule);
-    // Changing the page size is treated as a dataset-view change: jump back to
-    // page 1 so the viewer is not left mid-list after the rows shrink/expand.
+    // Changing the page size is treated as a dataset-view change: the server
+    // pages are re-fetched at the new size from page 1 so the viewer is not left
+    // mid-list after the rows shrink/expand.
     $("act-pager-size")?.addEventListener("change", (event) => {
-      activityPaging.pageSize = normalizePageSize(event.target?.value);
+      activityPaging.pages.reset(normalizePageSize(event.target?.value));
       activityPaging.page = 1;
-      repaintActivities();
+      loadActivities();
     });
     root.addEventListener("click", (event) => {
       const button = event.target.closest("button");
       if (!button) return;
       // Pagination step buttons (Previous/Next) carry a relative offset.
       if (button.dataset.pagerStep) {
-        if (goToPage(activityPaging.page + Number(button.dataset.pagerStep))) repaintActivities();
+        goToPage(activityPaging.page + Number(button.dataset.pagerStep)).then((moved) => { if (moved) repaintActivities(); });
         return;
       }
       // Numbered page buttons carry an absolute target page.
       if (button.dataset.pagerPage) {
-        if (goToPage(Number(button.dataset.pagerPage))) repaintActivities();
+        goToPage(Number(button.dataset.pagerPage)).then((moved) => { if (moved) repaintActivities(); });
         return;
       }
+      if (button.dataset.activityEnd) return void endActivity(button.dataset.activityEnd);
       if (button.dataset.templateEdit) openTemplateForm(automation.templates.find((item) => item.id === button.dataset.templateEdit));
       if (button.dataset.templateDelete) deleteTemplate(button.dataset.templateDelete);
       if (button.dataset.scheduleCancel) cancelSchedule(button.dataset.scheduleCancel);
@@ -509,10 +581,11 @@ if (!window.__yrSpaShell) {
   function activitiesLeave() {
     lifecycleToken += 1;
     activeSiteId = "";
-    // Drop the cached dataset so switching boards cannot briefly page through the
+    // Drop the cached pages so switching boards cannot briefly page through the
     // previous board's activities. `pageSize` is a UI preference and is kept.
-    activityPaging.items = [];
+    activityPaging.pages.reset();
     activityPaging.page = 1;
+    activityPaging.pageLoading = false;
   }
   _activitiesEnter = activitiesEnter;
   _activitiesLeave = activitiesLeave;
