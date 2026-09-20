@@ -240,6 +240,38 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(mockOne).not.toHaveBeenCalled();
   });
 
+  it("rejects a claim on a drop the creator ended, before and inside the locked transaction", async () => {
+    const claim = () => handleClaimCodeDrop(new Request("http://localhost/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "streamer", code: "KICK30" }),
+    }), mockEnv(), deps);
+
+    mockOne.mockResolvedValueOnce({
+      id: "drop-1", code: "KICK30", points_reward: 30, max_claims: 20, claimed_count: 5,
+      status: "expired", closed_at: "2026-08-30T10:00:00.000Z",
+    }); // find drop: creator ended it
+    const ended = await claim();
+    expect(ended.status).toBe(400);
+    expect((await ended.json()).error).toBe("This drop has ended.");
+    expect(mockOne).toHaveBeenCalledTimes(1);
+    expect(mockExec).not.toHaveBeenCalled();
+
+    mockOne.mockClear();
+    mockOne.mockResolvedValueOnce({
+      id: "drop-1", code: "KICK30", points_reward: 30, max_claims: 20, claimed_count: 5,
+      status: "active", closed_at: null,
+    }); // find drop: still open when read
+    mockOne.mockResolvedValueOnce(null); // not yet claimed
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "expired" }); // closed before the row lock
+    const raced = await claim();
+    expect(raced.status).toBe(400);
+    expect((await raced.json()).error).toBe("This drop has ended.");
+    expect(mockOne.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO code_drop_claims"))).toBe(false);
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(deps.markActive).not.toHaveBeenCalled();
+  });
+
   it("handleClaimCodeDrop rejects already claimed code for same viewer", async () => {
     mockOne.mockResolvedValueOnce({
       id: "drop-1",
@@ -278,7 +310,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       status: "active",
     }); // find drop
     mockOne.mockResolvedValueOnce(null); // not yet claimed in pre-check
-    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" }); // inside tx lock
     mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // membership inside transaction
     mockOne.mockResolvedValueOnce(null); // ON CONFLICT DO NOTHING
 
@@ -360,7 +392,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       status: "active",
     }); // find drop
     mockOne.mockResolvedValueOnce(null); // not yet claimed
-    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" }); // inside tx lock
     mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // membership inside transaction
     mockOne.mockResolvedValueOnce({ id: "claim-2" }); // atomic claim insert
     mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 130 }); // credit update
@@ -400,7 +432,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       status: "active",
     }); // find drop
     mockOne.mockResolvedValueOnce(null); // not yet claimed
-    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // inside tx lock
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" }); // inside tx lock
     mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 0 }); // membership inside transaction
     mockOne.mockResolvedValueOnce({ id: "claim-2" }); // atomic claim insert
     mockOne.mockResolvedValueOnce({ id: "sv-new", balance: 30 }); // credit update
@@ -430,7 +462,7 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       status: "active",
     });
     mockOne.mockResolvedValueOnce(null); // not yet claimed
-    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20 }); // locked drop
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" }); // locked drop
     mockOne.mockResolvedValueOnce({ id: "sv-blocked", balance: 10, blocked: true });
 
     const res = await handleClaimCodeDrop(new Request("http://localhost/api/events/drops/claim", {

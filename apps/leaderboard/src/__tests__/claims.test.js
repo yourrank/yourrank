@@ -90,9 +90,45 @@ describe("canonical Claims adapter", () => {
     expect(body.claims[0]).not.toHaveProperty("fulfillmentDetails");
     expect(JSON.stringify(body)).not.toMatch(/address|phone|email|shipping|kick_user_id|discord_user_id/i);
     expect(calls.capability[0].capability).toBe("canRoleManageClaims");
-    expect(calls.query[0].params).toEqual([SITE.id, "action_required", 100]);
+    expect(calls.query[0].params).toEqual([SITE.id, "action_required", "", null, 26]);
     expect(calls.query[0].sql).toContain("WHERE sv.site_id=$1");
-    expect(calls.query[0].sql).toContain("r.created_at END ASC");
+    expect(calls.query[0].sql).toContain("ORDER BY c.sort_bucket ASC, c.sort_key ASC, c.source_id ASC");
+    expect(body.page).toEqual({ limit: 25, hasMore: false, nextCursor: null });
+    expect(calls.one).toHaveLength(1);
+  });
+
+  it("paginates with a site-verified keyset cursor and escapes the search term", async () => {
+    const rows = Array.from({ length: 3 }, (_, i) => claimRow({ source_id: `2222222${i}-2222-4222-8222-222222222222` }));
+    const { calls, deps } = dependencies({
+      query: async (sql, params) => {
+        calls.query.push({ sql: String(sql), params });
+        return rows;
+      },
+    });
+    const response = await handleCreatorClaims(
+      request(`/api/claims?siteId=site-1&status=all&limit=2&q=${encodeURIComponent("50%_off")}&cursor=${SOURCE_ID}`),
+      {},
+      deps,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(calls.one[0].sql).toContain("sv.site_id=$1 AND r.id=$2");
+    expect(calls.one[0].params).toEqual([SITE.id, SOURCE_ID]);
+    expect(calls.query[0].params).toEqual([SITE.id, "all", "50\\%\\_off", SOURCE_ID, 3]);
+    expect(calls.query[0].sql).toContain("(c.sort_bucket, c.sort_key, c.source_id) > (");
+    expect(body.claims.map((c) => c.id)).toEqual([`redemption:${rows[0].source_id}`, `redemption:${rows[1].source_id}`]);
+    expect(body.page).toEqual({ limit: 2, hasMore: true, nextCursor: rows[1].source_id });
+  });
+
+  it("rejects malformed cursors and expires cursors that are not claims of this site", async () => {
+    const malformed = await handleCreatorClaims(request("/api/claims?siteId=site-1&cursor=not-a-uuid"), {}, dependencies().deps);
+    expect(malformed.status).toBe(400);
+
+    const { calls, deps } = dependencies({ one: async () => null });
+    const foreign = await handleCreatorClaims(request(`/api/claims?siteId=site-1&cursor=${SOURCE_ID}`), {}, deps);
+    expect(foreign.status).toBe(410);
+    expect(calls.query).toHaveLength(0);
   });
 
   it("loads a site-bound detail with a redacted fulfillment model and audited history", async () => {

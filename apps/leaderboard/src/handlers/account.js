@@ -184,6 +184,8 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   const sites = await deps.query(
     `SELECT s.id, s.name, s.slug, s.credits_enabled,
             ch.external_channel_id AS kick_channel_external_id, ch.external_channel_name AS kick_channel_name,
+            ch.reward_events_subscribed_at, ch.chat_events_subscribed_at, ch.event_subscriptions_checked_at,
+            EXISTS (SELECT 1 FROM chat_giveaway_sessions g WHERE g.site_id = s.id) AS uses_chat_giveaways,
             s.discord_webhook_url_enc, s.telegram_chat_id, s.telegram_notify,
             (SELECT count(*)::integer FROM credit_reward_mappings m WHERE m.site_id=s.id AND m.active=true) AS active_reward_mappings
        FROM sites s
@@ -254,7 +256,14 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       ...kickHealthInputs,
       activeRewardMappings: Number(site.active_reward_mappings) || 0,
       operationEnabled: Boolean(site.credits_enabled),
+      usesChatGiveaways: Boolean(site.uses_chat_giveaways),
+      delivery: {
+        rewardEventsSubscribedAt: site.reward_events_subscribed_at || null,
+        chatEventsSubscribedAt: site.chat_events_subscribed_at || null,
+        checkedAt: site.event_subscriptions_checked_at || null,
+      },
     });
+    const kickHealthy = kick.status === "authorized" || kick.status === "ready";
     connections.push({
       id: `kick-site:${site.id}`,
       provider: "Kick rewards",
@@ -265,9 +274,11 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
       detail: site.kick_channel_name && site.kick_channel_external_id
         ? `${kick.detail} Channel: @${site.kick_channel_name}.`
         : kick.detail,
-      action: kick.status === "authorized"
+      action: kickHealthy
         ? { label: "Disconnect", kind: "disconnect_kick", siteId: site.id }
-        : { label: kick.needsAttention ? "Reconnect" : "Connect", href: `/auth/kick?siteId=${encodeURIComponent(site.id)}` },
+        : kick.status === "delivery_failed"
+          ? { label: "Repair delivery", href: buildDashboardPath("siteConnections.channel", { siteId: site.id }) }
+          : { label: kick.needsAttention ? "Reconnect" : "Connect", href: `/auth/kick?siteId=${encodeURIComponent(site.id)}` },
     });
     connections.push({
       id: `discord-site:${site.id}`,

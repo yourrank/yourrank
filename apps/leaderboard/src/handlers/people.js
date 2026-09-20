@@ -12,6 +12,11 @@ import { requireSiteCapability } from "../site-authorization.js";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { linkedViewerIdentities, viewerDisplayName, viewerIdentitiesSql } from "@yourrank/shared/viewer-identity";
 import { routeContext } from "../middleware/handler.js";
+import { likePattern, pageMeta, readListCursor, readListLimit, readListSearch } from "../list-cursor.js";
+
+const MEMBER_PAGE = 25;
+const MEMBER_PAGE_MAX = 100;
+const MEMBER_SORTS = new Set(["activity", "balance", "status"]);
 
 const peopleDefaults = {
   query,
@@ -86,22 +91,65 @@ export async function handlePeopleMembers(request, env, injected = {}) {
     return bad("Too many requests.", 429);
   }
 
+  const url = new URL(request.url);
+  const { cursor, valid: cursorValid } = readListCursor(url);
+  if (!cursorValid) return bad("Invalid members cursor. Refresh the list.");
+  const limit = readListLimit(url, { fallback: MEMBER_PAGE, max: MEMBER_PAGE_MAX });
+  const search = readListSearch(url);
+  const sortParam = String(url.searchParams.get("sort") || "activity");
+  if (!MEMBER_SORTS.has(sortParam)) return bad("Unsupported members sort.");
+
+  if (cursor) {
+    const anchor = await deps.one(`SELECT id FROM site_viewers WHERE site_id=$1 AND id=$2`, [site.id, cursor]);
+    if (!anchor) return bad("Members cursor expired. Refresh the list.", 410);
+  }
+
+  // Every sort collapses to one descending numeric key plus created_at/id tie
+  // breakers so the keyset cursor works identically for each mode. The cursor
+  // anchor is resolved from the unfiltered site scope so its position is
+  // server-derived and independent of the search term.
+  //
+  // Search matches active provider-neutral identities only: the mirror
+  // trigger keeps every linked legacy `viewers.kick_*` / `discord_*` column
+  // in `viewer_identities`, and the display name shown to creators is derived
+  // from the same aggregate (docs/PROVIDER_PORTABILITY_PLAN.md §4).
   const rows = await deps.query(
-    `SELECT sv.id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked,
-            sv.last_earned_at, sv.last_seen_at, sv.created_at,
-            v.avatar_url, ${viewerIdentitiesSql("v")} AS identities
-       FROM site_viewers sv
-       JOIN viewers v ON v.id = sv.viewer_id
-      WHERE sv.site_id=$1
-      ORDER BY COALESCE(sv.last_seen_at, sv.last_earned_at, sv.created_at) DESC,
-               sv.created_at DESC
-      LIMIT 100`,
-    [site.id],
+    `WITH ranked AS (
+      SELECT sv.id, sv.viewer_id, sv.balance, sv.total_earned, sv.total_spent, sv.blocked,
+             sv.last_earned_at, sv.last_seen_at, sv.created_at,
+             v.avatar_url, ${viewerIdentitiesSql("v")} AS identities,
+             (CASE $3::text
+                WHEN 'balance' THEN sv.balance::double precision
+                WHEN 'status' THEN (CASE WHEN sv.blocked THEN 1 ELSE 0 END)::double precision
+                ELSE extract(epoch FROM COALESCE(sv.last_seen_at, sv.last_earned_at, sv.created_at))
+              END) AS sort_key
+        FROM site_viewers sv
+        JOIN viewers v ON v.id = sv.viewer_id
+       WHERE sv.site_id=$1
+    )
+    SELECT m.* FROM ranked m
+     WHERE ($2 = '' OR EXISTS (
+               SELECT 1 FROM viewer_identities vi
+                WHERE vi.viewer_id = m.viewer_id AND vi.status = 'active'
+                  AND vi.username ILIKE '%' || $2 || '%' ESCAPE '\\'))
+       AND ($4::uuid IS NULL OR (m.sort_key, m.created_at, m.id) < (
+             SELECT a.sort_key, a.created_at, a.id FROM ranked a WHERE a.id = $4::uuid))
+     ORDER BY m.sort_key DESC, m.created_at DESC, m.id DESC
+     LIMIT $5`,
+    [site.id, likePattern(search), sortParam, cursor, limit + 1],
   );
+  const { items, page } = pageMeta(rows || [], limit, (row) => row.id);
+  const totalRow = search
+    ? null
+    : await deps.one(`SELECT count(*)::integer AS total FROM site_viewers WHERE site_id=$1`, [site.id]);
 
   return privateOk({
     site: { id: site.id, name: site.name || site.slug, slug: site.slug },
-    members: (rows || []).map(memberSummary),
+    search,
+    sort: sortParam,
+    total: totalRow ? Number(totalRow.total) || 0 : null,
+    page,
+    members: items.map(memberSummary),
   });
 }
 

@@ -92,4 +92,96 @@ describe("Kick connection health", () => {
       homeAttention: false,
     }));
   });
+
+  describe("event delivery health", () => {
+    const authorized = {
+      channelLinked: true,
+      accountLinked: true,
+      hasAccessToken: true,
+      hasRefreshToken: true,
+      tokenExpiresAt: "2026-08-31T12:00:00.000Z",
+      now: NOW,
+    };
+    const checkedAt = "2026-08-30T11:00:00.000Z";
+
+    it("is Ready when every required subscription was confirmed", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 2,
+        usesChatGiveaways: true,
+        delivery: { rewardEventsSubscribedAt: checkedAt, chatEventsSubscribedAt: checkedAt, checkedAt },
+      });
+      expect(health).toEqual(expect.objectContaining({ status: "ready", label: "Ready", needsAttention: false }));
+      expect(health.delivery).toEqual(expect.objectContaining({
+        verifiedAt: checkedAt,
+        required: ["rewardEvents", "chatEvents"],
+        missing: [],
+        events: { rewardEvents: "subscribed", chatEvents: "subscribed" },
+      }));
+    });
+
+    it("stays Authorized (not Ready) while delivery has never been reconciled", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt: null },
+      });
+      expect(health).toEqual(expect.objectContaining({ status: "authorized", needsAttention: false }));
+      expect(health.delivery.events).toEqual({ rewardEvents: "unverified", chatEvents: "unverified" });
+      expect(health.delivery.missing).toEqual([]);
+    });
+
+    it("reports a missing required reward subscription as a repairable delivery fault, not a disconnect", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: checkedAt, checkedAt },
+      });
+      expect(health).toEqual(expect.objectContaining({
+        status: "delivery_failed",
+        label: "Delivery setup failed",
+        reason: "reward_events_missing",
+        needsAttention: true,
+        homeAttention: true,
+        canRepair: true,
+      }));
+      expect(health.detail).toContain("reward redemption events");
+      expect(health.detail).not.toMatch(/reconnect|revoked/i);
+    });
+
+    it("requires chat.message.sent only when the site uses Chat Giveaways", () => {
+      const missingChat = { rewardEventsSubscribedAt: checkedAt, chatEventsSubscribedAt: null, checkedAt };
+      expect(deriveKickConnectionHealth({ ...authorized, activeRewardMappings: 1, usesChatGiveaways: true, delivery: missingChat })).toEqual(expect.objectContaining({
+        status: "delivery_failed",
+        reason: "chat_events_missing",
+        homeAttention: false,
+      }));
+      expect(deriveKickConnectionHealth({ ...authorized, activeRewardMappings: 1, usesChatGiveaways: false, delivery: missingChat })).toEqual(expect.objectContaining({
+        status: "ready",
+      }));
+    });
+
+    it("does not require reward events when no enabled mapping depends on them", () => {
+      const missingRewards = { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt };
+      expect(deriveKickConnectionHealth({ ...authorized, activeRewardMappings: 0, delivery: missingRewards })).toEqual(expect.objectContaining({
+        status: "authorized",
+        needsAttention: false,
+      }));
+      expect(deriveKickConnectionHealth({ ...authorized, activeRewardMappings: 2, operationEnabled: false, delivery: missingRewards })).toEqual(expect.objectContaining({
+        status: "authorized",
+      }));
+    });
+
+    it("keeps revoked authorization as reconnect-required even when subscriptions were once confirmed", () => {
+      expect(deriveKickConnectionHealth({
+        ...authorized,
+        hasAccessToken: false,
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: checkedAt, chatEventsSubscribedAt: checkedAt, checkedAt },
+      })).toEqual(expect.objectContaining({
+        status: "needs_attention",
+        reason: "authorization_missing",
+      }));
+    });
+  });
 });

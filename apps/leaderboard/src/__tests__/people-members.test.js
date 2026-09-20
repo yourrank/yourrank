@@ -71,8 +71,11 @@ describe("People member list", () => {
       blocked: false,
       linkedIdentities: [{ provider: "Kick", displayName: "alice" }],
     }]);
-    expect(calls.query[0].params).toEqual(["site-1"]);
+    expect(calls.query[0].params).toEqual(["site-1", "", "activity", null, 26]);
     expect(calls.query[0].sql).toContain("WHERE sv.site_id=$1");
+    expect(calls.query[0].sql).toContain("ORDER BY m.sort_key DESC, m.created_at DESC, m.id DESC");
+    expect(body.page).toEqual({ limit: 25, hasMore: false, nextCursor: null });
+    expect(body.sort).toBe("activity");
     expect(calls.query[0].sql).not.toContain("fraud_score");
     expect(calls.query[0].sql).not.toMatch(/kick_user_id|discord_user_id/);
     expect(JSON.stringify(body)).not.toMatch(/fraud|blockReason|kickUserId|discordUserId/);
@@ -116,7 +119,57 @@ describe("People member list", () => {
       site: { id: "site-1", user_id: "creator-1", name: "Site One", slug: "one" },
       capability: "canRoleViewMembers",
     }]);
-    expect(calls.query[0].params).toEqual(["site-1"]);
+    expect(calls.query[0].params).toEqual(["site-1", "", "activity", null, 26]);
+  });
+
+  it("pages with a site-verified cursor, escapes search and only matches active provider-neutral identities", async () => {
+    const CURSOR = "33333333-3333-4333-8333-333333333333";
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      id: `membership-${i}`, viewer_id: `viewer-${i}`, balance: 5, total_earned: 5, total_spent: 0, blocked: false,
+      last_earned_at: null, last_seen_at: null, created_at: "2026-08-01T00:00:00Z", avatar_url: null,
+      identities: [{ provider: "discord", externalUserId: `d${i}`, username: `al_ice${i}`, linkedAt: "2026-08-01T00:00:00Z" }],
+    }));
+    const { calls, deps } = dependencies({
+      one: async (sql, params) => {
+        calls.one.push({ sql: String(sql), params });
+        return { id: CURSOR };
+      },
+      query: async (sql, params) => {
+        calls.query.push({ sql: String(sql), params });
+        return rows;
+      },
+    });
+
+    const response = await handlePeopleMembers(
+      request(`/api/people/members?siteId=site-1&sort=balance&limit=2&q=al_ice&cursor=${CURSOR}`),
+      {},
+      deps,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(calls.one[0].sql).toContain("FROM site_viewers WHERE site_id=$1 AND id=$2");
+    expect(calls.one[0].params).toEqual(["site-1", CURSOR]);
+    expect(calls.query[0].params).toEqual(["site-1", "al\\_ice", "balance", CURSOR, 3]);
+    expect(calls.query[0].sql).toContain("FROM viewer_identities vi");
+    expect(calls.query[0].sql).toContain("vi.status = 'active'");
+    expect(calls.query[0].sql).not.toMatch(/kick_username ILIKE|discord_username ILIKE/);
+    expect(calls.query[0].sql).toContain("(m.sort_key, m.created_at, m.id) < (");
+    expect(body.members.map((m) => m.id)).toEqual(["membership-0", "membership-1"]);
+    expect(body.members[0].linkedIdentities).toEqual([{ provider: "Discord", displayName: "al_ice0" }]);
+    expect(body.page).toEqual({ limit: 2, hasMore: true, nextCursor: "membership-1" });
+    expect(body.sort).toBe("balance");
+  });
+
+  it("rejects malformed, foreign or expired cursors and unsupported sorts before querying", async () => {
+    const CURSOR = "33333333-3333-4333-8333-333333333333";
+    const { calls, deps } = dependencies();
+    expect((await handlePeopleMembers(request("/api/people/members?siteId=site-1&cursor=nope"), {}, deps)).status).toBe(400);
+    expect((await handlePeopleMembers(request("/api/people/members?siteId=site-1&sort=fraud"), {}, deps)).status).toBe(400);
+    const expired = await handlePeopleMembers(request(`/api/people/members?siteId=site-1&cursor=${CURSOR}`), {}, deps);
+    expect(expired.status).toBe(410);
+    expect(calls.one[0].params).toEqual(["site-1", CURSOR]);
+    expect(calls.query).toHaveLength(0);
   });
 });
 

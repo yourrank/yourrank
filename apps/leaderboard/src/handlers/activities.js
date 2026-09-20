@@ -6,14 +6,20 @@
 // is inferred or duplicated here.
 import { one, query } from "@yourrank/shared/db";
 import { rateLimit } from "@yourrank/shared/ratelimit";
-import { requireUser, bad, json } from "../auth.js";
+import { logAudit } from "@yourrank/shared/audit";
+import { requireUser, bad, json, readJson } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import { listActivityAutomation } from "./activity-automation.js";
+import { pageMeta, readListCursor, readListLimit } from "../list-cursor.js";
+
+const ACTIVITY_PAGE = 50;
+const ACTIVITY_PAGE_MAX = 100;
 
 const activityDefaults = {
   query,
   one,
+  logAudit,
   rateLimit,
   requireUser,
   getByUser,
@@ -31,6 +37,7 @@ function dropState(row, now) {
   const status = String(row.status || "active").toLowerCase();
   const expiresAt = row.expires_at ? Date.parse(row.expires_at) : NaN;
   if (status === "exhausted") return { state: "completed", label: "Claimed out" };
+  if (row.closed_at) return { state: "completed", label: "Ended by creator" };
   if (status !== "active") return { state: "completed", label: "Ended" };
   if (Number.isFinite(expiresAt) && expiresAt <= now) {
     return { state: "completed", label: "Expired" };
@@ -49,7 +56,7 @@ export function activityFromCodeDrop(row, now = Date.now()) {
     state: state.state,
     stateLabel: state.label,
     createdAt: row.created_at,
-    endsAt: row.expires_at || null,
+    endsAt: row.closed_at || row.expires_at || null,
     participation: {
       mode: "free",
       cost: 0,
@@ -62,44 +69,131 @@ export function activityFromCodeDrop(row, now = Date.now()) {
     reward: {
       creditsPerClaim: Number(row.points_reward) || 0,
     },
+    actions: { canEnd: state.state === "open" },
   };
 }
 
-async function resolveActivitySite(request, env, user, deps) {
-  const url = new URL(request.url);
-  const siteId = String(url.searchParams.get("siteId") || "").trim();
-  return siteId
-    ? deps.getBoardById(env, user.id, siteId)
-    : deps.getByUser(env, user.id);
+const DROP_COLUMNS = `id, code, points_reward, max_claims, claimed_count, status,
+          expires_at, closed_at, created_at`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseActivityId(raw) {
+  const value = String(raw || "").trim();
+  const id = value.startsWith("drop:") ? value.slice(5) : value;
+  return UUID.test(id) ? id : null;
 }
 
-export async function handleGetActivities(request, env, injected = {}) {
-  const deps = { ...activityDefaults, ...injected };
+async function authorizeActivityRequest(request, env, deps, siteIdFromBody) {
   const { user, res } = await deps.requireUser(request, env);
-  if (res) return res;
-
-  const site = await resolveActivitySite(request, env, user, deps);
-  if (!site) return bad("Site not found.", 404);
+  if (res) return { res };
+  const url = new URL(request.url);
+  const siteId = String(siteIdFromBody || url.searchParams.get("siteId") || "").trim();
+  const site = siteId
+    ? await deps.getBoardById(env, user.id, siteId)
+    : await deps.getByUser(env, user.id);
+  if (!site) return { res: bad("Site not found.", 404) };
   const authorization = await deps.requireSiteCapability(
     user,
     site,
     "canRoleManageActivities",
   );
-  if (authorization.res) return authorization.res;
+  if (authorization.res) return { res: authorization.res };
+  return { user, site };
+}
+
+/**
+ * POST /api/activities/close — the creator ends an open Code Drop now.
+ * A creator-ended drop is an expired drop with `closed_at` set, so every
+ * existing reader (claims, lists, automation) already treats it as ended.
+ * Idempotent for an already-closed drop; a drop that ended on its own
+ * (exhausted/expired) is reported as a conflict with its current state so the
+ * dashboard can refresh instead of pretending it acted.
+ */
+export async function handleCloseActivity(request, env, injected = {}) {
+  const deps = { ...activityDefaults, ...injected };
+  const body = await readJson(request);
+  const { user, site, res } = await authorizeActivityRequest(request, env, deps, body?.siteId);
+  if (res) return res;
+  if (!(await deps.rateLimit(env, `activities:close:${user.id}:${site.id}`, 30, 60)).ok) {
+    return bad("Too many requests.", 429);
+  }
+
+  const dropId = parseActivityId(body?.activityId ?? body?.id);
+  if (!dropId) return bad("Activity id is required.", 400);
+
+  const closed = await deps.one(
+    `UPDATE code_drops
+        SET status='expired', closed_at=now(), updated_at=now()
+      WHERE id=$1 AND site_id=$2 AND status='active' AND closed_at IS NULL
+       AND (expires_at IS NULL OR expires_at > now())
+      RETURNING ${DROP_COLUMNS}`,
+    [dropId, site.id],
+  );
+  if (closed) {
+    await deps.logAudit({
+      actorId: user.id,
+      action: "code_drop_close",
+      entityType: "code_drop",
+      entityId: closed.id,
+      request,
+      details: { site_id: site.id, claimed_count: Number(closed.claimed_count) || 0 },
+    });
+    return privateOk({ activity: activityFromCodeDrop(closed), changed: true });
+  }
+
+  const existing = await deps.one(
+    `SELECT ${DROP_COLUMNS} FROM code_drops WHERE id=$1 AND site_id=$2`,
+    [dropId, site.id],
+  );
+  if (!existing) return bad("Activity not found.", 404);
+  const activity = activityFromCodeDrop(existing);
+  if (existing.closed_at) return privateOk({ activity, changed: false });
+  return json(
+    { ok: false, error: `This activity already ended (${activity.stateLabel.toLowerCase()}).`, activity },
+    409,
+    { "cache-control": "no-store, no-cache, must-revalidate" },
+  );
+}
+
+export async function handleGetActivities(request, env, injected = {}) {
+  const deps = { ...activityDefaults, ...injected };
+  const { user, site, res } = await authorizeActivityRequest(request, env, deps);
+  if (res) return res;
   if (!(await deps.rateLimit(env, `activities:${user.id}:${site.id}`, 60, 60)).ok) {
     return bad("Too many requests.", 429);
   }
 
+  const url = new URL(request.url);
+  const limit = readListLimit(url, { fallback: ACTIVITY_PAGE, max: ACTIVITY_PAGE_MAX });
+  const { cursor, valid } = readListCursor(url);
+  if (!valid) return bad("Invalid cursor.", 400);
+  if (cursor) {
+    const anchor = await deps.one(
+      `SELECT id FROM code_drops WHERE site_id=$1 AND id=$2`,
+      [site.id, cursor],
+    );
+    if (!anchor) return bad("This page has expired. Reload the list.", 410);
+  }
+
+  // Keyset pagination on (created_at, id): newest first, so pages stay stable
+  // while drops are created or closed between requests.
   const rows = await deps.query(
-    `SELECT id, code, points_reward, max_claims, claimed_count, status,
-            expires_at, created_at
-       FROM code_drops
-      WHERE site_id=$1
-      ORDER BY created_at DESC
-      LIMIT 50`,
+    `SELECT ${DROP_COLUMNS}
+       FROM code_drops d
+      WHERE d.site_id=$1
+        AND ($2::uuid IS NULL OR (d.created_at, d.id) < (
+              SELECT a.created_at, a.id FROM code_drops a WHERE a.id = $2::uuid
+            ))
+      ORDER BY d.created_at DESC, d.id DESC
+      LIMIT $3`,
+    [site.id, cursor, limit + 1],
+  );
+  const { items, page } = pageMeta(rows || [], limit, (row) => row.id);
+  const totals = await deps.one(
+    `SELECT count(*)::int AS total FROM code_drops WHERE site_id=$1`,
     [site.id],
   );
-  const automation = await listActivityAutomation(site.id, {
+  const automation = cursor ? undefined : await listActivityAutomation(site.id, {
     query: deps.query,
     one: deps.one,
     now: new Date(),
@@ -113,7 +207,9 @@ export async function handleGetActivities(request, env, injected = {}) {
       includedTypes: ["drop"],
       challenges: "deferred",
     },
-    activities: (rows || []).map((row) => activityFromCodeDrop(row)),
-    automation,
+    activities: items.map((row) => activityFromCodeDrop(row)),
+    page,
+    total: Number(totals?.total) || 0,
+    ...(automation ? { automation } : {}),
   });
 }

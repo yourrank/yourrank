@@ -5,6 +5,9 @@ import { clearSession } from "./dashboard/session.js";
 import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricEmpty, setMetricLoading, setRowsLoading } from "./dashboard/states.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
+import { ServerListController } from "./dashboard/server-list.js";
+import { bulkAwardSummary, remainingSelection, runBulkAward } from "./bulk-award.js";
+import { exportRows, MemberSelection } from "./member-selection.js";
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
 import { optimizeRewardImage } from "./reward-image.js";
@@ -58,9 +61,10 @@ let state = {}; // local credits page state (not dashboard/state.js)
 let viewerCtrl, redemptionCtrl, rewardCtrl;
 let activeSiteId = "";
 let pendingOAuthFeedback = null;
-// P3-5: selected member ids for the Audience bulk toolbar. Selection survives
-// re-renders and pagination; it is cleared on site change or explicit clear.
-const memberSelection = new Set();
+// P3-5: selected members for the Audience bulk toolbar. Selection survives
+// re-renders, pagination and search; it is cleared on site change or explicit
+// clear. Row snapshots are kept so export never depends on the loaded page.
+const memberSelection = new MemberSelection();
 // The per-viewer manual adjustment endpoint is rate limited to 30 requests /
 // 60 s per user, so one bulk apply may not exceed this many members.
 const BULK_AWARD_MAX = 25;
@@ -127,16 +131,20 @@ function showOAuthMessage({ finalize = false } = {}) {
     const params = new URLSearchParams(location.search);
     const error = params.get("error");
     const connected = params.get("kick_connected") === "1";
+    const deliveryFailed = params.get("kick_delivery") === "failed";
     if (!error && !connected) return;
-    pendingOAuthFeedback = { error, connected };
+    pendingOAuthFeedback = { error, connected, deliveryFailed };
     const clean = new URL(location.href);
     clean.searchParams.delete("error");
     clean.searchParams.delete("kick_connected");
+    clean.searchParams.delete("kick_delivery");
     history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
   }
-  const { error, connected } = pendingOAuthFeedback;
+  const { error, deliveryFailed } = pendingOAuthFeedback;
   if (error) {
     setStatus("cr-channel-status", OAUTH_MESSAGES[error] || "Kick connection could not be completed. Try again.", true);
+  } else if (deliveryFailed) {
+    setStatus("cr-channel-status", "Kick is authorized, but event delivery could not be set up. Use “Repair delivery” to retry.", true);
   } else {
     const channel = state.channel?.name ? `@${state.channel.name}` : "your channel";
     setStatus("cr-channel-status", `Connected to ${channel} on Kick.`, false);
@@ -154,25 +162,37 @@ function updateKickAuthLinks() {
 // helpers make the card honest: an expired/missing token flips the card to
 // "Needs attention" and reveals the Reconnect link, which the template ships
 // hidden and nothing used to unhide.
-function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt }) {
+// Delivery health is separate from authorization: `delivery_failed` means the
+// OAuth grant is fine but a required webhook subscription is missing, so the
+// card offers Repair (reconcile subscriptions) rather than Reconnect.
+function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt, canRepair = false, canManage = true }) {
   const needsAttention = connected && status === "needs_attention";
+  const deliveryFailed = connected && status === "delivery_failed";
+  const warn = needsAttention || deliveryFailed;
   const live = $("cr-channel-live");
   if (live) {
     live.textContent = !connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Connected");
-    live.classList.toggle("cr-attention", needsAttention);
+    live.classList.toggle("cr-attention", warn);
   }
   const token = $("cr-channel-token");
   if (token) {
     token.textContent = detail || (connected ? "Authorization can renew automatically" : "Not connected yet");
-    token.classList.toggle("cr-attention", needsAttention);
+    token.classList.toggle("cr-attention", warn);
   }
+  const delivery = $("cr-channel-delivery");
+  if (delivery) {
+    delivery.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "ready" ? "Verified" : status === "needs_attention" ? "Blocked by authorization" : "Not verified yet";
+    delivery.classList.toggle("cr-attention", deliveryFailed);
+  }
+  const repair = $("cr-channel-repair");
+  if (repair) repair.hidden = !(connected && canManage && (canRepair || deliveryFailed || status === "authorized"));
   const linked = $("cr-channel-linked");
   if (linked) linked.textContent = linkedAt ? fmtDate(linkedAt) : "—";
   const chip = $("cr-channel-chip");
   if (chip) {
     chip.textContent = `● ${!connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Authorized")}`;
-    chip.classList.toggle("v3-chip--fulfilled", connected && !needsAttention);
-    chip.classList.toggle("v3-chip--pending", needsAttention);
+    chip.classList.toggle("v3-chip--fulfilled", connected && !warn);
+    chip.classList.toggle("v3-chip--pending", warn);
     chip.classList.toggle("v3-chip--cancelled", !connected);
   }
   const reconnect = $("cr-channel-reconnect");
@@ -295,14 +315,52 @@ async function loadMemberHistoryDialog() {
 function claimIdForRedemption(id) {
   return `redemption:${id}`;
 }
-function renderRedemptionRow(r) {
+// Rows come from /api/claims (claimSummary shape): `source.id` is the
+// redemption id used by the transition/detail routes.
+function claimRedemptionStatus(claim) {
+  return claim.status === "completed" ? "fulfilled" : claim.status === "cancelled" ? "cancelled" : "pending";
+}
+function renderClaimRow(claim) {
+  const id = claim.source?.id || String(claim.id || "").replace(/^redemption:/, "");
+  const pending = claim.status === "submitted";
   const actions = [
-    `<button class="btn btn--sm" type="button" data-claim-detail="${esc(r.id)}" aria-controls="cr-claim-detail-drawer" aria-expanded="false">Details</button>`,
-    r.status === "pending" ? `<button class="btn btn--sm" type="button" data-cancel="${esc(r.id)}">Cancel</button>` : "",
-    r.status === "pending" ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(r.id)}">Complete</button>` : "",
+    `<button class="btn btn--sm" type="button" data-claim-detail="${esc(id)}" aria-controls="cr-claim-detail-drawer" aria-expanded="false">Details</button>`,
+    pending ? `<button class="btn btn--sm" type="button" data-cancel="${esc(id)}">Cancel</button>` : "",
+    pending ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(id)}">Complete</button>` : "",
   ].filter(Boolean).join(" ");
-  const support = r.support_status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
-  return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}${support}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+  const support = claim.support?.status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
+  const cost = Number(claim.reward?.cost) || 0;
+  return `<td data-label="Member"><b>${esc(claim.subject?.displayName || "Member")}</b></td><td data-label="Reward">${esc(claim.reward?.name || claim.source?.title || "Reward")}</td><td data-label="Cost" class="num"><b>${cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(claimRedemptionStatus(claim))}${support}</td><td data-label="Claimed" title="${esc(fmtDate(claim.submittedAt))}">${relative(claim.submittedAt)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+}
+const CLAIM_FILTER_PARAM = Object.freeze({ all: "all", pending: "action_required", needs_attention: "needs_attention", completed: "completed" });
+function fetchClaimsPage(params, cursor) {
+  const query = new URLSearchParams(params);
+  query.set("status", CLAIM_FILTER_PARAM[claimFilter] || "all");
+  query.delete("sort");
+  if (cursor) query.set("cursor", cursor);
+  const base = sitePath("/api/claims");
+  return api("GET", `${base}${base.includes("?") ? "&" : "?"}${query}`).then((data) => ({ items: data.claims || [], page: data.page, total: data.total }));
+}
+function fetchMembersPage(params, cursor) {
+  const query = new URLSearchParams(params);
+  if (cursor) query.set("cursor", cursor);
+  const base = sitePath("/api/people/members");
+  return api("GET", `${base}${base.includes("?") ? "&" : "?"}${query}`).then((data) => {
+    state.members = cursor ? [...(state.members || []), ...(data.members || [])] : (data.members || []);
+    memberSelection.refresh(data.members || []);
+    return { items: data.members || [], page: data.page, total: data.total };
+  });
+}
+function syncSelectAll() {
+  const selectAll = $("cr-member-select-all");
+  if (!selectAll) return;
+  const boxes = [...document.querySelectorAll("[data-member-select]")];
+  const checked = boxes.filter((box) => box.checked).length;
+  selectAll.checked = boxes.length > 0 && checked === boxes.length;
+  selectAll.indeterminate = checked > 0 && checked < boxes.length;
+}
+function localClaim(redemptionId) {
+  return redemptionCtrl?.items.find((item) => String(item.source?.id) === String(redemptionId)) || null;
 }
 // Publish review (YR-014): findings are linked to their edit control and
 // never rewrite a stored reward. Only a missing contact method blocks a new
@@ -420,7 +478,7 @@ function render() {
       accessNote.textContent = "Connection credentials and authentication settings are managed by the site owner.";
     }
     const connectionStatus = state.channel?.status || (connected ? "authorized" : "not_connected");
-    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt });
+    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt, canRepair: state.channel?.canRepair, canManage: capabilities.manageConnections });
     $("cr-channel-reconnect")?.toggleAttribute("hidden", !capabilities.manageConnections || connectionStatus !== "needs_attention");
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending claims"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "claims / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
@@ -442,9 +500,8 @@ function render() {
     shopItemsView = state.shopItems || []; renderShopCards(shopItemsView);
   }
   if (current === "viewers") {
-    const viewers = state.members || [];
     if (!viewerCtrl) {
-      viewerCtrl = new ListController({
+      viewerCtrl = new ServerListController({
         root: $("cr-viewers"),
         tbody: "cr-viewer-list",
         emptyEl: $("cr-viewer-empty"),
@@ -455,22 +512,21 @@ function render() {
           compact: true,
           actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }],
         },
-        items: viewers,
-        perPage: 15,
-        searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.blocked ? "blocked" : "active"}`,
+        noResultsSpec: { kind: "search", title: "No matching members", body: "No member name matches this search on the selected site.", compact: true },
+        errorSpec: { title: "Couldn't load members", body: "People for the selected site could not be loaded." },
+        itemLabel: "members",
         sortOptions: [
-          { key: "activity", label: "Recently active", fn: (a, b) => new Date(b.lastSeenAt || b.lastCreditAt || 0) - new Date(a.lastSeenAt || a.lastCreditAt || 0) },
-          { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) },
-          { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) },
+          { key: "activity", label: "Recently active" },
+          { key: "balance", label: "Credit balance" },
+          { key: "status", label: "Blocked first" },
         ],
-        emptyAllText: "No members yet.",
-        emptyText: "No matching members.",
+        fetchPage: fetchMembersPage,
         renderItem: (v) => renderViewerRow(v),
-        onRender: () => wireDynamicActions(),
+        onRender: () => { wireDynamicActions(); syncSelectAll(); },
       });
       mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot"));
     }
-    else viewerCtrl.setItems(viewers);
+    viewerCtrl.reload();
   }
   if (current === "overview") {
     renderOnboarding();
@@ -480,10 +536,23 @@ function render() {
     if ($("cr-analytics")) renderAnalytics();
   }
   if (current === "redemptions") {
-    const redemptions = filterClaims(state.redemptions || []);
     if (!redemptionCtrl) {
-      wireClaimFilters(); redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: CLAIM_EMPTY_SPEC, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
-    else applyClaimFilter();
+      wireClaimFilters();
+      redemptionCtrl = new ServerListController({
+        root: $("cr-redemptions"),
+        tbody: "cr-redemption-list",
+        emptyEl: $("cr-redemption-empty"),
+        emptySpec: CLAIM_EMPTY_SPEC,
+        noResultsSpec: { kind: "search", title: "No matching claims", body: "Try a different member or reward name.", compact: true },
+        errorSpec: { title: "Couldn't load claims", body: "Reward claims for the selected site could not be loaded." },
+        itemLabel: "claims",
+        fetchPage: fetchClaimsPage,
+        renderItem: (claim) => renderClaimRow(claim),
+        onRender: () => wireDynamicActions(),
+      });
+      mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot"));
+    }
+    applyClaimFilter();
   }
   if (current === "history") {
     const typeSelect = $("cr-history-type");
@@ -504,7 +573,7 @@ function renderOnboarding() {
   const canManageConnections = state.capabilities?.manageConnections !== false;
   const mappings = (state.mappings || []).filter((m) => m.active).length;
   const items = (state.shopItems || []).filter((i) => i.active).length;
-  const redemptions = (state.redemptions || []).length;
+  const redemptions = Number(state.usage?.redemptionsPer30Days) || (state.recentClaims || []).length;
   const steps = [{ id: 1, done: connected }, { id: 2, done: mappings > 0 }, { id: 3, done: items > 0 }, { id: 4, done: redemptions > 0 }, { id: 5, done: connected && mappings > 0 && items > 0 }];
   const current = steps.find((step) => !step.done)?.id;
   for (const step of steps) {
@@ -698,15 +767,6 @@ function ensureShopControls(hasItems = false) {
   controls.querySelector("[data-shop-next]").addEventListener("click", () => { shopPage++; renderShopCards(shopItemsView); });
 }
 let shopPage = 1;
-function claimNeedsAttention(r) {
-  return r.status === "pending" || r.support_status === "open";
-}
-function filterClaims(items) {
-  if (claimFilter === "pending") return items.filter((r) => r.status === "pending");
-  if (claimFilter === "needs_attention") return items.filter(claimNeedsAttention);
-  if (claimFilter === "completed") return items.filter((r) => r.status === "fulfilled");
-  return items;
-}
 function wireClaimFilters() {
   document.querySelectorAll("[data-claim-filter]").forEach((button) => button.addEventListener("click", () => {
     claimFilter = button.dataset.claimFilter;
@@ -725,10 +785,9 @@ const CLAIM_FILTER_EMPTY = {
 };
 function applyClaimFilter() {
   if (!redemptionCtrl) return;
-  const all = state.redemptions || [];
-  const spec = all.length && CLAIM_FILTER_EMPTY[claimFilter];
+  const spec = CLAIM_FILTER_EMPTY[claimFilter];
   redemptionCtrl.emptySpec = spec ? { kind: "empty", compact: true, ...spec } : CLAIM_EMPTY_SPEC;
-  redemptionCtrl.setItems(filterClaims(all));
+  redemptionCtrl.reload();
 }
 function mountListControls(root, toolbar, foot) {
   const controls = root?.querySelector(":scope > .list-controls");
@@ -1087,8 +1146,8 @@ async function resolveClaimSupport(button) {
     const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/resolve`));
     if (id !== claimDetailId) return;
     renderClaimSupport(data.support);
-    const local = (state.redemptions || []).find((item) => String(item.id) === String(id));
-    if (local) { local.support_status = "resolved"; applyClaimFilter(); }
+    const local = localClaim(id);
+    if (local) { local.support = { ...(local.support || {}), status: "resolved" }; redemptionCtrl.render(); }
   } catch (error) {
     if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
   } finally {
@@ -1127,9 +1186,9 @@ async function openClaimDetail(redemptionId, trigger) {
   claimDetailId = redemptionId;
   claimDetailTrigger = trigger;
   claimDetailTrigger.setAttribute("aria-expanded", "true");
-  const local = (state.redemptions || []).find((item) => String(item.id) === String(redemptionId));
-  $("cr-claim-detail-title").textContent = local?.item_name || "Claim details";
-  $("cr-claim-detail-subtitle").textContent = local ? `${viewerIdentity(local)} · ${statusChip(local.status).replace(/<[^>]+>/g, "")}` : "";
+  const local = localClaim(redemptionId);
+  $("cr-claim-detail-title").textContent = local?.reward?.name || "Claim details";
+  $("cr-claim-detail-subtitle").textContent = local ? `${local.subject?.displayName || "Member"} · ${local.statusLabel || ""}` : "";
   drawer.hidden = false;
   backdrop.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
@@ -1227,8 +1286,10 @@ async function load() {
     if (nextSiteId !== activeSiteId) { memberSelection.clear(); updateBulkBar(); }
     activeSiteId = nextSiteId;
     updateKickAuthLinks();
+    // The Members tab loads its rows through the cursor-paginated list
+    // controller; only the shell/site context is needed up front.
     state = tab() === "viewers"
-      ? await api("GET", sitePath("/api/people/members"))
+      ? { members: state.members || [], capabilities: state.capabilities }
       : await api("GET", sitePath("/api/credits/status"));
     setState({ CREDITS_STATUS: "ready" });
     render();
@@ -1302,35 +1363,24 @@ async function bulkAwardMembers() {
   const statusEl = $("cr-viewer-status");
   if (!Number.isFinite(amount) || amount <= 0) { setStatus("cr-viewer-status", "Enter a positive credit amount.", true); return; }
   if (!reason) { setStatus("cr-viewer-status", "An audit note is required for bulk credit awards.", true); return; }
-  const ids = [...memberSelection];
+  const ids = memberSelection.ids();
   if (!ids.length) return;
   if (ids.length > BULK_AWARD_MAX) { setStatus("cr-viewer-status", `Bulk award is capped at ${BULK_AWARD_MAX} members per apply.`, true); return; }
   const awardBtn = $("cr-bulk-award");
   if (awardBtn) awardBtn.disabled = true;
   setStatus("cr-viewer-status", `Awarding ${amount} credits to ${ids.length} member${ids.length === 1 ? "" : "s"}…`);
-  let ok = 0; const failed = [];
   // Sequential by design: one shared ledger write at a time keeps the 30/60s
   // adjustment rate limit intact and surfaces per-member errors clearly.
-  for (const id of ids) {
-    try {
-      await adjustMemberCredits(id, amount, reason);
-      ok++;
-    } catch (err) {
-      logError("bulk-award-member", err);
-      failed.push(id);
-      if (err?.code === "RATE_LIMITED" || err?.status === 429) break;
-    }
-  }
-  memberSelection.clear();
-  failed.forEach((id) => memberSelection.add(id));
+  const outcome = await runBulkAward(ids, (id) => adjustMemberCredits(id, amount, reason));
+  outcome.errors.forEach((err) => logError("bulk-award-member", err));
+  memberSelection.retain(remainingSelection(outcome));
+  document.querySelectorAll("[data-member-select]").forEach((box) => { box.checked = memberSelection.has(box.dataset.memberSelect); });
+  syncSelectAll();
   updateBulkBar();
   if (awardBtn) awardBtn.disabled = false;
-  if (!failed.length) {
-    setStatus("cr-viewer-status", `Awarded ${amount} credits to ${ok} member${ok === 1 ? "" : "s"}.`);
-    clearMemberSelection();
-  } else {
-    setStatus("cr-viewer-status", `Awarded ${ok} of ${ids.length}. ${ids.length - ok} remaining — rate limit reached or an error occurred; retry the selected members.`, true);
-  }
+  const complete = !outcome.failed.length && !outcome.unattempted.length;
+  setStatus("cr-viewer-status", bulkAwardSummary(outcome, amount), !complete);
+  if (complete) clearMemberSelection();
   await load().catch(() => {});
 }
 
@@ -1338,27 +1388,30 @@ function wireActions() {
   if (wired) return;
   wired = true;
   // P3-5: member multi-select + bulk toolbar.
+  const loadedMember = (id) => (state.members || []).find((m) => String(m.id) === String(id));
+  const toggleMember = (box) => {
+    const row = loadedMember(box.dataset.memberSelect);
+    if (box.checked && row) memberSelection.add(row);
+    else if (box.checked) box.checked = false;
+    else memberSelection.delete(box.dataset.memberSelect);
+  };
   $("cr-viewer-list")?.addEventListener("change", (e) => {
     const box = e.target.closest("[data-member-select]");
     if (!box) return;
-    if (box.checked) memberSelection.add(box.dataset.memberSelect);
-    else memberSelection.delete(box.dataset.memberSelect);
+    toggleMember(box);
     updateBulkBar();
   });
   $("cr-member-select-all")?.addEventListener("change", (e) => {
     const boxes = [...document.querySelectorAll("[data-member-select]")];
     boxes.forEach((box) => {
       box.checked = e.target.checked;
-      if (box.checked) memberSelection.add(box.dataset.memberSelect);
-      else memberSelection.delete(box.dataset.memberSelect);
+      toggleMember(box);
     });
     updateBulkBar();
   });
   $("cr-bulk-award")?.addEventListener("click", () => { bulkAwardMembers().catch((err) => { logError("bulk-award", err); setStatus("cr-viewer-status", err.message || "Bulk award failed.", true); }); });
   $("cr-bulk-export")?.addEventListener("click", () => {
-    const rows = memberSelection.size
-      ? (state.members || []).filter((v) => memberSelection.has(v.id))
-      : (state.members || []);
+    const rows = exportRows(memberSelection, state.members);
     if (!rows.length) { setStatus("cr-viewer-status", "Nothing to export yet.", true); return; }
     exportMembersCsv(rows);
   });
@@ -1368,6 +1421,18 @@ function wireActions() {
     e.preventDefault(); const btn = e.submitter || $("cr-channel-submit"); setLoading(btn, true, "Saving…");
     try { const data = await api("POST", sitePath("/api/credits/connect"), { externalId: $("cr-channel-id-input").value.trim(), name: $("cr-channel-name-input").value.trim() }); state.channel = data.channel; setStatus("cr-channel-status", "Channel saved."); render(); }
     catch (err) { setStatus("cr-channel-status", err.message, true); } finally { setLoading(btn, false); }
+  });
+  $("cr-channel-repair")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget; setLoading(btn, true, "Repairing…");
+    try {
+      const data = await api("POST", sitePath("/api/kick/repair", activeSiteId));
+      if (data.repaired) setStatus("cr-channel-status", "Kick event delivery verified.");
+      else setStatus("cr-channel-status", "Kick is still not delivering all required events. Try again in a moment.", true);
+      await load();
+    } catch (err) {
+      if (err?.code === "kick_reconnect_required") markKickNeedsAttention();
+      setStatus("cr-channel-status", err.message, true);
+    } finally { setLoading(btn, false); }
   });
   $("cr-channel-disconnect")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget; setLoading(btn, true, "Disconnecting…");

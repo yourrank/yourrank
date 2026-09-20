@@ -547,6 +547,7 @@
   var CODE_DROP_ERRORS = {
     "Invalid or expired drop code.": "That code is invalid or no longer active.",
     "This drop code has expired.": "That code has expired.",
+    "This drop has ended.": "That drop has ended.",
     "All claims for this drop have been taken!": "That code has no claims remaining.",
     "You have already claimed this drop code!": "You already claimed that code.",
     "Too many attempts. Please wait a minute.": "Too many attempts. Wait a minute, then try again.",

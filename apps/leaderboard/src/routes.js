@@ -61,7 +61,7 @@ import {
   handleChatGiveawayDraw,
   handleChatGiveawayRemoveEntry,
 } from "./handlers/chat-giveaways.js";
-import { handleGetActivities } from "./handlers/activities.js";
+import { handleGetActivities, handleCloseActivity } from "./handlers/activities.js";
 import {
   handleCreateActivityTemplate,
   handleUpdateActivityTemplate,
@@ -143,6 +143,7 @@ import {
   handleKickAuthStart,
   handleKickAuthCallback,
   handleKickAuthDisconnect,
+  handleKickAuthRepair,
 } from "./handlers/kick-auth.js";
 import {
   handleCreditsStatus,
@@ -324,6 +325,7 @@ export const ROUTES = [
   { path: "/auth/kick", method: "GET", handler: withHandler(handleKickAuthStart) },
   { path: "/auth/kick/callback", method: "GET", handler: withHandler(handleKickAuthCallback) },
   { path: "/api/kick/disconnect", method: "POST", handler: withHandler(handleKickAuthDisconnect) },
+  { path: "/api/kick/repair", method: "POST", handler: withHandler(handleKickAuthRepair) },
   { path: "/api/giveaways/chatroom", method: "GET", handler: withHandler(handleGiveawayChatroom) },
   { path: "/api/giveaways/chat", method: "GET", handler: withHandler(handleChatGiveawayState) },
   { path: "/api/giveaways/chat/start", method: "POST", handler: withHandler(handleChatGiveawayStart) },
@@ -333,6 +335,7 @@ export const ROUTES = [
 
   // Safe Activities foundation (existing free-workflow adapters only)
   { path: "/api/activities", method: "GET", handler: withHandler(handleGetActivities) },
+  { path: "/api/activities/close", method: "POST", handler: withHandler(handleCloseActivity) },
   { path: "/api/activities/templates", method: "POST", handler: withHandler(handleCreateActivityTemplate) },
   { path: "/api/activities/templates", method: "PUT", handler: withHandler(handleUpdateActivityTemplate) },
   { path: "/api/activities/templates/delete", method: "POST", handler: withHandler(handleDeleteActivityTemplate) },

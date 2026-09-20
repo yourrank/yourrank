@@ -419,6 +419,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   new: [{ classification: "one-shot-action", context: "Rewards → Shop", where: "Topbar + New → New shop item; credits.js enter() opens the shop drawer once and scrubs the parameter." }],
   invite: [{ classification: "one-shot-action", context: "Settings → Team", where: "Topbar + New → Invite member; account.js init() opens the invite modal once and scrubs the parameter." }],
   kick_connected: [{ classification: "one-shot-action", context: "dashboard documents after Kick OAuth", where: "credits.js OAuth return banner; deleted from the URL after display." }],
+  kick_delivery: [{ classification: "one-shot-action", context: "dashboard documents after Kick OAuth", where: "credits.js OAuth return banner when event subscriptions failed (authorized, delivery not verified); deleted from the URL after display." }],
   error: [
     { classification: "one-shot-action", context: "dashboard documents after OAuth", where: "credits.js OAuth error banner; deleted from the URL after display." },
     { classification: "feature", context: "auth/login pages", where: "Login error display outside the dashboard." },
@@ -438,6 +439,8 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   limit: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
   offset: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
   cursor: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
+  status: [{ classification: "feature", context: "API endpoints", where: "/api/claims list status filter requested by credits.js; API input, not dashboard routing." }],
+  sort: [{ classification: "feature", context: "API endpoints", where: "/api/people/members sort mode requested by credits.js list controllers; API input, not dashboard routing." }],
   days: [{ classification: "feature", context: "API endpoints", where: "API analytics range." }],
   type: [{ classification: "feature", context: "API/auth endpoints", where: "API filters and auth document variants." }],
   slug: [{ classification: "feature", context: "public/API lookups", where: "Public site resolution and API lookups." }],

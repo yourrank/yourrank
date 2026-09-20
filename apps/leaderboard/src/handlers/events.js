@@ -321,15 +321,18 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
 
   if (!site) return bad("Community is not available.", 404);
 
-  // Find active drop
+  // Find the drop for this site; the creator may have ended it early.
   const drop = await one(
-    `SELECT id, code, points_reward, max_claims, claimed_count, status, expires_at
+    `SELECT id, code, points_reward, max_claims, claimed_count, status, expires_at, closed_at
        FROM code_drops
-      WHERE site_id=$1 AND lower(code)=lower($2) AND status='active'`,
+      WHERE site_id=$1 AND lower(code)=lower($2)`,
     [site.id, rawCode]
   );
 
-  if (!drop) {
+  if (drop?.closed_at) {
+    return bad("This drop has ended.", 400);
+  }
+  if (!drop || drop.status !== "active") {
     return bad("Invalid or expired drop code.", 404);
   }
 
@@ -355,7 +358,8 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   // Execute atomic claim and points award
   const outcome = await withTransaction(async (tx) => {
     // Re-verify under row lock
-    const lockedDrop = await tx.one("SELECT claimed_count, max_claims FROM code_drops WHERE id=$1 FOR UPDATE", [drop.id]);
+    const lockedDrop = await tx.one("SELECT claimed_count, max_claims, status FROM code_drops WHERE id=$1 FOR UPDATE", [drop.id]);
+    if (lockedDrop.status !== "active") return { ended: true };
     if (lockedDrop.claimed_count >= lockedDrop.max_claims) {
       await tx.unsafe("UPDATE code_drops SET status='exhausted' WHERE id=$1", [drop.id]);
       return { exhausted: true };
@@ -405,6 +409,9 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     return { success: true, pointsAwarded: drop.points_reward, newBalance: updatedViewer.balance };
   });
 
+  if (outcome?.ended) {
+    return bad("This drop has ended.", 400);
+  }
   if (outcome?.exhausted) {
     return bad("All claims for this drop have been taken!", 400);
   }

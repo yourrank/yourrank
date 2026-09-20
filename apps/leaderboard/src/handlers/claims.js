@@ -15,8 +15,11 @@ import {
   CLAIM_SOURCE_PREFIX,
   transitionRedemptionClaimStatus,
 } from "./credits.js";
+import { likePattern, pageMeta, readListCursor, readListLimit, readListSearch } from "../list-cursor.js";
 
 const CLAIM_LIMIT = 100;
+const CREATOR_CLAIM_PAGE = 25;
+const CREATOR_CLAIM_PAGE_MAX = 100;
 const MEMBERSHIP_CLAIM_LIMIT = 50;
 const PRIVATE_CACHE = "private, no-store, no-cache, must-revalidate";
 const CREATOR_FILTERS = new Set(["action_required", "submitted", "needs_attention", "completed", "cancelled", "all"]);
@@ -238,32 +241,60 @@ export async function handleCreatorClaims(request, env, injected = {}) {
   const access = await creatorAccess(request, env, deps);
   if (access.res) return access.res;
   const { user, site } = access;
-  if (!(await deps.rateLimit(env, `claims:list:${user.id}:${site.id}`, 60, 60)).ok) {
+  if (!(await deps.rateLimit(env, `claims:list:${user.id}:${site.id}`, 120, 60)).ok) {
     return privateBad("Too many requests.", 429);
   }
 
-  const filter = creatorFilter(new URL(request.url));
+  const url = new URL(request.url);
+  const filter = creatorFilter(url);
   if (!filter) return privateBad("Unsupported claims filter.");
+  const { cursor, valid: cursorValid } = readListCursor(url);
+  if (!cursorValid) return privateBad("Invalid claims cursor. Refresh the list.");
+  const limit = readListLimit(url, { fallback: CREATOR_CLAIM_PAGE, max: CREATOR_CLAIM_PAGE_MAX });
+  const search = readListSearch(url);
 
+  if (cursor) {
+    const anchor = await deps.one(
+      `SELECT r.id FROM redemptions r JOIN site_viewers sv ON sv.id = r.site_viewer_id
+        WHERE sv.site_id=$1 AND r.id=$2`,
+      [site.id, cursor],
+    );
+    if (!anchor) return privateBad("Claims cursor expired. Refresh the list.", 410);
+  }
+
+  // Queue order: open support first, then pending oldest-first, then settled
+  // newest-first. Folded into one (bucket, key, id) tuple so keyset paging can
+  // resume exactly where the previous page stopped. The cursor's position is
+  // re-derived from the anchor row, so a client cannot forge sort values.
   const rows = await deps.query(
-    `${CLAIM_SELECT}
+    `WITH base AS (
+      ${CLAIM_SELECT}
       WHERE sv.site_id=$1
-        AND (
+    ), ranked AS (
+      SELECT b.*,
+             (CASE WHEN b.support_status = 'open' THEN 0 ELSE 2 END
+              + CASE WHEN b.source_status = 'pending' THEN 0 ELSE 1 END) AS sort_bucket,
+             (CASE WHEN b.source_status = 'pending' THEN extract(epoch FROM b.created_at)
+                   ELSE -extract(epoch FROM b.updated_at) END)::double precision AS sort_key
+        FROM base b
+    )
+    SELECT * FROM ranked c
+      WHERE (
           $2 = 'all'
-          OR ($2 IN ('action_required', 'submitted') AND r.status = 'pending')
-          OR ($2 = 'needs_attention' AND (r.status = 'pending' OR support.status = 'open'))
-          OR ($2 = 'completed' AND r.status = 'fulfilled')
-          OR ($2 = 'cancelled' AND r.status = 'cancelled')
+          OR ($2 IN ('action_required', 'submitted') AND c.source_status = 'pending')
+          OR ($2 = 'needs_attention' AND (c.source_status = 'pending' OR c.support_status = 'open'))
+          OR ($2 = 'completed' AND c.source_status = 'fulfilled')
+          OR ($2 = 'cancelled' AND c.source_status = 'cancelled')
         )
-      ORDER BY
-        CASE WHEN support.status = 'open' THEN 0 ELSE 1 END,
-        CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END,
-        CASE WHEN r.status = 'pending' THEN r.created_at END ASC,
-        CASE WHEN r.status != 'pending' THEN r.updated_at END DESC,
-        r.id ASC
-      LIMIT $3`,
-    [site.id, filter, CLAIM_LIMIT],
+        AND ($3 = '' OR c.display_name ILIKE '%' || $3 || '%' ESCAPE '\\' OR c.item_name ILIKE '%' || $3 || '%' ESCAPE '\\')
+        AND ($4::uuid IS NULL OR (c.sort_bucket, c.sort_key, c.source_id) > (
+          SELECT a.sort_bucket, a.sort_key, a.source_id FROM ranked a WHERE a.source_id = $4::uuid
+        ))
+      ORDER BY c.sort_bucket ASC, c.sort_key ASC, c.source_id ASC
+      LIMIT $5`,
+    [site.id, filter, likePattern(search), cursor, limit + 1],
   );
+  const { items, page } = pageMeta(rows || [], limit, (row) => row.source_id);
 
   const countRow = await deps.one(
     `SELECT
@@ -296,10 +327,11 @@ export async function handleCreatorClaims(request, env, injected = {}) {
   return privateOk({
     site: { id: site.id, name: site.name || site.slug, slug: site.slug },
     filter,
+    search,
     counts,
-    limit: CLAIM_LIMIT,
-    truncated: selectedCount > CLAIM_LIMIT,
-    claims: (rows || []).map(claimSummary),
+    total: search ? null : selectedCount,
+    page,
+    claims: items.map(claimSummary),
   });
 }
 

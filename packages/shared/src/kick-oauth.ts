@@ -304,6 +304,20 @@ export interface KickTokenSet {
   expiresAt: Date | null;
 }
 
+/**
+ * Only a provider-verified rejection may wipe stored credentials: an explicit
+ * 401 status, the OAuth `invalid_grant` marker, or the local "no refresh
+ * token" sentinel. Transient Kick errors and 403 scope bodies that merely
+ * contain the word "unauthorized" must keep the connection so the next
+ * operation can retry.
+ */
+export function isDefinitiveKickAuthorizationFailure(error: unknown): boolean {
+  const message = String((error as { message?: unknown })?.message ?? error);
+  return /\b401\b/.test(message)
+    || /invalid_grant/i.test(message)
+    || /refresh token not available/i.test(message);
+}
+
 export async function getValidKickAccessToken(
   env: any,
   encryptedAccess: string,

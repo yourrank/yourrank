@@ -257,13 +257,60 @@ export async function stopActiveChatGiveaways(run: SqlRunner, siteId: string): P
   );
 }
 
-export async function markChannelChatSubscription(
-  run: SqlRunner, siteId: string, provider: ProviderId, subscribed: boolean,
+export interface ChannelEventSubscriptions {
+  rewardEvents: boolean;
+  chatEvents: boolean;
+}
+
+export interface ChannelEventDelivery {
+  rewardEventsSubscribedAt: string | null;
+  chatEventsSubscribedAt: string | null;
+  checkedAt: string | null;
+}
+
+/** Which creator webhook events an `ensureKickWebhookSubscriptions` result confirmed. */
+export function subscriptionsFromEvents(subscribed: readonly string[]): ChannelEventSubscriptions {
+  return {
+    rewardEvents: subscribed.includes(KICK_REWARD_REDEMPTION_EVENT),
+    chatEvents: subscribed.includes(KICK_CHAT_MESSAGE_EVENT),
+  };
+}
+
+/**
+ * Record the outcome of a webhook subscription reconciliation on the site's
+ * channel. Each event is stored on its own so readers can tell exactly which
+ * delivery path is missing; `event_subscriptions_checked_at` marks that a
+ * check actually happened (NULL = never verified).
+ */
+export async function markChannelEventSubscriptions(
+  run: SqlRunner, siteId: string, provider: ProviderId, subscriptions: ChannelEventSubscriptions,
 ): Promise<void> {
   await run(
     `UPDATE community_channels
-        SET chat_events_subscribed_at = CASE WHEN $3 THEN now() END, updated_at = now()
+        SET reward_events_subscribed_at = CASE WHEN $3 THEN now() END,
+            chat_events_subscribed_at = CASE WHEN $4 THEN now() END,
+            event_subscriptions_checked_at = now(),
+            updated_at = now()
       WHERE site_id = $1 AND provider = $2`,
-    [siteId, provider, subscribed],
+    [siteId, provider, Boolean(subscriptions.rewardEvents), Boolean(subscriptions.chatEvents)],
   );
+}
+
+/** Stored delivery facts for the site's active channel (all NULL when none). */
+export async function loadChannelEventDelivery(
+  run: SqlRunner, siteId: string, provider: ProviderId = "kick",
+): Promise<ChannelEventDelivery> {
+  const rows = (await run(
+    `SELECT reward_events_subscribed_at, chat_events_subscribed_at, event_subscriptions_checked_at
+       FROM community_channels
+      WHERE site_id = $1 AND provider = $2 AND status = 'active'
+      LIMIT 1`,
+    [siteId, provider],
+  )) as Array<{ reward_events_subscribed_at: string | null; chat_events_subscribed_at: string | null; event_subscriptions_checked_at: string | null }>;
+  const row = rows[0];
+  return {
+    rewardEventsSubscribedAt: row?.reward_events_subscribed_at ?? null,
+    chatEventsSubscribedAt: row?.chat_events_subscribed_at ?? null,
+    checkedAt: row?.event_subscriptions_checked_at ?? null,
+  };
 }
