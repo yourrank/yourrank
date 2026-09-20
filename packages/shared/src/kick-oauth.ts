@@ -220,6 +220,74 @@ export async function subscribeKickWebhookEvent(
   }
 }
 
+export interface KickWebhookSubscription {
+  id: string;
+  event: string;
+  version: number;
+  method: string;
+}
+
+export async function listKickWebhookSubscriptions(accessToken: string): Promise<KickWebhookSubscription[]> {
+  const res = await kickCircuit.call(() =>
+    fetch("https://api.kick.com/public/v1/events/subscriptions", {
+      headers: { authorization: `Bearer ${accessToken}`, accept: "application/json" },
+    })
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Kick event subscription list failed ${res.status}: ${text}`);
+  }
+  let parsed: { data?: Array<Record<string, unknown>> } = {};
+  try { parsed = JSON.parse(text); } catch { parsed = {}; }
+  return (parsed.data || []).map((row) => ({
+    id: String(row.id ?? ""),
+    event: String(row.event ?? ""),
+    version: Number(row.version ?? 1),
+    method: String(row.method ?? "webhook"),
+  }));
+}
+
+export interface EnsureKickSubscriptionsResult {
+  subscribed: string[];
+  failed: Array<{ event: string; error: string }>;
+}
+
+/**
+ * Make sure the creator's channel has a webhook subscription for every event
+ * in `eventNames`, reusing existing ones instead of creating duplicates. Each
+ * event is reported individually so callers can be truthful about what is
+ * actually wired up (e.g. rewards succeeded but chat did not).
+ */
+export async function ensureKickWebhookSubscriptions(
+  accessToken: string,
+  eventNames: string[],
+  deps: {
+    list?: typeof listKickWebhookSubscriptions;
+    subscribe?: typeof subscribeKickWebhookEvent;
+  } = {}
+): Promise<EnsureKickSubscriptionsResult> {
+  const list = deps.list ?? listKickWebhookSubscriptions;
+  const subscribe = deps.subscribe ?? subscribeKickWebhookEvent;
+  let existing = new Set<string>();
+  try {
+    existing = new Set((await list(accessToken)).filter((s) => s.method === "webhook").map((s) => s.event));
+  } catch (err) {
+    // Listing is an optimization; fall back to subscribing each event.
+    console.warn("[kick-oauth] could not list event subscriptions:", err instanceof Error ? err.message : err);
+  }
+  const result: EnsureKickSubscriptionsResult = { subscribed: [], failed: [] };
+  for (const event of eventNames) {
+    if (existing.has(event)) { result.subscribed.push(event); continue; }
+    try {
+      await subscribe(accessToken, event);
+      result.subscribed.push(event);
+    } catch (err) {
+      result.failed.push({ event, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return result;
+}
+
 export async function encryptKickToken(plaintext: string): Promise<string> {
   const buf = await encryptToken(plaintext);
   return Buffer.from(buf).toString("hex");

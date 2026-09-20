@@ -189,6 +189,43 @@
   outline: none;
 }
 
+.gw-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--ws-radius-sm);
+  border: 1px solid var(--ws-line, var(--ws-line));
+  background: var(--ws-surface-soft, var(--ws-surface-soft));
+}
+
+.gw-channel-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.gw-connect-required {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--ws-radius-sm);
+  border: 1px dashed var(--ws-line-strong, var(--ws-line-strong));
+  background: var(--ws-surface-soft, var(--ws-surface-soft));
+}
+
+.gw-connect-required p {
+  margin: 0;
+  color: var(--ws-text-soft, var(--ws-text-mute));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .gw-options {
   display: flex;
   flex-direction: column;

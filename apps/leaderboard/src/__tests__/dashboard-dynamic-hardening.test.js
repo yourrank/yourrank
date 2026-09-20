@@ -84,15 +84,16 @@ describe("stale-navigation race protection", () => {
 });
 
 describe("lifecycle cleanup", () => {
-  it("giveaways leave() closes the WebSocket and clears all intervals", () => {
-    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*ws\.close/);
+  it("giveaways leave() stops the server poll and clears all intervals", () => {
+    expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(pollTimer\)/);
     expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(timerInterval\)/);
     expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*clearInterval\(claimTimerInterval\)/);
     expect(giveawaysJs).toMatch(/giveawaysLeave[\s\S]*removeEventListener.*trapEventDrawerFocus/);
   });
 
   it("giveaways enter() resets state and re-initializes for fresh re-entry", () => {
-    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*ws = null/);
+    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(pollTimer\)/);
+    expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*session = null; entrants = \[\]/);
     expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*clearInterval\(timerInterval\)/);
     expect(giveawaysJs).toMatch(/giveawaysEnter[\s\S]*init\(\)/);
   });

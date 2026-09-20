@@ -3,10 +3,10 @@ import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js"
 import { clearSession } from "./dashboard/session.js";
 import { inlineStateHtml, renderInlineState } from "./dashboard/states.js";
 import { showConfirmModal, paginate, wirePager } from "./dashboard/utils.js";
-import { computeTrustScore, connectKickChat } from "./chat-entry.js";
 
-// Client-side script for Live Chat Keyword Listener & Giveaways
-// Connects to Kick's Pusher WebSocket network in real-time
+// Client-side script for the Engage hub: server-backed Chat Giveaways
+// (entries arrive via Kick chat webhooks and are polled from the API),
+// plus Raffles, Code Drops and Predictions.
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
 
@@ -30,36 +30,27 @@ if (!window.__yrSpaShell) {
 }
 
 (function () {
-  // State
-  let ws = null;
-  let isListening = false;
-  let chatroomId = null;
-  let channelName = "";
-  let targetKeyword = "!win";
-  let entrants = []; // Array of { id, username, avatar, message, time, timestamp, trustScore, sybilFlag }
-  let entrantIds = new Set();
-  let messagesCount = 0;
-  let verifiedCount = 0;
-  let flaggedCount = 0;
-  let sessionStartTime = null;
-  let timerInterval = null;
+  // ---- Chat giveaway state (server is the source of truth) ----
+  // Entries are collected by the Worker from Kick chat webhooks; this page only
+  // polls /api/giveaways/chat while open, so closing or refreshing it never
+  // stops collection or loses entrants.
+  const POLL_MS = 4000;
+  let siteId = "";
+  let connection = { connected: false, chatReady: false, channelName: null };
+  let session = null;      // current chat_giveaway_sessions row (or null)
+  let entrants = [];       // persisted chat_giveaway_entries for `session`
   let currentWinner = null;
+  let pollTimer = null;
+  let pollInFlight = false;
+  let timerInterval = null;
   let claimTimerInterval = null;
   let claimSecondsRemaining = 60;
   let winnerClaimed = false;
-  let siteId = "";
-
-  // Anti-Alt & Sybil Tracking
-  const chatHistory = new Map(); // username -> message count
-  const recentEntryTimestamps = []; // timestamps of recent entrants for burst detection
+  let isRolling = false;
   let pastWinners = new Set();
 
   function pastWinnersKey() {
     return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
-  }
-
-  function channelKey() {
-    return `yr_gw_channel:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
   }
 
   function loadPastWinners() {
@@ -79,18 +70,11 @@ if (!window.__yrSpaShell) {
     wireEvents();
     loadBoardShell().then((shell) => {
       siteId = shell.activeSiteId || "";
-      autoFillChannel();
+      loadPastWinners();
+      refreshChatGiveaway().finally(() => startPolling());
       window.__yrBoot?.signal();
     }).catch((error) => {
       window.__yrBoot?.fail(error?.message || "The dashboard shell could not be loaded.");
-    });
-    window.addEventListener("beforeunload", (event) => {
-      if (isListening || entrants.length > 0 || currentWinner) {
-        const message = "A giveaway is in progress. Refreshing will clear all entrants and the current winner.";
-        event.preventDefault();
-        event.returnValue = message;
-        return message;
-      }
     });
   }
 
@@ -230,51 +214,21 @@ if (!window.__yrSpaShell) {
     return !first;
   }
 
-  async function autoFillChannel() {
-    // Check if channel is saved in localStorage or from site API
-    const saved = localStorage.getItem(channelKey());
-    if (saved) {
-      $("gw-channel-input").value = saved;
-    } else {
-      try {
-        const res = await dashboardFetch(sitePath("/api/credits/status"), { headers: { "Accept": "application/json" } });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.channel?.name) {
-            $("gw-channel-input").value = data.channel.name;
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-  }
 
   function wireEvents() {
     document.addEventListener("keydown", trapEventDrawerFocus);
     $("gw-setup-form")?.addEventListener("submit", (e) => {
       e.preventDefault();
-      toggleListening();
+      toggleGiveaway();
     });
 
     $("gw-btn-roll")?.addEventListener("click", () => rollWinner());
     $("gw-btn-reroll")?.addEventListener("click", () => rollWinner());
     $("gw-btn-copy-winner")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
     $("gw-btn-export")?.addEventListener("click", () => exportCSV());
-    $("gw-btn-reset")?.addEventListener("click", () => clearEntrants());
 
     $("gw-search-entrants")?.addEventListener("input", (e) => {
       filterEntrantsTable(e.target.value);
-    });
-
-    $("gw-opt-antialt")?.addEventListener("change", (e) => {
-      const badge = $("gw-shield-status");
-      const summary = $("gw-shield-summary");
-      if (badge) {
-        badge.textContent = e.target.checked ? "Active" : "Disabled";
-        badge.className = e.target.checked ? "gw-event-badge gw-event-badge--live" : "gw-event-badge";
-      }
-      if (summary) summary.textContent = e.target.checked ? "Fair play active" : "Fair play off";
     });
 
     const closeModal = () => {
@@ -288,219 +242,494 @@ if (!window.__yrSpaShell) {
       rollWinner();
     });
     $("gw-modal-copy")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && pollTimer) refreshChatGiveaway();
+    });
   }
 
   function setStatus(state, text) {
     const badge = $("gw-status-badge");
     const statusText = $("gw-status-text");
-    badge.className = `gw-status-pill gw-status--${state}`;
-    statusText.textContent = text;
+    if (badge) badge.className = `gw-status-pill gw-status--${state}`;
+    if (statusText) statusText.textContent = text;
   }
 
-  async function toggleListening() {
-    if (isListening) {
-      stopListening();
-    } else {
-      await startListening();
-    }
-  }
-
-  async function startListening() {
-    const inputChan = $("gw-channel-input").value.trim();
-    const keyword = $("gw-keyword-input").value.trim();
-
-    if (!inputChan) {
-      $("gw-status-text").textContent = "Please enter a Kick channel name.";
-      return;
-    }
-    if (!keyword) {
-      $("gw-status-text").textContent = "Please enter a target keyword.";
-      return;
-    }
-
-    targetKeyword = keyword;
-    channelName = inputChan.toLowerCase().replace(/^@/, "");
-    localStorage.setItem(channelKey(), channelName);
-
-    $("gw-status-text").textContent = "Resolving Kick chatroom…";
-    setStatus("connecting", "Connecting…");
-
-    try {
-      const res = await dashboardFetch(`/api/giveaways/chatroom?channel=${encodeURIComponent(channelName)}`);
-      const data = await res.json();
-
-      if (!data.ok || !data.chatroomId) {
-        $("gw-status-text").textContent = data.error || "Could not resolve channel chatroom.";
-        setStatus("error", "Error");
-        return;
-      }
-
-      chatroomId = data.chatroomId;
-      $("gw-status-text").textContent = `Connected to ${data.user || channelName}'s chatroom (ID: ${chatroomId})`;
-
-      connectWebSocket();
-    } catch (err) {
-      $("gw-status-text").textContent = "Couldn't reach Kick. Check the channel name.";
-      setStatus("error", "Error");
-    }
-  }
-
-  function connectWebSocket() {
-    if (ws) {
-      try { ws.close(); } catch {}
-    }
-
-    ws = connectKickChat({
-      chatroomId,
-      onOpen: () => {
-      isListening = true;
-      setStatus("live", "Live & Listening");
-      setListeningButtonState(true);
-
-      // Start timer
-      sessionStartTime = Date.now();
-      clearInterval(timerInterval);
-      timerInterval = setInterval(updateTimer, 1000);
-
-      appendChatSystemMessage(`Connected to Kick chatroom (${channelName}). Listening for "${targetKeyword}" with Anti-Alt Shield…`);
-      },
-      onMessage: handleIncomingChatMessage,
-      onError: (error) => {
-        console.error("[giveaway] websocket error:", error);
-        setStatus("error", "WS Error");
-      },
-      onClose: () => {
-      if (isListening) {
-        stopListening();
-        appendChatSystemMessage("Disconnected from Kick chatroom.");
-      }
-      },
+  function chatApi(path, body) {
+    return dashboardFetch(sitePath(`/api/giveaways/chat${path}`), body === undefined ? {} : {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
   }
 
-  function stopListening() {
-    isListening = false;
-    if (ws) {
-      try { ws.close(); } catch {}
-      ws = null;
-    }
-    clearInterval(timerInterval);
-    clearInterval(claimTimerInterval);
-    setStatus("idle", "Disconnected");
-    setListeningButtonState(false);
+  function startPolling() {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      refreshChatGiveaway();
+    }, POLL_MS);
   }
 
-  function setListeningButtonState(listening) {
+  async function refreshChatGiveaway() {
+    if (pollInFlight || !$("gw-setup-form")) return;
+    pollInFlight = true;
+    try {
+      const res = await chatApi("");
+      const data = await responseData(res);
+      if (!res.ok) {
+        if (res.status === 401) { clearInterval(pollTimer); pollTimer = null; }
+        return;
+      }
+      applyState(data);
+    } catch {
+      // transient; next poll retries
+    } finally {
+      pollInFlight = false;
+    }
+  }
+
+  function applyState(data) {
+    connection = data.connection || { connected: false, chatReady: false, channelName: null };
+    session = data.session || null;
+    entrants = Array.isArray(data.entries) ? data.entries : [];
+    const previousWinnerId = currentWinner?.id || null;
+    currentWinner = data.winner || null;
+
+    renderConnection();
+    renderSessionControls();
+    renderEntrants();
+    renderWinner(previousWinnerId);
+  }
+
+  function isActive() { return session?.status === "active"; }
+
+  function renderConnection() {
+    const nameEl = $("gw-channel-name");
+    const connectedBlock = $("gw-channel-connected");
+    const disconnectedBlock = $("gw-channel-disconnected");
+    const notice = $("gw-chat-events-notice");
+    if (nameEl) nameEl.textContent = connection.channelName ? connection.channelName : "";
+    if (connectedBlock) connectedBlock.hidden = !connection.connected;
+    if (disconnectedBlock) disconnectedBlock.hidden = connection.connected;
+    if (notice) notice.hidden = !(connection.connected && !connection.chatReady);
+    const connectLink = $("gw-btn-connect-kick");
+    if (connectLink) connectLink.href = sitePath("/dashboard/settings/connections");
+  }
+
+  function renderSessionControls() {
+    const startBtn = $("gw-btn-listen");
     const label = $("gw-listen-btn-label");
-    const button = $("gw-btn-listen");
-    if (label) label.textContent = listening ? "Stop Listening" : "Connect & Start Listening";
-    if (button) {
-      button.classList.toggle("btn--accent", !listening);
-      button.classList.toggle("btn--danger", listening);
+    const keywordInput = $("gw-keyword-input");
+    const keywordStat = $("gw-stat-keyword");
+    const active = isActive();
+
+    if (active) {
+      setStatus("live", "LIVE");
+      if (label) label.textContent = "Stop entries";
+      if (keywordInput) { keywordInput.value = session.keyword; keywordInput.readOnly = true; }
+    } else {
+      const ready = connection.connected && connection.chatReady;
+      setStatus(ready ? "idle" : "error", !connection.connected ? "Kick not connected"
+        : !connection.chatReady ? "Chat events unavailable"
+        : session?.status === "stopped" ? "Entries closed"
+        : session?.status === "completed" ? "Winner drawn" : "Ready");
+      if (label) label.textContent = "Start giveaway";
+      if (keywordInput) keywordInput.readOnly = false;
+    }
+    if (startBtn) {
+      startBtn.classList.toggle("btn--accent", !active);
+      startBtn.classList.toggle("btn--danger", active);
+      startBtn.disabled = !active && !(connection.connected && connection.chatReady);
+    }
+    if (keywordStat) keywordStat.textContent = session ? session.keyword : "—";
+
+    clearInterval(timerInterval);
+    timerInterval = null;
+    if (session) {
+      updateTimer();
+      if (active) timerInterval = setInterval(updateTimer, 1000);
+    } else if ($("gw-stat-time")) {
+      $("gw-stat-time").textContent = "00:00";
     }
   }
 
-  function handleIncomingChatMessage(chatData) {
-    if (!chatData || !chatData.content || !chatData.sender) return;
-
-    messagesCount++;
-    const feedCounter = $("gw-feed-counter");
-    if (feedCounter) feedCounter.textContent = `${messagesCount.toLocaleString()} messages`;
-
-    const sender = chatData.sender;
-    const username = sender.username || sender.slug || "Anonymous";
-    const userId = String(sender.id || username);
-    const content = String(chatData.content || "");
-    const avatar = sender.profile_thumb || sender.profile_pic || null;
-    const now = Date.now();
-
-    // Track chat history count (bounded to 2000 entries)
-    const unameLower = username.toLowerCase();
-    if (chatHistory.size > 2000) {
-      const oldestKey = chatHistory.keys().next().value;
-      if (oldestKey) chatHistory.delete(oldestKey);
-    }
-    chatHistory.set(unameLower, (chatHistory.get(unameLower) || 0) + 1);
-
-    // Live claim check and dedicated winner chat feed routing
-    if (currentWinner && unameLower === currentWinner.username.toLowerCase()) {
-      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      appendWinnerChatMessage(username, content, timeStr);
-      if (!winnerClaimed) {
-        confirmWinnerLiveClaim(content);
-      }
-    }
-
-    // Check keyword matching
-    const optCase = $("gw-opt-case").checked;
-    const optExact = $("gw-opt-exact").checked;
-    const optUnique = $("gw-opt-unique").checked;
-
-    let isMatch = false;
-    if (optCase) {
-      isMatch = optExact ? content.trim() === targetKeyword : content.includes(targetKeyword);
+  async function toggleGiveaway() {
+    clearEngageError();
+    if (isActive()) {
+      await stopEntries();
     } else {
-      const lowerContent = content.trim().toLowerCase();
-      const lowerKeyword = targetKeyword.toLowerCase();
-      isMatch = optExact ? lowerContent === lowerKeyword : lowerContent.includes(lowerKeyword);
+      await startGiveaway();
+    }
+  }
+
+  async function startGiveaway() {
+    const keyword = $("gw-keyword-input")?.value.trim() || "";
+    if (!keyword) {
+      showEngageError("Enter the keyword viewers should type.");
+      return;
+    }
+    if (!connection.connected) {
+      showEngageError("Chat giveaways require a connected Kick channel.");
+      return;
+    }
+    const button = $("gw-btn-listen");
+    if (button) button.disabled = true;
+    try {
+      const res = await chatApi("/start", { keyword, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not start the giveaway.");
+        return;
+      }
+      applyState(data);
+    } catch {
+      showEngageError("Network error starting the giveaway.");
+    } finally {
+      if (button) button.disabled = false;
+      renderSessionControls();
+    }
+  }
+
+  async function stopEntries() {
+    const button = $("gw-btn-listen");
+    if (button) button.disabled = true;
+    try {
+      const res = await chatApi("/stop", { sessionId: session?.id, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not stop entries.");
+        return;
+      }
+      applyState({ connection, ...data });
+    } catch {
+      showEngageError("Network error stopping entries.");
+    } finally {
+      if (button) button.disabled = false;
+      renderSessionControls();
+    }
+  }
+
+  function entrantBadges(entrant) {
+    const badges = Array.isArray(entrant.badges) ? entrant.badges : [];
+    const isSub = badges.some((b) => b?.type === "subscriber" || b?.type === "founder" || b?.type === "sub_gifter");
+    const isVip = badges.some((b) => b?.type === "vip" || b?.type === "moderator" || b?.type === "broadcaster");
+    return { isSub, isVip };
+  }
+
+  function formatEnteredAt(value) {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+
+  function renderEntrants() {
+    const tbody = $("gw-entrants-list");
+    if (!tbody) return;
+    tbody.replaceChildren();
+    entrants.forEach((entrant, idx) => renderEntrantRow(tbody, entrant, idx + 1));
+    updateEntrantsCount();
+    filterEntrantsTable($("gw-search-entrants")?.value || "");
+  }
+
+  function renderEntrantRow(tbody, entrant, index) {
+    const tr = document.createElement("tr");
+    tr.id = `entrant-${entrant.id}`;
+    tr.dataset.username = String(entrant.username || "").toLowerCase();
+
+    const numberCell = document.createElement("td");
+    numberCell.className = "ta-c gw-number-cell";
+    numberCell.dataset.label = "#";
+    numberCell.textContent = String(index);
+
+    const userCell = document.createElement("td");
+    userCell.dataset.label = "Viewer";
+    const userWrap = document.createElement("div");
+    userWrap.className = "gw-entrant-user";
+    const avatar = document.createElement("img");
+    avatar.className = "gw-entrant-avatar";
+    avatar.src = safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR);
+    avatar.alt = "";
+    avatar.addEventListener("error", () => {
+      avatar.src = DEFAULT_AVATAR;
+    }, { once: true });
+    const userLink = document.createElement("a");
+    userLink.className = "gw-entrant-name";
+    userLink.href = safeKickProfileUrl(entrant.username);
+    userLink.target = "_blank";
+    userLink.rel = "noopener";
+    userLink.textContent = entrant.username;
+    userWrap.append(avatar, userLink);
+    userCell.append(userWrap);
+
+    const { isSub, isVip } = entrantBadges(entrant);
+    const statusCell = document.createElement("td");
+    statusCell.dataset.label = "Status";
+    const statusBadge = document.createElement("span");
+    if (isSub) {
+      statusBadge.className = "gw-sub-badge";
+      statusBadge.textContent = "Subscriber";
+    } else if (isVip) {
+      statusBadge.className = "gw-vip-badge";
+      statusBadge.textContent = "VIP";
+    } else {
+      statusBadge.className = "gw-trust-badge gw-trust-badge--high";
+      statusBadge.textContent = "Entered";
+    }
+    statusCell.append(statusBadge);
+
+    const messageCell = document.createElement("td");
+    messageCell.dataset.label = "Chat message";
+    const message = document.createElement("span");
+    message.className = "gw-entrant-msg";
+    message.textContent = entrant.message;
+    messageCell.append(message);
+
+    const timeCell = document.createElement("td");
+    timeCell.className = "gw-time-cell";
+    timeCell.dataset.label = "Entered";
+    timeCell.textContent = formatEnteredAt(entrant.entered_at);
+
+    const actionCell = document.createElement("td");
+    actionCell.className = "ta-r";
+    actionCell.dataset.label = "Action";
+    const removeButton = document.createElement("button");
+    removeButton.className = "btn btn--sm btn--ghost btn--danger-text";
+    removeButton.type = "button";
+    removeButton.dataset.removeId = String(entrant.id);
+    removeButton.title = "Remove entrant";
+    removeButton.textContent = "✕";
+    removeButton.addEventListener("click", () => removeEntrant(entrant.id));
+    actionCell.append(removeButton);
+
+    tr.append(numberCell, userCell, statusCell, messageCell, timeCell, actionCell);
+    tbody.appendChild(tr);
+  }
+
+  async function removeEntrant(id) {
+    clearEngageError();
+    try {
+      const res = await chatApi("/entries/remove", { entryId: id, sessionId: session?.id, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not remove entrant.");
+        return;
+      }
+      applyState({ connection, ...data });
+    } catch {
+      showEngageError("Network error removing entrant.");
+    }
+  }
+
+  function updateEntrantsCount() {
+    const count = entrants.length;
+    if ($("gw-stat-entrants")) $("gw-stat-entrants").textContent = count.toLocaleString();
+    if ($("gw-count-header")) $("gw-count-header").textContent = count.toLocaleString();
+
+    const rollBtn = $("gw-btn-roll");
+    const exportBtn = $("gw-btn-export");
+    const emptyState = $("gw-entrants-empty");
+
+    if (count > 0 && !isRolling) {
+      rollBtn?.removeAttribute("disabled");
+    } else {
+      rollBtn?.setAttribute("disabled", "true");
+    }
+    if (count > 0) exportBtn?.removeAttribute("disabled");
+    else exportBtn?.setAttribute("disabled", "true");
+    if (emptyState) emptyState.hidden = count > 0;
+  }
+
+  function filterEntrantsTable(query) {
+    const term = String(query || "").toLowerCase().trim();
+    const rows = $("gw-entrants-list")?.querySelectorAll("tr") || [];
+    rows.forEach((row) => {
+      const username = row.dataset.username || "";
+      row.hidden = term ? !username.includes(term) : false;
+    });
+  }
+
+  // Eligibility filters run over the persisted entrants; the server then draws
+  // only from the ids we send back, so the pool can never contain anyone who
+  // did not enter this session.
+  function getEligibleEntrantsPool() {
+    if (entrants.length === 0) return [];
+
+    const optExcludePrev = $("gw-opt-skip-past")?.checked;
+    const subsPerk = $("gw-opt-subs-perk")?.value || "all";
+
+    let pool = entrants;
+
+    loadPastWinners();
+    if (optExcludePrev) {
+      const filtered = pool.filter((e) => !pastWinners.has(String(e.username).toLowerCase()));
+      if (filtered.length > 0) pool = filtered;
     }
 
-    // Append to live chat ticker
-    appendChatFeedMessage(username, content, isMatch);
-
-    if (isMatch) {
-      if (optUnique && entrantIds.has(userId.toLowerCase())) {
-        return; // Already entered
+    if (subsPerk === "subs_only") {
+      const filtered = pool.filter((e) => { const b = entrantBadges(e); return b.isSub || b.isVip; });
+      if (filtered.length > 0) {
+        pool = filtered;
+      } else {
+        showEngageError("No subscribers or VIPs found in the entrants pool yet. Try 'Equal Chance' or wait for subscribers to enter.");
+        return [];
       }
+    }
 
-      recentEntryTimestamps.push(now);
-      if (recentEntryTimestamps.length > 50) recentEntryTimestamps.shift();
+    let mult = 1;
+    if (subsPerk === "subs_2x") mult = 2;
+    else if (subsPerk === "subs_3x") mult = 3;
+    else if (subsPerk === "subs_5x") mult = 5;
 
-      const { trustScore, sybilFlag } = computeTrustScore(username, content, now, {
-        chatHistory,
-        recentEntryTimestamps,
-        pastWinners,
+    if (mult > 1) {
+      const weighted = [];
+      pool.forEach((e) => {
+        const b = entrantBadges(e);
+        const times = (b.isSub || b.isVip) ? mult : 1;
+        for (let i = 0; i < times; i++) weighted.push(e);
       });
+      pool = weighted;
+    }
 
-      const badges = sender.identity?.badges || sender.badges || [];
-      const isSub = badges.some((b) => b.type === "subscriber" || b.type === "founder" || b.type === "sub_gifter");
-      const isVip = badges.some((b) => b.type === "vip" || b.type === "moderator" || b.type === "broadcaster");
+    return pool;
+  }
 
-      const entrant = {
-        id: userId.toLowerCase(),
-        username: username,
-        avatar: avatar,
-        message: content,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        timestamp: now,
-        trustScore: trustScore,
-        sybilFlag: sybilFlag,
-        isSub: isSub,
-        isVip: isVip,
-        badges: badges,
-      };
+  async function rollWinner() {
+    clearEngageError();
+    if (!session || isRolling) return;
+    const pool = getEligibleEntrantsPool();
+    if (pool.length === 0) {
+      if (entrants.length === 0) return;
+      showEngageError("No entrants meet your active giveaway rules. Try changing your rules.");
+      return;
+    }
 
-      entrantIds.add(entrant.id);
-      entrants.push(entrant);
+    const rollBtn = $("gw-btn-roll");
+    const roller = $("gw-stage-idle");
+    const track = $("gw-roller-track");
+    const showcase = $("gw-winner-stage");
 
-      if (trustScore >= 70) verifiedCount++;
-      else if (trustScore < 50) flaggedCount++;
+    isRolling = true;
+    rollBtn?.setAttribute("disabled", "true");
+    if (showcase) showcase.hidden = true;
+    if (roller) roller.hidden = false;
+    track?.classList.add("gw-roller-track--spinning");
+    clearInterval(claimTimerInterval);
 
-      renderEntrantRow(entrant, entrants.length);
+    // Fast-cycle suspense names while the server draws.
+    const suspense = setInterval(() => {
+      const randomCandidate = pool[Math.floor(Math.random() * pool.length)];
+      if (track && randomCandidate) track.textContent = randomCandidate.username;
+    }, 80);
+    const minSpin = new Promise((resolve) => setTimeout(resolve, 2200));
+
+    try {
+      const res = await chatApi("/draw", { sessionId: session.id, entryIds: pool.map((e) => e.id), siteId: siteId || undefined });
+      const data = await responseData(res);
+      await minSpin;
+      if (!res.ok) {
+        showEngageError(data.error || "Could not draw a winner.");
+        return;
+      }
+      const winner = data.winner;
+      pastWinners.add(String(winner.username).toLowerCase());
+      try {
+        localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
+      } catch {}
+      applyState({ connection, ...data });
+      displayWinner(winner);
+      playWinnerSound();
+      if ($("gw-opt-claim-req")?.checked) {
+        startClaimTimer(winner);
+      } else if ($("gw-claim-box")) {
+        $("gw-claim-box").hidden = true;
+      }
+    } catch {
+      await minSpin;
+      showEngageError("Network error drawing a winner.");
+    } finally {
+      clearInterval(suspense);
+      track?.classList.remove("gw-roller-track--spinning");
+      isRolling = false;
+      if (roller && currentWinner) roller.hidden = true;
       updateEntrantsCount();
     }
+  }
+
+  // Poll results carry the winner and their webhook-confirmed reply; keep the
+  // stage in sync without re-triggering the celebration.
+  function renderWinner(previousWinnerId) {
+    const showcase = $("gw-winner-stage");
+    const idle = $("gw-stage-idle");
+    if (!currentWinner) {
+      if (showcase) showcase.hidden = true;
+      if (idle && !isRolling) idle.hidden = false;
+      return;
+    }
+    if (currentWinner.id !== previousWinnerId && !isRolling) {
+      fillWinnerViews(currentWinner);
+      if (idle) idle.hidden = true;
+      if (showcase) showcase.hidden = false;
+      if ($("gw-claim-box")) $("gw-claim-box").hidden = !session?.winner_confirmed_at;
+    }
+    if (session?.winner_confirmed_at && !winnerClaimed) {
+      confirmWinnerLiveClaim(session.winner_confirmation_message || "");
+    }
+  }
+
+  function winnerBadgeLabel(winner) {
+    const b = entrantBadges(winner);
+    return b.isSub ? "Subscriber" : b.isVip ? "VIP" : "Viewer";
+  }
+
+  function fillWinnerViews(winner) {
+    const customRule = $("gw-custom-rule-text")?.value?.trim();
+    const msgText = customRule ? `"${winner.message}" — Requirement: ${customRule}` : `"${winner.message}"`;
+
+    if ($("gw-winner-name")) $("gw-winner-name").textContent = winner.username;
+    if ($("gw-winner-message")) $("gw-winner-message").textContent = msgText;
+    if ($("gw-winner-avatar")) $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar_url, DEFAULT_AVATAR);
+
+    if ($("gw-modal-name")) $("gw-modal-name").textContent = winner.username;
+    if ($("gw-modal-msg")) $("gw-modal-msg").textContent = msgText;
+    if ($("gw-modal-avatar")) $("gw-modal-avatar").src = safeAvatarUrl(winner.avatar_url, DEFAULT_AVATAR);
+
+    const label = winnerBadgeLabel(winner);
+    for (const id of ["gw-winner-trust", "gw-modal-trust-badge"]) {
+      const badge = $(id);
+      if (badge) { badge.textContent = label; badge.className = "gw-trust-badge gw-trust-badge--high"; badge.hidden = false; }
+    }
+
+    const winnerFeed = $("gw-winner-chat-feed");
+    if (winnerFeed) {
+      winnerFeed.innerHTML = "";
+      appendWinnerChatMessage(winner.username, winner.message, formatEnteredAt(winner.entered_at));
+    }
+  }
+
+  function displayWinner(winner) {
+    winnerClaimed = false;
+    fillWinnerViews(winner);
+    setModalClaimVisible(true);
+    if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
+    const showcase = $("gw-winner-stage");
+    const modal = $("gw-winner-modal");
+    if (showcase) showcase.hidden = false;
+    if (modal) modal.hidden = false;
+    if (showcase) showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function confirmWinnerLiveClaim(messageText) {
     winnerClaimed = true;
     clearInterval(claimTimerInterval);
 
-    const updateElem = (statusId, dotId, fillId, countId) => {
+    const updateElem = (boxId, statusId, dotId, fillId, countId) => {
+      const box = $(boxId);
       const status = $(statusId);
       const dot = $(dotId);
       const fill = $(fillId);
       const countdown = $(countId);
 
+      if (box) box.hidden = false;
       if (status) {
         status.textContent = `Confirmed active. Responded: "${messageText}"`;
         status.classList.remove("gw-claim-status--waiting", "gw-claim-status--expired");
@@ -515,8 +744,11 @@ if (!window.__yrSpaShell) {
       if (countdown) countdown.textContent = "Verified";
     };
 
-    updateElem("gw-claim-status", "gw-claim-dot", "gw-claim-fill", "gw-claim-countdown");
-    updateElem("gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill", "gw-modal-claim-countdown");
+    updateElem("gw-claim-box", "gw-claim-status", "gw-claim-dot", "gw-claim-fill", "gw-claim-countdown");
+    updateElem("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill", "gw-modal-claim-countdown");
+    if (currentWinner && messageText) {
+      appendWinnerChatMessage(currentWinner.username, messageText, formatEnteredAt(session?.winner_confirmed_at));
+    }
   }
 
   function appendWinnerChatMessage(username, text, time) {
@@ -543,339 +775,6 @@ if (!window.__yrSpaShell) {
     row.append(timeSpan, userSpan, textSpan);
     feed.appendChild(row);
     feed.scrollTop = feed.scrollHeight;
-  }
-
-  function appendChatFeedMessage(username, content, isMatch) {
-    const feed = $("gw-chat-feed");
-    const empty = $("gw-feed-empty");
-    if (empty) empty.remove();
-
-    const row = document.createElement("div");
-    row.className = `gw-chat-msg ${isMatch ? "gw-chat-msg--match" : ""}`;
-
-    const userSpan = document.createElement("span");
-    userSpan.className = "gw-chat-user";
-    userSpan.textContent = username + ":";
-
-    const textSpan = document.createElement("span");
-    textSpan.className = "gw-chat-text";
-
-    if (isMatch) {
-      const mark = document.createElement("mark");
-      mark.textContent = content;
-      textSpan.replaceChildren(mark);
-    } else {
-      textSpan.textContent = ` ${content}`;
-    }
-
-    row.appendChild(userSpan);
-    row.appendChild(textSpan);
-    feed.appendChild(row);
-
-    // Keep at most 80 messages in feed
-    while (feed.children.length > 80) {
-      feed.removeChild(feed.firstChild);
-    }
-
-    feed.scrollTop = feed.scrollHeight;
-  }
-
-  function appendChatSystemMessage(text) {
-    const feed = $("gw-chat-feed");
-    const empty = $("gw-feed-empty");
-    if (empty) empty.remove();
-
-    const row = document.createElement("div");
-    row.className = "gw-chat-msg gw-chat-msg--system";
-    row.textContent = text;
-    feed.appendChild(row);
-    feed.scrollTop = feed.scrollHeight;
-  }
-
-  function renderEntrantRow(entrant, index) {
-    const tbody = $("gw-entrants-list");
-    const empty = $("gw-entrants-empty");
-    if (empty) empty.hidden = true;
-
-    const tr = document.createElement("tr");
-    tr.id = `entrant-${entrant.id}`;
-    tr.dataset.username = entrant.username.toLowerCase();
-
-    const numberCell = document.createElement("td");
-    numberCell.className = "ta-c gw-number-cell";
-    numberCell.dataset.label = "#";
-    numberCell.textContent = String(index);
-
-    const userCell = document.createElement("td");
-    userCell.dataset.label = "Viewer";
-    const userWrap = document.createElement("div");
-    userWrap.className = "gw-entrant-user";
-    const avatar = document.createElement("img");
-    avatar.className = "gw-entrant-avatar";
-    avatar.src = safeAvatarUrl(entrant.avatar, DEFAULT_AVATAR);
-    avatar.alt = "";
-    avatar.addEventListener("error", () => {
-      avatar.src = DEFAULT_AVATAR;
-    }, { once: true });
-    const userLink = document.createElement("a");
-    userLink.className = "gw-entrant-name";
-    userLink.href = safeKickProfileUrl(entrant.username);
-    userLink.target = "_blank";
-    userLink.rel = "noopener";
-    userLink.textContent = entrant.username;
-    userWrap.append(avatar, userLink);
-
-    if (entrant.isSub) {
-      const subBadge = document.createElement("span");
-      subBadge.className = "gw-sub-badge";
-      subBadge.textContent = "Subscriber";
-      userWrap.append(subBadge);
-    } else if (entrant.isVip) {
-      const vipBadge = document.createElement("span");
-      vipBadge.className = "gw-vip-badge";
-      vipBadge.textContent = "VIP";
-      userWrap.append(vipBadge);
-    }
-
-    userCell.append(userWrap);
-
-    // Status Badge Column
-    const trustCell = document.createElement("td");
-    trustCell.dataset.label = "Status";
-    const trustBadge = document.createElement("span");
-    const score = entrant.trustScore || 75;
-    if (score >= 70) {
-      trustBadge.className = "gw-trust-badge gw-trust-badge--high";
-      trustBadge.textContent = "Verified";
-    } else if (score >= 50) {
-      trustBadge.className = "gw-trust-badge gw-trust-badge--med";
-      trustBadge.textContent = "Regular";
-    } else {
-      trustBadge.className = "gw-trust-badge gw-trust-badge--low";
-      trustBadge.textContent = "Suspected alt";
-    }
-    trustCell.append(trustBadge);
-
-    const messageCell = document.createElement("td");
-    messageCell.dataset.label = "Chat message";
-    const message = document.createElement("span");
-    message.className = "gw-entrant-msg";
-    message.textContent = entrant.message;
-    messageCell.append(message);
-
-    const timeCell = document.createElement("td");
-    timeCell.className = "gw-time-cell";
-    timeCell.dataset.label = "Entered";
-    timeCell.textContent = entrant.time;
-
-    const actionCell = document.createElement("td");
-    actionCell.className = "ta-r";
-    actionCell.dataset.label = "Action";
-    const removeButton = document.createElement("button");
-    removeButton.className = "btn btn--sm btn--ghost btn--danger-text";
-    removeButton.type = "button";
-    removeButton.dataset.removeId = String(entrant.id);
-    removeButton.title = "Remove entrant";
-    removeButton.textContent = "✕";
-    actionCell.append(removeButton);
-
-    tr.append(numberCell, userCell, trustCell, messageCell, timeCell, actionCell);
-    removeButton.addEventListener("click", () => {
-      removeEntrant(entrant.id);
-    });
-
-    tbody.appendChild(tr);
-  }
-
-  function removeEntrant(id) {
-    const entrant = entrants.find((e) => e.id === id);
-    if (entrant) {
-      if (entrant.trustScore >= 70) verifiedCount = Math.max(0, verifiedCount - 1);
-      else if (entrant.trustScore < 50) flaggedCount = Math.max(0, flaggedCount - 1);
-    }
-    entrantIds.delete(id);
-    entrants = entrants.filter((e) => e.id !== id);
-    const tr = $(`entrant-${id}`);
-    if (tr) tr.remove();
-    updateEntrantsCount();
-    reindexTable();
-  }
-
-  function reindexTable() {
-    const rows = $("gw-entrants-list")?.querySelectorAll("tr") || [];
-    rows.forEach((row, idx) => {
-      const firstCol = row.querySelector("td");
-      if (firstCol) firstCol.textContent = idx + 1;
-    });
-  }
-
-  function updateEntrantsCount() {
-    const count = entrants.length;
-    $("gw-stat-entrants").textContent = count.toLocaleString();
-    $("gw-count-header").textContent = count.toLocaleString();
-    if ($("gw-stat-verified")) $("gw-stat-verified").textContent = verifiedCount.toLocaleString();
-    if ($("gw-stat-flagged")) $("gw-stat-flagged").textContent = flaggedCount.toLocaleString();
-
-    const rollBtn = $("gw-btn-roll");
-    const exportBtn = $("gw-btn-export");
-    const clearBtn = $("gw-btn-reset");
-    const emptyState = $("gw-entrants-empty");
-
-    if (count > 0) {
-      rollBtn?.removeAttribute("disabled");
-      exportBtn?.removeAttribute("disabled");
-      clearBtn?.removeAttribute("disabled");
-      if (emptyState) emptyState.hidden = true;
-    } else {
-      rollBtn?.setAttribute("disabled", "true");
-      exportBtn?.setAttribute("disabled", "true");
-      clearBtn?.setAttribute("disabled", "true");
-      if (emptyState) emptyState.hidden = false;
-    }
-  }
-
-  async function clearEntrants() {
-    if (!await showConfirmModal("Clear giveaway entrants", "Remove all current entrants from this giveaway?", "Clear entrants", true)) return;
-    entrants = [];
-    entrantIds.clear();
-    verifiedCount = 0;
-    flaggedCount = 0;
-    $("gw-entrants-list").innerHTML = "";
-    updateEntrantsCount();
-    $("gw-winner-stage").hidden = true;
-    $("gw-stage-idle").hidden = false;
-    clearInterval(claimTimerInterval);
-  }
-
-  function filterEntrantsTable(query) {
-    const term = query.toLowerCase().trim();
-    const rows = $("gw-entrants-list")?.querySelectorAll("tr") || [];
-    rows.forEach((row) => {
-      const username = row.dataset.username || "";
-      row.hidden = term ? !username.includes(term) : false;
-    });
-  }
-
-  function getEligibleEntrantsPool() {
-    if (entrants.length === 0) return [];
-
-    const optAntiAlt = $("gw-opt-antialt")?.checked;
-    const minTrust = parseInt($("gw-trust-min")?.value || "0", 10);
-    const optExcludePrev = $("gw-opt-skip-past")?.checked;
-
-    // Advanced requirement controls
-    const subsPerk = $("gw-opt-subs-perk")?.value || "all";
-    const minMsgs = parseInt($("gw-opt-min-msgs")?.value || "0", 10);
-
-    let pool = entrants;
-
-    // Filter out previous winners if enabled
-    loadPastWinners();
-    if (optExcludePrev) {
-      const filtered = pool.filter((e) => !pastWinners.has(e.username.toLowerCase()));
-      if (filtered.length > 0) pool = filtered;
-    }
-
-    // Filter by minimum trust score if enabled
-    if (optAntiAlt && minTrust > 0) {
-      const filtered = pool.filter((e) => (e.trustScore || 75) >= minTrust);
-      if (filtered.length > 0) pool = filtered;
-    }
-
-    // Advanced: Subscribers & VIPs only
-    if (subsPerk === "subs_only") {
-      const filtered = pool.filter((e) => e.isSub || e.isVip);
-      if (filtered.length > 0) {
-        pool = filtered;
-      } else {
-        showEngageError("No subscribers or VIPs found in the entrants pool yet. Try 'Open to All Viewers' or wait for subscribers to enter.");
-        return [];
-      }
-    }
-
-    // Advanced: Minimum chat messages in stream
-    if (minMsgs > 0) {
-      const filtered = pool.filter((e) => (chatHistory.get(e.username.toLowerCase()) || 0) >= minMsgs);
-      if (filtered.length > 0) pool = filtered;
-    }
-
-    // Advanced: Subscribers Luck Multiplier (Double/Triple tickets in draw)
-    let mult = 1;
-    if (subsPerk === "subs_2x") mult = 2;
-    else if (subsPerk === "subs_3x") mult = 3;
-    else if (subsPerk === "subs_5x") mult = 5;
-
-    if (mult > 1) {
-      const weighted = [];
-      pool.forEach((e) => {
-        const times = (e.isSub || e.isVip) ? mult : 1;
-        for (let i = 0; i < times; i++) {
-          weighted.push(e);
-        }
-      });
-      pool = weighted;
-    }
-
-    return pool;
-  }
-
-  function rollWinner() {
-    clearEngageError();
-    const pool = getEligibleEntrantsPool();
-    if (pool.length === 0) {
-      if (entrants.length === 0) return;
-      showEngageError("No entrants meet your active giveaway rules. Try changing your rules or clearing entrants.");
-      return;
-    }
-
-    const rollBtn = $("gw-btn-roll");
-    const roller = $("gw-stage-idle");
-    const track = $("gw-roller-track");
-    const showcase = $("gw-winner-stage");
-
-    rollBtn.setAttribute("disabled", "true");
-    showcase.hidden = true;
-    roller.hidden = false;
-    track?.classList.add("gw-roller-track--spinning");
-    clearInterval(claimTimerInterval);
-
-    // Fast-cycle suspense names for 2.2 seconds
-    let count = 0;
-    const interval = setInterval(() => {
-      const randomCandidate = pool[Math.floor(Math.random() * pool.length)];
-      if (track) track.textContent = randomCandidate.username;
-      count++;
-    }, 80);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      track?.classList.remove("gw-roller-track--spinning");
-      roller.hidden = true;
-      rollBtn.removeAttribute("disabled");
-
-      // Cryptographically secure winner selection from the verified pool
-      const array = new Uint32Array(1);
-      crypto.getRandomValues(array);
-      const winnerIndex = array[0] % pool.length;
-      const winner = pool[winnerIndex];
-      currentWinner = winner;
-
-      // Save winner to past winners registry
-      pastWinners.add(winner.username.toLowerCase());
-      try {
-        localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
-      } catch {}
-
-      displayWinner(winner);
-      playWinnerSound();
-
-      // Start live 60s claim proof timer if enabled
-      if ($("gw-opt-claim-req")?.checked) {
-        startClaimTimer(winner);
-      } else {
-        $("gw-claim-box").hidden = true;
-      }
-    }, 2200);
   }
 
   // The modal's chat-claim countdown only makes sense for the chat giveaway;
@@ -934,18 +833,16 @@ if (!window.__yrSpaShell) {
           }
         }
 
-        if (claimSecondsRemaining <= 0) {
-          if (!winnerClaimed) {
-            if (status) {
-              status.textContent = `@${winner.username} did not respond within ${totalSecs}s (AFK / suspected alt).`;
-              status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
-              status.classList.add("gw-claim-status--expired");
-            }
-            if (dot) dot.className = "gw-claim-dot gw-claim-dot--expired";
-            if (fill) {
-              fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
-              fill.classList.add("gw-claim-bar-fill--expired");
-            }
+        if (claimSecondsRemaining <= 0 && !winnerClaimed) {
+          if (status) {
+            status.textContent = `@${winner.username} did not respond within ${totalSecs}s.`;
+            status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
+            status.classList.add("gw-claim-status--expired");
+          }
+          if (dot) dot.className = "gw-claim-dot gw-claim-dot--expired";
+          if (fill) {
+            fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
+            fill.classList.add("gw-claim-bar-fill--expired");
           }
         }
       };
@@ -959,61 +856,6 @@ if (!window.__yrSpaShell) {
     }, 1000);
   }
 
-  function displayWinner(winner) {
-    const showcase = $("gw-winner-stage");
-    const modal = $("gw-winner-modal");
-
-    const customRule = $("gw-custom-rule-text")?.value?.trim();
-    const msgText = customRule ? `"${winner.message}" — Requirement: ${customRule}` : `"${winner.message}"`;
-
-    // Populate inline showcase
-    $("gw-winner-name").textContent = winner.username;
-    $("gw-winner-message").textContent = msgText;
-    $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar, DEFAULT_AVATAR);
-
-    // Populate Celebration Modal
-    $("gw-modal-name").textContent = winner.username;
-    $("gw-modal-msg").textContent = msgText;
-    $("gw-modal-avatar").src = safeAvatarUrl(winner.avatar, DEFAULT_AVATAR);
-    setModalClaimVisible(true);
-    if ($("gw-modal-trust-badge")) $("gw-modal-trust-badge").hidden = false;
-
-    const score = winner.trustScore || 75;
-    let badgeClass = "gw-trust-badge gw-trust-badge--high";
-    let badgeLabel = "Verified Viewer";
-    if (score < 50) {
-      badgeClass = "gw-trust-badge gw-trust-badge--low";
-      badgeLabel = "Suspected Alt";
-    } else if (score < 70) {
-      badgeClass = "gw-trust-badge gw-trust-badge--med";
-      badgeLabel = "Regular Viewer";
-    }
-
-    const trustBadge = $("gw-winner-trust");
-    if (trustBadge) {
-      trustBadge.textContent = badgeLabel;
-      trustBadge.className = badgeClass;
-    }
-
-    const modalTrustBadge = $("gw-modal-trust-badge");
-    if (modalTrustBadge) {
-      modalTrustBadge.textContent = badgeLabel;
-      modalTrustBadge.className = badgeClass;
-    }
-
-    // Reset and seed dedicated winner chat log with their entry message
-    const winnerFeed = $("gw-winner-chat-feed");
-    if (winnerFeed) {
-      winnerFeed.innerHTML = "";
-      appendWinnerChatMessage(winner.username, winner.message, winner.time);
-    }
-
-    if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
-    if (showcase) showcase.hidden = false;
-    if (modal) modal.hidden = false;
-    if (showcase) showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-
   function flashButtonLabel(button, label, duration = 2000) {
     if (!button) return;
     const labelNode = [...button.childNodes].find((node) => node.nodeType === Node.TEXT_NODE);
@@ -1025,9 +867,7 @@ if (!window.__yrSpaShell) {
 
   function copyWinnerDetails(button = $("gw-btn-copy-winner")) {
     if (!currentWinner) return;
-    const score = currentWinner.trustScore || 75;
-    const status = score >= 70 ? "Verified Viewer" : score >= 50 ? "Regular Viewer" : "Suspected Alt";
-    const text = `Giveaway Winner: ${currentWinner.username}\nStatus: ${status}\nMessage: "${currentWinner.message}"\nTime: ${currentWinner.time}\nKick Profile: https://kick.com/${currentWinner.username}`;
+    const text = `Giveaway Winner: ${currentWinner.username}\nStatus: ${winnerBadgeLabel(currentWinner)}\nMessage: "${currentWinner.message}"\nTime: ${formatEnteredAt(currentWinner.entered_at)}\nKick Profile: https://kick.com/${currentWinner.username}`;
     navigator.clipboard.writeText(text).then(() => {
       flashButtonLabel(button, "Copied!");
     });
@@ -1045,26 +885,29 @@ if (!window.__yrSpaShell) {
   function exportCSV() {
     if (entrants.length === 0) return;
 
-    let csv = "Index,Kick Username,Trust Score,Chat Message,Entered At,Kick Profile URL\n";
+    let csv = "Index,Kick Username,Status,Chat Message,Entered At,Kick Profile URL\n";
     entrants.forEach((e, idx) => {
       const cleanName = sanitizeCsvField(e.username);
       const cleanMsg = sanitizeCsvField(e.message);
       const cleanUrl = sanitizeCsvField(`https://kick.com/${e.username}`);
-      csv += `${idx + 1},${cleanName},${e.trustScore || 75}%,${cleanMsg},${e.time},${cleanUrl}\n`;
+      csv += `${idx + 1},${cleanName},${winnerBadgeLabel(e)},${cleanMsg},${sanitizeCsvField(e.entered_at)},${cleanUrl}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `kick-giveaway-entrants-${channelName || "stream"}-${Date.now()}.csv`;
+    a.download = `kick-giveaway-entrants-${connection.channelName || "stream"}-${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   function updateTimer() {
-    if (!sessionStartTime) return;
-    const elapsedSec = Math.floor((Date.now() - sessionStartTime) / 1000);
+    if (!session) return;
+    const start = Date.parse(session.started_at);
+    const end = session.status === "active" ? Date.now() : Date.parse(session.stopped_at || session.started_at);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+    const elapsedSec = Math.max(0, Math.floor((end - start) / 1000));
     const mins = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
     const secs = String(elapsedSec % 60).padStart(2, "0");
     if ($("gw-stat-time")) $("gw-stat-time").textContent = `${mins}:${secs}`;
@@ -1784,28 +1627,23 @@ if (!window.__yrSpaShell) {
     return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+
   // ---- Persistent-shell lifecycle ----
   // enter() resets module state and re-initializes against the freshly
-  // injected fragment DOM. leave() tears down the WebSocket, all intervals,
-  // and removes the document-level keydown listener so nothing leaks.
+  // injected fragment DOM. leave() stops the poll and timers and removes the
+  // document-level keydown listener so nothing leaks. Entry collection itself
+  // happens server-side, so leaving the page never affects the giveaway.
   function giveawaysEnter() {
-    // Reset live-chat state so a stale session doesn't carry over.
-    if (ws) { try { ws.close(); } catch {} ws = null; }
-    isListening = false;
+    clearInterval(pollTimer); pollTimer = null;
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
-    entrants = []; entrantIds = new Set();
-    messagesCount = 0; verifiedCount = 0; flaggedCount = 0;
-    sessionStartTime = null; currentWinner = null;
+    session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
     init();
     initEventsHub();
   }
 
   function giveawaysLeave() {
-    // Close the Kick chat WebSocket.
-    if (ws) { try { ws.close(); } catch {} ws = null; }
-    isListening = false;
-    // Clear all polling/timer intervals.
+    clearInterval(pollTimer); pollTimer = null;
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     // Remove the document-level drawer focus trap (added in wireEvents).

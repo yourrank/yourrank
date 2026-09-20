@@ -223,7 +223,8 @@ export async function linkCommunityChannel(run: SqlRunner, input: CommunityChann
 export async function revokeCommunityChannel(run: SqlRunner, siteId: string, provider: ProviderId): Promise<void> {
   await run(
     `UPDATE community_channels
-        SET status = 'revoked', verified_at = NULL, creator_connection_id = NULL, updated_at = now()
+        SET status = 'revoked', verified_at = NULL, creator_connection_id = NULL,
+            chat_events_subscribed_at = NULL, updated_at = now()
       WHERE site_id = $1 AND provider = $2 AND status <> 'revoked'`,
     [siteId, provider],
   );
