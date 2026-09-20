@@ -125,7 +125,7 @@ import '../dialog.js';
               <div class="yr-guide-info">
                 <strong>Managing Players &amp; Scores</strong>
                 <p>Inline spreadsheet editing, bulk score additions, and CSV imports.</p>
-                <a href="/dashboard/leaderboard/players" class="yr-guide-link">Go to Players Editor →</a>
+                <a href="/dashboard/leaderboard/players" class="yr-guide-link">Go to Leaderboard →</a>
               </div>
             </div>
 

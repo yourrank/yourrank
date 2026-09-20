@@ -47,16 +47,17 @@ const COMMANDS = [
     window.open("/" + (state.SLUG || ""), "_blank");
   }},
   { id: "nav-home", title: "Home", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "overview run-sheet", action: () => requestDashboardRoute("home") },
-  { id: "nav-board", title: "My board", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings board", action: () => requestDashboardRoute("board", "players") },
+  { id: "nav-board", title: "Community", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "my board leaderboard community site", action: () => requestDashboardRoute("board", "players") },
   { id: "nav-setup", title: "Setup", group: "Navigation", icon: PALETTE_ICONS.details, keywords: "site details schedule", action: () => requestDashboardRoute("board", "setup") },
-  { id: "nav-players", title: "Players", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "leaderboard standings", action: () => requestDashboardRoute("board", "players") },
+  { id: "nav-players", title: "Leaderboard", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "players standings scores leaderboard", action: () => requestDashboardRoute("board", "players") },
   { id: "nav-design", title: "Appearance", group: "Navigation", icon: PALETTE_ICONS.design, keywords: "theme styling live preview", action: () => requestDashboardRoute("board", "design") },
   { id: "nav-share", title: "Share", group: "Navigation", icon: PALETTE_ICONS.share, action: () => requestDashboardRoute("board", "share") },
   { id: "nav-history", title: "History", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "history", action: () => requestDashboardRoute("board", "history") },
-  { id: "nav-activities", title: "Engage", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage activities free drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
-  { id: "nav-analytics", title: "Stats", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "stats insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
-  { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards shop claims ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
-  { id: "nav-members", title: "Members", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "people audience members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
+  { id: "nav-activities", title: "Activities", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage activities code drops community", action: () => requestDashboardRoute("activities", "overview", { query: "" }) },
+  { id: "nav-giveaways", title: "Giveaways", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "engage giveaways chat giveaway raffles predictions tournaments", action: () => requestDashboardRoute("giveaways", "chat", { query: "" }) },
+  { id: "nav-analytics", title: "Insights", group: "Navigation", icon: PALETTE_ICONS.analytics, keywords: "stats insights traffic analytics visitors referrals events", action: () => requestDashboardRoute("performance", "activity", { query: "" }) },
+  { id: "nav-rewards", title: "Rewards", group: "Navigation", icon: PALETTE_ICONS.rewards, keywords: "rewards engage shop claims ways to earn credits", action: () => requestDashboardRoute("rewards", "overview", { query: "" }) },
+  { id: "nav-members", title: "Members", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "audience people members viewers balances tip", action: () => requestDashboardRoute("audience", "viewers", { query: "" }) },
   // Telegram lives on the bot Worker: the entry point resolves it through the
   // manifest and decides the required full document navigation.
   { id: "nav-telegram", title: "Telegram", group: "Navigation", icon: PALETTE_ICONS.bot, keywords: "bot console", action: () => requestDashboardRoute("telegram", "", { query: "" }) },

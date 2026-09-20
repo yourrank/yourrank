@@ -76,33 +76,33 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(dashboardChromeState("boards").crumbs).toEqual([{ label: "All sites" }]);
     expect(dashboardChromeState("site").crumbs).toEqual([{ label: "Site pages" }]);
     expect(dashboardChromeState("activities.overview").crumbs).toEqual([{ label: "Engage" }]);
-    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Engage" }]);
+    expect(dashboardChromeState("rewards.overview").crumbs).toEqual([{ label: "Rewards" }]);
   });
 
   it("pins the leaderboard editor chrome", () => {
     const players = dashboardChromeState("board.players");
     expect(players.navKey).toBe("board");
     expect(players.crumbs).toEqual([
-      { label: "My board", href: "/dashboard/leaderboard" },
-      { label: "Players" },
+      { label: "Community", href: "/dashboard/leaderboard" },
+      { label: "Leaderboard" },
     ]);
-    expect(players.documentTitle).toBe("Players · My board · YourRank");
+    expect(players.documentTitle).toBe("Leaderboard · Community · YourRank");
     // The board root opens on Setup; its crumb says so, its title stays
     // section-level.
     const root = dashboardChromeState("board");
     expect(root.crumbs).toEqual([
-      { label: "My board" },
+      { label: "Community" },
       { label: "Setup" },
     ]);
-    expect(root.documentTitle).toBe("My board · YourRank");
+    expect(root.documentTitle).toBe("Community · YourRank");
   });
 
   it("pins the customer-facing Stats detail labels", () => {
     const referrals = dashboardChromeState("performance.referrals");
     expect(referrals.tabLabel).toBe("Traffic sources");
-    expect(referrals.documentTitle).toBe("Traffic sources · Stats · YourRank");
+    expect(referrals.documentTitle).toBe("Traffic sources · Insights · YourRank");
     expect(referrals.crumbs).toEqual([
-      { label: "Stats", href: "/dashboard/analytics" },
+      { label: "Insights", href: "/dashboard/analytics" },
       { label: "Traffic sources" },
     ]);
     expect(dashboardChromeState("performance.activity").tabLabel).toBe("Overview");
@@ -114,10 +114,10 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(history.navKey).toBe("audience");
     expect(history.canonicalPath).toBe("/dashboard/audience/activity");
     expect(history.crumbs).toEqual([
-      { label: "Members", href: "/dashboard/audience/members" },
+      { label: "Audience", href: "/dashboard/audience/members" },
       { label: "Activity" },
     ]);
-    expect(history.documentTitle).toBe("Activity · Members · YourRank");
+    expect(history.documentTitle).toBe("Activity · Audience · YourRank");
 
     const channel = dashboardChromeState("siteConnections.channel");
     expect(channel.navKey).toBe("board");
@@ -136,13 +136,14 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     ]);
     expect(preds.documentTitle).toBe("Engage · YourRank");
 
-    // The Members tab inside the Members section collapses to a single
+    // The Members tab inside the Audience section collapses to a single
     // crumb entry (which renders no trail) and a section-level title.
     const viewers = dashboardChromeState("audience.viewers");
     expect(viewers.crumbs).toEqual([
+      { label: "Audience" },
       { label: "Members" },
     ]);
-    expect(viewers.documentTitle).toBe("Members · YourRank");
+    expect(viewers.documentTitle).toBe("Members · Audience · YourRank");
   });
 
   it("pins the account settings chrome", () => {

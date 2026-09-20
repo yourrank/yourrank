@@ -40,7 +40,7 @@ function LeaderboardTabs({ active }) {
     const legacy = BOARD_LEGACY_TABS.has(key);
     return <a class={"editor-step v3-tab" + (key === active ? " is-active is-on" : "")} href={href} data-egroup={key} data-tabs-legacy={legacy ? true : undefined} hidden={legacy && !legacyActive ? true : undefined} aria-current={key === active ? "page" : undefined}>{label}</a>;
   };
-  return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="My board sections">
+  return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="Community sections">
     {BOARD_TABS.flatMap((tab) => BOARD_LEGACY_TABS.has(tab[0])
       ? [<button class="v3-tab" type="button" data-tabs-more aria-expanded={legacyActive ? "true" : "false"}>More</button>, tabLink(tab)]
       : [tabLink(tab)])}
@@ -343,7 +343,7 @@ function AnalyticsSection({ active, activeHash = "activity" } = {}) {
 <div class="v3-analytics-page">
   <header class="v3-head"><h1 id="perfTitle">{chromeStateFor("performance", activeHash, { exact: true })?.tabLabel || chromeStateFor("performance", "activity").tabLabel}</h1><p class="v3-head-sub">Community growth, participation and rewards.</p></header>
   <div class="v3-analytics-scope"><span id="perfScope"><b id="perfBoardName">Active site</b><span aria-hidden="true"> · </span><span id="perfSelectedRange" hidden={activeHash === "referrals"}>Last <span id="perfRangeLabel">30</span> days · UTC</span><span id="perfSourcesRange" hidden={activeHash !== "referrals"}>Last 30 days · UTC</span></span><div id="perfRangeFilter" class="v3-range-filter" role="group" aria-label="Date range" hidden={activeHash === "referrals"}><button class="v3-range-btn" type="button" data-range="7">7 days</button><button class="v3-range-btn is-active" type="button" data-range="30">30 days</button></div></div>
-  <nav class="v3-tabs" aria-label="Stats pages">
+<nav class="v3-tabs" aria-label="Insights pages">
     <a class={"v3-tab" + (activeHash === "activity" ? " is-on" : "")} href="/dashboard/analytics/activity" data-perf-tab="activity" aria-current={activeHash === "activity" ? "page" : undefined}>Overview</a>
     <button class="v3-tab" type="button" data-tabs-more aria-expanded={activeHash === "referrals" || activeHash === "events" ? "true" : "false"}>More</button>
     <a class={"v3-tab" + (activeHash === "referrals" ? " is-on" : "")} href="/dashboard/analytics/referrals" data-perf-tab="referrals" data-tabs-legacy hidden={activeHash !== "referrals" && activeHash !== "events" ? true : undefined} aria-current={activeHash === "referrals" ? "page" : undefined}>Traffic sources</a>
@@ -662,7 +662,7 @@ export function DashboardNotFoundContent({ user } = {}) {
           <h2>Try one of these destinations</h2>
           <nav class="v3-tabs" aria-label="Dashboard destinations">
             <a class="v3-tab is-on" href="/dashboard">Home</a>
-            <a class="v3-tab" href="/dashboard/leaderboard/setup">My board</a>
+            <a class="v3-tab" href="/dashboard/leaderboard/setup">Community</a>
             <a class="v3-tab" href="/dashboard/leaderboards">All sites</a>
             <a class="v3-tab" href="/dashboard/settings/account">Account</a>
           </nav>

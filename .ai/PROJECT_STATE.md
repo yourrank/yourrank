@@ -2,6 +2,14 @@
 
 Maintained to prevent architecture drift.
 
+## Phase 3 dashboard IA — 2026-09-20
+
+The rail is now Home, Community, Audience, Engage, Rewards, Insights, Telegram, Settings.
+Community, Audience, and Insights replace the former My board, Members, and Stats labels.
+Rewards owns its routes and tab strip through a separate `rewards` navKey.
+Route paths and aliases remain unchanged.
+Standalone Activities, Audience, and Giveaways bundles now boot the command palette directly.
+
 ## Supplied viewer dashboard design — 2026-09-14
 
 Replaced the viewer shell with the owner's supplied `viewer-dashboard.html` design: ice canvas, context topbar, icon sidebar, white central panel, circular welcome guide, reward cards and a community overview rail. Home, Leaderboard, Reward shop, My activity, the viewer account/directory and viewer help use the canonical shared shell. Spotlight retains its podium within this light layout. Existing authentication, membership isolation, code redemption, reward confirmation and creator preview editing remain connected to their production owners. Home and Leaderboard now load site-scoped claims for the overview. No route, schema, identity, billing or deployment migration.

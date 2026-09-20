@@ -1,15 +1,10 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
-// The Engage workspace merges code drops, rewards, and giveaways behind one
-// rail item, so every surface shares this single tab strip. `Giveaways` links
-// the section root; it redirects to the default Chat tab.
+// Engage is creator-run engagement: Activities + Giveaways. Rewards is its
+// own workspace. `Giveaways` links the section root; it redirects to Chat.
 export const ENGAGE_TABS = [
   { key: "activities", label: "Activities", href: "/dashboard/activities" },
-  { key: "rewards", label: "Rewards", href: "/dashboard/rewards" },
-  { key: "shop", label: "Shop", href: "/dashboard/rewards/shop" },
-  { key: "rules", label: "Ways to earn", href: "/dashboard/rewards/rules" },
-  { key: "redemptions", label: "Claims", href: "/dashboard/rewards/redemptions" },
   { key: "giveaways", label: "Giveaways", href: "/dashboard/giveaways" },
 ];
 

@@ -51,7 +51,7 @@ function sourceFiles(dir = SRC_ROOT, out = []) {
 }
 
 describe("manifest: site settings delivery identity", () => {
-  it("declares /dashboard/site as an spa-section owned by the My board rail key", () => {
+  it("declares /dashboard/site as an spa-section owned by the Community rail key", () => {
     const site = routeById("site");
     expect(site.canonicalPath).toBe("/dashboard/site");
     expect(site.delivery).toBe("spa-section");

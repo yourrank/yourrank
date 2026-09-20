@@ -307,11 +307,12 @@ describe("dashboard overview quick actions", () => {
     expect(html).not.toContain(">Current site</div>");
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
     expect(html).toContain('>Home</a>');
+    const sidebar = html.match(/<nav class="lb-side-group lb-side-nav"[\s\S]*?<\/nav>/)?.[0] || "";
     for (const label of [
-      "My board", "Members", "Engage", "Stats", "Telegram", "Settings",
-    ]) expect(html).toContain(`>${label}</a>`);
-    for (const label of ["Sites", "Site", "Leaderboard", "People", "Rewards", "Insights", "Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
-      expect(html).not.toContain(`>${label}</a>`);
+      "Community", "Audience", "Engage", "Rewards", "Insights", "Telegram", "Settings",
+    ]) expect(sidebar).toContain(`>${label}</a>`);
+    for (const label of ["Sites", "Site", "Leaderboard", "People", "Stats", "Members", "Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
+      expect(sidebar).not.toContain(`>${label}</a>`);
     }
     expect(html).not.toContain(">Integrations</a>");
     expect(html).not.toContain(">All sites</a>");

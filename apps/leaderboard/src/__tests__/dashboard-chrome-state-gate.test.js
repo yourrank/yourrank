@@ -105,14 +105,14 @@ describe("chrome-state one-owner gate (runtime)", () => {
 
   it("pins the exact canonical creator-facing titles", () => {
     expect(dashboardTitle({ page: "home", tab: "" })).toBe("Home · YourRank");
-    expect(dashboardTitle({ page: "board", tab: "players" })).toBe("Players · My board · YourRank");
-    expect(dashboardTitle({ page: "board", tab: "" })).toBe("My board · YourRank");
-    expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Overview · Stats · YourRank");
-    expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Traffic sources · Stats · YourRank");
+    expect(dashboardTitle({ page: "board", tab: "players" })).toBe("Leaderboard · Community · YourRank");
+    expect(dashboardTitle({ page: "board", tab: "" })).toBe("Community · YourRank");
+    expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Overview · Insights · YourRank");
+    expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Traffic sources · Insights · YourRank");
     expect(dashboardTitle(null)).toBe("Dashboard · YourRank");
-    expect(dynamicTitle("rewards")).toBe("Rewards · Engage · YourRank");
+    expect(dynamicTitle("rewards")).toBe("Overview · Rewards · YourRank");
     expect(dynamicTitle("siteConnections", "channel")).toBe("Kick connection · Site pages · YourRank");
-    expect(dynamicTitle("audience", "viewers")).toBe("Members · YourRank");
+    expect(dynamicTitle("audience", "viewers")).toBe("Members · Audience · YourRank");
     expect(dynamicTitle("settings", "team")).toBe("Settings · YourRank");
     expect(dynamicTitle("giveaways", "raffles")).toBe("Engage · YourRank");
     expect(dynamicTitle("nope")).toBe("Dashboard · YourRank");

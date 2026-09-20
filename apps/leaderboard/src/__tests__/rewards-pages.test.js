@@ -39,9 +39,9 @@ describe("server-rendered rewards pages", () => {
     });
   }
 
-  it("groups every rewards destination under the Engage workspace", () => {
+  it("groups every rewards destination under the Rewards workspace", () => {
     for (const config of [rewardsOverviewConfig, rewardsRulesConfig, rewardsShopConfig, rewardsRedemptionsConfig]) {
-      expect(config.title).toContain("· Engage ·");
+      expect(config.title).toContain("· Rewards ·");
     }
   });
 

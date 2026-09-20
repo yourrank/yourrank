@@ -265,7 +265,7 @@ export function setActiveSideNav(page) {
   const area = areaForPage(navPage);
   // Dynamic sections may belong to a different product area than the SPA
   // default; map their rail key to the right area for side-group visibility.
-  const DYN_AREA = { redemptions: "credits", engage: "sites", audience: "sites", settings: "sites" };
+  const DYN_AREA = { redemptions: "credits", engage: "sites", rewards: "sites", audience: "sites", settings: "sites" };
   const resolvedArea = DYN_AREA[navPage] || area;
   document.querySelectorAll(".lb-side-group").forEach((g) => { g.hidden = (g.dataset.area !== resolvedArea && g.dataset.area !== "all"); });
   document.querySelectorAll(".lb-nav").forEach((n) => {

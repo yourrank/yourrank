@@ -118,7 +118,7 @@ describe("signed-in shell navigation", () => {
 
   it("marks the open rewards surface as current", () => {
     const html = renderPage(RewardsRedemptionsPage);
-    expect(html).toMatch(/data-nav="engage"[^>]*aria-current="page"/);
+    expect(html).toMatch(/data-nav="rewards"[^>]*aria-current="page"/);
     expect((html.match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
   });
 
@@ -220,7 +220,7 @@ describe("signed-in shell navigation", () => {
     expect(html).toContain('data-product-link="credits"');
   });
 
-  it("keeps the My board workspace and help actions accessible without rail duplication", () => {
+  it("keeps the Community workspace and help actions accessible without rail duplication", () => {
     const html = renderPage(AudienceMembersPage);
     expect(html).toContain('data-nav="board"');
     expect(html).toMatch(/href="\/dashboard\/leaderboard"[^>]*data-nav="board"/);
@@ -234,11 +234,11 @@ describe("signed-in shell navigation", () => {
   it("uses plain-language navigation labels", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design", user }).toString();
     expect(html).toContain(">Appearance</a>");
-    expect(html).toContain(">My board</a>");
-    expect(html).toContain(">Members</a>");
+    expect(html).toContain(">Community</a>");
+    expect(html).toContain(">Audience</a>");
     expect(html).toContain(">Engage</a>");
     expect(html).toContain(">Telegram</a>");
-    expect(html).toContain(">Stats</a>");
+    expect(html).toContain(">Insights</a>");
     expect(html).toContain(">Settings</a>");
     expect(html).toContain("Help &amp; feedback</a>");
     expect(html).toContain('data-nav="settings"');
@@ -266,16 +266,17 @@ describe("signed-in shell navigation", () => {
   });
 
   it("puts a breadcrumb trail on every leaf page", () => {
-    // The Members tab repeats its section head, so it collapses to a
-    // single crumb entry — and single-entry trails render no breadcrumb.
+    // Audience Members is the root page, but remains explicit in the trail.
     const members = renderPage(AudienceMembersPage);
-    expect(members).not.toContain('class="v3-crumbs"');
+    expect(members).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
+    expect(members).toContain('>Audience</span>');
+    expect(members).toContain('<span aria-current="page">Members</span>');
     const reviews = renderPage(AudienceReviewsPage);
     expect(reviews).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
-    expect(reviews).toContain('>Members</a>');
+    expect(reviews).toContain('>Audience</a>');
 
     const claims = renderPage(RewardsRedemptionsPage);
-    expect(claims).toContain('<a href="/dashboard/activities">Engage</a>');
+    expect(claims).toContain('<a href="/dashboard/rewards">Rewards</a>');
     expect(claims).toContain('<span aria-current="page">Claims</span>');
 
     const settings = renderPage(UnifiedSettingsPage);
@@ -286,7 +287,7 @@ describe("signed-in shell navigation", () => {
 
   it("trails dashboard sections and editor steps from the route", () => {
     const editor = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design" }).toString();
-    expect(editor).toContain('<a href="/dashboard/leaderboard">My board</a>');
+    expect(editor).toContain('<a href="/dashboard/leaderboard">Community</a>');
     expect(editor).toContain('<span aria-current="page">Appearance</span>');
     expect(editor).toContain('href="/dashboard/leaderboard/design" data-egroup="design"');
 

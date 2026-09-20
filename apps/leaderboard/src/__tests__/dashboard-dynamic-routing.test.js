@@ -193,11 +193,12 @@ describe("dynamic section shell integration", () => {
       expect(action, `${id} must route through the shell`).toContain("requestDashboardRoute");
       expect(action, `${id} must not navigate directly`).not.toContain("location.href");
     }
-    expect(paletteJs).toContain('{ id: "nav-activities", title: "Engage"');
-    expect(paletteJs).toContain('{ id: "nav-analytics", title: "Stats"');
+    expect(paletteJs).toContain('{ id: "nav-activities", title: "Activities"');
+    expect(paletteJs).toContain('{ id: "nav-giveaways", title: "Giveaways"');
+    expect(paletteJs).toContain('{ id: "nav-analytics", title: "Insights"');
     expect(paletteJs).toContain('{ id: "nav-members", title: "Members"');
     expect(paletteJs).toContain('{ id: "nav-settings", title: "Settings"');
-    for (const id of ["nav-games", "nav-giveaways", "nav-raffles", "nav-predictions", "nav-tournaments", "act-obs-pred", "act-export-winners", "act-reload-games-preview"]) {
+    for (const id of ["nav-games", "nav-raffles", "nav-predictions", "nav-tournaments", "act-obs-pred", "act-export-winners", "act-reload-games-preview"]) {
       expect(paletteJs).not.toContain(`id: "${id}"`);
     }
   });
