@@ -1363,7 +1363,7 @@ async function bulkAwardMembers() {
   const statusEl = $("cr-viewer-status");
   if (!Number.isFinite(amount) || amount <= 0) { setStatus("cr-viewer-status", "Enter a positive credit amount.", true); return; }
   if (!reason) { setStatus("cr-viewer-status", "An audit note is required for bulk credit awards.", true); return; }
-  const ids = [...memberSelection];
+  const ids = memberSelection.ids();
   if (!ids.length) return;
   if (ids.length > BULK_AWARD_MAX) { setStatus("cr-viewer-status", `Bulk award is capped at ${BULK_AWARD_MAX} members per apply.`, true); return; }
   const awardBtn = $("cr-bulk-award");

@@ -73,6 +73,13 @@ describe("credits.js wiring", () => {
     expect(src).not.toMatch(/\(state\.members \|\| \[\]\)\.filter\(\(v\) => memberSelection\.has\(v\.id\)\)/);
   });
 
+  it("never iterates MemberSelection directly; bulk award reads ids() from the model", () => {
+    expect(new MemberSelection()[Symbol.iterator]).toBeUndefined();
+    expect(() => [...new MemberSelection()]).toThrow(TypeError);
+    expect(src).toContain("const ids = memberSelection.ids();");
+    expect(src).not.toMatch(/\[\.\.\.memberSelection\]|for \(const \w+ of memberSelection\)|Array\.from\(memberSelection\)/);
+  });
+
   it("captures the row snapshot at selection time and refreshes it on every members fetch", () => {
     expect(src).toContain("if (box.checked && row) memberSelection.add(row);");
     expect(src).toContain("memberSelection.refresh(data.members || []);");

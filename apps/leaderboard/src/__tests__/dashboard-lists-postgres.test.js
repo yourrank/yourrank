@@ -372,6 +372,24 @@ describe("creator-controlled Code Drop closure (Postgres)", () => {
     expect(listed.activities.find((a) => a.id === `drop:${dropId}`)).toMatchObject({ stateLabel: "Ended by creator", actions: { canEnd: false } });
   });
 
+  integrationIt("leaves a naturally expired drop untouched: no closed_at, no audit, reports Expired", async () => {
+    const dropId = dropIds[2];
+    await sql`UPDATE code_drops SET expires_at = now() - interval '1 minute' WHERE id=${dropId} AND status='active'`;
+
+    const response = await closeActivity(`drop:${dropId}`);
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: false, error: "This activity already ended (expired)." });
+    expect(body.activity).toMatchObject({ state: "completed", stateLabel: "Expired", actions: { canEnd: false } });
+
+    const [row] = await sql`SELECT status, closed_at FROM code_drops WHERE id=${dropId}`;
+    expect(row).toEqual({ status: "active", closed_at: null });
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM audit_log WHERE action='code_drop_close' AND entity_id=${dropId}`;
+    expect(n).toBe(0);
+    const listed = await (await activities("&limit=100")).json();
+    expect(listed.activities.find((a) => a.id === `drop:${dropId}`)).toMatchObject({ stateLabel: "Expired" });
+  });
+
   integrationIt("is idempotent, refuses exhausted drops, and never crosses sites", async () => {
     const again = await closeActivity(`drop:${dropIds[0]}`);
     expect(again.status).toBe(200);

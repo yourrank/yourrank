@@ -124,7 +124,8 @@ export async function handleCloseActivity(request, env, injected = {}) {
   const closed = await deps.one(
     `UPDATE code_drops
         SET status='expired', closed_at=now(), updated_at=now()
-      WHERE id=$1 AND site_id=$2 AND status='active'
+      WHERE id=$1 AND site_id=$2 AND status='active' AND closed_at IS NULL
+       AND (expires_at IS NULL OR expires_at > now())
       RETURNING ${DROP_COLUMNS}`,
     [dropId, site.id],
   );

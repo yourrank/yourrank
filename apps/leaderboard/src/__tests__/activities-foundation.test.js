@@ -301,7 +301,8 @@ describe("creator End now for an open Code Drop", () => {
     expect(mock.calls.capability).toEqual([{ user: USER, site: SITE, capability: "canRoleManageActivities" }]);
     expect(mock.calls.one).toHaveLength(1);
     expect(mock.calls.one[0].sql).toMatch(/SET status='expired', closed_at=now\(\)/);
-    expect(mock.calls.one[0].sql).toMatch(/WHERE id=\$1 AND site_id=\$2 AND status='active'/);
+    expect(mock.calls.one[0].sql).toMatch(/WHERE id=\$1 AND site_id=\$2 AND status='active' AND closed_at IS NULL/);
+    expect(mock.calls.one[0].sql).toMatch(/AND \(expires_at IS NULL OR expires_at > now\(\)\)/);
     expect(mock.calls.one[0].params).toEqual([DROP, SITE.id]);
     expect(audits).toEqual([expect.objectContaining({ action: "code_drop_close", entityId: DROP, actorId: USER.id })]);
   });
@@ -324,6 +325,27 @@ describe("creator End now for an open Code Drop", () => {
     const expired = await close(mock);
     expect(expired.status).toBe(409);
     expect(await expired.json()).toMatchObject({ activity: { stateLabel: "Ended", actions: { canEnd: false } } });
+  });
+
+  it("does not stamp closed_at or audit a creator close on a drop that already expired naturally", async () => {
+    // status='active' in the row, but expires_at is in the past: the guarded
+    // UPDATE matches nothing, so the handler falls through to the read path.
+    const audits = [];
+    const mock = deps({
+      logAudit: async (entry) => { audits.push(entry); },
+      one: async (sql, params) => {
+        mock.calls.one.push({ sql, params });
+        if (sql.includes("UPDATE code_drops")) return null;
+        return { ...row("active"), expires_at: "2026-08-30T11:00:00.000Z" };
+      },
+    });
+    const response = await close(mock);
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: false, error: "This activity already ended (expired)." });
+    expect(body.activity).toMatchObject({ state: "completed", stateLabel: "Expired", actions: { canEnd: false } });
+    expect(body.activity.stateLabel).not.toBe("Ended by creator");
+    expect(audits).toEqual([]);
   });
 
   it("never touches a drop from another site or an unauthorized caller", async () => {
