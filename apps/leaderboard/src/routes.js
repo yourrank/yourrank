@@ -143,6 +143,7 @@ import {
   handleKickAuthStart,
   handleKickAuthCallback,
   handleKickAuthDisconnect,
+  handleKickAuthRepair,
 } from "./handlers/kick-auth.js";
 import {
   handleCreditsStatus,
@@ -324,6 +325,7 @@ export const ROUTES = [
   { path: "/auth/kick", method: "GET", handler: withHandler(handleKickAuthStart) },
   { path: "/auth/kick/callback", method: "GET", handler: withHandler(handleKickAuthCallback) },
   { path: "/api/kick/disconnect", method: "POST", handler: withHandler(handleKickAuthDisconnect) },
+  { path: "/api/kick/repair", method: "POST", handler: withHandler(handleKickAuthRepair) },
   { path: "/api/giveaways/chatroom", method: "GET", handler: withHandler(handleGiveawayChatroom) },
   { path: "/api/giveaways/chat", method: "GET", handler: withHandler(handleChatGiveawayState) },
   { path: "/api/giveaways/chat/start", method: "POST", handler: withHandler(handleChatGiveawayStart) },

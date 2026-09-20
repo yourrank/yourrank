@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { handleKickAuthCallback, handleKickAuthDisconnect, handleKickAuthStart } from "../handlers/kick-auth.js";
+import { handleKickAuthCallback, handleKickAuthDisconnect, handleKickAuthRepair, handleKickAuthStart } from "../handlers/kick-auth.js";
 import {
   handleKickViewerAuthCallback,
   handleKickViewerAuthHandoff,
@@ -664,8 +664,10 @@ describe("Kick OAuth state integration seams", () => {
     expect(writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean))).toEqual([
       "creator_connections", "users", "community_channels", "sites", "community_channels",
     ]);
-    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $3 THEN now() END");
-    expect(writes[4].params).toEqual([site.id, "kick", true]);
+    expect(writes[4].sql).toContain("reward_events_subscribed_at = CASE WHEN $3 THEN now() END");
+    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $4 THEN now() END");
+    expect(writes[4].sql).toContain("event_subscriptions_checked_at = now()");
+    expect(writes[4].params).toEqual([site.id, "kick", true, true]);
     expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);
     expect(writes[1].sql).toContain("kick_linked_at = now()");
     // The verified binding records the creator connection that proved ownership.
@@ -703,10 +705,42 @@ describe("Kick OAuth state integration seams", () => {
     // Rewards already subscribed → not re-requested (no duplicate); chat was attempted and failed.
     expect(subscribed).toEqual(["chat.message.sent"]);
     // The connection itself still succeeds, but the redirect and the stored
-    // readiness both say chat events are not wired.
-    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&kick_chat_events=failed&siteId=site-1");
+    // readiness both say delivery is not fully wired: rewards subscribed
+    // (reused), chat missing, and the reconciliation time recorded.
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&kick_delivery=failed&siteId=site-1");
     const readiness = writes.find(({ sql }) => sql.includes("chat_events_subscribed_at"));
-    expect(readiness.params).toEqual([site.id, "kick", false]);
+    expect(readiness.params).toEqual([site.id, "kick", true, false]);
+    // Credentials are still persisted: a subscription failure is not a revoked grant.
+    expect(writes.some(({ sql }) => /INSERT INTO creator_connections/.test(sql))).toBe(true);
+  });
+
+  test("streamer callback records a missing reward subscription without disconnecting OAuth", async () => {
+    const writes = [];
+    const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      currentUser: async () => user,
+      consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
+      one: async () => site,
+      requireSiteCapability: ownerCapability,
+      exchangeKickCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
+      fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 123, slug: "owner" }),
+      listKickWebhookSubscriptions: async () => [],
+      subscribeKickWebhookEvent: async (_token, event) => {
+        if (event === "channel.reward.redemption.updated") throw new Error("Kick event subscription failed 500");
+        return { id: "sub-chat" };
+      },
+      encryptKickToken: async (token) => `encrypted:${token}`,
+      withTransaction: async (fn) => fn({ unsafe: async (sql, params) => {
+        if (/^\s*SELECT/.test(sql)) return [{ id: "cc-1" }];
+        writes.push({ sql, params });
+        return [{ id: "cc-1" }];
+      } }),
+    });
+
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&kick_delivery=failed&siteId=site-1");
+    const readiness = writes.find(({ sql }) => sql.includes("reward_events_subscribed_at"));
+    expect(readiness.params).toEqual([site.id, "kick", false, true]);
+    expect(writes.some(({ sql }) => /INSERT INTO creator_connections/.test(sql))).toBe(true);
   });
 
   test("streamer callback rejects provider user/channel mismatches before persisting credentials", async () => {
@@ -812,5 +846,122 @@ describe("Kick OAuth state integration seams", () => {
     expect(queries.some((query) => query.sql.includes("kick_user_id = null"))).toBe(false);
     expect(queries.at(-2).sql).toContain("UPDATE community_channels");
     expect(queries.at(-1).sql).toContain("kick_channel_external_id = null");
+  });
+});
+
+describe("Kick delivery repair", () => {
+  const connection = {
+    user_id: "owner-1",
+    access_token_enc: "enc-access",
+    refresh_token_enc: "enc-refresh",
+    token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+  };
+  const freshTokens = { accessToken: "access", accessEnc: "enc-access", refreshEnc: "enc-refresh", expiresAt: connection.token_expires_at };
+
+  function repairDeps(overrides = {}) {
+    const writes = [];
+    const deps = {
+      requireUser: async () => ({ user, res: null }),
+      rateLimit: noRateLimit,
+      readJson: async () => ({}),
+      one: async (sql, params) => {
+        if (sql.includes("FROM sites WHERE id=$1")) return params[0] === site.id ? site : null;
+        if (sql.includes("FROM community_channels ch")) {
+          // The channel lookup is site-bound and only returns the owner's active connection.
+          expect(sql).toContain("cc.user_id = s.user_id");
+          expect(sql).toContain("ch.status = 'active' AND ch.verified_at IS NOT NULL");
+          return params[0] === site.id ? connection : null;
+        }
+        throw new Error(`unexpected query: ${sql}`);
+      },
+      requireSiteCapability: ownerCapability,
+      withTransaction: async (fn) => fn({ unsafe: async (sql, params) => { writes.push({ sql, params }); return []; } }),
+      getValidKickAccessToken: async () => freshTokens,
+      listKickWebhookSubscriptions: async () => [],
+      subscribeKickWebhookEvent: async (_token, event) => ({ id: `sub-${event}` }),
+      ...overrides,
+    };
+    return { deps, writes };
+  }
+
+  const repairRequest = (siteId = site.id) => request(`/api/kick/repair?siteId=${siteId}`, { method: "POST" });
+
+  test("repair subscribes missing events and records both as delivered", async () => {
+    const { deps, writes } = repairDeps();
+    const response = await handleKickAuthRepair(repairRequest(), {}, deps);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, repaired: true, subscriptions: { rewardEvents: true, chatEvents: true }, failedEvents: [] });
+    const readiness = writes.find(({ sql }) => sql.includes("reward_events_subscribed_at"));
+    expect(readiness.params).toEqual([site.id, "kick", true, true]);
+    // Unchanged tokens are not rewritten.
+    expect(writes.some(({ sql }) => sql.includes("access_token_enc"))).toBe(false);
+  });
+
+  test("repair failure keeps OAuth connected and reports only the failed event name", async () => {
+    const { deps, writes } = repairDeps({
+      listKickWebhookSubscriptions: async () => [{ id: "s1", event: "chat.message.sent", version: 1, method: "webhook" }],
+      subscribeKickWebhookEvent: async () => { throw new Error("Kick event subscription failed 500: {\"secret\":\"raw provider body\"}"); },
+    });
+    const response = await handleKickAuthRepair(repairRequest(), {}, deps);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toContain("raw provider body");
+    const body = JSON.parse(text);
+    expect(body).toMatchObject({ ok: true, repaired: false, subscriptions: { rewardEvents: false, chatEvents: true }, failedEvents: ["channel.reward.redemption.updated"] });
+    const readiness = writes.find(({ sql }) => sql.includes("reward_events_subscribed_at"));
+    expect(readiness.params).toEqual([site.id, "kick", false, true]);
+    expect(readiness.sql).toContain("event_subscriptions_checked_at = now()");
+    // No credential wipe on a subscription failure.
+    expect(writes.some(({ sql }) => /access_token_enc\s*=\s*NULL/i.test(sql))).toBe(false);
+  });
+
+  test("repair persists refreshed tokens when the access token was renewed", async () => {
+    const renewed = { accessToken: "new", accessEnc: "enc-new", refreshEnc: "enc-refresh-2", expiresAt: "2030-01-01T00:00:00.000Z" };
+    const { deps, writes } = repairDeps({ getValidKickAccessToken: async () => renewed });
+    const response = await handleKickAuthRepair(repairRequest(), {}, deps);
+    expect(response.status).toBe(200);
+    const tokenWrite = writes.find(({ sql }) => sql.includes("access_token_enc"));
+    expect(tokenWrite).toBeDefined();
+    expect(tokenWrite.params).toContain("enc-new");
+    expect(tokenWrite.params).not.toContain("new");
+  });
+
+  test("revoked authorization during repair clears credentials and asks to reconnect", async () => {
+    const { deps, writes } = repairDeps({
+      getValidKickAccessToken: async () => { throw new Error("Kick token refresh failed 401: invalid_grant"); },
+    });
+    const response = await handleKickAuthRepair(repairRequest(), {}, deps);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ ok: false, code: "kick_reconnect_required" });
+    expect(writes.some(({ sql }) => /access_token_enc\s*=\s*NULL/i.test(sql))).toBe(true);
+  });
+
+  test("transient refresh failure does not revoke the connection", async () => {
+    const { deps, writes } = repairDeps({
+      getValidKickAccessToken: async () => { throw new Error("Kick token refresh failed 503"); },
+    });
+    const response = await handleKickAuthRepair(repairRequest(), {}, deps);
+    expect(response.status).toBe(502);
+    expect(writes).toEqual([]);
+  });
+
+  test("repair is site-bound: another site's channel is not repaired and capability is enforced", async () => {
+    const { deps } = repairDeps();
+    const missing = await handleKickAuthRepair(repairRequest("site-other"), {}, deps);
+    expect(missing.status).toBe(404);
+
+    const denied = await handleKickAuthRepair(repairRequest(), {}, {
+      ...repairDeps().deps,
+      requireSiteCapability: async () => ({ role: "viewer", res: new Response("forbidden", { status: 403 }) }),
+    });
+    expect(denied.status).toBe(403);
+
+    const notConnected = await handleKickAuthRepair(repairRequest(), {}, {
+      ...repairDeps().deps,
+      one: async (sql) => (sql.includes("FROM sites") ? site : null),
+    });
+    expect(notConnected.status).toBe(409);
+    expect(await notConnected.json()).toMatchObject({ code: "kick_not_connected" });
   });
 });

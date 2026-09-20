@@ -1,11 +1,13 @@
 // Kick OAuth 2.1 flow for streamers linking their Kick channel.
-import { currentUser, requireUser, ok, bad, readJson, rateLimit } from "../auth.js";
+import { currentUser, requireUser, ok, bad, json, readJson, rateLimit } from "../auth.js";
 import {
+  clearCreatorConnectionTokens,
   linkCommunityChannel,
   linkCreatorConnection,
   otherVerifiedChannelForCreator,
   revokeCommunityChannel,
   revokeCreatorConnection,
+  storeCreatorConnectionTokens,
 } from "@yourrank/shared/provider-connections";
 import { one, withTransaction } from "@yourrank/shared/db";
 import { kickCreatorOwnsChannel } from "@yourrank/shared/providers/kick-ownership";
@@ -21,12 +23,14 @@ import {
   ensureKickWebhookSubscriptions,
   listKickWebhookSubscriptions,
   encryptKickToken,
+  getValidKickAccessToken,
+  isDefinitiveKickAuthorizationFailure,
 } from "@yourrank/shared/kick-oauth";
 import {
-  KICK_CHAT_MESSAGE_EVENT,
   KICK_CREATOR_WEBHOOK_EVENTS,
-  markChannelChatSubscription,
+  markChannelEventSubscriptions,
   stopActiveChatGiveaways,
+  subscriptionsFromEvents,
 } from "@yourrank/shared/chat-giveaways";
 import { notifyLiveBoard } from "../live-board-config.js";
 import { handleKickViewerAuthCallback, KICK_VIEWER_STATE_PREFIX } from "./viewer-auth.js";
@@ -202,7 +206,7 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
     for (const failure of subscriptions.failed) {
       console.warn(`[kick-auth] event subscription failed for ${failure.event}:`, failure.error);
     }
-    const chatSubscribed = subscriptions.subscribed.includes(KICK_CHAT_MESSAGE_EVENT);
+    const delivery = subscriptionsFromEvents(subscriptions.subscribed);
 
     const accessEnc = await encryptKickTokenImpl(tokens.access_token);
     const refreshEnc = tokens.refresh_token ? await encryptKickTokenImpl(tokens.refresh_token) : null;
@@ -229,18 +233,130 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
         creatorConnectionId,
         verified: true,
       });
-      await markChannelChatSubscription(run, stateData.siteId, "kick", chatSubscribed);
+      await markChannelEventSubscriptions(run, stateData.siteId, "kick", delivery);
     });
     void notifyLiveBoard(env, stateData.siteId);
 
+    // Authorization succeeded regardless; a failed webhook subscription is a
+    // separate, repairable delivery fault and is reported as such.
     const params = { kick_connected: "1" };
-    if (!chatSubscribed) params.kick_chat_events = "failed";
+    if (subscriptions.failed.length > 0) params.kick_delivery = "failed";
     return redirect(channelRedirect(params, stateData.siteId));
   } catch (err) {
     console.error("[kick-auth] callback failed:", err?.message || err);
     return redirect(channelRedirect({ error: "kick_auth_failed" }, stateData.siteId));
   }
 }
+
+// POST /api/kick/repair — reconcile the webhook subscriptions of the site's
+// verified Kick channel using the creator connection that verified it. The
+// authorization itself is never revoked here: only a provider-confirmed
+// rejection of the grant clears credentials (answered as
+// `kick_reconnect_required`, like reward operations do); every other failure
+// keeps the connection and reports delivery as still broken.
+export async function handleKickAuthRepair(request, env, deps = {}) {
+  const {
+    requireUser: requireUserImpl = requireUser,
+    rateLimit: rateLimitImpl = rateLimit,
+    one: oneImpl = one,
+    withTransaction: withTransactionImpl = withTransaction,
+    requireSiteCapability: requireSiteCapabilityImpl = requireSiteCapability,
+    readJson: readJsonImpl = readJson,
+    getValidKickAccessToken: getValidKickAccessTokenImpl = getValidKickAccessToken,
+    ensureKickWebhookSubscriptions: ensureKickWebhookSubscriptionsImpl = ensureKickWebhookSubscriptions,
+    listKickWebhookSubscriptions: listKickWebhookSubscriptionsImpl = listKickWebhookSubscriptions,
+    subscribeKickWebhookEvent: subscribeKickWebhookEventImpl = subscribeKickWebhookEvent,
+  } = deps;
+  const { user, res } = await requireUserImpl(request, env);
+  if (res) return res;
+
+  const url = new URL(request.url);
+  const body = await readJsonImpl(request);
+  const siteId = url.searchParams.get("siteId") || body?.siteId || "";
+  if (!siteId) return bad("Select a site before repairing Kick delivery.");
+  const site = await oneImpl("SELECT id, user_id FROM sites WHERE id=$1", [siteId]);
+  if (!site) return bad("Site not found.", 404);
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
+  if (authorization.res) return authorization.res;
+  if (!(await rateLimitImpl(env, `kick-repair:${site.id}`, 5, 60)).ok) {
+    return bad("Too many repair attempts. Try again in a minute.", 429);
+  }
+
+  // The channel must be verified for this site and routed to an active
+  // connection of the site owner — the same rule loadChatGiveawayConnection
+  // applies — so a member with manage rights repairs with the owner's grant
+  // and can never reach another site's channel or another creator's tokens.
+  const connection = await oneImpl(
+    `SELECT cc.user_id, cc.access_token_enc, cc.refresh_token_enc, cc.token_expires_at
+       FROM community_channels ch
+       JOIN sites s ON s.id = ch.site_id
+       JOIN creator_connections cc
+         ON cc.id = ch.creator_connection_id
+        AND cc.provider = ch.provider
+        AND cc.user_id = s.user_id
+        AND cc.status = 'active'
+        AND cc.linked_at IS NOT NULL
+      WHERE ch.site_id = $1 AND ch.provider = 'kick' AND ch.status = 'active' AND ch.verified_at IS NOT NULL`,
+    [site.id],
+  );
+  if (!connection) {
+    return json({ ok: false, error: "Connect Kick for this site before repairing delivery.", code: "kick_not_connected" }, 409);
+  }
+  if (!connection.access_token_enc) {
+    return kickReconnectRequired();
+  }
+
+  let tokens;
+  try {
+    tokens = await getValidKickAccessTokenImpl(
+      env, connection.access_token_enc, connection.refresh_token_enc, connection.token_expires_at,
+    );
+  } catch (err) {
+    if (isDefinitiveKickAuthorizationFailure(err)) {
+      console.warn("[kick-auth] repair: Kick rejected the saved authorization for site", site.id);
+      await withTransactionImpl(async (tx) => {
+        await clearCreatorConnectionTokens((sql, params) => tx.unsafe(sql, params), connection.user_id, "kick");
+      });
+      return kickReconnectRequired();
+    }
+    console.error("[kick-auth] repair: token refresh failed:", err?.message || err);
+    return bad("Kick did not answer the authorization refresh. Try again in a moment.", 502);
+  }
+
+  const subscriptions = await ensureKickWebhookSubscriptionsImpl(tokens.accessToken, KICK_CREATOR_WEBHOOK_EVENTS, {
+    list: listKickWebhookSubscriptionsImpl,
+    subscribe: subscribeKickWebhookEventImpl,
+  });
+  for (const failure of subscriptions.failed) {
+    console.warn(`[kick-auth] repair: event subscription failed for ${failure.event}:`, failure.error);
+  }
+  const delivery = subscriptionsFromEvents(subscriptions.subscribed);
+
+  await withTransactionImpl(async (tx) => {
+    const run = (sql, params) => tx.unsafe(sql, params);
+    if (tokens.accessEnc !== connection.access_token_enc) {
+      await storeCreatorConnectionTokens(run, connection.user_id, "kick", {
+        accessTokenEnc: tokens.accessEnc,
+        refreshTokenEnc: tokens.refreshEnc,
+        tokenExpiresAt: tokens.expiresAt,
+      });
+    }
+    await markChannelEventSubscriptions(run, site.id, "kick", delivery);
+  });
+
+  return ok({
+    repaired: subscriptions.failed.length === 0,
+    subscriptions: delivery,
+    // Event names only — provider error bodies stay in server logs.
+    failedEvents: subscriptions.failed.map((failure) => failure.event),
+  });
+}
+
+const kickReconnectRequired = () => json({
+  ok: false,
+  error: "Kick connection needs attention. Reconnect Kick to keep rewards working.",
+  code: "kick_reconnect_required",
+}, 409);
 
 export async function handleKickAuthDisconnect(request, env, deps = {}) {
   const {

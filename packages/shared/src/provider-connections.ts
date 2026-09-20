@@ -148,6 +148,57 @@ export async function revokeCreatorConnection(run: SqlRunner, userId: string, pr
   }
 }
 
+/**
+ * The provider proved the saved grant is invalid (401 / invalid_grant): drop
+ * the credentials but keep the identity link, so health reads "Reconnect
+ * required" instead of pretending the creator disconnected on purpose.
+ */
+export async function clearCreatorConnectionTokens(run: SqlRunner, userId: string, provider: ProviderId): Promise<void> {
+  await run(
+    `UPDATE creator_connections
+        SET access_token_enc = NULL, refresh_token_enc = NULL, token_expires_at = NULL, updated_at = now()
+      WHERE user_id = $1 AND provider = $2`,
+    [userId, provider],
+  );
+  if (LEGACY_CREATOR.has(provider)) {
+    await run(
+      `UPDATE users
+          SET kick_access_token_enc = null,
+              kick_refresh_token_enc = null,
+              kick_token_expires_at = null,
+              updated_at = now()
+        WHERE id = $1`,
+      [userId],
+    );
+  }
+}
+
+/** Persist refreshed OAuth credentials on the connection and its legacy mirror. */
+export async function storeCreatorConnectionTokens(
+  run: SqlRunner,
+  userId: string,
+  provider: ProviderId,
+  tokens: { accessTokenEnc: string; refreshTokenEnc: string | null; tokenExpiresAt: string | Date | null },
+): Promise<void> {
+  await run(
+    `UPDATE creator_connections
+        SET access_token_enc = $3, refresh_token_enc = $4, token_expires_at = $5, updated_at = now()
+      WHERE user_id = $1 AND provider = $2 AND status = 'active'`,
+    [userId, provider, tokens.accessTokenEnc, tokens.refreshTokenEnc, tokens.tokenExpiresAt],
+  );
+  if (LEGACY_CREATOR.has(provider)) {
+    await run(
+      `UPDATE users
+          SET kick_access_token_enc = $2,
+              kick_refresh_token_enc = $3,
+              kick_token_expires_at = $4,
+              updated_at = now()
+        WHERE id = $1`,
+      [userId, tokens.accessTokenEnc, tokens.refreshTokenEnc, tokens.tokenExpiresAt],
+    );
+  }
+}
+
 export async function loadCommunityChannel(run: SqlRunner, siteId: string, provider: ProviderId): Promise<CommunityChannel | null> {
   const [row] = await rows<{
     external_channel_id: string; external_channel_name: string | null; creator_connection_id: string | null;
@@ -224,7 +275,8 @@ export async function revokeCommunityChannel(run: SqlRunner, siteId: string, pro
   await run(
     `UPDATE community_channels
         SET status = 'revoked', verified_at = NULL, creator_connection_id = NULL,
-            chat_events_subscribed_at = NULL, updated_at = now()
+            chat_events_subscribed_at = NULL, reward_events_subscribed_at = NULL,
+            event_subscriptions_checked_at = NULL, updated_at = now()
       WHERE site_id = $1 AND provider = $2 AND status <> 'revoked'`,
     [siteId, provider],
   );

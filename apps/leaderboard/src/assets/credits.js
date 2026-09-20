@@ -131,16 +131,20 @@ function showOAuthMessage({ finalize = false } = {}) {
     const params = new URLSearchParams(location.search);
     const error = params.get("error");
     const connected = params.get("kick_connected") === "1";
+    const deliveryFailed = params.get("kick_delivery") === "failed";
     if (!error && !connected) return;
-    pendingOAuthFeedback = { error, connected };
+    pendingOAuthFeedback = { error, connected, deliveryFailed };
     const clean = new URL(location.href);
     clean.searchParams.delete("error");
     clean.searchParams.delete("kick_connected");
+    clean.searchParams.delete("kick_delivery");
     history.replaceState({}, "", `${clean.pathname}${clean.search}${clean.hash}`);
   }
-  const { error, connected } = pendingOAuthFeedback;
+  const { error, deliveryFailed } = pendingOAuthFeedback;
   if (error) {
     setStatus("cr-channel-status", OAUTH_MESSAGES[error] || "Kick connection could not be completed. Try again.", true);
+  } else if (deliveryFailed) {
+    setStatus("cr-channel-status", "Kick is authorized, but event delivery could not be set up. Use “Repair delivery” to retry.", true);
   } else {
     const channel = state.channel?.name ? `@${state.channel.name}` : "your channel";
     setStatus("cr-channel-status", `Connected to ${channel} on Kick.`, false);
@@ -158,25 +162,37 @@ function updateKickAuthLinks() {
 // helpers make the card honest: an expired/missing token flips the card to
 // "Needs attention" and reveals the Reconnect link, which the template ships
 // hidden and nothing used to unhide.
-function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt }) {
+// Delivery health is separate from authorization: `delivery_failed` means the
+// OAuth grant is fine but a required webhook subscription is missing, so the
+// card offers Repair (reconcile subscriptions) rather than Reconnect.
+function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt, canRepair = false, canManage = true }) {
   const needsAttention = connected && status === "needs_attention";
+  const deliveryFailed = connected && status === "delivery_failed";
+  const warn = needsAttention || deliveryFailed;
   const live = $("cr-channel-live");
   if (live) {
     live.textContent = !connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Connected");
-    live.classList.toggle("cr-attention", needsAttention);
+    live.classList.toggle("cr-attention", warn);
   }
   const token = $("cr-channel-token");
   if (token) {
     token.textContent = detail || (connected ? "Authorization can renew automatically" : "Not connected yet");
-    token.classList.toggle("cr-attention", needsAttention);
+    token.classList.toggle("cr-attention", warn);
   }
+  const delivery = $("cr-channel-delivery");
+  if (delivery) {
+    delivery.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "ready" ? "Verified" : status === "needs_attention" ? "Blocked by authorization" : "Not verified yet";
+    delivery.classList.toggle("cr-attention", deliveryFailed);
+  }
+  const repair = $("cr-channel-repair");
+  if (repair) repair.hidden = !(connected && canManage && (canRepair || deliveryFailed || status === "authorized"));
   const linked = $("cr-channel-linked");
   if (linked) linked.textContent = linkedAt ? fmtDate(linkedAt) : "—";
   const chip = $("cr-channel-chip");
   if (chip) {
     chip.textContent = `● ${!connected ? "Not connected" : statusLabel || (needsAttention ? "Needs attention" : "Authorized")}`;
-    chip.classList.toggle("v3-chip--fulfilled", connected && !needsAttention);
-    chip.classList.toggle("v3-chip--pending", needsAttention);
+    chip.classList.toggle("v3-chip--fulfilled", connected && !warn);
+    chip.classList.toggle("v3-chip--pending", warn);
     chip.classList.toggle("v3-chip--cancelled", !connected);
   }
   const reconnect = $("cr-channel-reconnect");
@@ -462,7 +478,7 @@ function render() {
       accessNote.textContent = "Connection credentials and authentication settings are managed by the site owner.";
     }
     const connectionStatus = state.channel?.status || (connected ? "authorized" : "not_connected");
-    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt });
+    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt, canRepair: state.channel?.canRepair, canManage: capabilities.manageConnections });
     $("cr-channel-reconnect")?.toggleAttribute("hidden", !capabilities.manageConnections || connectionStatus !== "needs_attention");
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending claims"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "claims / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};
@@ -1405,6 +1421,18 @@ function wireActions() {
     e.preventDefault(); const btn = e.submitter || $("cr-channel-submit"); setLoading(btn, true, "Saving…");
     try { const data = await api("POST", sitePath("/api/credits/connect"), { externalId: $("cr-channel-id-input").value.trim(), name: $("cr-channel-name-input").value.trim() }); state.channel = data.channel; setStatus("cr-channel-status", "Channel saved."); render(); }
     catch (err) { setStatus("cr-channel-status", err.message, true); } finally { setLoading(btn, false); }
+  });
+  $("cr-channel-repair")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget; setLoading(btn, true, "Repairing…");
+    try {
+      const data = await api("POST", sitePath("/api/kick/repair", activeSiteId));
+      if (data.repaired) setStatus("cr-channel-status", "Kick event delivery verified.");
+      else setStatus("cr-channel-status", "Kick is still not delivering all required events. Try again in a moment.", true);
+      await load();
+    } catch (err) {
+      if (err?.code === "kick_reconnect_required") markKickNeedsAttention();
+      setStatus("cr-channel-status", err.message, true);
+    } finally { setLoading(btn, false); }
   });
   $("cr-channel-disconnect")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget; setLoading(btn, true, "Disconnecting…");

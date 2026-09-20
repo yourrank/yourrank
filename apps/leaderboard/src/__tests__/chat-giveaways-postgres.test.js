@@ -6,8 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 import {
   ingestChatGiveawayMessage,
+  loadChannelEventDelivery,
   loadChatGiveawayConnection,
-  markChannelChatSubscription,
+  markChannelEventSubscriptions,
   stopActiveChatGiveaways,
 } from "@yourrank/shared/chat-giveaways";
 import {
@@ -73,9 +74,24 @@ afterAll(async () => {
 describe("Chat Giveaways (Postgres)", () => {
   integrationIt("connection is ready only after the chat subscription is recorded", async () => {
     expect(await loadChatGiveawayConnection(run, siteA)).toMatchObject({ connected: true, chatReady: false, externalChannelId: channelA });
-    await markChannelChatSubscription(run, siteA, "kick", true);
+    expect(await loadChannelEventDelivery(run, siteA)).toEqual({ rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt: null });
+
+    // A reconciliation that found chat missing records the check without marking chat ready.
+    await markChannelEventSubscriptions(run, siteA, "kick", { rewardEvents: true, chatEvents: false });
+    expect(await loadChatGiveawayConnection(run, siteA)).toMatchObject({ connected: true, chatReady: false });
+    let delivery = await loadChannelEventDelivery(run, siteA);
+    expect(delivery.rewardEventsSubscribedAt).not.toBeNull();
+    expect(delivery.chatEventsSubscribedAt).toBeNull();
+    expect(delivery.checkedAt).not.toBeNull();
+
+    await markChannelEventSubscriptions(run, siteA, "kick", { rewardEvents: true, chatEvents: true });
     expect(await loadChatGiveawayConnection(run, siteA)).toMatchObject({ connected: true, chatReady: true });
-    await markChannelChatSubscription(run, siteB, "kick", true);
+    delivery = await loadChannelEventDelivery(run, siteA);
+    expect(delivery.chatEventsSubscribedAt).not.toBeNull();
+
+    // Site B's channel is untouched by site A's reconciliation.
+    expect(await loadChannelEventDelivery(run, siteB)).toEqual({ rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt: null });
+    await markChannelEventSubscriptions(run, siteB, "kick", { rewardEvents: true, chatEvents: true });
   });
 
   integrationIt("collects one entry per stable Kick user, case-insensitively, exact token only", async () => {

@@ -312,7 +312,7 @@ function renderConnectedAccounts(data) {
   const canManageConnections = (data.capabilities || {}).canRoleManageConnections === true;
 
   wrap.innerHTML = `<div class="account-connection-list">${connections.map((connection) => {
-    const warning = connection.status === "needs_attention";
+    const warning = connection.status === "needs_attention" || connection.status === "delivery_failed";
     const muted = ["not_connected", "not_configured", "paused"].includes(connection.status);
     let action;
     if (connection.action?.kind === "disconnect_telegram") {

@@ -13,6 +13,7 @@ import {
   getValidKickAccessToken,
   createKickChannelReward,
   fetchKickCurrentChannel,
+  isDefinitiveKickAuthorizationFailure,
 } from "@yourrank/shared/kick-oauth";
 import {
   effectivePlan,
@@ -211,18 +212,6 @@ const kickReconnectRequired = () => json({
   code: "kick_reconnect_required",
 }, 409);
 
-function isDefinitiveKickAuthorizationFailure(error) {
-  const message = String(error?.message || error);
-  // Only a provider-verified rejection may wipe stored credentials: an
-  // explicit 401 status, the OAuth invalid_grant marker, or the local "no
-  // refresh token" sentinel. Transient Kick errors and 403 scope bodies that
-  // merely contain the word "unauthorized" must keep the connection so the
-  // next operation can retry.
-  return /\b401\b/.test(message)
-    || /invalid_grant/i.test(message)
-    || /refresh token not available/i.test(message);
-}
-
 async function clearInvalidKickAuthorization(deps, userId, reason) {
   try {
     await deps.exec(
@@ -307,9 +296,12 @@ export async function handleCreditsStatus(request, env) {
               u.kick_user_id IS NOT NULL AND u.kick_linked_at IS NOT NULL AS account_linked,
               u.kick_access_token_enc IS NOT NULL AS has_access_token,
               u.kick_refresh_token_enc IS NOT NULL AS has_refresh_token,
-              u.kick_token_expires_at
+              u.kick_token_expires_at,
+              ch.reward_events_subscribed_at, ch.chat_events_subscribed_at, ch.event_subscriptions_checked_at,
+              EXISTS (SELECT 1 FROM chat_giveaway_sessions g WHERE g.site_id = s.id) AS uses_chat_giveaways
          FROM sites s
          JOIN users u ON u.id = s.user_id
+         LEFT JOIN community_channels ch ON ch.site_id = s.id AND ch.provider = 'kick' AND ch.status = 'active'
         WHERE s.id=$1`,
       [site.id]
     ),
@@ -367,6 +359,12 @@ export async function handleCreditsStatus(request, env) {
     tokenExpiresAt: channel?.kick_token_expires_at || null,
     activeRewardMappings: Number(usage?.rewardMappings) || 0,
     operationEnabled: Boolean(site.credits_enabled),
+    usesChatGiveaways: Boolean(channel?.uses_chat_giveaways),
+    delivery: {
+      rewardEventsSubscribedAt: channel?.reward_events_subscribed_at || null,
+      chatEventsSubscribedAt: channel?.chat_events_subscribed_at || null,
+      checkedAt: channel?.event_subscriptions_checked_at || null,
+    },
   });
 
   const safeViewers = (viewers || []).map(({
@@ -389,6 +387,8 @@ export async function handleCreditsStatus(request, env) {
       detail: channelHealth.detail,
       needsAttention: channelHealth.needsAttention,
       homeAttention: channelHealth.homeAttention,
+      canRepair: Boolean(channelHealth.canRepair),
+      delivery: channelHealth.delivery,
       canManage: canManageConnections,
     },
     mappings: mappings || [],
