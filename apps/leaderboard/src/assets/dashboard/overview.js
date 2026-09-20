@@ -178,7 +178,7 @@ export function openBrandModal() {
 // Requests cancelled by a document navigation reject after the page has
 // started unloading; they are not failures the creator can act on.
 let unloading = false;
-window.addEventListener("pagehide", () => { unloading = true; });
+globalThis.addEventListener?.("pagehide", () => { unloading = true; });
 
 async function loadHomeSection(key, siteId, token) {
   const spec = HOME_SECTIONS[key];
