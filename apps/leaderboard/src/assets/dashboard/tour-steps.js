@@ -30,7 +30,7 @@ export const TOUR_STEPS = [
     id: "overlays",
     target: "#overlayDesignerCard",
     title: "Put the board on your stream",
-    body: "The Leaderboard overlay in My board → Share is a transparent browser source for OBS or Streamlabs. Pick a widget, copy the OBS link, and your leaderboard renders live on stream.",
+    body: "The Leaderboard overlay in Community → Share is a transparent browser source for OBS or Streamlabs. Pick a widget, copy the OBS link, and your leaderboard renders live on stream.",
   },
   {
     id: "kick",

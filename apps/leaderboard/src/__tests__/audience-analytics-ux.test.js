@@ -16,8 +16,8 @@ describe("Audience members body", () => {
     expect(html).toContain("<th>Member</th><th>Membership</th><th>Account connection</th><th>Credits</th>");
     expect(html).not.toContain("<th class=\"num\">Total earned</th>");
     expect(html).toContain("Looking for visitor trends?");
-    expect(html).toContain("Anonymous visits and traffic sources live in Stats.");
-    expect(html).toContain(">Open Stats</a>");
+    expect(html).toContain("Anonymous visits and traffic sources live in Insights.");
+    expect(html).toContain(">Open Insights</a>");
   });
 
   it("presents the empty member state without an orphaned table", () => {

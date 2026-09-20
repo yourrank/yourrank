@@ -115,9 +115,8 @@ const ROUTE_OWNER_BY_PATH = new Map(
   DASHBOARD_ROUTES.map((route) => [normalizedPath(route.canonicalPath), route.navKey]),
 );
 
-// Chrome ownership is judged per rail item (navKey): activities, rewards and
-// giveaways are surfaces of the one Engage workspace, so links among them are
-// intra-workspace even though they are distinct route sections.
+// Chrome ownership is judged per rail item (navKey): Activities and Giveaways
+// share Engage, while Rewards owns its own tab strip.
 function dashboardNavKeyForPath(path) {
   const normalized = normalizedPath(path);
   if (ROUTE_OWNER_BY_PATH.has(normalized)) return ROUTE_OWNER_BY_PATH.get(normalized);
@@ -198,12 +197,12 @@ function deriveRenderableRoutes() {
   }
   routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: true, hasBreadcrumbs: false });
   for (const tab of PEOPLE_TABS) {
-    // The Members tab repeats its "Members" section head and collapses to a
-    // single-entry trail, which renders no crumb; Reviews keeps the trail.
-    routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: tab.key !== "viewers" });
+    // Members is the Audience root page, while Activity and Reviews keep
+    // the section trail.
+    routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: true });
   }
-  // The Kick connection lives under Site settings → Connections: it renders the
-  // channel content without the Rewards subnav, owned by the Site settings rail.
+  // The Kick connection lives under Settings → Connections: it renders the
+  // channel content without the Rewards subnav, owned by the Settings rail.
   routes.push({ path: "/dashboard/site/connections", render: "rewards", tab: "channel", hasSubnav: false, hasBreadcrumbs: true });
   routes.push({ path: "/dashboard/settings", render: "settings", tab: "account", hasSubnav: true, hasBreadcrumbs: true });
   for (const [key] of SETTINGS_TABS) {
@@ -446,28 +445,31 @@ describe("dashboard chrome ownership", () => {
     expect(violations.duplicateSubnavLabels).toEqual([]);
   });
 
-  it("gives the Engage workspace one shared tab strip across its surfaces", () => {
-    const strip = (html) => region(html, /<nav\b[^>]*class="[^"]*engage-tabs/, "nav");
+  it("gives Engage and Rewards their own tab strips", () => {
+    const strip = (html, className) => region(html, new RegExp(`<nav\\b[^>]*class="[^"]*${className}`), "nav");
     const marks = (html) =>
-      [...strip(html).matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
+      [...strip(html, "engage-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
         .map((match) => ({ href: match[1], label: match[2], current: match[0].includes('aria-current="page"') }));
 
     const activities = PAGES.activities.Component({ user }).toString();
     expect(marks(activities).find((t) => t.current)?.href).toBe("/dashboard/activities");
 
     const shop = PAGES.rewardsShop.Component({ user }).toString();
-    const shopTabs = marks(shop);
+    const shopTabs = [...strip(shop, "rewards-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
+      .map((match) => ({ href: match[1], label: match[2], current: match[0].includes('aria-current="page"') }));
     expect(shopTabs.map((t) => t.label)).toEqual([
-      "Activities", "Rewards", "Shop", "Ways to earn", "Claims", "Giveaways",
+      "Overview", "Ways to earn", "Shop", "Claims",
     ]);
     expect(shopTabs.find((t) => t.current)?.href).toBe("/dashboard/rewards/shop");
+    expect(shop).not.toContain("engage-tabs");
 
     const giveaways = PAGES.giveaways.Component({ user }).toString();
     expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways");
 
-    // The Kick channel connection belongs to the Site pages workspace, so the
-    // Engage strip must not appear there.
+    // The Kick channel connection belongs to Settings → Connections, so the
+    // Engage and Rewards strips must not appear there.
     const channel = PAGES.rewardsChannel.Component({ user }).toString();
-    expect(strip(channel)).toBe("");
+    expect(strip(channel, "engage-tabs")).toBe("");
+    expect(strip(channel, "rewards-tabs")).toBe("");
   });
 });

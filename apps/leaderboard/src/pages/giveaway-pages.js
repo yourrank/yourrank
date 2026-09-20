@@ -208,7 +208,7 @@ ${engageTabsHtml("giveaways")}
   </div>
 </div>
 
-<div class="gw-nav-tabs v3-tabs" role="tablist" aria-label="Engage pages">
+<div class="gw-nav-tabs v3-tabs" role="tablist" aria-label="Giveaway types">
 ${tabs}
 </div>
 

@@ -43,7 +43,7 @@ const BOARD_ROUTES = [
 ];
 const BOARD_LABELS = {
   setup: "Setup",
-  players: "Players",
+  players: "Leaderboard",
   design: "Appearance",
   share: "Share",
   history: "History",
@@ -201,9 +201,9 @@ describe("client: editor step semantics come from the manifest", () => {
         tab: "",
         canonicalPath: BOARD_PATH,
         tabLabel: "",
-        documentTitle: "My board · YourRank",
+        documentTitle: "Community · YourRank",
         crumbs: [
-          { label: "My board" },
+          { label: "Community" },
           { label: "Setup" },
         ],
       },
@@ -212,9 +212,9 @@ describe("client: editor step semantics come from the manifest", () => {
         tab,
         canonicalPath: `${BOARD_PATH}/${tab}`,
         tabLabel: BOARD_LABELS[tab],
-        documentTitle: `${BOARD_LABELS[tab]} · My board · YourRank`,
+        documentTitle: `${BOARD_LABELS[tab]} · Community · YourRank`,
         crumbs: [
-          { label: "My board", href: BOARD_PATH },
+          { label: "Community", href: BOARD_PATH },
           { label: BOARD_LABELS[tab] },
         ],
       })),

@@ -47,6 +47,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       board: routeById("board").canonicalPath,
       audience: routeById("audience.viewers").canonicalPath,
       engage: routeById("activities.overview").canonicalPath,
+      rewards: routeById("rewards.overview").canonicalPath,
       performance: routeById("performance").canonicalPath,
       telegram: routeById("telegram").canonicalPath,
       settings: "/dashboard/settings",
@@ -67,9 +68,9 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       predictions: "engage", drops: "engage", tournaments: "engage",
       games: "games",
       activity: "performance", referrals: "performance", performance: "performance",
-      redemptions: "engage", overview: "engage", shop: "engage",
-      rules: "engage", rewards: "engage", history: "audience",
-      channel: "board", siteConnections: "board",
+      redemptions: "rewards", overview: "rewards", shop: "rewards",
+      rules: "rewards", rewards: "rewards", history: "audience",
+      channel: "settings", siteConnections: "settings",
       members: "audience", reviews: "audience", audience: "audience", viewers: "audience",
       boards: "board",
       site: "board",
@@ -77,7 +78,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       plan: "settings", connections: "settings", data: "settings",
       integrations: "settings", billing: "settings",
     });
-    expect(navOwner("channel")).toBe("board");
+    expect(navOwner("channel")).toBe("settings");
     expect(navOwner("unknown-name")).toBe("unknown-name");
     expect(navOwner(null)).toBe("home");
   });

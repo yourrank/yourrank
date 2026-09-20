@@ -1,3 +1,4 @@
+import "./dashboard/command-palette.js";
 import { showConfirmModal } from "./dashboard/utils.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";

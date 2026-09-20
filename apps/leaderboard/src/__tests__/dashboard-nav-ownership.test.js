@@ -48,14 +48,14 @@ describe("dashboard navigation ownership", () => {
     const groups = items.filter((item) => "kind" in item && item.kind === "group");
     const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
 
-    // The rail is flat and task-worded: one My board workspace (leaderboard
+    // The rail is flat and task-worded: one Community workspace (leaderboard
     // editor + site pages + the all-sites list, all owned by the "board"
-    // navKey), Members for the audience, Engage for activities/rewards/
-    // giveaways, Stats for analytics. Site management is reached through the
+    // navKey), Audience for members, Engage for activities/giveaways, Rewards
+    // for credits, and Insights for analytics. Site management is reached through the
     // topbar site selector's "Manage all sites…" entry, not a rail item.
     expect(groups.length).toBe(0);
     expect(topLevel.map((item) => item.key)).toEqual([
-      "home", "board", "audience", "engage", "performance", "telegram", "settings",
+      "home", "board", "audience", "engage", "rewards", "performance", "telegram", "settings",
     ]);
 
     // Restricted legacy destinations remain routable for owners but are not
@@ -77,10 +77,10 @@ describe("dashboard navigation ownership", () => {
     for (const item of flattenNav(dashboardNavItems())) {
       expect(keys.has(item.key)).toBe(true);
     }
-    // Kick channel management stays owned by the My board workspace.
-    expect(navOwner("channel")).toBe("board");
-    expect(navOwner("siteConnections")).toBe("board");
-    // The all-sites list also resolves to the My board owner.
+    // Kick channel management stays owned by the Community workspace.
+    expect(navOwner("channel")).toBe("settings");
+    expect(navOwner("siteConnections")).toBe("settings");
+    // The all-sites list also resolves to the Community owner.
     expect(navOwner("boards")).toBe("board");
   });
 
@@ -132,11 +132,11 @@ describe("dashboard navigation ownership", () => {
     };
     for (const path of ["/dashboard", "/dashboard/games", "/dashboard/analytics/activity", "/dashboard/leaderboards"]) {
       const board = boardSection(dashboardHtml(path));
-      expect(board.markup).toContain('aria-label="My board sections"');
+      expect(board.markup).toContain('aria-label="Community sections"');
       expect(board.active).toBe(false);
     }
     const onRoute = boardSection(dashboardHtml("/dashboard/leaderboard/setup"));
-    expect(onRoute.markup).toContain('aria-label="My board sections"');
+    expect(onRoute.markup).toContain('aria-label="Community sections"');
     expect(onRoute.active).toBe(true);
   });
 
@@ -170,10 +170,10 @@ describe("dashboard navigation ownership", () => {
       ["account", "settings"],
       ["connections", "settings"],
       ["integrations", "settings"],
-      ["redemptions", "engage"],
-      ["overview", "engage"],
-      ["rules", "engage"],
-      ["shop", "engage"],
+      ["redemptions", "rewards"],
+      ["overview", "rewards"],
+      ["rules", "rewards"],
+      ["shop", "rewards"],
       ["history", "audience"],
       ["engage", "engage"],
       ["giveaways", "engage"],
@@ -181,8 +181,8 @@ describe("dashboard navigation ownership", () => {
       ["predictions", "engage"],
       ["drops", "engage"],
       ["tournaments", "engage"],
-      ["channel", "board"],
-      ["siteConnections", "board"],
+      ["channel", "settings"],
+      ["siteConnections", "settings"],
       ["members", "audience"],
       ["audience", "audience"],
       ["viewers", "audience"],

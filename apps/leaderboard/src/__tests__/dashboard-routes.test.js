@@ -15,7 +15,7 @@ describe("dashboard routes", () => {
 
   it("resolves the Sites rail key to the boards listing, not Home", () => {
     // The legacy `sites` nav-owner spelling still addresses the `boards`
-    // section (site management moved into the My board workspace, but direct
+    // section (site management moved into the Community workspace, but direct
     // /dashboard/leaderboards links keep working).
     expect(resolveSection("sites")).toBe("boards");
     expect(dashboardPath("sites")).toBe("/dashboard/leaderboards");
@@ -42,8 +42,8 @@ describe("dashboard routes", () => {
 
   it("derives document titles from the canonical route table", () => {
     expect(dashboardTitleForPath("/dashboard")).toBe("Home · YourRank");
-    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Players · My board · YourRank");
-    expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · My board · YourRank");
+    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Leaderboard · Community · YourRank");
+    expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · Community · YourRank");
     expect(dashboardTitleForPath("/dashboard/games")).toBe("Games · YourRank");
   });
 

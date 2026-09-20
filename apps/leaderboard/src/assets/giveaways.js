@@ -1,3 +1,4 @@
+import "./dashboard/command-palette.js";
 import { loadBoardShell, sitePath } from "./dashboard/board-shell.js";
 import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js";
 import { clearSession } from "./dashboard/session.js";
