@@ -71,6 +71,15 @@ describe("Account settings creator UX", () => {
     expect(accountJs).not.toContain("Per-board connected apps");
   });
 
+  it("preserves the selected site for account connection links", () => {
+    expect(accountJs).toContain('new URLSearchParams(location.search).get("board")');
+    expect(accountJs).toContain('new URLSearchParams(location.search).get("siteId")');
+    expect(accountJs).toContain("state.ACTIVE_SITE_ID");
+    expect(accountJs).toContain('`?board=${encodeURIComponent(board)}`');
+    expect(accountJs).toContain('document.querySelector(".account-related-setting a[href^=\\"/dashboard/site/connections\\"]")');
+    expect(accountJs).toContain('buildDashboardPath("siteConnections.channel", { siteId })');
+  });
+
   it("keeps account deletion singular and team removal confirmed", () => {
     expect(occurrences(accountPages, 'id="deleteAccountModal"')).toBe(1);
     expect(accountPages).toContain('id="deleteAccountBtn"');

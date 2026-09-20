@@ -10,6 +10,7 @@ import { renderReferrals } from "./dashboard/referrals.js";
 import { renderPlan, loadHistory, loadPlanUsage } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
 import { parseDynamicPath } from "./dashboard/routes.js";
+import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 
 const statusEl = () => $("status");
 let _accountPopstate = null;
@@ -298,10 +299,17 @@ function setUserName() {
   if (sumPlan && state.ME?.plan) sumPlan.textContent = (state.ME.plan.name || "Active").toUpperCase();
 }
 
-function renderConnectedAccounts(data) {
+function renderConnectedAccounts(data, siteId = "") {
   const wrap = $("connectedAccounts");
   if (!wrap) return;
-  if (!data || data.error) { wrap.innerHTML = `<p class="error">Could not load connected accounts.</p>`; return; }
+  if (!data || data.error) {
+    wrap.innerHTML = `<p class="error">Could not load connected accounts.</p>`;
+    if (siteId) {
+      const manageLink = document.querySelector(".account-related-setting a[href^=\"/dashboard/site/connections\"]");
+      if (manageLink) manageLink.href = buildDashboardPath("siteConnections.channel", { siteId });
+    }
+    return;
+  }
 
   const connections = Array.isArray(data.connections) ? data.connections : [];
   // DEF-14: capabilities are returned by the API alongside connections so we
@@ -351,6 +359,10 @@ function renderConnectedAccounts(data) {
     button.disabled = false;
     setStatus(r.data?.error || "Could not disconnect Kick. Try again.", true);
   }));
+  if (siteId) {
+    const manageLink = document.querySelector(".account-related-setting a[href^=\"/dashboard/site/connections\"]");
+    if (manageLink) manageLink.href = buildDashboardPath("siteConnections.channel", { siteId });
+  }
 }
 
 // P3-4: Integration Health card — statuses from the connections payload plus
@@ -403,10 +415,18 @@ function renderIntegrationHealth(data) {
 }
 
 async function loadConnectedAccounts() {
-  const board = new URLSearchParams(location.search).get("board");
+  let board = new URLSearchParams(location.search).get("board")
+    || new URLSearchParams(location.search).get("siteId")
+    || state.ACTIVE_SITE_ID
+    || "";
+  if (!board) {
+    const site = await jsonReq("GET", "/api/site");
+    board = site.ok ? site.data?.siteId || "" : "";
+    if (board) state.ACTIVE_SITE_ID = board;
+  }
   const query = board ? `?board=${encodeURIComponent(board)}` : "";
   const r = await jsonReq("GET", `/api/account/connected-accounts${query}`);
-  renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" });
+  renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" }, board);
   renderIntegrationHealth(r.ok ? r.data : { error: r.data?.error || "failed" });
 }
 
