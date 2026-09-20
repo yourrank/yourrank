@@ -175,6 +175,11 @@ export function openBrandModal() {
   setTimeout(() => input.focus(), 30);
 }
 
+// Requests cancelled by a document navigation reject after the page has
+// started unloading; they are not failures the creator can act on.
+let unloading = false;
+window.addEventListener("pagehide", () => { unloading = true; });
+
 async function loadHomeSection(key, siteId, token) {
   const spec = HOME_SECTIONS[key];
   if (!spec || !siteId) return;
@@ -186,7 +191,7 @@ async function loadHomeSection(key, siteId, token) {
     if (token !== loadToken || home.siteId !== siteId) return;
     home.sections[key] = { status: "ready", data: spec.project(body), error: null };
   } catch (err) {
-    if (token !== loadToken || home.siteId !== siteId) return;
+    if (unloading || token !== loadToken || home.siteId !== siteId) return;
     // A viewer without this capability simply does not get the section; it is
     // not an error worth a retry button.
     if (err?.status === 403) home.sections[key] = { status: "forbidden", data: null, error: null };
