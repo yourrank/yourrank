@@ -1069,7 +1069,7 @@ ${panel({
 ${rulesHtml}`;
 }
 
-const BOARD_TAB_LABELS: Record<PublicBoardId, string> = { main: "Main", loyalty: "Loyalty" };
+const BOARD_TAB_LABELS: Record<PublicBoardId, string> = { main: "Main leaderboard", loyalty: "Loyalty leaderboard" };
 
 /**
  * Main/Loyalty pills under the Leaderboard title. Rendered only when the site
