@@ -47,7 +47,7 @@ const COMMANDS = [
     window.open("/" + (state.SLUG || ""), "_blank");
   }},
   { id: "nav-home", title: "Home", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "overview run-sheet", action: () => requestDashboardRoute("home") },
-  { id: "nav-board", title: "Community", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "my board leaderboard community site", action: () => requestDashboardRoute("board", "players") },
+  { id: "nav-board", title: "Community", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "my board leaderboard community site", action: () => requestDashboardRoute("board") },
   { id: "nav-setup", title: "Setup", group: "Navigation", icon: PALETTE_ICONS.details, keywords: "site details schedule", action: () => requestDashboardRoute("board", "setup") },
   { id: "nav-players", title: "Leaderboard", group: "Navigation", icon: PALETTE_ICONS.leaderboard, keywords: "players standings scores leaderboard", action: () => requestDashboardRoute("board", "players") },
   { id: "nav-design", title: "Appearance", group: "Navigation", icon: PALETTE_ICONS.design, keywords: "theme styling live preview", action: () => requestDashboardRoute("board", "design") },
@@ -75,7 +75,7 @@ const COMMANDS = [
   { id: "nav-boards", title: "All sites", group: "Navigation", icon: PALETTE_ICONS.overview, keywords: "sites boards all sites", action: () => requestDashboardRoute("boards", "", { query: "" }) },
   { id: "nav-settings", title: "Settings", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "settings account team billing connections data", action: () => requestDashboardRoute("settings", "account", { query: "" }) },
   { id: "nav-site-settings", title: "Site pages", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "site pages settings domain", action: () => requestDashboardRoute("site", "", { query: "" }) },
-  { id: "nav-kick-connection", title: "Kick connection", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "kick channel connection site settings connect", action: () => requestDashboardRoute("siteConnections", "channel", { query: "" }) },
+  { id: "nav-connections", title: "Connections", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "kick channel connection connect integrations providers settings", action: () => requestDashboardRoute("settings", "connections", { query: "" }) },
   { id: "nav-plan", title: "Billing", group: "Navigation", icon: PALETTE_ICONS.settings, keywords: "plans billing", action: () => requestDashboardRoute("settings", "plan", { query: "" }) },
   { id: "act-support", title: "Help & support drawer", group: "Support", icon: PALETTE_ICONS.help, action: () => $("openHelpDrawerBtn")?.click() },
   { id: "act-tour", title: "Restart the product tour", group: "Support", icon: PALETTE_ICONS.help, action: () => { stopTour(); startTour({ force: true }); } }

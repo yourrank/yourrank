@@ -32,7 +32,7 @@ const EXPECTED = {
     },
   },
   // The Kick connection is stored on the site row (sites.kick_channel_*), so
-  // it is owned by Site settings. It still boots the credits client module —
+  // it is owned by Settings → Connections. It still boots the credits client module —
   // only the address and the rail owner moved.
   siteConnections: {
     boot: "credits",

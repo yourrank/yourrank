@@ -175,7 +175,7 @@ const ROUTE_DEFS = [
   { id: "rewards.shop", canonicalPath: "/dashboard/rewards/shop", section: "rewards", tab: "shop", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.rules", canonicalPath: "/dashboard/rewards/rules", section: "rewards", tab: "rules", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.redemptions", canonicalPath: "/dashboard/rewards/redemptions", section: "rewards", tab: "redemptions", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "board", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },

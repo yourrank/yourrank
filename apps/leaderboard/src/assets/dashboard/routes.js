@@ -113,7 +113,7 @@ export const DYNAMIC_SECTIONS = {
   activities: dynamicSection("activities", { boot: "activities", boardContext: "selector", rootId: "act-dash" }),
   rewards: dynamicSection("rewards", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),
   // The Kick connection is stored on the site row (sites.kick_channel_*), so
-  // its canonical home is Site settings → Connections. It still boots the
+  // its canonical home is Settings → Connections. It still boots the
   // credits client module — the fragment markup and behaviour are unchanged,
   // only the address and the rail owner moved.
   siteConnections: dynamicSection("siteConnections", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),

@@ -2,13 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   DASHBOARD_ROUTES,
+  resolveDashboardLocation,
   resolveDashboardPath,
 } from "@yourrank/shared/dashboard-routes";
 import { dashboardNavItems } from "@yourrank/shared/dashboard-nav";
 import { dashboardChromeState } from "@yourrank/shared/dashboard-chrome-state";
 import { PAGES } from "../pages.jsx";
+import { RewardsChannelPage } from "../pages/rewards.jsx";
+import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { ENGAGE_TABS } from "../pages/engage-tabs.jsx";
 import { REWARDS_TABS } from "../pages/rewards.jsx";
+import { defaultTab } from "../assets/dashboard/routes.js";
 
 const palette = readFileSync(new URL("../assets/dashboard/command-palette.js", import.meta.url), "utf8");
 
@@ -42,7 +46,7 @@ describe("Phase 3 dashboard information architecture", () => {
       const expected = id.startsWith("rewards.") ? "rewards"
         : id === "activities.overview" || id.startsWith("giveaways.") ? "engage"
           : id.startsWith("audience.") ? "audience"
-            : id === "board" || id.startsWith("board.") || ["site", "boards", "siteConnections.channel"].includes(id) ? "board"
+            : id === "board" || id.startsWith("board.") || ["site", "boards"].includes(id) ? "board"
               : id === "performance" || id.startsWith("performance.") ? "performance"
                 : null;
       if (expected) expect(route.navKey, id).toBe(expected);
@@ -51,6 +55,23 @@ describe("Phase 3 dashboard information architecture", () => {
     expect(dashboardChromeState("giveaways.chat").navKey).toBe("engage");
     expect(dashboardChromeState("audience.viewers").navKey).toBe("audience");
     expect(dashboardChromeState("board.players").tabLabel).toBe("Leaderboard");
+    expect(dashboardChromeState("siteConnections.channel").navKey).toBe("settings");
+    expect(dashboardChromeState("siteConnections.channel").navKey).not.toBe("board");
+    expect(resolveDashboardLocation("/dashboard/site/connections", "siteId=abc")?.route.id).toBe("siteConnections.channel");
+    expect(resolveDashboardLocation("/dashboard/site/connections", "siteId=abc")?.route.navKey).toBe("settings");
+    expect(dashboardChromeState("settings.connections").navKey).toBe("settings");
+    expect(defaultTab("board")).toBe("setup");
+    expect(dashboardChromeState("siteConnections.channel").crumbs).toEqual([
+      { label: "Settings", href: "/dashboard/settings/account" },
+      { label: "Connections", href: "/dashboard/settings/connections" },
+      { label: "Kick connection" },
+    ]);
+    const channel = RewardsChannelPage({ user: {} }).toString();
+    expect(channel).toMatch(/data-nav="settings"[^>]*aria-current="page"/);
+    expect(channel).not.toMatch(/data-nav="board"[^>]*aria-current="page"/);
+    expect((channel.match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
+    const settings = UnifiedSettingsPage({ user: {}, tab: "connections" }).toString();
+    expect(settings).toMatch(/data-nav="settings"[^>]*aria-current="page"/);
   });
 
   it("keeps Engage and Rewards strips separate", () => {
@@ -67,6 +88,15 @@ describe("Phase 3 dashboard information architecture", () => {
       expect(palette).not.toContain(`title: "${title}"`);
     }
     for (const keyword of ["my board", "players", "stats"]) expect(palette).toContain(keyword);
+    expect((palette.match(/title: "Connections"/g) || []).length).toBe(1);
+    expect(palette).not.toContain('title: "Kick connection"');
+    expect(palette).toContain('keywords: "kick channel connection connect integrations providers settings"');
+    expect(palette).not.toContain('id: "nav-kick-connection"');
+    const boardCommand = palette.match(/\{ id: "nav-board",[^}]+/u)?.[0] || "";
+    expect(boardCommand).toContain('requestDashboardRoute("board")');
+    expect(boardCommand).not.toContain('"players"');
+    const playersCommand = palette.match(/\{ id: "nav-players",[^}]+/u)?.[0] || "";
+    expect(playersCommand).toContain('requestDashboardRoute("board", "players")');
   });
 
   it("boots the palette in every standalone dashboard bundle", () => {

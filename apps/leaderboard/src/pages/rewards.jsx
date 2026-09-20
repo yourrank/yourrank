@@ -54,7 +54,7 @@ function RewardsPage({ tab, activePath, boardContext = "selector", footer = "rew
   </DashboardShell>;
 }
 
-// Site settings → Connections: the Kick connection owns its own page because
+// Settings → Connections: the Kick connection owns its own page because
 // the connection is stored on the selected site. It reuses the rewards
 // fragment content and boot module; only the chrome (rail owner, crumbs,
 // title) differs.

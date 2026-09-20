@@ -70,7 +70,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       activity: "performance", referrals: "performance", performance: "performance",
       redemptions: "rewards", overview: "rewards", shop: "rewards",
       rules: "rewards", rewards: "rewards", history: "audience",
-      channel: "board", siteConnections: "board",
+      channel: "settings", siteConnections: "settings",
       members: "audience", reviews: "audience", audience: "audience", viewers: "audience",
       boards: "board",
       site: "board",
@@ -78,7 +78,7 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       plan: "settings", connections: "settings", data: "settings",
       integrations: "settings", billing: "settings",
     });
-    expect(navOwner("channel")).toBe("board");
+    expect(navOwner("channel")).toBe("settings");
     expect(navOwner("unknown-name")).toBe("unknown-name");
     expect(navOwner(null)).toBe("home");
   });

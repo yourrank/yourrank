@@ -122,6 +122,13 @@ describe("signed-in shell navigation", () => {
     expect((html.match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
   });
 
+  it("marks the Kick connection detail as a Settings surface", () => {
+    const html = renderPage(RewardsChannelPage);
+    expect(html).toMatch(/data-nav="settings"[^>]*aria-current="page"/);
+    expect(html).not.toMatch(/data-nav="board"[^>]*aria-current="page"/);
+    expect((html.match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
+  });
+
   it("marks the members page as the Audience area", () => {
     const html = renderPage(AudienceMembersPage);
     expect(html).toMatch(/data-nav="audience"[^>]*aria-current="page"/);

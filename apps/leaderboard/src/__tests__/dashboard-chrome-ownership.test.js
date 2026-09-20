@@ -201,8 +201,8 @@ function deriveRenderableRoutes() {
     // the section trail.
     routes.push({ path: tab.href, render: "people", tab: tab.key, hasSubnav: true, hasBreadcrumbs: true });
   }
-  // The Kick connection lives under Site settings → Connections: it renders the
-  // channel content without the Rewards subnav, owned by the Site settings rail.
+  // The Kick connection lives under Settings → Connections: it renders the
+  // channel content without the Rewards subnav, owned by the Settings rail.
   routes.push({ path: "/dashboard/site/connections", render: "rewards", tab: "channel", hasSubnav: false, hasBreadcrumbs: true });
   routes.push({ path: "/dashboard/settings", render: "settings", tab: "account", hasSubnav: true, hasBreadcrumbs: true });
   for (const [key] of SETTINGS_TABS) {
@@ -466,8 +466,8 @@ describe("dashboard chrome ownership", () => {
     const giveaways = PAGES.giveaways.Component({ user }).toString();
     expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways");
 
-    // The Kick channel connection belongs to the Site pages workspace, so the
-    // Engage strip must not appear there.
+    // The Kick channel connection belongs to Settings → Connections, so the
+    // Engage and Rewards strips must not appear there.
     const channel = PAGES.rewardsChannel.Component({ user }).toString();
     expect(strip(channel, "engage-tabs")).toBe("");
     expect(strip(channel, "rewards-tabs")).toBe("");

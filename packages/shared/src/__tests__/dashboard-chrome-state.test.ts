@@ -120,13 +120,13 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(history.documentTitle).toBe("Activity · Audience · YourRank");
 
     const channel = dashboardChromeState("siteConnections.channel");
-    expect(channel.navKey).toBe("board");
+    expect(channel.navKey).toBe("settings");
     expect(channel.crumbs).toEqual([
-      { label: "Site pages", href: "/dashboard/site" },
-      { label: "Connections" },
+      { label: "Settings", href: "/dashboard/settings/account" },
+      { label: "Connections", href: "/dashboard/settings/connections" },
       { label: "Kick connection" },
     ]);
-    expect(channel.documentTitle).toBe("Kick connection · Site pages · YourRank");
+    expect(channel.documentTitle).toBe("Kick connection · Settings · YourRank");
 
     const preds = dashboardChromeState("giveaways.preds");
     expect(preds.navKey).toBe("engage");

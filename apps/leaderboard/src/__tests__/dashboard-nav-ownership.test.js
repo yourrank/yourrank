@@ -78,8 +78,8 @@ describe("dashboard navigation ownership", () => {
       expect(keys.has(item.key)).toBe(true);
     }
     // Kick channel management stays owned by the Community workspace.
-    expect(navOwner("channel")).toBe("board");
-    expect(navOwner("siteConnections")).toBe("board");
+    expect(navOwner("channel")).toBe("settings");
+    expect(navOwner("siteConnections")).toBe("settings");
     // The all-sites list also resolves to the Community owner.
     expect(navOwner("boards")).toBe("board");
   });
@@ -181,8 +181,8 @@ describe("dashboard navigation ownership", () => {
       ["predictions", "engage"],
       ["drops", "engage"],
       ["tournaments", "engage"],
-      ["channel", "board"],
-      ["siteConnections", "board"],
+      ["channel", "settings"],
+      ["siteConnections", "settings"],
       ["members", "audience"],
       ["audience", "audience"],
       ["viewers", "audience"],

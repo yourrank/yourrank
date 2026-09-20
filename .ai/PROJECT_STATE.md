@@ -9,6 +9,8 @@ Community, Audience, and Insights replace the former My board, Members, and Stat
 Rewards owns its routes and tab strip through a separate `rewards` navKey.
 Route paths and aliases remain unchanged.
 Standalone Activities, Audience, and Giveaways bundles now boot the command palette directly.
+Kick connection detail is now owned by Settings → Connections while retaining its existing path.
+The command palette exposes one Connections result for account settings.
 
 ## Supplied viewer dashboard design — 2026-09-14
 

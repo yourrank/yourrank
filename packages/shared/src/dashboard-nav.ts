@@ -74,9 +74,9 @@ const NAV_OWNER_ROUTES = {
   rewards: "rewards.overview",
   // Old rewards activity paths land on Audience → Activity.
   history: "audience.activity",
-  // The Kick connection belongs to the selected site: the channel link is
-  // stored on the site row, so its rail owner is the Community workspace,
-  // not Engage.
+  // The Kick connection belongs to Settings → Connections: the channel link
+  // is stored on the selected site row, so the detail stays a Settings
+  // destination while preserving its site-scoped route.
   channel: "siteConnections.channel",
   siteConnections: "siteConnections.channel",
   members: "audience.viewers",

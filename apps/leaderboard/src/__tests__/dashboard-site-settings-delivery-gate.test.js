@@ -63,6 +63,7 @@ describe("manifest: site settings delivery identity", () => {
     expect(connections.canonicalPath).toBe("/dashboard/site/connections");
     expect(connections.delivery).toBe("fragment");
     expect(connections.section).toBe("siteConnections");
+    expect(connections.navKey).toBe("settings");
   });
 });
 
