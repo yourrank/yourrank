@@ -1,13 +1,13 @@
 // Dashboard entry point. Coordinates data loading and initial render across modules.
 import { $, esc, fromLocalInput, getViewerTimeZone, logError, showToast, timeZoneLabel, toLocalInput } from "./dashboard/utils.js";
 import { markDirty, setState, state, subscribe } from "./dashboard/state.js";
-import { currentRoute, navTo, registerSectionMounter, requestDashboardRoute, setupShell } from "./dashboard/shell.js";
+import { currentRoute, homeEntrySettled, navTo, registerSectionMounter, requestDashboardRoute, setupShell } from "./dashboard/shell.js";
 import { renderBoardSwitcher, renderBoardSelect, renderBoardsPage } from "./dashboard/boards.js";
 import { clearSession } from "./dashboard/session.js";
 import { applyPlayerFieldVisibility, renderPlayers } from "./dashboard/players.js";
 import { fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, renderArchives, renderBranding, renderDomain, renderDomainStatus, renderBoardStatus, renderContact, renderEditorTimestamps, renderEmbedShare, renderLegal, renderNotifications, renderPrizes, renderRules, renderSections, renderSocials, wirePublishAction, wireSiteIdentityActions } from "./dashboard/site.js";
 import { loadEventLeaderboards } from "./dashboard/event-leaderboards.js";
-import { loadOverviewLiveData, renderOverviewSummary } from "./dashboard/overview.js";
+import { renderOverviewSummary } from "./dashboard/overview.js";
 import { maybeAutoStartTour } from "./dashboard/tour.js";
 import { initPerformance } from "./dashboard/performance.js";
 import { initOverlayDesigner } from "./dashboard/overlay-designer.js";
@@ -314,17 +314,11 @@ async function init() {
   }
   // Games/Analytics/Home data loads happen in navTo (directly or through the
   // section mounter above), so boot only pays for the section being shown.
-  if (hasSection("home") || hasBoardSettings) loadCreditsStatus();
-  if (hasSection("home")) {
-    loadOverviewLiveData()
-      .catch((err) => {
-        logError("overview/live", err);
-        try {
-          renderOverviewSummary();
-        } catch (renderErr) {
-          logError("overview/render", renderErr);
-        }
-      })
+  // Home's entry (enterHome via navTo) already fetched credits/status when it
+  // is the landing section; board settings need it regardless of the route.
+  if (hasBoardSettings && route.page !== "home") loadCreditsStatus();
+  if (route.page === "home") {
+    homeEntrySettled()
       // P4-1: the tour spotlights live overview cards, so it waits for the
       // first render before deciding which steps still apply.
       .finally(() => {

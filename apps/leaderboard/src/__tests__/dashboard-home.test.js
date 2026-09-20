@@ -286,7 +286,8 @@ describe("Home: section loading and error isolation", () => {
   it("reloads the dynamic sections whenever Home is navigated to in-app", () => {
     const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
     expect(shellJs).toContain('import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";');
-    expect(shellJs).toContain('if (page === "home") {\n    renderOverviewSummary();\n    loadOverviewLiveData();\n  }');
+    expect(shellJs).toContain('if (page === "home") enterHome();');
+    expect(shellJs).toContain("homeEntry = Promise.all([loadCreditsStatus(), loadOverviewLiveData()])");
   });
 
   it("hides optional sections when empty and shows a compact skeleton while loading", () => {
