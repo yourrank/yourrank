@@ -98,7 +98,6 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "siteConnections.channel": "Kick connection",
   "giveaways.chat": "Giveaways",
   "giveaways.raffles": "Raffles",
-  "giveaways.drops": "Drops",
   "giveaways.preds": "Predictions",
   "giveaways.tournaments": "Tournaments",
   "audience.viewers": "Members",

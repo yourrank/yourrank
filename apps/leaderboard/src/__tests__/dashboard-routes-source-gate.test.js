@@ -82,7 +82,6 @@ describe("routes.js source gate", () => {
     expect(DYNAMIC_SECTIONS.giveaways.tabPaths).toEqual({
       chat: "/dashboard/giveaways/chat",
       raffles: "/dashboard/giveaways/raffles",
-      drops: "/dashboard/giveaways/drops",
       preds: "/dashboard/giveaways/predictions",
       tournaments: "/dashboard/giveaways/tournaments",
     });

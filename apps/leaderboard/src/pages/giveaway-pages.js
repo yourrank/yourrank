@@ -1,11 +1,11 @@
-// Markup for Giveaways & Community Events Hub (Chat Giveaways, Ticket Raffles, Flash Code Drops)
+// Markup for Giveaways (Chat Giveaways primary; Raffles, Predictions and
+// Tournaments secondary). Code Drops are owned by Activities.
 
 import { engageTabsHtml } from "./engage-tabs.jsx";
 
 export const GIVEAWAY_TABS = [
   ["chat", "Chat giveaways"],
   ["raffles", "Raffles"],
-  ["drops", "Drops"],
   ["preds", "Predictions"],
   ["tournaments", "Tournaments"],
 ];
@@ -174,71 +174,6 @@ export function renderGiveawayDrawersHtml() {
     </form>
   </div>
 </div>
-
-<!-- Launch Flash Code Drop Drawer -->
-<div class="gw-drawer-backdrop" id="cd-drawer" hidden>
-  <div class="gw-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="cd-drawer-title">
-    <div class="gw-drawer-head">
-        <h2 id="cd-drawer-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/></svg> Launch Flash Code Drop</h2>
-      <button class="gw-modal-close-btn" id="cd-drawer-close" type="button" aria-label="Close">✕</button>
-    </div>
-    <form id="cd-form" class="gw-drawer-body">
-      <div class="gw-drawer-fields">
-      <div class="field">
-        <label for="cd-code">Secret Drop Code *</label>
-        <div class="d-flex gap-8">
-          <input type="text" id="cd-code" class="gw-code-input" placeholder="e.g. KICKBOOST" required />
-          <span class="field-err" data-field-error="cd-code" role="alert" aria-live="polite"></span>
-          <button class="btn btn--sm btn--ghost" id="cd-btn-random" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg> Random</button>
-        </div>
-        <span class="hint">The keyword you shout out on stream for viewers to claim.</span>
-      </div>
-
-      <div class="field">
-        <label for="cd-points">Credits Reward per Viewer</label>
-        <input type="number" id="cd-points" min="1" value="100" placeholder="e.g. 30" required />
-        <span class="field-err" data-field-error="cd-points" role="alert" aria-live="polite"></span>
-        <div class="gw-chip-presets">
-          <button class="gw-chip" type="button" data-val="25" data-target="cd-points">+25 Credits</button>
-          <button class="gw-chip" type="button" data-val="50" data-target="cd-points">+50 Credits</button>
-          <button class="gw-chip" type="button" data-val="100" data-target="cd-points">+100 Credits</button>
-          <button class="gw-chip" type="button" data-val="250" data-target="cd-points">+250 Credits</button>
-        </div>
-        <span class="hint">How many Credits each viewer receives upon claiming.</span>
-      </div>
-
-      <div class="field">
-        <label for="cd-max">Max Total Claims (First Come, First Served)</label>
-        <input type="number" id="cd-max" min="1" value="50" placeholder="e.g. 20" required />
-        <span class="field-err" data-field-error="cd-max" role="alert" aria-live="polite"></span>
-        <div class="gw-chip-presets">
-          <button class="gw-chip" type="button" data-val="10" data-target="cd-max">10 claims</button>
-          <button class="gw-chip" type="button" data-val="25" data-target="cd-max">25 claims</button>
-          <button class="gw-chip" type="button" data-val="50" data-target="cd-max">50 claims</button>
-          <button class="gw-chip" type="button" data-val="100" data-target="cd-max">100 claims</button>
-        </div>
-        <span class="hint">Once this limit is reached, the drop code expires automatically.</span>
-      </div>
-
-      <div class="field">
-        <label for="cd-expire">Time Limit (Optional)</label>
-        <select id="cd-expire" class="v3-select">
-          <option value="0">No time limit (until claims run out)</option>
-          <option value="15">15 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="60">1 hour</option>
-        </select>
-      </div>
-      </div>
-
-      <div class="gw-drawer-footer">
-        <p class="status gw-drawer-status" id="cd-status" role="status" aria-live="polite" hidden></p>
-        <button class="btn btn--ghost" id="cd-cancel" type="button">Cancel</button>
-        <button class="btn btn--accent" id="cd-submit" type="submit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/></svg> Launch Drop</button>
-      </div>
-    </form>
-  </div>
-</div>
 `;
 }
 
@@ -248,13 +183,12 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   const activeDescription = {
     chat: "Collect chat entries, draw a winner, and confirm the result live.",
     raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
-    drops: "Share limited claim codes with viewers and track remaining rewards.",
-    preds: "Engage your viewers with live chat giveaways, Credit ticket raffles, and flash drop claim codes.",
+    preds: "Run live prediction pools and settle them when the outcome is known.",
     tournaments: "Open chat signups, review the entry list, and seed a tournament.",
   }[active] || "Engage viewers with live community events.";
-  // Primary mechanics stay visible; restricted-legacy surfaces (ticket raffles,
-  // predictions, tournaments) still route but sit behind the More toggle so a
-  // streamer sees "chat" and "drops" first.
+  // Chat giveaways is the primary mechanic; secondary/legacy surfaces (ticket
+  // raffles, predictions, tournaments) still route but sit behind the More
+  // toggle.
   const LEGACY_TABS = new Set(["raffles", "preds", "tournaments"]);
   const legacyActive = LEGACY_TABS.has(active);
   const tabLink = ([tab, label]) => `
@@ -553,59 +487,7 @@ ${tabs}
 </div>
 
 <!-- =========================================================================
-     TAB 3: FLASH CODE DROPS
-     ========================================================================= -->
-<div class="gw-tab-pane${active === "drops" ? " is-active" : ""}" id="pane-drops"${active === "drops" ? "" : " hidden"}>
-  <div class="gw-events-grid">
-    <section class="v3-table-card gw-card">
-      <div class="v3-section-head">
-        <div>
-          <h2>Active drops</h2>
-          <p class="v3-head-sub">Copy a code into chat while claims are available.</p>
-        </div>
-        <button class="btn btn--sm btn--accent" id="btn-create-drop" type="button">Create drop</button>
-      </div>
-
-      <div class="gw-drops-container" id="cd-active-list">
-        <div class="v3-empty" id="cd-empty-active">
-          <h2>No active drops</h2>
-          <p>Create a limited claim code to reward viewers in chat.</p>
-        </div>
-      </div>
-      <div class="gw-pager" id="cd-active-pager" hidden></div>
-    </section>
-
-    <section class="v3-table-card gw-card gw-card--table">
-      <div class="v3-section-head">
-        <div>
-          <h2>Drop history</h2>
-          <p class="v3-head-sub">Expired and fully claimed codes.</p>
-        </div>
-      </div>
-
-      <div class="v3-table-scroll">
-        <table class="v3-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Reward</th>
-              <th>Claims</th>
-              <th>Status</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody id="cd-past-list">
-            <tr><td colspan="5" class="ta-c font-muted gw-empty-cell">No drops yet. Create a limited claim code to reward viewers.</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="gw-pager" id="cd-past-pager" hidden></div>
-    </section>
-  </div>
-</div>
-
-<!-- =========================================================================
-     TAB 4: LIVE PREDICTIONS & BETTING
+     TAB 3: LIVE PREDICTIONS & BETTING
      ========================================================================= -->
 <div class="gw-tab-pane${active === "preds" ? " is-active" : ""}" id="pane-preds"${active === "preds" ? "" : " hidden"}>
   <div class="gw-events-grid">
@@ -657,7 +539,7 @@ ${tabs}
 </div>
 
 <!-- =========================================================================
-     TAB 5: TOURNAMENT ENTRIES
+     TAB 4: TOURNAMENT ENTRIES
      ========================================================================= -->
 <div class="gw-tab-pane${active === "tournaments" ? " is-active" : ""}" id="pane-tournaments"${active === "tournaments" ? "" : " hidden"}>
   <div id="tournament-app" class="tournament-app">
