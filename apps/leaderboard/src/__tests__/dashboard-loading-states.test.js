@@ -6,7 +6,7 @@ import {
   emptyStateHtml,
   metricText,
 } from "../assets/dashboard/states.js";
-import { visitsMetricState } from "../assets/dashboard/overview-state.js";
+import { pulseMetrics } from "../assets/dashboard/overview-state.js";
 import { PAGES } from "../pages.jsx";
 
 const assets = path.resolve(import.meta.dir, "../assets");
@@ -35,21 +35,11 @@ describe("dashboard loading states", () => {
     expect(metricText("error")).toBe("—");
   });
 
-  it("keeps Home visits states truthful across publication and stats status", () => {
-    expect(visitsMetricState({ published: false, statsStatus: "loading" })).toEqual({
-      kind: "unpublished",
-      value: "Not published",
-    });
-    expect(visitsMetricState({
-      published: true,
-      statsStatus: "ready",
-      stats: { days: [{ views: 0 }, { views: 0 }] },
-    })).toEqual({ kind: "ready", value: 0 });
-    expect(visitsMetricState({ published: true, statsStatus: "loading" })).toEqual({ kind: "loading" });
-    expect(visitsMetricState({ published: true, statsStatus: "error" })).toEqual({
-      kind: "unavailable",
-      value: "Unavailable",
-    });
+  it("keeps Home pulse figures unresolved until the Insights window arrives", () => {
+    // No payload yet: a labelled range and no metrics, so nothing paints a zero.
+    expect(pulseMetrics(null)).toEqual({ rangeLabel: "Last 30 days", metrics: [] });
+    const ready = pulseMetrics({ window: { effectiveDays: 30 }, community: { newMembers: 0 }, participation: { participants: 0 }, rewards: { claimsCompleted: 0 } });
+    expect(ready.metrics.map((metric) => metric.value)).toEqual([0, 0, 0]);
   });
 
   it("generates the shared empty state with optional actions", () => {

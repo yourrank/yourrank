@@ -75,6 +75,11 @@ export function activityFromCodeDrop(row, now = Date.now()) {
 
 const DROP_COLUMNS = `id, code, points_reward, max_claims, claimed_count, status,
           expires_at, closed_at, created_at`;
+// SQL twin of dropState()'s "open": still active, not closed by the creator,
+// not naturally expired. Evaluated before pagination so a filtered page and
+// its total describe the same set.
+const OPEN_DROP_SQL = `d.status='active' AND d.closed_at IS NULL
+        AND (d.expires_at IS NULL OR d.expires_at > now())`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseActivityId(raw) {
@@ -167,6 +172,9 @@ export async function handleGetActivities(request, env, injected = {}) {
   const limit = readListLimit(url, { fallback: ACTIVITY_PAGE, max: ACTIVITY_PAGE_MAX });
   const { cursor, valid } = readListCursor(url);
   if (!valid) return bad("Invalid cursor.", 400);
+  const stateParam = String(url.searchParams.get("state") || "all").trim().toLowerCase();
+  if (stateParam !== "all" && stateParam !== "open") return bad("Invalid state filter.", 400);
+  const stateSql = stateParam === "open" ? ` AND ${OPEN_DROP_SQL}` : "";
   if (cursor) {
     const anchor = await deps.one(
       `SELECT id FROM code_drops WHERE site_id=$1 AND id=$2`,
@@ -180,7 +188,7 @@ export async function handleGetActivities(request, env, injected = {}) {
   const rows = await deps.query(
     `SELECT ${DROP_COLUMNS}
        FROM code_drops d
-      WHERE d.site_id=$1
+      WHERE d.site_id=$1${stateSql}
         AND ($2::uuid IS NULL OR (d.created_at, d.id) < (
               SELECT a.created_at, a.id FROM code_drops a WHERE a.id = $2::uuid
             ))
@@ -190,7 +198,7 @@ export async function handleGetActivities(request, env, injected = {}) {
   );
   const { items, page } = pageMeta(rows || [], limit, (row) => row.id);
   const totals = await deps.one(
-    `SELECT count(*)::int AS total FROM code_drops WHERE site_id=$1`,
+    `SELECT count(*)::int AS total FROM code_drops d WHERE d.site_id=$1${stateSql}`,
     [site.id],
   );
   const automation = cursor ? undefined : await listActivityAutomation(site.id, {
@@ -208,6 +216,7 @@ export async function handleGetActivities(request, env, injected = {}) {
       challenges: "deferred",
     },
     activities: items.map((row) => activityFromCodeDrop(row)),
+    state: stateParam,
     page,
     total: Number(totals?.total) || 0,
     ...(automation ? { automation } : {}),

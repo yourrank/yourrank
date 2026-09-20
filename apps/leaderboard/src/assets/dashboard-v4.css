@@ -2262,17 +2262,30 @@ html[data-ui-mode="simple"] .v3-dash .v3-tabs [data-tabs-more][aria-expanded="fa
 .v3-dash[data-auth-workspace] .ov-live-row strong { color: var(--ws-text); font-size: 13px; }
 .v3-dash[data-auth-workspace] .ov-live-row div > span { color: var(--ws-text-soft); font-size: 12px; overflow-wrap: anywhere; }
 .v3-dash[data-auth-workspace] .ov-live-state { flex: 0 0 auto; color: var(--ws-success-text); font-size: 12px; font-weight: 700; }
-/* Contextual "Next step" row. Only ever shown for steps no other Home surface
-   already owns. */
-.v3-dash[data-auth-workspace] .ov-next-step { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
-.v3-dash[data-auth-workspace] .ov-next-step-copy { min-width: 0; }
-.v3-dash[data-auth-workspace] .ov-next-step h2 { max-width: 42ch; margin: 0 0 4px; font-size: 17px; line-height: 1.25; }
-.v3-dash[data-auth-workspace] .ov-next-step p { max-width: 68ch; margin: 0; color: var(--ws-text-soft); font-size: 14px; }
-.v3-dash[data-auth-workspace] .ov-next-step .btn { flex: 0 0 auto; }
-.v3-dash[data-auth-workspace] .ov-coming-next { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-4); padding: var(--ws-space-4) var(--ws-space-5); border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
-.v3-dash[data-auth-workspace] .ov-coming-next h2 { margin: 0 0 var(--ws-space-1); font-size: var(--ws-type-card-size); line-height: var(--ws-type-card-leading); }
-.v3-dash[data-auth-workspace] .ov-coming-next p { margin: 0; color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); line-height: var(--ws-type-meta-leading); }
-.v3-dash[data-auth-workspace] .ov-coming-next .btn { flex: 0 0 auto; }
+.v3-dash[data-auth-workspace] .ov-live-row .btn { flex: 0 0 auto; }
+.v3-dash[data-auth-workspace] .ov-live-row time { flex: 0 0 auto; color: var(--ws-text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.v3-dash[data-auth-workspace] .ov-live-row--skeleton > div { width: 60%; }
+.v3-dash[data-auth-workspace] .ov-live-row--skeleton .v3-skel-line { width: 100%; }
+.v3-dash[data-auth-workspace] .ov-live-row--skeleton .v3-skel-line--short { width: 55%; }
+/* Header state: the status word and the public link sit together, and the
+   link only exists while the public URL resolves. */
+.v3-dash[data-auth-workspace] .ov-head-state { display: flex; flex-direction: column; align-items: flex-end; gap: var(--ws-space-2); flex: 0 0 auto; }
+.v3-dash[data-auth-workspace] .ov-head-state .ov-status { margin-top: 10px; }
+.v3-dash[data-auth-workspace] .ov-public-link { color: var(--ws-accent); font: 650 12.5px var(--ws-sans); text-decoration: none; overflow-wrap: anywhere; }
+.v3-dash[data-auth-workspace] .ov-public-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Section-level failure: one line and a retry, inside the section that failed. */
+.v3-dash[data-auth-workspace] .ov-section-error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-3); padding: 12px var(--ws-space-5); border-top: 1px solid var(--ws-line); color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .ov-section-state { min-height: 0; }
+.v3-dash[data-auth-workspace] .ov-section-state .ov-section-error { padding-inline: 0; border-top: 0; }
+/* Community pulse: a labelled time range beside the heading, figures below. */
+.v3-dash[data-auth-workspace] .ov-pulse { display: grid; gap: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] .ov-pulse-range { flex: 0 0 auto; color: var(--ws-text-soft); font: 600 12px/1.4 var(--ws-sans); white-space: nowrap; }
+/* Quick actions: four equal targets that wrap, never scroll. */
+.v3-dash[data-auth-workspace] .ov-quick { display: grid; gap: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] .ov-quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--ws-space-3); }
+.v3-dash[data-auth-workspace] .ov-quick-action { display: flex; align-items: center; min-height: var(--ws-control-h-touch, 44px); padding: 12px 16px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); color: var(--ws-text); font: 650 13px var(--ws-sans); text-decoration: none; overflow-wrap: anywhere; }
+.v3-dash[data-auth-workspace] .ov-quick-action:hover { border-color: var(--ws-accent); background: var(--ws-accent-soft); color: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .ov-quick-action:focus-visible { outline-offset: 2px; }
 .v3-dash[data-auth-workspace] .ov-setup { overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
 .v3-dash[data-auth-workspace] .ov-setup.is-attention { border-color: var(--ws-warning); }
 .v3-dash[data-auth-workspace] .ov-setup-head { display: flex; align-items: center; justify-content: space-between; gap: var(--ws-space-4); padding: var(--ws-space-4) var(--ws-space-5); background: var(--ws-surface); }
@@ -2315,25 +2328,19 @@ button.ov-setup-row { width: 100%; font: inherit; text-align: left; border-left:
 /* Metric unavailable state */
 .v3-dash[data-auth-workspace] .metric-unavailable { color: var(--ws-text-soft); font-size: 0.85em; cursor: help; }
 .v3-dash[data-auth-workspace] [data-metric-unavailable] { opacity: 0.7; }
-/* Activity and top players: plain lists on the canvas, no card frames. */
-.v3-dash[data-auth-workspace] .ov-lists { display: grid; grid-template-columns: minmax(0, 7fr) minmax(260px, 5fr); gap: var(--ws-space-6); }
+/* Recent activity: a plain list on the canvas, no card frame. */
 .v3-dash[data-auth-workspace] .ov-list { min-width: 0; }
 .v3-dash[data-auth-workspace] .ov-list-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--ws-line-strong); }
 .v3-dash[data-auth-workspace] .ov-list-head h2 { margin: 0; font-size: var(--ws-type-card-size); line-height: var(--ws-type-card-leading); font-weight: 650; }
 .v3-dash[data-auth-workspace] .ov-list-link { padding: 0; border: 0; background: transparent; color: var(--ws-accent); font: 650 12.5px var(--ws-sans); text-decoration: none; cursor: pointer; }
 .v3-dash[data-auth-workspace] .ov-list-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-.v3-dash[data-auth-workspace] .ov-activity-row,
-.v3-dash[data-auth-workspace] .ov-player-row { min-height: 44px; border-bottom: 1px solid var(--ws-line); }
+.v3-dash[data-auth-workspace] .ov-activity-row { min-height: 44px; border-bottom: 1px solid var(--ws-line); }
 .v3-dash[data-auth-workspace] .ov-activity-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px 0; }
 .v3-dash[data-auth-workspace] .ov-activity-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--ws-radius-sm); background: var(--ws-surface-strong); color: var(--ws-text-soft); }
 .v3-dash[data-auth-workspace] .ov-activity-icon svg { width: 16px; height: 16px; }
 .v3-dash[data-auth-workspace] .ov-activity-copy { display: grid; gap: 4px; font-size: var(--ws-type-meta-size); }
 .v3-dash[data-auth-workspace] .ov-activity-copy > span,
 .v3-dash[data-auth-workspace] .ov-activity-row time { color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
-.v3-dash[data-auth-workspace] .ov-player-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 0 4px; }
-.v3-dash[data-auth-workspace] .ov-player-rank { font-size: 11px; font-weight: 700; color: var(--ws-text-soft); text-align: center; }
-.v3-dash[data-auth-workspace] .ov-player-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.v3-dash[data-auth-workspace] .ov-player-wager { font-size: 12px; font-weight: 600; color: var(--ws-text-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .v3-dash[data-auth-workspace] .ov-card-empty { min-height: 0; margin: 0; padding: 0; text-align: center; color: var(--ws-text-mute); font-size: 13px; }
 .v3-dash[data-auth-workspace] .ov-card-empty > .v3-empty { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-items: center; column-gap: 12px; row-gap: 2px; min-height: 84px; padding: 14px 0 0; text-align: left; }
 .v3-dash[data-auth-workspace] .ov-card-empty .v3-empty-ic { grid-row: 1 / 3; width: 36px; height: 36px; margin: 0; }
@@ -4589,7 +4596,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-widget--half { grid-column: 1 / -1; }
   .v3-dash[data-auth-workspace] .v3-kpi-grid,
   .v3-dash[data-auth-workspace] .v3-analytics-page .v3-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .v3-dash[data-auth-workspace] .ov-lists,
   .v3-dash[data-auth-workspace] .v3-games-layout,
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid,
   .v3-dash[data-auth-workspace] .cr-shop-layout.has-drawer .cr-shop-grid { grid-template-columns: 1fr; }
@@ -4625,8 +4631,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] #cr-onboarding > .v3-section-head > div { margin-bottom: 24px; }
   .v3-dash[data-auth-workspace] #cr-onboarding-hide { order: 2; align-self: flex-start; min-height: var(--ws-control-h-touch); }
   .v3-dash[data-auth-workspace] .ov-setup-head > .btn { width: 100%; min-height: var(--ws-control-h-touch); }
-  .v3-dash[data-auth-workspace] .ov-list-link,
-  .v3-dash[data-auth-workspace] #ovTopPlayers .btn { display: inline-flex; align-items: center; min-height: var(--ws-control-h-touch); }
+  .v3-dash[data-auth-workspace] .ov-list-link { display: inline-flex; align-items: center; min-height: var(--ws-control-h-touch); }
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-preview {
     top: calc(var(--ws-topbar-h) + 24px);
   }
@@ -4669,15 +4674,14 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-status { min-height: 26px; padding-inline: 7px; font-size: 10px; }
   .v3-dash[data-auth-workspace] .lb-publish-action { min-height: 44px; padding-inline: 9px; font-size: 11px; }
   .v3-dash[data-auth-workspace] .lb-board-select { min-height: 44px; }
-  .v3-dash[data-auth-workspace] .ov-next-step { align-items: flex-start; }
-  .v3-dash[data-auth-workspace] .ov-next-step .btn { width: 100%; }
   .v3-dash[data-auth-workspace] .ov-operations-head,
   .v3-dash[data-auth-workspace] .ov-attention-row,
-  .v3-dash[data-auth-workspace] .ov-live-row,
-  .v3-dash[data-auth-workspace] .ov-coming-next { align-items: flex-start; flex-direction: column; }
+  .v3-dash[data-auth-workspace] .ov-live-row { align-items: flex-start; flex-direction: column; }
   .v3-dash[data-auth-workspace] .ov-operations-head .btn,
   .v3-dash[data-auth-workspace] .ov-attention-row .btn,
-  .v3-dash[data-auth-workspace] .ov-coming-next .btn { width: 100%; min-height: var(--ws-control-h-touch); }
+  .v3-dash[data-auth-workspace] .ov-live-row .btn { width: 100%; min-height: var(--ws-control-h-touch); }
+  .v3-dash[data-auth-workspace] .ov-head-state { align-items: flex-start; }
+  .v3-dash[data-auth-workspace] .ov-quick-grid { grid-template-columns: 1fr; }
   .v3-dash[data-auth-workspace] .lb-main { padding-bottom: 48px; }
   .v3-dash[data-auth-workspace] .lb-main > .lb-topbar + .lb-bento { padding-top: 24px; }
   body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws-main-pad-inline); }
@@ -4826,32 +4830,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   background: var(--ws-accent);
 }
 
-/* Overview Top Players rows */
-.v3-dash[data-auth-workspace] .ov-player-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 2px;
-  background: transparent;
-}
-.v3-dash[data-auth-workspace] .ov-player-rank {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ws-accent);
-  min-width: 24px;
-}
-.v3-dash[data-auth-workspace] .ov-player-name {
-  flex: 1;
-  font-size: 13.5px;
-  font-weight: 650;
-  color: var(--ws-text);
-}
-.v3-dash[data-auth-workspace] .ov-player-wager {
-  font-family: var(--ws-mono, monospace);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ws-text);
-}
 /* ==========================================================================
    Help & Support Slide-Over Drawer + Quick Feedback Modal
    ========================================================================== */
@@ -7519,9 +7497,6 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 .v3-dash[data-auth-workspace] .ov-activity-copy span[title]:is(:hover, :focus-visible) { display: block; line-clamp: unset; -webkit-line-clamp: unset; overflow: visible;
 }
 
-.v3-dash[data-auth-workspace] .ov-player-row b { flex: 1; font-size: 14px;
-}
-
 @media (max-width: 720px) {
 
   .v3-dash[data-auth-workspace] .ov-setup-head { align-items: flex-start; flex-direction: column; gap: 8px;
@@ -7728,15 +7703,6 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.v3-dash[data-auth-workspace] .ov-player-row { min-width: 0; }
-.v3-dash[data-auth-workspace] .ov-player-name {
-  min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.v3-dash[data-auth-workspace] .ov-player-wager { flex: 0 0 auto; }
 
 /* Canonical operator workspace type scale. */
 .v3-dash[data-auth-workspace] {
@@ -9412,7 +9378,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 .v3-dash[data-auth-workspace] .ov-figures {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .v3-dash[data-auth-workspace] section[data-page="board"] > .design-grid > .design-controls > .v3-section-head {

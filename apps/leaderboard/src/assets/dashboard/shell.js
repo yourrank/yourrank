@@ -6,8 +6,8 @@
 // history for dashboard routes.
 import { state } from "./state.js";
 import { logError, showToast } from "./utils.js";
-import { renderOverviewSummary } from "./overview.js";
-import { discardEditorChanges, fitDesignPreview, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
+import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";
+import { discardEditorChanges, fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
 import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
 import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
@@ -299,6 +299,22 @@ function renderCrumbs(page, tab) {
   if (!existing) bento.prepend(nav);
 }
 
+// Every entry into Home — boot, sidebar, back/forward — refreshes the state
+// Home reads: the selected site's credits/status (pending claims and provider
+// health behind Needs attention) and the dynamic sections. Nothing else
+// fetches these for Home, so boot never issues the same request twice.
+let homeEntry = Promise.resolve();
+export function enterHome() {
+  renderOverviewSummary();
+  homeEntry = Promise.all([loadCreditsStatus(), loadOverviewLiveData()])
+    .catch((err) => {
+      logError("overview/live", err);
+      try { renderOverviewSummary(); } catch (renderErr) { logError("overview/render", renderErr); }
+    });
+  return homeEntry;
+}
+export const homeEntrySettled = () => homeEntry;
+
 export function navTo(page, hash = "") {
   const scrollHash = hash || defaultHash(page);
   const navHash = page === "board" ? hash : scrollHash;
@@ -318,7 +334,7 @@ export function navTo(page, hash = "") {
   // without duplicating drawer behavior in the SPA runtime.
   closeDashboardDrawer();
   renderCrumbs(page, scrollHash);
-  if (page === "home") renderOverviewSummary();
+  if (page === "home") enterHome();
   if (page === "home" || page === "performance") loadStats();
   // Re-render and re-fit the live preview whenever the Editor becomes visible
   // (updateDesignPreview() no-ops while the section is hidden, so navigating in

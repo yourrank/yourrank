@@ -46,6 +46,7 @@ import {
   handleAccountConnectedAccounts,
 } from "./handlers/account.js";
 import { handleInsights } from "./handlers/insights.js";
+import { handleHomeActivity } from "./handlers/home.js";
 import { handleContact } from "./handlers/contact.js";
 import { handleFeedback, handleSiteFeedback } from "./handlers/feedback.js";
 import { handleCspReport } from "./handlers/csp-report.js";
@@ -511,6 +512,7 @@ export const ROUTES = [
   { path: "/api/account/conversions", method: "GET", handler: withHandler(handleAccountConversions) },
   { path: "/api/account/connected-accounts", method: "GET", handler: withHandler(handleAccountConnectedAccounts) },
   { path: "/api/insights", method: "GET", handler: withHandler(handleInsights) },
+  { path: "/api/home/activity", method: "GET", handler: withHandler(handleHomeActivity) },
 
   // Attribution
   { path: "/api/attribution", method: "GET", handler: withHandler(handleAttribution) },

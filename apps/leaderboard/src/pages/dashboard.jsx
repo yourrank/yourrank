@@ -74,34 +74,34 @@ const ROUTE_SECTIONS = Object.fromEntries(
 function OverviewSection({ active } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="home">
-<header class="v3-head ov-head v3-head--row"><div class="ov-identity"><span class="ov-avatar" aria-hidden="true"><img id="ovSiteLogo" alt="" hidden /><span id="ovSiteInitial">Y</span></span><div><h1>Home</h1><p class="ov-scope"><strong id="ovSiteName">Checking…</strong><span id="ovOperatorContext" hidden></span></p><p class="v3-head-sub" id="ovHeadSub">Your community at a glance.</p></div></div><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span></header>
-<section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Get your community ready</h2><p id="ovSetupMessage">Add players and publish to open your site.</p></div><a class="btn btn--accent" id="ovSetupAction" href="/dashboard/site" hidden>Continue setup</a></div><details class="ov-setup-details"><summary>Launch checklist <span class="ov-setup-count" id="ovSetupCount">0 of 3 done</span></summary><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></details></section>
+<header class="v3-head ov-head v3-head--row"><div class="ov-identity"><span class="ov-avatar" aria-hidden="true"><img id="ovSiteLogo" alt="" hidden /><span id="ovSiteInitial">Y</span></span><div><h1>Home</h1><p class="ov-scope"><strong id="ovSiteName">Checking…</strong><span id="ovOperatorContext" hidden></span></p><p class="v3-head-sub" id="ovHeadSub">Your community at a glance.</p></div></div><div class="ov-head-state"><span class="ov-status" id="ovStatus" data-state="checking"><i aria-hidden="true"></i><span id="ovPublishedStatus">Checking…</span></span><a class="ov-public-link" id="ovPublicLink" href="/" target="_blank" rel="noopener noreferrer" hidden>Open public page ↗</a></div></header>
 <section class="ov-operations ov-attention" id="ovAttention" aria-labelledby="ovAttentionTitle" role="region" aria-live="polite" aria-atomic="false" hidden>
-  <header class="ov-operations-head"><div><h2 id="ovAttentionTitle">Needs attention</h2><p>Work that is waiting for you on this site.</p></div><span class="ov-operation-count" id="ovAttentionCount">0 items</span></header>
-  <div class="ov-attention-list">
-    <div class="v3-alert v3-alert--warning ov-attention-row" id="ovPendingOrdersAlert" hidden><span><b id="ovPendingOrdersAlertCount">0</b> <span id="ovPendingOrdersAlertLabel">pending claims need review.</span></span><a class="btn btn--sm btn--ghost" id="ovPendingOrdersAlertAction" href="/dashboard/rewards/redemptions">Review claims</a></div>
-    <div class="v3-alert v3-alert--warning ov-attention-row" id="ovConnectionAlert" hidden><span><b>Kick rewards need attention.</b> <span id="ovConnectionAlertDetail">Reconnect Kick to keep active reward grants working.</span></span><a class="btn btn--sm btn--ghost" id="ovConnectionAlertAction" href="/dashboard/site/connections">Open Connections</a></div>
-    <div class="v3-alert v3-alert--warning ov-attention-row" id="ovAutomationAlert" hidden><span><b id="ovAutomationAlertTitle">Scheduled Activity needs attention.</b> <span id="ovAutomationAlertDetail">Review its status before choosing a new future time.</span></span><a class="btn btn--sm btn--ghost" id="ovAutomationAlertAction" href="/dashboard/activities">Review schedule</a></div>
-    <div class="v3-alert v3-alert--warning ov-attention-row" id="ovInvitesAlert" hidden><span><b id="ovInvitesAlertCount">0</b> <span id="ovInvitesAlertLabel">pending invites are waiting for teammates to accept.</span></span><a class="btn btn--sm btn--ghost" id="ovInvitesAlertAction" href="/dashboard/settings/team">Review invites</a></div>
-  </div>
+  <header class="ov-operations-head"><div><h2 id="ovAttentionTitle">Needs attention</h2><p>Problems that block members or visitors, with the fix for each.</p></div><span class="ov-operation-count" id="ovAttentionCount">0 items</span></header>
+  <div class="ov-attention-list" id="ovAttentionList"></div>
 </section>
-<section class="ov-operations ov-happening-now" id="ovHappeningNow" aria-labelledby="ovHappeningNowTitle" hidden>
-  <header class="ov-operations-head"><div><h2 id="ovHappeningNowTitle">Happening now</h2><p id="ovHappeningNowSummary">Open Activities on this site.</p></div><a class="btn btn--sm" id="ovHappeningNowAction" href="/dashboard/activities">Open Activities</a></header>
-  <div class="ov-live-list" id="ovHappeningNowList"></div>
+<section class="ov-operations ov-live" id="ovLiveNow" aria-labelledby="ovLiveNowTitle" data-home-section="live" hidden>
+  <header class="ov-operations-head"><div><h2 id="ovLiveNowTitle">Live now</h2><p id="ovLiveNowSummary">Engagement running on this community right now.</p></div></header>
+  <div class="ov-live-list" id="ovLiveNowList"></div>
 </section>
-<section class="ov-coming-next" id="ovComingNext" aria-labelledby="ovComingNextTitle" hidden><div><h2 id="ovComingNextTitle">Coming next</h2><p id="ovComingNextDetail">—</p></div><a class="btn btn--sm" id="ovComingNextAction" href="/dashboard/activities">Open Activities</a></section>
-<section class="ov-next-step" id="ovNextStep" aria-labelledby="ovNextStepTitle" hidden><div class="ov-next-step-copy"><h2 id="ovNextStepTitle">—</h2><p id="ovNextStepBody">—</p></div><a class="btn btn--sm btn--accent" id="ovNextStepAction" href="#">—</a></section>
-<section class="ov-figures" id="ovFigures" aria-label="Selected site summary">
-  <div class="ov-figure">
-    <span class="ov-figure-lbl" id="ovLblViews">Visits this week</span>
-    <span class="ov-figure-val" id="ovViews14" aria-labelledby="ovLblViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-  </div>
-  <div class="ov-figure">
-    <span class="ov-figure-lbl" id="ovLblPlayers">Players</span>
-    <span class="ov-figure-val" id="ovPlayersCount" aria-labelledby="ovLblPlayers"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></span>
-  </div>
+<section class="ov-operations ov-coming-next" id="ovComingNext" aria-labelledby="ovComingNextTitle" data-home-section="upcoming" hidden>
+  <header class="ov-operations-head"><div><h2 id="ovComingNextTitle">Coming next</h2><p>Scheduled for this community, soonest first.</p></div></header>
+  <div class="ov-live-list" id="ovComingNextList"></div>
 </section>
-<div class="ov-lists"><section class="ov-list" aria-labelledby="ovActivityTitle"><div class="ov-list-head"><h2 id="ovActivityTitle">Recent activity</h2><button class="ov-list-link" id="ovAnalyticsLink" type="button" data-jump="performance">See analytics</button></div><div class="ov-activity-list" id="ovActivityList"></div><div class="ov-card-empty" id="ovActivityEmpty" hidden></div></section><section class="ov-list" aria-labelledby="ovTopTitle"><div class="ov-list-head"><h2 id="ovTopTitle">Top players</h2><a class="ov-list-link" href="/dashboard/leaderboard/players">All players</a></div><div class="ov-players-list" id="ovTopPlayers"></div><div class="ov-card-empty" id="ov_topEmpty" hidden></div></section></div>
+<section class="ov-pulse" id="ovPulse" aria-labelledby="ovPulseTitle" data-home-section="pulse">
+  <div class="ov-list-head"><h2 id="ovPulseTitle">Community pulse</h2><span class="ov-pulse-range" id="ovPulseRange">Last 30 days</span></div>
+  <div class="ov-figures" id="ovFigures" aria-label="Community pulse"></div>
+  <div class="ov-section-state" id="ovPulseState" hidden></div>
+</section>
+<section class="ov-list ov-recent" aria-labelledby="ovActivityTitle" id="ovRecent" data-home-section="recent">
+  <div class="ov-list-head"><h2 id="ovActivityTitle">Recent activity</h2><a class="ov-list-link" id="ovActivityAllLink" href="/dashboard/audience/activity">All activity</a></div>
+  <div class="ov-activity-list" id="ovActivityList"></div>
+  <div class="ov-section-state" id="ovActivityEmpty" hidden></div>
+</section>
+<section class="ov-quick" id="ovQuickActions" aria-labelledby="ovQuickActionsTitle">
+  <div class="ov-list-head"><h2 id="ovQuickActionsTitle">Quick actions</h2></div>
+  <div class="ov-quick-grid" id="ovQuickActionsList"></div>
+</section>
+<section class="ov-setup" id="ovSetup" aria-labelledby="ovSetupTitle" hidden><div class="ov-setup-head"><div><h2 id="ovSetupTitle">Setup progress</h2><p id="ovSetupMessage">Add players and publish to open your community.</p></div><a class="btn btn--accent" id="ovSetupAction" href="/dashboard/site" hidden>Continue setup</a></div><details class="ov-setup-details"><summary>Core setup <span class="ov-setup-count" id="ovSetupCount">0 of 3 done</span></summary><ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul></details></section>
 </section>
   );
 }
