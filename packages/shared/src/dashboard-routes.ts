@@ -404,6 +404,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   board: [
     { classification: "navigation", context: "core SPA destinations", where: "Site context; stamped by preserveSiteContextLinks (board-shell.js siteDestinations + /dashboard/leaderboard/*)." },
     { classification: "navigation", context: "Settings Connections mixed-scope inventory", where: "Optional selected-site context for a Home attention deep link; site actions return through buildDashboardPath to the core SPA board context." },
+    { classification: "feature", context: "public leaderboard rendering", where: "Public /<slug>/leaderboard board selection (main|loyalty); Main is the default, rendered by site-routes.js + site-render.ts." },
   ],
   siteId: [{ classification: "navigation", context: "fragment-booted destinations", where: "Site context; stamped by preserveSiteContextLinks (creditsDestinations), read by credits/giveaways/audience clients and sitePath()." }],
   nav: [{ classification: "navigation", context: "core SPA paths (parseDashboardPath matches)", where: "Legacy section addressing; 302-canonicalized by index.js (NAV_QUERY_ALIASES)." }],

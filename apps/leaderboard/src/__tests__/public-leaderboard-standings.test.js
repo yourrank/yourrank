@@ -171,7 +171,7 @@ describe("public leaderboard standings", () => {
     const html = await render("leaderboard", { data: { ...baseData, players: [] } });
     // The empty board is a designed state: what is empty, and one line about
     // when it fills — not a sentence floating in a blank panel.
-    expect(html).toContain('<p class="yr-empty-t">No players yet</p>');
+    expect(html).toContain('<p class="yr-empty-t">No leaderboard entries yet.</p>');
     expect(html).toContain('<p class="yr-empty-p">Ask Creator Name how wagered is counted on this leaderboard. Your first published entry puts you on the board. Leaderboard wagered is separate from Credits.</p>');
     const points = await render("leaderboard", { data: { ...baseData, rankBy: "score", players: [] } });
     expect(points).toContain("how points are counted on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.");
@@ -393,5 +393,65 @@ describe("public leaderboard standings", () => {
     expect(home).toContain('<span class="viewer-player-name">Alice</span>');
     expect(home).toContain('<span class="viewer-rank">1</span>');
     expect((home.match(/class="viewer-board-row"/g) || [])).toHaveLength(3);
+  });
+});
+
+describe("Main / Loyalty boards (shared renderer)", () => {
+  const loyal = { ...baseData, sections: { leaderboard: true, loyaltyLeaderboard: true } };
+  const loyaltyRows = [
+    { viewerId: "va", name: "Viewer A", avatarUrl: "https://cdn.example/a.png", earned: 500, rank: 1 },
+    { viewerId: "vb", name: "Viewer B", avatarUrl: null, earned: 300, rank: 2 },
+  ];
+  const renderBoard = (data, board, loyalty = []) => renderSite({
+    r: { slug: "creator", plan: "pro", data },
+    section: "leaderboard",
+    viewer: null,
+    viewerData: null,
+    opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n", isCustomDomain: false, board, loyalty },
+  });
+
+  it("shows no switcher and the configured Main metric when only Main exists", async () => {
+    const html = await renderBoard(baseData, undefined);
+    expect(html).not.toContain("viewer-board-tabs");
+    expect(html).toContain('>Player</span><span class="yr-r">Wagered</span>');
+    expect(html).not.toContain("Credits earned");
+  });
+
+  it("switches the metric header between Main and Loyalty and marks the active tab", async () => {
+    const main = await renderBoard(loyal, "main", loyaltyRows);
+    expect(main).toContain('data-board="main" aria-current="page">Main</a>');
+    expect(main).toContain('>Player</span><span class="yr-r">Wagered</span>');
+    expect(main).not.toContain("Viewer A");
+
+    const loyalty = await renderBoard(loyal, "loyalty", loyaltyRows);
+    expect(loyalty).toContain('data-board="loyalty" aria-current="page">Loyalty</a>');
+    expect(loyalty).toContain('>Viewer</span><span class="yr-r">Credits earned</span>');
+    expect(loyalty).toContain("Ranked by lifetime credits earned");
+    const rows = rowsOf(loyalty);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("Viewer A");
+    expect(rows[0]).toContain(">500</span>");
+    expect(rows[0]).toContain('src="https://cdn.example/a.png"');
+    expect(rows[1]).toContain("Viewer B");
+    expect(rows[1]).toContain(">300</span>");
+    expect(loyalty).not.toContain("Alice");
+    // Tabs sit under the title, before the standings.
+    expect(loyalty.indexOf("yr-lbh-title")).toBeLessThan(loyalty.indexOf("viewer-board-tabs"));
+    expect(loyalty.indexOf("viewer-board-tabs")).toBeLessThan(loyalty.indexOf("data-loyalty-rows"));
+  });
+
+  it("renders the exact Loyalty empty state with no sample viewers", async () => {
+    const html = await renderBoard(loyal, "loyalty", []);
+    expect(html).toContain('<p class="yr-empty-t">No loyalty activity yet.</p>');
+    expect(html).toContain('<p class="yr-empty-p">Viewers will appear here after earning credits.</p>');
+    expect(rowsOf(html)).toHaveLength(0);
+  });
+
+  it("escapes viewer names and keeps the public sidebar free of board links", async () => {
+    const html = await renderBoard(loyal, "loyalty", [{ viewerId: "x", name: "<img src=x onerror=alert(1)>", avatarUrl: "javascript:alert(1)", earned: 7, rank: 1 }]);
+    expect(html).not.toContain("<img src=x");
+    expect(html).not.toContain('src="javascript:');
+    const rail = html.slice(html.indexOf('class="viewer-rail"'), html.indexOf('class="viewer-main"'));
+    expect(rail).not.toContain("Loyalty");
   });
 });

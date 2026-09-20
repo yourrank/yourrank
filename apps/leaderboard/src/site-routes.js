@@ -14,8 +14,8 @@ import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
-import { renderSite as defaultRenderSite, effectivePublicSections, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
-import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem } from "./site-data.js";
+import { renderSite as defaultRenderSite, effectivePublicSections, parsePublicBoard, publicLeaderboardBoards, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
+import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem, getLoyaltyBoard as defaultGetLoyaltyBoard } from "./site-data.js";
 import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
   cachedPublicBoardResponse,
@@ -95,6 +95,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     renderSite = defaultRenderSite,
     getViewerSiteData = defaultGetViewerSiteData,
     getShopItem = defaultGetShopItem,
+    getLoyaltyBoard = defaultGetLoyaltyBoard,
   } = deps;
   const collaborators = { createQueueProducer, queueFallback, hashToken };
   setRequestMetrics({ route: rewardId ? "/site/shop/:rewardId" : `/site/${section}`, site: slug });
@@ -139,6 +140,20 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
         });
       }
       return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
+    }
+
+    // `?board=` is URL state inside the one Leaderboard section. Main is the
+    // default; a Loyalty link whose board the creator has since turned off
+    // falls back to Main instead of exposing the standings.
+    let board = "main";
+    if (section === "leaderboard") {
+      board = parsePublicBoard(url.searchParams.get("board"));
+      if (board !== "main" && !publicLeaderboardBoards(r.data).includes(board)) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: siteSectionHref("leaderboard", slug, isCustomDomain), "cache-control": "no-store" },
+        });
+      }
     }
 
     const cacheableSite = cacheableRequest && isPublicBoardCacheSite(r);
@@ -186,6 +201,8 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
       await bumpView(env, ctx, request, r.id, slug, respHeaders, collaborators);
     }
 
+    const loyalty = board === "loyalty" ? await getLoyaltyBoard(r.id) : [];
+
     if (section === "games" && (url.searchParams.get("embed") === "1" || url.searchParams.get("isolated") === "1")) {
       const b = r.data?.brand || {};
       const mount = gamesIslandMount({
@@ -228,6 +245,8 @@ ${gamesIslandHead()}
         watermark,
         csrfToken,
         boards: r.boards,
+        board,
+        loyalty,
         botUsername: r.botUsername,
         isDemo,
         viewerAuthError: section === "me" ? url.searchParams.get("error") : null,

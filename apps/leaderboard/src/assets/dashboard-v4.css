@@ -10159,3 +10159,10 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
 }
 /* == role-preview:end */
+
+/* Setup → Leaderboards: fixed Main/Loyalty rows sharing the block-toggle row style. */
+.v3-dash[data-auth-workspace] .lb-type-row { padding: var(--ws-space-3) 0; }
+.v3-dash[data-auth-workspace] .lb-type-copy { display: grid; gap: var(--ws-space-1); min-width: 0; }
+.v3-dash[data-auth-workspace] .lb-type-copy .hint { margin: 0; }
+.v3-dash[data-auth-workspace] .lb-type-control { display: inline-flex; align-items: center; gap: var(--ws-space-2); }
+.v3-dash[data-auth-workspace] .lb-type-control .hint { margin: 0; min-width: 2ch; }

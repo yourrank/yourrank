@@ -297,6 +297,10 @@ describe("handleViewerRedeem balance edge cases", () => {
     const balanceUpdate = db.calls.find((c) => c.method === "one" && /UPDATE site_viewers/.test(c.sql));
     expect(balanceUpdate.sql).toMatch(/AND balance >= \$1/);
     expect(balanceUpdate.params).toEqual([50, "sv-1"]);
+    // Spending moves balance/total_spent only: the Loyalty board ranks by
+    // lifetime `total_earned`, so a redemption can never lower a rank.
+    expect(balanceUpdate.sql).toMatch(/total_spent = total_spent \+ \$1/);
+    expect(balanceUpdate.sql).not.toMatch(/total_earned/);
   });
 
   it("refuses to redeem with 0 credits", async () => {

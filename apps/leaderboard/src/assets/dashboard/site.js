@@ -30,6 +30,7 @@ export const DEFAULT_SECTIONS = {
   cta: true,
   payouts: true,
   poweredBy: false,
+  loyaltyLeaderboard: false,
 };
 
 const PLAN_ORDER = ["free", "pro", "team"];
@@ -1827,7 +1828,10 @@ const SECTIONS_CATALOG = [
   { key: "poweredBy", label: "Show 'Powered by YourRank' badge" },
 ];
 
-const SECTION_KEYS = SECTIONS_CATALOG.map((s) => s.key);
+// The Loyalty board flag lives in the same visibility map but is edited from
+// the Setup → Leaderboards card, not the Layout & blocks list.
+const LOYALTY_SECTION_KEY = "loyaltyLeaderboard";
+const SECTION_KEYS = [...SECTIONS_CATALOG.map((s) => s.key), LOYALTY_SECTION_KEY];
 
 /**
  * The one read path for block visibility, kept in lockstep with the server's
@@ -1897,6 +1901,27 @@ function bindSectionToggle(input) {
   });
 }
 
+/**
+ * Setup → Leaderboards: Main is the board itself and is always listed; the
+ * Loyalty board (viewers ranked by lifetime credits earned) is a plain on/off
+ * flag stored beside the other block flags. "Show Leaderboard" in Layout &
+ * blocks stays the master switch, so this toggle can only add a second view.
+ */
+export function renderLeaderboardTypes() {
+  const input = $("f_loyalty_board");
+  if (!input) return;
+  const current = normalizeSections(state.EXTRA.sections);
+  input.checked = current[LOYALTY_SECTION_KEY] === true;
+  const stateEl = $("f_loyalty_board_state");
+  if (stateEl) stateEl.textContent = input.checked ? "On" : "Off";
+  if (input.dataset.bound) return;
+  input.dataset.bound = "1";
+  input.addEventListener("change", () => {
+    setSectionValue(LOYALTY_SECTION_KEY, input.checked === true);
+    if (stateEl) stateEl.textContent = input.checked ? "On" : "Off";
+  });
+}
+
 export function renderSections() {
   const list = $("sectionsList");
   const body = $("sectionsBody");
@@ -1905,6 +1930,7 @@ export function renderSections() {
   // sections object — the tabs that do not render the list must not be the
   // reason a later upgrade ships a half-filled payload.
   state.EXTRA.sections = normalizeSections(state.EXTRA.sections);
+  renderLeaderboardTypes();
   if (body) body.hidden = !isPro();
   if (lock) lock.hidden = isPro();
   if (!list || !isPro()) return;

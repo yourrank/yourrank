@@ -474,3 +474,10 @@ body.yr-support-open{overflow:hidden}
 .yr-support-success-mark{width:48px;height:48px;display:grid;place-items:center;border-radius:50%;background:color-mix(in srgb,var(--yr-primary) 24%,var(--yr-surface));color:var(--yr-accent-readable)}.yr-support-success-mark .viewer-icon{width:24px;height:24px}
 .yr-support-success .btn{min-width:120px;margin-top:6px}
 @media(max-width:520px){.yr-support-modal{width:calc(100% - 16px);max-height:calc(100dvh - 16px)}.yr-support-form{padding:18px 16px 16px}.yr-support-actions{flex-direction:column-reverse}.yr-support-actions .btn{width:100%}}
+/* Main / Loyalty pills under the Leaderboard title; only rendered when a site has both boards. */
+.viewer-board-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.viewer-board-tab{display:inline-flex;align-items:center;min-height:36px;padding:0 16px;border:1px solid var(--yr-edge);border-radius:999px;background:var(--yr-surface);color:var(--yr-mute);font-size:13px;font-weight:600;text-decoration:none;transition:border-color .15s,color .15s,background .15s}
+.viewer-board-tab:hover{color:var(--yr-fog);border-color:#7a52ff66}
+.viewer-board-tab[aria-current="page"]{background:var(--yr-primary);border-color:var(--yr-primary);color:#fff}
+.viewer-board-tab:focus-visible{outline:2px solid var(--yr-accent-readable);outline-offset:2px}
+.viewer-shell .yr-player-avatar{object-fit:cover}
