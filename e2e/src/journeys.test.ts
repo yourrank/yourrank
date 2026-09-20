@@ -423,8 +423,9 @@ describe("release-gate journeys", () => {
 
     const home = await client.get(`/dashboard?board=${encodeURIComponent(siteId)}`);
     expect(home.status).toBe(200);
-    expect(home.body).toContain('id="ovConnectionAlert"');
-    expect(home.body).toContain('id="ovConnectionAlertAction"');
+    expect(home.body).toContain('id="ovAttention"');
+    expect(home.body).toContain('id="ovAttentionList"');
+    expect(home.body).not.toContain('id="ovConnectionAlert"');
   });
 
   it.skipIf(!PUBLIC_ACCESS_AVAILABLE)(`${tag("wave-i-moderator-insights-readonly")} Moderator views Insights but provider management remains owner-only`, async () => {
