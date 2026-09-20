@@ -253,17 +253,30 @@ export async function handleCreatorClaims(request, env, injected = {}) {
   const limit = readListLimit(url, { fallback: CREATOR_CLAIM_PAGE, max: CREATOR_CLAIM_PAGE_MAX });
   const search = readListSearch(url);
 
+  if (cursor) {
+    const anchor = await deps.one(
+      `SELECT r.id FROM redemptions r JOIN site_viewers sv ON sv.id = r.site_viewer_id
+        WHERE sv.site_id=$1 AND r.id=$2`,
+      [site.id, cursor],
+    );
+    if (!anchor) return privateBad("Claims cursor expired. Refresh the list.", 410);
+  }
+
   // Queue order: open support first, then pending oldest-first, then settled
   // newest-first. Folded into one (bucket, key, id) tuple so keyset paging can
-  // resume exactly where the previous page stopped.
+  // resume exactly where the previous page stopped. The cursor's position is
+  // re-derived from the anchor row, so a client cannot forge sort values.
   const rows = await deps.query(
-    `WITH ranked AS (
-      ${CLAIM_SELECT},
-         (CASE WHEN support.status = 'open' THEN 0 ELSE 2 END
-          + CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END) AS sort_bucket,
-         (CASE WHEN r.status = 'pending' THEN extract(epoch FROM r.created_at)
-               ELSE -extract(epoch FROM r.updated_at) END)::double precision AS sort_key
+    `WITH base AS (
+      ${CLAIM_SELECT}
       WHERE sv.site_id=$1
+    ), ranked AS (
+      SELECT b.*,
+             (CASE WHEN b.support_status = 'open' THEN 0 ELSE 2 END
+              + CASE WHEN b.source_status = 'pending' THEN 0 ELSE 1 END) AS sort_bucket,
+             (CASE WHEN b.source_status = 'pending' THEN extract(epoch FROM b.created_at)
+                   ELSE -extract(epoch FROM b.updated_at) END)::double precision AS sort_key
+        FROM base b
     )
     SELECT * FROM ranked c
       WHERE (
