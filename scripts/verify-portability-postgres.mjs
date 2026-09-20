@@ -33,6 +33,9 @@ export const PORTABILITY_SUITES = Object.freeze([
   "apps/leaderboard/src/__tests__/provider-binding-postgres.test.js",
   // Viewer session authority (global vs custom domain) across providers.
   "apps/leaderboard/src/__tests__/viewer-authority-postgres.test.js",
+  // Chat giveaways: verified channel -> site routing, one active session per
+  // site, one entry per stable provider user, stop/disconnect keep history.
+  "apps/leaderboard/src/__tests__/chat-giveaways-postgres.test.js",
 ]);
 
 function fail(message) {

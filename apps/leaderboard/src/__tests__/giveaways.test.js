@@ -67,7 +67,29 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).not.toContain("tr.innerHTML");
     expect(source).toContain("message.textContent = entrant.message");
     expect(source).toContain("userLink.textContent = entrant.username");
-    expect(source).toContain("safeAvatarUrl(entrant.avatar, DEFAULT_AVATAR)");
+    expect(source).toContain("safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR)");
+  });
+
+  it("runs Chat Giveaways through the connected Kick channel and server API, not the legacy listener", () => {
+    const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+    for (const legacy of ["connectKickChat", "chat-entry.js", "/api/giveaways/chatroom", "chatroomId", "Resolving Kick chatroom", "Start Listening", "Refreshing will clear"]) {
+      expect(source).not.toContain(legacy);
+    }
+    expect(source).toContain('sitePath(`/api/giveaways/chat${path}`)');
+    expect(source).toContain('chatApi("/start"');
+    expect(source).toContain('chatApi("/stop"');
+    expect(source).toContain('chatApi("/draw"');
+    expect(source).toContain("const POLL_MS = 4000");
+    expect(source).toContain('label.textContent = "Stop entries"');
+    expect(source).toContain('label.textContent = "Start giveaway"');
+    // No editable channel: the connected channel is displayed, arbitrary entry is gone.
+    expect(giveawaysHtml).not.toContain('id="gw-channel-input"');
+    expect(giveawaysHtml).toContain('id="gw-channel-name"');
+    expect(giveawaysHtml).toContain("Chat giveaways require a connected Kick channel.");
+    expect(giveawaysHtml).toContain('id="gw-btn-connect-kick" href="/dashboard/settings/connections"');
+    for (const legacy of ["Connect &amp; Start Listening", "chatroom", 'id="gw-chat-feed"', 'id="gw-opt-case"', 'id="gw-opt-exact"', 'id="gw-trust-min"']) {
+      expect(giveawaysHtml).not.toContain(legacy);
+    }
   });
 
   it("loads the server-rendered giveaway tab on initialization", () => {
@@ -85,7 +107,7 @@ describe("Giveaway Chatroom Handler", () => {
     const html = vnode.toString();
     expect(html).toContain("Giveaways");
     expect(html).toContain("gw-setup-form");
-    expect(html).toContain("gw-chat-feed");
+    expect(html).toContain("gw-channel-name");
     expect(html).toContain("gw-roller");
   });
 
@@ -137,14 +159,9 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(4);
   });
 
-  it("keeps setup defaults behind the fair-play disclosure", () => {
+  it("keeps draw options behind the disclosure", () => {
     expect(giveawaysHtml).toContain('<details class="cr-advanced gw-setup-advanced" data-ui-advanced>');
-    expect(giveawaysHtml).toContain('id="gw-shield-status"');
-    expect(giveawaysHtml).toContain('id="gw-opt-unique" checked');
-    expect(giveawaysHtml).toContain('id="gw-opt-antialt" checked');
-    expect(giveawaysHtml).toContain('id="gw-trust-min"');
     expect(giveawaysHtml).toContain('id="gw-opt-subs-perk"');
-    expect(giveawaysHtml).toContain('id="gw-opt-min-msgs"');
     expect(giveawaysHtml).toContain('id="gw-opt-skip-past"');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-req"');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-duration"');
@@ -168,8 +185,6 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).not.toContain('style="');
     expect(giveawaysSource).toContain('|| "Yes"');
     expect(giveawaysSource).toContain('|| "No"');
-    expect(giveawaysSource).toContain('$("gw-shield-summary")');
-    expect(giveawaysSource).toContain('summary.textContent = e.target.checked ? "Fair play active" : "Fair play off"');
     expect(giveawaysHtml).not.toContain("🎉");
     expect(giveawaysHtml).not.toContain("💬");
     expect(giveawaysSource).not.toContain("🎉");
@@ -186,7 +201,6 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysSource).toContain('$("gw-btn-reroll")?.addEventListener("click"');
     expect(giveawaysSource).toContain('$("gw-btn-copy-winner")?.addEventListener("click"');
     expect(giveawaysSource).toContain('$("gw-search-entrants")?.addEventListener("input"');
-    expect(giveawaysSource).toContain('$("gw-btn-reset")?.addEventListener("click"');
     expect(giveawaysSource).not.toContain('$("gw-roll-btn")');
     expect(giveawaysSource).not.toContain('$("gw-reroll-btn")');
     expect(giveawaysSource).not.toContain('$("gw-copy-winner")');
@@ -225,10 +239,8 @@ describe("Giveaway Chatroom Handler", () => {
   it("keeps dynamic Giveaway states on stylesheet classes", () => {
     expect(giveawaysSource).not.toContain("style.color");
     expect(giveawaysSource).not.toContain("style.fontStyle");
-    expect(giveawaysSource).toContain("gw-chat-msg--system");
     expect(giveawaysSource).toContain("gw-claim-status--confirmed");
     expect(giveawaysSource).toContain("gw-claim-status--expired");
-    expect(giveawaysCssSource).toContain(".gw-chat-msg--system");
     expect(giveawaysCssSource).toContain(".gw-claim-status--confirmed");
     expect(giveawaysCssSource).toContain(".gw-claim-status--expired");
     expect(giveawaysSource).toContain("flashButtonLabel(button, \"Copied!\")");

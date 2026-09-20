@@ -70,6 +70,7 @@ describe("C04 provider ownership database boundary", () => {
       fetchKickCurrentUser: async () => ({ user_id: channel, name: "owner" }),
       fetchKickCurrentChannel: async () => ({ broadcaster_user_id: channel, slug: "owner" }),
       encryptKickToken: async () => "test-encrypted",
+      listKickWebhookSubscriptions: async () => [],
       subscribeKickWebhookEvent: async () => {},
     });
     expect(response.headers.get("location")).toContain("kick_auth_failed");

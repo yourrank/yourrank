@@ -632,6 +632,7 @@ describe("Kick OAuth state integration seams", () => {
 
   test("streamer callback atomically records matching provider identity and verified Site binding", async () => {
     const writes = [];
+    const subscribed = [];
     let transactionCount = 0;
     const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
       currentUser: async () => user,
@@ -641,7 +642,8 @@ describe("Kick OAuth state integration seams", () => {
       exchangeKickCode: async () => ({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
       fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
       fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 123, slug: "owner" }),
-      subscribeKickWebhookEvent: async () => {},
+      listKickWebhookSubscriptions: async () => [],
+      subscribeKickWebhookEvent: async (token, event) => { subscribed.push([token, event]); },
       encryptKickToken: async (token) => `encrypted:${token}`,
       withTransaction: async (fn) => {
         transactionCount += 1;
@@ -655,16 +657,56 @@ describe("Kick OAuth state integration seams", () => {
 
     expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&siteId=site-1");
     expect(transactionCount).toBe(1);
-    // Generic rows are written first, legacy users/sites mirrors afterwards, all in one transaction.
+    // Rewards and chat webhooks are both requested for the verified channel.
+    expect(subscribed).toEqual([["access", "channel.reward.redemption.updated"], ["access", "chat.message.sent"]]);
+    // Generic rows are written first, legacy users/sites mirrors afterwards, then
+    // chat-giveaway readiness on the verified channel, all in one transaction.
     expect(writes.map(({ sql }) => sql.match(/INSERT INTO (\w+)|UPDATE (\w+)/).slice(1).find(Boolean))).toEqual([
-      "creator_connections", "users", "community_channels", "sites",
+      "creator_connections", "users", "community_channels", "sites", "community_channels",
     ]);
+    expect(writes[4].sql).toContain("chat_events_subscribed_at = CASE WHEN $3 THEN now() END");
+    expect(writes[4].params).toEqual([site.id, "kick", true]);
     expect(writes[0].params.slice(0, 3)).toEqual([user.id, "kick", "123"]);
     expect(writes[1].sql).toContain("kick_linked_at = now()");
     // The verified binding records the creator connection that proved ownership.
     expect(writes[2].params).toEqual([site.id, "kick", "123", "owner", true, "cc-1"]);
     expect(writes[3].sql).toContain("kick_channel_verified_at = CASE WHEN $3 THEN now() END");
     expect(writes[3].params).toEqual(["123", "owner", true, site.id]);
+  });
+
+  test("streamer callback reuses existing Kick subscriptions and never marks chat ready when chat subscription fails", async () => {
+    const writes = [];
+    const subscribed = [];
+    const response = await handleKickAuthCallback(request("/auth/kick/callback?code=code&state=state"), {}, {
+      currentUser: async () => user,
+      consumeOAuthState: async () => ({ userId: user.id, siteId: site.id, codeVerifier: "verifier" }),
+      one: async () => site,
+      requireSiteCapability: ownerCapability,
+      exchangeKickCode: async () => ({ access_token: "access" }),
+      fetchKickCurrentUser: async () => ({ user_id: 123, name: "owner" }),
+      fetchKickCurrentChannel: async () => ({ broadcaster_user_id: 123, slug: "owner" }),
+      listKickWebhookSubscriptions: async () => [
+        { id: "sub-1", event: "channel.reward.redemption.updated", version: 1, method: "webhook" },
+      ],
+      subscribeKickWebhookEvent: async (_token, event) => {
+        subscribed.push(event);
+        throw new Error("Kick event subscription failed 500");
+      },
+      encryptKickToken: async (token) => `encrypted:${token}`,
+      withTransaction: async (fn) => fn({ unsafe: async (sql, params) => {
+        if (/^\s*SELECT/.test(sql)) return [{ id: "cc-1" }];
+        writes.push({ sql, params });
+        return [{ id: "cc-1" }];
+      } }),
+    });
+
+    // Rewards already subscribed → not re-requested (no duplicate); chat was attempted and failed.
+    expect(subscribed).toEqual(["chat.message.sent"]);
+    // The connection itself still succeeds, but the redirect and the stored
+    // readiness both say chat events are not wired.
+    expect(response.headers.get("location")).toBe("/dashboard/site/connections?kick_connected=1&kick_chat_events=failed&siteId=site-1");
+    const readiness = writes.find(({ sql }) => sql.includes("chat_events_subscribed_at"));
+    expect(readiness.params).toEqual([site.id, "kick", false]);
   });
 
   test("streamer callback rejects provider user/channel mismatches before persisting credentials", async () => {
@@ -736,9 +778,15 @@ describe("Kick OAuth state integration seams", () => {
     expect(queries[3].sql).toContain("UPDATE creator_connections");
     expect(queries[3].sql).toContain("status = 'revoked'");
     expect(queries[4].sql).toContain("kick_user_id = null");
-    expect(queries[5].sql).toContain("UPDATE community_channels");
-    expect(queries[6].sql).toContain("kick_channel_external_id = null");
-    expect(queries[6].params).toEqual(["site-2"]);
+    // Active chat giveaways stop collecting (entrants are kept) before the binding is revoked.
+    expect(queries[5].sql).toContain("UPDATE chat_giveaway_sessions");
+    expect(queries[5].sql).toContain("SET status = 'stopped'");
+    expect(queries[5].sql).not.toContain("DELETE");
+    expect(queries[5].params).toEqual(["site-2"]);
+    expect(queries[6].sql).toContain("UPDATE community_channels");
+    expect(queries[6].sql).toContain("chat_events_subscribed_at = NULL");
+    expect(queries[7].sql).toContain("kick_channel_external_id = null");
+    expect(queries[7].params).toEqual(["site-2"]);
   });
 
   test("preserves the account link when another owned site remains connected", async () => {

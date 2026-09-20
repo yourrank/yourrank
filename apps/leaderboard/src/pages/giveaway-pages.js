@@ -296,85 +296,41 @@ ${tabs}
         <div class="v3-section-head">
           <div>
             <h2>Start collecting entries</h2>
-            <p class="v3-head-sub">Choose your Kick channel and the word viewers should type.</p>
+            <p class="v3-head-sub">Viewers who type your keyword in your connected Kick chat are entered automatically.</p>
           </div>
           <div id="gw-status-badge" class="gw-status-pill gw-status--idle" aria-live="polite">
             <span class="gw-status-dot"></span>
-            <span id="gw-status-text">Disconnected</span>
+            <span id="gw-status-text">Checking…</span>
           </div>
         </div>
 
         <form id="gw-setup-form" class="gw-form">
-          <div class="field">
-            <label for="gw-channel-input">Kick channel</label>
-            <div class="gw-input-row">
-              <span class="gw-input-prefix">kick.com/</span>
-              <input id="gw-channel-input" name="channel" type="text" placeholder="channelname" required autocomplete="off" />
+          <div class="field" id="gw-channel-connected" hidden>
+            <span class="field-label">Kick channel</span>
+            <div class="gw-channel-row">
+              <span class="gw-channel-name" id="gw-channel-name"></span>
+              <span class="gw-event-badge gw-event-badge--live">✓ Connected</span>
             </div>
-            <span class="hint">Enter any Kick streamer channel or broadcaster username.</span>
+            <span class="hint" id="gw-chat-events-notice" hidden>Kick did not confirm chat events for this channel yet. Reconnect Kick in Connections to enable Chat giveaways.</span>
+          </div>
+
+          <div class="gw-connect-required" id="gw-channel-disconnected" hidden>
+            <p>Chat giveaways require a connected Kick channel.</p>
+            <a class="btn btn--accent" id="gw-btn-connect-kick" href="/dashboard/settings/connections">Connect Kick</a>
           </div>
 
           <div class="field">
-            <label for="gw-keyword-input">Entry keyword</label>
-            <input id="gw-keyword-input" name="keyword" type="text" value="!win" placeholder="e.g. !win, !enter, YOURRANK" required />
-            <span class="hint">Viewers who type this in chat will be entered into the giveaway.</span>
+            <label for="gw-keyword-input">Keyword</label>
+            <input id="gw-keyword-input" name="keyword" type="text" value="!win" placeholder="e.g. !win, !enter, YOURRANK" maxlength="64" required />
+            <span class="hint">Viewers who type this word in chat are entered once each. Matching ignores upper/lowercase.</span>
           </div>
 
           <details class="cr-advanced gw-setup-advanced" data-ui-advanced>
             <summary>
-              <span>Fair play &amp; entry options</span>
-              <span class="gw-advanced-summary-state">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span id="gw-shield-summary">Fair play active</span>
-                <span class="gw-event-badge gw-event-badge--live" id="gw-shield-status" aria-live="polite">Active</span>
-              </span>
+              <span>Draw &amp; winner options</span>
             </summary>
             <div class="gw-setup-advanced-body">
-              <div class="gw-options">
-                <label class="cr-toggle-row">
-                  <span>
-                    <b>Unique entries only</b>
-                    <small>1 entry per viewer username</small>
-                  </span>
-                  <input type="checkbox" class="v3-toggle" id="gw-opt-unique" checked />
-                </label>
-
-                <label class="cr-toggle-row">
-                  <span>
-                    <b>Case sensitive</b>
-                    <small>Exact match on upper/lowercase</small>
-                  </span>
-                  <input type="checkbox" class="v3-toggle" id="gw-opt-case" />
-                </label>
-
-                <label class="cr-toggle-row">
-                  <span>
-                    <b>Full message match</b>
-                    <small>Only count if message is strictly the keyword</small>
-                  </span>
-                  <input type="checkbox" class="v3-toggle" id="gw-opt-exact" />
-                </label>
-              </div>
-
               <div class="gw-security-box">
-                <label class="cr-toggle-row">
-                  <span>
-                    <b>Block Fake / Duplicate Accounts</b>
-                    <small>Filter out instant bot farms &amp; duplicate alt entries</small>
-                  </span>
-                  <input type="checkbox" class="v3-toggle" id="gw-opt-antialt" checked />
-                </label>
-
-                <div class="field gw-rule-field">
-                  <label for="gw-trust-min">Who is eligible to win?</label>
-                  <select id="gw-trust-min" class="v3-select">
-                    <option value="0">Everyone (Open to all chatters)</option>
-                    <option value="50" selected>Balanced — Filter obvious fake accounts (Recommended)</option>
-                    <option value="75">Loyal Viewers Only — Active stream chatters</option>
-                  </select>
-                  <span class="hint">Choose who is eligible when you draw a winner.</span>
-                </div>
-
                 <div class="field gw-rule-field gw-rule-field--compact">
                   <label for="gw-opt-subs-perk">Subscriber &amp; VIP Perks</label>
                   <select id="gw-opt-subs-perk" class="v3-select">
@@ -387,21 +343,10 @@ ${tabs}
                   <span class="hint">Reward your subscribers with higher winning odds or exclusive draws.</span>
                 </div>
 
-                <div class="field gw-rule-field gw-rule-field--compact">
-                  <label for="gw-opt-min-msgs">Minimum Stream Chat Messages</label>
-                  <select id="gw-opt-min-msgs" class="v3-select">
-                    <option value="0" selected>No minimum (Instant entry)</option>
-                    <option value="3">At least 3 messages during stream</option>
-                    <option value="5">At least 5 messages (Active chatter)</option>
-                    <option value="10">At least 10 messages (Super active)</option>
-                  </select>
-                  <span class="hint">Ensure entrants are actually active in chat during your broadcast.</span>
-                </div>
-
                 <label class="cr-toggle-row">
                   <span>
                     <b>Skip Recent Winners</b>
-                    <small>Give others a chance (skip anyone who won in the last 24 hours)</small>
+                    <small>Give others a chance (skip anyone who won recently on this device)</small>
                   </span>
                   <input type="checkbox" class="v3-toggle" id="gw-opt-skip-past" />
                 </label>
@@ -437,30 +382,12 @@ ${tabs}
           </details>
 
           <div class="gw-actions">
-            <button class="btn btn--accent" id="gw-btn-listen" type="submit">
-              <span id="gw-listen-btn-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M4 14v3a2 2 0 0 0 2 2h1v-5H4Z"/><path d="M20 14v3a2 2 0 0 1-2 2h-1v-5h3Z"/></svg> <span id="gw-listen-btn-label">Connect &amp; Start Listening</span></span>
-            </button>
-            <button class="btn btn--ghost" id="gw-btn-reset" type="button" hidden>
-              Clear Entrants
+            <button class="btn btn--accent" id="gw-btn-listen" type="submit" disabled>
+              <span id="gw-listen-btn-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M4 14v3a2 2 0 0 0 2 2h1v-5H4Z"/><path d="M20 14v3a2 2 0 0 1-2 2h-1v-5h3Z"/></svg> <span id="gw-listen-btn-label">Start giveaway</span></span>
             </button>
           </div>
+          <p class="hint">Entries keep collecting on our servers even if you close or refresh this page.</p>
         </form>
-      </section>
-
-      <!-- Real-Time Chat Stream Activity (Compact Log) -->
-      <section class="v3-table-card gw-card" id="gw-feed-card">
-        <div class="v3-section-head">
-          <div>
-            <h2>Chat activity</h2>
-            <p class="v3-head-sub">Messages from your Kick channel appear here while listening.</p>
-          </div>
-          <span class="gw-event-badge" id="gw-feed-counter">0 messages</span>
-        </div>
-        <div class="gw-feed-container" id="gw-chat-feed" aria-live="polite">
-          <div class="gw-feed-empty" id="gw-feed-empty">
-            Connect your Kick channel to watch chat messages land here in real time.
-          </div>
-        </div>
       </section>
     </div>
 
@@ -479,16 +406,12 @@ ${tabs}
               <span class="gw-stat-lbl">Entrants</span>
             </div>
             <div class="gw-stat-pill">
-              <span class="gw-stat-val" id="gw-stat-verified">0</span>
-              <span class="gw-stat-lbl">Verified</span>
+              <span class="gw-stat-val" id="gw-stat-keyword">—</span>
+              <span class="gw-stat-lbl">Keyword</span>
             </div>
             <div class="gw-stat-pill">
               <span class="gw-stat-val" id="gw-stat-time">00:00</span>
-              <span class="gw-stat-lbl">Session time</span>
-            </div>
-            <div class="gw-stat-pill" id="gw-pill-flagged" hidden>
-              <span class="gw-stat-val font-danger" id="gw-stat-flagged">0</span>
-              <span class="gw-stat-lbl">Flagged Alts</span>
+              <span class="gw-stat-lbl">Time</span>
             </div>
           </div>
         </div>
@@ -502,7 +425,7 @@ ${tabs}
               <div class="gw-winner-meta">
                 <div class="gw-winner-badges-row">
                   <span class="gw-winner-badge">WINNER DRAWN</span>
-                  <span class="gw-trust-badge gw-trust-badge--high" id="gw-winner-trust">Verified Viewer</span>
+                  <span class="gw-trust-badge gw-trust-badge--high" id="gw-winner-trust">Viewer</span>
                 </div>
                 <h3 class="gw-winner-username" id="gw-winner-name">Username</h3>
                 <p class="gw-winner-msg" id="gw-winner-message">"entry message"</p>
@@ -533,7 +456,7 @@ ${tabs}
               <div class="gw-idle-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="7" rx="2"/><path d="M12 7v14M3 11h18M12 7H8.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7Zm0 0h3.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7Z"/></svg></div>
             </div>
             <div class="gw-roller-track" id="gw-roller-track" aria-hidden="true">Ready to draw</div>
-            <p>Everyone who types your keyword lands here. Roll once chat is in.</p>
+            <p>Everyone who types your keyword lands here. Draw once entries are in.</p>
             <button class="btn btn--accent btn--lg" id="gw-btn-roll" type="button" disabled>
               Draw Random Winner
             </button>
@@ -546,7 +469,7 @@ ${tabs}
         <div class="v3-section-head">
           <div>
             <h2>Entrants (<span id="gw-count-header">0</span>)</h2>
-            <p class="v3-head-sub">Viewers who used your entry keyword during this session.</p>
+            <p class="v3-head-sub">Viewers who typed the keyword in your Kick chat during this giveaway.</p>
           </div>
           <div class="gw-entrants-tools">
             <label class="sr-only" for="gw-search-entrants">Search entrants</label>
@@ -572,7 +495,7 @@ ${tabs}
         </div>
 
         <div class="v3-state-inline" id="gw-entrants-empty" role="status">
-          <span class="v3-state-inline-copy"><b>No entrants yet</b><span>Connect Kick and start listening to chat to collect entries.</span></span>
+          <span class="v3-state-inline-copy"><b>No entrants yet</b><span>Start a giveaway and viewers who type the keyword in your Kick chat will appear here.</span></span>
         </div>
       </section>
     </div>
@@ -849,7 +772,7 @@ ${tabs}
       <img class="gw-modal-avatar" id="gw-modal-avatar" src="" alt="Winner avatar" />
       <div class="gw-winner-badges-row gw-winner-badges-row--center">
         <span class="gw-winner-badge">WINNER DRAWN</span>
-        <span class="gw-trust-badge gw-trust-badge--high" id="gw-modal-trust-badge">Verified Viewer</span>
+        <span class="gw-trust-badge gw-trust-badge--high" id="gw-modal-trust-badge">Viewer</span>
       </div>
       <h2 class="gw-modal-name" id="gw-modal-name">Winner</h2>
       <p class="gw-winner-msg" id="gw-modal-msg">"!"</p>
