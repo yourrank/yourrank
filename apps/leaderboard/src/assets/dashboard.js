@@ -92,7 +92,7 @@ async function init() {
   // Plan and billing live in the account settings document; a `?plan=` on the
   // dashboard is an old checkout link.
   const planParam = urlParams.get("plan");
-  const requestedSiteId = urlParams.get("board") || null;
+  const requestedSiteId = urlParams.get("board") || urlParams.get("siteId") || null;
   const apiUrl = requestedSiteId ? `/api/site?siteId=${encodeURIComponent(requestedSiteId)}` : "/api/site";
   // The board request does not depend on the auth response, so both are issued
   // together; the auth result is still applied first and gates everything else.

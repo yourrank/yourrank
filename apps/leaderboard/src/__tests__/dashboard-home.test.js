@@ -241,6 +241,11 @@ describe("Home: section loading and error isolation", () => {
     expect(overviewJs).not.toContain("Promise.all([\n      fetchDashboardJson");
   });
 
+  it("boots Home from either site parameter so fragment-section links never fall back to the default site", () => {
+    const dashboardJs = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
+    expect(dashboardJs).toContain('const requestedSiteId = urlParams.get("board") || urlParams.get("siteId") || null;');
+  });
+
   it("reloads the dynamic sections whenever Home is navigated to in-app", () => {
     const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
     expect(shellJs).toContain('import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";');
