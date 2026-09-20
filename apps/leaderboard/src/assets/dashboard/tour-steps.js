@@ -17,14 +17,14 @@ export const TOUR_STEPS = [
   {
     id: "setup",
     target: "#ovSetup",
-    title: "Start with the launch checklist",
-    body: "Name your site, add the players you want to rank, then publish. The checklist tracks what is left — the site stays editable the whole time.",
+    title: "Start with core setup",
+    body: "Name your community, add the players you want to rank, then publish. Setup progress tracks what is left — the community stays editable the whole time.",
   },
   {
     id: "scoring",
-    target: "#ovTopPlayers",
-    title: "Players are ranked by score",
-    body: "Every player you add appears here, highest score first. Ranking rules, imports and score edits live in the Leaderboard editor in the sidebar.",
+    target: "#ovQuickActions",
+    title: "Jump straight to the work",
+    body: "Quick actions open the editors for players, Activities and rewards. Players are ranked by score; ranking rules, imports and score edits live in Community → Leaderboard.",
   },
   {
     id: "overlays",

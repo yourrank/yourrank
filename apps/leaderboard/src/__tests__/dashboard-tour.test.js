@@ -69,7 +69,7 @@ describe("tour steps", () => {
     expect(TOUR_STEPS.map((s) => s.target)).toEqual([
       NO_TARGET,
       "#ovSetup",
-      "#ovTopPlayers",
+      "#ovQuickActions",
       "#overlayDesignerCard",
       NO_TARGET,
     ]);
@@ -97,7 +97,7 @@ describe("tour steps", () => {
       new URL("../pages/dashboard.jsx", import.meta.url),
       "utf8",
     );
-    for (const selector of ["#ovSetup", "#ovTopPlayers", "#overlayDesignerCard"]) {
+    for (const selector of ["#ovSetup", "#ovQuickActions", "#overlayDesignerCard"]) {
       const needle = selector.startsWith("#")
         ? `id="${selector.slice(1)}"`
         : selector.slice(1);

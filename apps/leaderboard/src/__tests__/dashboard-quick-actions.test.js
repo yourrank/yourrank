@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { PAGES } from "../pages.jsx";
 import { effectivePlan } from "@yourrank/shared/plans";
-import { activityEmptyAction, nextStepAction } from "../assets/dashboard/overview-state.js";
+import { SETUP_STEPS, setupStepHref } from "../assets/dashboard/overview-state.js";
 import { SECTIONS } from "../assets/dashboard/routes.js";
 
 const siteJs = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
@@ -28,128 +28,74 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('<ul class="ov-setup-list" id="ovSetupList" aria-label="Setup steps"></ul>');
     expect(html).not.toContain('id="ovActiveGiveaway"');
     expect(html).not.toContain("Times shared");
-    expect(html).toContain('id="ovAttention"');
-    expect(html).toContain('id="ovHappeningNow"');
-    expect(html).toContain('id="ovComingNext"');
-    expect(html).toContain('id="ovActivityList"');
-    expect(html).toContain('id="ovTopPlayers"');
+    for (const id of ["ovAttention", "ovLiveNow", "ovComingNext", "ovPulse", "ovRecent", "ovQuickActions", "ovSetup"]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).not.toContain('id="ovTopPlayers"');
+    expect(html).not.toContain('id="ovNextStep"');
+    expect(html).not.toContain('id="ovHappeningNow"');
     expect(html).not.toContain('class="ov-summary"');
     expect(html).toContain('id="ovPublishedStatus"');
+    expect(html).toContain('id="ovPublicLink"');
+    expect(html).toMatch(/id="ovPublicLink"[^>]*hidden/);
     expect(html).not.toContain('id="ovPublicSiteAction"');
     expect(html).toContain('id="liveLink"');
     expect((html.match(/>View site ↗</g) || []).length).toBe(1);
-    expect(html).toContain('href="/dashboard/leaderboard/setup"');
-    expect(html).toContain('class="ov-card-empty" id="ovActivityEmpty"');
-    expect(html).toContain('href="/dashboard/rewards/redemptions"');
-    // Home states both scope and condition beside its title, and groups only
-    // the two useful site figures into one quiet summary instead of a KPI wall.
     expect(html).toContain('class="ov-scope"><strong id="ovSiteName"');
     expect(html).toContain('id="ovOperatorContext" hidden');
     expect(html).toContain('class="ov-status" id="ovStatus"');
-    expect(html).toContain('class="ov-figures" id="ovFigures" aria-label="Selected site summary"');
+    expect(html).toContain('class="ov-figures" id="ovFigures" aria-label="Community pulse"');
+    expect(html).toContain('id="ovPulseRange">Last 30 days<');
+    expect(html).not.toContain("Visits this week");
     expect(html).not.toContain('id="ovKpiRow"');
     expect(html).not.toContain('id="ovCommandGrid"');
     expect((html.match(/id="ovPublishedStatus"/g) || []).length).toBe(1);
   });
 
-  it("models Home setup as an accessible essentials-only launch checklist", () => {
+  it("models Home setup as an accessible essentials-only checklist that sits last", () => {
     const html = dashboardHtml();
-    const setupDefinition = overviewJs.slice(overviewJs.indexOf("const SETUP_STEPS"), overviewJs.indexOf("function isBoardSetup"));
-    const setupKeys = [...setupDefinition.matchAll(/key: "([^"]+)"/g)].map((match) => match[1]);
-    expect(setupKeys).toEqual(["brand", "players", "publish"]);
-    expect(setupDefinition).not.toContain('key: "kick"');
-    expect(setupDefinition).toContain('href: "/dashboard/site"');
-    expect(nextStepAction({ status: { published: false, emailVerified: true }, steps: {} })).toMatchObject({ label: "Name site", href: "/dashboard/site" });
+    expect(SETUP_STEPS.map((step) => step.key)).toEqual(["brand", "players", "publish"]);
+    expect(SETUP_STEPS.some((step) => step.key === "kick")).toBe(false);
+    expect(setupStepHref(SETUP_STEPS[0], { siteId: "s1" })).toBe("/dashboard/site?board=s1");
+    expect(setupStepHref(SETUP_STEPS[1], { siteId: "s1" })).toBe("/dashboard/leaderboard/players?board=s1");
+    expect(setupStepHref(SETUP_STEPS[2], { emailVerified: true })).toBe("#publish");
+    expect(setupStepHref(SETUP_STEPS[2], { emailVerified: false })).toBe("/verify-email");
+    // Setup progress must be the last Home section and start hidden.
+    expect(html.lastIndexOf('id="ovSetup"')).toBeGreaterThan(html.indexOf('id="ovQuickActions"'));
+    expect(html).toMatch(/id="ovSetup"[^>]*hidden/);
     expect(html).not.toContain("Active giveaways");
     expect(overviewJs).toContain("state.CREDITS?.usage?.pendingRedemptions");
-    expect(overviewJs).toContain('pendingOrders === 1 ? "pending claim needs review." : "pending claims need review."');
-    expect(overviewJs).toContain('pendingOrders === 1 ? "Review claim" : "Review claims"');
-    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertLabel">pending claims need review.</span>');
-    expect(dashboardHtml()).toContain('id="ovPendingOrdersAlertAction"');
-    expect(dashboardHtml()).toContain('id="ovConnectionAlert"');
-    expect(dashboardHtml()).toContain('id="ovConnectionAlertAction"');
+    expect(overviewJs).toContain("state.CREDITS?.channel || null");
+    expect(dashboardHtml()).toContain('id="ovAttentionList"');
     expect(dashboardHtml()).toContain('id="ovAttentionCount"');
     expect(dashboardHtml()).toContain('role="region" aria-live="polite" aria-atomic="false" hidden');
-    expect(overviewJs).toContain("state.CREDITS?.channel?.homeAttention === true");
-    expect(overviewJs).toContain('connectionAction.textContent = canManageConnection ? "Open Connections" : "View connection"');
-    expect(overviewJs).toContain('buildDashboardPath("settings.connections", { board: state.ACTIVE_SITE_ID })');
-    expect(overviewJs).toContain('buildDashboardPath("siteConnections.channel", { siteId: state.ACTIVE_SITE_ID })');
-    expect(overviewJs).toContain('activityHomeState(body?.activities)');
     expect(overviewJs).toContain('Moderator for ${ownerName}');
     expect(overviewJs).toContain('data-setup-state="${stateKey}"');
     expect(overviewJs).toContain('"owner-action"');
-    expect(html).toContain('id="ovSetupCount"');
-  });
-
-  it("keeps one owner for the Home body and its data", () => {
-    const html = dashboardHtml();
-    // One Home body, one summary surface, one activity list, one player list.
-    for (const marker of [/data-page="home"/g, /id="ovFigures"/g, /id="ovActivityList"/g, /id="ovTopPlayers"/g]) {
-      expect(html.match(marker)).toHaveLength(1);
-    }
-    // The state and its actions are derived in overview-state.js and rendered
-    // in overview.js; nothing else may paint Home.
-    expect(overviewJs).toContain("renderOverviewSummary");
-    expect(overviewJs).toContain("nextStepAction(");
-    // Loading and empty surfaces exist for the remaining asynchronous figures.
     expect(overviewJs).toContain("setMetricLoading(");
     expect(overviewJs).not.toContain("/api/events/raffles");
     expect(overviewJs).not.toContain("/api/predictions");
     expect(overviewJs).not.toContain("GIVEAWAYS_STATUS");
-    expect(overviewJs).toContain('renderEmpty($("ovActivityEmpty")');
-    expect(overviewJs).toContain('renderEmpty($("ov_topEmpty")');
-    expect(html).toContain('class="skeleton v3-skel-kpi"');
+    expect(overviewJs).toContain('renderEmpty(activityEmpty');
+    expect(overviewJs).not.toContain("ov_topEmpty");
   });
 
-  it("names one contextual next step and lets dedicated surfaces keep their own", () => {
-    // Setup, verification and pending orders already have dedicated Home
-    // surfaces, so the card must not repeat them.
-    const setupComplete = { brand: true, players: true, publish: true };
-    expect(nextStepAction({ status: { published: false, emailVerified: true }, steps: {} }).key).toBe("brand");
-    expect(nextStepAction({ status: { published: false, emailVerified: true }, steps: { brand: true } }).key).toBe("players");
-    expect(nextStepAction({ status: { published: false, emailVerified: true }, steps: { brand: true, players: true } }).key).toBe("publish");
-    expect(nextStepAction({ status: { published: true, emailVerified: false }, steps: setupComplete }).key).toBe("verifyEmail");
-    expect(nextStepAction({ status: { published: true, emailVerified: true }, steps: setupComplete, pendingOrders: 2 }).key).toBe("pendingOrders");
-
-    // These have no other owner on Home, so the card speaks for them.
-    const live = { status: { published: true, emailVerified: true }, steps: setupComplete };
-    expect(nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: false }).key).toBe("connectKick");
-    const addReward = nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: true, rewardMappings: 0 });
-    expect(addReward.key).toBe("addReward");
-    expect(addReward.href).toBe("/dashboard/rewards/rules#cr-reward-create-form");
-    const addShop = nextStepAction({ ...live, creditsEnabled: true, creditsStatus: "ready", creditsConnected: true, rewardMappings: 1, shopItems: 0 });
-    expect(addShop.key).toBe("addShopItem");
-    expect(addShop.href).toBe("/dashboard/rewards/shop");
-    expect(nextStepAction({ ...live, hasActivity: false, visits: 0 }).key).toBe("shareSite");
-    expect(nextStepAction({ ...live, hasActivity: false, visits: 4 })).toBeNull();
-
-    // A healthy, active site is told nothing at all.
-    expect(nextStepAction({ ...live, hasActivity: true, visits: 40 })).toBeNull();
-    // Unresolved async state must not produce a premature instruction.
-    expect(nextStepAction({ ...live, hasActivity: true, visits: 40, creditsEnabled: true, creditsStatus: "loading" })).toBeNull();
-  });
-
-  it("renders the next step card and suppresses steps another surface owns", () => {
+  it("keeps one owner for the Home body and its data", () => {
     const html = dashboardHtml();
-    expect(html).toContain('id="ovNextStep"');
-    expect(html).toContain('id="ovNextStepTitle"');
-    expect(html).toContain('id="ovNextStepAction"');
-    // Starts hidden so it never flashes generic copy before state resolves.
-    expect(html).toMatch(/id="ovNextStep"[^>]*hidden/);
-    // Labelled for assistive tech rather than relying on visual order.
-    expect(html).toContain('aria-labelledby="ovNextStepTitle"');
-    expect(overviewJs).toContain("NEXT_STEP_OWNED_ELSEWHERE");
-    for (const key of ["verifyEmail", "brand", "players", "publish", "pendingOrders"]) {
-      expect(overviewJs).toContain(`"${key}"`);
+    for (const marker of [/data-page="home"/g, /id="ovFigures"/g, /id="ovActivityList"/g, /id="ovQuickActionsList"/g]) {
+      expect(html.match(marker)).toHaveLength(1);
     }
-    expect(overviewJs).toContain("nextStepAction(");
-    expect(overviewJs).toContain("!status.live");
-    expect(dashboardCss).toContain(".ov-next-step");
-  });
-
-  it("matches the empty activity action to publication state", () => {
-    expect(activityEmptyAction(false)).toEqual({ label: "Publish your site", href: "/dashboard/leaderboard/setup" });
-    expect(activityEmptyAction(true)).toEqual({ label: "Share your site", href: "/dashboard/leaderboard/share" });
+    // Every Home section is derived in overview-state.js and painted by
+    // overview.js; nothing else may render Home.
+    expect(overviewJs).toContain("renderOverviewSummary");
+    for (const projection of ["attentionItems(", "liveNowItems(", "comingNextItems(", "pulseMetrics(", "recentActivityItems(", "quickActions(", "setupProgress("]) {
+      expect(overviewJs).toContain(projection);
+    }
+    expect(overviewJs).toContain("setMetricLoading(");
+    expect(overviewJs).not.toContain("nextStepAction(");
+    expect(overviewJs).not.toContain("visitsMetricState(");
+    expect(dashboardCss).not.toContain(".ov-next-step");
+    expect(dashboardCss).not.toContain(".ov-lists");
   });
 
   it("keeps Home orientation-only by removing score mutation controls", () => {
@@ -240,8 +186,8 @@ describe("dashboard overview quick actions", () => {
   it("keeps authenticated cards on the v4 geometry without changing public cards", () => {
     expect(dashboardCss).toMatch(/\.v3-dash\[data-auth-workspace\] \.card \{[\s\S]*?padding: 24px;[\s\S]*?margin-top: 0;[\s\S]*?transition: none;/);
     expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .card:hover { border-color: var(--ws-line); }");
-    // Home lists are plain sections, not framed dashboard cards.
-    expect(dashboardCss).toContain(".v3-dash[data-auth-workspace] .ov-lists { display: grid;");
+    // Home sections stack in one column; no framed side-by-side card grid.
+    expect(dashboardCss).not.toContain(".ov-lists");
     expect(dashboardCss).not.toContain(".ov-live-grid");
   });
 

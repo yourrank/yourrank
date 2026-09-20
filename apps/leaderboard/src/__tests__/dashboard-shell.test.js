@@ -214,11 +214,14 @@ describe("signed-in shell navigation", () => {
     expect(html).toContain('id="ovSetupAction"');
     expect(html).not.toContain('id="ovStepBrand"');
     expect(html).toContain(">Home</h1>");
-    // One state, one next action, one summary, then the lists — no bento grid.
+    // One column, in the operational order — no bento grid, no side column.
     expect(html).not.toContain('id="ovCommandGrid"');
     expect(html).not.toContain('id="ovOnboardingBento"');
     expect(html).not.toContain('id="ovActiveBento"');
-    expect(html).toContain('class="ov-lists"');
+    expect(html).not.toContain('class="ov-lists"');
+    const order = ["ovAttention", "ovLiveNow", "ovComingNext", "ovPulse", "ovRecent", "ovQuickActions", "ovSetup"].map((id) => html.indexOf(`id="${id}"`));
+    expect(order.every((index) => index > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   it("does not duplicate peer products below the rail", () => {

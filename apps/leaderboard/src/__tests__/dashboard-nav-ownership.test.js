@@ -265,13 +265,10 @@ describe("dashboard navigation ownership", () => {
     expect(playersJs).toContain("--players-table-min-width");
     expect(dashboardV4Css).not.toContain(".v3-players-table th:nth-child(3)");
     expect(dashboardV4Css).not.toContain(".v3-players-table td:nth-child(3)");
-    expect(dashboardV4Css).toContain(".ov-player-name {\n  min-width: 0;");
     expect(boardsJs).toContain("renderSiteSelector({");
     expect(siteSelectorJs).toContain("import { esc } from \"./utils.js\";");
     expect(readFileSync(new URL("../assets/dashboard/players.js", import.meta.url), "utf8"))
       .toContain('class="p-name" placeholder="Player name" aria-label="Player name" title="${esc(p.name)}"');
-    expect(readFileSync(new URL("../assets/dashboard/overview.js", import.meta.url), "utf8"))
-      .toContain('class="ov-player-name" title="${esc(player.name)}"');
   });
 
   it("keeps delegated site lookup unambiguous", () => {
