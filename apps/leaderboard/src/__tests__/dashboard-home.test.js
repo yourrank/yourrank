@@ -241,6 +241,12 @@ describe("Home: section loading and error isolation", () => {
     expect(overviewJs).not.toContain("Promise.all([\n      fetchDashboardJson");
   });
 
+  it("reloads the dynamic sections whenever Home is navigated to in-app", () => {
+    const shellJs = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
+    expect(shellJs).toContain('import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";');
+    expect(shellJs).toContain('if (page === "home") {\n    renderOverviewSummary();\n    loadOverviewLiveData();\n  }');
+  });
+
   it("hides optional sections when empty and shows a compact skeleton while loading", () => {
     expect(overviewJs).toContain("liveSection.hidden = !liveLoading && !liveError && live.items.length === 0");
     expect(overviewJs).toContain("upcomingSection.hidden = !loading && !error && upcoming.length === 0");

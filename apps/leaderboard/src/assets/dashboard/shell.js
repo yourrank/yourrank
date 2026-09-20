@@ -6,7 +6,7 @@
 // history for dashboard routes.
 import { state } from "./state.js";
 import { logError, showToast } from "./utils.js";
-import { renderOverviewSummary } from "./overview.js";
+import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";
 import { discardEditorChanges, fitDesignPreview, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
 import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
 import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
@@ -318,7 +318,10 @@ export function navTo(page, hash = "") {
   // without duplicating drawer behavior in the SPA runtime.
   closeDashboardDrawer();
   renderCrumbs(page, scrollHash);
-  if (page === "home") renderOverviewSummary();
+  if (page === "home") {
+    renderOverviewSummary();
+    loadOverviewLiveData();
+  }
   if (page === "home" || page === "performance") loadStats();
   // Re-render and re-fit the live preview whenever the Editor becomes visible
   // (updateDesignPreview() no-ops while the section is hidden, so navigating in
