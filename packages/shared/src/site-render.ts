@@ -167,6 +167,30 @@ export function effectivePublicSections(data) {
   };
 }
 
+export const PUBLIC_BOARD_IDS = ["main", "loyalty"] as const;
+export type PublicBoardId = (typeof PUBLIC_BOARD_IDS)[number];
+
+/**
+ * Fixed public leaderboards of a site. Main is always present (it is the
+ * Leaderboard section itself); Loyalty exists only when the creator turned
+ * `sections.loyaltyLeaderboard` on. "Show Leaderboard" stays the master switch:
+ * callers check `effectivePublicSections(data).leaderboard` before any of this.
+ */
+export function publicLeaderboardBoards(data): PublicBoardId[] {
+  const sections = (data && typeof data === "object" ? data.sections : null) || {};
+  return sections.loyaltyLeaderboard === true ? ["main", "loyalty"] : ["main"];
+}
+
+/** `?board=` value → board id; anything unknown or absent is Main. */
+export function parsePublicBoard(value): PublicBoardId {
+  return value === "loyalty" ? "loyalty" : "main";
+}
+
+export function publicBoardHref(board: PublicBoardId, slug, isCustomDomain) {
+  const base = siteSectionHref("leaderboard", slug, isCustomDomain);
+  return board === "main" ? base : `${base}?board=${board}`;
+}
+
 /** One-off predicate form of effectivePublicSections(). */
 export function isPublicSectionEnabled(data, section) {
   return effectivePublicSections(data)[section] === true;
@@ -626,10 +650,13 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     viewerIntent: opts.viewerIntent && typeof opts.viewerIntent === "object" ? opts.viewerIntent : { intent: "signin", rewardId: "" },
     rewardId: typeof opts.rewardId === "string" ? opts.rewardId : "",
     reward: opts.reward && typeof opts.reward === "object" ? opts.reward : null,
+    board: parsePublicBoard(opts.board),
+    publicBoards: publicLeaderboardBoards(data),
+    loyalty: Array.isArray(opts.loyalty) ? opts.loyalty : [],
   };
 
   const mainInner = section == null && typeof opts.contentHtml === "string" ? opts.contentHtml : (section === "home" ? homeMain(ctx)
-    : section === "leaderboard" ? boardMain(ctx)
+    : section === "leaderboard" ? (ctx.board === "loyalty" ? loyaltyMain(ctx) : boardMain(ctx))
     : section === "shop" ? (ctx.rewardId ? rewardDetailMain(ctx) : shopMain(ctx))
     : section === "games" ? gamesMain(ctx)
     : section === "me" ? meMain(ctx)
@@ -1008,7 +1035,7 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
 ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
-    : emptyState(ICONS.trophy, "No players yet", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
+    : emptyState(ICONS.trophy, "No leaderboard entries yet.", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
   const customPayoutNote = String(data.prizes?.payoutNote || "").trim();
   const payoutNote = !showPool ? ""
@@ -1021,7 +1048,7 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
   const rulesHtml = rulesBlock(data, payoutNote);
 
   const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
-  const switcher = events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '';
+  const switcher = boardTabs(ctx) + (events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '');
   if (data.sections?.leaderboard === false) {
     return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
 ${panel({ title: "Standings", titleHidden: true, meta: "", body: emptyState(ICONS.trophy, "Standings are hidden", `${esc(b.name || slug)} is not showing the standings right now. Check back later.`), foot: notes })}
@@ -1040,6 +1067,73 @@ ${panel({
     foot: notes,
   })}</div>
 ${rulesHtml}`;
+}
+
+const BOARD_TAB_LABELS: Record<PublicBoardId, string> = { main: "Main", loyalty: "Loyalty" };
+
+/**
+ * Main/Loyalty pills under the Leaderboard title. Rendered only when the site
+ * has more than one public board, so a Main-only site looks exactly as before.
+ * Plain links: the board is URL state (`?board=`), shareable and cache-safe.
+ */
+function boardTabs(ctx) {
+  const { publicBoards: boards, board, slug, isCustomDomain } = ctx;
+  if (!Array.isArray(boards) || boards.length < 2) return "";
+  return `<nav class="viewer-board-tabs" aria-label="Leaderboard type">${boards.map((id) =>
+    `<a class="viewer-board-tab" href="${publicBoardHref(id, slug, isCustomDomain)}" data-board="${id}"${id === board ? ' aria-current="page"' : ""}>${BOARD_TAB_LABELS[id]}</a>`).join("")}</nav>`;
+}
+
+/* ── Loyalty leaderboard ───────────────────────────────────────────────────── */
+
+/**
+ * Viewers of this community ranked by lifetime credits earned. Rows are site
+ * memberships, not leaderboard players: a viewer never becomes a Main player
+ * by sharing a name, and spending credits never moves anyone down.
+ */
+function loyaltyMain(ctx) {
+  const { b, slug } = ctx;
+  const rows = (Array.isArray(ctx.loyalty) ? ctx.loyalty : []).slice().sort((x, z) => (x.rank || 0) - (z.rank || 0) || String(x.name || "").localeCompare(String(z.name || "")));
+  const metric = "Credits earned";
+
+  const introHtml = `<section class="yr-lbh viewer-board-hero">
+<div class="viewer-board-hero-copy">
+<p class="viewer-hero-kicker">${esc(b.name || slug)} · Creator community</p>
+<h1 class="yr-h1 yr-lbh-title">Leaderboard</h1>
+<p class="yr-lbh-note">See who's leading this community. Ranked by lifetime credits earned; spending credits never lowers a rank.</p>
+<p class="yr-lbh-meta"><span class="yr-lbh-state is-live">Live</span><span>Loyalty leaderboard</span></p>
+</div>
+<div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy">${ICONS.medal}</span></div>
+</section>`;
+
+  const items = rows.map((v, i) => {
+    const rank = Number(v.rank) || i + 1;
+    const initials = esc(Array.from(String(v.name || "?")).slice(0, 2).join("").toUpperCase());
+    const avatar = v.avatarUrl ? safeUrl(v.avatarUrl) : "#";
+    const mark = avatar !== "#"
+      ? `<img class="yr-player-mark yr-player-avatar" src="${avatar}" alt="" loading="lazy" width="32" height="32" />`
+      : `<span class="yr-player-mark" aria-hidden="true">${initials}</span>`;
+    return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-position="${rank}">
+<span class="yr-srow-rank"><span class="yr-sr">Rank </span>${rank}</span>
+<span class="yr-srow-name">${mark}<span class="yr-player-name">${esc(v.name)}</span></span>
+<span class="yr-srow-val"><span class="yr-sr">${metric}: </span>${formatNumber(v.earned || 0)}</span>
+</li>`;
+  }).join("");
+
+  const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="true"><span>#</span><span>Viewer</span><span class="yr-r">${metric}</span></div>`;
+  const standings = rows.length
+    ? `${columns}
+<ol class="yr-stand" data-loyalty-rows aria-label="Loyalty standings for ${esc(b.name || slug)}" data-value-label="${metric}" data-hide-prizes="true">${items}</ol>`
+    : emptyState(ICONS.medal, "No loyalty activity yet.", "Viewers will appear here after earning credits.");
+
+  return `${introHtml}${boardTabs(ctx)}
+<div data-loyalty-board>
+${panel({
+    title: "Loyalty standings",
+    titleHidden: true,
+    meta: `<span>${formatNumber(rows.length)} ${rows.length === 1 ? "viewer" : "viewers"}</span>`,
+    body: standings,
+    foot: `<p class="yr-note">Lifetime credits earned in this community. Credits you spend on rewards still count here.</p>`,
+  })}</div>`;
 }
 
 /* ── Rewards ──────────────────────────────────────────────────────────── */

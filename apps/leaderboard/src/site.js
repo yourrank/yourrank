@@ -72,6 +72,7 @@ export const DEFAULT_EXTRA = {
     cta: true,
     payouts: true,
     poweredBy: false,
+    loyaltyLeaderboard: false,
   },
   playerFields: {
     score: true,
@@ -94,8 +95,8 @@ export const DEFAULT_EXTRA = {
 };
 
 /**
- * The canonical shape of the public block-visibility map. `poweredBy` is the
- * one block that defaults off; every other known block defaults on. Booleans
+ * The canonical shape of the public block-visibility map. `poweredBy` and
+ * `loyaltyLeaderboard` default off; every other known block defaults on. Booleans
  * are coerced from `!== false` rather than `!!`: a stored row written before a
  * key existed means "on", and only an explicit `false` turns a block off.
  *

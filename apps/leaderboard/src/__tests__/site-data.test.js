@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getViewerSiteData } from "../site-data.js";
+import { getViewerSiteData, getLoyaltyBoard, LOYALTY_BOARD_LIMIT } from "../site-data.js";
 
 const membershipRow = (overrides = {}) => ({
   id: "sv-1",
@@ -135,5 +135,60 @@ describe("viewer board membership tracking", () => {
     expect(result.participation).toEqual([{ type: "code_drop_claim" }]);
     expect(result.participationLimit).toBe(25);
     expect(result.participationTruncated).toBe(false);
+  });
+});
+
+describe("getLoyaltyBoard", () => {
+  const loyaltyRow = (overrides = {}) => ({
+    viewer_id: "viewer-a",
+    total_earned: 500,
+    rank: 1,
+    avatar_url: null,
+    identities: [{ provider: "kick", externalUserId: "1", username: "viewer_a", avatarUrl: "https://cdn.example/a.png", linkedAt: null }],
+    ...overrides,
+  });
+
+  it("ranks this site's memberships by lifetime credits earned, never by spendable balance", async () => {
+    const calls = [];
+    const rows = await getLoyaltyBoard("site-1", {}, {
+      queryImpl: async (sql, params) => {
+        calls.push({ sql, params });
+        return [
+          loyaltyRow(),
+          loyaltyRow({ viewer_id: "viewer-b", total_earned: 300, rank: 2, identities: [{ provider: "discord", externalUserId: "2", username: "viewer_b", avatarUrl: null, linkedAt: null }] }),
+        ];
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    const { sql, params } = calls[0];
+    expect(params[0]).toBe("site-1");
+    expect(sql).toContain("sv.site_id=$1");
+    expect(sql).toContain("sv.total_earned DESC");
+    expect(sql).toContain("sv.blocked=false");
+    expect(sql).toContain("v.is_system=false");
+    expect(sql).not.toMatch(/\bbalance\b/);
+    expect(sql).not.toMatch(/\bplayers\b/);
+    expect(sql).not.toMatch(/\btotal_spent\b/);
+
+    expect(rows).toEqual([
+      { viewerId: "viewer-a", name: "viewer_a", avatarUrl: "https://cdn.example/a.png", earned: 500, rank: 1 },
+      { viewerId: "viewer-b", name: "viewer_b", avatarUrl: null, earned: 300, rank: 2 },
+    ]);
+  });
+
+  it("clamps the limit and returns an empty board when nobody has earned credits", async () => {
+    let seen;
+    const rows = await getLoyaltyBoard("site-2", { limit: 100000 }, { queryImpl: async (_sql, params) => { seen = params; return []; } });
+    expect(seen).toEqual(["site-2", LOYALTY_BOARD_LIMIT]);
+    expect(rows).toEqual([]);
+  });
+
+  it("falls back to a generic display name and the viewer avatar when no identity is linked", async () => {
+    const rows = await getLoyaltyBoard("site-1", {}, {
+      queryImpl: async () => [loyaltyRow({ identities: [], avatar_url: "https://cdn.example/v.png" })],
+    });
+    expect(rows[0].name).toBe("Viewer");
+    expect(rows[0].avatarUrl).toBe("https://cdn.example/v.png");
   });
 });

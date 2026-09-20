@@ -1,6 +1,7 @@
 // Per-site viewer data helpers for the public site shell.
 import { one, query, exec } from "@yourrank/shared/db";
 import { getViewerClaimsForMembership } from "./handlers/claims.js";
+import { linkedViewerIdentities, viewerDisplayName, viewerIdentitiesSql } from "@yourrank/shared/viewer-identity";
 
 const VIEWER_PARTICIPATION_LIMIT = 25;
 
@@ -59,6 +60,40 @@ export async function getViewerParticipationHistory(
     limit: VIEWER_PARTICIPATION_LIMIT,
     truncated: found.length > VIEWER_PARTICIPATION_LIMIT,
   };
+}
+
+export const LOYALTY_BOARD_LIMIT = 100;
+
+/**
+ * Loyalty standings: this site's memberships ranked by `site_viewers.total_earned`,
+ * the lifetime credits-earned aggregate the credit ledger already maintains.
+ * Spending only moves `balance`/`total_spent`, so redemptions never lower a
+ * rank. Rows are memberships, never leaderboard players; nothing here links a
+ * viewer to a player by name. Ties share a rank (RANK(), like the main board).
+ */
+export async function getLoyaltyBoard(siteId, { limit = LOYALTY_BOARD_LIMIT } = {}, { queryImpl = query } = {}) {
+  const rows = await queryImpl(
+    `SELECT sv.viewer_id, sv.total_earned,
+            RANK() OVER (ORDER BY sv.total_earned DESC) AS rank,
+            v.avatar_url,
+            ${viewerIdentitiesSql("v")} AS identities
+       FROM site_viewers sv
+       JOIN viewers v ON v.id=sv.viewer_id AND v.is_system=false
+      WHERE sv.site_id=$1 AND sv.blocked=false AND sv.total_earned > 0
+      ORDER BY sv.total_earned DESC, sv.created_at ASC, sv.id ASC
+      LIMIT $2`,
+    [siteId, Math.max(1, Math.min(Number(limit) || LOYALTY_BOARD_LIMIT, LOYALTY_BOARD_LIMIT))],
+  );
+  return (rows || []).map((row, i) => {
+    const identities = linkedViewerIdentities(row);
+    return {
+      viewerId: row.viewer_id,
+      name: viewerDisplayName(row, "Viewer"),
+      avatarUrl: identities.find((identity) => identity.avatarUrl)?.avatarUrl || row.avatar_url || null,
+      earned: Number(row.total_earned) || 0,
+      rank: Number(row.rank) || i + 1,
+    };
+  });
 }
 
 /** Resolve the viewer's per-site row plus requested membership records.

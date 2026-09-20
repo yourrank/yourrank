@@ -99,6 +99,18 @@ const routeSite = {
       s.data.sections = { leaderboard: false };
       return s;
     }
+    // Show Loyalty leaderboard = ON alongside the master switch.
+    if (slug === "loyal") {
+      const s = makeSite("loyal");
+      s.data.sections = { leaderboard: true, loyaltyLeaderboard: true };
+      return s;
+    }
+    // Master switch OFF beats the Loyalty flag.
+    if (slug === "nolb-loyal") {
+      const s = makeSite("nolb-loyal");
+      s.data.sections = { leaderboard: false, loyaltyLeaderboard: true };
+      return s;
+    }
     return makeSite(slug || "streamer");
   },
   getBySlug: () => Promise.resolve(null),
@@ -142,7 +154,16 @@ const routeDeps = {
   hashToken: async () => "hash",
   getViewerSiteData: routeSiteData.getViewerSiteData,
   getShopItem: routeSiteData.getShopItem,
+  getLoyaltyBoard: (siteId) => {
+    routeSiteData.calls.push({ loyaltySiteId: siteId });
+    return Promise.resolve(LOYALTY_ROWS);
+  },
 };
+
+const LOYALTY_ROWS = [
+  { viewerId: "viewer-a", name: "Viewer A", avatarUrl: "https://cdn.example/a.png", earned: 500, rank: 1 },
+  { viewerId: "viewer-b", name: "Viewer B", avatarUrl: null, earned: 300, rank: 2 },
+];
 
 // ── Import after mocks ─────────────────────────────────────────────────
 import { parseSitePath, renderSiteRoute as renderSiteRouteImpl } from "../site-routes.js";
@@ -627,5 +648,86 @@ describe("Show Leaderboard visibility", () => {
     expect(html).toContain("Alice");
     expect(html).toContain("Bob");
     expect(html).toContain(">Leaderboard</a>");
+  });
+});
+
+// ── Main / Loyalty boards inside the one Leaderboard route ─────────────
+
+describe("Main / Loyalty public boards", () => {
+  const lb = (slug, search = "", isCustomDomain = false) =>
+    renderSiteRoute({ request: req(`https://${isCustomDomain ? `${slug}.example` : "example.com"}${isCustomDomain ? "" : `/${slug}`}/leaderboard${search}`), env, ctx, nonce: "n", slug, section: "leaderboard", isCustomDomain });
+
+  it("keeps Main as the default with no switcher when Loyalty is off", async () => {
+    const res = await lb("streamer");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Alice");
+    expect(html).not.toContain("viewer-board-tabs");
+    expect(html).not.toContain("Credits earned");
+    expect(routeSiteData.calls.some((c) => c.loyaltySiteId)).toBe(false);
+  });
+
+  it("renders the Main/Loyalty switcher only when both boards are available", async () => {
+    const html = await (await lb("loyal")).text();
+    expect(html).toContain('<nav class="viewer-board-tabs" aria-label="Leaderboard type">');
+    expect(html).toContain('href="/loyal/leaderboard" data-board="main" aria-current="page">Main</a>');
+    expect(html).toContain('href="/loyal/leaderboard?board=loyalty" data-board="loyalty">Loyalty</a>');
+    // Main content, Main metric.
+    expect(html).toContain("Alice");
+    expect(html).not.toContain("Viewer A");
+    expect(html).not.toContain("Credits earned");
+  });
+
+  it("serves the shareable ?board=loyalty link with lifetime credits earned, isolated to this site", async () => {
+    routeSiteData.calls.length = 0;
+    const res = await lb("loyal", "?board=loyalty");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(routeSiteData.calls.filter((c) => c.loyaltySiteId).map((c) => c.loyaltySiteId)).toEqual(["site-1"]);
+    expect(html).toContain('data-board="loyalty" aria-current="page">Loyalty</a>');
+    expect(html).toContain("Credits earned");
+    expect(html).toContain('data-value-label="Credits earned"');
+    expect(html).toContain("Viewer A");
+    expect(html).toContain("Viewer B");
+    expect(html.indexOf("Viewer A")).toBeLessThan(html.indexOf("Viewer B"));
+    expect(html).toContain('src="https://cdn.example/a.png"');
+    // Loyalty viewers are memberships, never Main players.
+    expect(html).not.toContain("Alice");
+    expect(html).not.toContain("Bob");
+  });
+
+  it("treats ?board=main and unknown values as Main", async () => {
+    for (const search of ["?board=main", "?board=nonsense"]) {
+      const html = await (await lb("loyal", search)).text();
+      expect(html).toContain("Alice");
+      expect(html).not.toContain("Credits earned");
+    }
+  });
+
+  it("redirects a direct Loyalty URL back to Main once the creator turns Loyalty off", async () => {
+    const res = await lb("streamer", "?board=loyalty");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/streamer/leaderboard");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const custom = await lb("streamer", "?board=loyalty", true);
+    expect(custom.status).toBe(302);
+    expect(custom.headers.get("location")).toBe("/leaderboard");
+  });
+
+  it("hides both boards when the master Show Leaderboard switch is off", async () => {
+    const main = await lb("nolb-loyal");
+    expect(main.status).toBe(302);
+    expect(main.headers.get("location")).toBe("/nolb-loyal");
+    const loyalty = await lb("nolb-loyal", "?board=loyalty");
+    expect(loyalty.status).toBe(302);
+    expect(loyalty.headers.get("location")).toBe("/nolb-loyal");
+    expect(await loyalty.text()).not.toContain("Viewer A");
+  });
+
+  it("keeps the public sidebar unchanged on the Loyalty board", async () => {
+    const html = await (await lb("loyal", "?board=loyalty")).text();
+    const rail = html.slice(html.indexOf('class="viewer-rail"'), html.indexOf('class="viewer-main"'));
+    expect(rail).not.toContain("Loyalty");
+    expect((rail.match(/href="\/loyal\/leaderboard"/g) || []).length).toBe(1);
   });
 });

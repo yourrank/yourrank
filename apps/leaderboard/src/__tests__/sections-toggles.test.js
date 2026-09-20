@@ -60,6 +60,10 @@ describe("normalizeSections (server payload shape)", () => {
     expect(out.countdown).toBe(true);
     expect(out.payouts).toBe(true);
     expect(out.poweredBy).toBe(false);
+    // Existing sites keep their public behavior: the Loyalty board is opt-in.
+    expect(out.loyaltyLeaderboard).toBe(false);
+    expect(DEFAULT_EXTRA.sections.loyaltyLeaderboard).toBe(false);
+    expect(normalizeSections({ loyaltyLeaderboard: true }).loyaltyLeaderboard).toBe(true);
   });
 
   it("coerces a legacy non-boolean to a boolean instead of passing it through", () => {
@@ -210,6 +214,32 @@ describe("Layout & blocks toggle wiring (client)", () => {
 });
 
 const { renderSite } = await import("@yourrank/shared/site-render");
+
+describe("Setup → Leaderboards: Show Loyalty leaderboard (client)", () => {
+  const dashboardJsx = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
+
+  it("is a plain boolean in the same visibility map, written through setSectionValue", () => {
+    expect(client.DEFAULT_SECTIONS.loyaltyLeaderboard).toBe(false);
+    expect(siteJs).toContain('const LOYALTY_SECTION_KEY = "loyaltyLeaderboard";');
+    const start = siteJs.indexOf("export function renderLeaderboardTypes()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = siteJs.slice(start, siteJs.indexOf("\n}", start));
+    expect(body).toContain("setSectionValue(LOYALTY_SECTION_KEY, input.checked === true)");
+    expect(body).toContain("input.checked = current[LOYALTY_SECTION_KEY] === true");
+    // Rendered from renderSections so it follows the same normalized state.
+    expect(siteJs).toContain("renderLeaderboardTypes();");
+  });
+
+  it("lists exactly Main and Loyalty in the Setup card with one on/off switch", () => {
+    expect(dashboardJsx).toContain('data-leaderboard-type="main"');
+    expect(dashboardJsx).toContain('data-leaderboard-type="loyalty"');
+    expect((dashboardJsx.match(/data-leaderboard-type="/g) || []).length).toBe(2);
+    expect(dashboardJsx).toContain('id="f_loyalty_board" role="switch" aria-label="Show Loyalty leaderboard"');
+    expect(dashboardJsx).toContain('id="f_loyalty_board_state"');
+    expect(dashboardJsx).toContain("Ranks viewers by lifetime credits earned");
+    expect(dashboardJsx).not.toMatch(/loyalty.*formula/i);
+  });
+});
 
 describe("every Layout & blocks toggle changes the public page", () => {
   const baseData = {
