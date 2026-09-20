@@ -298,7 +298,7 @@ export async function handleCreditsStatus(request, env) {
   if (authorization.res) return authorization.res;
   if (!(await rateLimit(env, `credits:status:${user.id}`, 60, 60)).ok) return bad("Too many requests.", 429);
 
-  const [channel, mappings, items, viewers, redemptions, usage] = await Promise.all([
+  const [channel, mappings, items, viewers, recentClaims, usage] = await Promise.all([
     one(
       `SELECT s.kick_channel_external_id, s.kick_channel_name, s.kick_channel_linked_at,
               s.kick_channel_verified_at IS NOT NULL
@@ -339,19 +339,19 @@ export async function handleCreditsStatus(request, env) {
         LIMIT 100`,
       [site.id]
     ),
+    // Home's recent-activity feed only; the Claims list itself is served by
+    // /api/claims with cursor pagination.
     query(
-      `SELECT r.id, r.cost, r.status, r.created_at, r.updated_at,
-              v.kick_user_id, v.kick_username,
-              v.discord_user_id, v.discord_username, i.name AS item_name,
-              (SELECT q.status FROM claim_support_requests q WHERE q.claim_id = r.id
-                ORDER BY CASE WHEN q.status = 'open' THEN 0 ELSE 1 END, q.created_at DESC LIMIT 1) AS support_status
+      `SELECT r.created_at,
+              COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'Member') AS display_name,
+              i.name AS item_name
          FROM redemptions r
          JOIN site_viewers sv ON sv.id = r.site_viewer_id
          JOIN viewers v ON v.id = sv.viewer_id
          JOIN shop_items i ON i.id = r.shop_item_id
         WHERE sv.site_id=$1
         ORDER BY r.created_at DESC
-        LIMIT 100`,
+        LIMIT 5`,
       [site.id]
     ),
     getSiteCreditsUsage(site.id),
@@ -376,11 +376,6 @@ export async function handleCreditsStatus(request, env) {
     fraud_score: _fraudScore,
     ...viewer
   }) => viewer);
-  const safeRedemptions = (redemptions || []).map(({
-    kick_user_id: _kickUserId,
-    discord_user_id: _discordUserId,
-    ...redemption
-  }) => redemption);
 
   return json({
     ok: true,
@@ -403,7 +398,11 @@ export async function handleCreditsStatus(request, env) {
       editHref: "/dashboard/site#siteContactCard",
     },
     viewers: safeViewers,
-    redemptions: safeRedemptions,
+    recentClaims: (recentClaims || []).map((row) => ({
+      createdAt: row.created_at,
+      displayName: row.display_name,
+      itemName: row.item_name,
+    })),
     usage: usage || {},
     viewerAuth: {
       kick: site.viewer_kick_auth_enabled,

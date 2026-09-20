@@ -5,6 +5,8 @@ import { clearSession } from "./dashboard/session.js";
 import { UNKNOWN, inlineStateHtml, renderEmpty, renderError, setBlockLoading, setMetricEmpty, setMetricLoading, setRowsLoading } from "./dashboard/states.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
+import { ServerListController } from "./dashboard/server-list.js";
+import { bulkAwardSummary, remainingSelection, runBulkAward } from "./bulk-award.js";
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
 import { optimizeRewardImage } from "./reward-image.js";
@@ -295,14 +297,51 @@ async function loadMemberHistoryDialog() {
 function claimIdForRedemption(id) {
   return `redemption:${id}`;
 }
-function renderRedemptionRow(r) {
+// Rows come from /api/claims (claimSummary shape): `source.id` is the
+// redemption id used by the transition/detail routes.
+function claimRedemptionStatus(claim) {
+  return claim.status === "completed" ? "fulfilled" : claim.status === "cancelled" ? "cancelled" : "pending";
+}
+function renderClaimRow(claim) {
+  const id = claim.source?.id || String(claim.id || "").replace(/^redemption:/, "");
+  const pending = claim.status === "submitted";
   const actions = [
-    `<button class="btn btn--sm" type="button" data-claim-detail="${esc(r.id)}" aria-controls="cr-claim-detail-drawer" aria-expanded="false">Details</button>`,
-    r.status === "pending" ? `<button class="btn btn--sm" type="button" data-cancel="${esc(r.id)}">Cancel</button>` : "",
-    r.status === "pending" ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(r.id)}">Complete</button>` : "",
+    `<button class="btn btn--sm" type="button" data-claim-detail="${esc(id)}" aria-controls="cr-claim-detail-drawer" aria-expanded="false">Details</button>`,
+    pending ? `<button class="btn btn--sm" type="button" data-cancel="${esc(id)}">Cancel</button>` : "",
+    pending ? `<button class="btn btn--sm btn--accent" type="button" data-fulfill="${esc(id)}">Complete</button>` : "",
   ].filter(Boolean).join(" ");
-  const support = r.support_status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
-  return `<td data-label="Member"><b>${esc(viewerIdentity(r))}</b></td><td data-label="Reward">${esc(r.item_name)}</td><td data-label="Cost" class="num"><b>${r.cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(r.status)}${support}</td><td data-label="Claimed" title="${esc(fmtDate(r.created_at))}">${relative(r.created_at)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+  const support = claim.support?.status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
+  const cost = Number(claim.reward?.cost) || 0;
+  return `<td data-label="Member"><b>${esc(claim.subject?.displayName || "Member")}</b></td><td data-label="Reward">${esc(claim.reward?.name || claim.source?.title || "Reward")}</td><td data-label="Cost" class="num"><b>${cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(claimRedemptionStatus(claim))}${support}</td><td data-label="Claimed" title="${esc(fmtDate(claim.submittedAt))}">${relative(claim.submittedAt)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+}
+const CLAIM_FILTER_PARAM = Object.freeze({ all: "all", pending: "action_required", needs_attention: "needs_attention", completed: "completed" });
+function fetchClaimsPage(params, cursor) {
+  const query = new URLSearchParams(params);
+  query.set("status", CLAIM_FILTER_PARAM[claimFilter] || "all");
+  query.delete("sort");
+  if (cursor) query.set("cursor", cursor);
+  const base = sitePath("/api/claims");
+  return api("GET", `${base}${base.includes("?") ? "&" : "?"}${query}`).then((data) => ({ items: data.claims || [], page: data.page, total: data.total }));
+}
+function fetchMembersPage(params, cursor) {
+  const query = new URLSearchParams(params);
+  if (cursor) query.set("cursor", cursor);
+  const base = sitePath("/api/people/members");
+  return api("GET", `${base}${base.includes("?") ? "&" : "?"}${query}`).then((data) => {
+    state.members = cursor ? [...(state.members || []), ...(data.members || [])] : (data.members || []);
+    return { items: data.members || [], page: data.page, total: data.total };
+  });
+}
+function syncSelectAll() {
+  const selectAll = $("cr-member-select-all");
+  if (!selectAll) return;
+  const boxes = [...document.querySelectorAll("[data-member-select]")];
+  const checked = boxes.filter((box) => box.checked).length;
+  selectAll.checked = boxes.length > 0 && checked === boxes.length;
+  selectAll.indeterminate = checked > 0 && checked < boxes.length;
+}
+function localClaim(redemptionId) {
+  return redemptionCtrl?.items.find((item) => String(item.source?.id) === String(redemptionId)) || null;
 }
 // Publish review (YR-014): findings are linked to their edit control and
 // never rewrite a stored reward. Only a missing contact method blocks a new
@@ -442,9 +481,8 @@ function render() {
     shopItemsView = state.shopItems || []; renderShopCards(shopItemsView);
   }
   if (current === "viewers") {
-    const viewers = state.members || [];
     if (!viewerCtrl) {
-      viewerCtrl = new ListController({
+      viewerCtrl = new ServerListController({
         root: $("cr-viewers"),
         tbody: "cr-viewer-list",
         emptyEl: $("cr-viewer-empty"),
@@ -455,22 +493,21 @@ function render() {
           compact: true,
           actions: [{ label: "Share your site", href: "/dashboard/leaderboard/share", accent: true }],
         },
-        items: viewers,
-        perPage: 15,
-        searchFn: (v) => `${memberIdentity(v)} ${memberPlatforms(v).join(" ")} ${v.blocked ? "blocked" : "active"}`,
+        noResultsSpec: { kind: "search", title: "No matching members", body: "No member name matches this search on the selected site.", compact: true },
+        errorSpec: { title: "Couldn't load members", body: "People for the selected site could not be loaded." },
+        itemLabel: "members",
         sortOptions: [
-          { key: "activity", label: "Recently active", fn: (a, b) => new Date(b.lastSeenAt || b.lastCreditAt || 0) - new Date(a.lastSeenAt || a.lastCreditAt || 0) },
-          { key: "balance", label: "Credit balance", fn: (a, b) => (b.balance || 0) - (a.balance || 0) },
-          { key: "status", label: "Blocked first", fn: (a, b) => Number(b.blocked) - Number(a.blocked) },
+          { key: "activity", label: "Recently active" },
+          { key: "balance", label: "Credit balance" },
+          { key: "status", label: "Blocked first" },
         ],
-        emptyAllText: "No members yet.",
-        emptyText: "No matching members.",
+        fetchPage: fetchMembersPage,
         renderItem: (v) => renderViewerRow(v),
-        onRender: () => wireDynamicActions(),
+        onRender: () => { wireDynamicActions(); syncSelectAll(); },
       });
       mountListControls($("cr-viewers"), $("cr-viewer-toolbar"), $("cr-viewer-foot"));
     }
-    else viewerCtrl.setItems(viewers);
+    viewerCtrl.reload();
   }
   if (current === "overview") {
     renderOnboarding();
@@ -480,10 +517,23 @@ function render() {
     if ($("cr-analytics")) renderAnalytics();
   }
   if (current === "redemptions") {
-    const redemptions = filterClaims(state.redemptions || []);
     if (!redemptionCtrl) {
-      wireClaimFilters(); redemptionCtrl = new ListController({ root: $("cr-redemptions"), tbody: "cr-redemption-list", emptyEl: $("cr-redemption-empty"), emptySpec: CLAIM_EMPTY_SPEC, items: redemptions, perPage: 15, searchFn: (r) => `${r.kick_username || r.kick_user_id} ${r.item_name} ${r.status}`, sortOptions: [{ key: "queue", label: "Action queue", fn: (a, b) => Number(a.status !== "pending") - Number(b.status !== "pending") || (a.status === "pending" ? new Date(a.created_at || 0) - new Date(b.created_at || 0) : new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)) }, { key: "time", label: "Newest", fn: (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0) }, { key: "cost", label: "Cost", fn: (a, b) => (b.cost || 0) - (a.cost || 0) }, { key: "status", label: "Status", fn: (a, b) => (a.status || "").localeCompare(b.status || "") }], emptyAllText: "No claims yet.", emptyText: "No matching claims.", renderItem: (r) => renderRedemptionRow(r), onRender: () => wireDynamicActions() }); mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot")); }
-    else applyClaimFilter();
+      wireClaimFilters();
+      redemptionCtrl = new ServerListController({
+        root: $("cr-redemptions"),
+        tbody: "cr-redemption-list",
+        emptyEl: $("cr-redemption-empty"),
+        emptySpec: CLAIM_EMPTY_SPEC,
+        noResultsSpec: { kind: "search", title: "No matching claims", body: "Try a different member or reward name.", compact: true },
+        errorSpec: { title: "Couldn't load claims", body: "Reward claims for the selected site could not be loaded." },
+        itemLabel: "claims",
+        fetchPage: fetchClaimsPage,
+        renderItem: (claim) => renderClaimRow(claim),
+        onRender: () => wireDynamicActions(),
+      });
+      mountListControls($("cr-redemptions"), $("cr-redemption-toolbar"), $("cr-redemption-foot"));
+    }
+    applyClaimFilter();
   }
   if (current === "history") {
     const typeSelect = $("cr-history-type");
@@ -504,7 +554,7 @@ function renderOnboarding() {
   const canManageConnections = state.capabilities?.manageConnections !== false;
   const mappings = (state.mappings || []).filter((m) => m.active).length;
   const items = (state.shopItems || []).filter((i) => i.active).length;
-  const redemptions = (state.redemptions || []).length;
+  const redemptions = Number(state.usage?.redemptionsPer30Days) || (state.recentClaims || []).length;
   const steps = [{ id: 1, done: connected }, { id: 2, done: mappings > 0 }, { id: 3, done: items > 0 }, { id: 4, done: redemptions > 0 }, { id: 5, done: connected && mappings > 0 && items > 0 }];
   const current = steps.find((step) => !step.done)?.id;
   for (const step of steps) {
@@ -698,15 +748,6 @@ function ensureShopControls(hasItems = false) {
   controls.querySelector("[data-shop-next]").addEventListener("click", () => { shopPage++; renderShopCards(shopItemsView); });
 }
 let shopPage = 1;
-function claimNeedsAttention(r) {
-  return r.status === "pending" || r.support_status === "open";
-}
-function filterClaims(items) {
-  if (claimFilter === "pending") return items.filter((r) => r.status === "pending");
-  if (claimFilter === "needs_attention") return items.filter(claimNeedsAttention);
-  if (claimFilter === "completed") return items.filter((r) => r.status === "fulfilled");
-  return items;
-}
 function wireClaimFilters() {
   document.querySelectorAll("[data-claim-filter]").forEach((button) => button.addEventListener("click", () => {
     claimFilter = button.dataset.claimFilter;
@@ -725,10 +766,9 @@ const CLAIM_FILTER_EMPTY = {
 };
 function applyClaimFilter() {
   if (!redemptionCtrl) return;
-  const all = state.redemptions || [];
-  const spec = all.length && CLAIM_FILTER_EMPTY[claimFilter];
+  const spec = CLAIM_FILTER_EMPTY[claimFilter];
   redemptionCtrl.emptySpec = spec ? { kind: "empty", compact: true, ...spec } : CLAIM_EMPTY_SPEC;
-  redemptionCtrl.setItems(filterClaims(all));
+  redemptionCtrl.reload();
 }
 function mountListControls(root, toolbar, foot) {
   const controls = root?.querySelector(":scope > .list-controls");
@@ -1087,8 +1127,8 @@ async function resolveClaimSupport(button) {
     const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/resolve`));
     if (id !== claimDetailId) return;
     renderClaimSupport(data.support);
-    const local = (state.redemptions || []).find((item) => String(item.id) === String(id));
-    if (local) { local.support_status = "resolved"; applyClaimFilter(); }
+    const local = localClaim(id);
+    if (local) { local.support = { ...(local.support || {}), status: "resolved" }; redemptionCtrl.render(); }
   } catch (error) {
     if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
   } finally {
@@ -1127,9 +1167,9 @@ async function openClaimDetail(redemptionId, trigger) {
   claimDetailId = redemptionId;
   claimDetailTrigger = trigger;
   claimDetailTrigger.setAttribute("aria-expanded", "true");
-  const local = (state.redemptions || []).find((item) => String(item.id) === String(redemptionId));
-  $("cr-claim-detail-title").textContent = local?.item_name || "Claim details";
-  $("cr-claim-detail-subtitle").textContent = local ? `${viewerIdentity(local)} · ${statusChip(local.status).replace(/<[^>]+>/g, "")}` : "";
+  const local = localClaim(redemptionId);
+  $("cr-claim-detail-title").textContent = local?.reward?.name || "Claim details";
+  $("cr-claim-detail-subtitle").textContent = local ? `${local.subject?.displayName || "Member"} · ${local.statusLabel || ""}` : "";
   drawer.hidden = false;
   backdrop.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
@@ -1227,8 +1267,10 @@ async function load() {
     if (nextSiteId !== activeSiteId) { memberSelection.clear(); updateBulkBar(); }
     activeSiteId = nextSiteId;
     updateKickAuthLinks();
+    // The Members tab loads its rows through the cursor-paginated list
+    // controller; only the shell/site context is needed up front.
     state = tab() === "viewers"
-      ? await api("GET", sitePath("/api/people/members"))
+      ? { members: state.members || [], capabilities: state.capabilities }
       : await api("GET", sitePath("/api/credits/status"));
     setState({ CREDITS_STATUS: "ready" });
     render();
@@ -1308,29 +1350,19 @@ async function bulkAwardMembers() {
   const awardBtn = $("cr-bulk-award");
   if (awardBtn) awardBtn.disabled = true;
   setStatus("cr-viewer-status", `Awarding ${amount} credits to ${ids.length} member${ids.length === 1 ? "" : "s"}…`);
-  let ok = 0; const failed = [];
   // Sequential by design: one shared ledger write at a time keeps the 30/60s
   // adjustment rate limit intact and surfaces per-member errors clearly.
-  for (const id of ids) {
-    try {
-      await adjustMemberCredits(id, amount, reason);
-      ok++;
-    } catch (err) {
-      logError("bulk-award-member", err);
-      failed.push(id);
-      if (err?.code === "RATE_LIMITED" || err?.status === 429) break;
-    }
-  }
+  const outcome = await runBulkAward(ids, (id) => adjustMemberCredits(id, amount, reason));
+  outcome.errors.forEach((err) => logError("bulk-award-member", err));
   memberSelection.clear();
-  failed.forEach((id) => memberSelection.add(id));
+  remainingSelection(outcome).forEach((id) => memberSelection.add(id));
+  document.querySelectorAll("[data-member-select]").forEach((box) => { box.checked = memberSelection.has(box.dataset.memberSelect); });
+  syncSelectAll();
   updateBulkBar();
   if (awardBtn) awardBtn.disabled = false;
-  if (!failed.length) {
-    setStatus("cr-viewer-status", `Awarded ${amount} credits to ${ok} member${ok === 1 ? "" : "s"}.`);
-    clearMemberSelection();
-  } else {
-    setStatus("cr-viewer-status", `Awarded ${ok} of ${ids.length}. ${ids.length - ok} remaining — rate limit reached or an error occurred; retry the selected members.`, true);
-  }
+  const complete = !outcome.failed.length && !outcome.unattempted.length;
+  setStatus("cr-viewer-status", bulkAwardSummary(outcome, amount), !complete);
+  if (complete) clearMemberSelection();
   await load().catch(() => {});
 }
 
