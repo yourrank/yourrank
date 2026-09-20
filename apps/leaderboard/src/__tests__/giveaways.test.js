@@ -96,7 +96,8 @@ describe("Giveaway Chatroom Handler", () => {
     const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
     expect(source).toContain('document.querySelector(".gw-tab-btn.is-active")?.dataset.tab');
     expect(source).toContain('if (activeTab === "raffles") loadRaffles();');
-    expect(source).toContain('if (activeTab === "drops") loadCodeDrops();');
+    expect(source).not.toContain("loadCodeDrops");
+    expect(source).not.toContain('"cd-drawer"');
     expect(source).toContain('if (activeTab === "preds") loadPredictions();');
     expect(source).not.toContain('querySelectorAll(".gw-tab-btn").forEach((btn) => {');
   });
@@ -155,8 +156,8 @@ describe("Giveaway Chatroom Handler", () => {
   it("keeps giveaway history tables on the canonical table markup", () => {
     expect(giveawaysHtml).not.toContain('class="gw-table"');
     expect(giveawaysHtml).not.toContain('class="gw-table-wrap"');
-    expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(4);
-    expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(4);
+    expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(3);
+    expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(3);
   });
 
   it("keeps draw options behind the disclosure", () => {
@@ -273,18 +274,17 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysSource).toContain("trapEventDrawerFocus");
     expect(giveawaysSource).toContain("sessionStorage.setItem");
     expect(giveawaysSource).not.toMatch(/\b(?:alert|confirm)\s*\(/);
-    for (const id of ["rf-drawer", "cd-drawer", "pred-drawer", "settle-drawer"]) {
+    for (const id of ["rf-drawer", "pred-drawer", "settle-drawer"]) {
       expect(giveawaysHtml).toContain(`id="${id}"`);
       expect(giveawaysHtml).toContain('role="dialog" aria-modal="true" aria-labelledby=');
     }
     expect(giveawaysHtml).toContain('id="rf-status"');
-    expect(giveawaysHtml).toContain('id="cd-status"');
     expect(giveawaysHtml).toContain('id="pred-status"');
     expect(giveawaysHtml).toContain('id="settle-status"');
   });
 
   it("keeps every event drawer's fields scrollable while actions stay pinned above the app", () => {
-    for (const id of ["rf-drawer", "cd-drawer", "pred-drawer", "settle-drawer"]) {
+    for (const id of ["rf-drawer", "pred-drawer", "settle-drawer"]) {
       const drawer = giveawaysHtml.match(
         new RegExp(`<div class="gw-drawer-backdrop" id="${id}"[\\s\\S]*?</div>\\n</div>`, "m"),
       )?.[0];
@@ -324,7 +324,7 @@ describe("Giveaway Chatroom Handler", () => {
     const bentoEnd = page.lastIndexOf("</div>", firstDrawer);
     expect(bentoStart).toBeGreaterThanOrEqual(0);
     expect(bentoEnd).toBeGreaterThan(bentoStart);
-    for (const id of ["pred-drawer", "settle-drawer", "rf-drawer", "cd-drawer"]) {
+    for (const id of ["pred-drawer", "settle-drawer", "rf-drawer"]) {
       expect(page.indexOf(`id="${id}"`)).toBeGreaterThan(bentoEnd);
     }
   });

@@ -186,7 +186,7 @@ export function resolveFragment(targetPath) {
   // Engagement
   if (clean.startsWith("/dashboard/giveaways/")) {
     const tab = clean.slice("/dashboard/giveaways/".length);
-    if (["chat", "raffles", "drops", "tournaments"].includes(tab)) return { pageKey: "giveaways", tab };
+    if (["chat", "raffles", "tournaments"].includes(tab)) return { pageKey: "giveaways", tab };
     if (tab === "predictions") return { pageKey: "giveaways", tab: "preds" };
     return null;
   }
@@ -1007,7 +1007,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path.startsWith("/dashboard/giveaways/")) {
         const tab = path.slice("/dashboard/giveaways/".length);
-        if (["chat", "raffles", "drops", "predictions", "tournaments"].includes(tab)) {
+        if (["chat", "raffles", "predictions", "tournaments"].includes(tab)) {
           return renderDashboardPage("giveaways", "giveaways_render_failed", tab === "predictions" ? "preds" : tab);
         }
         return redirectKeepingSearch("/dashboard/giveaways/chat", url);

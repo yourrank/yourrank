@@ -6,7 +6,7 @@ import { showConfirmModal, paginate, wirePager } from "./dashboard/utils.js";
 
 // Client-side script for the Engage hub: server-backed Chat Giveaways
 // (entries arrive via Kick chat webhooks and are polled from the API),
-// plus Raffles, Code Drops and Predictions.
+// plus Raffles and Predictions (Code Drops are owned by Activities).
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
 
@@ -148,7 +148,6 @@ if (!window.__yrSpaShell) {
   }
   const drawerFields = {
     "rf-drawer": ["rf-title", "rf-desc", "rf-cost", "rf-max"],
-    "cd-drawer": ["cd-code", "cd-points", "cd-max", "cd-expire"],
     "pred-drawer": ["pred-title", "pred-opt-1", "pred-opt-2", "pred-min-bet", "pred-max-bet", "pred-lock-min"],
   };
   let activeDrawer = null;
@@ -946,7 +945,7 @@ if (!window.__yrSpaShell) {
   }
 
   // =========================================================================
-  // COMMUNITY EVENTS HUB: RAFFLES & FLASH CODE DROPS
+  // COMMUNITY EVENTS HUB: RAFFLES
   // =========================================================================
 
   function initEventsHub() {
@@ -960,7 +959,6 @@ if (!window.__yrSpaShell) {
       tabs.scrollTo({ left: Math.max(0, targetLeft), behavior: "auto" });
     }
     if (activeTab === "raffles") loadRaffles();
-    if (activeTab === "drops") loadCodeDrops();
     if (activeTab === "preds") loadPredictions();
 
     // Preset chips (custom-first: updates the target input without locking it)
@@ -984,10 +982,6 @@ if (!window.__yrSpaShell) {
     $("rf-drawer-close")?.addEventListener("click", () => closeEventDrawer("rf-drawer"));
     $("rf-cancel")?.addEventListener("click", () => closeEventDrawer("rf-drawer", { clear: true }));
 
-    $("btn-create-drop")?.addEventListener("click", (event) => openEventDrawer("cd-drawer", event.currentTarget));
-    $("cd-drawer-close")?.addEventListener("click", () => closeEventDrawer("cd-drawer"));
-    $("cd-cancel")?.addEventListener("click", () => closeEventDrawer("cd-drawer", { clear: true }));
-
     $("btn-create-pred")?.addEventListener("click", (event) => openEventDrawer("pred-drawer", event.currentTarget));
     $("pred-drawer-close")?.addEventListener("click", () => closeEventDrawer("pred-drawer"));
     $("pred-cancel")?.addEventListener("click", () => closeEventDrawer("pred-drawer", { clear: true }));
@@ -996,18 +990,8 @@ if (!window.__yrSpaShell) {
     $("settle-btn-confirm")?.addEventListener("click", () => settlePrediction());
     $("settle-btn-cancel-pred")?.addEventListener("click", () => cancelPrediction());
 
-    // Random code generator
-    $("cd-btn-random")?.addEventListener("click", () => {
-      const prefixes = ["WIN", "BOOST", "DROP", "LUCK", "RACE", "KICK", "PRO"];
-      const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-      const num = Math.floor(100 + Math.random() * 900);
-      const input = $("cd-code");
-      if (input) input.value = `${prefix}${num}`;
-    });
-
     // Forms
     $("rf-form")?.addEventListener("submit", handleCreateRaffleSubmit);
-    $("cd-form")?.addEventListener("submit", handleCreateDropSubmit);
     $("pred-form")?.addEventListener("submit", handleCreatePredSubmit);
     Object.entries(drawerFields).forEach(([formId, ids]) => {
       ids.forEach((id) => $(id)?.addEventListener("input", () => saveDraft(formId, ids)));
@@ -1173,157 +1157,6 @@ if (!window.__yrSpaShell) {
       showEngageError("Network error drawing raffle.");
     } finally {
       if (trigger) { trigger.disabled = false; trigger.innerHTML = original; }
-    }
-  }
-
-  async function loadCodeDrops() {
-    const activeList = $("cd-active-list");
-    try {
-      const res = await dashboardFetch("/api/events/drops");
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (activeList) {
-          renderInlineState(activeList, { kind: "error", title: "Couldn't load drops", body: data.error || "Something went wrong. Try again.", actions: [{ label: "Retry", onClick: loadCodeDrops }] });
-        }
-        return;
-      }
-      const data = await res.json();
-      renderCodeDrops(data.drops || []);
-    } catch (err) {
-      if (activeList) {
-        renderInlineState(activeList, { kind: "error", title: "Couldn't load drops", body: "Network error. Check your connection and try again.", actions: [{ label: "Retry", onClick: loadCodeDrops }] });
-      }
-    }
-  }
-
-  // Fresh data reload resets both pagers — a dropped/expired drop could leave a
-  // stale page pointing past the new end otherwise.
-  const dropPages = { active: 1, past: 1 };
-  let dropData = { active: [], past: [] };
-
-  function renderCodeDrops(drops) {
-    const activeList = $("cd-active-list");
-    const pastList = $("cd-past-list");
-    if (!activeList || !pastList) return;
-
-    dropData.active = drops.filter((d) => d.status === "active");
-    dropData.past = drops.filter((d) => d.status !== "active");
-    dropPages.active = 1;
-    dropPages.past = 1;
-    renderActiveDrops();
-    renderPastDrops();
-  }
-
-  function renderActiveDrops() {
-    const activeList = $("cd-active-list");
-    const pagerHost = $("cd-active-pager");
-    const active = dropData.active;
-    if (active.length === 0) {
-      activeList.innerHTML = `
-        ${inlineStateHtml({ kind: "empty", title: "No active drops", body: "Create a limited claim code to reward viewers in chat." })}`;
-      if (pagerHost) { pagerHost.innerHTML = ""; pagerHost.hidden = true; }
-      return;
-    }
-    const { items, page, totalPages } = paginate(active, dropPages.active, 6);
-    dropPages.active = page;
-    activeList.innerHTML = items.map((d) => {
-        const pct = Math.min(100, Math.round(((d.claimed_count || 0) / (d.max_claims || 1)) * 100));
-        const remaining = Math.max(0, (d.max_claims || 0) - (d.claimed_count || 0));
-        return `
-          <article class="gw-event-row">
-            <div class="gw-event-row-main">
-              <span class="gw-event-badge gw-event-badge--live">Claimable now</span>
-              <div class="gw-event-code-row">
-                <code class="gw-event-code">${esc(d.code)}</code>
-                <button class="btn btn--sm btn--ghost btn--copy-drop" data-code="${esc(d.code)}" type="button" aria-label="Copy code ${esc(d.code)}">Copy code</button>
-              </div>
-              <p class="gw-event-sub">Viewers type this code in chat to claim ${d.points_reward} Credits.</p>
-            </div>
-            <div class="gw-event-row-progress">
-              <div class="gw-event-meter-head">
-                <span>Claims used</span>
-                <strong>${d.claimed_count || 0} of ${d.max_claims}</strong>
-              </div>
-              <div class="gw-event-meter" role="progressbar" aria-label="Claims used" aria-valuemin="0" aria-valuemax="${d.max_claims}" aria-valuenow="${d.claimed_count || 0}"><div class="gw-event-meter-fill" style="width: ${pct}%;"></div></div>
-            </div>
-            <dl class="gw-event-row-details">
-              <div><dt>Reward</dt><dd>+${d.points_reward} Credits</dd></div>
-              <div><dt>Remaining</dt><dd>${remaining}</dd></div>
-              <div><dt>${d.expires_at ? "Expires" : "Time limit"}</dt><dd>${d.expires_at ? new Date(d.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "None"}</dd></div>
-            </dl>
-          </article>
-        `;
-      }).join("");
-
-      activeList.querySelectorAll(".btn--copy-drop").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          navigator.clipboard?.writeText(btn.dataset.code);
-          flashButtonLabel(btn, "Copied", 1500);
-        });
-      });
-    wirePager(pagerHost, { page, totalPages, onPage: (n) => { dropPages.active = n; renderActiveDrops(); } });
-  }
-
-  function renderPastDrops() {
-    const pastList = $("cd-past-list");
-    const pagerHost = $("cd-past-pager");
-    const past = dropData.past;
-    const active = dropData.active;
-    if (past.length === 0) {
-      pastList.innerHTML = `<tr><td colspan="5">${inlineStateHtml({ kind: "empty", title: active.length === 0 ? "No drops created yet" : "No past drops yet", body: active.length === 0 ? "Create a drop to reward active viewers with a limited-claim code." : "Active drops are shown above. Past exhausted/expired drops will appear here." })}</td></tr>`;
-      if (pagerHost) { pagerHost.innerHTML = ""; pagerHost.hidden = true; }
-      return;
-    }
-    const { items, page, totalPages } = paginate(past, dropPages.past, 10);
-    dropPages.past = page;
-    pastList.innerHTML = items.map((d) => `
-        <tr>
-          <td data-label="Code"><code class="gw-event-code">${esc(d.code)}</code></td>
-          <td data-label="Reward">+${d.points_reward} Credits</td>
-          <td data-label="Claims">${d.claimed_count || 0} / ${d.max_claims}</td>
-          <td data-label="Status"><span class="gw-event-badge">${esc(d.status)}</span></td>
-          <td data-label="Created">${new Date(d.created_at).toLocaleString()}</td>
-        </tr>
-      `).join("");
-    wirePager(pagerHost, { page, totalPages, onPage: (n) => { dropPages.past = n; renderPastDrops(); } });
-  }
-
-  async function handleCreateDropSubmit(e) {
-    e.preventDefault();
-    setInlineStatus("cd-status", "");
-    if (!validateDrawer("cd-form", [
-      { id: "cd-code", message: "Enter a drop code.", valid: (value) => Boolean(value.trim()) },
-      { id: "cd-points", message: "Enter a reward of at least 1 Credit.", valid: (value) => /^\d+$/.test(value) && Number(value) >= 1 },
-      { id: "cd-max", message: "Enter at least 1 claim.", valid: (value) => /^\d+$/.test(value) && Number(value) >= 1 },
-    ])) return;
-    const code = $("cd-code")?.value?.trim();
-
-    const points = parseInt($("cd-points")?.value, 10) || 100;
-    const maxClaims = parseInt($("cd-max")?.value, 10) || 50;
-    const expireMinutes = parseInt($("cd-expire")?.value, 10) || 0;
-
-    const submit = $("cd-submit");
-    const original = submit?.innerHTML;
-    if (submit) { submit.disabled = true; submit.textContent = "Launching…"; }
-    try {
-      const res = await dashboardFetch("/api/events/drops", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, pointsReward: points, maxClaims, expireMinutes }),
-      });
-      const data = await responseData(res);
-      if (!res.ok) {
-        setInlineStatus("cd-status", data.error || "Failed to launch drop", true);
-        return;
-      }
-      clearDraft("cd-drawer");
-      closeEventDrawer("cd-drawer");
-      $("cd-code").value = "";
-      loadCodeDrops();
-    } catch {
-      setInlineStatus("cd-status", "Network error launching drop.", true);
-    } finally {
-      if (submit) { submit.disabled = false; submit.innerHTML = original; }
     }
   }
 

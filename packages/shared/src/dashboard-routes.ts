@@ -178,7 +178,6 @@ const ROUTE_DEFS = [
   { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "board", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.drops", canonicalPath: "/dashboard/giveaways/drops", section: "giveaways", tab: "drops", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
@@ -257,6 +256,9 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   // giveaways
   { path: "/dashboard/giveaways", routeId: "giveaways.chat", kind: "redirect", status: 302, search: "preserve" },
   { path: "/dashboard/giveaways/preds", routeId: "giveaways.preds", kind: "redirect", status: 301, search: "preserve" },
+  // Code Drops are owned by Activities; the retired Giveaways → Drops tab
+  // keeps its address as a redirect so bookmarks land on the canonical owner.
+  { path: "/dashboard/giveaways/drops", routeId: "activities.overview", kind: "redirect", status: 301, search: "preserve" },
   // audience (members moved out of Rewards; activity lives on the Audience tab)
   { path: "/dashboard/audience", routeId: "audience.viewers", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/audience/viewers", routeId: "audience.viewers", kind: "redirect", status: 301, search: "preserve" },

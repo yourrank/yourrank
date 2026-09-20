@@ -45,7 +45,6 @@ const EXPECTED = {
     tabs: {
       chat: "giveaways",
       raffles: "giveaways",
-      drops: "giveaways",
       preds: "giveaways",
       tournaments: "giveaways",
     },
