@@ -9,6 +9,7 @@ import { handleCreatorClaims, handleCreatorClaimTransition } from "../handlers/c
 import { handlePeopleMembers } from "../handlers/people.js";
 import { handleCloseActivity, handleGetActivities } from "../handlers/activities.js";
 import { handleClaimCodeDrop } from "../handlers/events.js";
+import { HOME_ACTIVITY_LIMIT, handleHomeActivity } from "../handlers/home.js";
 
 const databaseUrl = process.env.AUDIT_TEST_DATABASE_URL || "";
 const integrationIt = (name, fn) => (databaseUrl ? it : it.skip)(name, fn, 60000);
@@ -49,6 +50,8 @@ const members = (params = "", ownSite = site) =>
   handlePeopleMembers(get(`/api/people/members?siteId=${ownSite.id}${params}`), {}, creatorDeps(ownSite));
 const activities = (params = "", ownSite = site) =>
   handleGetActivities(get(`/api/activities?siteId=${ownSite.id}${params}`), {}, creatorDeps(ownSite));
+const homeActivity = (ownSite = site) =>
+  handleHomeActivity(get(`/api/home/activity?siteId=${ownSite.id}`), {}, creatorDeps(ownSite));
 const closeActivity = (activityId, ownSite = site) =>
   handleCloseActivity(new Request("https://yourrank.site/api/activities/close", {
     method: "POST",
@@ -403,5 +406,131 @@ describe("creator-controlled Code Drop closure (Postgres)", () => {
     expect((await closeActivity(dropIds[1], otherSite)).status).toBe(404);
     const [{ n }] = await sql`SELECT count(*)::int AS n FROM code_drops WHERE id IN (${otherDropId}, ${dropIds[1]}) AND status='active'`;
     expect(n).toBe(2);
+  });
+});
+
+describe("Live now open-drop filter (Postgres)", () => {
+  // After the closure tests above: 7 exhausted, 1 creator-closed, 1 naturally
+  // expired drop on this site, none of which may count as live.
+  const OPEN = DROPS - 7 - 1 - 1;
+
+  integrationIt("counts every genuinely open drop before pagination and returns a bounded page", async () => {
+    const res = await activities("&state=open&limit=4");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.state).toBe("open");
+    expect(body.total).toBe(OPEN);
+    expect(body.activities).toHaveLength(4);
+    expect(body.activities.every((a) => a.state === "open" && a.stateLabel === "Open")).toBe(true);
+    expect(body.page).toMatchObject({ limit: 4, hasMore: true });
+    expect(body.automation).toBeDefined();
+
+    // The history list is unchanged: it still reports every drop for the site.
+    const all = await (await activities("&limit=100")).json();
+    expect(all.total).toBe(DROPS);
+    expect(all.state).toBe("all");
+  });
+
+  integrationIt("never lists closed, expired or exhausted drops as open, and stays site-isolated", async () => {
+    const crawl = await collect((cursor) => activities(`&state=open&limit=25${cursor ? `&cursor=${cursor}` : ""}`), "activities");
+    expect(crawl.ids).toHaveLength(OPEN);
+    expect(crawl.unique).toBe(OPEN);
+    const listed = new Set(crawl.ids);
+    expect(listed.has(`drop:${dropIds[0]}`)).toBe(false); // creator-closed
+    expect(listed.has(`drop:${dropIds[2]}`)).toBe(false); // naturally expired
+    expect(listed.has(`drop:${dropIds[8]}`)).toBe(false); // exhausted
+    expect(listed.has(`drop:${otherDropId}`)).toBe(false);
+
+    const other = await (await activities("&state=open&limit=4", otherSite)).json();
+    expect(other.total).toBe(1);
+    expect(other.activities.map((a) => a.id)).toEqual([`drop:${otherDropId}`]);
+  });
+});
+
+describe("Home recent activity (Postgres)", () => {
+  // A dedicated site whose only events are member joins, so the SQL branch
+  // limit (not the mix of sources) decides whether truncation is visible.
+  const homeSiteId = crypto.randomUUID();
+  const homeSite = { id: homeSiteId, user_id: ownerId, slug: `dl-home-${suffix}`, name: "Home site" };
+  const homeItemId = crypto.randomUUID();
+  const homeViewerIds = [];
+  const homeMembershipIds = [];
+  const JOINS = HOME_ACTIVITY_LIMIT + 1;
+  const joinedAt = (i) => new Date(Date.UTC(2026, 0, 10 + i));
+  const oldClaimId = crypto.randomUUID();
+  const newerClaimId = crypto.randomUUID();
+
+  beforeAll(async () => {
+    if (!sql) return;
+    await sql`INSERT INTO sites (id, user_id, slug, name, published, is_draft)
+      VALUES (${homeSiteId}, ${ownerId}, ${homeSite.slug}, ${homeSite.name}, true, false)`;
+    await sql`INSERT INTO shop_items (id, site_id, name, cost) VALUES (${homeItemId}, ${homeSiteId}, 'Hoodie', 10)`;
+    const viewers = [];
+    const memberships = [];
+    for (let i = 0; i < JOINS; i++) {
+      const viewerId = crypto.randomUUID();
+      const membershipId = crypto.randomUUID();
+      homeViewerIds.push(viewerId);
+      homeMembershipIds.push(membershipId);
+      viewers.push(viewerRow(viewerId, { kick_user_id: `dl-home-${suffix}-${i}`, kick_username: `home${i}_${suffix}`, kick_linked_at: new Date() }));
+      memberships.push({ id: membershipId, site_id: homeSiteId, viewer_id: viewerId, balance: 0, created_at: joinedAt(i), last_seen_at: joinedAt(i), blocked: false });
+    }
+    await sql`INSERT INTO viewers ${sql(viewers)}`;
+    await sql`INSERT INTO site_viewers ${sql(memberships)}`;
+  });
+  afterAll(async () => {
+    if (!sql) return;
+    await sql`DELETE FROM sites WHERE id = ${homeSiteId}`;
+    await sql`DELETE FROM viewers WHERE id IN ${sql(homeViewerIds)}`;
+  });
+
+  integrationIt("reports truncation when more than the limit exists in a single event kind", async () => {
+    const res = await homeActivity(homeSite);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.events).toHaveLength(HOME_ACTIVITY_LIMIT);
+    expect(body.truncated).toBe(true);
+    expect(body.events.every((e) => e.kind === "member_joined")).toBe(true);
+    expect(body.events.map((e) => e.at)).toEqual(
+      Array.from({ length: HOME_ACTIVITY_LIMIT }, (_, i) => joinedAt(JOINS - 1 - i).toISOString()),
+    );
+  });
+
+  integrationIt("dates a settled claim by its completion, so an old claim fulfilled now is the newest event", async () => {
+    const twentyDaysAgo = new Date(Date.now() - 20 * 86400000);
+    const tenDaysAgo = new Date(Date.now() - 10 * 86400000);
+    await sql`INSERT INTO redemptions ${sql([
+      { id: oldClaimId, site_viewer_id: homeMembershipIds[0], shop_item_id: homeItemId, cost: 10, status: "pending", created_at: twentyDaysAgo },
+      { id: newerClaimId, site_viewer_id: homeMembershipIds[1], shop_item_id: homeItemId, cost: 10, status: "pending", created_at: tenDaysAgo },
+    ])}`;
+    // Sanity: while both wait, the newer submission leads and both are dated by created_at.
+    let body = await (await homeActivity(homeSite)).json();
+    expect(body.events.slice(0, 2)).toMatchObject([
+      { kind: "claim", at: tenDaysAgo.toISOString(), detail: "Claimed Hoodie · waiting for you" },
+      { kind: "claim", at: twentyDaysAgo.toISOString(), detail: "Claimed Hoodie · waiting for you" },
+    ]);
+
+    // Fulfil the old claim through a plain UPDATE so the redemptions trigger stamps updated_at.
+    await sql`UPDATE redemptions SET status='fulfilled' WHERE id=${oldClaimId}`;
+    const [row] = await sql`SELECT updated_at FROM redemptions WHERE id=${oldClaimId}`;
+    expect(new Date(row.updated_at).getTime()).toBeGreaterThan(tenDaysAgo.getTime());
+
+    body = await (await homeActivity(homeSite)).json();
+    expect(body.events[0]).toEqual({ kind: "claim", at: new Date(row.updated_at).toISOString(), title: `home0_${suffix}`, detail: "Claim for Hoodie completed" });
+    expect(body.events[1]).toMatchObject({ kind: "claim", at: tenDaysAgo.toISOString(), detail: "Claimed Hoodie · waiting for you" });
+    expect(body.truncated).toBe(true);
+
+    await sql`UPDATE redemptions SET status='cancelled' WHERE id=${newerClaimId}`;
+    body = await (await homeActivity(homeSite)).json();
+    expect(body.events[0]).toMatchObject({ kind: "claim", detail: "Claim for Hoodie cancelled" });
+    expect(Date.parse(body.events[0].at)).toBeGreaterThan(Date.parse(body.events[1].at));
+  });
+
+  integrationIt("stops reporting truncation once exactly the limit remains", async () => {
+    await sql`DELETE FROM redemptions WHERE id IN (${oldClaimId}, ${newerClaimId})`;
+    await sql`DELETE FROM site_viewers WHERE id=${homeMembershipIds[0]}`;
+    const body = await (await homeActivity(homeSite)).json();
+    expect(body.events).toHaveLength(HOME_ACTIVITY_LIMIT);
+    expect(body.truncated).toBe(false);
   });
 });

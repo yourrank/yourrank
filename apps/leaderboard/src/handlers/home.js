@@ -28,8 +28,10 @@ function privateResponse(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-// One UNION over the site-scoped event sources; each branch is already sorted
-// and capped so the outer sort never touches more than 5 × limit rows.
+// One UNION over the site-scoped event sources. Every branch is sorted and
+// capped at the same $2 = limit + 1 rows as the outer query, so the outer sort
+// never touches more than 5 × (limit + 1) rows and the extra row that proves
+// truncation survives even when all events come from a single source.
 const HOME_EVENTS_SQL = `
   WITH member_joined AS (
     SELECT 'member_joined' AS kind, sv.created_at AS at,
@@ -39,15 +41,23 @@ const HOME_EVENTS_SQL = `
      WHERE sv.site_id = $1 AND v.is_system = FALSE
      ORDER BY sv.created_at DESC LIMIT $2
   ), claim_submitted AS (
-    SELECT 'claim' AS kind, r.created_at AS at,
-           COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'A member') AS actor,
-           i.name AS subject, r.status AS status
-      FROM redemptions r
-      JOIN site_viewers sv ON sv.id = r.site_viewer_id
-      JOIN viewers v ON v.id = sv.viewer_id
-      JOIN shop_items i ON i.id = r.shop_item_id
-     WHERE sv.site_id = $1 AND v.is_system = FALSE
-     ORDER BY r.created_at DESC LIMIT $2
+    SELECT claim.kind, claim.at, claim.actor, claim.subject, claim.status FROM (
+      SELECT 'claim' AS kind,
+             -- The event described is the state change: a settled claim is
+             -- dated by when it was completed/cancelled (updated_at is kept by
+             -- the redemptions trigger), a waiting claim by its submission.
+             CASE WHEN r.status IN ('fulfilled', 'cancelled')
+                  THEN COALESCE(r.updated_at, r.created_at)
+                  ELSE r.created_at END AS at,
+             COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'A member') AS actor,
+             i.name AS subject, r.status AS status
+        FROM redemptions r
+        JOIN site_viewers sv ON sv.id = r.site_viewer_id
+        JOIN viewers v ON v.id = sv.viewer_id
+        JOIN shop_items i ON i.id = r.shop_item_id
+       WHERE sv.site_id = $1 AND v.is_system = FALSE
+    ) claim
+     ORDER BY claim.at DESC LIMIT $2
   ), drop_claimed AS (
     SELECT 'drop_claimed' AS kind, c.created_at AS at,
            COALESCE(NULLIF(v.kick_username, ''), NULLIF(v.discord_username, ''), 'A member') AS actor,
@@ -84,7 +94,7 @@ const HOME_EVENTS_SQL = `
     UNION ALL SELECT * FROM giveaway_drawn
   ) events
   ORDER BY at DESC
-  LIMIT $3`;
+  LIMIT $2`;
 
 // Creator-readable copy for one raw event row. Anything the UI does not need
 // (ids, provider ids, codes) never leaves the Worker.
@@ -141,7 +151,7 @@ export async function handleHomeActivity(request, env, injected = {}) {
   }
 
   // One extra row tells the client whether older events exist without a count.
-  const rows = await deps.activityQuery(HOME_EVENTS_SQL, [site.id, HOME_ACTIVITY_LIMIT, HOME_ACTIVITY_LIMIT + 1]);
+  const rows = await deps.activityQuery(HOME_EVENTS_SQL, [site.id, HOME_ACTIVITY_LIMIT + 1]);
   const normalized = (rows || []).map(normalizeHomeEvent).filter(Boolean);
   const events = normalized.slice(0, HOME_ACTIVITY_LIMIT);
   return json({

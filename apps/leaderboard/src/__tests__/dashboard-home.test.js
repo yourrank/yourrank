@@ -127,6 +127,43 @@ describe("Home: live now", () => {
     expect(result.more).toBe(3);
     expect(liveNowItems({ siteId: SITE })).toEqual({ items: [], more: 0 });
   });
+
+  it("trusts the server's open-drop total over the bounded page it received", () => {
+    const page = Array.from({ length: HOME_LIVE_LIMIT }, (_, i) => openDrop(`d${i}`));
+    expect(activityHomeState(page, { total: 57 })).toMatchObject({ totalOpen: 57 });
+    expect(activityHomeState(page, { total: 57 }).open).toHaveLength(HOME_LIVE_LIMIT);
+    // A missing or stale total can never undercount what is visibly on the page.
+    expect(activityHomeState(page, { total: 1 })).toMatchObject({ totalOpen: HOME_LIVE_LIMIT });
+    expect(activityHomeState(page, { total: undefined })).toMatchObject({ totalOpen: HOME_LIVE_LIMIT });
+    const result = liveNowItems({ activities: activityHomeState(page, { total: 57 }), siteId: SITE });
+    expect(result.items).toHaveLength(HOME_LIVE_LIMIT);
+    expect(result.more).toBe(57 - HOME_LIVE_LIMIT);
+  });
+
+  const activeGiveaway = giveawayHomeState({ session: { id: "g1", status: "active", keyword: "gg" }, entries: [{}] });
+  const drops = (n, total = n) => activityHomeState(Array.from({ length: n }, (_, i) => openDrop(`d${i}`)), { total });
+
+  it("keeps the active giveaway visible next to four open drops and counts it in the overflow", () => {
+    const result = liveNowItems({ activities: drops(HOME_LIVE_LIMIT), giveaway: activeGiveaway, siteId: SITE });
+    expect(result.items).toHaveLength(HOME_LIVE_LIMIT);
+    expect(result.items.map((item) => item.kind)).toEqual(["code_drop", "code_drop", "code_drop", "chat_giveaway"]);
+    expect(result.more).toBe(1);
+  });
+
+  it("reports an exact overflow with more than four open drops and a giveaway", () => {
+    const result = liveNowItems({ activities: drops(HOME_LIVE_LIMIT, 9), giveaway: activeGiveaway, siteId: SITE });
+    expect(result.items.filter((item) => item.kind === "chat_giveaway")).toHaveLength(1);
+    expect(result.items).toHaveLength(HOME_LIVE_LIMIT);
+    expect(result.more).toBe(9 + 1 - HOME_LIVE_LIMIT);
+  });
+
+  it("shows a lone giveaway, drops only, and never counts an expired drop as live", () => {
+    expect(liveNowItems({ activities: drops(0), giveaway: activeGiveaway, siteId: SITE })).toMatchObject({ items: [{ kind: "chat_giveaway" }], more: 0 });
+    expect(liveNowItems({ activities: drops(2), siteId: SITE })).toMatchObject({ more: 0 });
+    expect(liveNowItems({ activities: drops(2), siteId: SITE }).items.map((item) => item.kind)).toEqual(["code_drop", "code_drop"]);
+    const expired = activityHomeState([openDrop("d1", { state: "completed", stateLabel: "Expired" }), openDrop("d2")], { total: 1 });
+    expect(liveNowItems({ activities: expired, giveaway: activeGiveaway, siteId: SITE })).toMatchObject({ items: [{ key: "d2" }, { kind: "chat_giveaway" }], more: 0 });
+  });
 });
 
 describe("Home: coming next", () => {
@@ -292,10 +329,18 @@ describe("GET /api/home/activity", () => {
     const res = await handleHomeActivity(request(), {}, deps({ activityQuery: async (sql, params) => { calls.push({ sql, params }); return []; } }));
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
-    expect(calls[0].params).toEqual([SITE, HOME_ACTIVITY_LIMIT, HOME_ACTIVITY_LIMIT + 1]);
+    expect(calls[0].params).toEqual([SITE, HOME_ACTIVITY_LIMIT + 1]);
     for (const branch of ["member_joined", "claim_submitted", "drop_claimed", "drop_ended", "giveaway_drawn"]) expect(calls[0].sql).toContain(`${branch} AS (`);
     expect(calls[0].sql.match(/site_id = \$1/g).length).toBe(5);
-    expect(calls[0].sql).toContain("ORDER BY at DESC\n  LIMIT $3");
+    // Every branch supplies limit + 1 candidates so the outer sort can prove
+    // truncation even when one source owns every recent event.
+    expect(calls[0].sql.match(/LIMIT \$2/g).length).toBe(6);
+    expect(calls[0].sql).not.toContain("$3");
+    expect(calls[0].sql).toContain("ORDER BY at DESC\n  LIMIT $2");
+    // Settled claims are dated by their state change, waiting claims by submission.
+    expect(calls[0].sql).toContain("CASE WHEN r.status IN ('fulfilled', 'cancelled')");
+    expect(calls[0].sql).toContain("THEN COALESCE(r.updated_at, r.created_at)");
+    expect(calls[0].sql).toContain("ORDER BY claim.at DESC LIMIT $2");
     expect(res.headers.get("cache-control")).toBe("no-store, no-cache, must-revalidate");
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, site: { id: SITE, name: "Night Owls", slug: "night-owls" }, limit: HOME_ACTIVITY_LIMIT, truncated: false, events: [] });

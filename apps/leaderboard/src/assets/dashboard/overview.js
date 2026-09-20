@@ -4,6 +4,7 @@ import { $, esc, currentPlayers, getCsrf, logError, showToast } from "./utils.js
 import { state, boardStatus } from "./state.js";
 import { renderEmpty, setMetricLoading, setMetricValue } from "./states.js";
 import {
+  HOME_LIVE_LIMIT,
   HOME_PULSE_DAYS,
   SETUP_STEPS,
   activityHomeState,
@@ -27,8 +28,13 @@ import { fetchDashboardJson } from "./request.js";
 // compact retry in that section and leaves the rest of Home usable.
 const HOME_SECTIONS = {
   activities: {
-    request: (params) => `/api/activities?${params}`,
-    project: (body) => ({ automation: automationHomeState(body?.automation), activities: activityHomeState(body?.activities) }),
+    // Server-side open filter: `total` counts every genuinely open drop for
+    // the site, so Live now never infers live state from one history page.
+    request: (params) => `/api/activities?${params}&state=open&limit=${HOME_LIVE_LIMIT}`,
+    project: (body) => ({
+      automation: automationHomeState(body?.automation),
+      activities: activityHomeState(body?.activities, { total: body?.total }),
+    }),
   },
   giveaway: {
     request: (params) => `/api/giveaways/chat?${params}`,

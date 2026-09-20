@@ -141,6 +141,37 @@ describe("Wave E safe Activities foundation", () => {
     expect(body.automation).toBeUndefined();
   });
 
+  it("filters genuinely open drops server-side, before pagination, with a matching total", async () => {
+    const mock = deps();
+    const response = await handleGetActivities(
+      new Request("https://yourrank.test/api/activities?siteId=site-1&state=open&limit=4"),
+      {},
+      mock.value,
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.state).toBe("open");
+    expect(body.automation).toBeDefined();
+    const openSql = "d.status='active' AND d.closed_at IS NULL\n        AND (d.expires_at IS NULL OR d.expires_at > now())";
+    // The open predicate sits in the page query's WHERE, ahead of the keyset
+    // cursor and LIMIT, and the total counts the same filtered set.
+    expect(mock.calls.query[0].sql).toContain(`WHERE d.site_id=$1 AND ${openSql}`);
+    expect(mock.calls.query[0].sql.indexOf(openSql)).toBeLessThan(mock.calls.query[0].sql.indexOf("LIMIT $3"));
+    expect(mock.calls.query[0].params).toEqual(["site-1", null, 5]);
+    const total = mock.calls.one.find(({ sql }) => sql.includes("count(*)"));
+    expect(total.sql).toContain(`WHERE d.site_id=$1 AND ${openSql}`);
+
+    const all = deps();
+    await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1"), {}, all.value);
+    expect(all.calls.query[0].sql).not.toContain("d.status='active'");
+    expect(all.calls.one.find(({ sql }) => sql.includes("count(*)")).sql).not.toContain("d.status='active'");
+
+    const invalid = deps();
+    const invalidResponse = await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1&state=ended"), {}, invalid.value);
+    expect(invalidResponse.status).toBe(400);
+    expect(invalid.calls.query).toHaveLength(0);
+  });
+
   it("caps the page size and rejects malformed or stale cursors", async () => {
     const capped = deps();
     await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1&limit=5000"), {}, capped.value);

@@ -34,7 +34,7 @@ export function automationHomeState(automation = {}) {
 // the claim code embedded in the Activity title. Keep this as a deliberately
 // smaller projection than the Activities page and accept only the proven safe
 // code-drop adapter.
-export function activityHomeState(activities = []) {
+export function activityHomeState(activities = [], { total = null } = {}) {
   const seen = new Set();
   const open = (Array.isArray(activities) ? activities : []).flatMap((activity) => {
     if (
@@ -55,7 +55,11 @@ export function activityHomeState(activities = []) {
       creditsPerClaim: Number(activity.reward?.creditsPerClaim) || 0,
     }];
   });
-  return { open: open.slice(0, HOME_LIVE_LIMIT), totalOpen: open.length };
+  // `total` is the server's count of genuinely open drops for the site; the
+  // rows themselves are one bounded page of it.
+  const serverTotal = Number(total);
+  const totalOpen = Number.isFinite(serverTotal) && serverTotal >= open.length ? serverTotal : open.length;
+  return { open: open.slice(0, HOME_LIVE_LIMIT), totalOpen };
 }
 
 // /api/giveaways/chat returns the site's single current session; only an
@@ -77,7 +81,11 @@ export function giveawayHomeState(body = {}) {
 // place to manage it.
 export function liveNowItems({ activities = { open: [], totalOpen: 0 }, giveaway = { active: null }, siteId = "" } = {}) {
   const items = [];
-  for (const drop of activities.open || []) {
+  const totalOpen = Math.max(Number(activities.totalOpen) || 0, (activities.open || []).length);
+  const totalLive = totalOpen + (giveaway.active ? 1 : 0);
+  // The single active giveaway always keeps its slot; drops fill the rest.
+  const dropSlots = HOME_LIVE_LIMIT - (giveaway.active ? 1 : 0);
+  for (const drop of (activities.open || []).slice(0, dropSlots)) {
     const progress = drop.capacity > 0 ? `${drop.claimed.toLocaleString("en-US")} of ${drop.capacity.toLocaleString("en-US")} claims` : `${drop.claimed.toLocaleString("en-US")} claims`;
     items.push({
       key: drop.id,
@@ -103,8 +111,7 @@ export function liveNowItems({ activities = { open: [], totalOpen: 0 }, giveaway
       action: "Manage",
     });
   }
-  const moreOpen = Math.max(0, (activities.totalOpen || 0) - (activities.open || []).length);
-  return { items: items.slice(0, HOME_LIVE_LIMIT), more: moreOpen };
+  return { items, more: Math.max(0, totalLive - items.length) };
 }
 
 // Coming next: real future events from the existing model — scheduled safe
