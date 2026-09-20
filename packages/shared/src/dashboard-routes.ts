@@ -438,6 +438,8 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   limit: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
   offset: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
   cursor: [{ classification: "feature", context: "API endpoints", where: "API pagination." }],
+  status: [{ classification: "feature", context: "API endpoints", where: "/api/claims list status filter requested by credits.js; API input, not dashboard routing." }],
+  sort: [{ classification: "feature", context: "API endpoints", where: "/api/people/members sort mode requested by credits.js list controllers; API input, not dashboard routing." }],
   days: [{ classification: "feature", context: "API endpoints", where: "API analytics range." }],
   type: [{ classification: "feature", context: "API/auth endpoints", where: "API filters and auth document variants." }],
   slug: [{ classification: "feature", context: "public/API lookups", where: "Public site resolution and API lookups." }],

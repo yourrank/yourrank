@@ -7,6 +7,7 @@ import { loadBoardShell, preserveSiteContextLinks, sitePath, siteQuery } from ".
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
 import { ServerListController } from "./dashboard/server-list.js";
 import { bulkAwardSummary, remainingSelection, runBulkAward } from "./bulk-award.js";
+import { exportRows, MemberSelection } from "./member-selection.js";
 import "./dashboard/help-drawer.js";
 import "./dashboard/command-palette.js";
 import { optimizeRewardImage } from "./reward-image.js";
@@ -60,9 +61,10 @@ let state = {}; // local credits page state (not dashboard/state.js)
 let viewerCtrl, redemptionCtrl, rewardCtrl;
 let activeSiteId = "";
 let pendingOAuthFeedback = null;
-// P3-5: selected member ids for the Audience bulk toolbar. Selection survives
-// re-renders and pagination; it is cleared on site change or explicit clear.
-const memberSelection = new Set();
+// P3-5: selected members for the Audience bulk toolbar. Selection survives
+// re-renders, pagination and search; it is cleared on site change or explicit
+// clear. Row snapshots are kept so export never depends on the loaded page.
+const memberSelection = new MemberSelection();
 // The per-viewer manual adjustment endpoint is rate limited to 30 requests /
 // 60 s per user, so one bulk apply may not exceed this many members.
 const BULK_AWARD_MAX = 25;
@@ -329,6 +331,7 @@ function fetchMembersPage(params, cursor) {
   const base = sitePath("/api/people/members");
   return api("GET", `${base}${base.includes("?") ? "&" : "?"}${query}`).then((data) => {
     state.members = cursor ? [...(state.members || []), ...(data.members || [])] : (data.members || []);
+    memberSelection.refresh(data.members || []);
     return { items: data.members || [], page: data.page, total: data.total };
   });
 }
@@ -1354,8 +1357,7 @@ async function bulkAwardMembers() {
   // adjustment rate limit intact and surfaces per-member errors clearly.
   const outcome = await runBulkAward(ids, (id) => adjustMemberCredits(id, amount, reason));
   outcome.errors.forEach((err) => logError("bulk-award-member", err));
-  memberSelection.clear();
-  remainingSelection(outcome).forEach((id) => memberSelection.add(id));
+  memberSelection.retain(remainingSelection(outcome));
   document.querySelectorAll("[data-member-select]").forEach((box) => { box.checked = memberSelection.has(box.dataset.memberSelect); });
   syncSelectAll();
   updateBulkBar();
@@ -1370,27 +1372,30 @@ function wireActions() {
   if (wired) return;
   wired = true;
   // P3-5: member multi-select + bulk toolbar.
+  const loadedMember = (id) => (state.members || []).find((m) => String(m.id) === String(id));
+  const toggleMember = (box) => {
+    const row = loadedMember(box.dataset.memberSelect);
+    if (box.checked && row) memberSelection.add(row);
+    else if (box.checked) box.checked = false;
+    else memberSelection.delete(box.dataset.memberSelect);
+  };
   $("cr-viewer-list")?.addEventListener("change", (e) => {
     const box = e.target.closest("[data-member-select]");
     if (!box) return;
-    if (box.checked) memberSelection.add(box.dataset.memberSelect);
-    else memberSelection.delete(box.dataset.memberSelect);
+    toggleMember(box);
     updateBulkBar();
   });
   $("cr-member-select-all")?.addEventListener("change", (e) => {
     const boxes = [...document.querySelectorAll("[data-member-select]")];
     boxes.forEach((box) => {
       box.checked = e.target.checked;
-      if (box.checked) memberSelection.add(box.dataset.memberSelect);
-      else memberSelection.delete(box.dataset.memberSelect);
+      toggleMember(box);
     });
     updateBulkBar();
   });
   $("cr-bulk-award")?.addEventListener("click", () => { bulkAwardMembers().catch((err) => { logError("bulk-award", err); setStatus("cr-viewer-status", err.message || "Bulk award failed.", true); }); });
   $("cr-bulk-export")?.addEventListener("click", () => {
-    const rows = memberSelection.size
-      ? (state.members || []).filter((v) => memberSelection.has(v.id))
-      : (state.members || []);
+    const rows = exportRows(memberSelection, state.members);
     if (!rows.length) { setStatus("cr-viewer-status", "Nothing to export yet.", true); return; }
     exportMembersCsv(rows);
   });
