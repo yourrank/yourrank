@@ -264,7 +264,7 @@ function statusChip(status) {
 }
 const metric = (value) => value == null ? UNKNOWN : value;
 function renderRewardRow(m) {
-  return `<td data-label="Kick reward"><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td data-label="How it works" class="hint">Kick reward used · ${m.kick_reward_cost} points</td><td data-label="Credits" class="num"><b>+${m.credits} credits</b></td><td data-label="Available"><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" aria-label="Make ${esc(m.kick_reward_title)} available" /></td><td data-label="Actions" class="ta-r"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger" data-del-reward="${esc(m.id)}">Disable</button></td>`;
+  return `<td data-label="Kick reward"><b>${esc(m.kick_reward_title)}</b><br><span class="hint">${esc(m.kick_reward_id)}</span></td><td data-label="How it works" class="hint">Kick reward used · ${m.kick_reward_cost} points</td><td data-label="Credits" class="num"><b>+${m.credits} credits</b></td><td data-label="Available"><input class="v3-toggle" type="checkbox" ${m.active ? "checked" : ""} data-toggle-reward="${esc(m.id)}" aria-label="Make ${esc(m.kick_reward_title)} available" /></td><td data-label="Actions" class="ta-r"><div class="cr-row-actions"><button class="btn btn--sm" data-edit-reward="${esc(m.id)}">Edit</button> <button class="btn btn--sm btn--danger-quiet" data-del-reward="${esc(m.id)}">Disable</button></div></td>`;
 }
 function viewerIdentity(v) {
   return v.kick_username || v.discord_username || v.kick_user_id || v.discord_user_id || "Member";
@@ -330,7 +330,7 @@ function renderClaimRow(claim) {
   ].filter(Boolean).join(" ");
   const support = claim.support?.status === "open" ? ' <span class="v3-chip v3-chip--pending" title="The member asked for help with this claim">Support open</span>' : "";
   const cost = Number(claim.reward?.cost) || 0;
-  return `<td data-label="Member"><b>${esc(claim.subject?.displayName || "Member")}</b></td><td data-label="Reward">${esc(claim.reward?.name || claim.source?.title || "Reward")}</td><td data-label="Cost" class="num"><b>${cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(claimRedemptionStatus(claim))}${support}</td><td data-label="Claimed" title="${esc(fmtDate(claim.submittedAt))}">${relative(claim.submittedAt)}</td><td data-label="Actions" class="ta-r">${actions}</td>`;
+  return `<td data-label="Member"><b>${esc(claim.subject?.displayName || "Member")}</b></td><td data-label="Reward">${esc(claim.reward?.name || claim.source?.title || "Reward")}</td><td data-label="Cost" class="num"><b>${cost}</b><span class="hint">credits</span></td><td data-label="Status">${statusChip(claimRedemptionStatus(claim))}${support}</td><td data-label="Claimed" title="${esc(fmtDate(claim.submittedAt))}">${relative(claim.submittedAt)}</td><td data-label="Actions" class="ta-r"><div class="cr-row-actions">${actions}</div></td>`;
 }
 const CLAIM_FILTER_PARAM = Object.freeze({ all: "all", pending: "action_required", needs_attention: "needs_attention", completed: "completed" });
 function fetchClaimsPage(params, cursor) {
@@ -439,7 +439,7 @@ function renderShopCards(items) {
       </label>
       <div class="cr-shop-row-actions">
         <button class="btn btn--sm" type="button" data-edit-shop="${esc(i.id)}">Edit</button>
-        <button class="btn btn--sm btn--danger" type="button" data-del-shop="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">Delete</button>
+        <button class="btn btn--sm btn--danger-quiet" type="button" data-del-shop="${esc(i.id)}" aria-label="Delete ${esc(i.name)}">Delete</button>
       </div>
     </article>`;
   }).join("");
@@ -799,6 +799,31 @@ function mountListControls(root, toolbar, foot) {
   controls.remove();
 }
 let drawerTrigger;
+let shopRelease;
+let shopOverlayResizeBound = false;
+function syncShopOverlay() {
+  const drawer = $("cr-shop-drawer");
+  if (!drawer || drawer.hidden) return;
+  const modal = getComputedStyle(drawer).position === "fixed";
+  drawer.setAttribute("role", modal ? "dialog" : "region");
+  if (modal) {
+    drawer.setAttribute("aria-modal", "true");
+    if (!shopRelease) shopRelease = window.YRDialog?.trap(drawer, closeShop);
+  } else {
+    drawer.removeAttribute("aria-modal");
+    if (shopRelease) { shopRelease(); shopRelease = undefined; }
+  }
+}
+function bindShopOverlayResize() {
+  if (shopOverlayResizeBound) return;
+  window.addEventListener("resize", syncShopOverlay);
+  shopOverlayResizeBound = true;
+}
+function unbindShopOverlayResize() {
+  if (!shopOverlayResizeBound) return;
+  window.removeEventListener("resize", syncShopOverlay);
+  shopOverlayResizeBound = false;
+}
 let rewardImageDraft;
 let rewardImageVersion = 0;
 let rewardImageProcessing = false;
@@ -820,9 +845,19 @@ function openShop(item, trigger) {
   $("cr-shop")?.classList.add("has-drawer");
   $("cr-shop-drawer").hidden = false; $("cr-shop-drawer-title").textContent = item ? "Edit item" : "Create item"; $("cr-shop-item-id").value = item?.id || ""; $("cr-shop-name").value = item?.name || ""; $("cr-shop-desc").value = item?.description || ""; $("cr-shop-cost").value = item?.cost || 100; $("cr-shop-stock").value = item?.stock === null ? "" : (item?.stock ?? ""); $("cr-shop-cooldown").value = String(Number(item?.cooldown_seconds) || 0); $("cr-shop-active").checked = item?.active !== false;
   renderShopReview();
-  $("cr-shop-name").focus(); 
+  syncShopOverlay();
+  $("cr-shop-drawer").scrollTop = 0;
+  $("cr-shop-name").focus({ preventScroll: true });
 }
-function closeShop() { rewardImageVersion++; rewardImageProcessing = false; $("cr-shop-drawer").hidden = true; $("cr-shop")?.classList.remove("has-drawer"); drawerTrigger?.focus(); }
+function closeShop() {
+  rewardImageVersion++;
+  rewardImageProcessing = false;
+  const drawer = $("cr-shop-drawer");
+  if (drawer) { drawer.hidden = true; drawer.removeAttribute("aria-modal"); }
+  if (shopRelease) { shopRelease(); shopRelease = undefined; }
+  $("cr-shop")?.classList.remove("has-drawer");
+  drawerTrigger?.focus({ preventScroll: true });
+}
 let tipRelease;
 async function openTip(viewerId, username) {
   const drawer = $("cr-tip-drawer");
@@ -1675,6 +1710,7 @@ function maybeAutoOpenFromQuery() {
 }
 
 if ($("cr-app") && !window.__yrSpaShell) {
+  bindShopOverlayResize();
   wireActions();
   load().then(() => { maybeAutoOpenFromQuery(); window.__yrBoot?.signal(); }).catch(() => {});
 }
@@ -1688,6 +1724,7 @@ if ($("cr-app") && !window.__yrSpaShell) {
 // nothing leaks when the operator navigates away.
 
 export function enter() {
+  bindShopOverlayResize();
   // Reset so re-entry re-wires event handlers against the freshly injected DOM.
   wired = false;
   state = {};
@@ -1713,6 +1750,8 @@ export function enter() {
 }
 
 export function leave() {
+  if (!$("cr-shop-drawer")?.hidden) closeShop();
+  unbindShopOverlayResize();
   closeTip();
   closeMemberHistory();
   // Clear all status toast timers so they don't fire into a detached DOM.

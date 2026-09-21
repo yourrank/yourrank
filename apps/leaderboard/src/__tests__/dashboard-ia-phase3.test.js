@@ -15,6 +15,10 @@ import { REWARDS_TABS } from "../pages/rewards.jsx";
 import { defaultTab } from "../assets/dashboard/routes.js";
 
 const palette = readFileSync(new URL("../assets/dashboard/command-palette.js", import.meta.url), "utf8");
+const dashboardPageSource = readFileSync(new URL("../pages/dashboard.jsx", import.meta.url), "utf8");
+const siteClientSource = readFileSync(new URL("../assets/dashboard/site.js", import.meta.url), "utf8");
+const creditsPageSource = readFileSync(new URL("../pages/credits-pages.js", import.meta.url), "utf8");
+const creditsClientSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 
 function dashboardHtml(activePath = "/dashboard") {
   return PAGES.dashboard.Component({ activePath }).toString();
@@ -104,6 +108,26 @@ describe("Phase 3 dashboard information architecture", () => {
       const source = readFileSync(new URL(`../assets/${name}`, import.meta.url), "utf8");
       expect(source).toContain('import "./dashboard/command-palette.js";');
     }
+  });
+
+  it("keeps Connections as the only provider-management surface", () => {
+    // The old hidden Advanced panel displayed a second Kick status. It made
+    // Settings → Connections look non-canonical even though its client fetch
+    // still feeds Home's summary projection.
+    expect(dashboardPageSource).not.toContain('id="kickStatus"');
+    expect(dashboardPageSource).not.toContain('id="kickRewardsLink"');
+    expect(siteClientSource).not.toContain('"kickStatus"');
+    expect(siteClientSource).toContain('fetch(creditsUrl)');
+  });
+
+  it("keeps palette and responsive reward-editor overlays accessible", () => {
+    expect(palette).toContain('paletteEl.hidden = true');
+    expect(palette).toContain('backdropEl.hidden = true');
+    expect(palette).toContain('canRestorePaletteFocus(paletteTrigger)');
+    expect(creditsPageSource).toContain('role="region" aria-labelledby="cr-shop-drawer-title"');
+    expect(creditsPageSource).toContain('aria-label="Close reward editor"');
+    expect(creditsClientSource).toContain('drawer.setAttribute("role", modal ? "dialog" : "region")');
+    expect(creditsClientSource).toContain('window.YRDialog?.trap(drawer, closeShop)');
   });
 
   it("preserves shipped dashboard aliases", () => {

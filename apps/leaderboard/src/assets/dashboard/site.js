@@ -2424,32 +2424,17 @@ export function renderDomainStatus(status, message) {
 }
 
 export async function loadCreditsStatus() {
-  const statusEl = $("kickStatus");
-  const linkEl = $("kickRewardsLink");
   setState({ CREDITS_STATUS: "loading" });
-  if (statusEl) {
-    statusEl.setAttribute("aria-busy", "true");
-    statusEl.innerHTML = '<span class="skeleton v3-skel-line" aria-hidden="true"></span>';
-  }
   try {
     const creditsUrl = state.ACTIVE_SITE_ID ? `/api/credits/status?siteId=${encodeURIComponent(state.ACTIVE_SITE_ID)}` : "/api/credits/status";
     const res = await fetch(creditsUrl);
     const data = await res.json();
     setState({ CREDITS: data, CREDITS_STATUS: "ready", CREDITS_PRODUCT_ENABLED: data.enabled === true });
     renderOverviewSummary();
-    const connected = Boolean(data.channel?.externalId);
-    if (statusEl) statusEl.textContent = connected
-      ? `Connected to ${data.channel?.name || "your Kick channel"}. ${data.usage?.rewardMappings == null ? "—" : data.usage.rewardMappings} ways to earn active.`
-      : "Connect your Kick channel in Rewards to start giving members credits.";
-    if (linkEl) linkEl.textContent = connected ? "Manage connected apps →" : "Open connected apps →";
   } catch (err) {
     setState({ CREDITS_STATUS: "error" });
     logError("credits/status", err);
     renderOverviewSummary();
-    if (statusEl) {
-      statusEl.removeAttribute("aria-busy");
-      statusEl.textContent = "Could not load connected apps status. Try again.";
-    }
   }
 }
 
