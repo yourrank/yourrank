@@ -34,6 +34,20 @@ function draftLogoUrl(draftData, site) {
   return inline ? inline.trim() : saved;
 }
 
+/**
+ * The banner counterpart of draftLogoUrl: the picked cover previews inline
+ * before it is stored, an explicit `null` previews the removal, and anything
+ * else falls back to the saved banner route. Banners are a single image, so
+ * there is no srcset object to unwrap.
+ */
+function draftBannerUrl(draftData, site) {
+  const saved = site.data.branding?.hasBanner ? `/banner/${site.slug}` : null;
+  const draft = draftData.branding ? draftData.branding.banner : undefined;
+  if (draft === undefined) return saved;
+  if (draft === null) return null;
+  return typeof draft === "string" && DATA_IMAGE.test(draft.trim()) ? draft.trim() : saved;
+}
+
 export async function handleDashboardPreview(request, env, nonce, {
   currentUserImpl = currentUser,
   getUserSiteByIdImpl = getUserSiteById,
@@ -124,6 +138,7 @@ ${gamesIslandHead()}
       isCustomDomain: false,
       nonce,
       logoUrl: plan !== "free" ? draftLogoUrl(draftData, site) : null,
+      bannerUrl: plan !== "free" ? draftBannerUrl(draftData, site) : null,
       watermark,
       preview: true,
       previewDevice: device,

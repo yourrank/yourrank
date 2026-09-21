@@ -6,37 +6,45 @@ const MAX_LOGO_CHARS = 250000; // chars of data URI (~187KB decoded)
 const MAX_LOGO_BYTES = 200 * 1024;
 const MAX_LOGO_JSON_CHARS = 400000; // srcset object with multiple pre-sized WebP blobs
 const MAX_LOGO_TOTAL_BYTES = 240 * 1024;
+// The banner is one wide cover image, not a srcset: wider than a logo, but
+// still bounded so the sites row stays small.
+const MAX_BANNER_CHARS = 700000; // chars of data URI (~525KB decoded)
+const MAX_BANNER_BYTES = 500 * 1024;
 
-function validateSingleLogoData(dataUri) {
+function validateImageDataUri(dataUri, { label, maxChars, maxBytes, maxText }) {
   const m = LOGO_RE.exec(String(dataUri ?? ""));
-  if (!m) return { error: "Logo must be a base64 data URI for PNG, JPEG or WebP." };
+  if (!m) return { error: `${label} must be a base64 data URI for PNG, JPEG or WebP.` };
 
   const declaredMime = `image/${m[1]}`;
   const base64 = m[2];
-  if (base64.length > MAX_LOGO_CHARS) {
-    return { error: "Logo is too large. Keep it under ~180KB." };
+  if (base64.length > maxChars) {
+    return { error: `${label} is too large. Keep it under ~${maxText}.` };
   }
 
   let bytes;
   try {
     bytes = Buffer.from(base64, "base64");
   } catch {
-    return { error: "Logo base64 is malformed." };
+    return { error: `${label} base64 is malformed.` };
   }
-  if (bytes.length > MAX_LOGO_BYTES) {
-    return { error: "Logo is too large. Keep it under ~180KB." };
+  if (bytes.length > maxBytes) {
+    return { error: `${label} is too large. Keep it under ~${maxText}.` };
   }
 
   const detected = detectImageMime(bytes);
   if (!detected) {
-    return { error: "Logo file type could not be verified from its contents." };
+    return { error: `${label} file type could not be verified from its contents.` };
   }
   if (detected !== declaredMime) {
-    return { error: `Logo content is ${detected.split("/")[1]} but declared as ${declaredMime.split("/")[1]}.` };
+    return { error: `${label} content is ${detected.split("/")[1]} but declared as ${declaredMime.split("/")[1]}.` };
   }
 
   const normalised = `data:${detected};base64,${bytes.toString("base64")}`;
   return { ok: true, mime: detected, dataUri: normalised, bytes: bytes.length };
+}
+
+function validateSingleLogoData(dataUri) {
+  return validateImageDataUri(dataUri, { label: "Logo", maxChars: MAX_LOGO_CHARS, maxBytes: MAX_LOGO_BYTES, maxText: "180KB" });
 }
 
 const PNG_MAGIC = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
@@ -84,4 +92,9 @@ export function validateLogoData(dataUri) {
     return { ok: true, mime: "image/webp", dataUri: json };
   }
   return validateSingleLogoData(dataUri);
+}
+
+/** Validate a banner data URI (a single wide cover image) by decoding and checking magic bytes. */
+export function validateBannerData(dataUri) {
+  return validateImageDataUri(dataUri, { label: "Banner", maxChars: MAX_BANNER_CHARS, maxBytes: MAX_BANNER_BYTES, maxText: "480KB" });
 }

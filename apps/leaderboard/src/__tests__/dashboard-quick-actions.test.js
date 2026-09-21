@@ -194,17 +194,16 @@ describe("dashboard overview quick actions", () => {
   it("labels Appearance editor groups by the content they contain", () => {
     const html = dashboardHtml("/dashboard/leaderboard/design");
     expect(html).toContain('<h1 class="v3-section-title" data-egroup="design">Appearance</h1>');
-    expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>');
-    // Brand text and links are owned by Site, so Appearance no longer
-    // carries a "Content" group; it owns layout, blocks and prize labels.
+    expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Leaderboard design</h2></div>');
+    // Branding is owned by Appearance itself: a Brand group holds name,
+    // tagline, logo, banner and accent above the leaderboard design groups.
+    expect(html).toContain('<div class="design-group-heading" data-egroup="design"><h2>Brand</h2></div>');
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Content</h2></div>');
     expect(html).not.toContain('<div class="design-group-heading" data-egroup="design"><h2>Appearance</h2></div>');
     expect(html).not.toContain("<h2>Theme &amp; branding</h2>");
-    expect(html).toContain("Public identity is managed in Site.");
-    expect(html).toContain("Name, tagline, logo, colors and social links apply across every public page.");
-    // Identity opens in place: an action button, not an <a> that leaves the
-    // section (and trips the unsaved-changes guard).
-    expect(html).toContain('class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit="true">Edit site identity</button>');
+    // No owner note sends creators elsewhere for branding anymore.
+    expect(html).not.toContain("Public identity is managed in Site");
+    expect(html).not.toContain("data-identity-edit");
     expect(html).not.toContain('href="/dashboard/site">Edit site identity</a>');
     expect(html).toContain("Your current edits, rendered by the same renderer visitors see. Publish to put them live.");
   });

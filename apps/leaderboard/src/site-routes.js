@@ -172,6 +172,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     const paid = r.plan !== "free";
     const watermark = !paid;
     const logoUrl = paid && r.data?.branding?.hasLogo ? `${homeUrl}/logo/${slug}` : null;
+    const bannerUrl = paid && r.data?.branding?.hasBanner ? `${homeUrl}/banner/${slug}` : null;
 
     let viewerData = null;
     if (section === "home" || section === "shop" || section === "me") {
@@ -242,6 +243,7 @@ ${gamesIslandHead()}
         slug,
         isCustomDomain,
         logoUrl,
+        bannerUrl,
         watermark,
         csrfToken,
         boards: r.boards,

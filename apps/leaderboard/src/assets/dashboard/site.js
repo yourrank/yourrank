@@ -541,6 +541,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
     if (state.CURRENT_BRANDING?.accentA) out.branding.accentA = state.CURRENT_BRANDING.accentA;
     if (state.CURRENT_BRANDING?.accentB) out.branding.accentB = state.CURRENT_BRANDING.accentB;
     if (state.LOGO !== undefined) out.branding.logo = state.LOGO;
+    if (state.BANNER !== undefined) out.branding.banner = state.BANNER;
   }
   if (isPro()) {
     out.branding = {
@@ -1586,10 +1587,17 @@ export function renderBranding(br) {
     font: br.font || "Inter",
   };
   const paid = state.ME.plan !== "free";
-  $("brandBody").hidden = !paid;
-  $("brandLock").hidden = paid;
+  // Branding is edited in Community → Appearance; Site keeps only the viewer
+  // template and text style. Both surfaces share the same Pro gate state.
+  const appearanceBody = $("appearanceBrandBody");
+  const appearanceLock = $("appearanceBrandLock");
+  if (appearanceBody) appearanceBody.hidden = !paid;
+  if (appearanceLock) appearanceLock.hidden = paid;
+  if ($("brandBody")) $("brandBody").hidden = !paid;
+  if ($("brandLock")) $("brandLock").hidden = paid;
   updateThemeSelection();
   if (br.hasLogo) { $("logoPreview").src = "/logo/" + state.SLUG + "?t=" + Date.now(); $("logoPreview").hidden = false; $("logoClear").hidden = false; }
+  if (br.hasBanner) { $("bannerPreview").src = "/banner/" + state.SLUG + "?t=" + Date.now(); $("bannerPreview").hidden = false; $("bannerClear").hidden = false; }
 }
 
 export function renderPrizes(prizes = {}) {
@@ -1723,6 +1731,82 @@ export function handleLogoSelection(f) {
   reader.onerror = () => { setLogoStatus("Couldn't read that image."); };
   reader.readAsDataURL(f);
   if ($("logoFile")) $("logoFile").value = "";
+}
+
+// The community cover banner follows the logo's draft contract exactly:
+// undefined = unchanged, null = remove on save, string = new data URI. It is a
+// single wide image (no srcset) stored through the same site branding payload.
+const BANNER_MAX_BYTES = 5 * 1024 * 1024;
+const BANNER_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const BANNER_WIDTH = 1600;
+const BANNER_MAX_CHARS = 700000; // mirrors the server's banner validation limit
+
+function setBannerStatus(message) {
+  const local = $("bannerStatus");
+  if (local) local.textContent = message;
+  const status = $("status");
+  if (status) { status.textContent = message; status.hidden = false; }
+}
+
+export function wireBannerControls() {
+  $("bannerPick")?.setAttribute("aria-label", "Upload banner");
+  $("bannerPick")?.addEventListener("click", () => $("bannerFile")?.click());
+  $("bannerClear")?.setAttribute("aria-label", "Remove banner");
+  $("bannerClear")?.addEventListener("click", () => {
+    state.BANNER = null;
+    $("bannerPreview").hidden = true;
+    $("bannerClear").hidden = true;
+    setBannerStatus("Banner will be removed when you save.");
+    markDirty();
+  });
+  $("bannerFile")?.addEventListener("input", (event) => event.stopPropagation());
+  $("bannerFile")?.addEventListener("change", (event) => {
+    event.stopPropagation();
+    handleBannerSelection($("bannerFile").files[0]);
+  });
+}
+wireBannerControls();
+
+// Same rejection rules as the logo: a rejected file never touches the draft,
+// so the current saved banner stays previewed until a replacement is accepted.
+export function handleBannerSelection(f) {
+  if (!f) return;
+  if (f.type && !BANNER_TYPES.includes(f.type)) {
+    setBannerStatus("That file type isn't supported. Use a PNG, JPG or WebP image.");
+    if ($("bannerFile")) $("bannerFile").value = "";
+    return;
+  }
+  if (f.size > BANNER_MAX_BYTES) {
+    setBannerStatus(`That image is ${(f.size / (1024 * 1024)).toFixed(1)} MB. Use one under 5 MB.`);
+    if ($("bannerFile")) $("bannerFile").value = "";
+    return;
+  }
+  const reader = new FileReader();
+  const img = new Image();
+  img.onload = () => {
+    // Wide cover: cap the width and keep the source aspect ratio. The public
+    // renderer crops responsively with object-fit, so creators never need to
+    // calculate exact dimensions.
+    const w = Math.min(BANNER_WIDTH, img.width);
+    const h = Math.max(1, Math.round((w / img.width) * img.height));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    let uri = c.toDataURL("image/webp", 0.82);
+    if (!uri.startsWith("data:image/webp")) uri = c.toDataURL("image/jpeg", 0.85);
+    if (!uri.startsWith("data:")) { setBannerStatus("Couldn't convert that image."); return; }
+    if (uri.length > BANNER_MAX_CHARS) { setBannerStatus("That image is too detailed even after resizing. Try a simpler one."); return; }
+    state.BANNER = uri;
+    $("bannerPreview").src = uri;
+    $("bannerPreview").hidden = false; $("bannerClear").hidden = false;
+    setBannerStatus("Banner ready — hit Save to publish it.");
+    markDirty();
+  };
+  img.onerror = () => { setBannerStatus("Couldn't read that image."); };
+  reader.onload = () => { img.src = String(reader.result); };
+  reader.onerror = () => { setBannerStatus("Couldn't read that image."); };
+  reader.readAsDataURL(f);
+  if ($("bannerFile")) $("bannerFile").value = "";
 }
 // The custom accent picker owns its own dirty/update path. The dashboard marks
 // every bubbled input/change dirty, which would flag unsaved work for a colour
@@ -2017,104 +2101,6 @@ export function renderSitePublicAddress() {
       // Colour and a flashing label are not a message: say what happened.
       if (copyStatus) copyStatus.textContent = copied ? `Copied ${url} to your clipboard.` : "Could not copy the link. Select it and copy manually.";
     });
-  }
-}
-
-// Identity is edited where it is referenced, not by leaving the page. The old
-// "Edit site identity" text link was an <a href="/dashboard/site">: even though
-// the shell intercepts it, the cross-section request ran through
-// allowNavigation(), so a dirty draft raised the "Unsaved changes" modal and a
-// clean one swapped the visible section — a page-trip feel for what is a
-// two-field edit. The action below opens the same name/tagline fields in an
-// inline dialog and persists them directly, so nothing navigates and the
-// creator's unsaved work in the surrounding editor is left untouched.
-export function openSiteIdentityModal() {
-  if ($("siteIdentityModal")) return;
-  const nameValue = $("f_name")?.value.trim() || "";
-  const taglineValue = $("f_tagline")?.value.trim() || "";
-  const overlay = document.createElement("div");
-  overlay.className = "modal";
-  overlay.id = "siteIdentityModal";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-labelledby", "siteIdentityTitle");
-  overlay.innerHTML = `<div class="modal-card" role="document">
-    <h3 id="siteIdentityTitle">Edit site identity</h3>
-    <p>This is the name and tagline visitors see at the top of every public page.</p>
-    <div class="field"><label for="identityName">Site name</label><input id="identityName" maxlength="80" autocomplete="off" placeholder="Summer Race 2026" /></div>
-    <div class="field"><label for="identityTagline">Tagline <span class="hint">Optional</span></label><input id="identityTagline" maxlength="120" autocomplete="off" placeholder="Stream community leaderboard" /></div>
-    <div class="modal-actions"><button class="btn btn--sm btn--ghost" data-identity="cancel" type="button">Cancel</button><button class="btn btn--sm btn--accent" data-identity="save" type="button">Save identity</button></div>
-    <p class="status" id="siteIdentityErr" role="alert" aria-live="assertive"></p>
-  </div>`;
-  document.body.appendChild(overlay);
-  document.documentElement.classList.add("yr-modal-open");
-  const release = window.YRDialog ? window.YRDialog.trap(overlay, close) : null;
-  const nameInput = overlay.querySelector("#identityName");
-  const taglineInput = overlay.querySelector("#identityTagline");
-  const err = overlay.querySelector("#siteIdentityErr");
-  const save = overlay.querySelector('[data-identity="save"]');
-  nameInput.value = nameValue;
-  taglineInput.value = taglineValue;
-  function close() {
-    release?.();
-    overlay.remove();
-    document.documentElement.classList.remove("yr-modal-open");
-  }
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('[data-identity="cancel"]').addEventListener("click", close);
-  for (const input of [nameInput, taglineInput]) {
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save.click(); } });
-  }
-  save.addEventListener("click", async () => {
-    const name = nameInput.value.trim();
-    const tagline = taglineInput.value.trim();
-    if (!name) { err.textContent = "Enter a site name."; nameInput.focus(); return; }
-    err.textContent = "Saving…";
-    save.disabled = true;
-    try {
-      const { body } = await fetchDashboardJson("/api/site", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
-        body: JSON.stringify({
-          siteId: state.ACTIVE_SITE_ID || undefined,
-          name,
-          brand: { name, tagline },
-        }),
-      });
-      if (body?.ok) {
-        // Mirror the saved values into the editor fields so the Settings →
-        // Public site card and the live preview agree without a reload.
-        const nameField = $("f_name");
-        const taglineField = $("f_tagline");
-        if (nameField) nameField.value = name;
-        if (taglineField) taglineField.value = tagline;
-        state.ONBOARDING = { ...(state.ONBOARDING || {}), brand: true };
-        close();
-        showToast("Site identity saved.", "success");
-        renderOverviewSummary();
-        refreshDesignPreview();
-      } else {
-        err.textContent = body?.error || "Couldn't save the identity.";
-        save.disabled = false;
-      }
-    } catch (e) {
-      logError("site-identity-save", e);
-      err.textContent = e?.message || "Couldn't save the identity.";
-      save.disabled = false;
-    }
-  });
-}
-
-// The owner-note action is a button, so no routing is involved: clicking it
-// never reaches requestDashboardRoute/allowNavigation and therefore never
-// raises the unsaved-changes guard. Wiring is idempotent because the sections
-// this note lives in re-render on navigation.
-export function wireSiteIdentityActions() {
-  for (const button of document.querySelectorAll("[data-identity-edit]")) {
-    if (button._identityWired) continue;
-    button._identityWired = true;
-    button.addEventListener("click", () => openSiteIdentityModal());
   }
 }
 

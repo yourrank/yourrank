@@ -29,6 +29,7 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
     GAMES_STATUS: "loading",
     THEME_SAVING: false,
     LOGO: undefined, // undefined = unchanged, null = remove, string = new data URI
+    BANNER: undefined, // same contract as LOGO: undefined = unchanged, null = remove, string = new data URI
     _dirty: false,
     DRAFT_REVISION: 0,
     // Guarded so the module stays importable outside a browser (bun test);

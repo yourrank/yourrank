@@ -155,6 +155,32 @@ describe("handleDashboardPreview", () => {
     expect(untouched).toContain("/logo/actual-board");
   });
 
+  it("shows a picked banner before it is saved, and its removal too", async () => {
+    const uri = "data:image/webp;base64,UklGRgAAAABXRUJQ";
+    const html = async (branding, section = "home") => (await handleDashboardPreview(
+      previewRequest(`board=site-1&device=desktop&edit=0&section=${section}`, branding ? { branding } : {}),
+      {},
+      "nonce123",
+      impls(),
+    )).text();
+
+    // A picked-but-unsaved banner previews inline on the home hero.
+    const picked = await html({ banner: uri });
+    expect(picked).toContain(`class="viewer-hero-cover" src="${uri}"`);
+
+    // The leaderboard hero gets the same cover: competition and board pages
+    // inherit the site's banner rather than growing their own.
+    const board = await html({ banner: uri }, "leaderboard");
+    expect(board).toContain(`class="viewer-board-hero-cover" src="${uri}"`);
+
+    mockGetUserSiteById.mockResolvedValue({ ...SITE, data: { ...SITE.data, branding: { ...SITE.data.branding, hasBanner: true } } });
+    const removed = await html({ banner: null });
+    expect(removed).not.toContain("/banner/actual-board");
+    expect(removed).toContain("viewer-hero-scene");
+    const untouched = await html(null);
+    expect(untouched).toContain("/banner/actual-board");
+  });
+
   it("renders the mobile viewport at the width a phone viewer gets", async () => {
     const res = await handleDashboardPreview(previewRequest("board=site-1&device=mobile&edit=0", {}), {}, "nonce123", impls());
     const html = await res.text();

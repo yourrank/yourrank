@@ -148,7 +148,6 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </section>
 </section></section>
 <StandingsTabs active={activeHash} />
-<aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="setupBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="score">Points / score</option><option value="wagered">Amount</option></select><span class="hint">Players with the same value share a rank.</span></div>
 <div class="field"><label for="f_pool">Award or prize pool (optional)</label><input id="f_pool" placeholder="Optional" /></div>
@@ -216,9 +215,20 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 </div>
 <div class="v3-bulkbar" id="bulkActions" role="toolbar" aria-label="Bulk actions" hidden><span class="v3-bulkbar-mark" aria-hidden="true"></span><span id="bulkCount" role="status" aria-live="polite" aria-atomic="true">0 players selected</span><span class="v3-bulkbar-sep" aria-hidden="true"></span><button class="v3-btn v3-btn--dark" id="bulkClearWager" type="button">Reset scores to zero</button><button class="v3-btn v3-btn--danger" id="bulkDelete" type="button">Remove selected players</button></div>
 </div>
-<aside class="v3-owner-note" data-egroup="design" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and social links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
+<div class="design-group-heading" data-egroup="design"><h2>Brand</h2></div>
+<div class="card" data-egroup="design" id="appearanceIdentityCard"><h3>Community name &amp; tagline</h3><p class="card-sub">Viewers see these at the top of every public page, including competition leaderboards.</p><div class="grid2">
+<div class="field"><label for="f_name">Community name</label><input id="f_name" maxlength="80" autocomplete="off" aria-describedby="siteNameCounter siteNameError" /><span class="hint" id="siteNameCounter" role="status" aria-live="polite"></span><span class="field-err" id="siteNameError" data-field-error="f_name" role="alert" hidden></span></div>
+<div class="field"><label for="f_tagline">Tagline <span class="hint">Optional</span></label><input id="f_tagline" maxlength="120" autocomplete="off" placeholder="Stream community leaderboard" aria-describedby="siteTaglineHint siteTaglineCounter" /><span class="hint" id="siteTaglineHint">Short line shown under your name. Long taglines are shortened on your public site.</span><span class="hint" id="siteTaglineCounter" role="status" aria-live="polite"></span></div>
+</div></div>
+<div class="card" data-egroup="design" id="appearanceBrandCard"><div class="d-flex gap-8 items-center justify-between"><h3>Logo, banner &amp; accent</h3><span class="pill pill--info">PRO</span></div><p class="card-sub">Your community's look across every public page.</p>
+<div id="appearanceBrandBody">
+<div class="field"><label for="logoFile">Logo</label><div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" hidden /><button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div><span class="hint" id="siteLogoHint">PNG, JPG or WebP, up to 2 MB. Shows in your page header and as the link preview image.</span><span class="v3-settings-status" id="logoStatus" role="status" aria-live="polite"></span></div>
+<div class="field"><label for="bannerFile">Banner</label><div class="banner-row"><img id="bannerPreview" class="banner-preview" alt="Your current banner" hidden /><input type="file" id="bannerFile" accept="image/png,image/jpeg,image/webp" aria-describedby="bannerHint" hidden /><span class="banner-actions"><button class="btn btn--sm" id="bannerPick" type="button">Upload banner</button><button class="btn btn--sm btn--ghost" id="bannerClear" type="button" hidden>Remove banner</button></span></div><span class="hint" id="bannerHint">Recommended: wide image. PNG, JPG or WebP, up to 5 MB — it's resized and cropped automatically. Shown as the cover on your community home and leaderboard.</span><span class="v3-settings-status" id="bannerStatus" role="status" aria-live="polite"></span></div>
+<div class="field"><span class="v3-settings-label" id="siteAccentLabel">Accent color</span><div class="preset-list" id="colorPresets" role="group" aria-labelledby="siteAccentLabel"></div><span class="hint">Used for active navigation, buttons and highlights.</span><details class="advanced-colors"><summary>Custom accent color</summary><div class="color-row"><label for="c_a" class="sr-only">Accent color</label><input type="color" id="c_a" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset</button></div></details></div>
+</div>
+<div class="empty upsell-card" id="appearanceBrandLock" hidden>Branding is a Pro feature. <a href="/dashboard/settings/billing?from=branding" id="appearanceBrandUpgrade">Upgrade to Pro to unlock branding</a>.</div></div>
 <div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Standings</a></div>
-<div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
+<div class="design-group-heading" data-egroup="design"><h2>Leaderboard design</h2></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
 <div id="sectionsBody"><div class="sections-editor" id="sectionsList"></div></div>
 <div class="empty upsell-card" id="sectionsLock" hidden>Page block controls are a Pro feature. <a href="/dashboard/settings/billing?from=sections" id="sectionsUpgrade">Upgrade to unlock them</a>.</div></div>
@@ -410,7 +420,7 @@ function BoardSettingsSection({ active } = {}) {
   <header class="v3-head v3-head--row">
     <div>
       <h1>Site pages</h1>
-      <p class="v3-head-sub" id="settingsSubline">Manage the public identity and pages viewers see for the selected site. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
+      <p class="v3-head-sub" id="settingsSubline">Manage the public pages viewers see for the selected site. Community branding lives in Appearance. Personal settings and billing live in <a href="/dashboard/settings/account">Account</a>.</p>
     </div>
     <a class="btn btn--sm" id="sitePublicSiteAction" href="#" target="_blank" rel="noopener noreferrer">View public site ↗</a>
   </header>
@@ -443,23 +453,8 @@ function BoardSettingsSection({ active } = {}) {
         </div>
       </div>
       <div class="v3-customize-controls">
-        <div class="v3-settings-card" id="siteIdentityCard">
-          <div class="v3-settings-card-head"><div><h2>Name and tagline</h2><p>Viewers see these at the top of every public page.</p></div></div>
-          <div class="v3-settings-field">
-            <label class="v3-settings-label" for="f_name">Site name</label>
-            <input id="f_name" maxlength="80" autocomplete="off" aria-describedby="siteNameCounter siteNameError" />
-            <span class="v3-settings-muted" id="siteNameCounter" role="status" aria-live="polite"></span>
-            <span class="field-err" id="siteNameError" data-field-error="f_name" role="alert" hidden></span>
-          </div>
-          <div class="v3-settings-field">
-            <label class="v3-settings-label" for="f_tagline">Tagline <span class="v3-settings-muted">Optional</span></label>
-            <input id="f_tagline" maxlength="120" autocomplete="off" placeholder="Stream community leaderboard" aria-describedby="siteTaglineHint siteTaglineCounter" />
-            <span class="v3-settings-muted" id="siteTaglineHint">Short line shown under your name. Long taglines are shortened on your public site.</span>
-            <span class="v3-settings-muted" id="siteTaglineCounter" role="status" aria-live="polite"></span>
-          </div>
-        </div>
         <div class="v3-settings-card" id="brandCard">
-          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your viewer template, logo, accent color and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
+          <div class="v3-settings-card-head"><div><h2>Brand</h2><p>Your viewer template and text style.</p></div><span class="v3-chip v3-chip--pro">Pro</span></div>
           <div id="brandBody">
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="f_viewerTemplate">Viewer template</label>
@@ -467,20 +462,7 @@ function BoardSettingsSection({ active } = {}) {
               <span class="v3-settings-muted" id="siteTemplateHint" role="status" aria-live="polite">{VIEWER_TEMPLATES[0].description}</span>
               <span class="v3-settings-muted" id="siteTemplateScope">Applies to this site's viewer pages. Check the preview, then save your choice.</span>
             </div>
-            <div class="v3-settings-field">
-              <label class="v3-settings-label" for="logoFile">Logo</label>
-              <div class="logo-row"><img id="logoPreview" class="logo-preview" alt="Your current logo" hidden /><input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" aria-describedby="siteLogoHint" hidden /><button class="btn btn--sm" id="logoPick" type="button">Upload logo</button><button class="btn btn--sm btn--ghost" id="logoClear" type="button" hidden>Remove logo</button></div>
-              <span class="v3-settings-muted" id="siteLogoHint">PNG, JPG or WebP, up to 2 MB. Shows in your page header and as the link preview image.</span>
-              <span class="v3-settings-status" id="logoStatus" role="status" aria-live="polite"></span>
-            </div>
-            <div class="v3-settings-field">
-              <span class="v3-settings-label" id="siteAccentLabel">Accent color</span>
-              <div class="preset-list" id="colorPresets" role="group" aria-labelledby="siteAccentLabel"></div>
-              <span class="v3-settings-muted">Used for active navigation, buttons and highlights.</span>
-              <details class="advanced-colors"><summary>Custom accent color</summary>
-              <div class="color-row"><label for="c_a" class="sr-only">Accent color</label><input type="color" id="c_a" value="#5b5bf5" /><button class="btn btn--sm btn--ghost" id="colorsReset" type="button">Reset</button></div>
-              </details>
-            </div>
+            <div class="v3-settings-row"><div><b>Community branding</b><p>Name, tagline, logo, banner and accent color are managed in Appearance.</p></div><a class="v3-set-btn v3-set-btn--outline" href="/dashboard/leaderboard/design">Open Appearance</a></div>
             <div class="v3-settings-field">
               <label class="v3-settings-label" for="f_font">Text style</label>
               <select id="f_font" aria-describedby="siteFontHint"><option value="Inter">Inter — Default</option><option value="Oswald">Oswald — Bold &amp; Sporty</option><option value="Playfair Display">Playfair Display — Premium &amp; Elegant</option><option value="Rajdhani">Rajdhani — Techy &amp; Esports</option><option value="Bebas Neue">Bebas Neue — Impact &amp; Hype</option></select>

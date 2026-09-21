@@ -13,7 +13,7 @@ import { directQueueFallback } from "@yourrank/shared/queue-effects";
 import { encrypt } from "@yourrank/shared/crypto";
 import { recordReplayHash } from "@yourrank/shared/postback";
 import { verifyBoardPasswordCookie } from "./board-password.js";
-import { detectImageMime, validateLogoData } from "./logo-validation.js";
+import { detectImageMime, validateBannerData, validateLogoData } from "./logo-validation.js";
 import { invalidatePublicBoardCache } from "./public-html-cache.js";
 import { notifyLiveBoard } from "./live-board-config.js";
 import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
@@ -21,7 +21,7 @@ import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
 import { VIEWER_OAUTH_PROVIDERS, resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 import { EMPTY_CREATOR_CONTACT, hasCreatorContactMethod, normalizeCreatorContact, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
-export { detectImageMime, validateLogoData };
+export { detectImageMime, validateBannerData, validateLogoData };
 
 
 function getTokenEncKey() {
@@ -110,11 +110,11 @@ export function normalizeSections(raw) {
   return out;
 }
 
-// All site columns except logo_data (base64 image, up to 180KB) — that's only
+// All site columns except logo_data/banner_data (base64 images) — they're only
 // needed by the /logo/:slug endpoint and saveSite(), which fetch it separately.
 // PERF-004 / PERF-107: avoid SELECT * to prevent 180KB+ transfers on every page.
 // PERF-005: include has_logo as a computed column to avoid a separate re-query.
-const SITE_COLUMNS = "id, user_id, slug, name, tagline, casino, code, cta_url, prize_pool, period, starts_at, ends_at, rank_by, reset_note, blurb, extra_json, published, is_draft, theme_json, updated_at, published_at, custom_domain, domain_status, discord_webhook_url_enc, telegram_chat_id, telegram_notify, auto_reset_enabled, auto_reset_clear, auto_reset_last_run_at, password_hash, password_salt, viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled, games_enabled, shop_enabled, credits_enabled, (logo_data IS NOT NULL AND logo_data != '') AS has_logo";
+const SITE_COLUMNS = "id, user_id, slug, name, tagline, casino, code, cta_url, prize_pool, period, starts_at, ends_at, rank_by, reset_note, blurb, extra_json, published, is_draft, theme_json, updated_at, published_at, custom_domain, domain_status, discord_webhook_url_enc, telegram_chat_id, telegram_notify, auto_reset_enabled, auto_reset_clear, auto_reset_last_run_at, password_hash, password_salt, viewer_kick_auth_enabled, viewer_discord_auth_enabled, viewer_public_redeem_enabled, games_enabled, shop_enabled, credits_enabled, (logo_data IS NOT NULL AND logo_data != '') AS has_logo, (banner_data IS NOT NULL AND banner_data != '') AS has_banner";
 
 // L1 in-memory cache (per-isolate). No L2 KV — sessions moved to Postgres.
 const siteCache = new Map();
@@ -459,7 +459,7 @@ async function getArchivePlayerCounts(env, siteId, limit = 6, historyDays = HIST
   return rows || [];
 }
 
-export function publicShape(site, players, archives = [], hasLogo = false, playerCount = null) {
+export function publicShape(site, players, archives = [], hasLogo = false, playerCount = null, hasBanner = false) {
   const rawExtra = fromJsonb(site.extra_json);
   const extra = (rawExtra && typeof rawExtra === "object") ? rawExtra : {};
   const m = { ...DEFAULT_EXTRA, ...extra };
@@ -485,7 +485,7 @@ export function publicShape(site, players, archives = [], hasLogo = false, playe
     rankBy: rankField(site.rank_by),
     partner: { blurb: site.blurb, chips: m.chips },
     whyStats: m.whyStats, rules: m.rules, socials: (m.socials || []).filter(s => s.enabled !== false),
-    branding: { hasLogo, accentA: theme.accentA, accentB: theme.accentB, template: theme.template, text: theme.text, font: theme.font, options: theme.options },
+    branding: { hasLogo, hasBanner, accentA: theme.accentA, accentB: theme.accentB, template: theme.template, text: theme.text, font: theme.font, options: theme.options },
     pastWinners: archives.map(archiveShape),
     playerCount: Number.isFinite(Number(playerCount)) ? Number(playerCount) : players.length,
     players: players.map((p, i) => ({
@@ -595,7 +595,7 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       getArchives(env, site.id, archiveLimit, HISTORY_DAYS[plan]), // DB-003-v8: fetch only entitled history
     ]);
     const boards = shapePublicBoards(fromJsonb(owner?.public_boards) || []);
-    const data = publicShape(site, players, archives, !!site.has_logo, playerCount);
+    const data = publicShape(site, players, archives, !!site.has_logo, playerCount, !!site.has_banner);
     if (boundedPlayers) data.playerMatchCount = playerMatchCount;
     data.eventBoards = fromJsonb(owner?.event_boards) || [];
     const requestUrl = request ? new URL(request.url) : null;
@@ -657,7 +657,7 @@ export async function getUserSite(env, uid, plan) {
         updatedAt: site.updated_at,
         publishedAt: site.published_at,
         autoReset: { enabled: !!site.auto_reset_enabled, clear: site.auto_reset_clear || "wagers" },
-        data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo),
+        data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo, null, !!site.has_banner),
         socials: (fromJsonb(site.extra_json)?.socials) ?? DEFAULT_EXTRA.socials,
         customDomain: site.custom_domain || "",
           domainStatus: site.domain_status || "pending",
@@ -738,7 +738,7 @@ export async function getUserSiteById(env, uid, siteId, plan) {
     updatedAt: site.updated_at,
     publishedAt: site.published_at,
     autoReset: { enabled: !!site.auto_reset_enabled, clear: site.auto_reset_clear || "wagers" },
-    data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo),
+    data: publicShape(site, await getPlayers(env, site.id, { rankBy: site.rank_by }), archives.slice(0, archiveLimit), !!site.has_logo, null, !!site.has_banner),
     socials: (fromJsonb(site.extra_json)?.socials) ?? DEFAULT_EXTRA.socials,
       customDomain: site.custom_domain || "",
           domainStatus: site.domain_status || "pending",
@@ -861,15 +861,16 @@ export async function duplicateBoard(env, uid, siteId, request = null) {
   const theme = (rawTheme && typeof rawTheme === "object") ? rawTheme : {};
   const rawExtra = fromJsonb(source.extra_json);
   const extra = (rawExtra && typeof rawExtra === "object") ? rawExtra : {};
-  const logoRow = await one("SELECT logo_data FROM sites WHERE id=$1", [siteId]);
+  const logoRow = await one("SELECT logo_data, banner_data FROM sites WHERE id=$1", [siteId]);
   const logoData = logoRow?.logo_data || "";
+  const bannerData = logoRow?.banner_data || "";
   const boardOrder = (source.board_order || 0) + 1;
 
   await withTransaction(async (tx) => {
     await tx.unsafe(
-      `INSERT INTO sites (id,user_id,slug,name,tagline,casino,code,cta_url,prize_pool,period,starts_at,ends_at,rank_by,reset_note,blurb,published,is_draft,extra_json,logo_data,theme_json,board_order)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20::jsonb,$21)`,
-      [newId, uid, newSlug, `${source.name} (copy)`.slice(0, 80), source.tagline, source.casino, source.code, source.cta_url, source.prize_pool, source.period, source.starts_at, source.ends_at, rankField(source.rank_by), source.reset_note, source.blurb, false, true, extra, logoData, theme, boardOrder]
+      `INSERT INTO sites (id,user_id,slug,name,tagline,casino,code,cta_url,prize_pool,period,starts_at,ends_at,rank_by,reset_note,blurb,published,is_draft,extra_json,logo_data,banner_data,theme_json,board_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20,$21::jsonb,$22)`,
+      [newId, uid, newSlug, `${source.name} (copy)`.slice(0, 80), source.tagline, source.casino, source.code, source.cta_url, source.prize_pool, source.period, source.starts_at, source.ends_at, rankField(source.rank_by), source.reset_note, source.blurb, false, true, extra, logoData, bannerData, theme, boardOrder]
     );
     if (players.length) {
       const valueRows = [];
@@ -1050,10 +1051,21 @@ function isProPlan(plan) {
   return plan === "pro" || plan === "team";
 }
 
-export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null } = {}) {
+export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null, deps = {} } = {}) {
+  const oneImpl = deps.one || one;
+  const queryImpl = deps.query || query;
+  const withTransactionImpl = deps.withTransaction || withTransaction;
+  const getBoardByIdImpl = deps.getBoardById || getBoardById;
+  const getByUserImpl = deps.getByUser || getByUser;
+  const getPlayersImpl = deps.getPlayers || getPlayers;
+  const invalidateSiteCacheImpl = deps.invalidateSiteCache || invalidateSiteCache;
+  const invalidatePublicBoardCacheImpl = deps.invalidatePublicBoardCache || invalidatePublicBoardCache;
+  const logAuditImpl = deps.logAudit || logAudit;
+  const notifyLiveBoardImpl = deps.notifyLiveBoard || notifyLiveBoard;
+  const createNotifyQueueImpl = deps.createNotifyQueue || createNotifyQueue;
   const uid = typeof user === "string" ? user : user.id;
   const plan = typeof user === "object" ? effectivePlan(user) : "free";
-  const site = siteId ? await getBoardById(env, uid, siteId) : await getByUser(env, uid);
+  const site = siteId ? await getBoardByIdImpl(env, uid, siteId) : await getByUserImpl(env, uid);
   if (!site) return { error: "no site" };
   const requestedStartsAt = normalizeEndsAt(payload.startsAt, site.starts_at);
   const requestedEndsAt = normalizeEndsAt(payload.endsAt, site.ends_at);
@@ -1084,7 +1096,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       if (site.user_id !== uid) {
         return { error: "Only the site owner can rename the site URL.", code: "forbidden" };
       }
-      const taken = await one("SELECT id FROM sites WHERE slug=$1", [next]);
+      const taken = await oneImpl("SELECT id FROM sites WHERE slug=$1", [next]);
       if (taken && taken.id !== site.id) return { error: "That URL is already taken. Pick another.", code: "slug_taken" };
       slugRename = next;
     }
@@ -1114,7 +1126,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   if (typeof user === "object" && validatedPlayers) {
     let effectiveSitePlan = plan;
     if (site.user_id !== uid) {
-      const owner = await one("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
+      const owner = await oneImpl("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
       if (owner) effectiveSitePlan = effectivePlan(owner);
     }
     if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
@@ -1227,9 +1239,11 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     passwordSalt = hashed.salt;
   }
 
-  // Fetch logo_data separately since the shared query no longer includes it (PERF-004).
-  const existingLogoRow = await one("SELECT logo_data FROM sites WHERE id=$1", [site.id]);
+  // Fetch the image columns separately since the shared query no longer
+  // includes them (PERF-004).
+  const existingLogoRow = await oneImpl("SELECT logo_data, banner_data FROM sites WHERE id=$1", [site.id]);
   let logoData = existingLogoRow?.logo_data ?? "";
+  let bannerData = existingLogoRow?.banner_data ?? "";
   const rawThemeObj = fromJsonb(site.theme_json);
   let themeObj = (rawThemeObj && typeof rawThemeObj === "object") ? rawThemeObj : {};
   const br = payload.branding;
@@ -1239,6 +1253,12 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       const validated = validateLogoData(br.logo);
       if (validated.error) return { error: validated.error, code: "invalid_logo" };
       logoData = validated.dataUri;
+    }
+    if (br.banner === null) bannerData = "";
+    else if (typeof br.banner === "string" && br.banner) {
+      const validated = validateBannerData(br.banner);
+      if (validated.error) return { error: validated.error, code: "invalid_banner" };
+      bannerData = validated.dataUri;
     }
     const t = {};
     if (br.template && VALID_TEMPLATES.includes(br.template)) {
@@ -1264,12 +1284,12 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
 
   // Invalidate this isolate's L1 cache before writing. There is no L2/KV, so
   // other live isolates keep stale entries until the 25s TTL expires.
-  invalidateSiteCache(env, site.slug, uid, siteId);
-  if (slugRename) invalidateSiteCache(env, slugRename);
+  invalidateSiteCacheImpl(env, site.slug, uid, siteId);
+  if (slugRename) invalidateSiteCacheImpl(env, slugRename);
 
   // Capture old top-3 for notifications
   const nextRankBy = rankField(payload.rankBy ?? site.rank_by);
-  const oldPlayers = await getPlayers(env, site.id, { rankBy: site.rank_by });
+  const oldPlayers = await getPlayersImpl(env, site.id, { rankBy: site.rank_by });
   const oldTop3 = sortPlayersForRanking(oldPlayers, site.rank_by).slice(0, 3);
   if (validatedPlayers) {
     const closed = (requestedStartsAt && new Date(requestedStartsAt).getTime() > Date.now())
@@ -1300,7 +1320,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     });
   }
 
-  const txResult = await withTransaction(async (tx) => {
+  const txResult = await withTransactionImpl(async (tx) => {
     // QA-004 / C-07: Lock the site row and re-read updated_at inside the same
     // transaction so the optimistic concurrency check is authoritative.
     const locked = await tx.one(
@@ -1339,14 +1359,14 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       ? String(b.period || "Monthly").trim()
       : (site.period || "Monthly");
     await tx.unsafe(
-      `UPDATE sites SET slug=$1, name=$2, tagline=$3, casino=$4, code=$5, cta_url=$6, prize_pool=$7, period=$8, starts_at=$9, ends_at=$10, rank_by=$11, reset_note=$12, blurb=$13, extra_json=$14::jsonb, logo_data=$15, theme_json=$16::jsonb, published=$17, is_draft=$18, discord_webhook_url_enc=$19, telegram_chat_id=$20, telegram_notify=$21, auto_reset_enabled=$22, auto_reset_clear=$23, password_hash=$24, password_salt=$25, published_at=$26, shop_enabled=$27, credits_enabled=$28, games_enabled=$29, updated_at=now() WHERE id=$30`,
+      `UPDATE sites SET slug=$1, name=$2, tagline=$3, casino=$4, code=$5, cta_url=$6, prize_pool=$7, period=$8, starts_at=$9, ends_at=$10, rank_by=$11, reset_note=$12, blurb=$13, extra_json=$14::jsonb, logo_data=$15, theme_json=$16::jsonb, published=$17, is_draft=$18, discord_webhook_url_enc=$19, telegram_chat_id=$20, telegram_notify=$21, auto_reset_enabled=$22, auto_reset_clear=$23, password_hash=$24, password_salt=$25, published_at=$26, shop_enabled=$27, credits_enabled=$28, games_enabled=$29, banner_data=$30, updated_at=now() WHERE id=$31`,
       [
         slugVal, siteName, b.tagline ?? site.tagline, b.casino ?? site.casino, b.code ?? site.code,
         b.ctaUrl ?? site.cta_url, b.prizePool ?? site.prize_pool, periodVal,
         startsAtVal, endsAtVal, nextRankBy, b.resetNote ?? site.reset_note, (payload.partner && payload.partner.blurb) ?? site.blurb,
         extra, logoData, themeJson, publishedVal, isDraftVal, discordWebhookUrlEnc, telegramChatId, telegramNotify,
         autoResetEnabled, autoResetClear, passwordHash, passwordSalt, publishedAtVal,
-        shopEnabled, creditsEnabled, gamesEnabled, site.id,
+        shopEnabled, creditsEnabled, gamesEnabled, bannerData, site.id,
       ]
     );
 
@@ -1412,7 +1432,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   // thread and routes player DMs through the bot_id the player subscribed to.
   if (validatedPlayers && typeof user === "object" && effectivePlan(user) !== "free") {
     try {
-      const notifyQueue = createNotifyQueue(env);
+      const notifyQueue = createNotifyQueueImpl(env);
       const newSorted = sortPlayersForRanking(validatedPlayers, nextRankBy);
       const top3Changes = detectTop3Changes(oldTop3, newSorted, nextRankBy);
       if (top3Changes.length) {
@@ -1421,7 +1441,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
 
       const changedNames = getRankChangedPlayerNames(oldPlayers || [], newSorted, nextRankBy);
       if (changedNames.length) {
-        const subs = await query(
+        const subs = await queryImpl(
           `SELECT ps.tg_user_id, ps.player_name, ps.bot_id
              FROM player_subscriptions ps
             WHERE ps.site_id = $1
@@ -1467,9 +1487,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     }
   }
   // Return updated site data including new timestamp for optimistic concurrency
-  const updatedSite = await getBoardById(env, uid, site.id);
-  void notifyLiveBoard(env, site.id, updatedSite?.updated_at || new Date().toISOString());
-  invalidatePublicBoardCache(
+  const updatedSite = await getBoardByIdImpl(env, uid, site.id);
+  void notifyLiveBoardImpl(env, site.id, updatedSite?.updated_at || new Date().toISOString());
+  invalidatePublicBoardCacheImpl(
     `yourrank.site/${site.slug}`,
     `yourrank.site/${site.slug}/leaderboard`,
     slugRename ? `yourrank.site/${slugRename}` : null,
@@ -1489,6 +1509,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     const hadLogo = !!existingLogoRow?.logo_data;
     const hasLogo = !!logoData;
     if (br && br.logo !== undefined && hadLogo !== hasLogo) changes.push("logo");
+    const hadBanner = !!existingLogoRow?.banner_data;
+    const hasBanner = !!bannerData;
+    if (br && br.banner !== undefined && hadBanner !== hasBanner) changes.push("banner");
     if (br && br.accentA && br.accentA !== (oldTheme.accentA || "")) changes.push("accentA");
     if (br && br.accentB && br.accentB !== (oldTheme.accentB || "")) changes.push("accentB");
   }
@@ -1500,7 +1523,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   if (typeof sectionPayload.credits === "boolean" && sectionPayload.credits !== !!site.credits_enabled) changes.push("credits_enabled");
   if (typeof sectionPayload.games === "boolean" && sectionPayload.games !== !!site.games_enabled) changes.push("games_enabled");
 
-  await logAudit({
+  await logAuditImpl({
     actorId: uid,
     action: "board_update",
     entityType: "site",

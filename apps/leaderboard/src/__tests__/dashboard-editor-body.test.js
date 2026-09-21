@@ -158,9 +158,10 @@ describe("authenticated editor body", () => {
 
   it("progressively discloses the rarely-changed editor settings", () => {
     const html = editorHtml("/dashboard/leaderboard/setup");
-    // Ranking essentials stay visible. Site-wide identity points to its proven
-    // owner; optional sponsor and scheduling detail sit behind disclosures.
-    expect(html).toContain('id="setupBrandLink" type="button" data-identity-edit="true">Edit site identity</button>');
+    // Ranking essentials stay visible. Branding is edited in Appearance, so
+    // Setup carries no identity pointer; optional sponsor and scheduling
+    // detail sit behind disclosures.
+    expect(html).not.toContain("data-identity-edit");
     expect(html).toContain("Leaderboard basics");
     expect(html).toMatch(/<details class="editor-more editor-more--standalone"[^>]*data-editor-more="setup-sponsor">/);
     expect(html).toMatch(/<details class="editor-more" data-editor-more="setup-schedule">/);
