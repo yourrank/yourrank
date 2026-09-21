@@ -108,6 +108,11 @@ describe("release-gate journeys", () => {
       expect(event.published).toBe(false);
       expect(event.players).toEqual([{ name: "Competition player", score: 42 }]);
       expect(event.updated_at).toBeTruthy();
+      expect(list.json.playerLimit).toBeGreaterThan(0);
+      for (const players of [[{ name: 'Alex', score: 1 }, { name: 'alex', score: 2 }], [{ name: 'Invalid', score: -1 }], [{ name: 'Too high', score: 1e13 }], Array.from({ length: list.json.playerLimit + 1 }, (_, i) => ({ name: 'Player ' + i, score: i }))]) {
+        const invalid = await client.post(endpoint, { id: eventId, updatedAt: event.updated_at, name: event.name, players, published: false });
+        expect(invalid.status).toBe(400);
+      }
       for (const tab of ["setup", "players", "history", "competitions"]) {
         const page = await client.get(`/dashboard/leaderboard/${tab}?board=${siteId}`);
         expect(page.status).toBe(200);
@@ -130,8 +135,18 @@ describe("release-gate journeys", () => {
         expect(publicPage.body).toContain('data-event-id="' + eventId + '"');
         expect(publicPage.body).toContain("Competition player");
       }
+      const stale = await client.post(endpoint, { id: eventId, updatedAt: event.updated_at, name: 'Stale overwrite', players: [], published: false });
+      expect(stale.status).toBe(409);
+      const latest = (await client.get(endpoint)).json.events.find((item: any) => item.id === eventId);
+      const replacement = [{ name: 'Alex', score: 250 }, { name: 'Sam', score: 250 }, { name: 'Chris', score: 145 }];
+      const renamed = await client.post(endpoint, { id: eventId, updatedAt: latest.updated_at, name: 'Managed challenge', players: replacement, published: false });
+      expect(renamed.status).toBe(200);
+      const managed = (await client.get(endpoint)).json.events.find((item: any) => item.id === eventId);
+      expect(managed.name).toBe('Managed challenge');
+      expect(managed.published).toBe(false);
+      expect(managed.players).toEqual(replacement);
       const mainAfter = await client.get(`/api/site?siteId=${siteId}`);
-      expect(mainAfter.json.data.players).toEqual(mainBefore.json.data.players);
+      expect(mainAfter.json.data).toEqual(mainBefore.json.data);
     } finally {
       const list = await client.get(endpoint);
       const current = list.json.events.find((item: any) => item.id === eventId);
