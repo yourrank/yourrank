@@ -35,7 +35,7 @@ import {
   HTML, SECURE_HTML, notFoundPage, missingSectionPage, suspendedPage, pendingVerificationPage, error500Page, withNonce
 } from "./middleware/index.js";
 import { handlePublicApiPreflight } from "./middleware/public-api.js";
-import { findSiteLogoData, findSiteStatus, findUserTotpSecret } from "./data/sites.js";
+import { findSiteBannerData, findSiteLogoData, findSiteStatus, findUserTotpSecret } from "./data/sites.js";
 import { detectImageMime } from "./site.js";
 import { one, query, exec } from "@yourrank/shared/db";
 import { logAudit } from "@yourrank/shared/audit";
@@ -121,6 +121,7 @@ function telemetryRoute(path) {
   }
   if (parts[0] === "go") return "/go/:slug";
   if (parts[0] === "logo") return "/logo/:slug";
+  if (parts[0] === "banner") return "/banner/:slug";
   if (parts.length >= 2 && parts[1] === "player") return "/:slug/player/:name";
   if (parts.length >= 2 && SITE_SECTIONS.has(parts[1])) return "/:slug/" + parts[1];
   if (parts.length === 1 && !NON_SITE_PATHS.has(parts[0])) return "/:slug";
@@ -300,6 +301,30 @@ async function serveLogo(request, path) {
   try { bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)); } catch { return new Response("not found", { status: 404 }); }
   // H-19: validate magic bytes even on read so a legacy invalid blob cannot be
   // served under an image MIME type.
+  const detected = detectImageMime(bytes);
+  if (!detected) return new Response("not found", { status: 404 });
+  return new Response(bytes, { headers: { "content-type": detected, "cache-control": "public, max-age=86400", etag } });
+}
+
+// Community cover banners: same storage and validation contract as logos,
+// served as one pre-sized wide image (no srcset widths). The lookup is
+// injectable so the route contract is testable without a database.
+export async function serveBanner(request, path, lookup = findSiteBannerData) {
+  let slug;
+  try { slug = decodeURIComponent(path.slice(8)).toLowerCase().replace(/\.(png|jpe?g|webp)$/, ""); } catch { return new Response("not found", { status: 404 }); }
+  const site = await lookup(slug);
+  const bannerData = site?.banner_data || "";
+  const m = (bannerData || "").match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
+  if (!m) return new Response("not found", { status: 404 });
+  const encoder = new TextEncoder();
+  const hashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(bannerData));
+  const etag = '"' + [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 16) + '"';
+  const ifNoneMatch = request.headers.get("if-none-match");
+  if (ifNoneMatch === etag) return new Response(null, { status: 304, headers: { etag, "cache-control": "public, max-age=86400" } });
+  let bytes;
+  try { bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)); } catch { return new Response("not found", { status: 404 }); }
+  // Same rule as logos: magic bytes decide the served MIME type, so a legacy
+  // invalid blob can never be served as an image.
   const detected = detectImageMime(bytes);
   if (!detected) return new Response("not found", { status: 404 });
   return new Response(bytes, { headers: { "content-type": detected, "cache-control": "public, max-age=86400", etag } });
@@ -526,6 +551,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           // Only serve GET requests on custom domains (no dashboard/API)
           if (method === "GET" && path.startsWith("/logo/")) {
             return serveLogo(request, path);
+          }
+          if (method === "GET" && path.startsWith("/banner/")) {
+            return serveBanner(request, path);
           }
           if (method === "GET" && path === "/favicon.ico") {
             return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>', {
@@ -1153,6 +1181,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       if (path.startsWith("/logo/") && method === "GET") {
         return serveLogo(request, path);
       }
+      if (path.startsWith("/banner/") && method === "GET") {
+        return serveBanner(request, path);
+      }
 
       // --- API routing ---
       if (method === "OPTIONS") {
@@ -1509,6 +1540,9 @@ a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
               isCustomDomain: false,
               logoUrl: r.plan !== "free" && r.data.branding?.hasLogo
                 ? `${url.origin}/logo/${slug}`
+                : null,
+              bannerUrl: r.plan !== "free" && r.data.branding?.hasBanner
+                ? `${url.origin}/banner/${slug}`
                 : null,
             },
           }),

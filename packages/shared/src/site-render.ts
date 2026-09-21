@@ -591,6 +591,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const isCustomDomain = !!opts.isCustomDomain;
   const homeUrl = String(opts.homeUrl || "https://yourrank.site").replace(/\/$/, "");
   const logoUrl = opts.logoUrl || null;
+  const bannerUrl = opts.bannerUrl || null;
   const watermark = data.sections?.poweredBy !== undefined ? !!data.sections?.poweredBy : r.plan === "free";
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
@@ -640,10 +641,10 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
       ? `${rawTitleBase}'s public site — ${b.tagline || "compete on the leaderboard, earn free credits and claim rewards."}`
       : `${SECTION_LABELS[section] || section} for ${rawTitleBase}'s public site.`);
   const desc = esc(rawDesc);
-  const ogImageUrl = logoUrl ? esc(logoUrl) : `${homeUrl}/og.png`;
+  const ogImageUrl = (bannerUrl || logoUrl) ? esc(bannerUrl || logoUrl) : `${homeUrl}/og.png`;
 
   const ctx = {
-    r, data, b, br, section, siteSections, slug, isCustomDomain, homeUrl, logoUrl,
+    r, data, b, br, section, siteSections, slug, isCustomDomain, homeUrl, logoUrl, bannerUrl,
     viewer, viewerData, viewerOnSite, membershipStatus, isMember, balance, casino, pool, period, ctaHref, hasCta, socialLinks,
     returnTo, nonce, watermark, isDemo: !!opts.isDemo,
     viewerAuthError: typeof opts.viewerAuthError === "string" ? opts.viewerAuthError : "",
@@ -678,7 +679,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <title>${title}</title><meta name="description" content="${desc}" />
 <meta property="og:title" content="${titleBase}" /><meta property="og:description" content="${desc}" /><meta property="og:type" content="website" />
 <link rel="canonical" href="${canonicalUrl}" /><meta property="og:url" content="${canonicalUrl}" />
-<meta name="twitter:card" content="${logoUrl ? "summary_large_image" : "summary"}" /><meta name="twitter:title" content="${titleBase}" /><meta name="twitter:description" content="${desc}" /><meta property="og:image" content="${ogImageUrl}" /><meta name="twitter:image" content="${ogImageUrl}" />
+<meta name="twitter:card" content="${(logoUrl || bannerUrl) ? "summary_large_image" : "summary"}" /><meta name="twitter:title" content="${titleBase}" /><meta name="twitter:description" content="${desc}" /><meta property="og:image" content="${ogImageUrl}" /><meta name="twitter:image" content="${ogImageUrl}" />
 <link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="${fontsHref}" rel="stylesheet" media="print" data-async${viewerShell ? " data-viewer-fonts" : ""} />
 <script nonce="${nonce}">document.querySelector('link[data-async]').onload=function(){this.media='all'};</script>
@@ -809,7 +810,7 @@ ${lead}<p class="yr-fine">${CREDITS_DISCLAIMER}</p>
  * has not configured.
  */
 function viewerCommunityHeading(ctx) {
-  const { b, slug, viewer, isMember, membershipStatus, siteSections, isCustomDomain, logoUrl } = ctx;
+  const { b, slug, viewer, isMember, membershipStatus, siteSections, isCustomDomain, logoUrl, bannerUrl } = ctx;
   const name = b.name || slug;
   const channel = streamerChannel(ctx);
   // The only identity block on Home: one H1, kept out of <main> so the layout
@@ -826,10 +827,13 @@ function viewerCommunityHeading(ctx) {
   const note = otherLinks.length
     ? `<aside class="viewer-hero-note" aria-label="${esc(name)} elsewhere"><p class="viewer-hero-note-title">Find ${esc(name)} on</p><ul class="viewer-hero-links">${otherLinks.map(link => `<li><a href="${esc(link.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('link')}<span>${esc(link.label)}</span>${viewerIcon('external')}</a></li>`).join('')}</ul></aside>`
     : `<aside class="viewer-hero-note"><span class="viewer-hero-note-icon">${viewerIcon('coins')}</span><p>Free credits, earned here, unlock ${esc(name)}'s rewards.</p></aside>`;
-  // No banner field exists on the brand, so the scene is a branded abstract
-  // composition: the creator's mark softened into the canvas, lit orbs, a
-  // ruled grid and the YourRank crown as a line drawing. Nothing in it is data.
-  const scene = `<div class="viewer-hero-scene" aria-hidden="true">${creatorMark(logoUrl, 'viewer-hero-backdrop', 640)}<span class="viewer-hero-orb viewer-hero-orb--a"></span><span class="viewer-hero-orb viewer-hero-orb--b"></span><span class="viewer-hero-ring"></span><span class="viewer-hero-crown">${viewerIcon('crown')}</span></div>`;
+  // With a community banner the cover image owns the scene; without one the
+  // scene stays the branded abstract composition: the creator's mark softened
+  // into the canvas, lit orbs, a ruled grid and the YourRank crown as a line
+  // drawing. Nothing in that fallback is data.
+  const scene = bannerUrl
+    ? `<div class="viewer-hero-scene viewer-hero-scene--cover" aria-hidden="true"><img class="viewer-hero-cover" src="${esc(bannerUrl)}" alt="" decoding="async" /></div>`
+    : `<div class="viewer-hero-scene" aria-hidden="true">${creatorMark(logoUrl, 'viewer-hero-backdrop', 640)}<span class="viewer-hero-orb viewer-hero-orb--a"></span><span class="viewer-hero-orb viewer-hero-orb--b"></span><span class="viewer-hero-ring"></span><span class="viewer-hero-crown">${viewerIcon('crown')}</span></div>`;
   return `<section class="viewer-home-banner" aria-labelledby="viewer-home-title">${scene}<div class="viewer-hero-identity"><div class="viewer-hero-avatar">${creatorMark(logoUrl, 'yr-id-logo', 104, `<span class="viewer-avatar">${esc(Array.from(name)[0] || 'Y')}</span>`)}${live}</div><div><p class="viewer-hero-kicker"><span>${isMember ? 'Community member' : 'Creator community'}</span></p><h1 class="viewer-context-name" id="viewer-home-title" data-preview-field="f_name">${esc(name)}</h1>${b.tagline ? `<p class="viewer-context-sub" data-preview-field="f_tagline">${esc(b.tagline)}</p>` : ''}<p class="viewer-hero-lede">Earn free credits here, climb the standings and claim rewards.</p><div class="viewer-banner-actions">${memberHref ? `<a class="yr-btn${isMember ? ' yr-btn--ghost' : ''}" href="${memberHref}">${viewerIcon(isMember ? 'check' : 'user')}${memberLabel}</a>` : ''}${channel ? `<a class="yr-btn${isMember || !memberHref ? '' : ' yr-btn--ghost'}" href="${esc(channel.href)}" target="_blank" rel="noopener noreferrer">${viewerIcon('chat')}Watch on ${esc(channel.label)}</a>` : `<a class="yr-btn yr-btn--ghost" href="${esc(helpHref)}">How it works ${viewerIcon('chevron')}</a>`}</div></div></div>${note}</section>`;
 }
 
@@ -1004,7 +1008,9 @@ function boardMain(ctx) {
 <p class="yr-lbh-note">${scheduled ? `Pre-start standings are visible; scores update once the round begins. Ranked by ${wagerLabel.toLowerCase()}, and tied players share a rank.` : `Ranked by ${wagerLabel.toLowerCase()}. Tied players share a rank.`}</p>
 <p class="yr-lbh-meta">${metaItems}</p>
 </div>
-<div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy">${ICONS.trophy}</span></div>
+${ctx.bannerUrl
+    ? `<img class="viewer-board-hero-cover" src="${esc(ctx.bannerUrl)}" alt="" decoding="async" />`
+    : `<div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy">${ICONS.trophy}</span></div>`}
 </section>`;
 
   // A podium is a presentation of the original rows, never a second player

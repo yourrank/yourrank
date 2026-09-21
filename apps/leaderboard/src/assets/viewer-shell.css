@@ -300,6 +300,13 @@
 .viewer-board-orb--b{width:200px;height:200px;right:-40px;top:-30px;background:#7a52ff5c}
 .viewer-board-hero-trophy{position:absolute;right:100px;top:50%;translate:0 -50%;display:grid;place-items:center;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,#ff9a6a30,#ff9a6a05 72%);border:1px solid #ffffff10;color:#ffb08a}
 .viewer-board-hero-trophy svg{width:76px;height:76px;filter:drop-shadow(0 12px 24px #ff8a5b55)}
+/* Creator-uploaded community cover (banner). The same responsive object-fit
+   cover treatment fills the home and leaderboard heroes; when no banner is
+   set the existing gradient/orb scenes above remain the intact fallback. */
+.viewer-shell[data-section="home"] .viewer-hero-scene--cover{-webkit-mask-image:none;mask-image:none;background:0 0}
+.viewer-shell[data-section="home"] .viewer-hero-cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center}
+.viewer-board-hero-cover{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;object-position:center;border-radius:inherit}
+.viewer-board-hero:has(>.viewer-board-hero-cover)::after{content:"";position:absolute;inset:0;z-index:0;background:linear-gradient(90deg,#0e0d1ad9 0,#0e0d1a8c 48%,#0e0d1a33 100%);pointer-events:none;border-radius:inherit}
 .viewer-shell[data-section="leaderboard"] .viewer-board-switcher{padding:0}
 .viewer-shell[data-section="leaderboard"] .yr-panel{background:none;border:0}
 .viewer-shell[data-section="leaderboard"] .yr-lb{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:0 12px}.viewer-shell[data-section="leaderboard"] .yr-lb>*{order:3;flex:0 0 100%;min-width:0}.viewer-shell[data-section="leaderboard"] .yr-lb>.yr-panel-head{order:2;flex:0 0 auto;margin-left:auto;padding:0 0 12px;display:flex;align-items:center}.viewer-shell[data-section="leaderboard"] .yr-lb>.yr-search-row{order:1;flex:1 1 200px}

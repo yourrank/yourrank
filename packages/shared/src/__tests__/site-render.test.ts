@@ -118,6 +118,49 @@ describe("shared public board renderer", () => {
     expect(ranked).toContain("−250");
   });
 
+  it("renders the community banner as the home and leaderboard hero cover, with the scene as fallback", async () => {
+    const withBanner = await renderSite({
+      r: fixture,
+      section: "home",
+      viewer: null,
+      viewerData: null,
+      opts: { ...opts, bannerUrl: "https://example.test/banner/board%20fixture" },
+    });
+    expect(withBanner).toContain('class="viewer-hero-cover" src="https://example.test/banner/board%20fixture"');
+    expect(withBanner).not.toContain("viewer-hero-orb");
+    // The banner leads the social-card metadata ahead of the logo.
+    expect(withBanner).toContain('property="og:image" content="https://example.test/banner/board%20fixture"');
+
+    const board = await renderSite({
+      r: fixture,
+      section: "leaderboard",
+      viewer: null,
+      viewerData: null,
+      opts: { ...opts, bannerUrl: "https://example.test/banner/board%20fixture" },
+    });
+    expect(board).toContain('class="viewer-board-hero-cover" src="https://example.test/banner/board%20fixture"');
+    expect(board).not.toContain("viewer-board-orb");
+
+    // No banner: the existing abstract scenes render instead of a broken image.
+    const without = await renderSite({ r: fixture, section: "home", viewer: null, viewerData: null, opts });
+    expect(without).not.toContain("viewer-hero-cover");
+    expect(without).toContain("viewer-hero-orb");
+    const boardWithout = await renderSite({ r: fixture, section: "leaderboard", viewer: null, viewerData: null, opts });
+    expect(boardWithout).not.toContain("viewer-board-hero-cover");
+    expect(boardWithout).toContain("viewer-board-orb");
+  });
+
+  it("prefers the logo for social cards when no banner exists", async () => {
+    const html = await renderSite({
+      r: fixture,
+      section: "home",
+      viewer: null,
+      viewerData: null,
+      opts: { ...opts, logoUrl: "https://example.test/logo/board%20fixture" },
+    });
+    expect(html).toContain('property="og:image" content="https://example.test/logo/board%20fixture"');
+  });
+
   it("contains a chosen creator typeface to display roles", async () => {
     const render = (branding) => renderSite({
       r: { ...fixture, data: { ...fixture.data, branding } },

@@ -1,8 +1,8 @@
-// Site is the creator's customizer: the public-site branding,
-// navigation, links and address a viewer sees, next to a preview of the real
-// public site. These tests pin the parts a creator depends on — labelled
-// controls, a viewer-accurate preview mount, an honest save state — so the
-// section cannot silently lose them.
+// Site is the creator's customizer for the public pages: navigation, links,
+// viewer template and address, next to a preview of the real public site.
+// Community branding (name, tagline, logo, banner, accent) is owned by
+// Community → Appearance; these tests pin both sides of that split so neither
+// surface silently grows a competing editor.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { DashboardContent } from "../pages/dashboard.jsx";
@@ -18,11 +18,17 @@ const customize = html.slice(
   html.indexOf('data-settings-panel="customize"'),
   html.indexOf('data-settings-panel="notifications"'),
 );
+// The Appearance section of the leaderboard editor: from its section title to
+// the Share title. Community branding lives here now.
+const appearance = html.slice(
+  html.indexOf('<h1 class="v3-section-title" data-egroup="design">Appearance</h1>'),
+  html.indexOf('<h1 class="v3-section-title" data-egroup="share">Share</h1>'),
+);
 
 describe("markup: Site answers what viewers see", () => {
   it("titles the section for the public site and offers the real thing", () => {
     expect(html).toContain("<h1>Site pages</h1>");
-    expect(html).toContain("Manage the public identity and pages viewers see for the selected site.");
+    expect(html).toContain("Manage the public pages viewers see for the selected site. Community branding lives in Appearance.");
     expect(html).toContain('data-settings-tab="customize">Public site</button>');
     expect(html).toMatch(/id="sitePublicSiteAction"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
     expect(html).toContain("View public site ↗");
@@ -45,26 +51,16 @@ describe("markup: Site answers what viewers see", () => {
     expect(customize).toContain("data-preview-retry");
   });
 
-  it("labels every brand control and explains its limits", () => {
-    expect(customize).toMatch(/<label class="v3-settings-label" for="f_name">Site name<\/label>/);
-    expect(customize).toMatch(/id="f_name" maxlength="80"[^>]*aria-describedby="siteNameCounter siteNameError"/);
-    expect(customize).toMatch(/id="siteNameCounter"[^>]*aria-live="polite"/);
-    expect(customize).toMatch(/id="siteNameError"[^>]*data-field-error="f_name"[^>]*role="alert"/);
-    expect(customize).toContain("Short line shown under your name.");
-    expect(customize).toMatch(/id="f_tagline" maxlength="120"/);
-    // Logo: the accepted types and the size ceiling are stated before upload,
-    // and the visible controls are buttons, not a raw file input.
-    expect(customize).toMatch(/id="logoFile" accept="image\/png,image\/jpeg,image\/webp"[^>]*hidden/);
-    expect(customize).toContain("PNG, JPG or WebP, up to 2 MB.");
-    expect(customize).toMatch(/<button class="btn btn--sm" id="logoPick" type="button">Upload logo<\/button>/);
-    expect(customize).toContain('id="logoClear"');
-    expect(customize).toMatch(/id="logoStatus"[^>]*aria-live="polite"/);
-    expect(siteJs).toContain('$("logoPick")?.addEventListener("click", () => $("logoFile")?.click())');
-    // Accent: curated choices first, custom picker behind a disclosure.
-    expect(customize).toMatch(/id="colorPresets"[^>]*role="group"[^>]*aria-labelledby="siteAccentLabel"/);
-    expect(customize).toContain("Used for active navigation, buttons and highlights.");
-    expect(customize).toContain('<details class="advanced-colors"><summary>Custom accent color</summary>');
-    expect(customize).toContain('<label for="c_a" class="sr-only">Accent color</label>');
+  it("keeps no editable branding copy — name, tagline, logo, banner and accent moved to Appearance", () => {
+    for (const id of ["f_name", "f_tagline", "logoFile", "logoPick", "logoClear", "logoStatus", "bannerFile", "bannerPick", "colorPresets", "c_a", "colorsReset"]) {
+      expect(customize).not.toContain(`id="${id}"`);
+    }
+    // A single, clearly labelled pointer to the canonical surface instead.
+    expect(customize).toContain("<b>Community branding</b>");
+    expect(customize).toContain("Name, tagline, logo, banner and accent color are managed in Appearance.");
+    expect(customize).toContain('href="/dashboard/leaderboard/design">Open Appearance</a>');
+    // The removed "Name and tagline" editor card stays gone.
+    expect(customize).not.toContain('id="siteIdentityCard"');
   });
 
   it("offers the two supported viewer templates without reviving legacy designs", () => {
@@ -73,7 +69,7 @@ describe("markup: Site answers what viewers see", () => {
     }
     expect(dashboardCss).not.toContain("template-select");
     expect(siteJs).not.toContain("templateSelectorGrid");
-    expect(customize).toContain("Your viewer template, logo, accent color and text style.");
+    expect(customize).toContain("Your viewer template and text style.");
     // The stored template value still rides through save for legacy rows.
     expect(siteJs).toContain('template: state.CURRENT_BRANDING?.template || "cyber_arcade"');
     expect(siteJs).toContain('template: br.template || "cyber_arcade"');
@@ -114,8 +110,8 @@ describe("markup: Site answers what viewers see", () => {
     ]);
   });
 
-  it("keeps public identity in Site and redirects leaderboard-specific presentation to Appearance", () => {
-    for (const id of ["f_name", "f_tagline", "logoFile", "c_a", "f_font", "socialsList"]) {
+  it("keeps public branding in Appearance and site plumbing in Site, each exactly once", () => {
+    for (const id of ["f_name", "f_tagline", "logoFile", "bannerFile", "c_a", "f_font", "socialsList"]) {
       expect(html.match(new RegExp(`id="${id}"`, "g"))).toHaveLength(1);
     }
     expect(customize).toContain("<b>Leaderboard appearance</b>");
@@ -157,6 +153,61 @@ describe("markup: Site answers what viewers see", () => {
   });
 });
 
+describe("markup: Appearance owns community branding", () => {
+  it("labels every brand control in Appearance and explains its limits", () => {
+    expect(appearance).toContain('<div class="design-group-heading" data-egroup="design"><h2>Brand</h2></div>');
+    // Name and tagline: the same canonical fields, now in Appearance.
+    expect(appearance).toMatch(/<label for="f_name">Community name<\/label>/);
+    expect(appearance).toMatch(/id="f_name" maxlength="80"[^>]*aria-describedby="siteNameCounter siteNameError"/);
+    expect(appearance).toMatch(/id="siteNameCounter"[^>]*aria-live="polite"/);
+    expect(appearance).toMatch(/id="siteNameError"[^>]*data-field-error="f_name"[^>]*role="alert"/);
+    expect(appearance).toContain("Short line shown under your name.");
+    expect(appearance).toMatch(/id="f_tagline" maxlength="120"/);
+    // Logo: the accepted types and the size ceiling are stated before upload,
+    // and the visible controls are buttons, not a raw file input.
+    expect(appearance).toMatch(/id="logoFile" accept="image\/png,image\/jpeg,image\/webp"[^>]*hidden/);
+    expect(appearance).toContain("PNG, JPG or WebP, up to 2 MB.");
+    expect(appearance).toMatch(/<button class="btn btn--sm" id="logoPick" type="button">Upload logo<\/button>/);
+    expect(appearance).toContain('id="logoClear"');
+    expect(appearance).toMatch(/id="logoPreview"[^>]*alt="Your current logo"/);
+    expect(appearance).toMatch(/id="logoStatus"[^>]*aria-live="polite"/);
+    expect(siteJs).toContain('$("logoPick")?.addEventListener("click", () => $("logoFile")?.click())');
+    // Banner: upload, replace (same picker) and remove, with a live preview
+    // and no dimension math asked of the creator.
+    expect(appearance).toMatch(/id="bannerFile" accept="image\/png,image\/jpeg,image\/webp"[^>]*hidden/);
+    expect(appearance).toContain("Recommended: wide image.");
+    expect(appearance).toMatch(/<button class="btn btn--sm" id="bannerPick" type="button">Upload banner<\/button>/);
+    expect(appearance).toContain('id="bannerClear"');
+    expect(appearance).toMatch(/id="bannerPreview"[^>]*alt="Your current banner"/);
+    expect(appearance).toMatch(/id="bannerStatus"[^>]*aria-live="polite"/);
+    expect(siteJs).toContain('$("bannerPick")?.addEventListener("click", () => $("bannerFile")?.click())');
+    // Accent: curated choices first, custom picker behind a disclosure.
+    expect(appearance).toMatch(/id="colorPresets"[^>]*role="group"[^>]*aria-labelledby="siteAccentLabel"/);
+    expect(appearance).toContain("Used for active navigation, buttons and highlights.");
+    expect(appearance).toContain('<details class="advanced-colors"><summary>Custom accent color</summary>');
+    expect(appearance).toContain('<label for="c_a" class="sr-only">Accent color</label>');
+    // Brand is the first group in Appearance, above leaderboard design.
+    expect(appearance.indexOf("<h2>Brand</h2>")).toBeLessThan(appearance.indexOf("<h2>Leaderboard design</h2>"));
+    // No font picker, gradient editor or theme builder snuck in.
+    expect(appearance).not.toContain('id="f_font"');
+    expect(appearance).not.toContain('id="c_b"');
+    expect(appearance).not.toContain("gradient");
+  });
+
+  it("gates Appearance branding behind the same Pro plan check as before", () => {
+    expect(appearance).toContain('id="appearanceBrandBody"');
+    expect(appearance).toContain('id="appearanceBrandLock"');
+    expect(appearance).toContain("Branding is a Pro feature.");
+    expect(siteJs).toContain("appearanceBody.hidden = !paid");
+    expect(siteJs).toContain("appearanceLock.hidden = paid");
+  });
+
+  it("keeps the banner picker off the dashboard's global dirty owner", () => {
+    expect(siteJs).toContain('$("bannerFile")?.addEventListener("input", (event) => event.stopPropagation())');
+    expect(siteJs).toMatch(/\$\("bannerFile"\)\?\.addEventListener\("change", \(event\) => \{\s*event\.stopPropagation\(\);/);
+  });
+});
+
 describe("client: one owner for preview, brand fields and save", () => {
   it("previews through the real public renderer under an ownership check", () => {
     const handler = readFileSync(new URL("../handlers/preview.js", import.meta.url), "utf8");
@@ -194,10 +245,10 @@ describe("client: one owner for preview, brand fields and save", () => {
 
 describe("markup: accent is one real control, not two fake colors", () => {
   it("exposes a single accent picker and no second color anywhere", () => {
-    expect(customize).toContain('<label for="c_a" class="sr-only">Accent color</label>');
-    expect(customize).not.toContain('id="c_b"');
-    expect(customize).not.toContain("Accent color start");
-    expect(customize).not.toContain("Accent color end");
+    expect(appearance).toContain('<label for="c_a" class="sr-only">Accent color</label>');
+    expect(html).not.toContain('id="c_b"');
+    expect(html).not.toContain("Accent color start");
+    expect(html).not.toContain("Accent color end");
     expect(siteJs).not.toContain('$("c_b")');
   });
 
@@ -205,9 +256,9 @@ describe("markup: accent is one real control, not two fake colors", () => {
     // A second "Apply" click was a second state path: the picker could be
     // changed, look dirty, and be saved without the canonical branding state
     // ever accepting the colour.
-    expect(customize).not.toContain("applyCustomColors");
+    expect(html).not.toContain("applyCustomColors");
     expect(siteJs).not.toContain("applyCustomColors");
-    expect(customize).toContain('id="colorsReset"');
+    expect(appearance).toContain('id="colorsReset"');
     expect(siteJs).toContain('$("c_a")?.addEventListener("change", (event) => {');
     expect(siteJs).toContain('applyTheme($("c_a")?.value, "Custom color")');
     // `input` fires continuously while the native picker is open; it is
@@ -952,6 +1003,113 @@ describe("behavior: a rejected logo never fakes unsaved changes", () => {
     expect(state.LOGO).toBe(null);
     expect(preview.hidden).toBe(true);
     expect(state._dirty).toBe(true);
+  });
+});
+
+describe("behavior: the banner follows the logo's draft contract", () => {
+  beforeEach(() => {
+    elements.clear();
+    state.ACTIVE_SITE_ID = "site-1";
+    state.BOARDS = [];
+    state.ME = { plan: "pro" };
+    state.SLUG = "site-one";
+    state.BANNER = undefined;
+    setState({ _dirty: false });
+  });
+
+  function bannerElements() {
+    const file = register("bannerFile");
+    file.files = [];
+    const parts = { file, status: register("bannerStatus"), preview: register("bannerPreview"), clear: register("bannerClear"), pageStatus: register("status") };
+    register("bannerPick");
+    site.wireBannerControls();
+    return parts;
+  }
+
+  it("reports an unsupported type without touching the draft or the saved preview", () => {
+    const { status, preview, file } = bannerElements();
+    preview.src = "/banner/site-one";
+    site.handleBannerSelection({ type: "image/gif", size: 1000 });
+    expect(status.textContent).toContain("isn't supported");
+    expect(state._dirty).toBe(false);
+    expect(state.BANNER).toBeUndefined();
+    expect(preview.src).toBe("/banner/site-one");
+    expect(file.value).toBe("");
+  });
+
+  it("reports an oversized file without touching the draft", () => {
+    const { status } = bannerElements();
+    site.handleBannerSelection({ type: "image/png", size: 8.2 * 1024 * 1024 });
+    expect(status.textContent).toContain("8.2 MB");
+    expect(state._dirty).toBe(false);
+    expect(state.BANNER).toBeUndefined();
+  });
+
+  it("accepts a valid wide image, assigns a single data URI and previews it before save", () => {
+    const { status, preview, clear } = bannerElements();
+    site.handleBannerSelection({ type: "image/png", size: 1024 });
+    expect(state._dirty).toBe(false);
+    lastReader.onload();
+    lastImage.onload();
+    expect(typeof state.BANNER).toBe("string");
+    expect(state.BANNER).toContain("data:image/");
+    expect(preview.hidden).toBe(false);
+    expect(clear.hidden).toBe(false);
+    expect(status.textContent).toContain("Banner ready");
+    expect(state._dirty).toBe(true);
+  });
+
+  it("reports a decode failure without blanking the current banner", () => {
+    const { status, preview } = bannerElements();
+    preview.src = "/banner/site-one";
+    preview.hidden = false;
+    site.handleBannerSelection({ type: "image/png", size: 1024 });
+    lastReader.onload();
+    lastImage.onerror();
+    expect(status.textContent).toContain("Couldn't read that image.");
+    expect(state.BANNER).toBeUndefined();
+    expect(preview.src).toBe("/banner/site-one");
+    expect(preview.hidden).toBe(false);
+    expect(state._dirty).toBe(false);
+  });
+
+  it("removing the banner marks the draft dirty and hides the preview until save", () => {
+    const { clear, preview, status } = bannerElements();
+    for (const listener of clear.listeners.click || []) listener({});
+    expect(state.BANNER).toBe(null);
+    expect(preview.hidden).toBe(true);
+    expect(status.textContent).toContain("removed when you save");
+    expect(state._dirty).toBe(true);
+  });
+
+  it("renders the saved banner preview from the site's own banner route", () => {
+    register("brandBody");
+    register("brandLock");
+    const body = register("appearanceBrandBody");
+    const lock = register("appearanceBrandLock");
+    const preview = register("bannerPreview");
+    const clear = register("bannerClear");
+    register("logoPreview");
+    register("logoClear");
+    register("colorPresets");
+    site.renderBranding({ template: "cyber_arcade", hasBanner: true });
+    expect(preview.src).toContain("/banner/site-one");
+    expect(preview.hidden).toBe(false);
+    expect(clear.hidden).toBe(false);
+    expect(body.hidden).toBe(false);
+    expect(lock.hidden).toBe(true);
+  });
+
+  it("keeps the banner draft out of the payload until it changes, then sends remove or replace", () => {
+    registerCollectForm();
+    state.ME = { plan: "pro" };
+    state.CURRENT_BRANDING = { template: "cyber_arcade", accentA: "#5b5bf5" };
+    state.BANNER = undefined;
+    expect(site.collect({ reportPlayerErrors: false }).payload.branding.banner).toBeUndefined();
+    state.BANNER = null;
+    expect(site.collect({ reportPlayerErrors: false }).payload.branding.banner).toBe(null);
+    state.BANNER = "data:image/webp;base64,AAAA";
+    expect(site.collect({ reportPlayerErrors: false }).payload.branding.banner).toBe("data:image/webp;base64,AAAA");
   });
 });
 

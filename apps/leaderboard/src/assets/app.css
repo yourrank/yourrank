@@ -458,6 +458,9 @@ table.admin-table td.note{max-width:260px;color:var(--ink-soft)}
 /* --- branding --- */
 .logo-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .logo-preview{width:44px;height:44px;object-fit:contain;border-radius:8px;border:1px solid var(--line-2);background:var(--panel-2)}
+.banner-preview{width:100%;max-width:520px;aspect-ratio:3/1;object-fit:cover;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-2);display:block}
+.banner-row{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.banner-row .banner-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* ===== Casino Template Gallery ===== */
 
 /* Category tab bar */
