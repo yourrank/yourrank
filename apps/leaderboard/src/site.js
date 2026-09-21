@@ -1051,10 +1051,21 @@ function isProPlan(plan) {
   return plan === "pro" || plan === "team";
 }
 
-export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null } = {}) {
+export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null, deps = {} } = {}) {
+  const oneImpl = deps.one || one;
+  const queryImpl = deps.query || query;
+  const withTransactionImpl = deps.withTransaction || withTransaction;
+  const getBoardByIdImpl = deps.getBoardById || getBoardById;
+  const getByUserImpl = deps.getByUser || getByUser;
+  const getPlayersImpl = deps.getPlayers || getPlayers;
+  const invalidateSiteCacheImpl = deps.invalidateSiteCache || invalidateSiteCache;
+  const invalidatePublicBoardCacheImpl = deps.invalidatePublicBoardCache || invalidatePublicBoardCache;
+  const logAuditImpl = deps.logAudit || logAudit;
+  const notifyLiveBoardImpl = deps.notifyLiveBoard || notifyLiveBoard;
+  const createNotifyQueueImpl = deps.createNotifyQueue || createNotifyQueue;
   const uid = typeof user === "string" ? user : user.id;
   const plan = typeof user === "object" ? effectivePlan(user) : "free";
-  const site = siteId ? await getBoardById(env, uid, siteId) : await getByUser(env, uid);
+  const site = siteId ? await getBoardByIdImpl(env, uid, siteId) : await getByUserImpl(env, uid);
   if (!site) return { error: "no site" };
   const requestedStartsAt = normalizeEndsAt(payload.startsAt, site.starts_at);
   const requestedEndsAt = normalizeEndsAt(payload.endsAt, site.ends_at);
@@ -1085,7 +1096,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       if (site.user_id !== uid) {
         return { error: "Only the site owner can rename the site URL.", code: "forbidden" };
       }
-      const taken = await one("SELECT id FROM sites WHERE slug=$1", [next]);
+      const taken = await oneImpl("SELECT id FROM sites WHERE slug=$1", [next]);
       if (taken && taken.id !== site.id) return { error: "That URL is already taken. Pick another.", code: "slug_taken" };
       slugRename = next;
     }
@@ -1115,7 +1126,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   if (typeof user === "object" && validatedPlayers) {
     let effectiveSitePlan = plan;
     if (site.user_id !== uid) {
-      const owner = await one("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
+      const owner = await oneImpl("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
       if (owner) effectiveSitePlan = effectivePlan(owner);
     }
     if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
@@ -1230,7 +1241,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
 
   // Fetch the image columns separately since the shared query no longer
   // includes them (PERF-004).
-  const existingLogoRow = await one("SELECT logo_data, banner_data FROM sites WHERE id=$1", [site.id]);
+  const existingLogoRow = await oneImpl("SELECT logo_data, banner_data FROM sites WHERE id=$1", [site.id]);
   let logoData = existingLogoRow?.logo_data ?? "";
   let bannerData = existingLogoRow?.banner_data ?? "";
   const rawThemeObj = fromJsonb(site.theme_json);
@@ -1273,12 +1284,12 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
 
   // Invalidate this isolate's L1 cache before writing. There is no L2/KV, so
   // other live isolates keep stale entries until the 25s TTL expires.
-  invalidateSiteCache(env, site.slug, uid, siteId);
-  if (slugRename) invalidateSiteCache(env, slugRename);
+  invalidateSiteCacheImpl(env, site.slug, uid, siteId);
+  if (slugRename) invalidateSiteCacheImpl(env, slugRename);
 
   // Capture old top-3 for notifications
   const nextRankBy = rankField(payload.rankBy ?? site.rank_by);
-  const oldPlayers = await getPlayers(env, site.id, { rankBy: site.rank_by });
+  const oldPlayers = await getPlayersImpl(env, site.id, { rankBy: site.rank_by });
   const oldTop3 = sortPlayersForRanking(oldPlayers, site.rank_by).slice(0, 3);
   if (validatedPlayers) {
     const closed = (requestedStartsAt && new Date(requestedStartsAt).getTime() > Date.now())
@@ -1309,7 +1320,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     });
   }
 
-  const txResult = await withTransaction(async (tx) => {
+  const txResult = await withTransactionImpl(async (tx) => {
     // QA-004 / C-07: Lock the site row and re-read updated_at inside the same
     // transaction so the optimistic concurrency check is authoritative.
     const locked = await tx.one(
@@ -1421,7 +1432,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   // thread and routes player DMs through the bot_id the player subscribed to.
   if (validatedPlayers && typeof user === "object" && effectivePlan(user) !== "free") {
     try {
-      const notifyQueue = createNotifyQueue(env);
+      const notifyQueue = createNotifyQueueImpl(env);
       const newSorted = sortPlayersForRanking(validatedPlayers, nextRankBy);
       const top3Changes = detectTop3Changes(oldTop3, newSorted, nextRankBy);
       if (top3Changes.length) {
@@ -1430,7 +1441,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
 
       const changedNames = getRankChangedPlayerNames(oldPlayers || [], newSorted, nextRankBy);
       if (changedNames.length) {
-        const subs = await query(
+        const subs = await queryImpl(
           `SELECT ps.tg_user_id, ps.player_name, ps.bot_id
              FROM player_subscriptions ps
             WHERE ps.site_id = $1
@@ -1476,9 +1487,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     }
   }
   // Return updated site data including new timestamp for optimistic concurrency
-  const updatedSite = await getBoardById(env, uid, site.id);
-  void notifyLiveBoard(env, site.id, updatedSite?.updated_at || new Date().toISOString());
-  invalidatePublicBoardCache(
+  const updatedSite = await getBoardByIdImpl(env, uid, site.id);
+  void notifyLiveBoardImpl(env, site.id, updatedSite?.updated_at || new Date().toISOString());
+  invalidatePublicBoardCacheImpl(
     `yourrank.site/${site.slug}`,
     `yourrank.site/${site.slug}/leaderboard`,
     slugRename ? `yourrank.site/${slugRename}` : null,
@@ -1512,7 +1523,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   if (typeof sectionPayload.credits === "boolean" && sectionPayload.credits !== !!site.credits_enabled) changes.push("credits_enabled");
   if (typeof sectionPayload.games === "boolean" && sectionPayload.games !== !!site.games_enabled) changes.push("games_enabled");
 
-  await logAudit({
+  await logAuditImpl({
     actorId: uid,
     action: "board_update",
     entityType: "site",
