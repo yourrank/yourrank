@@ -120,7 +120,8 @@ describe("Connected Accounts provider presentation", () => {
     const [info, exportCard, del] = browser.document.querySelectorAll("#vd-data .vd-settings-card");
     expect(info.textContent).not.toContain("Email management");
     const facts = [...info.querySelectorAll(".vd-facts div")].map((row) => [row.querySelector("dt").textContent, row.querySelector("dd").textContent]);
-    expect(facts).toEqual([["Display name", "36_ates"], ["Member since", "Sep 1, 2026"]]);
+    const memberSince = new Date(me.viewer.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    expect(facts).toEqual([["Display name", "36_ates"], ["Member since", memberSince]]);
 
     expect(exportCard.querySelector(".vd-export-row > p").textContent).toContain("Your viewer identity, provider connections");
     expect(exportCard.querySelector("h3")).toBeNull();

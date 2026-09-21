@@ -189,7 +189,8 @@ describe("design tokens", () => {
     expect(declared(sources.landing, "--accent")).toBe(MARKETING_ACCENT);
     expect(declared(sources.app, "--accent-ink")).toBe("#ffffff");
     expect(declared(sources.landing, "--accent-ink")).toBe("#ffffff");
-    expect(declared(sources.dashboard, "--ws-accent")).toBe(V4_ACCENT);
+    expect(declared(sources.dashboard, "--ws-accent")).toBe(`var(--wsd-accent, ${V4_ACCENT})`);
+    expect(declared(sources.dashboard, "--wsd-accent")).toBe("rgb(123 150 255)");
   });
 
   it("ui.css reads the accent through the brand token chain", () => {
@@ -219,6 +220,9 @@ describe("design tokens", () => {
     expect(contrastRatio(V4_ACCENT, "#ffffff")).toBeGreaterThanOrEqual(4.5);
     const darkInk = declared(sources.dashboard, "--wsd-accent-text");
     expect(darkInk).toBe("rgb(14 21 38)");
+    // Prove the tested dark background is actually wired to the action token.
+    expect(declared(sources.dashboard, "--ws-accent")).toContain("var(--wsd-accent,");
+    expect(declared(sources.dashboard, "--wsd-accent")).toBe("rgb(123 150 255)");
     expect(contrastRatio("#7b96ff", "#0e1526")).toBeGreaterThanOrEqual(4.5);
   });
 
@@ -331,7 +335,7 @@ describe("dashboard design foundation", () => {
     expect(sources.dashboard).toContain(
       ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-side input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] .lb-side select:focus-visible,\n.v3-dash[data-auth-workspace] .lb-side textarea:focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
     );
-    expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("#304398");
+    expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("var(--wsd-accent, #304398)");
     expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }");
     expect(sources.devinSystem || "").toContain("body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible");
   });

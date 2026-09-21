@@ -100,6 +100,7 @@ let resultsList = null;
 let activeIndex = 0;
 let filteredCommands = [...COMMANDS];
 let releaseFocus = null;
+let paletteTrigger = null;
 
 function availableCommands(query = "") {
   const usable = (id) => {
@@ -130,10 +131,12 @@ function buildPalette() {
   backdropEl = document.createElement("div");
   backdropEl.className = "yr-palette-backdrop";
   backdropEl.id = "yrPaletteBackdrop";
+  backdropEl.hidden = true;
 
   paletteEl = document.createElement("div");
   paletteEl.className = "yr-palette-modal";
   paletteEl.id = "yrPaletteModal";
+  paletteEl.hidden = true;
   paletteEl.setAttribute("role", "dialog");
   paletteEl.setAttribute("aria-modal", "true");
   paletteEl.setAttribute("aria-label", "Command Palette");
@@ -168,6 +171,10 @@ function buildPalette() {
 
 function openPalette() {
   buildPalette();
+  if (paletteEl.classList.contains("is-open")) return;
+  paletteTrigger = document.activeElement;
+  backdropEl.hidden = false;
+  paletteEl.hidden = false;
   filteredCommands = availableCommands();
   activeIndex = 0;
   if (searchInput) searchInput.value = "";
@@ -175,13 +182,31 @@ function openPalette() {
   backdropEl?.classList.add("is-open");
   paletteEl?.classList.add("is-open");
   if (!releaseFocus && window.YRDialog) releaseFocus = window.YRDialog.trap(paletteEl, closePalette);
-  setTimeout(() => searchInput?.focus(), 50);
+  searchInput?.focus({ preventScroll: true });
+}
+
+function canRestorePaletteFocus(el) {
+  return Boolean(el?.isConnected
+    && el !== document.body
+    && !el.matches(":disabled")
+    && !el.closest("[hidden], [inert]")
+    && el.getClientRects().length);
 }
 
 function closePalette() {
   backdropEl?.classList.remove("is-open");
   paletteEl?.classList.remove("is-open");
   if (releaseFocus) { const release = releaseFocus; releaseFocus = null; release(); }
+  if (paletteEl) paletteEl.hidden = true;
+  if (backdropEl) backdropEl.hidden = true;
+  const fallback = $("topbarCmdTrigger");
+  const trigger = canRestorePaletteFocus(paletteTrigger) ? paletteTrigger : fallback;
+  trigger?.focus({ preventScroll: true });
+  // Browser history and dynamic-fragment replacement can leave the element
+  // that opened the palette connected but unfocusable. The stable topbar
+  // trigger is the accessible recovery target in that case.
+  if (document.activeElement !== trigger && fallback && fallback !== trigger) fallback.focus({ preventScroll: true });
+  paletteTrigger = null;
 }
 
 function onSearchInput() {
@@ -260,6 +285,7 @@ function renderResults() {
     });
     item.addEventListener("mouseenter", () => {
       activeIndex = Number(item.dataset.index);
+      searchInput?.setAttribute("aria-activedescendant", item.id);
       resultsList.querySelectorAll(".yr-palette-item").forEach((it, j) => {
         const sel = j === activeIndex;
         it.classList.toggle("is-selected", sel);

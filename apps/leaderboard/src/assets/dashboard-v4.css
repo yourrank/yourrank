@@ -90,13 +90,13 @@ body:has(.v3-dash[data-auth-workspace]),
   --ws-chrome-text: var(--wsd-chrome-text, #243348);
   --ws-chrome-text-soft: var(--wsd-chrome-text-soft, #536176);
   --ws-chrome-card: var(--wsd-chrome-card, #e5ebf3);
-  --ws-accent: #4056b9;
+  --ws-accent: var(--wsd-accent, #4056b9);
   --ws-accent-rgb: var(--wsd-accent-rgb, 64 86 185);
   --ws-accent-hover: var(--wsd-accent-hover, #304398);
   --ws-accent-soft: var(--wsd-accent-soft, #edf0fc);
   --ws-accent-line: rgb(var(--ws-accent-rgb) / 0.28);
   --ws-accent-text: var(--wsd-accent-text, #ffffff);
-  --ws-accent-on-chrome: #304398;
+  --ws-accent-on-chrome: var(--wsd-accent, #304398);
   --ws-success: #1f8a68;
   --ws-success-soft: var(--wsd-success-soft, #eaf7f2);
   --ws-success-text: var(--wsd-success-text, #166a50);
@@ -202,6 +202,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --wsd-chrome-text-soft: rgb(168 179 196);
   --wsd-chrome-card: rgb(26 33 48);
   --wsd-accent-rgb: 123 150 255;
+  --wsd-accent: rgb(123 150 255);
   --wsd-accent-text: rgb(14 21 38);
   --wsd-accent-hover: rgb(147 169 255);
   --wsd-accent-soft: rgb(123 150 255 / 0.14);
@@ -2065,6 +2066,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-btn--danger:hover,
 .v3-dash[data-auth-workspace] .v3-set-btn--danger:hover { border-color: var(--ws-danger-text, #9b1c13); background: var(--ws-danger-text, #9b1c13); color: var(--ws-accent-text, #ffffff); }
 .v3-dash[data-auth-workspace] .v3-set-btn--danger-outline { border-color: var(--ws-danger-line-soft, #d99c97); background: var(--ws-surface, #ffffff); color: var(--ws-danger); }
+.v3-dash[data-auth-workspace] .btn--danger-quiet { border-color: var(--ws-danger-line); background: transparent; color: var(--ws-danger-text); }
+.v3-dash[data-auth-workspace] .btn--danger-quiet:hover { background: var(--ws-danger-soft); border-color: var(--ws-danger-text); }
+.v3-dash[data-auth-workspace] .cr-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--ws-space-2); }
 .v3-dash[data-auth-workspace] .btn--sm,
 .v3-dash[data-auth-workspace] .v3-btn--sm { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .v3-dash[data-auth-workspace] .v3-btn--xs { min-height: 30px; padding: 0 10px; font-size: 14px; }
@@ -4486,7 +4490,7 @@ body:has(.v3-dash[data-auth-workspace]) > .modal .modal-card p {
   padding: 3px 9px;
   font: 500 12px var(--ws-mono); }
 .v3-dash[data-auth-workspace] .v3-chip--fulfilled { border-color: var(--ws-success-line); background: var(--ws-success-soft); color: var(--ws-success-text); }
-.v3-dash[data-auth-workspace] .v3-chip--cancelled { border-color: var(--ws-danger-line-soft); background: var(--ws-danger-soft); color: var(--ws-danger); }
+.v3-dash[data-auth-workspace] .v3-chip--cancelled { border-color: var(--ws-danger-line-soft); background: var(--ws-danger-soft); color: var(--ws-danger-text); }
 .v3-dash[data-auth-workspace] .v3-chip--pro { border-color: var(--ws-accent-line); background: var(--ws-accent-soft); color: var(--ws-accent);
   text-transform: uppercase;
   letter-spacing: 0.08em; }
@@ -4603,7 +4607,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     height: auto;
     max-height: none;
     margin: 0; }
-  .v3-dash[data-auth-workspace] .cr-shop-drawer { position: fixed; inset: var(--ws-topbar-h) 0 0; z-index: 130; overflow-y: auto; border-radius: 0; }
+  .v3-dash[data-auth-workspace] .cr-shop-drawer { position: fixed; inset: var(--ws-topbar-h) 0 0; z-index: 1100; align-self: stretch; overflow-y: auto; overscroll-behavior: contain; border-radius: 0; min-height: 0; }
   .v3-dash[data-auth-workspace] .operator-help-section { grid-column: 1 / -1; }
   .v3-dash[data-auth-workspace] .v3-settings-inline-form,
   .v3-dash[data-auth-workspace] .v3-settings-notify-account { grid-template-columns: 1fr; }
@@ -4620,7 +4624,9 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   .v3-dash[data-auth-workspace] .lb-site-command { gap: 8px; }
   .v3-dash[data-auth-workspace] .lb-board-select { width: clamp(110px, 24vw, 190px); }
   .v3-dash[data-auth-workspace] .lb-publish-action { padding-inline: 11px; }
-  .v3-dash[data-auth-workspace] .lb-topbar-cmd { display: none; }
+  .v3-dash[data-auth-workspace] .lb-topbar-cmd { display: inline-flex; flex: 0 0 var(--ws-control-h-touch); width: var(--ws-control-h-touch); min-height: var(--ws-control-h-touch); padding: var(--ws-space-3); }
+  .v3-dash[data-auth-workspace] .lb-topbar-cmd span,
+  .v3-dash[data-auth-workspace] .lb-topbar-cmd kbd { display: none; }
 }
 
 @media (max-width: 700px) {
@@ -4653,9 +4659,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
     min-width: 0;
   }
   .v3-dash[data-auth-workspace] .lb-topbar-actions { order: 1; }
-  .v3-dash[data-auth-workspace]:has([data-page="home"].is-on) .lb-topbar-cmd { display: inline-flex; width: 44px; min-height: 44px; padding: 12px; }
-  .v3-dash[data-auth-workspace] .lb-topbar-cmd span,
-  .v3-dash[data-auth-workspace] .lb-topbar-cmd kbd { display: none; }
   .v3-dash[data-auth-workspace] .lb-site-command { gap: 6px; width: 100%; }
   .v3-dash[data-auth-workspace] .lb-site-command-icon,
   .v3-dash[data-auth-workspace] .lb-board-select-lbl,
@@ -5261,6 +5264,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   opacity: 1;
   pointer-events: auto;
 }
+.yr-palette-modal[hidden], .yr-palette-backdrop[hidden] { display: none; }
 
 .yr-palette-search-wrap {
   display: flex;
@@ -5275,6 +5279,7 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 .yr-palette-input {
   flex: 1;
+  min-width: 0;
   border: 0;
   outline: 0;
   background: transparent;
@@ -5329,6 +5334,8 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 }
 .yr-palette-item-title {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--ws-text);
@@ -5364,6 +5371,10 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   border-top: 1px solid var(--ws-line);
   font-size: 11.5px;
   color: var(--ws-text-soft);
+}
+@media (max-width: 700px) {
+  .yr-palette-footer { flex-wrap: wrap; justify-content: flex-start; gap: var(--ws-space-2) var(--ws-space-4); }
+  .yr-palette-footer > span { white-space: nowrap; }
 }
 .yr-palette-footer b {
   color: var(--ws-text);
@@ -5987,16 +5998,16 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
   background: var(--ws-accent-text);
 }
 
-.v3-dash[data-auth-workspace] .v3-chip--pending { background: var(--ws-warning-fill); color: var(--yr-color-warning-2);
+.v3-dash[data-auth-workspace] .v3-chip--pending { background: var(--ws-warning-fill); color: var(--ws-warning-text);
 }
 
 .v3-dash[data-auth-workspace] .v3-chip--refunded { background: var(--ws-info-soft); color: var(--ws-info);
 }
 
-.v3-dash[data-auth-workspace] .cr-positive { color: #15803d;
+.v3-dash[data-auth-workspace] .cr-positive { color: var(--ws-success-text);
 }
 
-.v3-dash[data-auth-workspace] .cr-negative { color: #b91c1c;
+.v3-dash[data-auth-workspace] .cr-negative { color: var(--ws-danger-text);
 }
 
 .v3-dash[data-auth-workspace] .v3-delta {
@@ -7785,6 +7796,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
     overflow: visible;
     white-space: normal;
   }
+  .v3-dash[data-auth-workspace] .cr-shop-row-title { white-space: normal; overflow-wrap: anywhere; }
 
   .v3-dash[data-auth-workspace] .cr-shop-row-availability {
     justify-content: space-between;
@@ -7817,10 +7829,13 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 
   .v3-dash[data-auth-workspace] #cr-shop-controls .list-pagination {
     margin-left: 0;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .v3-dash[data-auth-workspace] #cr-shop-controls .list-pagination button {
-    width: 100%;
+    width: auto;
     min-height: 44px;
   }
 
@@ -7904,6 +7919,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   .v3-dash[data-auth-workspace] #cr-rewards .v3-table td.ta-r {
     text-align: left;
   }
+  .v3-dash[data-auth-workspace] .cr-row-actions { justify-content: flex-start; }
 
   .v3-dash[data-auth-workspace] #cr-redemptions .v3-table td.ta-r .btn,
   .v3-dash[data-auth-workspace] #cr-rewards .v3-table td.ta-r .btn {
