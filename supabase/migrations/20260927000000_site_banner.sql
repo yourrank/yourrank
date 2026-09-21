@@ -8,7 +8,11 @@
 -- read every row safely.
 
 ALTER TABLE public.sites
-  ADD COLUMN IF NOT EXISTS banner_data text DEFAULT ''::text NOT NULL;
+  -- Expand-phase policy: nullable on purpose. The DEFAULT backfills existing
+  -- rows with '' and every read path treats NULL and '' identically ("no
+  -- banner"), so N-1 code stays safe. NOT NULL belongs to a later contract
+  -- phase if ever desired.
+  ADD COLUMN IF NOT EXISTS banner_data text DEFAULT ''::text;
 
 COMMENT ON COLUMN public.sites.banner_data IS
   'Base64 data URI (PNG/JPEG/WebP) for the community cover banner. Empty string means no banner; served at /banner/:slug.';
