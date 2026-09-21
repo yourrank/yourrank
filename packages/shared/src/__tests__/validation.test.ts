@@ -124,6 +124,17 @@ describe("validateJson", () => {
     expect((await put({ 64: 12 })).ok).toBe(false);
   });
 
+  test("accepts banner uploads and removal in real site requests while rejecting invalid shapes", async () => {
+    const put = (banner: unknown) => validateJson(new Request("http://test/api/site", {
+      method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ branding: { banner } }),
+    }), handlerSchemas.handlePutSite);
+    expect((await put("data:image/webp;base64,UklGRg==")).ok).toBe(true);
+    expect((await put(null)).ok).toBe(true);
+    expect((await put({ 64: "data:image/webp;base64,UklGRg==" })).ok).toBe(false);
+    expect((await put("x".repeat(700001))).ok).toBe(false);
+  });
+
   test("validates array lengths on board saves", async () => {
     const request = new Request("http://test/api/site", {
       method: "PUT",
