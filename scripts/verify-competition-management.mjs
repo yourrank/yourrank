@@ -16,6 +16,10 @@ try {
     page.setDefaultTimeout(10000);
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
+    // Chromium reports expected 409 responses and blocked external fixture assets as resource errors.
+    page.on('console', message => {
+      if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) errors.push(message.text());
+    });
     await page.route('https://**/*', route => route.abort());
     await page.request.get(origin + '/__fixture?mode=populated');
     const mainBefore = (await (await page.request.get(origin + '/api/site?siteId=fixture-site')).json()).data;
