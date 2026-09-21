@@ -2,6 +2,19 @@
 
 Maintained to prevent architecture drift.
 
+## Competition management — 2026-09-21
+
+Competition management extends Community → Competitions with Overview and Standings
+views. The management workspace replaces the textarea editor described below with
+player add/edit/remove controls, search, and replace-only standings import, using
+the shared event-player validation and ranking functions. The `competition` and
+`competitionTab` URL state passes through the existing dashboard shell. The
+`/api/site/events` GET response now includes `playerLimit` derived from the site
+owner's effective plan. The interface inherits the existing mineral workspace
+tokens and fonts; no durable visual-system, schema, scoring, or public-renderer
+change is introduced. This note records source changes only; it does not certify
+runtime checks or CI.
+
 ## Community IA correction — 2026-09-21
 
 Community presents Overview, Standings, Competitions, Appearance, and Share.

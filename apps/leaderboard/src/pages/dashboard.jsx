@@ -115,18 +115,37 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
 <header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Overview</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
 <section class="event-boards" id="eventBoards" data-egroup="competitions" aria-labelledby="eventBoardsTitle">
+<div id="eventBoardOverview">
 <header class="v3-head v3-head--row"><div><h1 id="eventBoardsTitle">Competitions</h1><p class="v3-head-sub">Separate leaderboards for your community challenges.</p></div><button class="btn btn--accent" id="eventBoardCreate" type="button" disabled>New competition</button></header>
 <p id="eventBoardListStatus" class="status" role="status" aria-live="polite"></p>
 <button class="btn" id="eventBoardRetry" type="button" hidden>Try again</button>
 <div id="eventBoardList" class="competition-list"></div>
-<section id="eventBoardEditor" class="card" aria-labelledby="eventBoardEditorTitle" hidden>
-<header class="v3-head--row"><h2 id="eventBoardEditorTitle">Manage competition</h2><button class="btn" id="eventBoardClose" type="button">Back to competitions</button></header>
+</div>
+<section id="eventBoardEditor" aria-labelledby="eventBoardEditorTitle" hidden>
+<button class="btn" id="eventBoardClose" type="button">← Competitions</button>
+<header class="competition-heading"><div><h1 id="eventBoardEditorTitle" tabindex="-1">New competition</h1><p id="eventBoardSummary" class="competition-meta"></p></div><div id="eventBoardLink" class="event-board-actions"></div></header>
+<nav class="standings-tabs" aria-label="Competition sections"><button class="btn" type="button" data-competition-tab="overview" aria-current="page">Overview</button><button class="btn" type="button" data-competition-tab="standings">Standings</button></nav>
+<p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p>
+<button class="btn" id="eventBoardReload" type="button" hidden>Reload saved competition</button>
+<div id="eventBoardSettings">
+<p id="eventBoardNewHint" class="hint">Create this competition with a name, then add players in Standings.</p>
 <form id="eventBoardForm"><fieldset id="eventBoardFields">
 <div class="field"><label for="eventBoardName">Competition name</label><input id="eventBoardName" required maxlength="80" placeholder="e.g. Summer Challenge" /></div>
-<div class="field"><label for="eventBoardPlayers">Players and points</label><textarea id="eventBoardPlayers" rows="5" placeholder={'Alex, 250\nSam, 180'} aria-describedby="eventPlayersHint"></textarea><span class="hint" id="eventPlayersHint">One player per line: name, points. Higher points rank first; tied points share a rank. These points are separate from viewer credits.</span></div>
-<label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this competition on the public site</label>
-<div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save competition</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete competition</button></div>
-</fieldset><p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form>
+<div class="field"><label for="eventBoardPublished">Visibility</label><select id="eventBoardPublished"><option value="draft">Draft</option><option value="published">Published</option></select></div>
+<dl class="competition-facts"><div><dt>Player count</dt><dd id="eventBoardCount">0</dd></div><div><dt>Last updated</dt><dd id="eventBoardUpdated">Not saved yet</dd></div></dl>
+<button class="btn btn--accent" id="eventBoardSave" type="submit">Save changes</button>
+</fieldset></form>
+<div class="competition-danger" id="eventBoardDanger" hidden><h2>Delete competition</h2><p>Permanently remove this competition and its standings.</p><button class="btn btn--danger" id="eventBoardDelete" type="button">Delete competition</button></div>
+</div>
+<section id="eventStandings" aria-labelledby="eventStandingsTitle" hidden>
+<h2 id="eventStandingsTitle">Standings</h2>
+<div class="competition-toolbar"><div class="field"><label for="eventPlayerSearch">Search players</label><input id="eventPlayerSearch" type="search" placeholder="Search players…" /></div><div class="event-board-actions"><button class="btn btn--accent" id="eventPlayerAdd" type="button">Add player</button><button class="btn" id="eventPlayerImport" type="button">Import players</button></div></div>
+<form id="eventPlayerForm" class="competition-entry" aria-labelledby="eventPlayerFormTitle" hidden novalidate><h3 id="eventPlayerFormTitle">Add player</h3><div class="grid2"><div class="field"><label for="eventPlayerName">Player name</label><input id="eventPlayerName" maxlength="80" required aria-describedby="eventPlayerError" /></div><div class="field"><label for="eventPlayerPoints">Points</label><input id="eventPlayerPoints" type="number" min="0" max="1000000000000" step="any" required aria-describedby="eventPlayerError" /></div></div><p id="eventPlayerError" class="status" role="alert"></p><div class="event-board-actions"><button class="btn" id="eventPlayerCancel" type="button">Cancel</button><button class="btn btn--accent" type="submit">Save player</button></div><p class="hint">Save standings to apply your player changes.</p></form>
+<form id="eventImportForm" class="competition-entry" aria-labelledby="eventImportTitle" hidden novalidate><h3 id="eventImportTitle">Import players</h3><div class="field"><label for="eventBoardPlayers">Players and points</label><textarea id="eventBoardPlayers" rows="6" placeholder={'Alex, 250\nSam, 180'} aria-describedby="eventImportHint eventImportError"></textarea><p class="hint" id="eventImportHint">One player per line: name, points. Import replaces the current standings after you save.</p></div><p id="eventImportError" class="status" role="alert"></p><div class="event-board-actions"><button class="btn" id="eventImportCancel" type="button">Cancel</button><button class="btn btn--accent" type="submit">Replace current standings</button></div></form>
+<p id="eventPlayerCount" class="status" role="status" aria-live="polite"></p>
+<div id="eventPlayerRows" class="competition-standings" role="list" aria-label="Competition standings"></div>
+<button class="btn btn--accent" id="eventStandingsSave" type="button">Save standings</button>
+</section>
 </section></section>
 <StandingsTabs active={activeHash} />
 <aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="setupBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>

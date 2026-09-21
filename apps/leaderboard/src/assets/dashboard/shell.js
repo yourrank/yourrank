@@ -156,7 +156,9 @@ function routeDestination(page, tab = "", query = location.search) {
   // document's section vocabulary; they resolve through the canonical chrome
   // state and end in a full document navigation below.
   else base = chromeStateFor(page, tab)?.canonicalPath || dashboardPath(page, tab || defaultHash(page));
-  return base + suffix;
+  const params = new URLSearchParams(suffix);
+  if (page !== "board" || tab !== "competitions") { params.delete("competition"); params.delete("competitionTab"); }
+  return base + (params.size ? `?${params}` : "");
 }
 
 function routeTitle(page, tab) {
@@ -350,6 +352,7 @@ export function navTo(page, hash = "") {
 
   // A settings tab is a route, not an anchor: keep its heading and tabs visible.
   scrollToHash(page === "site" ? location.hash.slice(1) : scrollHash);
+  document.dispatchEvent(new CustomEvent("yr:dashboard-route", { detail: { page, tab: scrollHash } }));
 }
 
 export function scrollToHash(hash) {

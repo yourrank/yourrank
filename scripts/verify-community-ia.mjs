@@ -64,8 +64,9 @@ try {
     await page.locator('#eventBoardClose').click();
     await page.locator('#eventBoardCreate').click();
     await page.locator('#eventBoardName').fill('Browser competition ' + width);
-    await page.locator('#eventBoardPlayers').fill('Browser player, 123');
     await page.locator('#eventBoardSave').click();
+    await page.locator('#eventBoardStatus').filter({ hasText: 'Competition saved.' }).waitFor();
+    await page.locator('#eventBoardClose').click();
     const created = page.locator('.competition-row').filter({ hasText: 'Browser competition ' + width });
     await created.waitFor();
     await created.getByRole('button', { name: /Delete/ }).click();

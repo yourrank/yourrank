@@ -2,7 +2,7 @@
 // Does not certify authentication, provider delivery, or persistence.
 import { handleDashboardPreview } from '../apps/leaderboard/src/handlers/preview.js';
 import { renderSite } from '../packages/shared/dist/site-render.js';
-import { rankEventPlayers } from '../packages/shared/dist/event-leaderboards.js';
+import { rankEventPlayers, validateEventPlayers } from '../packages/shared/dist/event-leaderboards.js';
 import { createServer } from 'node:http';
 import { PAGES } from '../apps/leaderboard/src/pages.jsx';
 import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/index.js';
@@ -75,10 +75,15 @@ const server = createServer(async (req, res) => {
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);
-      if (req.method === 'GET') return json(res, { ok: true, events: empty ? [] : events });
+      if (req.method === 'GET') return json(res, { ok: true, playerLimit: 1000, events: empty ? [] : events });
       let raw = ''; for await (const chunk of req) raw += chunk;
       const body = JSON.parse(raw);
       const index = events.findIndex(item => item.id === body.id);
+      if (body.id && index < 0) return json(res, { error: 'Event not found' }, 404);
+      if (index >= 0 && body.updatedAt !== events[index].updated_at) return json(res, { error: 'This event changed in another window. Reload it before saving.' }, 409);
+      if (req.method !== 'DELETE') {
+        try { body.players = validateEventPlayers(body.players, 1000); } catch (error) { return json(res, { error: error.message }, 400); }
+      }
       if (req.method === 'DELETE') { if (index >= 0) events.splice(index, 1); return json(res, { ok: true }); }
       const event = { ...body, id: body.id || crypto.randomUUID(), updated_at: new Date().toISOString() };
       if (index >= 0) events[index] = event; else events.push(event);

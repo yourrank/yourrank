@@ -5,12 +5,13 @@ import { resolvePublicEvent } from '../site.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
 const stamp = '2026-09-08T00:00:00.000Z';
-function harness({ existing = null, count = 0, denied = false } = {}) {
+function harness({ existing = null, count = 0, denied = false, plan = 'pro', member = false } = {}) {
   const writes = [];
   const deps = {
-    requireUser: async () => ({ user: { id: 'owner', plan: 'pro' } }),
+    requireUser: async () => ({ user: { id: member ? 'moderator' : 'owner', plan } }),
     getBoardById: async (_env, _user, siteId) => siteId === 'site-a' ? { id: siteId, user_id: 'owner' } : null,
     requireSiteCapability: async () => denied ? { res: new Response(null, { status: 403 }) } : {},
+    one: async () => ({ plan: 'team' }),
     rateLimit: async () => ({ ok: true }),
     query: async (_sql, params) => { expect(params).toEqual(['site-a']); return []; },
     withTransaction: async fn => fn({
@@ -69,4 +70,15 @@ it('recovers unavailable event documents without mixing events into paginated re
   expect(html).toContain('Showing the main leaderboard.');
   expect(html).toContain('Main player');
   expect(html).not.toContain('data-event-id=');
+});
+
+it('exposes the site owner player limit and enforces it without writing Main or credit data', async () => {
+  expect((await (await harness({ plan: 'free' }).call(null, 'GET')).json()).playerLimit).toBe(50);
+  expect((await (await harness({ plan: 'free', member: true }).call(null, 'GET')).json()).playerLimit).toBe(5000);
+  const h = harness({ plan: 'free' });
+  expect((await h.call({ name: 'Limited', players: Array.from({ length: 51 }, (_, i) => ({ name: 'Player ' + i, score: i })) })).status).toBe(400);
+  expect(h.writes).toEqual([]);
+  const update = harness({ existing: { id, updated_at: stamp } });
+  expect((await update.call({ id, updatedAt: stamp, name: 'Renamed', players: [{ name: 'Solo', score: 0 }], published: false })).status).toBe(200);
+  expect(update.writes.map(write => write.sql)).toEqual(['SELECT id FROM sites WHERE id=$1 FOR UPDATE', 'UPDATE app_private.site_event_leaderboards SET name=$1, players=$2::jsonb, published=$3, updated_at=now() WHERE id=$4 AND site_id=$5']);
 });

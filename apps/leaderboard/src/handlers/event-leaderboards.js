@@ -14,7 +14,9 @@ export async function handleEventLeaderboards(request, env, deps = defaults) {
   if (!site) return bad('Site not found', 404);
   const access = await deps.requireSiteCapability(user, site, 'canRoleManageBoard');
   if (access.res) return access.res;
-  if (request.method === 'GET') return ok({ events: await deps.query('SELECT id, name, players, published, updated_at FROM app_private.site_event_leaderboards WHERE site_id=$1 ORDER BY created_at, id', [site.id]) });
+  const owner = site.user_id === user.id ? user : await deps.one('SELECT plan, plan_expires_at, status FROM users WHERE id=$1', [site.user_id]);
+  const playerLimit = PLAN_LIMITS[effectivePlan(owner)];
+  if (request.method === 'GET') return ok({ playerLimit, events: await deps.query('SELECT id, name, players, published, updated_at FROM app_private.site_event_leaderboards WHERE site_id=$1 ORDER BY created_at, id', [site.id]) });
   if (!(await deps.rateLimit(env, `event-boards:${user.id}`, 30, 60)).ok) return bad('Too many changes. Try again shortly.', 429);
   const body = await readJson(request);
   if (!body) return bad('Invalid request');
@@ -25,8 +27,7 @@ export async function handleEventLeaderboards(request, env, deps = defaults) {
   let players = [];
   if (request.method !== 'DELETE') {
     if (!name || name.length > 80) return bad('Enter an event name of at most 80 characters.');
-    const owner = site.user_id === user.id ? user : await deps.one('SELECT plan, plan_expires_at, status FROM users WHERE id=$1', [site.user_id]);
-    try { players = validateEventPlayers(body.players, PLAN_LIMITS[effectivePlan(owner)]); } catch (err) { return bad(err.message); }
+    try { players = validateEventPlayers(body.players, playerLimit); } catch (err) { return bad(err.message); }
   }
   const result = await deps.withTransaction(async tx => {
     await tx.unsafe('SELECT id FROM sites WHERE id=$1 FOR UPDATE', [site.id]);
