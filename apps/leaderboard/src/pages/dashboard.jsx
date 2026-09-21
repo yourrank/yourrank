@@ -32,18 +32,18 @@ export const BOARD_TABS = DASHBOARD_SECTIONS.board.tabs.map((tab) => [
   dashboardPath("board", tab),
 ]);
 
-const BOARD_LEGACY_TABS = new Set(["history"]);
-
 function LeaderboardTabs({ active }) {
-  const legacyActive = BOARD_LEGACY_TABS.has(active);
-  const tabLink = ([key, label, href]) => {
-    const legacy = BOARD_LEGACY_TABS.has(key);
-    return <a class={"editor-step v3-tab" + (key === active ? " is-active is-on" : "")} href={href} data-egroup={key} data-tabs-legacy={legacy ? true : undefined} hidden={legacy && !legacyActive ? true : undefined} aria-current={key === active ? "page" : undefined}>{label}</a>;
-  };
+  const topLevel = active === "history" ? "players" : active;
   return <nav class="editor-steps v3-tabs" id="editorTabs" aria-label="Community sections">
-    {BOARD_TABS.flatMap((tab) => BOARD_LEGACY_TABS.has(tab[0])
-      ? [<button class="v3-tab" type="button" data-tabs-more aria-expanded={legacyActive ? "true" : "false"}>More</button>, tabLink(tab)]
-      : [tabLink(tab)])}
+    {BOARD_TABS.filter(([key]) => key !== "history").map(([key, label, href]) =>
+      <a class={"editor-step v3-tab" + (key === topLevel ? " is-active is-on" : "")} href={href} data-egroup={key} aria-current={key === topLevel ? "page" : undefined}>{label}</a>)}
+  </nav>;
+}
+
+// History retains its route but belongs beneath Standings.
+function StandingsTabs({ active }) {
+  return <nav class="standings-tabs" id="standingsTabs" aria-label="Standings sections" hidden={!["players", "history"].includes(active)}>
+    {["players", "history"].map(key => <a class="btn" href={dashboardPath("board", key)} data-standings-tab={key} aria-current={key === active ? "page" : undefined}>{key === "players" ? "Current" : "History"}</a>)}
   </nav>;
 }
 
@@ -113,15 +113,22 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="design-grid">
 <div class="design-controls">
 {showTabs ? <LeaderboardTabs active={activeHash} /> : null}
-<header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Setup</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
-<section class="card event-boards" id="eventBoards" data-egroup="setup" aria-labelledby="eventBoardsTitle">
-<h2 id="eventBoardsTitle">Events</h2><p class="card-sub">Run Event A, Event B and more inside this site. Each has its own points. Viewers switch between published events on your Leaderboard page.</p>
-<div class="field"><label for="eventBoardSelect">Choose an event to edit</label><select id="eventBoardSelect"><option value="">Create event…</option></select></div>
-<form id="eventBoardForm"><div class="field"><label for="eventBoardName">Event name</label><input id="eventBoardName" required maxlength="80" placeholder="e.g. Community challenge" /></div>
+<header class="v3-section-head" data-egroup="setup"><h1 class="v3-section-title">Overview</h1><p>Choose how this leaderboard ranks players and when the current period runs.</p></header>
+<section class="event-boards" id="eventBoards" data-egroup="competitions" aria-labelledby="eventBoardsTitle">
+<header class="v3-head v3-head--row"><div><h1 id="eventBoardsTitle">Competitions</h1><p class="v3-head-sub">Separate leaderboards for your community challenges.</p></div><button class="btn btn--accent" id="eventBoardCreate" type="button" disabled>New competition</button></header>
+<p id="eventBoardListStatus" class="status" role="status" aria-live="polite"></p>
+<button class="btn" id="eventBoardRetry" type="button" hidden>Try again</button>
+<div id="eventBoardList" class="competition-list"></div>
+<section id="eventBoardEditor" class="card" aria-labelledby="eventBoardEditorTitle" hidden>
+<header class="v3-head--row"><h2 id="eventBoardEditorTitle">Manage competition</h2><button class="btn" id="eventBoardClose" type="button">Back to competitions</button></header>
+<form id="eventBoardForm"><fieldset id="eventBoardFields">
+<div class="field"><label for="eventBoardName">Competition name</label><input id="eventBoardName" required maxlength="80" placeholder="e.g. Summer Challenge" /></div>
 <div class="field"><label for="eventBoardPlayers">Players and points</label><textarea id="eventBoardPlayers" rows="5" placeholder={'Alex, 250\nSam, 180'} aria-describedby="eventPlayersHint"></textarea><span class="hint" id="eventPlayersHint">One player per line: name, points. Higher points rank first; tied points share a rank. These points are separate from viewer credits.</span></div>
-<label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this event on the public site</label>
-<div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save event</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete event</button></div>
-<p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form></section>
+<label class="chk"><input id="eventBoardPublished" type="checkbox" /> Show this competition on the public site</label>
+<div class="event-board-actions"><button class="btn btn--accent" id="eventBoardSave" type="submit">Save competition</button><button class="btn btn--danger" id="eventBoardDelete" type="button" hidden>Delete competition</button></div>
+</fieldset><p id="eventBoardStatus" class="status" role="status" aria-live="polite"></p></form>
+</section></section>
+<StandingsTabs active={activeHash} />
 <aside class="v3-owner-note" data-egroup="setup" aria-label="Site identity owner"><div><strong>Public identity is managed in Site pages.</strong><span>Name, tagline, logo, colors and links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="setupBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
 <div class="card" data-egroup="setup"><h2>Leaderboard basics</h2><p class="card-sub">Set the ranking rule, prize summary and end time visitors will see.</p><div class="grid2">
 <div class="field"><label for="f_rank_by">Rank players by</label><select id="f_rank_by"><option value="score">Points / score</option><option value="wagered">Amount</option></select><span class="hint">Players with the same value share a rank.</span></div>
@@ -147,7 +154,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <h1 class="v3-section-title" data-egroup="design">Appearance</h1>
 <div class="v3-players" data-egroup="players">
 <div class="v3-head">
-<h1>Players &amp; scores</h1>
+<h1>Standings</h1>
 <p class="v3-head-sub v3-head-sub--mono"><span id="pCount">0</span> / <span id="pLimit">0</span> players on your leaderboard <span id="limitHint" class="v3-players-limit"></span> <a class="v3-players-upgrade" id="playerLimitUpgrade" href="/dashboard/settings" hidden>Upgrade</a></p>
 </div>
 <div class="v3-alert v3-alert--warning players-sample-notice" id="playersSampleNotice" hidden role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="#quickAdd">Manage players</a></div>
@@ -191,7 +198,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="v3-bulkbar" id="bulkActions" role="toolbar" aria-label="Bulk actions" hidden><span class="v3-bulkbar-mark" aria-hidden="true"></span><span id="bulkCount" role="status" aria-live="polite" aria-atomic="true">0 players selected</span><span class="v3-bulkbar-sep" aria-hidden="true"></span><button class="v3-btn v3-btn--dark" id="bulkClearWager" type="button">Reset scores to zero</button><button class="v3-btn v3-btn--danger" id="bulkDelete" type="button">Remove selected players</button></div>
 </div>
 <aside class="v3-owner-note" data-egroup="design" aria-label="Site identity owner"><div><strong>Public identity is managed in Site.</strong><span>Name, tagline, logo, colors and social links apply across every public page.</span></div><button class="btn btn--sm btn--accent" id="designBrandLink" type="button" data-identity-edit>Edit site identity</button></aside>
-<div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Players</a></div>
+<div class="appearance-owner-row" data-egroup="design" id="playerFieldsCard"><div><h2>Leaderboard columns</h2><p>Choose which supporting values appear beside each player.</p></div><a class="btn btn--sm btn--ghost" id="playerFieldsLink" href="/dashboard/leaderboard/players">Manage in Standings</a></div>
 <div class="design-group-heading" data-egroup="design"><h2>Page design</h2></div>
 <div class="card" data-egroup="design" id="sectionsCard"><h3>Layout &amp; blocks <span class="pill pill--info ml-6">PRO</span></h3><p class="card-sub">Choose what appears on your public page.</p>
 <div id="sectionsBody"><div class="sections-editor" id="sectionsList"></div></div>

@@ -27,6 +27,7 @@ export interface Scenario {
 }
 
 export const SCENARIOS: Scenario[] = [
+  { key: "community-competitions", title: "Community competitions preserve Main standings and draft privacy", tier: "required" },
   {
     key: "auth-login-logout-relogin",
     title: "Login, logout and re-login report truthful outcomes",

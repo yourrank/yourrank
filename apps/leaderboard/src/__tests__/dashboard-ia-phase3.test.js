@@ -58,7 +58,7 @@ describe("Phase 3 dashboard information architecture", () => {
     expect(dashboardChromeState("rewards.shop").navKey).toBe("rewards");
     expect(dashboardChromeState("giveaways.chat").navKey).toBe("engage");
     expect(dashboardChromeState("audience.viewers").navKey).toBe("audience");
-    expect(dashboardChromeState("board.players").tabLabel).toBe("Leaderboard");
+    expect(dashboardChromeState("board.players").tabLabel).toBe("Standings");
     expect(dashboardChromeState("siteConnections.channel").navKey).toBe("settings");
     expect(dashboardChromeState("siteConnections.channel").navKey).not.toBe("board");
     expect(resolveDashboardLocation("/dashboard/site/connections", "siteId=abc")?.route.id).toBe("siteConnections.channel");
@@ -85,7 +85,7 @@ describe("Phase 3 dashboard information architecture", () => {
   });
 
   it("renames palette destinations without dropping legacy search terms", () => {
-    for (const title of ["Community", "Leaderboard", "Activities", "Giveaways", "Insights", "Rewards", "Members"]) {
+    for (const title of ["Community", "Standings", "Activities", "Giveaways", "Insights", "Rewards", "Members"]) {
       expect(palette).toContain(`title: "${title}"`);
     }
     for (const title of ["My board", "Players", "Stats"]) {

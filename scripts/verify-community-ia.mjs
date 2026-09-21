@@ -1,0 +1,101 @@
+// Run against dashboard-polish-fixtures.mjs: real browser, renderers and assets,
+// synthetic selected-site API data. Persistence/auth are certified separately by CI.
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { DASHBOARD_ROUTES } from '../packages/shared/dist/dashboard-routes.js';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH ? pathToFileURL(process.env.PLAYWRIGHT_MODULE_PATH).href : 'playwright');
+const origin = process.env.POLISH_ORIGIN || 'http://127.0.0.1:8915';
+const output = process.env.POLISH_OUTPUT || '.local-logs/community-ia';
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
+const results = [];
+try {
+  for (const width of [1440, 390]) {
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('https://**/*', route => route.abort());
+    await page.request.get(origin + '/__fixture?mode=populated');
+    for (const route of DASHBOARD_ROUTES.filter(route => route.section === 'board')) {
+      await page.goto(origin + route.canonicalPath + '?board=fixture-site');
+      await page.locator('#eventBoardCreate:not([disabled])').waitFor({ state: 'attached' });
+      assert.deepEqual(await page.locator('#editorTabs a').allTextContents(), ['Overview', 'Standings', 'Competitions', 'Appearance', 'Share']);
+      assert.equal(await page.locator('#editorTabs [aria-current="page"]').getAttribute('data-egroup'), route.tab === 'history' ? 'players' : route.tab || 'setup');
+      assert.equal(await page.locator('#eventBoards').isVisible(), route.tab === 'competitions');
+      assert.equal(await page.locator('#standingsTabs').isVisible(), ['history', 'players'].includes(route.tab));
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, route.id + ' overflow');
+      if (route.tab === 'players') assert.equal(await page.locator('.v3-players h1').innerText(), 'Standings');
+      if (['competitions', 'players', 'history', 'setup'].includes(route.tab)) await page.screenshot({ path: output + '/' + width + '-' + route.tab + '.png', fullPage: true });
+      results.push({ width, route: route.id, result: 'PASSED' });
+    }
+    await page.goto(origin + '/dashboard/leaderboard/players?board=fixture-site');
+    await page.locator('#standingsTabs').getByText('History', { exact: true }).click();
+    await page.waitForURL('**/history?board=fixture-site');
+    assert.equal(await page.locator('.history-workspace').isVisible(), true);
+    await page.goBack();
+    await page.waitForURL('**/players?board=fixture-site');
+    await page.goForward();
+    await page.waitForURL('**/history?board=fixture-site');
+    await page.locator('#editorTabs').getByText('Competitions', { exact: true }).click();
+    await page.waitForURL('**/competitions?board=fixture-site');
+    const published = page.locator('.competition-row').filter({ hasText: 'Summer Challenge' });
+    const draft = page.locator('.competition-row').filter({ hasText: 'September Challenge' });
+    assert.match(await published.innerText(), /Published[\s\S]*1 player[\s\S]*Updated/);
+    assert.match(await draft.innerText(), /Draft[\s\S]*1 player/);
+    const publicPagePromise = context.waitForEvent('page');
+    await published.getByText('View leaderboard ↗').click();
+    const publicPage = await publicPagePromise;
+    await publicPage.waitForLoadState();
+    assert.match(await publicPage.locator('body').innerText(), /Summer player/);
+    assert.match(publicPage.url(), /leaderboard\?event=11111111/);
+    await publicPage.close();
+    const previewPromise = context.waitForEvent('page');
+    await draft.getByRole('button', { name: 'Preview', exact: true }).click();
+    const preview = await previewPromise;
+    await preview.waitForLoadState();
+    assert.match(preview.url(), /dashboard\/preview\?board=fixture-site/);
+    assert.match(await preview.locator('body').innerText(), /Draft player/);
+    assert.doesNotMatch(await preview.locator('body').innerText(), /Summer player|Community member 1/);
+    await preview.close();
+    await draft.getByRole('button', { name: 'Manage', exact: true }).click();
+    assert.equal(await page.locator('#eventBoardName').inputValue(), 'September Challenge');
+    await page.locator('#eventBoardClose').click();
+    await page.locator('#eventBoardCreate').click();
+    await page.locator('#eventBoardName').fill('Browser competition ' + width);
+    await page.locator('#eventBoardPlayers').fill('Browser player, 123');
+    await page.locator('#eventBoardSave').click();
+    const created = page.locator('.competition-row').filter({ hasText: 'Browser competition ' + width });
+    await created.waitFor();
+    await created.getByRole('button', { name: /Delete/ }).click();
+    await page.getByRole('button', { name: 'Delete competition', exact: true }).last().click();
+    await created.waitFor({ state: 'detached' });
+    await page.keyboard.press('Control+k');
+    await page.locator('#yrPaletteInput').fill('events');
+    assert.ok((await page.locator('.yr-palette-item-title').allTextContents()).includes('Competitions'));
+    await page.locator('.yr-palette-item-title').getByText('Competitions', { exact: true }).click();
+    await page.keyboard.press('Control+k');
+    await page.locator('#yrPaletteInput').fill('setup');
+    assert.ok((await page.locator('.yr-palette-item-title').allTextContents()).includes('Overview'));
+    await page.keyboard.press('Escape');
+    await page.goto(origin + '/dashboard/leaderboard/competitions?board=second-site');
+    await page.getByText('No competitions yet.', { exact: false }).waitFor();
+    assert.equal(await page.locator('.competition-row').count(), 0);
+    await page.goto(origin + '/dashboard/leaderboard/competitions?board=fixture-site');
+    await published.waitFor();
+    await page.request.get(origin + '/__fixture?mode=error');
+    await page.reload();
+    await page.locator('#eventBoardRetry').waitFor();
+    assert.equal(await page.locator('.competition-row').count(), 0);
+    await page.request.get(origin + '/__fixture?mode=populated');
+    await page.locator('#eventBoardRetry').click();
+    await published.waitFor();
+    assert.deepEqual(errors, []);
+    results.push({ width, navigationHistorySiteContextCrudPreviewPaletteRecovery: 'PASSED' });
+    await context.close();
+  }
+  await writeFile(output + '/results.json', JSON.stringify(results, null, 2));
+  console.log(JSON.stringify(results, null, 2));
+} finally { await browser.close(); }
+

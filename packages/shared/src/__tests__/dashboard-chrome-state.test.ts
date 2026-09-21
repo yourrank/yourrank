@@ -84,15 +84,15 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(players.navKey).toBe("board");
     expect(players.crumbs).toEqual([
       { label: "Community", href: "/dashboard/leaderboard" },
-      { label: "Leaderboard" },
+      { label: "Standings" },
     ]);
-    expect(players.documentTitle).toBe("Leaderboard · Community · YourRank");
+    expect(players.documentTitle).toBe("Standings · Community · YourRank");
     // The board root opens on Setup; its crumb says so, its title stays
     // section-level.
     const root = dashboardChromeState("board");
     expect(root.crumbs).toEqual([
       { label: "Community" },
-      { label: "Setup" },
+      { label: "Overview" },
     ]);
     expect(root.documentTitle).toBe("Community · YourRank");
   });

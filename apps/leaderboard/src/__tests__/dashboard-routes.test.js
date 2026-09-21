@@ -42,7 +42,7 @@ describe("dashboard routes", () => {
 
   it("derives document titles from the canonical route table", () => {
     expect(dashboardTitleForPath("/dashboard")).toBe("Home · YourRank");
-    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Leaderboard · Community · YourRank");
+    expect(dashboardTitleForPath("/dashboard/leaderboard/players")).toBe("Standings · Community · YourRank");
     expect(dashboardTitleForPath("/dashboard/leaderboard/design")).toBe("Appearance · Community · YourRank");
     expect(dashboardTitleForPath("/dashboard/games")).toBe("Games · YourRank");
   });

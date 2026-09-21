@@ -6520,16 +6520,16 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   background: var(--ws-chrome-line-strong);
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-preview { display: none;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step:is([data-egroup="players"], [data-egroup="competitions"]).is-active) .design-preview { display: none;
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-grid { display: block;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step:is([data-egroup="players"], [data-egroup="competitions"]).is-active) .design-grid { display: block;
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls { display: block;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step:is([data-egroup="players"], [data-egroup="competitions"]).is-active) .design-controls { display: block;
 }
 
-.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active) .design-controls > *:not([data-egroup="players"]):not(.savebar):not(.editor-steps) { display: none;
+.v3-dash[data-auth-workspace] .lb-main:has(.editor-step[data-egroup="players"].is-active):not(:has(.standings-tabs [data-standings-tab="history"][aria-current="page"])) .design-controls > *:not([data-egroup="players"]):not(.savebar):not(.editor-steps):not(.standings-tabs) { display: none;
 }
 
 @media (max-width: 560px) {
@@ -10148,3 +10148,15 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 .v3-dash[data-auth-workspace] .lb-type-copy .hint { margin: 0; }
 .v3-dash[data-auth-workspace] .lb-type-control { display: inline-flex; align-items: center; gap: var(--ws-space-2); }
 .v3-dash[data-auth-workspace] .lb-type-control .hint { margin: 0; min-width: 2ch; }
+
+/* Community competition list and Standings subnavigation use workspace tokens. */
+.v3-dash[data-auth-workspace] .standings-tabs { display: flex; gap: var(--ws-space-2); margin-block: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] .standings-tabs [aria-current="page"] { color: var(--ws-accent); background: var(--ws-accent-soft); }
+.v3-dash[data-auth-workspace] .competition-list { display: grid; margin-block: var(--ws-space-5); }
+.v3-dash[data-auth-workspace] .competition-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-4); padding-block: var(--ws-space-5); border-bottom: 1px solid var(--ws-line); }
+.v3-dash[data-auth-workspace] .competition-row h2 { margin: 0 0 var(--ws-space-2); overflow-wrap: anywhere; }
+.v3-dash[data-auth-workspace] .competition-meta { display: flex; flex-wrap: wrap; gap: var(--ws-space-3); color: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] .event-boards fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: var(--ws-space-5); }
+.v3-dash[data-auth-workspace] .event-boards .btn { min-height: var(--ws-control-h-touch); }
+
+.v3-dash[data-auth-workspace] .event-boards { padding-top: var(--ws-space-5); }
