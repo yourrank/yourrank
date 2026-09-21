@@ -82,8 +82,9 @@ export const DASHBOARD_SECTION_TITLES = {
 // text, Telegram page H1s). The Telegram root is its Overview page, so the
 // tab-less `telegram` route carries that page's label.
 const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
-  "board.setup": "Setup",
-  "board.players": "Leaderboard",
+  "board.setup": "Overview",
+  "board.players": "Standings",
+  "board.competitions": "Competitions",
   "board.design": "Appearance",
   "board.share": "Share",
   "board.history": "History",
@@ -160,6 +161,11 @@ function crumbLabel(route: DashboardRouteDef): string {
 
 function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
   const sectionTitle = DASHBOARD_SECTION_TITLES[route.section as keyof typeof DASHBOARD_SECTION_TITLES];
+  if (route.id === "board.history") return [
+    { label: "Community", href: routeById("board").canonicalPath },
+    { label: "Standings", href: routeById("board.players").canonicalPath },
+    { label: "History" },
+  ];
   switch (route.section) {
     case "home":
       return [];

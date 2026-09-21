@@ -1,5 +1,8 @@
 // Isolated visual audit: real renderers/assets, synthetic API responses only.
 // Does not certify authentication, provider delivery, or persistence.
+import { handleDashboardPreview } from '../apps/leaderboard/src/handlers/preview.js';
+import { renderSite } from '../packages/shared/dist/site-render.js';
+import { rankEventPlayers } from '../packages/shared/dist/event-leaderboards.js';
 import { createServer } from 'node:http';
 import { PAGES } from '../apps/leaderboard/src/pages.jsx';
 import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/index.js';
@@ -23,6 +26,10 @@ const members = Array.from({ length: 12 }, (_, i) => ({ id: `member-${i}`, displ
 const shopItems = Array.from({ length: 4 }, (_, i) => ({ id: `reward-${i}`, name: i === 1 ? 'Choose the theme for our next community celebration stream' : ['Community shout-out', '', 'Suggest a stream topic', 'Choose a community emote'][i], description: 'A creator reward for participating in the community. Claim it with earned credits.', cost: 500 + i * 250, stock: null, active: true, cooldown_seconds: 0 }));
 const claims = members.slice(0, 4).map((m, i) => ({ id: `redemption:claim-${i}`, source: { id: `claim-${i}`, title: shopItems[i].name }, subject: { displayName: m.displayName }, reward: shopItems[i], status: 'submitted', statusLabel: 'Needs fulfillment', submittedAt: now }));
 const credits = { ok: true, enabled: true, channel: { connected: true, name: 'community', externalId: '123', status: 'authorized', statusLabel: 'Connected' }, shopItems, mappings: [{ id: 'mapping-1', kick_reward_title: 'Community participation bonus with a longer reward title', kick_reward_id: 'kick-1', kick_reward_cost: 150, credits: 200, active: true }], usage: { shopItems: 4, rewardMappings: 1, pendingRedemptions: 4, redemptionsPer30Days: 16, newViewersPer30Days: 24 }, limits: { shopItems: 50, rewardMappings: 50, pendingRedemptions: 100, redemptionsPer30Days: 1000, newViewersPer30Days: 1000 }, viewerAuth: {}, capabilities: { manageRewards: true, manageConnections: true, manageClaims: true, manageMembers: true } };
+const competitions = new Map([[site.id, [
+  { id: '11111111-1111-4111-8111-111111111111', name: 'Summer Challenge', published: true, players: [{ name: 'Summer player', score: 42 }], updated_at: now },
+  { id: '22222222-2222-4222-8222-222222222222', name: 'September Challenge', published: false, players: [{ name: 'Draft player', score: 18 }], updated_at: now },
+]], [secondarySite.id, []]]);
 let mode = 'populated';
 const json = (res, body, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const html = (res, body) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(body); };
@@ -35,6 +42,19 @@ const server = createServer(async (req, res) => {
     if (path === '/bot/dash/client.js') { res.setHeader('content-type', 'text/javascript'); return res.end(clientScriptSource()); }
     if (path === '/dashboard/_content') { const fragment = resolveFragment(url.searchParams.get('path')); if (fragment) return json(res, await renderFragmentPayload(PAGES[fragment.pageKey], { user, tab: fragment.tab })); return json(res, {}, 404); }
     if (path.startsWith('/dashboard/telegram')) return html(res, appHtml(user, 'http://127.0.0.1:8915', 'fixture', path.split('/')[3] || 'overview', undefined, { botUsername: 'community_bot', botStatus: 'active' }));
+    if (path === '/dashboard/preview') {
+      let body = ''; for await (const chunk of req) body += chunk;
+      const response = await handleDashboardPreview(new Request(url, { method: req.method, headers: req.headers, ...(req.method === 'POST' ? { body } : {}) }), {}, 'fixture', {
+        currentUserImpl: async () => user,
+        getUserSiteByIdImpl: async (_env, _user, id) => id === site.id ? site : id === secondarySite.id ? secondarySite : null,
+      });
+      res.writeHead(response.status, { 'content-type': 'text/html' }); return res.end(await response.text());
+    }
+    if (path.endsWith('/leaderboard') && !path.startsWith('/dashboard')) {
+      const selectedSite = path.startsWith('/' + secondarySite.slug + '/') ? secondarySite : site;
+      const event = competitions.get(selectedSite.id).find(item => item.id === url.searchParams.get('event') && item.published);
+      if (event) return html(res, await renderSite({ r: { ...selectedSite, data: { ...selectedSite.data, eventId: event.id, eventName: event.name, rankBy: 'score', players: rankEventPlayers(event.players) } }, section: 'leaderboard', opts: { slug: selectedSite.slug, homeUrl: url.origin, nonce: 'fixture' } }));
+    }
     if (path.startsWith('/dashboard')) {
       const fragment = resolveFragment(path);
       const page = PAGES[fragment?.pageKey || 'dashboard'];
@@ -52,6 +72,18 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
+    if (path === '/api/site/events') {
+      const events = competitions.get(url.searchParams.get('siteId'));
+      if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);
+      if (req.method === 'GET') return json(res, { ok: true, events: empty ? [] : events });
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw);
+      const index = events.findIndex(item => item.id === body.id);
+      if (req.method === 'DELETE') { if (index >= 0) events.splice(index, 1); return json(res, { ok: true }); }
+      const event = { ...body, id: body.id || crypto.randomUUID(), updated_at: new Date().toISOString() };
+      if (index >= 0) events[index] = event; else events.push(event);
+      return json(res, { ok: true, id: event.id });
+    }
     if (path === '/api/credits/status') return json(res, empty ? { ...credits, shopItems: [], mappings: [] } : credits);
     if (path === '/api/activities') return json(res, { activities: empty ? [] : activities, total: empty ? 0 : activities.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
     if (path === '/api/people/members') return json(res, { members: empty ? [] : members, total: empty ? 0 : members.length, page: { hasMore: false, nextCursor: null } });

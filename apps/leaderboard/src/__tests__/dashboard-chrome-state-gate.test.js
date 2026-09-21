@@ -105,7 +105,7 @@ describe("chrome-state one-owner gate (runtime)", () => {
 
   it("pins the exact canonical creator-facing titles", () => {
     expect(dashboardTitle({ page: "home", tab: "" })).toBe("Home · YourRank");
-    expect(dashboardTitle({ page: "board", tab: "players" })).toBe("Leaderboard · Community · YourRank");
+    expect(dashboardTitle({ page: "board", tab: "players" })).toBe("Standings · Community · YourRank");
     expect(dashboardTitle({ page: "board", tab: "" })).toBe("Community · YourRank");
     expect(dashboardTitle({ page: "performance", tab: "activity" })).toBe("Overview · Insights · YourRank");
     expect(dashboardTitle({ page: "performance", tab: "referrals" })).toBe("Traffic sources · Insights · YourRank");

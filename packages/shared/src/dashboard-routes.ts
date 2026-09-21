@@ -158,6 +158,7 @@ const ROUTE_DEFS = [
   { id: "board", canonicalPath: "/dashboard/leaderboard", section: "board", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.setup", canonicalPath: "/dashboard/leaderboard/setup", section: "board", tab: "setup", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.players", canonicalPath: "/dashboard/leaderboard/players", section: "board", tab: "players", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
+  { id: "board.competitions", canonicalPath: "/dashboard/leaderboard/competitions", section: "board", tab: "competitions", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.design", canonicalPath: "/dashboard/leaderboard/design", section: "board", tab: "design", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.share", canonicalPath: "/dashboard/leaderboard/share", section: "board", tab: "share", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
   { id: "board.history", canonicalPath: "/dashboard/leaderboard/history", section: "board", tab: "history", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },

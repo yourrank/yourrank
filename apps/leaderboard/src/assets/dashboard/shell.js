@@ -8,7 +8,7 @@ import { state } from "./state.js";
 import { logError, showToast } from "./utils.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";
 import { discardEditorChanges, fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
-import { chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
+import { SECTIONS, chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
 import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
 
@@ -374,7 +374,7 @@ export function scrollToHash(hash) {
 }
 
 // Editor sub-navigation: group the endless controls column into tabs
-// (Setup / Players / Design / Share / History) so the form isn't one long scroll.
+// Community destinations, with Current / History owned by Standings.
 export function setupEditorTabs() {
     const tabs = document.getElementById("editorTabs");
     if (!tabs || tabs._wired) return;
@@ -385,7 +385,7 @@ export function setupEditorTabs() {
       const chosen = buttons.find((b) => b.dataset.egroup === group);
       if (chosen?.hasAttribute("data-tabs-legacy") && chosen.hidden) expandTabsLegacy(tabs);
       buttons.forEach((b) => {
-        const on = b.dataset.egroup === group;
+        const on = b.dataset.egroup === (group === "history" ? "players" : group);
         b.classList.toggle("is-active", on);
         // The server marks the initially active step with is-on, which carries
         // the same selected weight, so it has to follow the client route too.
@@ -399,6 +399,14 @@ export function setupEditorTabs() {
       if (controls) {
         controls.querySelectorAll("[data-egroup]:not(.editor-step)").forEach((el) => {
           el.hidden = el.dataset.egroup !== group;
+        });
+      }
+      const standings = document.getElementById("standingsTabs");
+      if (standings) {
+        standings.hidden = !["players", "history"].includes(group);
+        standings.querySelectorAll("[data-standings-tab]").forEach(link => {
+          if (link.dataset.standingsTab === group) link.setAttribute("aria-current", "page");
+          else link.removeAttribute("aria-current");
         });
       }
       const crumbCurrent = document.querySelector(".v3-crumbs span[aria-current='page']");
@@ -425,7 +433,7 @@ export function setupEditorTabs() {
     });
     tabs._show = show;
     const initialGroup = currentRoute().tab || location.hash.replace("#", "") || defaultTab("board");
-    show(buttons.find((b) => b.dataset.egroup === initialGroup)?.dataset.egroup || defaultTab("board"));
+    show(SECTIONS.board.tabs.includes(initialGroup) ? initialGroup : defaultTab("board"));
   }
 
 // "More" keeps long-tail tabs out of the default strip: the legacy items are

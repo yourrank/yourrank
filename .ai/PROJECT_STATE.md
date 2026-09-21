@@ -2,6 +2,17 @@
 
 Maintained to prevent architecture drift.
 
+## Community IA correction — 2026-09-21
+
+Community presents Overview, Standings, Competitions, Appearance, and Share.
+Overview retains /dashboard/leaderboard/setup; Standings retains /dashboard/leaderboard/players.
+History retains /dashboard/leaderboard/history beneath Standings (Current / History).
+Competitions adds /dashboard/leaderboard/competitions and reuses /api/site/events and
+app_private.site_event_leaderboards. Manage opens the retained textarea editor;
+draft Preview uses the existing authenticated renderer without publishing.
+Main/Loyalty semantics, public event rendering, archive/reset behavior and schema are unchanged.
+Existing /dashboard/editor/* compatibility redirects remain intact.
+
 ## Phase 3 dashboard IA — 2026-09-20
 
 The rail is now Home, Community, Audience, Engage, Rewards, Insights, Telegram, Settings.

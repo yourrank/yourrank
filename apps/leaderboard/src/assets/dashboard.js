@@ -235,7 +235,7 @@ async function init() {
     renderSocials();
     renderSections();
     renderRules();
-    loadEventLeaderboards();
+    loadEventLeaderboards(d.brand);
     renderEmbedShare();
     const iframe = $("designPreview");
     if (iframe) iframe.addEventListener("load", fitDesignPreview);

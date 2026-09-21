@@ -93,6 +93,56 @@ describe("release-gate journeys", () => {
     if (!publish.json?.ok) throw new Error(`publish failed: ${publish.status} ${publish.body}`);
   });
 
+
+  it(tag("community-competitions", "competition lifecycle preserves Main standings and draft privacy"), async () => {
+    const mainBefore = await client.get(`/api/site?siteId=${siteId}`);
+    const endpoint = `/api/site/events?siteId=${siteId}`;
+    const create = await client.post(endpoint, { name: "Community IA challenge", players: [{ name: "Competition player", score: 42 }], published: false });
+    expect(create.status).toBe(200);
+    expect(create.json?.id).toBeTruthy();
+    const eventId = create.json.id;
+    try {
+      const list = await client.get(endpoint);
+      const event = list.json.events.find((item: any) => item.id === eventId);
+      expect(event.name).toBe("Community IA challenge");
+      expect(event.published).toBe(false);
+      expect(event.players).toEqual([{ name: "Competition player", score: 42 }]);
+      expect(event.updated_at).toBeTruthy();
+      for (const tab of ["setup", "players", "history", "competitions"]) {
+        const page = await client.get(`/dashboard/leaderboard/${tab}?board=${siteId}`);
+        expect(page.status).toBe(200);
+        expect(page.body).toContain('aria-label="Community sections"');
+      }
+      const guest = new Client(BASE_URL);
+      const draftPage = await guest.get(`/${slug}/leaderboard?event=${eventId}`);
+      expect(draftPage.body).not.toContain('data-event-id="' + eventId + '"');
+      const preview = await client.post(`/dashboard/preview?board=${siteId}&section=leaderboard&edit=0`, {
+        eventId, eventName: event.name, players: [{ name: "Competition player", score: 42, rank: 1 }], rankBy: "score",
+      });
+      expect(preview.status).toBe(200);
+      expect(preview.body).toContain('data-event-id="' + eventId + '"');
+      expect(preview.body).toContain("Competition player");
+      const published = await client.post(endpoint, { id: eventId, updatedAt: event.updated_at, name: event.name, players: event.players, published: true });
+      expect(published.status).toBe(200);
+      if (PUBLIC_ACCESS_AVAILABLE) {
+        const publicPage = await guest.get(`/${slug}/leaderboard?event=${eventId}`);
+        expect(publicPage.status).toBe(200);
+        expect(publicPage.body).toContain('data-event-id="' + eventId + '"');
+        expect(publicPage.body).toContain("Competition player");
+      }
+      const mainAfter = await client.get(`/api/site?siteId=${siteId}`);
+      expect(mainAfter.json.data.players).toEqual(mainBefore.json.data.players);
+    } finally {
+      const list = await client.get(endpoint);
+      const current = list.json.events.find((item: any) => item.id === eventId);
+      if (current) {
+        const deleted = await client.req("DELETE", endpoint, { body: { id: eventId, updatedAt: current.updated_at } });
+        expect(deleted.status).toBe(200);
+        expect((await client.get(endpoint)).json.events.some((item: any) => item.id === eventId)).toBe(false);
+      }
+    }
+  });
+
   afterAll(async () => {
     if (!accountCreated) return;
     const relogin = await login(currentPassword);

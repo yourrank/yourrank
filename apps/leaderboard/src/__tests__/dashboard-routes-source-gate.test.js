@@ -51,7 +51,7 @@ describe("routes.js source gate", () => {
         expect(section.path + "/" + tab).toBe(tabRoute.canonicalPath);
       }
     }
-    expect(SECTIONS.board.tabs).toEqual(["setup", "players", "design", "share", "history"]);
+    expect(SECTIONS.board.tabs).toEqual(["setup", "players", "competitions", "design", "share", "history"]);
     expect(SECTIONS.performance.tabs).toEqual(["activity", "referrals", "events"]);
   });
 

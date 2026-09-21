@@ -32,18 +32,20 @@ import {
 
 const SRC_ROOT = path.resolve(import.meta.dir, "..");
 const BOARD_PATH = "/dashboard/leaderboard";
-const BOARD_TABS = ["setup", "players", "design", "share", "history"];
+const BOARD_TABS = ["setup", "players", "competitions", "design", "share", "history"];
 const BOARD_ROUTES = [
   { id: "board", path: BOARD_PATH, tab: "" },
   { id: "board.setup", path: `${BOARD_PATH}/setup`, tab: "setup" },
   { id: "board.players", path: `${BOARD_PATH}/players`, tab: "players" },
+  { id: "board.competitions", path: "/dashboard/leaderboard/competitions", tab: "competitions" },
   { id: "board.design", path: `${BOARD_PATH}/design`, tab: "design" },
   { id: "board.share", path: `${BOARD_PATH}/share`, tab: "share" },
   { id: "board.history", path: `${BOARD_PATH}/history`, tab: "history" },
 ];
 const BOARD_LABELS = {
-  setup: "Setup",
-  players: "Leaderboard",
+  setup: "Overview",
+  players: "Standings",
+  competitions: "Competitions",
   design: "Appearance",
   share: "Share",
   history: "History",
@@ -109,7 +111,7 @@ function withoutComments(source) {
 }
 
 describe("manifest: Leaderboard editor delivery identity", () => {
-  it("declares exactly the six board SPA routes", () => {
+  it("declares all seven board SPA routes", () => {
     const boardRoutes = DASHBOARD_ROUTES.filter(({ section }) => section === "board");
     expect(boardRoutes.map(({ id }) => id)).toEqual(BOARD_ROUTES.map(({ id }) => id));
     for (const expected of BOARD_ROUTES) {
@@ -204,7 +206,7 @@ describe("client: editor step semantics come from the manifest", () => {
         documentTitle: "Community · YourRank",
         crumbs: [
           { label: "Community" },
-          { label: "Setup" },
+          { label: "Overview" },
         ],
       },
       ...BOARD_TABS.map((tab) => ({
@@ -215,6 +217,7 @@ describe("client: editor step semantics come from the manifest", () => {
         documentTitle: `${BOARD_LABELS[tab]} · Community · YourRank`,
         crumbs: [
           { label: "Community", href: BOARD_PATH },
+          ...(tab === "history" ? [{ label: "Standings", href: `${BOARD_PATH}/players` }] : []),
           { label: BOARD_LABELS[tab] },
         ],
       })),
@@ -239,13 +242,13 @@ describe("markup: one editor body and one step nav", () => {
       expect(html.match(/id="editorTabs"/g)).toHaveLength(1);
       const steps = editorStepAnchors(html);
       expect(steps.map(({ key, label, href }) => ({ key, label, href }))).toEqual(
-        BOARD_TABS.map((tab) => ({ key: tab, label: BOARD_LABELS[tab], href: `${BOARD_PATH}/${tab}` })),
+        BOARD_TABS.filter(tab => tab !== "history").map((tab) => ({ key: tab, label: BOARD_LABELS[tab], href: `${BOARD_PATH}/${tab}` })),
       );
       const active = steps.filter(({ markup }) =>
         /\bis-active\b/.test(markup) && /aria-current="page"/.test(markup),
       );
       expect(active).toHaveLength(1);
-      expect(active[0].key).toBe(route.tab || defaultTab("board"));
+      expect(active[0].key).toBe(route.tab === "history" ? "players" : route.tab || defaultTab("board"));
     }
   });
 
