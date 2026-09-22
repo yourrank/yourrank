@@ -296,23 +296,33 @@ describe("Chat Giveaways (Postgres)", () => {
   });
   // The draw/finalize CAS statements, verbatim from the dashboard handler: the
   // UPDATE is the arbiter, so a stale or racing request must match zero rows.
-  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond'), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
+  const STAMP = `WITH stamp AS (
+      SELECT GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond') AS drawn_at
+        FROM chat_giveaway_sessions WHERE id = $1
+    )`;
+  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = stamp.drawn_at,
+            winner_confirmed_at = NULL, winner_confirmation_message = NULL,
             winner_finalized_at = NULL, winner_finalized_by = NULL,
-            winner_response_required = $4, winner_response_timeout_seconds = $5,
-            status = 'completed', stopped_at = COALESCE(stopped_at, now())`;
+            winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
+            winner_response_deadline = CASE WHEN $4::boolean THEN stamp.drawn_at + make_interval(secs => $5::int) ELSE NULL END,
+            status = 'completed', stopped_at = COALESCE(s.stopped_at, now())`;
   const initialDraw = (sessionId, winnerId, required = false, timeout = null) => run(
-    `UPDATE chat_giveaway_sessions ${DRAW_SET}
-     WHERE id = $1 AND site_id = $3 AND winner_entry_id IS NULL
-     RETURNING id, drawn_at`,
+    `${STAMP}
+     UPDATE chat_giveaway_sessions s ${DRAW_SET}
+       FROM stamp
+     WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL
+       AND s.winner_entry_id IS NULL
+     RETURNING s.id, s.drawn_at`,
     [sessionId, winnerId, siteC, required, timeout],
   );
   const reroll = (sessionId, winnerId, expectedId, expectedDrawnAt, required = false, timeout = null) => run(
-    `UPDATE chat_giveaway_sessions ${DRAW_SET}
-     WHERE id = $1 AND site_id = $3
-       AND winner_entry_id = $6
-       AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $7::timestamptz)
-       AND winner_finalized_at IS NULL
-     RETURNING id, drawn_at`,
+    `${STAMP}
+     UPDATE chat_giveaway_sessions s ${DRAW_SET}
+       FROM stamp
+     WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL
+       AND s.winner_entry_id = $6
+       AND date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)
+     RETURNING s.id, s.drawn_at`,
     [sessionId, winnerId, siteC, required, timeout, expectedId, expectedDrawnAt],
   );
   const finalize = (sessionId, winnerId, drawnAt) => run(

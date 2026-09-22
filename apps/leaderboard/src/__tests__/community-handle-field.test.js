@@ -32,7 +32,7 @@ describe("community handle field", () => {
     const signup = read("../handlers/auth.js");
     expect(signup).toContain('import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";');
     expect(signup).toContain('if (requested && !requested.ok) return json({ ok: false, error: requested.error, field: "slug" }, 400);');
-    const sites = read("../handlers/sites.js");
+    const sites = read("../handlers/sites.js").replace(/\r\n/g, "\n");
     expect(sites).toContain("const handle = normalizeCommunityHandle(body.slug);\n  if (!handle.ok) return bad(handle.error);");
     const site = read("../site.js");
     expect(site).toContain("const handle = normalizeCommunityHandle(payload.slug);");

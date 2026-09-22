@@ -10,17 +10,8 @@ import {
 } from "@yourrank/shared/chat-giveaways";
 
 const CAPABILITY = "canRoleManageRewards";
-const SESSION_COLUMNS = `id, site_id, provider, keyword, status, started_at, stopped_at,
-  winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message,
-  winner_finalized_at, winner_finalized_by,
-  winner_response_required, winner_response_timeout_seconds, created_at`;
-const ENTRY_COLUMNS = `id, giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at`;
-
-function randomIndex(max) {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  return arr[0] % max;
-}
+import { giveawayRulesSchema, GIVEAWAY_CAPABILITIES } from "@yourrank/shared/giveaway-eligibility";
+import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
 
 async function resolveSite(request, env, deps) {
   const { requireUser, getByUser, getBoardById, requireSiteCapability, siteIdOverride } = deps;
@@ -45,6 +36,7 @@ function withDefaults(deps) {
     query: defaultQuery,
     exec: defaultExec,
     loadChatGiveawayConnection: defaultLoadChatGiveawayConnection,
+    transaction: giveawayTransaction,
     ...deps,
   };
 }
@@ -75,7 +67,7 @@ export async function handleChatGiveawayState(request, env, deps = {}) {
   const url = new URL(request.url);
   const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
   const view = await loadSessionView(d, site.id, url.searchParams.get("sessionId"));
-  return ok({ connection, ...view });
+  return ok({ connection, capabilities: GIVEAWAY_CAPABILITIES, ...view });
 }
 
 /** POST /api/giveaways/chat/start — create the site's single active session. */
@@ -85,6 +77,8 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
   if (res) return res;
 
+  const parsedRules = giveawayRulesSchema.safeParse(body.rules ?? {});
+  if (!parsedRules.success) return bad(parsedRules.error.issues[0]?.message || "Invalid giveaway rules.", 400);
   const keyword = normalizeGiveawayKeyword(body.keyword);
   if (!keyword) return bad("Enter the keyword viewers should type.", 400);
   if (/\s/.test(keyword)) return bad("Use a single word or command (no spaces) as the keyword.", 400);
@@ -97,10 +91,10 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
 
   try {
     const session = await d.one(
-      `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by)
-       VALUES ($1, 'kick', $2, 'active', $3)
+      `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by, rules)
+       VALUES ($1, 'kick', $2, 'active', $3, $4::jsonb)
        RETURNING ${SESSION_COLUMNS}`,
-      [site.id, keyword, user.id],
+      [site.id, keyword, user.id, parsedRules.data],
     );
     return ok({ connection, session, entries: [], winner: null });
   } catch (err) {
@@ -134,73 +128,31 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   if (res) return res;
   if (!body.sessionId) return bad("Missing sessionId", 400);
 
-  const session = await d.one(
-    `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2`,
-    [body.sessionId, site.id],
-  );
-  if (!session) return bad("Giveaway not found", 404);
-  if (session.status === "cancelled") return bad("This giveaway was cancelled.", 409);
-
-  // The response rule is captured with the draw so a reload or another device
-  // derives the same claim state from the session row.
-  const responseRequired = body.responseRequired === true;
-  const timeout = Number.parseInt(body.responseTimeoutSeconds, 10);
-  const responseTimeoutSeconds = responseRequired && Number.isInteger(timeout) && timeout >= 10 && timeout <= 600
-    ? timeout
-    : (responseRequired ? 60 : null);
-
-  const entries = await d.query(
-    `SELECT ${ENTRY_COLUMNS} FROM chat_giveaway_entries WHERE giveaway_session_id = $1 ORDER BY entered_at ASC`,
-    [session.id],
-  );
-  // Optional client-side eligibility filter (e.g. skip recent winners); the
-  // server only ever draws from persisted entries of this session.
-  const allowed = Array.isArray(body.entryIds) ? new Set(body.entryIds.map(String)) : null;
-  const pool = allowed ? entries.filter((e) => allowed.has(e.id)) : entries;
-  if (pool.length === 0) return bad("No eligible entrants to draw from.", 409);
-
-  // The UPDATE is the arbiter: it only lands on the draw identity the client
-  // saw (no winner yet for an initial draw, or the exact winner + drawn_at for
-  // a re-roll), so a concurrent request cannot overwrite a winner the client
-  // never saw. drawn_at compares at millisecond precision because it
-  // round-trips through JSON.
+  // The row lock plus the compare-and-swap inside drawGiveaway make the server
+  // the arbiter: only the draw identity the client saw (no winner yet, or the
+  // exact winner + drawn_at for a re-roll) can be replaced, so concurrent tabs
+  // and devices cannot overwrite a winner the client never saw.
   const reroll = body.expectedWinnerEntryId != null;
-  let expectedDrawnAt = null;
-  if (reroll) {
-    expectedDrawnAt = Date.parse(body.expectedDrawnAt);
-    if (!Number.isFinite(expectedDrawnAt)) return bad("Invalid expectedDrawnAt", 400);
-  }
+  if (reroll && !Number.isFinite(Date.parse(body.expectedDrawnAt))) return bad("Invalid expectedDrawnAt", 400);
 
-  const winner = pool[randomIndex(pool.length)];
-  const drawSet = `SET winner_entry_id = $2, drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond'), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
-            winner_finalized_at = NULL, winner_finalized_by = NULL,
-            winner_response_required = $4, winner_response_timeout_seconds = $5,
-            status = 'completed', stopped_at = COALESCE(stopped_at, now())`;
-  const updated = await d.one(
-    reroll
-      ? `UPDATE chat_giveaway_sessions
-        ${drawSet}
-      WHERE id = $1 AND site_id = $3
-        AND winner_entry_id = $6
-        AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $7::timestamptz)
-        AND winner_finalized_at IS NULL
-      RETURNING ${SESSION_COLUMNS}`
-      : `UPDATE chat_giveaway_sessions
-        ${drawSet}
-      WHERE id = $1 AND site_id = $3 AND winner_entry_id IS NULL
-      RETURNING ${SESSION_COLUMNS}`,
-    reroll
-      ? [session.id, winner.id, site.id, responseRequired, responseTimeoutSeconds, String(body.expectedWinnerEntryId), body.expectedDrawnAt]
-      : [session.id, winner.id, site.id, responseRequired, responseTimeoutSeconds],
-  );
-  if (!updated) {
-    const view = await loadSessionView(d, site.id, session.id);
-    const message = view.session?.winner_finalized_at
-      ? "This winner is already confirmed and cannot be re-rolled."
-      : "The giveaway draw changed. Refresh the current draw before drawing again.";
-    return json({ ok: false, error: message, ...view }, 409);
+  const result = await d.transaction(async (run) => {
+    const [session] = await run(
+      `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2 FOR UPDATE`,
+      [body.sessionId, site.id],
+    );
+    if (!session) return { error: "Giveaway not found", status: 404 };
+    return drawGiveaway(run, session, {
+      automatic: body.automatic === true,
+      expectedWinnerEntryId: reroll ? String(body.expectedWinnerEntryId) : null,
+      expectedDrawnAt: reroll ? body.expectedDrawnAt : null,
+    });
+  });
+  if (result.conflict) {
+    const view = await loadSessionView(d, site.id, body.sessionId);
+    return json({ ok: false, error: result.error, ...view }, 409);
   }
-  return ok({ session: updated, entries, winner });
+  if (result.error) return bad(result.error, result.status || 409);
+  return ok(await loadSessionView(d, site.id, body.sessionId));
 }
 
 /** POST /api/giveaways/chat/finalize — the streamer's manual "Confirm Winner".

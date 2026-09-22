@@ -1,3 +1,4 @@
+import { giveawayRules, GIVEAWAY_CAPABILITIES } from "@yourrank/shared/giveaway-eligibility";
 import { beforeAll, describe, expect, it } from "bun:test";
 import { handleKickWebhook } from "../handlers/kick-webhook.js";
 import {
@@ -142,7 +143,7 @@ function apiRequest(path, body) {
 }
 
 function deps(overrides = {}) {
-  return {
+  const d = {
     requireUser: async () => ({ user: owner, res: null }),
     getByUser: async () => siteA,
     getBoardById: async (_env, _userId, siteId) => (siteId === siteA.id ? siteA : null),
@@ -156,6 +157,13 @@ function deps(overrides = {}) {
     exec: async () => {},
     ...overrides,
   };
+  d.transaction ||= (fn) => fn(async (sql, params) => {
+    if (sql.includes("FROM chat_giveaway_entries e")) return d.query(sql, params);
+    if (sql.startsWith("INSERT INTO chat_giveaway_draws")) return [];
+    const row = await d.one(sql, params);
+    return row ? [row] : [];
+  });
+  return d;
 }
 
 describe("Chat Giveaway API", () => {
@@ -177,6 +185,15 @@ describe("Chat Giveaway API", () => {
     expect(inserted).toBe(false);
   });
 
+  it("rejects unsupported eligibility and anti-abuse rules before writing a session", async () => {
+    let wrote = false;
+    for (const rules of [{ entryMode: "verified", vpnDetection: true }, { entryMode: "verified", duplicateDevice: true }, { entryMode: "chat", onePerIp: true }, { subscriberOnly: "yes" }]) {
+      const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win", rules }), {}, deps({ one: async () => { wrote = true; } }));
+      expect(res.status).toBe(400);
+    }
+    expect(wrote).toBe(false);
+  });
+
   it("refuses to start when the chat subscription was not confirmed", async () => {
     const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
       loadChatGiveawayConnection: async () => ({ connected: true, chatReady: false, channelName: "streamer", externalChannelId: "111" }),
@@ -196,7 +213,7 @@ describe("Chat Giveaway API", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(inserts[0].sql).toContain("INSERT INTO chat_giveaway_sessions");
-    expect(inserts[0].params).toEqual([siteA.id, "!win", owner.id]);
+    expect(inserts[0].params).toEqual([siteA.id, "!win", owner.id, giveawayRules({})]);
     expect(data.session).toMatchObject({ id: "gs-1", status: "active", keyword: "!win" });
     expect(data.entries).toEqual([]);
   });
@@ -217,8 +234,8 @@ describe("Chat Giveaway API", () => {
   it("stops a session without deleting entrants and reads them back from the database", async () => {
     const sql = [];
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
-      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
+      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
     const res = await handleChatGiveawayStop(apiRequest("/api/giveaways/chat/stop", { sessionId: "gs-1" }), {}, deps({
       one: async (text, params) => {
@@ -238,66 +255,68 @@ describe("Chat Giveaway API", () => {
 
   it("draws the winner only from persisted entries of the session and records it", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
-      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
+      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
+    entries[0].eligibility_status = "pending_verification";
     let update = null;
-    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", entryIds: ["e2", "not-persisted"] }), {}, deps({
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", entryIds: ["e1", "not-persisted"] }), {}, deps({
       one: async (text, params) => {
-        if (text.startsWith("UPDATE")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
-        return { id: "gs-1", site_id: siteA.id, keyword: "!win", status: "stopped" };
+        if (text.includes("UPDATE chat_giveaway_sessions")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
+        if (update) return { id: "gs-1", status: "completed", winner_entry_id: update.params[1] };
+        return { id: "gs-1", site_id: siteA.id, keyword: "!win", status: "stopped", rules: {} };
       },
       query: async () => entries,
     }));
     expect(res.status).toBe(200);
     const data = await res.json();
-    // Client eligibility hints can only narrow the persisted pool, never add to it.
+    // A forged client list cannot admit pending entries; the server chooses the eligible pool.
     expect(data.winner.id).toBe("e2");
     expect(update.params).toEqual(["gs-1", "e2", siteA.id, false, null]);
     expect(update.text).toContain("status = 'completed'");
-    expect(update.text).toContain("drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond')");
+    expect(update.text).toContain("GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond')");
     // An initial draw only lands while no winner exists yet.
     expect(update.text).toContain("winner_entry_id IS NULL");
     // A re-roll clears any previous streamer-side confirmation.
     expect(update.text).toContain("winner_finalized_at = NULL");
     expect(update.text).toContain("winner_finalized_by = NULL");
-    expect(update.text).toContain("winner_response_required = $4");
-    expect(update.text).toContain("winner_response_timeout_seconds = $5");
+    expect(update.text).toContain("winner_response_required = $4::boolean");
+    expect(update.text).toContain("winner_response_timeout_seconds = $5::int");
     expect(data.session.winner_entry_id).toBe("e2");
   });
 
-  it("persists the draw's response rule and window on the session", async () => {
+  it("derives the draw's response rule from the persisted session rules, not the request", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
     let update = null;
-    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", responseRequired: true, responseTimeoutSeconds: 90 }), {}, deps({
+    // The request claims OFF/10s; the rules persisted at /start win.
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", responseRequired: false, responseTimeoutSeconds: 10 }), {}, deps({
       one: async (text, params) => {
-        if (text.startsWith("UPDATE")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
-        return { id: "gs-1", site_id: siteA.id, status: "stopped" };
+        if (text.includes("UPDATE chat_giveaway_sessions")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
+        return { id: "gs-1", site_id: siteA.id, status: "stopped", rules: { winnerMustRespond: true, responseTimeout: 90 } };
       },
       query: async () => entries,
     }));
     expect(res.status).toBe(200);
     expect(update.params).toEqual(["gs-1", "e1", siteA.id, true, 90]);
+    expect(update.text).toContain("winner_response_deadline = CASE WHEN $4::boolean THEN stamp.drawn_at + make_interval(secs => $5::int) ELSE NULL END");
   });
 
-  it("defaults the response window to 60 when the client sends an out-of-range or non-integer value", async () => {
+  it("persists no response window when the session rules do not require one", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
-    for (const sent of [5, 601, "soon", null]) {
-      let params = null;
-      const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", responseRequired: true, responseTimeoutSeconds: sent }), {}, deps({
-        one: async (text, p) => {
-          if (text.startsWith("UPDATE")) { params = p; return { id: "gs-1", status: "completed", winner_entry_id: p[1] }; }
-          return { id: "gs-1", site_id: siteA.id, status: "stopped" };
-        },
-        query: async () => entries,
-      }));
-      expect(res.status).toBe(200);
-      expect(params).toEqual(["gs-1", "e1", siteA.id, true, 60]);
-    }
+    let update = null;
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1" }), {}, deps({
+      one: async (text, params) => {
+        if (text.includes("UPDATE chat_giveaway_sessions")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
+        return { id: "gs-1", site_id: siteA.id, status: "stopped", rules: { winnerMustRespond: false } };
+      },
+      query: async () => entries,
+    }));
+    expect(res.status).toBe(200);
+    expect(update.params).toEqual(["gs-1", "e1", siteA.id, false, null]);
   });
 
   it("finalizes a drawn winner by stamping who confirmed and when", async () => {
@@ -480,8 +499,8 @@ describe("Chat Giveaway API", () => {
 
   it("a re-roll only lands on the draw identity the client saw", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
-      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
+      { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "333", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
     let update = null;
     const drawnAt = "2026-09-28T00:00:00.000Z";
@@ -489,8 +508,8 @@ describe("Chat Giveaway API", () => {
       sessionId: "gs-1", expectedWinnerEntryId: "e1", expectedDrawnAt: drawnAt,
     }), {}, deps({
       one: async (text, params) => {
-        if (text.startsWith("UPDATE")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
-        return { id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1", drawn_at: drawnAt };
+        if (text.includes("UPDATE chat_giveaway_sessions")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
+        return { id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1", drawn_at: drawnAt, rules: {} };
       },
       query: async () => entries,
     }));
@@ -503,18 +522,18 @@ describe("Chat Giveaway API", () => {
 
   it("a stale re-roll is rejected and reports the current draw", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
     let updated = false;
     const current = {
       id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e2",
-      drawn_at: "2026-09-28T00:01:00.000Z", winner_finalized_at: null,
+      drawn_at: "2026-09-28T00:01:00.000Z", winner_finalized_at: null, rules: {},
     };
     const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", {
       sessionId: "gs-1", expectedWinnerEntryId: "e1", expectedDrawnAt: "2026-09-28T00:00:00.000Z",
     }), {}, deps({
       one: async (text) => {
-        if (text.startsWith("UPDATE")) { updated = true; return null; }
+        if (text.includes("UPDATE chat_giveaway_sessions")) { updated = true; return null; }
         return current;
       },
       query: async () => entries,
@@ -524,22 +543,47 @@ describe("Chat Giveaway API", () => {
     expect(data.error).toBe("The giveaway draw changed. Refresh the current draw before drawing again.");
     expect(data.session.winner_entry_id).toBe("e2");
     expect(data.entries).toHaveLength(1);
-    expect(updated).toBe(true); // attempted once, matched nothing
+    // The row lock catches the mismatch before any write is attempted.
+    expect(updated).toBe(false);
+  });
+
+  it("an initial draw is rejected while a winner already exists", async () => {
+    const entries = [
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
+    ];
+    let updated = false;
+    const current = {
+      id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+      drawn_at: "2026-09-28T00:00:00.000Z", winner_finalized_at: null, rules: {},
+    };
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1" }), {}, deps({
+      one: async (text) => {
+        if (text.includes("UPDATE chat_giveaway_sessions")) { updated = true; return null; }
+        return current;
+      },
+      query: async () => entries,
+    }));
+    expect(res.status).toBe(409);
+    const data = await res.json();
+    expect(data.error).toBe("The giveaway draw changed. Refresh the current draw before drawing again.");
+    expect(data.session.winner_entry_id).toBe("e1");
+    expect(updated).toBe(false);
   });
 
   it("a re-roll on an already-confirmed winner is rejected", async () => {
     const entries = [
-      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t", eligibility_status: "eligible" },
     ];
+    let updated = false;
     const current = {
       id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
-      drawn_at: "2026-09-28T00:00:00.000Z", winner_finalized_at: "2026-09-28T00:05:00Z",
+      drawn_at: "2026-09-28T00:00:00.000Z", winner_finalized_at: "2026-09-28T00:05:00Z", rules: {},
     };
     const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", {
       sessionId: "gs-1", expectedWinnerEntryId: "e1", expectedDrawnAt: "2026-09-28T00:00:00.000Z",
     }), {}, deps({
       one: async (text) => {
-        if (text.startsWith("UPDATE")) return null;
+        if (text.includes("UPDATE chat_giveaway_sessions")) { updated = true; return null; }
         return current;
       },
       query: async () => entries,
@@ -548,6 +592,7 @@ describe("Chat Giveaway API", () => {
     const data = await res.json();
     expect(data.error).toBe("This winner is already confirmed and cannot be re-rolled.");
     expect(data.session.winner_finalized_at).toBe("2026-09-28T00:05:00Z");
+    expect(updated).toBe(false);
   });
 
   it("exposes connection + session + entries for the dashboard poll", async () => {
@@ -558,6 +603,7 @@ describe("Chat Giveaway API", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       ok: true,
+      capabilities: GIVEAWAY_CAPABILITIES,
       connection: { connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111" },
       session: { id: "gs-1", site_id: siteA.id, keyword: "!win", status: "active", winner_entry_id: null },
       entries: [{ id: "e1", username: "a", provider_user_id: "222" }],
