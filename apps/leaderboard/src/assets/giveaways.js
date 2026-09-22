@@ -49,6 +49,8 @@ if (!window.__yrSpaShell) {
   let winnerClaimed = false;
   let isRolling = false;
   let pastWinners = new Set();
+  let modalOpenTimer = null;
+  let winnerStreamConfirmed = false;
 
   function pastWinnersKey() {
     return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
@@ -223,8 +225,9 @@ if (!window.__yrSpaShell) {
     });
 
     $("gw-btn-roll")?.addEventListener("click", () => rollWinner());
-    $("gw-btn-reroll")?.addEventListener("click", () => rollWinner());
+    $("gw-btn-reroll")?.addEventListener("click", () => rollWinner({ excludeIds: currentWinner ? [currentWinner.id] : [] }));
     $("gw-btn-copy-winner")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
+    $("gw-btn-confirm")?.addEventListener("click", () => confirmWinner());
     $("gw-btn-export")?.addEventListener("click", () => exportCSV());
 
     $("gw-search-entrants")?.addEventListener("input", (e) => {
@@ -232,16 +235,18 @@ if (!window.__yrSpaShell) {
     });
 
     const closeModal = () => {
+      clearTimeout(modalOpenTimer);
       const m = $("gw-winner-modal");
       if (m) m.hidden = true;
     };
     $("gw-modal-close")?.addEventListener("click", closeModal);
-    $("gw-modal-done")?.addEventListener("click", closeModal);
     $("gw-modal-reroll")?.addEventListener("click", () => {
+      const exclude = currentWinner ? [currentWinner.id] : [];
       closeModal();
-      rollWinner();
+      rollWinner({ excludeIds: exclude });
     });
     $("gw-modal-copy")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
+    $("gw-modal-confirm")?.addEventListener("click", () => confirmWinner());
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && pollTimer) refreshChatGiveaway();
@@ -524,6 +529,7 @@ if (!window.__yrSpaShell) {
     const count = entrants.length;
     if ($("gw-stat-entrants")) $("gw-stat-entrants").textContent = count.toLocaleString();
     if ($("gw-count-header")) $("gw-count-header").textContent = count.toLocaleString();
+    if ($("gw-idle-entrant-count")) $("gw-idle-entrant-count").textContent = count.toLocaleString();
 
     const rollBtn = $("gw-btn-roll");
     const exportBtn = $("gw-btn-export");
@@ -593,10 +599,158 @@ if (!window.__yrSpaShell) {
     return pool;
   }
 
-  async function rollWinner() {
+  // Vertical roulette: usernames scroll through a fixed center selection line,
+  // fast at first, then easing down, then one final step onto the real winner.
+  // The animation NEVER picks the winner — it only lands on the server's pick.
+  const ROULETTE_ITEM_H = 46;
+
+  function buildRouletteSequence(pool, winner) {
+    const names = [...new Set(pool.map((e) => e.username))];
+    const pick = () => names[Math.floor(Math.random() * names.length)];
+    const seq = [];
+    let prev = null;
+    for (let i = 0; i < 22; i++) {
+      let n = pick();
+      while (names.length > 1 && n === prev) n = pick();
+      seq.push(n);
+      prev = n;
+    }
+    let decoy = pick();
+    while (names.length > 1 && decoy === winner.username) decoy = pick();
+    seq.push(decoy, winner.username);
+    return seq;
+  }
+
+  function runRoulette(track, pool, winner) {
+    return new Promise((resolve) => {
+      if (!track) return resolve();
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const seq = buildRouletteSequence(pool, winner);
+      track.innerHTML = "";
+      for (const name of seq) {
+        const item = document.createElement("div");
+        item.className = "gw-roulette-item";
+        item.textContent = `@${name}`;
+        track.appendChild(item);
+      }
+      if (reduced) {
+        track.style.transform = `translateY(${(1 - (seq.length - 1)) * ROULETTE_ITEM_H}px)`;
+        setTimeout(resolve, 500);
+        return;
+      }
+
+      const lastIdx = seq.length - 1;      // winner
+      const decoyIdx = seq.length - 2;     // near-miss before the winner
+      const MAIN_MS = 2600;                // fast then gradually slowing
+      const PAUSE_MS = 380;                // "almost stops" on the decoy
+      const FINAL_MS = 620;                // one more step onto the winner
+      const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+      const setPos = (p) => {
+        track.style.transform = `translateY(${(1 - p) * ROULETTE_ITEM_H}px)`;
+      };
+      setPos(0);
+
+      const animate = (from, to, ms, ease) => new Promise((done) => {
+        const t0 = performance.now();
+        let lastT = t0;
+        let lastP = from;
+        const step = (now) => {
+          const t = Math.min(1, (now - t0) / ms);
+          const p = from + (to - from) * ease(t);
+          // motion blur while the track moves fast
+          const vel = Math.abs(p - lastP) / Math.max(1, now - lastT) * 1000; // items/sec
+          track.classList.toggle("gw-roulette-track--blur", vel > 6);
+          lastT = now;
+          lastP = p;
+          setPos(p);
+          if (t < 1) requestAnimationFrame(step);
+          else { track.classList.remove("gw-roulette-track--blur"); done(); }
+        };
+        requestAnimationFrame(step);
+      });
+
+      (async () => {
+        await animate(0, decoyIdx, MAIN_MS, easeOutQuint);
+        await new Promise((r) => setTimeout(r, PAUSE_MS));
+        await animate(decoyIdx, lastIdx, FINAL_MS, easeOutCubic);
+        setPos(lastIdx);
+        setTimeout(resolve, 260);
+      })();
+    });
+  }
+
+  function launchConfetti() {
+    const box = $("gw-confetti");
+    if (!box) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    box.innerHTML = "";
+    const colors = ["var(--ws-accent)", "#8b5cf6", "#c4b5fd", "#e2e8f0"];
+    for (let i = 0; i < 24; i++) {
+      const piece = document.createElement("span");
+      piece.className = "gw-confetti-piece";
+      piece.style.setProperty("--gw-cx", `${(Math.random() * 2 - 1) * 150}px`);
+      piece.style.setProperty("--gw-cy", `${-(50 + Math.random() * 150)}px`);
+      piece.style.setProperty("--gw-cr", `${Math.random() * 420 - 210}deg`);
+      piece.style.setProperty("--gw-cd", `${0.9 + Math.random() * 0.7}s`);
+      piece.style.setProperty("--gw-cc", colors[i % colors.length]);
+      box.appendChild(piece);
+    }
+    setTimeout(() => { box.innerHTML = ""; }, 2400);
+  }
+
+  function markClaimExpired() {
+    // Timeout: re-roll becomes the prominent action.
+    for (const id of ["gw-btn-reroll", "gw-modal-reroll"]) {
+      const b = $(id);
+      if (b) { b.classList.add("btn--accent"); b.classList.remove("btn--ghost"); }
+    }
+    if (!winnerStreamConfirmed) {
+      for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
+        const b = $(id);
+        if (b) { b.classList.remove("btn--accent"); b.classList.add("btn--ghost"); }
+      }
+    }
+  }
+
+  function resetWinnerActionButtons() {
+    winnerStreamConfirmed = false;
+    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
+      const b = $(id);
+      if (b) { b.removeAttribute("disabled"); b.classList.add("btn--accent"); b.classList.remove("btn--ghost", "gw-btn-confirmed"); }
+    }
+    for (const id of ["gw-btn-reroll", "gw-modal-reroll"]) {
+      const b = $(id);
+      if (b) { b.classList.remove("btn--accent"); b.classList.add("btn--ghost"); }
+    }
+    $("gw-winner-stage")?.classList.remove("gw-winner-stage--confirmed");
+    const chip = $("gw-modal-verify-chip");
+    if (chip) chip.hidden = true;
+  }
+
+  function confirmWinner() {
+    if (!currentWinner || winnerStreamConfirmed) return;
+    winnerStreamConfirmed = true;
+    clearTimeout(modalOpenTimer);
+    const modal = $("gw-winner-modal");
+    if (modal) modal.hidden = true;
+    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
+      const b = $(id);
+      if (b) { b.setAttribute("disabled", "true"); b.classList.remove("btn--accent", "btn--ghost"); b.classList.add("gw-btn-confirmed"); }
+    }
+    $("gw-winner-stage")?.classList.add("gw-winner-stage--confirmed");
+  }
+
+  async function rollWinner(opts = {}) {
     clearEngageError();
     if (!session || isRolling) return;
-    const pool = getEligibleEntrantsPool();
+    let pool = getEligibleEntrantsPool();
+    if (Array.isArray(opts.excludeIds) && opts.excludeIds.length) {
+      const excluded = new Set(opts.excludeIds.map(String));
+      const filtered = pool.filter((e) => !excluded.has(String(e.id)));
+      if (filtered.length > 0) pool = filtered;
+    }
     if (pool.length === 0) {
       if (entrants.length === 0) return;
       showEngageError("No entrants meet your active giveaway rules. Try changing your rules.");
@@ -604,33 +758,35 @@ if (!window.__yrSpaShell) {
     }
 
     const rollBtn = $("gw-btn-roll");
-    const roller = $("gw-stage-idle");
+    const idle = $("gw-stage-idle");
+    const roulette = $("gw-roulette");
     const track = $("gw-roller-track");
     const showcase = $("gw-winner-stage");
 
     isRolling = true;
     rollBtn?.setAttribute("disabled", "true");
     if (showcase) showcase.hidden = true;
-    if (roller) roller.hidden = false;
-    track?.classList.add("gw-roller-track--spinning");
+    if (idle) idle.hidden = true;
+    if (roulette) roulette.hidden = false;
     clearInterval(claimTimerInterval);
+    clearTimeout(modalOpenTimer);
 
-    // Fast-cycle suspense names while the server draws.
-    const suspense = setInterval(() => {
-      const randomCandidate = pool[Math.floor(Math.random() * pool.length)];
-      if (track && randomCandidate) track.textContent = randomCandidate.username;
-    }, 80);
-    const minSpin = new Promise((resolve) => setTimeout(resolve, 2200));
-
-    try {
+    // The server draws the winner immediately; the roulette only visualizes it.
+    const drawPromise = (async () => {
       const res = await chatApi("/draw", { sessionId: session.id, entryIds: pool.map((e) => e.id), siteId: siteId || undefined });
       const data = await responseData(res);
-      await minSpin;
-      if (!res.ok) {
+      return { res, data };
+    })();
+    const minSpin = new Promise((resolve) => setTimeout(resolve, 600));
+
+    try {
+      const [{ res, data }] = await Promise.all([drawPromise, minSpin]);
+      if (!res.ok || !data.winner) {
         showEngageError(data.error || "Could not draw a winner.");
         return;
       }
       const winner = data.winner;
+      await runRoulette(track, pool, winner);
       pastWinners.add(String(winner.username).toLowerCase());
       try {
         localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
@@ -644,13 +800,11 @@ if (!window.__yrSpaShell) {
         $("gw-claim-box").hidden = true;
       }
     } catch {
-      await minSpin;
       showEngageError("Network error drawing a winner.");
     } finally {
-      clearInterval(suspense);
-      track?.classList.remove("gw-roller-track--spinning");
       isRolling = false;
-      if (roller && currentWinner) roller.hidden = true;
+      if (roulette) roulette.hidden = true;
+      if (!currentWinner && idle) idle.hidden = false;
       updateEntrantsCount();
     }
   }
@@ -660,14 +814,16 @@ if (!window.__yrSpaShell) {
   function renderWinner(previousWinnerId) {
     const showcase = $("gw-winner-stage");
     const idle = $("gw-stage-idle");
+    const roulette = $("gw-roulette");
     if (!currentWinner) {
       if (showcase) showcase.hidden = true;
       if (idle && !isRolling) idle.hidden = false;
       return;
     }
+    if (idle) idle.hidden = true;
+    if (roulette && !isRolling) roulette.hidden = true;
     if (currentWinner.id !== previousWinnerId && !isRolling) {
       fillWinnerViews(currentWinner);
-      if (idle) idle.hidden = true;
       if (showcase) showcase.hidden = false;
       if ($("gw-claim-box")) $("gw-claim-box").hidden = !session?.winner_confirmed_at;
     }
@@ -686,7 +842,6 @@ if (!window.__yrSpaShell) {
     const msgText = customRule ? `"${winner.message}" — Requirement: ${customRule}` : `"${winner.message}"`;
 
     if ($("gw-winner-name")) $("gw-winner-name").textContent = winner.username;
-    if ($("gw-winner-message")) $("gw-winner-message").textContent = msgText;
     if ($("gw-winner-avatar")) $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar_url, DEFAULT_AVATAR);
 
     if ($("gw-modal-name")) $("gw-modal-name").textContent = winner.username;
@@ -710,12 +865,24 @@ if (!window.__yrSpaShell) {
     winnerClaimed = false;
     fillWinnerViews(winner);
     setModalClaimVisible(true);
+    resetWinnerActionButtons();
     if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
+    if ($("gw-roulette")) $("gw-roulette").hidden = true;
     const showcase = $("gw-winner-stage");
-    const modal = $("gw-winner-modal");
-    if (showcase) showcase.hidden = false;
-    if (modal) modal.hidden = false;
-    if (showcase) showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (showcase) {
+      showcase.hidden = false;
+      showcase.classList.remove("gw-winner-stage--reveal");
+      void showcase.offsetWidth; // restart the reveal animation
+      showcase.classList.add("gw-winner-stage--reveal");
+      showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    launchConfetti();
+    // Let the reveal land before the verification modal opens over it.
+    clearTimeout(modalOpenTimer);
+    modalOpenTimer = setTimeout(() => {
+      const modal = $("gw-winner-modal");
+      if (modal && currentWinner && !winnerStreamConfirmed) modal.hidden = false;
+    }, 950);
   }
 
   function confirmWinnerLiveClaim(messageText) {
@@ -731,7 +898,7 @@ if (!window.__yrSpaShell) {
 
       if (box) box.hidden = false;
       if (status) {
-        status.textContent = `Confirmed active. Responded: "${messageText}"`;
+        status.textContent = messageText ? `Responded: "${messageText}"` : "Responded in chat";
         status.classList.remove("gw-claim-status--waiting", "gw-claim-status--expired");
         status.classList.add("gw-claim-status--confirmed");
       }
@@ -746,6 +913,10 @@ if (!window.__yrSpaShell) {
 
     updateElem("gw-claim-box", "gw-claim-status", "gw-claim-dot", "gw-claim-fill", "gw-claim-countdown");
     updateElem("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill", "gw-modal-claim-countdown");
+    const hint = $("gw-modal-claim-hint");
+    if (hint) hint.textContent = "The winner responded within the response window.";
+    const chip = $("gw-modal-verify-chip");
+    if (chip) chip.hidden = false;
     if (currentWinner && messageText) {
       appendWinnerChatMessage(currentWinner.username, messageText, formatEnteredAt(session?.winner_confirmed_at));
     }
@@ -798,7 +969,7 @@ if (!window.__yrSpaShell) {
 
       if (box) box.hidden = false;
       if (status) {
-        status.textContent = `Waiting for @${winner.username} to chat...`;
+        status.textContent = "Waiting for winner response…";
         status.classList.remove("gw-claim-status--confirmed", "gw-claim-status--expired");
         status.classList.add("gw-claim-status--waiting");
       }
@@ -835,7 +1006,7 @@ if (!window.__yrSpaShell) {
 
         if (claimSecondsRemaining <= 0 && !winnerClaimed) {
           if (status) {
-            status.textContent = `@${winner.username} did not respond within ${totalSecs}s.`;
+            status.textContent = `Winner did not respond within ${totalSecs} seconds`;
             status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
             status.classList.add("gw-claim-status--expired");
           }
@@ -844,6 +1015,7 @@ if (!window.__yrSpaShell) {
             fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
             fill.classList.add("gw-claim-bar-fill--expired");
           }
+          markClaimExpired();
         }
       };
 
