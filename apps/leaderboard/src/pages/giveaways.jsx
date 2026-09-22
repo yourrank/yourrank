@@ -36,7 +36,7 @@ export const giveawaysConfig = {
     "/assets/shell-nav.css",
     "/assets/ui.css",
     "/assets/dashboard-v4.css",
-    "/assets/giveaways.css?v=2",
+    "/assets/giveaways.css",
   ],
   scripts: [
     '<script src="/assets/giveaways.js?v=2" type="module"></script>',

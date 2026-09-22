@@ -60,6 +60,7 @@ import {
   handleChatGiveawayStart,
   handleChatGiveawayStop,
   handleChatGiveawayDraw,
+  handleChatGiveawayFinalize,
   handleChatGiveawayRemoveEntry,
 } from "./handlers/chat-giveaways.js";
 import { handleGetActivities, handleCloseActivity } from "./handlers/activities.js";
@@ -332,6 +333,7 @@ export const ROUTES = [
   { path: "/api/giveaways/chat/start", method: "POST", handler: withHandler(handleChatGiveawayStart) },
   { path: "/api/giveaways/chat/stop", method: "POST", handler: withHandler(handleChatGiveawayStop) },
   { path: "/api/giveaways/chat/draw", method: "POST", handler: withHandler(handleChatGiveawayDraw) },
+  { path: "/api/giveaways/chat/finalize", method: "POST", handler: withHandler(handleChatGiveawayFinalize) },
   { path: "/api/giveaways/chat/entries/remove", method: "POST", handler: withHandler(handleChatGiveawayRemoveEntry) },
 
   // Safe Activities foundation (existing free-workflow adapters only)

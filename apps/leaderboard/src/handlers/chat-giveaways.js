@@ -11,7 +11,8 @@ import {
 
 const CAPABILITY = "canRoleManageRewards";
 const SESSION_COLUMNS = `id, site_id, provider, keyword, status, started_at, stopped_at,
-  winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message, created_at`;
+  winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message,
+  winner_finalized_at, winner_finalized_by, created_at`;
 const ENTRY_COLUMNS = `id, giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at`;
 
 function randomIndex(max) {
@@ -153,12 +154,45 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   const updated = await d.one(
     `UPDATE chat_giveaway_sessions
         SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
+            winner_finalized_at = NULL, winner_finalized_by = NULL,
             status = 'completed', stopped_at = COALESCE(stopped_at, now())
       WHERE id = $1 AND site_id = $3
       RETURNING ${SESSION_COLUMNS}`,
     [session.id, winner.id, site.id],
   );
   return ok({ session: updated, entries, winner });
+}
+
+/** POST /api/giveaways/chat/finalize — the streamer's manual "Confirm Winner".
+ * Distinct from winner_confirmed_at, which is set by the winner's Kick chat
+ * reply: this stamps who confirmed and when, and is idempotent. */
+export async function handleChatGiveawayFinalize(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+  if (!body.sessionId) return bad("Missing sessionId", 400);
+
+  const session = await d.one(
+    `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2`,
+    [body.sessionId, site.id],
+  );
+  if (!session) return bad("Giveaway not found", 404);
+  if (!session.winner_entry_id) return bad("Draw a winner before confirming.", 409);
+
+  const updated = session.winner_finalized_at
+    ? session
+    : await d.one(
+      `UPDATE chat_giveaway_sessions
+          SET winner_finalized_at = now(), winner_finalized_by = $3
+        WHERE id = $1 AND site_id = $2 AND winner_entry_id IS NOT NULL AND winner_finalized_at IS NULL
+        RETURNING ${SESSION_COLUMNS}`,
+      [session.id, site.id, user.id],
+    ) || session;
+
+  const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
+  const view = await loadSessionView(d, site.id, session.id);
+  return ok({ connection, ...view, session: view.session || updated });
 }
 
 /** POST /api/giveaways/chat/entries/remove — remove one entrant from a session. */

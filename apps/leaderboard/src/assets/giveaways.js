@@ -50,7 +50,11 @@ if (!window.__yrSpaShell) {
   let isRolling = false;
   let pastWinners = new Set();
   let modalOpenTimer = null;
-  let winnerStreamConfirmed = false;
+  // Per-draw claim state: `responseRequired` is captured from the toggle at
+  // roll time; `claimExpired` flips when the response window runs out. Final
+  // acceptance is server truth only (session.winner_finalized_at).
+  let responseRequired = false;
+  let claimExpired = false;
 
   function pastWinnersKey() {
     return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
@@ -700,46 +704,68 @@ if (!window.__yrSpaShell) {
     setTimeout(() => { box.innerHTML = ""; }, 2400);
   }
 
-  function markClaimExpired() {
-    // Timeout: re-roll becomes the prominent action.
-    for (const id of ["gw-btn-reroll", "gw-modal-reroll"]) {
+  // Single renderer for the draw actions: derives everything from state so
+  // live draws, polls, and reloads all land on the same button treatment.
+  function updateWinnerActions() {
+    const finalized = Boolean(session?.winner_finalized_at);
+    const awaitingResponse = !finalized && responseRequired && !winnerClaimed;
+    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
       const b = $(id);
-      if (b) { b.classList.add("btn--accent"); b.classList.remove("btn--ghost"); }
-    }
-    if (!winnerStreamConfirmed) {
-      for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
-        const b = $(id);
-        if (b) { b.classList.remove("btn--accent"); b.classList.add("btn--ghost"); }
+      if (!b) continue;
+      b.classList.remove("btn--accent", "btn--ghost", "gw-btn-confirmed");
+      b.removeAttribute("title");
+      if (finalized) {
+        b.setAttribute("disabled", "true");
+        b.classList.add("gw-btn-confirmed");
+      } else if (awaitingResponse) {
+        // No override path: confirm never bypasses a required chat response.
+        b.setAttribute("disabled", "true");
+        b.classList.add("btn--ghost");
+        b.title = claimExpired
+          ? "The winner did not respond — re-roll to pick another winner"
+          : "Waiting for the winner to respond in chat";
+      } else {
+        b.removeAttribute("disabled");
+        b.classList.add("btn--accent");
       }
     }
-  }
-
-  function resetWinnerActionButtons() {
-    winnerStreamConfirmed = false;
-    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
-      const b = $(id);
-      if (b) { b.removeAttribute("disabled"); b.classList.add("btn--accent"); b.classList.remove("btn--ghost", "gw-btn-confirmed"); }
-    }
     for (const id of ["gw-btn-reroll", "gw-modal-reroll"]) {
       const b = $(id);
-      if (b) { b.classList.remove("btn--accent"); b.classList.add("btn--ghost"); }
+      if (!b) continue;
+      b.classList.remove("btn--accent", "btn--ghost");
+      b.classList.add(awaitingResponse && claimExpired ? "btn--accent" : "btn--ghost");
     }
-    $("gw-winner-stage")?.classList.remove("gw-winner-stage--confirmed");
+    const stage = $("gw-winner-stage");
+    if (stage) stage.classList.toggle("gw-winner-stage--confirmed", finalized);
     const chip = $("gw-modal-verify-chip");
-    if (chip) chip.hidden = true;
+    if (chip) chip.hidden = !winnerClaimed;
+    if (finalized) {
+      clearTimeout(modalOpenTimer);
+      clearInterval(claimTimerInterval);
+      const modal = $("gw-winner-modal");
+      if (modal) modal.hidden = true;
+    }
   }
 
-  function confirmWinner() {
-    if (!currentWinner || winnerStreamConfirmed) return;
-    winnerStreamConfirmed = true;
-    clearTimeout(modalOpenTimer);
+  async function confirmWinner() {
+    if (!currentWinner || session?.winner_finalized_at) return;
+    // A required chat response can never be bypassed by the confirm button.
+    if (responseRequired && !winnerClaimed) return;
+    clearEngageError();
+    try {
+      const res = await chatApi("/finalize", { sessionId: session.id, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not confirm the winner.");
+        return;
+      }
+      applyState({ connection, ...data });
+      updateWinnerActions();
+    } catch {
+      showEngageError("Network error confirming the winner.");
+    }
     const modal = $("gw-winner-modal");
     if (modal) modal.hidden = true;
-    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
-      const b = $(id);
-      if (b) { b.setAttribute("disabled", "true"); b.classList.remove("btn--accent", "btn--ghost"); b.classList.add("gw-btn-confirmed"); }
-    }
-    $("gw-winner-stage")?.classList.add("gw-winner-stage--confirmed");
   }
 
   async function rollWinner(opts = {}) {
@@ -763,6 +789,8 @@ if (!window.__yrSpaShell) {
     const track = $("gw-roller-track");
     const showcase = $("gw-winner-stage");
 
+    responseRequired = Boolean($("gw-opt-claim-req")?.checked);
+    claimExpired = false;
     isRolling = true;
     rollBtn?.setAttribute("disabled", "true");
     if (showcase) showcase.hidden = true;
@@ -794,7 +822,7 @@ if (!window.__yrSpaShell) {
       applyState({ connection, ...data });
       displayWinner(winner);
       playWinnerSound();
-      if ($("gw-opt-claim-req")?.checked) {
+      if (responseRequired) {
         startClaimTimer(winner);
       } else if ($("gw-claim-box")) {
         $("gw-claim-box").hidden = true;
@@ -823,13 +851,19 @@ if (!window.__yrSpaShell) {
     if (idle) idle.hidden = true;
     if (roulette && !isRolling) roulette.hidden = true;
     if (currentWinner.id !== previousWinnerId && !isRolling) {
+      // A reloaded winner starts fresh: no stale per-draw claim flags.
+      responseRequired = false;
+      claimExpired = false;
       fillWinnerViews(currentWinner);
       if (showcase) showcase.hidden = false;
-      if ($("gw-claim-box")) $("gw-claim-box").hidden = !session?.winner_confirmed_at;
+      const showClaim = Boolean(session?.winner_confirmed_at);
+      if ($("gw-claim-box")) $("gw-claim-box").hidden = !showClaim;
+      if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = !showClaim;
     }
     if (session?.winner_confirmed_at && !winnerClaimed) {
       confirmWinnerLiveClaim(session.winner_confirmation_message || "");
     }
+    if (currentWinner) updateWinnerActions();
   }
 
   function winnerBadgeLabel(winner) {
@@ -863,9 +897,11 @@ if (!window.__yrSpaShell) {
 
   function displayWinner(winner) {
     winnerClaimed = false;
+    claimExpired = false;
     fillWinnerViews(winner);
-    setModalClaimVisible(true);
-    resetWinnerActionButtons();
+    if ($("gw-claim-box")) $("gw-claim-box").hidden = !responseRequired;
+    setModalClaimVisible(responseRequired);
+    updateWinnerActions();
     if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
     if ($("gw-roulette")) $("gw-roulette").hidden = true;
     const showcase = $("gw-winner-stage");
@@ -881,7 +917,7 @@ if (!window.__yrSpaShell) {
     clearTimeout(modalOpenTimer);
     modalOpenTimer = setTimeout(() => {
       const modal = $("gw-winner-modal");
-      if (modal && currentWinner && !winnerStreamConfirmed) modal.hidden = false;
+      if (modal && currentWinner && !session?.winner_finalized_at) modal.hidden = false;
     }, 950);
   }
 
@@ -915,8 +951,7 @@ if (!window.__yrSpaShell) {
     updateElem("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill", "gw-modal-claim-countdown");
     const hint = $("gw-modal-claim-hint");
     if (hint) hint.textContent = "The winner responded within the response window.";
-    const chip = $("gw-modal-verify-chip");
-    if (chip) chip.hidden = false;
+    updateWinnerActions();
     if (currentWinner && messageText) {
       appendWinnerChatMessage(currentWinner.username, messageText, formatEnteredAt(session?.winner_confirmed_at));
     }
@@ -1015,7 +1050,8 @@ if (!window.__yrSpaShell) {
             fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
             fill.classList.add("gw-claim-bar-fill--expired");
           }
-          markClaimExpired();
+          claimExpired = true;
+          updateWinnerActions();
         }
       };
 
@@ -1644,6 +1680,7 @@ if (!window.__yrSpaShell) {
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
+    responseRequired = false; claimExpired = false;
     init();
     initEventsHub();
   }
@@ -1652,6 +1689,8 @@ if (!window.__yrSpaShell) {
     clearInterval(pollTimer); pollTimer = null;
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
+    clearTimeout(modalOpenTimer); modalOpenTimer = null;
+    responseRequired = false; claimExpired = false;
     // Remove the document-level drawer focus trap (added in wireEvents).
     document.removeEventListener("keydown", trapEventDrawerFocus);
   }

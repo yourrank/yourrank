@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "bun:test";
 import { handleKickWebhook } from "../handlers/kick-webhook.js";
 import {
   handleChatGiveawayDraw,
+  handleChatGiveawayFinalize,
   handleChatGiveawayStart,
   handleChatGiveawayState,
   handleChatGiveawayStop,
@@ -160,7 +161,7 @@ function deps(overrides = {}) {
 describe("Chat Giveaway API", () => {
   it("registers the server-backed routes alongside the legacy chatroom lookup", () => {
     const paths = routes.map((r) => `${r.method} ${r.path}`);
-    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/entries/remove"]) {
+    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/remove"]) {
       expect(paths).toContain(p);
     }
   });
@@ -254,7 +255,79 @@ describe("Chat Giveaway API", () => {
     expect(data.winner.id).toBe("e2");
     expect(update.params).toEqual(["gs-1", "e2", siteA.id]);
     expect(update.text).toContain("status = 'completed'");
+    // A re-roll clears any previous streamer-side confirmation.
+    expect(update.text).toContain("winner_finalized_at = NULL");
+    expect(update.text).toContain("winner_finalized_by = NULL");
     expect(data.session.winner_entry_id).toBe("e2");
+  });
+
+  it("finalizes a drawn winner by stamping who confirmed and when", async () => {
+    const queries = [];
+    const finalized = {
+      id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+      winner_finalized_at: "2026-09-28T00:00:00Z", winner_finalized_by: owner.id,
+    };
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1", siteId: siteA.id }), {}, deps({
+      one: async (text, params) => {
+        queries.push({ text, params });
+        if (text.includes("winner_finalized_at = now()")) return finalized;
+        if (text.startsWith("UPDATE")) return null;
+        // The re-read after the update reflects the persisted stamp.
+        if (queries.some((q) => q.text.includes("winner_finalized_at = now()"))) return finalized;
+        return { id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1", winner_finalized_at: null };
+      },
+      query: async (text) => { queries.push({ text }); return [{ id: "e1", giveaway_session_id: "gs-1", username: "a" }]; },
+    }));
+    expect(res.status).toBe(200);
+    const update = queries.find((q) => q.text.includes("winner_finalized_at = now()"));
+    expect(update).toBeTruthy();
+    expect(update.params).toEqual(["gs-1", siteA.id, owner.id]);
+    expect(update.text).toContain("winner_finalized_at IS NULL");
+    const data = await res.json();
+    expect(data.session.winner_finalized_at).toBe("2026-09-28T00:00:00Z");
+    expect(data.winner.id).toBe("e1");
+    expect(data.connection.connected).toBe(true);
+  });
+
+  it("refuses to finalize before a winner is drawn", async () => {
+    let updated = false;
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1" }), {}, deps({
+      one: async (text) => {
+        if (text.includes("winner_finalized_at = now()")) { updated = true; return null; }
+        return { id: "gs-1", site_id: siteA.id, status: "stopped", winner_entry_id: null };
+      },
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Draw a winner before confirming.");
+    expect(updated).toBe(false);
+  });
+
+  it("returns the current state unchanged when the winner was already finalized", async () => {
+    let updated = false;
+    const session = {
+      id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+      winner_finalized_at: "2026-09-28T00:00:00Z", winner_finalized_by: owner.id,
+    };
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1" }), {}, deps({
+      one: async (text) => {
+        if (text.includes("winner_finalized_at = now()")) { updated = true; return null; }
+        return session;
+      },
+      query: async () => [{ id: "e1", giveaway_session_id: "gs-1", username: "a" }],
+    }));
+    expect(res.status).toBe(200);
+    expect(updated).toBe(false);
+    expect((await res.json()).session.winner_finalized_at).toBe("2026-09-28T00:00:00Z");
+  });
+
+  it("denies finalize to members without the rewards capability", async () => {
+    let touched = false;
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1" }), {}, deps({
+      requireSiteCapability: async () => ({ role: "moderator", res: new Response("forbidden", { status: 403 }) }),
+      one: async () => { touched = true; return null; },
+    }));
+    expect(res.status).toBe(403);
+    expect(touched).toBe(false);
   });
 
   it("refuses to draw when there are no persisted entrants", async () => {
