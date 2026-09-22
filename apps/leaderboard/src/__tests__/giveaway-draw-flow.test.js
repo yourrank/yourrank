@@ -105,6 +105,23 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
   if (path === "/api/giveaways/chat") return json(statePayload());
   if (path === "/api/giveaways/chat/draw") {
+    // CAS: the draw only lands on the identity the client claimed to see
+    // (null/null = "no draw yet").
+    const expectedId = body?.expectedWinnerEntryId ?? null;
+    const expectedDrawn = body?.expectedDrawnAt ?? null;
+    const mismatch = expectedId === null
+      ? server.session.winner_entry_id !== null
+      : server.session.winner_entry_id !== expectedId
+        || Date.parse(server.session.drawn_at) !== Date.parse(expectedDrawn);
+    if (mismatch) {
+      const error = server.session.winner_finalized_at
+        ? "This winner is already confirmed and cannot be re-rolled."
+        : "The giveaway draw changed. Refresh the current draw before drawing again.";
+      return json({ ok: false, error, session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
+    }
+    if (expectedId !== null && server.session.winner_finalized_at) {
+      return json({ ok: false, error: "This winner is already confirmed and cannot be re-rolled.", session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
+    }
     // The server draws from the ids the client submitted — always the LAST one,
     // a pick the client could not have predicted from its own ordering.
     const ids = (body?.entryIds || []).map(String);
@@ -123,7 +140,18 @@ globalThis.fetch = async (input, init = {}) => {
     return json({ ok: true, session: server.session, entries: server.entries, winner });
   }
   if (path === "/api/giveaways/chat/finalize") {
-    if (!server.session?.winner_entry_id) return json({ ok: false, error: "Draw a winner before confirming." }, 409);
+    if (!body?.sessionId) return json({ ok: false, error: "Missing sessionId" }, 400);
+    if (!body?.winnerEntryId) return json({ ok: false, error: "Missing winnerEntryId" }, 400);
+    if (body?.drawnAt == null) return json({ ok: false, error: "Missing drawnAt" }, 400);
+    // CAS: only the draw the client saw may be finalized.
+    if (server.session?.winner_entry_id !== body.winnerEntryId
+        || Date.parse(server.session?.drawn_at) !== Date.parse(body.drawnAt)) {
+      return json({ ok: false, error: "The giveaway winner changed. Refresh the current draw before confirming.", session: server.session }, 409);
+    }
+    if (server.session.winner_finalized_at) return json(statePayload());
+    if (server.session.winner_response_required && !server.session.winner_confirmed_at) {
+      return json({ ok: false, error: "The winner must respond in chat before you can confirm.", session: server.session }, 409);
+    }
     Object.assign(server.session, { winner_finalized_at: "2026-09-28T00:02:00Z", winner_finalized_by: user.id });
     return json(statePayload());
   }
@@ -251,6 +279,8 @@ describe("Giveaway draw flow", () => {
     const finalize = requestsTo("/api/giveaways/chat/finalize");
     expect(finalize).toHaveLength(1);
     expect(finalize[0].body.sessionId).toBe("gs-1");
+    expect(finalize[0].body.winnerEntryId).toBe("e3");
+    expect(finalize[0].body.drawnAt).toBe(server.session.drawn_at);
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
       expect(b.classList.contains("gw-btn-confirmed")).toBe(true);
@@ -436,5 +466,57 @@ describe("Giveaway draw flow", () => {
     const shown = parseInt($id("gw-claim-countdown").textContent, 10);
     expect(shown).toBeLessThanOrEqual(88);
     expect(shown).toBeGreaterThanOrEqual(83);
+  });
+
+  it("a re-roll carries the current draw's compare-and-swap identity", async () => {
+    await boot();
+    await drawWinner();
+    const firstDraw = requestsTo("/api/giveaways/chat/draw").at(-1);
+    expect(firstDraw.body.expectedWinnerEntryId).toBeNull();
+    expect(firstDraw.body.expectedDrawnAt).toBeNull();
+    $id("gw-btn-reroll").click();
+    await tickUntilReveal();
+    const second = requestsTo("/api/giveaways/chat/draw").at(-1);
+    expect(second.body.expectedWinnerEntryId).toBe("e3");
+    expect(second.body.expectedDrawnAt).toBeTruthy();
+  });
+
+  it("confirming a draw that changed underneath resyncs instead of finalizing", async () => {
+    await boot();
+    await drawWinner();
+    expect($id("gw-winner-name").textContent).toBe("charlie");
+    // Another device re-drew while we were looking at charlie.
+    Object.assign(server.session, {
+      winner_entry_id: "e2", drawn_at: new Date(now).toISOString(),
+      winner_confirmed_at: null, winner_finalized_at: null,
+    });
+    $id("gw-modal-confirm").click();
+    await clock.tick(0);
+    const finalize = requestsTo("/api/giveaways/chat/finalize");
+    expect(finalize).toHaveLength(1);
+    expect(finalize[0].body.winnerEntryId).toBe("e3");
+    expect(server.session.winner_finalized_at).toBeNull();
+    // The client resynced to the server's draw: bravo is shown, not charlie.
+    expect($id("gw-winner-name").textContent).toBe("bravo");
+    expect($id("gw-page-alert").textContent).toContain("winner changed");
+  });
+
+  it("a stale re-roll surfaces the conflict without revealing a winner", async () => {
+    await boot();
+    await drawWinner();
+    // Another device re-drew to a different winner.
+    Object.assign(server.session, {
+      winner_entry_id: "e1", drawn_at: new Date(now + 1000).toISOString(),
+      winner_confirmed_at: null, winner_finalized_at: null,
+    });
+    $id("gw-btn-reroll").click();
+    await clock.tick(3000);
+    const draws = requestsTo("/api/giveaways/chat/draw");
+    expect(draws).toHaveLength(2);
+    expect(draws[1].body.expectedWinnerEntryId).toBe("e3");
+    // The 409 resynced to winner e1; no new reveal happened.
+    expect($id("gw-winner-name").textContent).toBe("alpha");
+    expect(server.session.winner_entry_id).toBe("e1");
+    expect($id("gw-page-alert").textContent).toContain("draw changed");
   });
 });

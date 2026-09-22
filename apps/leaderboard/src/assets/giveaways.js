@@ -764,9 +764,16 @@ if (!window.__yrSpaShell) {
     if (drawRules().required && !winnerClaimed) return;
     clearEngageError();
     try {
-      const res = await chatApi("/finalize", { sessionId: session.id, siteId: siteId || undefined });
+      const res = await chatApi("/finalize", {
+        sessionId: session.id,
+        winnerEntryId: session.winner_entry_id,
+        drawnAt: session.drawn_at,
+        siteId: siteId || undefined,
+      });
       const data = await responseData(res);
       if (!res.ok) {
+        // The draw may have changed underneath us; resync before showing why.
+        if (data.session) await refreshChatGiveaway();
         showEngageError(data.error || "Could not confirm the winner.");
         return;
       }
@@ -814,6 +821,8 @@ if (!window.__yrSpaShell) {
       const res = await chatApi("/draw", {
         sessionId: session.id,
         entryIds: pool.map((e) => e.id),
+        expectedWinnerEntryId: session.winner_entry_id ?? null,
+        expectedDrawnAt: session.drawn_at ?? null,
         siteId: siteId || undefined,
         responseRequired: Boolean($("gw-opt-claim-req")?.checked),
         responseTimeoutSeconds: parseInt($("gw-opt-claim-duration")?.value || "60", 10),
@@ -826,6 +835,10 @@ if (!window.__yrSpaShell) {
     try {
       const [{ res, data }] = await Promise.all([drawPromise, minSpin]);
       if (!res.ok || !data.winner) {
+        // A 409 means another draw won the race; resync instead of revealing.
+        // isRolling must clear first or the resynced winner won't re-render.
+        isRolling = false;
+        if (data.session) await refreshChatGiveaway();
         showEngageError(data.error || "Could not draw a winner.");
         return;
       }

@@ -186,7 +186,7 @@ describe("Chat Giveaways (Postgres)", () => {
           winner_finalized_at = CASE WHEN ${finalized} THEN now() ELSE NULL END,
           winner_finalized_by = CASE WHEN ${finalized} THEN ${ownerC}::uuid ELSE NULL END,
           status='completed', stopped_at=COALESCE(stopped_at, now())
-      WHERE id=${s.id} RETURNING id, drawn_at`;
+      WHERE id=${s.id} RETURNING id, drawn_at, winner_entry_id`;
     return row;
   }
   const ms = (v) => new Date(v).getTime();
@@ -248,6 +248,94 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(outcome.winnerConfirmed).toBe(true);
     const [row] = await sql`SELECT winner_confirmed_at FROM chat_giveaway_sessions WHERE id=${d.id}`;
     expect(ms(row.winner_confirmed_at)).toBe(Date.parse(occurredAt));
+  });
+
+  // The draw/finalize CAS statements, verbatim from the dashboard handler: the
+  // UPDATE is the arbiter, so a stale or racing request must match zero rows.
+  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
+            winner_finalized_at = NULL, winner_finalized_by = NULL,
+            winner_response_required = $4, winner_response_timeout_seconds = $5,
+            status = 'completed', stopped_at = COALESCE(stopped_at, now())`;
+  const initialDraw = (sessionId, winnerId, required = false, timeout = null) => run(
+    `UPDATE chat_giveaway_sessions ${DRAW_SET}
+     WHERE id = $1 AND site_id = $3 AND winner_entry_id IS NULL
+     RETURNING id, drawn_at`,
+    [sessionId, winnerId, siteC, required, timeout],
+  );
+  const reroll = (sessionId, winnerId, expectedId, expectedDrawnAt, required = false, timeout = null) => run(
+    `UPDATE chat_giveaway_sessions ${DRAW_SET}
+     WHERE id = $1 AND site_id = $3
+       AND winner_entry_id = $6
+       AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $7::timestamptz)
+       AND winner_finalized_at IS NULL
+     RETURNING id, drawn_at`,
+    [sessionId, winnerId, siteC, required, timeout, expectedId, expectedDrawnAt],
+  );
+  const finalize = (sessionId, winnerId, drawnAt) => run(
+    `UPDATE chat_giveaway_sessions
+        SET winner_finalized_at = now(), winner_finalized_by = $3
+      WHERE id = $1 AND site_id = $2
+        AND winner_entry_id = $4
+        AND date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $5::timestamptz)
+        AND winner_finalized_at IS NULL
+        AND (winner_response_required IS NOT TRUE OR winner_confirmed_at IS NOT NULL)
+      RETURNING id`,
+    [sessionId, siteC, ownerC, winnerId, drawnAt],
+  );
+
+  async function freshSessionWithEntries(...userIds) {
+    await sql`DELETE FROM chat_giveaway_sessions WHERE site_id = ${siteC}`;
+    const s = await startSession(siteC);
+    for (const uid of userIds) {
+      await sql`INSERT INTO chat_giveaway_entries (giveaway_session_id, provider_user_id, username) VALUES (${s.id}, ${uid}, ${`u-${uid}`})`;
+    }
+    const es = await sql`SELECT id, provider_user_id FROM chat_giveaway_entries WHERE giveaway_session_id = ${s.id}`;
+    return { session: s, entries: es };
+  }
+
+  integrationIt("two concurrent initial draws: exactly one wins the compare-and-swap", async () => {
+    const { session, entries } = await freshSessionWithEntries("x1", "x2");
+    const [a, b] = await Promise.all([
+      initialDraw(session.id, entries[0].id),
+      initialDraw(session.id, entries[1].id),
+    ]);
+    expect(a.length + b.length).toBe(1);
+    const [row] = await sql`SELECT winner_entry_id FROM chat_giveaway_sessions WHERE id = ${session.id}`;
+    expect([entries[0].id, entries[1].id]).toContain(row.winner_entry_id);
+  });
+
+  integrationIt("a stale re-roll matches no row and leaves the newer winner untouched", async () => {
+    const { session, entries } = await freshSessionWithEntries("x1", "x2", "x3");
+    const [a] = await initialDraw(session.id, entries[0].id);
+    const drawnA = new Date(ms(a.drawn_at)).toISOString();
+    const [b] = await reroll(session.id, entries[1].id, entries[0].id, drawnA);
+    expect(b).toBeTruthy();
+    // A client still holding draw A tries to re-roll: no row matches.
+    const stale = await reroll(session.id, entries[2].id, entries[0].id, drawnA);
+    expect(stale).toHaveLength(0);
+    const [row] = await sql`SELECT winner_entry_id FROM chat_giveaway_sessions WHERE id = ${session.id}`;
+    expect(row.winner_entry_id).toBe(entries[1].id);
+  });
+
+  integrationIt("a re-roll cannot overwrite a finalized draw", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 10, finalized: true });
+    const drawnAt = new Date(ms(d.drawn_at)).toISOString();
+    const res = await reroll(d.id, d.winner_entry_id, d.winner_entry_id, drawnAt);
+    expect(res).toHaveLength(0);
+  });
+
+  integrationIt("finalize CAS: a stale identity cannot confirm the winner that replaced it", async () => {
+    const { session, entries } = await freshSessionWithEntries("x1", "x2");
+    const [a] = await initialDraw(session.id, entries[0].id);
+    const drawnA = new Date(ms(a.drawn_at)).toISOString();
+    const [b] = await reroll(session.id, entries[1].id, entries[0].id, drawnA);
+    const drawnB = new Date(ms(b.drawn_at)).toISOString();
+    // Confirming the replaced winner A is a no-op: zero rows.
+    expect(await finalize(session.id, entries[0].id, drawnA)).toHaveLength(0);
+    const [mid] = await sql`SELECT winner_finalized_at FROM chat_giveaway_sessions WHERE id = ${session.id}`;
+    expect(mid.winner_finalized_at).toBeNull();
+    // The current winner B finalizes normally.
+    expect(await finalize(session.id, entries[1].id, drawnB)).toHaveLength(1);
   });
 
   integrationIt("disconnecting Kick stops collection, clears readiness, and preserves history", async () => {
