@@ -198,7 +198,11 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-claim-box").hidden).toBe(false);
     expect($id("gw-modal-claim-box").hidden).toBe(false);
     expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
-    expect($id("gw-claim-countdown").textContent).toBe("30s");
+    // The roulette consumed part of the 30s window: the countdown derives
+    // from drawn_at, not the checkbox duration.
+    const shown = parseInt($id("gw-claim-countdown").textContent, 10);
+    expect(shown).toBeLessThanOrEqual(27);
+    expect(shown).toBeGreaterThanOrEqual(24);
     for (const b of confirmButtons()) {
       expect(b.disabled).toBe(true);
       expect(b.title).toBe("Waiting for the winner to respond in chat");
@@ -398,6 +402,21 @@ describe("Giveaway draw flow", () => {
     for (const b of confirmButtons()) expect(b.disabled).toBe(false);
   });
 
+  it("a reload mid-window keeps counting down from the same deadline", async () => {
+    await boot();
+    $id("gw-opt-claim-req").checked = true;
+    await drawWinner();
+    const atReveal = parseInt($id("gw-claim-countdown").textContent, 10);
+    await clock.tick(5000);
+    leave();
+    enter();
+    await clock.tick(50);
+    // ~5s later than the reveal value, from the same drawn_at deadline.
+    const afterReload = parseInt($id("gw-claim-countdown").textContent, 10);
+    expect(Math.abs(afterReload - (atReveal - 5))).toBeLessThanOrEqual(1);
+    expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
+  });
+
   it("re-roll sends the current draw options to the server", async () => {
     await boot();
     await drawWinner();
@@ -412,8 +431,10 @@ describe("Giveaway draw flow", () => {
     expect(draws[1].body.responseTimeoutSeconds).toBe(90);
     expect(server.session.winner_response_required).toBe(true);
     expect(server.session.winner_response_timeout_seconds).toBe(90);
-    // The new draw's rules drive the UI.
+    // The new draw's rules drive the UI; the roulette consumed a few seconds.
     expect($id("gw-claim-box").hidden).toBe(false);
-    expect($id("gw-claim-countdown").textContent).toBe("90s");
+    const shown = parseInt($id("gw-claim-countdown").textContent, 10);
+    expect(shown).toBeLessThanOrEqual(88);
+    expect(shown).toBeGreaterThanOrEqual(83);
   });
 });

@@ -23,6 +23,10 @@ export interface ChatGiveawaySession {
   drawn_at: string | null;
   winner_confirmed_at: string | null;
   winner_confirmation_message: string | null;
+  winner_finalized_at: string | null;
+  winner_finalized_by: string | null;
+  winner_response_required: boolean | null;
+  winner_response_timeout_seconds: number | null;
   created_at: string;
 }
 
@@ -101,7 +105,11 @@ interface RoutedSessionRow {
 /**
  * Sessions a provider channel's chat currently feeds: the active session (for
  * entries) and the most recent completed one still awaiting winner
- * confirmation (for the claim flow). Empty when the channel is not routable.
+ * confirmation (for the claim flow). A completed session only routes while a
+ * required winner response is still possible — the draw-time rule and window,
+ * plus a 5-minute routing grace so a late-delivered webhook carrying an
+ * on-time provider timestamp can still land; the UPDATE below enforces the
+ * real deadline against `drawn_at`. Empty when the channel is not routable.
  */
 async function routedSessionsForChannel(
   run: SqlRunner, provider: ProviderId, externalChannelId: string,
@@ -115,7 +123,10 @@ async function routedSessionsForChannel(
         AND (
           gs.status = 'active'
           OR (gs.status = 'completed' AND gs.winner_entry_id IS NOT NULL
-              AND gs.winner_confirmed_at IS NULL AND gs.drawn_at > now() - interval '15 minutes')
+              AND gs.winner_response_required = true
+              AND gs.winner_confirmed_at IS NULL AND gs.winner_finalized_at IS NULL
+              AND gs.drawn_at IS NOT NULL
+              AND gs.drawn_at + make_interval(secs => COALESCE(gs.winner_response_timeout_seconds, 60)) > now() - interval '5 minutes')
         )
       ORDER BY gs.created_at DESC
       LIMIT 2`,
@@ -179,16 +190,33 @@ export async function ingestChatGiveawayMessage(
       if (inserted.length > 0) outcome.entered = true;
       else outcome.duplicate = true;
     } else if (session.winner_provider_user_id && session.winner_provider_user_id === input.senderUserId) {
-      await run(
+      // The winner's reply counts only while its provider timestamp sits
+      // inside the draw's response window [drawn_at, drawn_at + timeout].
+      const at = resolveChatEventTime(input.occurredAt).toISOString();
+      const confirmed = (await run(
         `UPDATE chat_giveaway_sessions
-            SET winner_confirmed_at = now(), winner_confirmation_message = $2
-          WHERE id = $1 AND winner_confirmed_at IS NULL`,
-        [session.id, input.content.slice(0, 500)],
-      );
-      outcome.winnerConfirmed = true;
+            SET winner_confirmed_at = $3::timestamptz, winner_confirmation_message = $2
+          WHERE id = $1
+            AND winner_response_required = true
+            AND winner_confirmed_at IS NULL
+            AND winner_finalized_at IS NULL
+            AND drawn_at IS NOT NULL
+            AND $3::timestamptz >= drawn_at
+            AND $3::timestamptz <= drawn_at + make_interval(secs => COALESCE(winner_response_timeout_seconds, 60))
+          RETURNING id`,
+        [session.id, input.content.slice(0, 500), at],
+      )) as { id: string }[];
+      outcome.winnerConfirmed = confirmed.length > 0;
     }
   }
   return outcome;
+}
+
+/** Provider event time if valid and not in the future (60s skew); otherwise the processing time. */
+export function resolveChatEventTime(occurredAt: string | null | undefined, now = new Date()): Date {
+  const t = occurredAt ? Date.parse(occurredAt) : NaN;
+  if (!Number.isFinite(t) || t > now.getTime() + 60_000) return now;
+  return new Date(t);
 }
 
 /** Extract the routing/identity fields from a Kick chat webhook payload. */

@@ -22,10 +22,13 @@ const integrationIt = (name, fn) => (url ? it : it.skip)(name, fn, 60000);
 
 const ownerA = crypto.randomUUID();
 const ownerB = crypto.randomUUID();
+const ownerC = crypto.randomUUID();
 const siteA = crypto.randomUUID();
 const siteB = crypto.randomUUID();
+const siteC = crypto.randomUUID();
 const channelA = `cg-${crypto.randomUUID()}`;
 const channelB = `cg-${crypto.randomUUID()}`;
+const channelC = `cg-${crypto.randomUUID()}`;
 let sql;
 const run = (text, params = []) => sql.unsafe(text, params);
 
@@ -48,11 +51,13 @@ beforeAll(async () => {
   sql = postgres(url, { max: 3, prepare: false });
   await sql`INSERT INTO users (id, email, status, email_verified) VALUES
     (${ownerA}, ${`${ownerA}@test.example`}, 'active', true),
-    (${ownerB}, ${`${ownerB}@test.example`}, 'active', true)`;
+    (${ownerB}, ${`${ownerB}@test.example`}, 'active', true),
+    (${ownerC}, ${`${ownerC}@test.example`}, 'active', true)`;
   await sql`INSERT INTO sites (id, user_id, slug, name, published, is_draft) VALUES
     (${siteA}, ${ownerA}, ${`a-${siteA.slice(0, 30)}`}, 'Site A', true, false),
-    (${siteB}, ${ownerB}, ${`b-${siteB.slice(0, 30)}`}, 'Site B', true, false)`;
-  for (const [userId, siteId, channel] of [[ownerA, siteA, channelA], [ownerB, siteB, channelB]]) {
+    (${siteB}, ${ownerB}, ${`b-${siteB.slice(0, 30)}`}, 'Site B', true, false),
+    (${siteC}, ${ownerC}, ${`c-${siteC.slice(0, 30)}`}, 'Site C', true, false)`;
+  for (const [userId, siteId, channel] of [[ownerA, siteA, channelA], [ownerB, siteB, channelB], [ownerC, siteC, channelC]]) {
     const connectionId = await linkCreatorConnection(run, {
       userId, provider: "kick", externalUserId: channel, username: `streamer-${channel.slice(-4)}`,
       accessTokenEnc: "enc", refreshTokenEnc: null, tokenExpiresAt: null,
@@ -66,8 +71,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!sql) return;
-  await sql`DELETE FROM sites WHERE id IN (${siteA}, ${siteB})`;
-  await sql`DELETE FROM users WHERE id IN (${ownerA}, ${ownerB})`;
+  await sql`DELETE FROM sites WHERE id IN (${siteA}, ${siteB}, ${siteC})`;
+  await sql`DELETE FROM users WHERE id IN (${ownerA}, ${ownerB}, ${ownerC})`;
   await sql.end({ timeout: 0 });
 });
 
@@ -85,6 +90,7 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(delivery.checkedAt).not.toBeNull();
 
     await markChannelEventSubscriptions(run, siteA, "kick", { rewardEvents: true, chatEvents: true });
+    await markChannelEventSubscriptions(run, siteC, "kick", { rewardEvents: true, chatEvents: true });
     expect(await loadChatGiveawayConnection(run, siteA)).toMatchObject({ connected: true, chatReady: true });
     delivery = await loadChannelEventDelivery(run, siteA);
     expect(delivery.chatEventsSubscribedAt).not.toBeNull();
@@ -163,6 +169,85 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(reread.winner_finalized_by).toBe(ownerA);
     expect(reread.winner_response_required).toBe(true);
     expect(reread.winner_response_timeout_seconds).toBe(90);
+  });
+
+  // A completed draw awaiting a required response: creates a finished session
+  // on site C whose winner is provider user "wc".
+  async function completedDraw({ drawnAgoSecs = 20, required = true, timeout = 30, finalized = false } = {}) {
+    // Earlier draws keep routing within the 5-minute grace window; clear them
+    // so each case exercises exactly one session.
+    await sql`DELETE FROM chat_giveaway_sessions WHERE site_id = ${siteC}`;
+    const s = await startSession(siteC);
+    await sql`INSERT INTO chat_giveaway_entries (giveaway_session_id, provider_user_id, username) VALUES (${s.id}, 'wc', 'winner-user')`;
+    const [e] = await sql`SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=${s.id} AND provider_user_id='wc'`;
+    const [row] = await sql`UPDATE chat_giveaway_sessions
+      SET winner_entry_id=${e.id}, drawn_at = now() - make_interval(secs => ${drawnAgoSecs}),
+          winner_response_required=${required}, winner_response_timeout_seconds=${timeout},
+          winner_finalized_at = CASE WHEN ${finalized} THEN now() ELSE NULL END,
+          winner_finalized_by = CASE WHEN ${finalized} THEN ${ownerC}::uuid ELSE NULL END,
+          status='completed', stopped_at=COALESCE(stopped_at, now())
+      WHERE id=${s.id} RETURNING id, drawn_at`;
+    return row;
+  }
+  const ms = (v) => new Date(v).getTime();
+  const winnerMsg = (occurredAt) => ({ ...msg(channelC, "wc", "yes here", "winner-user"), occurredAt });
+
+  integrationIt("a winner reply inside the window confirms, stamped with provider time", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 20, timeout: 30 });
+    const occurredAt = new Date(ms(d.drawn_at) + 10_000).toISOString();
+    const outcome = await ingestChatGiveawayMessage(run, winnerMsg(occurredAt));
+    expect(outcome.winnerConfirmed).toBe(true);
+    const [row] = await sql`SELECT winner_confirmed_at, winner_confirmation_message FROM chat_giveaway_sessions WHERE id=${d.id}`;
+    expect(ms(row.winner_confirmed_at)).toBe(Date.parse(occurredAt));
+    expect(row.winner_confirmation_message).toBe("yes here");
+  });
+
+  integrationIt("the deadline is inclusive at the boundary and rejects past it", async () => {
+    const onTime = await completedDraw({ drawnAgoSecs: 20, timeout: 30 });
+    const exact = new Date(ms(onTime.drawn_at) + 30_000).toISOString();
+    expect((await ingestChatGiveawayMessage(run, winnerMsg(exact))).winnerConfirmed).toBe(true);
+
+    const late = await completedDraw({ drawnAgoSecs: 20, timeout: 30 });
+    const over = new Date(ms(late.drawn_at) + 31_000).toISOString();
+    expect((await ingestChatGiveawayMessage(run, winnerMsg(over))).winnerConfirmed).toBe(false);
+    const [row] = await sql`SELECT winner_confirmed_at FROM chat_giveaway_sessions WHERE id=${late.id}`;
+    expect(row.winner_confirmed_at).toBeNull();
+  });
+
+  integrationIt("an omitted timestamp falls back to now and loses an already-closed window", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 40, timeout: 30 });
+    const outcome = await ingestChatGiveawayMessage(run, { ...msg(channelC, "wc", "late", "winner-user") });
+    expect(outcome.routed).toBe(true); // still inside the 5-minute routing grace
+    expect(outcome.winnerConfirmed).toBe(false);
+    const [row] = await sql`SELECT winner_confirmed_at, winner_confirmation_message FROM chat_giveaway_sessions WHERE id=${d.id}`;
+    expect(row.winner_confirmed_at).toBeNull();
+    expect(row.winner_confirmation_message).toBeNull();
+  });
+
+  integrationIt("a draw that never required a response cannot be chat-confirmed at all", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 10, required: false, timeout: null });
+    const outcome = await ingestChatGiveawayMessage(run, winnerMsg(new Date().toISOString()));
+    expect(outcome.routed).toBe(false); // nothing routable: no active session, no pending claim
+    expect(outcome.winnerConfirmed).toBe(false);
+    const [row] = await sql`SELECT winner_confirmed_at FROM chat_giveaway_sessions WHERE id=${d.id}`;
+    expect(row.winner_confirmed_at).toBeNull();
+  });
+
+  integrationIt("a finalized draw stops routing the winner's replies", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 10, timeout: 60, finalized: true });
+    const outcome = await ingestChatGiveawayMessage(run, winnerMsg(new Date().toISOString()));
+    expect(outcome.winnerConfirmed).toBe(false);
+    const [row] = await sql`SELECT winner_confirmed_at FROM chat_giveaway_sessions WHERE id=${d.id}`;
+    expect(row.winner_confirmed_at).toBeNull();
+  });
+
+  integrationIt("a late-delivered webhook still lands when its provider time was on time", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 60, timeout: 30 });
+    const occurredAt = new Date(ms(d.drawn_at) + 20_000).toISOString();
+    const outcome = await ingestChatGiveawayMessage(run, winnerMsg(occurredAt));
+    expect(outcome.winnerConfirmed).toBe(true);
+    const [row] = await sql`SELECT winner_confirmed_at FROM chat_giveaway_sessions WHERE id=${d.id}`;
+    expect(ms(row.winner_confirmed_at)).toBe(Date.parse(occurredAt));
   });
 
   integrationIt("disconnecting Kick stops collection, clears readiness, and preserves history", async () => {

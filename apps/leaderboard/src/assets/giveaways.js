@@ -840,8 +840,9 @@ if (!window.__yrSpaShell) {
       playWinnerSound();
       const rules = drawRules();
       if (rules.required) {
-        // The draw just happened, so the full window starts at the reveal.
-        startClaimTimer(winner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.timeoutSecs });
+        // The roulette consumed part of the window: the countdown derives from
+        // drawn_at, the same clock a reload uses.
+        startClaimTimer(winner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.remainingSecs });
       } else if ($("gw-claim-box")) {
         $("gw-claim-box").hidden = true;
       }
