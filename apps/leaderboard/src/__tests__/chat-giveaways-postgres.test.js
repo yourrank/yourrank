@@ -153,13 +153,16 @@ describe("Chat Giveaways (Postgres)", () => {
     const [e] = await sql`SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=${a.id} AND provider_user_id='u1'`;
     const [s] = await sql`UPDATE chat_giveaway_sessions
       SET winner_entry_id=${e.id}, drawn_at=now(), winner_finalized_at=now(), winner_finalized_by=${ownerA},
+          winner_response_required=true, winner_response_timeout_seconds=90,
           status='completed'
       WHERE id=${a.id} RETURNING winner_finalized_at, winner_finalized_by`;
     expect(s.winner_finalized_at).not.toBeNull();
     expect(s.winner_finalized_by).toBe(ownerA);
-    const [reread] = await sql`SELECT winner_finalized_at, winner_finalized_by FROM chat_giveaway_sessions WHERE id=${a.id}`;
+    const [reread] = await sql`SELECT winner_finalized_at, winner_finalized_by, winner_response_required, winner_response_timeout_seconds FROM chat_giveaway_sessions WHERE id=${a.id}`;
     expect(reread.winner_finalized_at).not.toBeNull();
     expect(reread.winner_finalized_by).toBe(ownerA);
+    expect(reread.winner_response_required).toBe(true);
+    expect(reread.winner_response_timeout_seconds).toBe(90);
   });
 
   integrationIt("disconnecting Kick stops collection, clears readiness, and preserves history", async () => {

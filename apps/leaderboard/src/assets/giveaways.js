@@ -50,11 +50,20 @@ if (!window.__yrSpaShell) {
   let isRolling = false;
   let pastWinners = new Set();
   let modalOpenTimer = null;
-  // Per-draw claim state: `responseRequired` is captured from the toggle at
-  // roll time; `claimExpired` flips when the response window runs out. Final
-  // acceptance is server truth only (session.winner_finalized_at).
-  let responseRequired = false;
+  // Per-draw claim state is derived from the session row the server persists
+  // at draw time (winner_response_required / winner_response_timeout_seconds),
+  // so a reload or another device renders the same rule. `claimExpired` mirrors
+  // the derived window state; final acceptance is server truth only
+  // (session.winner_finalized_at).
   let claimExpired = false;
+
+  function drawRules() {
+    const required = Boolean(session?.winner_response_required);
+    const timeoutSecs = Number(session?.winner_response_timeout_seconds) || 60;
+    const drawnAt = session?.drawn_at ? Date.parse(session.drawn_at) : NaN;
+    const elapsed = Number.isFinite(drawnAt) ? Math.max(0, Math.floor((Date.now() - drawnAt) / 1000)) : 0;
+    return { required, timeoutSecs, remainingSecs: Math.max(0, timeoutSecs - elapsed) };
+  }
 
   function pastWinnersKey() {
     return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
@@ -708,7 +717,9 @@ if (!window.__yrSpaShell) {
   // live draws, polls, and reloads all land on the same button treatment.
   function updateWinnerActions() {
     const finalized = Boolean(session?.winner_finalized_at);
-    const awaitingResponse = !finalized && responseRequired && !winnerClaimed;
+    const rules = drawRules();
+    if (rules.required && !winnerClaimed && rules.remainingSecs <= 0) claimExpired = true;
+    const awaitingResponse = !finalized && rules.required && !winnerClaimed;
     for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
       const b = $(id);
       if (!b) continue;
@@ -750,7 +761,7 @@ if (!window.__yrSpaShell) {
   async function confirmWinner() {
     if (!currentWinner || session?.winner_finalized_at) return;
     // A required chat response can never be bypassed by the confirm button.
-    if (responseRequired && !winnerClaimed) return;
+    if (drawRules().required && !winnerClaimed) return;
     clearEngageError();
     try {
       const res = await chatApi("/finalize", { sessionId: session.id, siteId: siteId || undefined });
@@ -789,7 +800,6 @@ if (!window.__yrSpaShell) {
     const track = $("gw-roller-track");
     const showcase = $("gw-winner-stage");
 
-    responseRequired = Boolean($("gw-opt-claim-req")?.checked);
     claimExpired = false;
     isRolling = true;
     rollBtn?.setAttribute("disabled", "true");
@@ -801,7 +811,13 @@ if (!window.__yrSpaShell) {
 
     // The server draws the winner immediately; the roulette only visualizes it.
     const drawPromise = (async () => {
-      const res = await chatApi("/draw", { sessionId: session.id, entryIds: pool.map((e) => e.id), siteId: siteId || undefined });
+      const res = await chatApi("/draw", {
+        sessionId: session.id,
+        entryIds: pool.map((e) => e.id),
+        siteId: siteId || undefined,
+        responseRequired: Boolean($("gw-opt-claim-req")?.checked),
+        responseTimeoutSeconds: parseInt($("gw-opt-claim-duration")?.value || "60", 10),
+      });
       const data = await responseData(res);
       return { res, data };
     })();
@@ -822,8 +838,10 @@ if (!window.__yrSpaShell) {
       applyState({ connection, ...data });
       displayWinner(winner);
       playWinnerSound();
-      if (responseRequired) {
-        startClaimTimer(winner);
+      const rules = drawRules();
+      if (rules.required) {
+        // The draw just happened, so the full window starts at the reveal.
+        startClaimTimer(winner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.timeoutSecs });
       } else if ($("gw-claim-box")) {
         $("gw-claim-box").hidden = true;
       }
@@ -851,14 +869,22 @@ if (!window.__yrSpaShell) {
     if (idle) idle.hidden = true;
     if (roulette && !isRolling) roulette.hidden = true;
     if (currentWinner.id !== previousWinnerId && !isRolling) {
-      // A reloaded winner starts fresh: no stale per-draw claim flags.
-      responseRequired = false;
-      claimExpired = false;
+      // A reloaded winner derives its claim state from the session row:
+      // confirmed -> verified boxes; a required-but-unanswered draw resumes
+      // the countdown from drawn_at; anything else has no claim UI.
       fillWinnerViews(currentWinner);
       if (showcase) showcase.hidden = false;
-      const showClaim = Boolean(session?.winner_confirmed_at);
-      if ($("gw-claim-box")) $("gw-claim-box").hidden = !showClaim;
-      if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = !showClaim;
+      const rules = drawRules();
+      claimExpired = rules.required && !winnerClaimed && rules.remainingSecs <= 0;
+      if (session?.winner_confirmed_at) {
+        if ($("gw-claim-box")) $("gw-claim-box").hidden = false;
+        if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = false;
+      } else if (rules.required) {
+        startClaimTimer(currentWinner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.remainingSecs });
+      } else {
+        if ($("gw-claim-box")) $("gw-claim-box").hidden = true;
+        if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = true;
+      }
     }
     if (session?.winner_confirmed_at && !winnerClaimed) {
       confirmWinnerLiveClaim(session.winner_confirmation_message || "");
@@ -899,8 +925,9 @@ if (!window.__yrSpaShell) {
     winnerClaimed = false;
     claimExpired = false;
     fillWinnerViews(winner);
-    if ($("gw-claim-box")) $("gw-claim-box").hidden = !responseRequired;
-    setModalClaimVisible(responseRequired);
+    const required = drawRules().required;
+    if ($("gw-claim-box")) $("gw-claim-box").hidden = !required;
+    setModalClaimVisible(required);
     updateWinnerActions();
     if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
     if ($("gw-roulette")) $("gw-roulette").hidden = true;
@@ -990,10 +1017,11 @@ if (!window.__yrSpaShell) {
     if (box) box.hidden = !visible;
   }
 
-  function startClaimTimer(winner) {
-    const totalSecs = parseInt($("gw-opt-claim-duration")?.value || "60", 10);
+  function startClaimTimer(winner, options = {}) {
+    const totalSecs = Number(options.totalSecs) || parseInt($("gw-opt-claim-duration")?.value || "60", 10);
+    const remaining = options.remainingSecs === undefined ? totalSecs : Math.max(0, Number(options.remainingSecs) || 0);
     winnerClaimed = false;
-    claimSecondsRemaining = totalSecs;
+    claimSecondsRemaining = remaining;
 
     const setInitial = (boxId, statusId, dotId, countId, fillId) => {
       const box = $(boxId);
@@ -1009,15 +1037,43 @@ if (!window.__yrSpaShell) {
         status.classList.add("gw-claim-status--waiting");
       }
       if (dot) dot.className = "gw-claim-dot gw-claim-dot--waiting";
-      if (count) count.textContent = `${totalSecs}s`;
+      if (count) count.textContent = `${remaining}s`;
       if (fill) {
-        fill.style.width = "100%";
+        fill.style.width = `${Math.max(0, (remaining / totalSecs) * 100)}%`;
         fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning", "gw-claim-bar-fill--expired");
       }
     };
 
     setInitial("gw-claim-box", "gw-claim-status", "gw-claim-dot", "gw-claim-countdown", "gw-claim-fill");
     setInitial("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-countdown", "gw-modal-claim-fill");
+
+    // The window may already be over (e.g. reloaded long after the draw):
+    // render the expired state immediately instead of running a timer.
+    if (remaining <= 0) {
+      for (const [statusId, dotId, fillId] of [
+        ["gw-claim-status", "gw-claim-dot", "gw-claim-fill"],
+        ["gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill"],
+      ]) {
+        const status = $(statusId);
+        const dot = $(dotId);
+        const fill = $(fillId);
+        if (status) {
+          status.textContent = `Winner did not respond within ${totalSecs} seconds`;
+          status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
+          status.classList.add("gw-claim-status--expired");
+        }
+        if (dot) dot.className = "gw-claim-dot gw-claim-dot--expired";
+        if (fill) {
+          fill.style.width = "0%";
+          fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
+          fill.classList.add("gw-claim-bar-fill--expired");
+        }
+      }
+      claimExpired = true;
+      clearInterval(claimTimerInterval);
+      updateWinnerActions();
+      return;
+    }
 
     clearInterval(claimTimerInterval);
     claimTimerInterval = setInterval(() => {
@@ -1680,7 +1736,7 @@ if (!window.__yrSpaShell) {
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
-    responseRequired = false; claimExpired = false;
+    claimExpired = false;
     init();
     initEventsHub();
   }
@@ -1690,7 +1746,7 @@ if (!window.__yrSpaShell) {
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     clearTimeout(modalOpenTimer); modalOpenTimer = null;
-    responseRequired = false; claimExpired = false;
+    claimExpired = false;
     // Remove the document-level drawer focus trap (added in wireEvents).
     document.removeEventListener("keydown", trapEventDrawerFocus);
   }

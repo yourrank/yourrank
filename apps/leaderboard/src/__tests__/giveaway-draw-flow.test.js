@@ -36,6 +36,9 @@ globalThis.clearInterval = (id) => cancelTimer(id);
 globalThis.requestAnimationFrame = (cb) => scheduleTimer(() => cb(now), 16, 0);
 globalThis.cancelAnimationFrame = (id) => cancelTimer(id);
 Object.defineProperty(globalThis, "performance", { value: { now: () => now }, configurable: true });
+// Server timestamps (drawn_at) are generated inside the fake API and compared
+// against Date.now() by the client, so both must share the virtual clock.
+Date.now = () => now;
 
 async function flushMicrotasks() {
   for (let i = 0; i < 6; i++) await Promise.resolve();
@@ -84,7 +87,7 @@ const ENTRANTS = [
 
 const server = { session: null, entries: [], requests: [] };
 function resetServer({ session } = {}) {
-  server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, created_at: "2026-09-28T00:00:00Z" };
+  server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, created_at: "2026-09-28T00:00:00Z" };
   server.entries = ENTRANTS.map((e) => ({ ...e }));
   server.requests.length = 0;
 }
@@ -109,9 +112,13 @@ globalThis.fetch = async (input, init = {}) => {
     const winner = pool[pool.length - 1] || null;
     if (!winner) return json({ ok: false, error: "No eligible entrants to draw from." }, 409);
     Object.assign(server.session, {
-      winner_entry_id: winner.id, drawn_at: "2026-09-28T00:01:00Z", status: "completed",
+      winner_entry_id: winner.id, drawn_at: new Date(now).toISOString(), status: "completed",
       winner_confirmed_at: null, winner_confirmation_message: null,
       winner_finalized_at: null, winner_finalized_by: null,
+      winner_response_required: body?.responseRequired === true,
+      winner_response_timeout_seconds: body?.responseRequired === true
+        ? (Number.isInteger(body.responseTimeoutSeconds) && body.responseTimeoutSeconds >= 10 && body.responseTimeoutSeconds <= 600 ? body.responseTimeoutSeconds : 60)
+        : null,
     });
     return json({ ok: true, session: server.session, entries: server.entries, winner });
   }
@@ -140,12 +147,16 @@ async function boot() {
   expect($id("gw-btn-roll").disabled).toBe(false);
 }
 
-async function drawWinner() {
-  $id("gw-btn-roll").click();
+async function tickUntilReveal() {
   // Advance until the reveal lands; stop right away so later assertions see
   // the state exactly at reveal time (e.g. the claim countdown's first value).
   for (let i = 0; i < 90 && $id("gw-winner-stage").hidden; i++) await clock.tick(100);
   expect($id("gw-winner-stage").hidden).toBe(false);
+}
+
+async function drawWinner() {
+  $id("gw-btn-roll").click();
+  await tickUntilReveal();
 }
 
 describe("Giveaway draw flow", () => {
@@ -304,5 +315,105 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-winner-modal").hidden).toBe(true);
     await clock.tick(950);
     expect($id("gw-winner-modal").hidden).toBe(false);
+  });
+
+  it("a reload during a required response window resumes the claim, not the confirm", async () => {
+    await boot();
+    $id("gw-opt-claim-req").checked = true;
+    await drawWinner();
+    leave();
+    enter();
+    await clock.tick(50);
+    expect($id("gw-claim-box").hidden).toBe(false);
+    expect($id("gw-modal-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-status").textContent).toBe("Waiting for winner response…");
+    for (const b of confirmButtons()) {
+      expect(b.disabled).toBe(true);
+      expect(b.title).toContain("Waiting for the winner");
+    }
+    expect($id("gw-winner-modal").hidden).toBe(true);
+  });
+
+  it("the countdown on reload is derived from drawn_at, not the full window", async () => {
+    await boot();
+    $id("gw-opt-claim-req").checked = true;
+    await drawWinner();
+    // Reach exactly 10s after the server's drawn_at before reloading.
+    const drawnAt = Date.parse(server.session.drawn_at);
+    await clock.tick(Math.max(0, drawnAt + 10_000 - now));
+    leave();
+    enter();
+    await clock.tick(50);
+    expect($id("gw-claim-countdown").textContent).toBe("20s");
+    await clock.tick(5000);
+    expect($id("gw-claim-countdown").textContent).toBe("15s");
+  });
+
+  it("a reload after the response window closed renders the expired state immediately", async () => {
+    await boot();
+    $id("gw-opt-claim-req").checked = true;
+    await drawWinner();
+    leave();
+    await clock.tick(31_000);
+    enter();
+    await clock.tick(50);
+    expect($id("gw-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-status").textContent).toBe("Winner did not respond within 30 seconds");
+    for (const b of rerollButtons()) expect(b.classList.contains("btn--accent")).toBe(true);
+    for (const b of confirmButtons()) {
+      expect(b.disabled).toBe(true);
+      expect(b.classList.contains("btn--accent")).toBe(false);
+    }
+    // No countdown was restarted.
+    await clock.tick(2000);
+    expect($id("gw-claim-status").textContent).toBe("Winner did not respond within 30 seconds");
+  });
+
+  it("a reload after the winner responded in chat renders the verified state", async () => {
+    await boot();
+    $id("gw-opt-claim-req").checked = true;
+    await drawWinner();
+    server.session.winner_confirmed_at = new Date(now).toISOString();
+    server.session.winner_confirmation_message = "here!";
+    leave();
+    enter();
+    await clock.tick(50);
+    expect($id("gw-claim-status").textContent).toContain("Responded:");
+    expect($id("gw-claim-countdown").textContent).toBe("Verified");
+    expect($id("gw-modal-verify-chip").hidden).toBe(false);
+    for (const b of confirmButtons()) {
+      expect(b.disabled).toBe(false);
+      expect(b.classList.contains("btn--accent")).toBe(true);
+    }
+  });
+
+  it("a reload with no response requirement keeps claim boxes hidden and confirm ready", async () => {
+    await boot();
+    await drawWinner();
+    leave();
+    enter();
+    await clock.tick(50);
+    expect($id("gw-claim-box").hidden).toBe(true);
+    expect($id("gw-modal-claim-box").hidden).toBe(true);
+    for (const b of confirmButtons()) expect(b.disabled).toBe(false);
+  });
+
+  it("re-roll sends the current draw options to the server", async () => {
+    await boot();
+    await drawWinner();
+    expect(requestsTo("/api/giveaways/chat/draw").at(-1).body.responseRequired).toBe(false);
+    $id("gw-opt-claim-req").checked = true;
+    $id("gw-opt-claim-duration").value = "90";
+    $id("gw-btn-reroll").click();
+    await tickUntilReveal();
+    const draws = requestsTo("/api/giveaways/chat/draw");
+    expect(draws).toHaveLength(2);
+    expect(draws[1].body.responseRequired).toBe(true);
+    expect(draws[1].body.responseTimeoutSeconds).toBe(90);
+    expect(server.session.winner_response_required).toBe(true);
+    expect(server.session.winner_response_timeout_seconds).toBe(90);
+    // The new draw's rules drive the UI.
+    expect($id("gw-claim-box").hidden).toBe(false);
+    expect($id("gw-claim-countdown").textContent).toBe("90s");
   });
 });

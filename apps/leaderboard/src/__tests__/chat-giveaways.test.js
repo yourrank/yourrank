@@ -253,12 +253,48 @@ describe("Chat Giveaway API", () => {
     const data = await res.json();
     // Client eligibility hints can only narrow the persisted pool, never add to it.
     expect(data.winner.id).toBe("e2");
-    expect(update.params).toEqual(["gs-1", "e2", siteA.id]);
+    expect(update.params).toEqual(["gs-1", "e2", siteA.id, false, null]);
     expect(update.text).toContain("status = 'completed'");
     // A re-roll clears any previous streamer-side confirmation.
     expect(update.text).toContain("winner_finalized_at = NULL");
     expect(update.text).toContain("winner_finalized_by = NULL");
+    expect(update.text).toContain("winner_response_required = $4");
+    expect(update.text).toContain("winner_response_timeout_seconds = $5");
     expect(data.session.winner_entry_id).toBe("e2");
+  });
+
+  it("persists the draw's response rule and window on the session", async () => {
+    const entries = [
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+    ];
+    let update = null;
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", responseRequired: true, responseTimeoutSeconds: 90 }), {}, deps({
+      one: async (text, params) => {
+        if (text.startsWith("UPDATE")) { update = { text, params }; return { id: "gs-1", status: "completed", winner_entry_id: params[1] }; }
+        return { id: "gs-1", site_id: siteA.id, status: "stopped" };
+      },
+      query: async () => entries,
+    }));
+    expect(res.status).toBe(200);
+    expect(update.params).toEqual(["gs-1", "e1", siteA.id, true, 90]);
+  });
+
+  it("defaults the response window to 60 when the client sends an out-of-range or non-integer value", async () => {
+    const entries = [
+      { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "222", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t" },
+    ];
+    for (const sent of [5, 601, "soon", null]) {
+      let params = null;
+      const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", responseRequired: true, responseTimeoutSeconds: sent }), {}, deps({
+        one: async (text, p) => {
+          if (text.startsWith("UPDATE")) { params = p; return { id: "gs-1", status: "completed", winner_entry_id: p[1] }; }
+          return { id: "gs-1", site_id: siteA.id, status: "stopped" };
+        },
+        query: async () => entries,
+      }));
+      expect(res.status).toBe(200);
+      expect(params).toEqual(["gs-1", "e1", siteA.id, true, 60]);
+    }
   });
 
   it("finalizes a drawn winner by stamping who confirmed and when", async () => {
@@ -287,6 +323,49 @@ describe("Chat Giveaway API", () => {
     expect(data.session.winner_finalized_at).toBe("2026-09-28T00:00:00Z");
     expect(data.winner.id).toBe("e1");
     expect(data.connection.connected).toBe(true);
+  });
+
+  it("refuses to finalize while a required chat response is still unanswered", async () => {
+    let updated = false;
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1" }), {}, deps({
+      one: async (text) => {
+        if (text.includes("winner_finalized_at = now()")) { updated = true; return null; }
+        return {
+          id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+          winner_response_required: true, winner_response_timeout_seconds: 30, winner_confirmed_at: null,
+        };
+      },
+    }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("The winner must respond in chat before you can confirm.");
+    expect(updated).toBe(false);
+  });
+
+  it("finalizes once the required chat response has arrived", async () => {
+    let update = null;
+    const finalized = {
+      id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+      winner_response_required: true, winner_response_timeout_seconds: 30,
+      winner_confirmed_at: "2026-09-28T00:01:00Z",
+      winner_finalized_at: "2026-09-28T00:02:00Z", winner_finalized_by: owner.id,
+    };
+    const res = await handleChatGiveawayFinalize(apiRequest("/api/giveaways/chat/finalize", { sessionId: "gs-1" }), {}, deps({
+      one: async (text, params) => {
+        if (text.includes("winner_finalized_at = now()")) { update = { text, params }; return finalized; }
+        if (text.startsWith("UPDATE")) return null;
+        if (update) return finalized;
+        return {
+          id: "gs-1", site_id: siteA.id, status: "completed", winner_entry_id: "e1",
+          winner_response_required: true, winner_response_timeout_seconds: 30,
+          winner_confirmed_at: "2026-09-28T00:01:00Z", winner_finalized_at: null,
+        };
+      },
+      query: async () => [{ id: "e1", giveaway_session_id: "gs-1", username: "a" }],
+    }));
+    expect(res.status).toBe(200);
+    expect(update).toBeTruthy();
+    expect(update.params).toEqual(["gs-1", siteA.id, owner.id]);
+    expect((await res.json()).session.winner_finalized_at).toBe("2026-09-28T00:02:00Z");
   });
 
   it("refuses to finalize before a winner is drawn", async () => {

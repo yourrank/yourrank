@@ -12,7 +12,8 @@ import {
 const CAPABILITY = "canRoleManageRewards";
 const SESSION_COLUMNS = `id, site_id, provider, keyword, status, started_at, stopped_at,
   winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message,
-  winner_finalized_at, winner_finalized_by, created_at`;
+  winner_finalized_at, winner_finalized_by,
+  winner_response_required, winner_response_timeout_seconds, created_at`;
 const ENTRY_COLUMNS = `id, giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at`;
 
 function randomIndex(max) {
@@ -140,6 +141,14 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   if (!session) return bad("Giveaway not found", 404);
   if (session.status === "cancelled") return bad("This giveaway was cancelled.", 409);
 
+  // The response rule is captured with the draw so a reload or another device
+  // derives the same claim state from the session row.
+  const responseRequired = body.responseRequired === true;
+  const timeout = Number.parseInt(body.responseTimeoutSeconds, 10);
+  const responseTimeoutSeconds = responseRequired && Number.isInteger(timeout) && timeout >= 10 && timeout <= 600
+    ? timeout
+    : (responseRequired ? 60 : null);
+
   const entries = await d.query(
     `SELECT ${ENTRY_COLUMNS} FROM chat_giveaway_entries WHERE giveaway_session_id = $1 ORDER BY entered_at ASC`,
     [session.id],
@@ -155,10 +164,11 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
     `UPDATE chat_giveaway_sessions
         SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
             winner_finalized_at = NULL, winner_finalized_by = NULL,
+            winner_response_required = $4, winner_response_timeout_seconds = $5,
             status = 'completed', stopped_at = COALESCE(stopped_at, now())
       WHERE id = $1 AND site_id = $3
       RETURNING ${SESSION_COLUMNS}`,
-    [session.id, winner.id, site.id],
+    [session.id, winner.id, site.id, responseRequired, responseTimeoutSeconds],
   );
   return ok({ session: updated, entries, winner });
 }
@@ -179,6 +189,9 @@ export async function handleChatGiveawayFinalize(request, env, deps = {}) {
   );
   if (!session) return bad("Giveaway not found", 404);
   if (!session.winner_entry_id) return bad("Draw a winner before confirming.", 409);
+  if (session.winner_response_required && !session.winner_confirmed_at) {
+    return bad("The winner must respond in chat before you can confirm.", 409);
+  }
 
   const updated = session.winner_finalized_at
     ? session
