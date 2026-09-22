@@ -130,6 +130,8 @@ const brandingSchema = z
         z.null(),
       ])
       .optional(),
+    // The cover is one resized data URI; decoded MIME/size validation stays in saveSite.
+    banner: z.string().max(700000).nullable().optional(),
     accentA: z.string().max(8).optional(),
     accentB: z.string().max(8).optional(),
     font: z.string().max(50).optional(),
