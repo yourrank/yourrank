@@ -47,11 +47,14 @@ it('renders selected event identity, switcher and channels without linking to ma
   const html = await renderSite({ r: { slug: 'northstar', plan: 'pro', data }, section: 'leaderboard', opts: { slug: 'northstar', homeUrl: 'https://example.com', nonce: 'n' } });
   expect(html).toContain(`data-event-id="${id}"`);
   expect(html).toContain('Event A');
-  expect(html).toContain('Main leaderboard');
+  expect(html).toContain('data-board="main">Main</a>');
+  expect(html).toContain(`data-event="${id}" aria-current="page">Event A</a>`);
+  expect(html).not.toContain('viewer-board-switcher');
+  expect(html).not.toContain('<select');
   expect(html).toContain('https://kick.com/northstar');
   expect(html).not.toContain('/player/Event%20player');
   expect(html).toContain('class="viewer-top-community" href="/northstar"');
-  expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('class="viewer-board-switcher"'));
+  expect(html.indexOf('<h1')).toBeLessThan(html.indexOf('class="viewer-board-tabs"'));
 });
 
 it('recovers unavailable event documents without mixing events into paginated results', async () => {

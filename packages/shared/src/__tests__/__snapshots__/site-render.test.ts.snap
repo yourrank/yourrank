@@ -15,7 +15,7 @@ exports[`shared public board renderer keeps the fixed fixture HTML stable 1`] = 
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/viewer-shell.css" />
 
-<meta name="viewer-accent" content="var(--yr-color-board-accent)" /><meta name="viewer-accent-ink" content="#000000" />
+<meta name="viewer-accent" content="var(--yr-color-board-accent)" /><meta name="viewer-accent-ink" content="#000000" /><style nonce="fixed-nonce" data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:var(--yr-color-board-accent);--yr-accent-ink:#000000}</style>
 
 </head><body class="yr-site viewer-shell" data-section="leaderboard" data-slug="board fixture" data-custom-domain="false" data-creator-contact="false" data-currency="$" data-rank-by="wagered">
 <!--

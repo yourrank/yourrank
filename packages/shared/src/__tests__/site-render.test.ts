@@ -161,6 +161,46 @@ describe("shared public board renderer", () => {
     expect(html).toContain('property="og:image" content="https://example.test/logo/board%20fixture"');
   });
 
+  it("uses one branded secondary-page hero for Rewards and My Activity", async () => {
+    const brandedOpts = {
+      ...opts,
+      logoUrl: "https://example.test/logo/board%20fixture",
+      bannerUrl: "https://example.test/banner/board%20fixture",
+    };
+    const rewards = await renderSite({ r: fixture, section: "shop", viewer: null, viewerData: null, opts: brandedOpts });
+    const activity = await renderSite({ r: fixture, section: "me", viewer: null, viewerData: null, opts: brandedOpts });
+
+    for (const html of [rewards, activity]) {
+      expect(html).toContain('class="viewer-secondary-hero-cover" src="https://example.test/banner/board%20fixture" alt=""');
+      expect(html).toContain("viewer-secondary-hero");
+      expect(html).toContain('data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:var(--yr-color-board-accent)');
+      expect(html).not.toContain("viewer-secondary-hero-scene");
+    }
+    expect(rewards).toContain(">Rewards</h1>");
+    expect(rewards).toContain("Redeem your credits for Ampersand &amp; Board's community rewards.");
+    expect(activity).toContain(">My Activity</h1>");
+    expect(activity).toContain("Your credits, claims and activity in Ampersand &amp; Board.");
+
+    const fallback = await renderSite({ r: fixture, section: "shop", viewer: null, viewerData: null, opts: { ...opts, logoUrl: brandedOpts.logoUrl } });
+    expect(fallback).toContain("viewer-secondary-hero-scene");
+    expect(fallback).toContain('class="viewer-secondary-hero-mark" src="https://example.test/logo/board%20fixture"');
+    expect(fallback).not.toContain("viewer-secondary-hero-cover");
+  });
+
+  it("marks sparse reward collections for one, two, three and larger grid layouts", async () => {
+    const item = (id) => ({ id: `reward-${id}`, name: `Reward ${id}`, description: "Community reward", cost: id * 10, active: true });
+    for (const [count, marker] of [[1, 1], [2, 2], [3, 3], [6, 4]]) {
+      const html = await renderSite({
+        r: { ...fixture, data: { ...fixture.data, shopItems: Array.from({ length: count }, (_, index) => item(index + 1)) } },
+        section: "shop",
+        viewer: null,
+        viewerData: null,
+        opts,
+      });
+      expect(html).toContain(`id="viewer-rewards" role="list" data-count="${marker}"`);
+    }
+  });
+
   it("contains a chosen creator typeface to display roles", async () => {
     const render = (branding) => renderSite({
       r: { ...fixture, data: { ...fixture.data, branding } },
