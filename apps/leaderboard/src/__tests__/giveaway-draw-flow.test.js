@@ -5,13 +5,19 @@
 //
 // Run: bun test src/__tests__/giveaway-draw-flow.test.js
 
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
 import { giveawaysHtml } from "../pages/giveaway-pages.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/chat" });
 const { document } = window;
-for (const key of ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle"]) {
+// This file runs inside a shared bun process with every other leaderboard
+// test: every global it installs must be restored in afterAll or later files
+// inherit a dead virtual clock and hang.
+const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "fetch", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "performance"];
+const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
+const originalDateNow = Date.now;
+for (const key of INSTALLED_GLOBALS.slice(0, 14)) {
   globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
 }
 window.Element.prototype.scrollIntoView = function () {};
@@ -203,6 +209,21 @@ describe("Giveaway draw flow", () => {
     leave();
     timers.forEach((t) => { t.cancelled = true; });
     timers.length = 0;
+  });
+
+  afterAll(() => {
+    // Hand every installed global back so the next test file sees real timers,
+    // the real fetch, and the real Date.now.
+    for (const key of INSTALLED_GLOBALS) {
+      if (key === "performance") {
+        Object.defineProperty(globalThis, "performance", { value: originalGlobals.performance, configurable: true });
+      } else if (originalGlobals[key] === undefined) {
+        delete globalThis[key];
+      } else {
+        globalThis[key] = originalGlobals[key];
+      }
+    }
+    Date.now = originalDateNow;
   });
 
   it("with no response requirement the claim boxes stay hidden and confirm is ready", async () => {
