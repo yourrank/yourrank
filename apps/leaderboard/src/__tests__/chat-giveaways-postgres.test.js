@@ -148,18 +148,18 @@ describe("Chat Giveaways (Postgres)", () => {
   });
 
   integrationIt("finalizing stamps who confirmed and persists across re-reads", async () => {
-    const [b] = await sql`SELECT id FROM chat_giveaway_sessions WHERE site_id=${siteB} AND status='active'`;
-    await sql`INSERT INTO chat_giveaway_entries (giveaway_session_id, provider_user_id, username) VALUES (${b.id}, 'u9', 'viewer-u9')`;
-    const [e] = await sql`SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=${b.id} AND provider_user_id='u9'`;
+    // Uses site A's stopped "!win" session so site B's active giveaway is untouched.
+    const [a] = await sql`SELECT id FROM chat_giveaway_sessions WHERE site_id=${siteA} AND status='stopped'`;
+    const [e] = await sql`SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=${a.id} AND provider_user_id='u1'`;
     const [s] = await sql`UPDATE chat_giveaway_sessions
-      SET winner_entry_id=${e.id}, drawn_at=now(), winner_finalized_at=now(), winner_finalized_by=${ownerB},
-          status='completed', stopped_at=COALESCE(stopped_at, now())
-      WHERE id=${b.id} RETURNING winner_finalized_at, winner_finalized_by`;
+      SET winner_entry_id=${e.id}, drawn_at=now(), winner_finalized_at=now(), winner_finalized_by=${ownerA},
+          status='completed'
+      WHERE id=${a.id} RETURNING winner_finalized_at, winner_finalized_by`;
     expect(s.winner_finalized_at).not.toBeNull();
-    expect(s.winner_finalized_by).toBe(ownerB);
-    const [reread] = await sql`SELECT winner_finalized_at, winner_finalized_by FROM chat_giveaway_sessions WHERE id=${b.id}`;
+    expect(s.winner_finalized_by).toBe(ownerA);
+    const [reread] = await sql`SELECT winner_finalized_at, winner_finalized_by FROM chat_giveaway_sessions WHERE id=${a.id}`;
     expect(reread.winner_finalized_at).not.toBeNull();
-    expect(reread.winner_finalized_by).toBe(ownerB);
+    expect(reread.winner_finalized_by).toBe(ownerA);
   });
 
   integrationIt("disconnecting Kick stops collection, clears readiness, and preserves history", async () => {
