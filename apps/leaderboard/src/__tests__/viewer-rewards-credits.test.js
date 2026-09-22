@@ -388,7 +388,7 @@ describe("a creator's My Community page", () => {
     const html = await credits();
     expect((html.match(/<h1\b/g) || []).length).toBe(1);
     expect(html).toContain("1,234,567");
-    expect(html).toContain('class="yr-lbh viewer-board-hero viewer-me-hero"');
+    expect(html).toContain('class="yr-lbh viewer-board-hero viewer-secondary-hero viewer-me-hero"');
     expect(html).not.toContain("Member since");
     expect(html).not.toContain("yr-gamer");
     expect(html).not.toContain("Credits / 7d");

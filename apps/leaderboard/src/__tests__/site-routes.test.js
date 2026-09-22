@@ -669,9 +669,9 @@ describe("Main / Loyalty public boards", () => {
 
   it("renders the Main/Loyalty switcher only when both boards are available", async () => {
     const html = await (await lb("loyal")).text();
-    expect(html).toContain('<nav class="viewer-board-tabs" aria-label="Leaderboard type">');
-    expect(html).toContain('href="/loyal/leaderboard" data-board="main" aria-current="page">Main leaderboard</a>');
-    expect(html).toContain('href="/loyal/leaderboard?board=loyalty" data-board="loyalty">Loyalty leaderboard</a>');
+    expect(html).toContain('<nav class="viewer-board-tabs" aria-label="Leaderboards">');
+    expect(html).toContain('href="/loyal/leaderboard" data-board="main" aria-current="page">Main</a>');
+    expect(html).toContain('href="/loyal/leaderboard?board=loyalty" data-board="loyalty">Loyalty</a>');
     // Main content, Main metric.
     expect(html).toContain("Alice");
     expect(html).not.toContain("Viewer A");
@@ -684,7 +684,7 @@ describe("Main / Loyalty public boards", () => {
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(routeSiteData.calls.filter((c) => c.loyaltySiteId).map((c) => c.loyaltySiteId)).toEqual(["site-1"]);
-    expect(html).toContain('data-board="loyalty" aria-current="page">Loyalty leaderboard</a>');
+    expect(html).toContain('data-board="loyalty" aria-current="page">Loyalty</a>');
     expect(html).toContain("Credits earned");
     expect(html).toContain('data-value-label="Credits earned"');
     expect(html).toContain("Viewer A");

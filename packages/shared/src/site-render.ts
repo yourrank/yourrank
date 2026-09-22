@@ -687,7 +687,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
 <link rel="stylesheet" href="/assets/site-shell.css" />
 <link rel="stylesheet" href="/assets/${viewerShell ? "viewer-shell" : "devin-system"}.css" />
 ${section === "games" ? gamesIslandHead() : ""}
-${viewerShell ? `<meta name="viewer-accent" content="${esc(accent)}" /><meta name="viewer-accent-ink" content="${esc(accentInkValue)}" />${font ? `<meta name="viewer-display-font" content="${esc(`"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif`)}" />` : ""}` : `<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-display-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>`}
+${viewerShell ? `<meta name="viewer-accent" content="${esc(accent)}" /><meta name="viewer-accent-ink" content="${esc(accentInkValue)}" /><style nonce="${nonce}" data-viewer-theme-tokens>.yr-site.viewer-shell{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}}</style>${font ? `<meta name="viewer-display-font" content="${esc(`"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif`)}" />` : ""}` : `<style nonce="${nonce}" data-theme-tokens>.yr-site{--yr-accent:${accent};--yr-accent-ink:${accentInkValue}${font ? `;--yr-display-font:"${font}", "Fira Sans", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif` : ""}}${section === "games" ? `#gx-root{--gx-accent:${accent};--gx-accent-ink:${accentInkValue}}` : ""}</style>`}
 ${opts.csrfToken ? `<meta name="csrf-token" content="${esc(opts.csrfToken)}" />` : ""}
 </head>`;
 
@@ -1053,8 +1053,7 @@ ${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-b
   ].filter(Boolean).join("");
   const rulesHtml = rulesBlock(data, payoutNote);
 
-  const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
-  const switcher = boardTabs(ctx) + (events.length ? `<form class="viewer-board-switcher" action="${siteSectionHref('leaderboard', slug, isCustomDomain)}" method="get"><label for="viewer-event">Leaderboard</label><select id="viewer-event" name="event"><option value="">Main leaderboard</option>${events.map(event => `<option value="${esc(event.id)}"${event.id === data.eventId ? ' selected' : ''}>${esc(event.name)}</option>`).join('')}</select><button class="yr-btn yr-btn--sm" type="submit">View leaderboard</button></form>` : '');
+  const switcher = leaderboardSwitcher(ctx);
   if (data.sections?.leaderboard === false) {
     return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
 ${panel({ title: "Standings", titleHidden: true, meta: "", body: emptyState(ICONS.trophy, "Standings are hidden", `${esc(b.name || slug)} is not showing the standings right now. Check back later.`), foot: notes })}
@@ -1075,18 +1074,26 @@ ${panel({
 ${rulesHtml}`;
 }
 
-const BOARD_TAB_LABELS: Record<PublicBoardId, string> = { main: "Main leaderboard", loyalty: "Loyalty leaderboard" };
+const BOARD_TAB_LABELS: Record<PublicBoardId, string> = { main: "Main", loyalty: "Loyalty" };
 
 /**
- * Main/Loyalty pills under the Leaderboard title. Rendered only when the site
- * has more than one public board, so a Main-only site looks exactly as before.
- * Plain links: the board is URL state (`?board=`), shareable and cache-safe.
+ * One canonical switcher for the main board, optional loyalty board and every
+ * published competition. Plain links keep each state shareable and cache-safe.
  */
-function boardTabs(ctx) {
-  const { publicBoards: boards, board, slug, isCustomDomain } = ctx;
-  if (!Array.isArray(boards) || boards.length < 2) return "";
-  return `<nav class="viewer-board-tabs" aria-label="Leaderboard type">${boards.map((id) =>
-    `<a class="viewer-board-tab" href="${publicBoardHref(id, slug, isCustomDomain)}" data-board="${id}"${id === board ? ' aria-current="page"' : ""}>${BOARD_TAB_LABELS[id]}</a>`).join("")}</nav>`;
+function leaderboardSwitcher(ctx) {
+  const { publicBoards: boards, board, data, slug, isCustomDomain } = ctx;
+  const events = Array.isArray(data.eventBoards) ? data.eventBoards : [];
+  const availableBoards = Array.isArray(boards) && boards.length ? boards : ["main"];
+  if (availableBoards.length === 1 && events.length === 0) return "";
+  const eventId = data.eventId && !data.eventUnavailable ? String(data.eventId) : "";
+  const base = siteSectionHref("leaderboard", slug, isCustomDomain);
+  const boardLinks = availableBoards.map((id) =>
+    `<a class="viewer-board-tab" href="${publicBoardHref(id, slug, isCustomDomain)}" data-board="${id}"${!eventId && id === board ? ' aria-current="page"' : ""}>${BOARD_TAB_LABELS[id]}</a>`).join("");
+  const eventLinks = events.map((event) => {
+    const id = String(event.id || "");
+    return `<a class="viewer-board-tab" href="${base}?event=${encodeURIComponent(id)}" data-event="${esc(id)}"${eventId === id ? ' aria-current="page"' : ""}>${esc(event.name)}</a>`;
+  }).join("");
+  return `<nav class="viewer-board-tabs" aria-label="Leaderboards">${boardLinks}${eventLinks}</nav>`;
 }
 
 /* ── Loyalty leaderboard ───────────────────────────────────────────────────── */
@@ -1131,7 +1138,7 @@ function loyaltyMain(ctx) {
 <ol class="yr-stand" data-loyalty-rows aria-label="Loyalty standings for ${esc(b.name || slug)}" data-value-label="${metric}" data-hide-prizes="true">${items}</ol>`
     : emptyState(ICONS.medal, "No loyalty activity yet.", "Viewers will appear here after earning credits.");
 
-  return `${introHtml}${boardTabs(ctx)}
+  return `${introHtml}${leaderboardSwitcher(ctx)}
 <div data-loyalty-board>
 ${panel({
     title: "Loyalty standings",
@@ -1144,6 +1151,21 @@ ${panel({
 
 /* ── Rewards ──────────────────────────────────────────────────────────── */
 
+/** Shared branded hero for public secondary pages. Uploaded banners are
+ * decorative context; the title and description remain the accessible name. */
+function secondaryPageHero(ctx, { title, description, icon, kicker, aside = "", modifier = "" }) {
+  const { b, slug, logoUrl, bannerUrl } = ctx;
+  const name = b.name || slug;
+  const fallback = `<span class="viewer-secondary-hero-monogram">${esc(Array.from(name)[0] || "Y")}</span>`;
+  const scene = bannerUrl
+    ? `<img class="viewer-secondary-hero-cover" src="${esc(bannerUrl)}" alt="" decoding="async" />`
+    : `<div class="viewer-secondary-hero-scene" aria-hidden="true">${creatorMark(logoUrl, "viewer-secondary-hero-mark", 120, fallback)}<span class="viewer-secondary-hero-icon">${viewerIcon(icon)}</span></div>`;
+  return `<header class="yr-lbh viewer-board-hero viewer-secondary-hero${modifier ? ` ${modifier}` : ""}">
+<div class="viewer-board-hero-copy"><p class="viewer-hero-kicker">${esc(name)} · ${esc(kicker || "Creator community")}</p><h1 class="yr-h1 yr-lbh-title">${esc(title)}</h1><p class="yr-lbh-note">${description}</p></div>
+${scene}${aside}
+</header>`;
+}
+
 function shopMain(ctx) {
   const { r, b, data, viewer, viewerData, viewerOnSite, isMember, balance, returnTo, slug, homeUrl, isCustomDomain } = ctx;
   const items = (viewerData?.shopItems || data.shopItems || []).filter((i) => i.active !== false).slice().sort((x, z) => Number(x.cost) - Number(z.cost));
@@ -1153,14 +1175,20 @@ function shopMain(ctx) {
   const unavailable = viewer && ctx.membershipStatus === 'unavailable';
   // The hero carries the creator's identity the same way Home and Leaderboard do;
   // the search and sort controls sit at the top of the catalog itself.
-  const head = `<header class="yr-lbh viewer-board-hero viewer-shop-hero"><div class="viewer-board-hero-copy"><p class="viewer-hero-kicker">${esc(b.name || slug)} · Creator community</p><h1 class="yr-h1 yr-lbh-title">Rewards</h1><p class="yr-lbh-note">Redeem your credits for ${esc(b.name || slug)}'s community rewards.</p></div><div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy viewer-shop-hero-gift">${ICONS.gift}</span></div><div class="viewer-shop-hero-aside">${viewerIcon('coins')}<p><strong>Earn, then claim.</strong>Credits are free, earned in this community, and spent only here.</p></div></header>${!viewer || isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : 'Join this community before claiming a reward.'}</p>`}`;
+  const head = `${secondaryPageHero(ctx, {
+    title: "Rewards",
+    description: `Redeem your credits for ${esc(b.name || slug)}'s community rewards.`,
+    icon: "gift",
+    modifier: "viewer-shop-hero",
+    aside: `<aside class="viewer-shop-hero-aside">${viewerIcon('coins')}<p><strong>Earn, then claim.</strong>Credits are free, earned in this community, and spent only here.</p></aside>`,
+  })}${!viewer || isMember ? '' : `<p class="yr-note">${unavailable ? 'Your membership could not load. Reload this page before claiming a reward.' : 'Join this community before claiming a reward.'}</p>`}`;
 
   const blockedNote = viewer && blocked
     ? `<p class="yr-note yr-note--w">Claiming is currently unavailable for this membership.</p>`
     : "";
 
   const list = items.length
-    ? `<section aria-label="All rewards"><div class="viewer-shop-tools"><h2 class="yr-sr">All rewards</h2><div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list" data-count="${Math.min(items.length, 3)}">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug, isCustomDomain })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
+    ? `<section aria-label="All rewards"><div class="viewer-shop-tools"><h2 class="yr-sr">All rewards</h2><div class="viewer-reward-tools" hidden><label class="yr-sr" for="viewer-reward-search">Search rewards</label><input id="viewer-reward-search" type="search" placeholder="Search rewards…" aria-controls="viewer-rewards" autocomplete="off" /></div><div class="viewer-reward-tools" hidden><label for="viewer-reward-sort">Sort by</label><select id="viewer-reward-sort" aria-controls="viewer-rewards"><option value="cost">Credits: low to high</option><option value="name">Name</option></select></div></div><ul class="yr-rwds" id="viewer-rewards" role="list" data-count="${Math.min(items.length, 4)}">${items.map((item) => rewardRow({ item, viewer, member: isMember, balance, blocked, unavailable, membershipHref: creditsHref, slug, isCustomDomain })).join("")}</ul><p class="yr-search-status" id="viewer-reward-status" role="status" aria-live="polite"></p><p id="viewer-reward-empty" class="yr-note" hidden>No rewards match your search.</p></section>`
     : `<section class="yr-vsec yr-vsec--empty${viewer ? "" : " yr-vsec--narrow"}">${sectionHead("All rewards")}${emptyState(ICONS.gift, "No rewards yet", `Rewards will appear here when ${esc(b.name || slug)} adds them.`)}</section>`;
 
   const canOrder = viewer && isMember && !blocked && items.some((item) => (item.stock === null || item.stock === undefined || Number(item.stock) > 0) && Number(item.cost || 0) <= balance);
@@ -1370,7 +1398,14 @@ function meMain(ctx) {
   // viewer's real ledger, claims and the published standings.
   const own = member ? viewerName(viewer).toLowerCase() : "";
   const standing = own && siteSections.leaderboard !== false ? (data.players || []).find((player) => String(player.name || "").toLowerCase() === own) : null;
-  const heading = `<header class="yr-lbh viewer-board-hero viewer-me-hero"><div class="viewer-board-hero-copy"><p class="viewer-hero-kicker">${creator} · ${member ? "Community member" : "Creator community"}</p><h1 class="yr-h1 yr-lbh-title">My Activity</h1><p class="yr-lbh-note">Your credits, claims and activity in ${creator}.</p></div><div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-me-hero-clock">${viewerIcon('activity')}</span></div>${member ? `<aside class="viewer-shop-hero-aside viewer-me-hero-aside">${viewerIcon('coins')}<p><strong>Earn here, claim here.</strong>Credits you earn in ${creator} are redeemed for rewards here.</p></aside>` : ""}</header>${member ? `<dl class="viewer-stats viewer-me-stats"><div>${viewerIcon('coins')}<div><dt>Your credits</dt><dd data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span></dd><p>Only in ${creator}</p></div></div><div>${viewerIcon('gift')}<div><dt>Claims</dt><dd>${formatNumber((viewerData.claims || []).length)}${viewerData.claimsTruncated ? '+' : ''}</dd><p>Rewards you've claimed</p></div></div><div>${viewerIcon('activity')}<div><dt>Credit activity</dt><dd>${formatNumber((viewerData.ledger || []).length)}${viewerData.ledgerTruncated ? '+' : ''}</dd><p>Recent credit changes</p></div></div>${standing ? `<div>${viewerIcon('crown')}<div><dt>Current rank</dt><dd>#${esc(String(standing.rank || ""))}</dd><p>On the ${esc((b.period || "current").toLowerCase())} leaderboard</p></div></div>` : ""}</dl>` : ''}`;
+  const heading = `${secondaryPageHero(ctx, {
+    title: "My Activity",
+    description: `Your credits, claims and activity in ${creator}.`,
+    icon: "activity",
+    kicker: member ? "Community member" : "Creator community",
+    modifier: "viewer-me-hero",
+    aside: member ? `<aside class="viewer-shop-hero-aside viewer-me-hero-aside">${viewerIcon('coins')}<p><strong>Earn here, claim here.</strong>Credits you earn in ${creator} are redeemed for rewards here.</p></aside>` : "",
+  })}${member ? `<dl class="viewer-stats viewer-me-stats"><div>${viewerIcon('coins')}<div><dt>Your credits</dt><dd data-credit-balance="${Number(balance) || 0}"><span data-credit-balance-num>${formatNumber(balance)}</span></dd><p>Only in ${creator}</p></div></div><div>${viewerIcon('gift')}<div><dt>Claims</dt><dd>${formatNumber((viewerData.claims || []).length)}${viewerData.claimsTruncated ? '+' : ''}</dd><p>Rewards you've claimed</p></div></div><div>${viewerIcon('activity')}<div><dt>Credit activity</dt><dd>${formatNumber((viewerData.ledger || []).length)}${viewerData.ledgerTruncated ? '+' : ''}</dd><p>Recent credit changes</p></div></div>${standing ? `<div>${viewerIcon('crown')}<div><dt>Current rank</dt><dd>#${esc(String(standing.rank || ""))}</dd><p>On the ${esc((b.period || "current").toLowerCase())} leaderboard</p></div></div>` : ""}</dl>` : ''}`;
   if (!viewer) {
     const reward = viewerIntent.intent === "reward"
       ? (viewerData?.shopItems || data.shopItems || []).find((item) => String(item.id) === viewerIntent.rewardId)
