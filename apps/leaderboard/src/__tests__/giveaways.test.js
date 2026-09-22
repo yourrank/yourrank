@@ -161,9 +161,18 @@ describe("Giveaway Chatroom Handler", () => {
   });
 
   it("keeps draw options behind the disclosure", () => {
-    expect(giveawaysHtml).toContain('<details class="cr-advanced gw-setup-advanced" data-ui-advanced>');
-    expect(giveawaysHtml).toContain('id="gw-opt-subs-perk"');
+    expect(giveawaysHtml).toContain('id="gw-settings"');
+    expect(giveawaysHtml).toContain('Entry Mode');
+    expect(giveawaysHtml).toContain('YourRank Members Only');
+    expect(giveawaysHtml).toContain('Verified Entry');
+    expect(giveawaysHtml).toContain('id="gw-opt-subscriber"');
+    expect(giveawaysHtml).toContain('id="gw-opt-vip"');
     expect(giveawaysHtml).toContain('id="gw-opt-skip-past"');
+    expect(giveawaysHtml).toContain('id="gw-opt-ip"');
+    expect(giveawaysHtml).toContain('Requires Verified Entry');
+    expect(giveawaysHtml).toContain('VPN / Proxy detection');
+    expect(giveawaysHtml).toContain('Duplicate device detection');
+    expect(giveawaysHtml).toContain('Winner verification');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-req"');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-duration"');
     expect(giveawaysHtml).toContain('<option value="60" selected>60 seconds</option>');

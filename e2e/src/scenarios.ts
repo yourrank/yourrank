@@ -27,6 +27,11 @@ export interface Scenario {
 }
 
 export const SCENARIOS: Scenario[] = [
+  {
+    key: "giveaway-verification-boundary",
+    title: "Giveaway verification page and session binding reject cross-giveaway request substitution",
+    tier: "required",
+  },
   { key: "community-competitions", title: "Community competitions preserve Main standings and draft privacy", tier: "required" },
   {
     key: "auth-login-logout-relogin",

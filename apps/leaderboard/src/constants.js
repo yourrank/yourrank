@@ -8,5 +8,5 @@ export const NON_SITE_PATHS = new Set([
   "account", "contact", "faq", "reviews", "cookies", "privacy", "terms",
   "responsible", "refund", "setup", "demo", "sites", "telegram", "credits", "pricing",
   "overlays", "games", "switch", "docs", "about", "go", "logo", "favicon.ico",
-  "changelog", "brand", "status",
+  "changelog", "brand", "status", "giveaways",
 ]);

@@ -100,7 +100,7 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
   const entries = new Set<string>();
   const inserts: unknown[][] = [];
   const run = async (sql: string, params: unknown[] = []) => {
-    if (sql.includes("FROM chat_giveaway_sessions gs")) {
+    if (sql.startsWith("SELECT") && sql.includes("FROM chat_giveaway_sessions gs")) {
       const [provider, channel] = params as [string, string];
       expect(provider).toBe("kick");
       return (sessionsByChannel[channel] || []).map((s) => ({

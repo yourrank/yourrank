@@ -1,3 +1,4 @@
+import { handleGiveawayVerification, handleGiveawayVerificationPage } from "./handlers/giveaway-verification.js";
 // Route table: maps HTTP paths and methods to handler functions.
 // Consumed by router.js, which registers each entry on the Hono app.
 // (:slug/:id are Hono path params, read via c.req.param() in router.js.)
@@ -328,6 +329,9 @@ export const ROUTES = [
   { path: "/api/kick/disconnect", method: "POST", handler: withHandler(handleKickAuthDisconnect) },
   { path: "/api/kick/repair", method: "POST", handler: withHandler(handleKickAuthRepair) },
   { path: "/api/giveaways/chatroom", method: "GET", handler: withHandler(handleGiveawayChatroom) },
+  { path: "/giveaways/verify", method: "GET", handler: withHandler(handleGiveawayVerificationPage) },
+  { path: "/api/viewer/giveaway", method: "GET", handler: withHandler(handleGiveawayVerification) },
+  { path: "/api/viewer/giveaway", method: "POST", handler: withHandler(handleGiveawayVerification) },
   { path: "/api/giveaways/chat", method: "GET", handler: withHandler(handleChatGiveawayState) },
   { path: "/api/giveaways/chat/start", method: "POST", handler: withHandler(handleChatGiveawayStart) },
   { path: "/api/giveaways/chat/stop", method: "POST", handler: withHandler(handleChatGiveawayStop) },

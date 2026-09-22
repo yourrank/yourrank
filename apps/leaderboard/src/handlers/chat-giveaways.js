@@ -10,15 +10,8 @@ import {
 } from "@yourrank/shared/chat-giveaways";
 
 const CAPABILITY = "canRoleManageRewards";
-const SESSION_COLUMNS = `id, site_id, provider, keyword, status, started_at, stopped_at,
-  winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message, created_at`;
-const ENTRY_COLUMNS = `id, giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at`;
-
-function randomIndex(max) {
-  const arr = new Uint32Array(1);
-  crypto.getRandomValues(arr);
-  return arr[0] % max;
-}
+import { giveawayRulesSchema, GIVEAWAY_CAPABILITIES } from "@yourrank/shared/giveaway-eligibility";
+import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
 
 async function resolveSite(request, env, deps) {
   const { requireUser, getByUser, getBoardById, requireSiteCapability, siteIdOverride } = deps;
@@ -43,6 +36,7 @@ function withDefaults(deps) {
     query: defaultQuery,
     exec: defaultExec,
     loadChatGiveawayConnection: defaultLoadChatGiveawayConnection,
+    transaction: giveawayTransaction,
     ...deps,
   };
 }
@@ -73,7 +67,7 @@ export async function handleChatGiveawayState(request, env, deps = {}) {
   const url = new URL(request.url);
   const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
   const view = await loadSessionView(d, site.id, url.searchParams.get("sessionId"));
-  return ok({ connection, ...view });
+  return ok({ connection, capabilities: GIVEAWAY_CAPABILITIES, ...view });
 }
 
 /** POST /api/giveaways/chat/start — create the site's single active session. */
@@ -83,6 +77,8 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
   if (res) return res;
 
+  const parsedRules = giveawayRulesSchema.safeParse(body.rules ?? {});
+  if (!parsedRules.success) return bad(parsedRules.error.issues[0]?.message || "Invalid giveaway rules.", 400);
   const keyword = normalizeGiveawayKeyword(body.keyword);
   if (!keyword) return bad("Enter the keyword viewers should type.", 400);
   if (/\s/.test(keyword)) return bad("Use a single word or command (no spaces) as the keyword.", 400);
@@ -95,10 +91,10 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
 
   try {
     const session = await d.one(
-      `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by)
-       VALUES ($1, 'kick', $2, 'active', $3)
+      `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by, rules)
+       VALUES ($1, 'kick', $2, 'active', $3, $4::jsonb)
        RETURNING ${SESSION_COLUMNS}`,
-      [site.id, keyword, user.id],
+      [site.id, keyword, user.id, parsedRules.data],
     );
     return ok({ connection, session, entries: [], winner: null });
   } catch (err) {
@@ -132,33 +128,14 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   if (res) return res;
   if (!body.sessionId) return bad("Missing sessionId", 400);
 
-  const session = await d.one(
-    `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2`,
-    [body.sessionId, site.id],
-  );
-  if (!session) return bad("Giveaway not found", 404);
-  if (session.status === "cancelled") return bad("This giveaway was cancelled.", 409);
-
-  const entries = await d.query(
-    `SELECT ${ENTRY_COLUMNS} FROM chat_giveaway_entries WHERE giveaway_session_id = $1 ORDER BY entered_at ASC`,
-    [session.id],
-  );
-  // Optional client-side eligibility filter (e.g. skip recent winners); the
-  // server only ever draws from persisted entries of this session.
-  const allowed = Array.isArray(body.entryIds) ? new Set(body.entryIds.map(String)) : null;
-  const pool = allowed ? entries.filter((e) => allowed.has(e.id)) : entries;
-  if (pool.length === 0) return bad("No eligible entrants to draw from.", 409);
-
-  const winner = pool[randomIndex(pool.length)];
-  const updated = await d.one(
-    `UPDATE chat_giveaway_sessions
-        SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
-            status = 'completed', stopped_at = COALESCE(stopped_at, now())
-      WHERE id = $1 AND site_id = $3
-      RETURNING ${SESSION_COLUMNS}`,
-    [session.id, winner.id, site.id],
-  );
-  return ok({ session: updated, entries, winner });
+  const result = await d.transaction(async (run) => {
+    const [session] = await run(`SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id=$1 AND site_id=$2 FOR UPDATE`,
+      [body.sessionId, site.id]);
+    if (!session) return { error: "Giveaway not found", status: 404 };
+    return drawGiveaway(run, session, { automatic: body.automatic === true, expectedDrawnAt: body.expectedDrawnAt });
+  });
+  if (result.error) return bad(result.error, result.status || 409);
+  return ok(await loadSessionView(d, site.id, body.sessionId));
 }
 
 /** POST /api/giveaways/chat/entries/remove — remove one entrant from a session. */
