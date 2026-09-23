@@ -55,6 +55,7 @@ const validEnvironment = () => ({
   STAGING_TOKEN_ENC_KEY: "a".repeat(64),
   STAGING_IP_HASH_SALT: "x",
   STAGING_MONITOR_CHECK_SECRET: "x",
+  STAGING_DATABASE_URL: "postgresql://postgres.abcdefghijklmnopqrst:x@aws-0-eu-west-1.pooler.supabase.com:5432/postgres",
 });
 
 const stagingWorkflowPromise = rootFile(".github/workflows/staging.yml");
@@ -372,11 +373,16 @@ describe("F-012 staging release verification", () => {
     expect(jobBlock(staging, "backend-readiness-staging")).toContain("if: ${{ inputs.inject_failure == 'after-backend-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}");
     expect(jobBlock(staging, "release-smoke-staging")).toContain("if: ${{ inputs.inject_failure == 'after-web-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}");
     const finalizer = jobBlock(staging, "staging-finalizer");
-    expect(finalizer).toContain("inputs.inject_failure == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging'");
-    expect(finalizer.match(/inputs\.inject_failure != 'recovery-command'/g)).toHaveLength(5);
+    expect(finalizer).toContain("(inputs.inject_failure || 'none') == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging'");
+    expect(finalizer.match(/\(inputs\.inject_failure \|\| 'none'\) != 'recovery-command'/g)).toHaveLength(5);
     for (const production of [deploy, rollback, contract]) {
       expect(production).not.toContain("inject_failure");
-      expect(production).not.toContain("RELEASE_ENVIRONMENT");
+      // Production workflows may set RELEASE_ENVIRONMENT only for the
+      // release-target guard, and only ever to "production".
+      for (const value of production.matchAll(/RELEASE_ENVIRONMENT: (\w+)/g)) {
+        expect(value[1]).toBe("production");
+      }
+      expect(production).not.toContain("RELEASE_ENVIRONMENT=staging");
     }
   });
 

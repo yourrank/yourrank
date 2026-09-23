@@ -33,9 +33,18 @@ concurrency:
 jobs:
   release-preflight:
     name: Validate production release capacity
+    # Production releases only promote main; a workflow_dispatch from another
+    # branch skips this job and everything downstream of it (the always()
+    # finalizer still requires capture-release-state == success).
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Refuse non-production release target
+        env:
+          RELEASE_ENVIRONMENT: production
+          SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
+        run: node scripts/release-target-guard.mjs production
       - name: Validate Cloudflare Cron Trigger inventory and capacity
         env:
           CLOUDFLARE_WORKERS_PLAN: ${{ vars.CLOUDFLARE_WORKERS_PLAN }}
@@ -164,6 +173,13 @@ jobs:
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
         with:
           version: 2.39.2
+
+      - name: Refuse non-production release target
+        env:
+          RELEASE_ENVIRONMENT: production
+          SUPABASE_PROJECT_REF: lygcqzjxlqbvymkfjvel
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/release-target-guard.mjs production
 
       - name: Link project and push migrations
         id: push-migrations

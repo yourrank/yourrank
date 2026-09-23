@@ -12,16 +12,20 @@ name: Staging release
 # concurrency group is separate from `production-mutation`, and it uses only the
 # GitHub `staging` environment (no production Supabase names are accepted).
 #
-# Manual trigger only. `inject_failure` exists solely to exercise the F-003/F-005
-# finalizer against staging: fail after backend mutation, after Web mutation, or
-# make the recovery command itself fail so the run stays red.
+# Triggers: manual `workflow_dispatch` (any branch) or a same-repo pull request
+# labeled `deploy-staging` (labeled/synchronize/reopened). `inject_failure` exists
+# solely to exercise the F-003/F-005 finalizer against staging: fail after backend
+# mutation, after Web mutation, or make the recovery command itself fail so the run
+# stays red. Every mutation step is preceded by scripts/release-target-guard.mjs so
+# a misconfigured environment fails closed before Cloudflare or Supabase is touched.
 #
 # GitHub `staging` environment contract (validated by scripts/staging-preflight.mjs):
 #   vars:    STAGING_HYPERDRIVE_ID, STAGING_SUPABASE_PROJECT_REF, STAGING_WEB_URL,
 #            STAGING_MONITOR_URL, STAGING_DISABLED_INTEGRATIONS (optional)
 #   secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, STAGING_SUPABASE_ACCESS_TOKEN,
 #            STAGING_SUPABASE_DB_PASSWORD, STAGING_RESEND_API_KEY, STAGING_MAIL_FROM,
-#            STAGING_TOKEN_ENC_KEY, STAGING_IP_HASH_SALT, STAGING_MONITOR_CHECK_SECRET
+#            STAGING_TOKEN_ENC_KEY, STAGING_IP_HASH_SALT, STAGING_MONITOR_CHECK_SECRET,
+#            STAGING_DATABASE_URL (admin postgres URL — identity guarded, used by E2E)
 
 on:
   workflow_dispatch:
@@ -35,6 +39,8 @@ on:
           - after-backend-mutation
           - after-web-mutation
           - recovery-command
+  pull_request:
+    types: [labeled, synchronize, reopened]
 
 permissions:
   contents: read
@@ -53,10 +59,22 @@ env:
 jobs:
   staging-preflight:
     name: Validate staging configuration contract
+    # Manual runs always proceed; PR runs require the `deploy-staging` label on a
+    # same-repo pull request (fork PRs never reach the `staging` environment).
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, 'deploy-staging'))
     runs-on: ubuntu-latest
     environment: staging
     steps:
       - uses: actions/checkout@v7
+      - name: Refuse production release target
+        env:
+          RELEASE_ENVIRONMENT: staging
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          STAGING_MONITOR_URL: ${{ vars.STAGING_MONITOR_URL }}
+        run: node scripts/release-target-guard.mjs staging
       - name: Validate GitHub staging environment contract (names only)
         env:
           STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
@@ -73,6 +91,7 @@ jobs:
           STAGING_TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
           STAGING_IP_HASH_SALT: ${{ secrets.STAGING_IP_HASH_SALT }}
           STAGING_MONITOR_CHECK_SECRET: ${{ secrets.STAGING_MONITOR_CHECK_SECRET }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
         run: node scripts/staging-preflight.mjs environment
       - name: Render staging Hyperdrive id and refuse placeholder or production resources
         env:
@@ -85,14 +104,31 @@ jobs:
       - name: Validate migration compatibility window
         run: node scripts/check-migration-compatibility.mjs
       - name: Record failure injection mode
-        if: ${{ inputs.inject_failure != 'none' }}
+        if: ${{ (inputs.inject_failure || 'none') != 'none' }}
         run: |
           echo "::notice::Staging failure injection enabled: ${{ inputs.inject_failure }} (staging Workers only)."
           echo "## Staging failure injection: \`${{ inputs.inject_failure }}\`" >> "$GITHUB_STEP_SUMMARY"
 
+  # Nothing reaches staging before the PR/dispatch commit passes the same
+  # lint/typecheck/test/build gate production changes require.
+  ci:
+    name: CI gate
+    needs: staging-preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+
   capture-staging-state:
     name: Capture exact pre-mutation staging state
-    needs: staging-preflight
+    needs: [staging-preflight, ci]
     runs-on: ubuntu-latest
     environment: staging
     outputs:
@@ -115,7 +151,7 @@ jobs:
   # F-004: the same semantic N-1 gate production runs, executed from the staging branch.
   n1-compatibility:
     name: Semantic N-1 Compatibility
-    needs: staging-preflight
+    needs: [staging-preflight, ci]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -187,6 +223,13 @@ jobs:
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
         with:
           version: 2.39.2
+      - name: Refuse production release target
+        env:
+          RELEASE_ENVIRONMENT: staging
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: node scripts/release-target-guard.mjs staging
       - name: Link the staging project and push migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
@@ -215,8 +258,6 @@ jobs:
       - name: Build shared
         working-directory: packages/shared
         run: bun run build
-      - name: Run tests
-        run: bun run test
       - name: Build leaderboard
         working-directory: apps/leaderboard
         run: node build.js
@@ -583,6 +624,41 @@ jobs:
           echo "::error::Injected staging failure after Web mutation; finalizer must restore all five staging Workers."
           exit 1
 
+  # Same scenarios as the PR Check E2E gate, but against the freshly released
+  # staging apex and its real database — no local runtime is provisioned.
+  e2e-staging:
+    name: E2E release gate (staging)
+    needs: [release-smoke-staging]
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      E2E_BASE_URL: ${{ env.STAGING_APEX }}
+      E2E_DB_URL: ${{ secrets.STAGING_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - run: bun install --frozen-lockfile
+      - name: Build shared
+        working-directory: packages/shared
+        run: bun run build
+      # There is no headless Kick/Telegram OAuth, so the viewer session the
+      # journeys need is minted directly in the staging database.
+      - name: Mint a viewer session
+        working-directory: e2e
+        run: MINT_VIEWER_ENV_FILE="$GITHUB_ENV" bun scripts/mint-viewer.ts
+      - name: Run E2E release gate
+        working-directory: e2e
+        env:
+          E2E_ALLOW_MUTATIONS: '1'
+          # The deployed staging environment serves the marketing Worker ("/" and
+          # "/pricing", a service binding) and the Bot Worker (/bot/*, a zone
+          # route), so both are exercised for real.
+          E2E_MARKETING_AVAILABLE: '1'
+          E2E_BOT_AVAILABLE: '1'
+        run: bun run gate
+
   staging-finalizer:
     name: Finalize staging release or recover exact staging state
     needs:
@@ -596,6 +672,7 @@ jobs:
       - deploy-web-staging
       - web-readiness-staging
       - release-smoke-staging
+      - e2e-staging
     if: ${{ always() && needs.capture-staging-state.result == 'success' }}
     runs-on: ubuntu-latest
     environment: staging
@@ -653,13 +730,13 @@ jobs:
 
       # Staging-only: make the first recovery command fail so the run must stay red.
       - name: Staging-only failure injection (recovery command)
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' && inputs.inject_failure == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.worker_changes == 'true' && (inputs.inject_failure || 'none') == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging' }}
         run: |
           echo "::error::Injected staging recovery-command failure; the release must remain red and verify must not report a restored state."
           exit 1
 
       - name: Restore exact Leaderboard version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/leaderboard
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.leaderboard_restore_specs }}
@@ -668,7 +745,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Bot version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/bot
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.bot_restore_specs }}
@@ -677,7 +754,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Consumer version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/consumer
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.consumer_restore_specs }}
@@ -686,7 +763,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Monitor version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/monitor
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.monitor_restore_specs }}
@@ -695,7 +772,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Web version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_changed == 'true' && inputs.inject_failure != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/web
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.web_restore_specs }}

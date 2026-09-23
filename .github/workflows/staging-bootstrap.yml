@@ -1,0 +1,185 @@
+name: Staging bootstrap
+
+# One-time, idempotent provisioning of the isolated staging infrastructure that
+# .github/workflows/staging.yml verifies but cannot create itself:
+#   - yourrank-events-staging / yourrank-events-staging-dlq queues
+#   - the yourrank-staging-pg Hyperdrive config (-> STAGING_HYPERDRIVE_ID var)
+#   - the workers.dev subdomain URLs (-> STAGING_WEB_URL / STAGING_MONITOR_URL vars)
+#   - the staging.yourrank.site DNS record (proxied AAAA, or manual instructions)
+#
+# Manual trigger only; `environment: staging` scopes every secret/variable to the
+# staging GitHub environment. The release-target guard runs first so a
+# misconfigured environment fails closed before Cloudflare is touched.
+#
+# Secrets used (staging environment): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
+# STAGING_SUPABASE_PROJECT_REF, STAGING_WORKER_DATABASE_URL (the yourrank_worker
+# Supavisor session-pooler URL — see apps/leaderboard/STAGING.md §1.2).
+# STAGING_DATABASE_URL may also be present (admin URL for E2E/guards); the guard
+# validates whichever of the two is set. Connection strings are never echoed.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-mutation
+  cancel-in-progress: false
+
+env:
+  RELEASE_ENVIRONMENT: staging
+  WRANGLER_VERSION: "4.106.0"
+
+jobs:
+  bootstrap:
+    name: Provision staging infrastructure (idempotent)
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+
+      - name: Refuse production release target
+        env:
+          # STAGING_HYPERDRIVE_ID is expected to be unset the first time this runs;
+          # the guard only validates it when present.
+          STAGING_SUPABASE_PROJECT_REF: ${{ vars.STAGING_SUPABASE_PROJECT_REF }}
+          STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          STAGING_WORKER_DATABASE_URL: ${{ secrets.STAGING_WORKER_DATABASE_URL }}
+          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+          STAGING_MONITOR_URL: ${{ vars.STAGING_MONITOR_URL }}
+        run: |
+          if [ -z "${{ secrets.STAGING_DATABASE_URL }}" ]; then
+            # Bootstrap must be runnable before the admin URL exists; the release
+            # workflow re-checks it as required. Guard needs *a* value, so skip
+            # only the required check by pointing the guard at the worker URL —
+            # both are validated under the same staging contract anyway.
+            STAGING_DATABASE_URL="$STAGING_WORKER_DATABASE_URL" node scripts/release-target-guard.mjs staging
+          else
+            node scripts/release-target-guard.mjs staging
+          fi
+
+      - run: bun install --frozen-lockfile
+
+      - name: Create staging queues (if missing)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +x
+          EXISTING=$(bunx wrangler@$WRANGLER_VERSION queues list 2>/dev/null | grep -oE '"(yourrank-events-staging|yourrank-events-staging-dlq)"' | tr -d '"' | sort -u || true)
+          for QUEUE in yourrank-events-staging yourrank-events-staging-dlq; do
+            if printf '%s\n' "$EXISTING" | grep -qx "$QUEUE"; then
+              echo "Queue $QUEUE already exists — skipping."
+            else
+              bunx wrangler@$WRANGLER_VERSION queues create "$QUEUE"
+              echo "::notice::Created queue $QUEUE"
+            fi
+          done
+
+      - name: Create staging Hyperdrive config (if missing)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_WORKER_DATABASE_URL: ${{ secrets.STAGING_WORKER_DATABASE_URL }}
+        run: |
+          set +x
+          if [ -z "$STAGING_WORKER_DATABASE_URL" ]; then
+            echo "::error::STAGING_WORKER_DATABASE_URL is not set in the staging environment — cannot create the Hyperdrive config."
+            exit 1
+          fi
+          # Connection strings are never echoed; only names and the resulting id are logged.
+          # wrangler hyperdrive list renders either a table (id and name on one line)
+          # or key/value blocks (id above the name) — cover both layouts.
+          hd_id() {
+            LIST=$(bunx wrangler@$WRANGLER_VERSION hyperdrive list 2>/dev/null || true)
+            printf '%s\n' "$LIST" | grep 'yourrank-staging-pg' | grep -oE '[0-9a-f]{32}' | head -1
+            printf '%s\n' "$LIST" | grep -B5 'yourrank-staging-pg' | grep -oE '[0-9a-f]{32}' | head -1
+          }
+          EXISTING_ID=$(hd_id | head -1)
+          if [ -z "$EXISTING_ID" ]; then
+            bunx wrangler@$WRANGLER_VERSION hyperdrive create yourrank-staging-pg \
+              --connection-string="$STAGING_WORKER_DATABASE_URL" 2>&1 | sed -E 's#(postgres(ql)?://)[^@ ]+@#\1***@#g'
+            EXISTING_ID=$(hd_id | head -1)
+          else
+            echo "Hyperdrive config yourrank-staging-pg already exists — skipping create."
+          fi
+          if [ -z "$EXISTING_ID" ]; then
+            echo "::error::Could not determine the yourrank-staging-pg Hyperdrive id."
+            exit 1
+          fi
+          echo "::notice::STAGING_HYPERDRIVE_ID=$EXISTING_ID — set this as a GitHub staging environment *variable*."
+          {
+            echo "## Hyperdrive"
+            echo ""
+            echo "Set the GitHub \`staging\` environment variable \`STAGING_HYPERDRIVE_ID\` to:"
+            echo ""
+            echo '```'
+            echo "$EXISTING_ID"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report workers.dev subdomain URLs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +x
+          SUB=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain // empty')
+          if [ -z "$SUB" ]; then
+            echo "::warning::Could not read the workers.dev subdomain — set STAGING_WEB_URL and STAGING_MONITOR_URL manually."
+            exit 0
+          fi
+          {
+            echo "## workers.dev URLs"
+            echo ""
+            echo "Set these GitHub \`staging\` environment *variables*:"
+            echo ""
+            echo '```'
+            echo "STAGING_WEB_URL=https://yourrank-web-staging.${SUB}.workers.dev"
+            echo "STAGING_MONITOR_URL=https://yourrank-monitor-staging.${SUB}.workers.dev"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "STAGING_WEB_URL=https://yourrank-web-staging.${SUB}.workers.dev"
+          echo "STAGING_MONITOR_URL=https://yourrank-monitor-staging.${SUB}.workers.dev"
+
+      - name: Ensure staging.yourrank.site DNS record
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +x
+          ZONE=$(grep -oE 'CF_ZONE_ID = "[0-9a-f]+"' apps/leaderboard/wrangler.toml | head -1 | grep -oE '[0-9a-f]{32}')
+          if [ -z "$ZONE" ]; then
+            echo "::error::Could not read CF_ZONE_ID from apps/leaderboard/wrangler.toml."
+            exit 1
+          fi
+          RESPONSE=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE/dns_records?name=staging.yourrank.site")
+          COUNT=$(printf '%s' "$RESPONSE" | jq '.result | length')
+          if [ "$COUNT" -gt 0 ]; then
+            echo "DNS record for staging.yourrank.site already exists — skipping."
+            exit 0
+          fi
+          CREATE=$(curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/zones/$ZONE/dns_records" \
+            --data '{"type":"AAAA","name":"staging.yourrank.site","content":"100::","proxied":true}')
+          if printf '%s' "$CREATE" | jq -e '.success == true' >/dev/null; then
+            echo "::notice::Created proxied AAAA record staging.yourrank.site -> 100:: (Cloudflare Workers placeholder)."
+          else
+            # A 403 just means the token lacks DNS edit; the record is trivial to add by hand.
+            echo "::warning::DNS create failed (likely missing Zone.DNS edit permission). Create this record manually:"
+            echo "::warning::Type AAAA | Name staging | IPv6 100:: | Proxied | TTL Auto — in the yourrank.site zone."
+            printf '%s\n' "$CREATE" | jq -c '{success, errors}' || true
+            {
+              echo "## DNS (manual step)"
+              echo ""
+              echo "The API token could not create the record. Add it by hand in the \`yourrank.site\` zone:"
+              echo "- Type: \`AAAA\`, Name: \`staging\`, IPv6: \`100::\`, Proxied: yes"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

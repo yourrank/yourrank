@@ -17,6 +17,9 @@
 //                   Worker (from `wrangler secret list --env staging`) against the
 //                   required / integration / forbidden contract.
 //
+// STAGING_DATABASE_URL (admin postgres URL for guards and E2E) is a required
+// environment secret; full identity is enforced by scripts/release-target-guard.mjs.
+//
 // Integrations that are intentionally disabled in staging must be declared in the
 // STAGING_DISABLED_INTEGRATIONS variable; an undeclared missing integration fails.
 import { readFile, writeFile } from "node:fs/promises";
@@ -163,6 +166,7 @@ export const STAGING_ENVIRONMENT_CONTRACT = Object.freeze({
     "STAGING_TOKEN_ENC_KEY",
     "STAGING_IP_HASH_SALT",
     "STAGING_MONITOR_CHECK_SECRET",
+    "STAGING_DATABASE_URL",
   ]),
   optionalVars: Object.freeze(["STAGING_DISABLED_INTEGRATIONS", "CLOUDFLARE_WORKERS_PLAN"]),
   // Production-only names must never be present in the staging environment.
@@ -493,6 +497,15 @@ export function checkStagingEnvironment(env) {
     else if (env.STAGING_SUPABASE_PROJECT_REF === PRODUCTION_RESOURCES.supabaseProjectRef) problems.push("STAGING_SUPABASE_PROJECT_REF is the PRODUCTION Supabase project.");
   }
   if (present("STAGING_TOKEN_ENC_KEY") && !HEX_64.test(env.STAGING_TOKEN_ENC_KEY)) problems.push("STAGING_TOKEN_ENC_KEY must be 64 hex characters.");
+  if (present("STAGING_DATABASE_URL")) {
+    let stagingDbUrl;
+    try { stagingDbUrl = new URL(env.STAGING_DATABASE_URL); } catch { stagingDbUrl = null; }
+    if (!stagingDbUrl || !["postgres:", "postgresql:"].includes(stagingDbUrl.protocol)) {
+      problems.push("STAGING_DATABASE_URL must be a postgres:// connection URL.");
+    } else if (env.STAGING_DATABASE_URL.includes(PRODUCTION_RESOURCES.supabaseProjectRef)) {
+      problems.push("STAGING_DATABASE_URL references the PRODUCTION Supabase project.");
+    }
+  }
   for (const name of ["STAGING_WEB_URL", "STAGING_MONITOR_URL"]) {
     if (!present(name)) continue;
     let url;
