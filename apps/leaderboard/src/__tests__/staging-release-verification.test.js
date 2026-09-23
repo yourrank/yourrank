@@ -375,6 +375,9 @@ describe("F-012 staging release verification", () => {
     const finalizer = jobBlock(staging, "staging-finalizer");
     expect(finalizer).toContain("(inputs.inject_failure || 'none') == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging'");
     expect(finalizer.match(/\(inputs\.inject_failure \|\| 'none'\) != 'recovery-command'/g)).toHaveLength(5);
+    // A first staging release has nothing to restore: each restore step must skip
+    // workers whose baseline capture reported them absent.
+    expect(finalizer.match(/_first_deploy != 'true'/g)).toHaveLength(5);
     for (const production of [deploy, rollback, contract]) {
       expect(production).not.toContain("inject_failure");
       // Production workflows may set RELEASE_ENVIRONMENT only for the

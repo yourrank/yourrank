@@ -53,7 +53,7 @@ function required(value, name) {
   return value;
 }
 
-async function requestJson(url, token, fetchImpl, label) {
+async function requestJson(url, token, fetchImpl, label, { allowNotFound = false } = {}) {
   const response = await fetchImpl(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
@@ -61,6 +61,7 @@ async function requestJson(url, token, fetchImpl, label) {
   });
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (allowNotFound && response.status === 404) return null;
     const detail = body?.errors?.map((error) => error.message).join("; ") || body?.message || `HTTP ${response.status}`;
     throw new Error(`Release-state request failed for ${label}: ${detail}`);
   }
@@ -122,6 +123,7 @@ export function versionTag(versionPayload) {
 }
 
 export function versionSourceSha(workerState) {
+  if (workerState.absent) return null;
   const tags = new Set(workerState.versions.map((version) => version.tag ?? null));
   if (tags.size !== 1) return null;
   const [tag] = tags;
@@ -129,6 +131,7 @@ export function versionSourceSha(workerState) {
 }
 
 export function versionSpecs(workerState) {
+  if (workerState.absent) return "absent";
   return [...workerState.versions]
     .sort((left, right) => left.versionId.localeCompare(right.versionId))
     .map(({ versionId, percentage }) => `${versionId}@${Number(percentage)}%`)
@@ -154,6 +157,7 @@ export async function fetchReleaseState({
   supabaseAccessToken,
   fetchImpl = fetch,
   releaseWorkers = RELEASE_WORKERS,
+  allowAbsentWorkers = false,
 } = {}) {
   const accountId = required(cloudflareAccountId, "CLOUDFLARE_ACCOUNT_ID");
   const cloudflareToken = required(cloudflareApiToken, "CLOUDFLARE_API_TOKEN");
@@ -163,7 +167,17 @@ export async function fetchReleaseState({
   const workers = {};
   for (const worker of releaseWorkers) {
     const scriptUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${worker.scriptName}`;
-    const payload = await requestJson(`${scriptUrl}/deployments`, cloudflareToken, fetchImpl, `${worker.scriptName} deployments`);
+    const payload = await requestJson(
+      `${scriptUrl}/deployments`,
+      cloudflareToken,
+      fetchImpl,
+      `${worker.scriptName} deployments`,
+      { allowNotFound: allowAbsentWorkers },
+    );
+    if (payload === null) {
+      workers[worker.key] = { scriptName: worker.scriptName, absent: true, deploymentId: null, createdOn: null, versions: [] };
+      continue;
+    }
     const state = latestDeploymentState(payload, worker.scriptName);
     for (const version of state.versions) {
       const detail = await requestJson(
@@ -200,11 +214,18 @@ export function buildRecoveryPlan({ baseline, current, stages, releaseWorkers = 
   const migrationsMissing = baseline.migrations.filter(({ version }) => !currentMigrations.has(version));
   const restoreTargets = [];
   const unchangedWorkers = [];
+  const firstDeployWorkers = [];
   const workers = {};
 
   for (const worker of releaseWorkers) {
     const before = required(baseline.workers?.[worker.key], `baseline state for ${worker.key}`);
     const after = required(current.workers?.[worker.key], `current state for ${worker.key}`);
+    if (before.absent) {
+      const changed = !after.absent;
+      workers[worker.key] = { changed, before, after, restoreSpecs: "absent" };
+      firstDeployWorkers.push(worker.key);
+      continue;
+    }
     const changed = !sameVersions(before, after);
     workers[worker.key] = { changed, before, after, restoreSpecs: versionSpecs(before) };
     (changed ? restoreTargets : unchangedWorkers).push(worker.key);
@@ -212,11 +233,12 @@ export function buildRecoveryPlan({ baseline, current, stages, releaseWorkers = 
 
   return {
     releaseFailed: RELEASE_STAGES.some((stage) => FAILED_RESULTS.has(stages[stage])),
-    mutationObserved: migrationsAdded.length > 0 || migrationsMissing.length > 0 || restoreTargets.length > 0,
+    mutationObserved: migrationsAdded.length > 0 || migrationsMissing.length > 0 || restoreTargets.length > 0 || firstDeployWorkers.length > 0,
     migrationsAdded,
     migrationsMissing,
     restoreTargets,
     unchangedWorkers,
+    firstDeployWorkers,
     workers,
   };
 }
@@ -288,6 +310,7 @@ function environmentStateOptions() {
     supabaseProjectRef,
     supabaseAccessToken: process.env.SUPABASE_ACCESS_TOKEN,
     releaseWorkers: environment.workers,
+    allowAbsentWorkers: name !== "production",
   };
 }
 
@@ -328,6 +351,7 @@ async function planCommand() {
   for (const worker of options.releaseWorkers) {
     outputs[`${worker.key}_changed`] = String(plan.workers[worker.key].changed);
     outputs[`${worker.key}_restore_specs`] = plan.workers[worker.key].restoreSpecs;
+    outputs[`${worker.key}_first_deploy`] = String(Boolean(plan.workers[worker.key].before.absent));
     console.log(
       `${worker.key}: changed=${plan.workers[worker.key].changed}; ` +
       `captured=${versionSpecs(plan.workers[worker.key].before)}; ` +
@@ -339,15 +363,18 @@ async function planCommand() {
   console.log(`Observed migrations missing: ${outputs.migrations_missing}`);
   console.log(`Workers requiring exact restoration: ${plan.restoreTargets.join(", ") || "none"}`);
   console.log(`Workers still at captured state: ${plan.unchangedWorkers.join(", ") || "none"}`);
+  console.log(`First deploy — nothing to restore: ${plan.firstDeployWorkers.join(", ") || "none"}`);
   const workerRows = options.releaseWorkers.map((worker) => {
     const state = plan.workers[worker.key];
-    return `| ${worker.key} | \`${versionSpecs(state.before)}\` | \`${versionSpecs(state.after)}\` | ${state.changed ? "restore" : "unchanged"} |`;
+    const action = state.before.absent ? "first deploy — nothing to restore" : state.changed ? "restore" : "unchanged";
+    return `| ${worker.key} | \`${versionSpecs(state.before)}\` | \`${versionSpecs(state.after)}\` | ${action} |`;
   }).join("\n");
   await appendSummary(
     `## Recovery plan\n\n- Migrations added and retained: ${outputs.migrations_added}\n` +
     `- Migrations unexpectedly missing: ${outputs.migrations_missing}\n` +
     `- Restore exact captured versions: ${plan.restoreTargets.join(", ") || "none"}\n` +
-    `- Already at captured versions: ${plan.unchangedWorkers.join(", ") || "none"}\n\n` +
+    `- Already at captured versions: ${plan.unchangedWorkers.join(", ") || "none"}\n` +
+    `- First deploy — nothing to restore: ${plan.firstDeployWorkers.join(", ") || "none"}\n\n` +
     `| Worker | Captured allocation | Observed allocation | Recovery |\n` +
     `|---|---|---|---|\n${workerRows}`,
   );

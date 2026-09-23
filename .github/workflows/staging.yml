@@ -738,7 +738,7 @@ jobs:
           exit 1
 
       - name: Restore exact Leaderboard version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.leaderboard_changed == 'true' && steps.plan.outputs.leaderboard_first_deploy != 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/leaderboard
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.leaderboard_restore_specs }}
@@ -747,7 +747,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Bot version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.bot_changed == 'true' && steps.plan.outputs.bot_first_deploy != 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/bot
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.bot_restore_specs }}
@@ -756,7 +756,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Consumer version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.consumer_changed == 'true' && steps.plan.outputs.consumer_first_deploy != 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/consumer
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.consumer_restore_specs }}
@@ -765,7 +765,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Monitor version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.monitor_changed == 'true' && steps.plan.outputs.monitor_first_deploy != 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/monitor
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.monitor_restore_specs }}
@@ -774,7 +774,7 @@ jobs:
           bunx wrangler versions deploy "${SPECS[@]}" --env staging -y --message "Automatic staging recovery for GitHub run ${GITHUB_RUN_ID}"
 
       - name: Restore exact Web version allocation
-        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_changed == 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
+        if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_changed == 'true' && steps.plan.outputs.web_first_deploy != 'true' && (inputs.inject_failure || 'none') != 'recovery-command' }}
         working-directory: apps/web
         env:
           VERSION_SPECS: ${{ steps.plan.outputs.web_restore_specs }}
