@@ -223,7 +223,7 @@ import {
   handleViewerExportStatus,
   handleViewerExportDownload,
 } from "./handlers/viewer-export.js";
-import { handleApiDocs, handleOpenApiJson } from "./handlers/docs.js";
+import { handleApiDocs, handleDocsPage, handleOpenApiJson, DOCS_PATH, OPENAPI_PATH, LEGACY_OPENAPI_PATH } from "./handlers/docs.js";
 import { handleUserPayments, handleAccountUsage } from "./billing.js";
 import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook } from "./handlers/polar-billing.js";
 import {
@@ -494,8 +494,10 @@ export const ROUTES = [
   { path: "/api/games/fairness/rotate", method: "POST", handler: withHandler(handleGamesFairnessRotate) },
 
   // Public API routes (CSRF-exempt)
+  { path: DOCS_PATH, method: "GET", handler: withHandler(handleDocsPage) },
+  { path: OPENAPI_PATH, method: "GET", handler: withHandler(handleOpenApiJson) },
   { path: "/api/docs", method: "GET", handler: withHandler(handleApiDocs) },
-  { path: "/api/openapi.json", method: "GET", handler: withHandler(handleOpenApiJson) },
+  { path: LEGACY_OPENAPI_PATH, method: "GET", handler: withHandler(handleOpenApiJson) },
   { path: "/api/public/:slug/standings", method: "GET", handler: withHandler(handlePublicStandings) },
   { path: "/api/public/:slug/players", method: "GET", handler: withHandler(handlePublicPlayers) },
   { path: "/api/public/:slug/stream", method: "GET", handler: withHandler(handlePublicStream) },
