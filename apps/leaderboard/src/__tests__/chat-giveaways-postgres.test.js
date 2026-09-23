@@ -297,14 +297,14 @@ describe("Chat Giveaways (Postgres)", () => {
   // The draw/finalize CAS statements, verbatim from the dashboard handler: the
   // UPDATE is the arbiter, so a stale or racing request must match zero rows.
   const STAMP = `WITH stamp AS (
-      SELECT GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond') AS drawn_at
+      SELECT GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond') AS new_drawn_at
         FROM chat_giveaway_sessions WHERE id = $1
     )`;
-  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = stamp.drawn_at,
+  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = stamp.new_drawn_at,
             winner_confirmed_at = NULL, winner_confirmation_message = NULL,
             winner_finalized_at = NULL, winner_finalized_by = NULL,
             winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
-            winner_response_deadline = CASE WHEN $4::boolean THEN stamp.drawn_at + make_interval(secs => $5::int) ELSE NULL END,
+            winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END,
             status = 'completed', stopped_at = COALESCE(s.stopped_at, now())`;
   const initialDraw = (sessionId, winnerId, required = false, timeout = null) => run(
     `${STAMP}

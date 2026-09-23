@@ -79,15 +79,15 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
   const params = [session.id, winner.id, session.site_id, responseRequired, responseTimeoutSeconds];
   if (expectedWinnerEntryId != null || automatic) params.push(session.winner_entry_id, session.drawn_at);
   const updated = await run(`WITH stamp AS (
-      SELECT GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond') AS drawn_at
+      SELECT GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond') AS new_drawn_at
         FROM chat_giveaway_sessions WHERE id = $1
     )
     UPDATE chat_giveaway_sessions s
-       SET winner_entry_id = $2, drawn_at = stamp.drawn_at,
+       SET winner_entry_id = $2, drawn_at = stamp.new_drawn_at,
            winner_confirmed_at = NULL, winner_confirmation_message = NULL,
            winner_finalized_at = NULL, winner_finalized_by = NULL,
            winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
-           winner_response_deadline = CASE WHEN $4::boolean THEN stamp.drawn_at + make_interval(secs => $5::int) ELSE NULL END,
+           winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END,
            status = 'completed', stopped_at = COALESCE(s.stopped_at, now())
       FROM stamp
      WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL ${cas}

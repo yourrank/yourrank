@@ -300,7 +300,7 @@ describe("Chat Giveaway API", () => {
     }));
     expect(res.status).toBe(200);
     expect(update.params).toEqual(["gs-1", "e1", siteA.id, true, 90]);
-    expect(update.text).toContain("winner_response_deadline = CASE WHEN $4::boolean THEN stamp.drawn_at + make_interval(secs => $5::int) ELSE NULL END");
+    expect(update.text).toContain("winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END");
   });
 
   it("persists no response window when the session rules do not require one", async () => {
@@ -515,7 +515,7 @@ describe("Chat Giveaway API", () => {
     }));
     expect(res.status).toBe(200);
     expect(update.text).toContain("winner_entry_id = $6");
-    expect(update.text).toContain("date_trunc('milliseconds', drawn_at) = date_trunc('milliseconds', $7::timestamptz)");
+    expect(update.text).toContain("date_trunc('milliseconds', s.drawn_at) = date_trunc('milliseconds', $7::timestamptz)");
     expect(update.text).toContain("winner_finalized_at IS NULL");
     expect(update.params).toEqual(["gs-1", update.params[1], siteA.id, false, null, "e1", drawnAt]);
   });
