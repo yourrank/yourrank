@@ -36,6 +36,8 @@ export const PORTABILITY_SUITES = Object.freeze([
   // Chat giveaways: verified channel -> site routing, one active session per
   // site, one entry per stable provider user, stop/disconnect keep history.
   "apps/leaderboard/src/__tests__/chat-giveaways-postgres.test.js",
+  // Board-scoped API keys, idempotency reservations, concurrent score merges.
+  "apps/leaderboard/src/__tests__/scores-api-postgres.test.js",
   // Entry-mode eligibility, authenticated verification, giveaway-scoped IP HMAC and draw filtering.
   "apps/leaderboard/src/__tests__/giveaway-rules-postgres.test.js",
 ]);

@@ -14,6 +14,9 @@ let _saveSiteResult = {};
 let _savedPayload = null;
 let _saveOptions = null;
 let _hashInput = null;
+let _keySiteId = null;
+let _rlBucket = null;
+let _idem = null;
 
 const dbDeps = ({
   one: (sql, _params) => {
@@ -69,7 +72,7 @@ const cryptoDeps = ({
 const postbackDeps = ({
   POSTBACK_SUNSET: "2026-10-01",
   unsignedPostbacksEnabled: (value) => value !== "false" && value !== "0",
-  findPostbackOwner: async () => _siteRow ? { id: "key-id", userId: _siteRow.user_id } : null,
+  findPostbackOwner: async () => _siteRow ? { id: "key-id", userId: _siteRow.user_id, siteId: _keySiteId } : null,
   logPostbackIntake: () => {},
   getActivePostbackKey: async () => null,
   createPostbackKey: async () => "pbkey",
@@ -78,19 +81,42 @@ const postbackDeps = ({
   recordReplayHash: async () => { throw new Error("Replay admission must be inside the save transaction"); },
 });
 
-const { handleScores } = await import("../handlers/scores.js");
+const { handleScores, handleScoresUpsert } = await import("../handlers/scores.js");
+const idemDeps = () => ({
+  computeIdempotencyRequestHash: async (input) => { _idem.hashInput = input; return "req-hash"; },
+  reserveIdempotencyKey: async (args) => { _idem.reserveArgs = args; return _idem.reserve; },
+  completeIdempotencyKey: async (args) => { _idem.completed.push(args); return true; },
+  releaseIdempotencyKey: async (args) => { _idem.released.push(args); return true; },
+});
 const invokeScores = (request, env) =>
   handleScores(request, env, {
     ...dbDeps,
     ...sessionDeps,
     ...cryptoDeps,
     ...postbackDeps,
+    ...( _idem ? idemDeps() : {}),
+    rateLimit: _rlSpy || undefined,
     saveSiteImpl: async (_env, _user, payload, _siteId, _request, options) => {
       _savedPayload = payload;
       _saveOptions = options;
       return _saveSiteResult;
     },
   });
+const invokeUpsert = (request, env) =>
+  handleScoresUpsert(request, env, {
+    ...dbDeps,
+    ...sessionDeps,
+    ...cryptoDeps,
+    ...postbackDeps,
+    ...( _idem ? idemDeps() : {}),
+    rateLimit: _rlSpy || undefined,
+    saveSiteImpl: async (_env, _user, payload, _siteId, _request, options) => {
+      _savedPayload = payload;
+      _saveOptions = options;
+      return _saveSiteResult;
+    },
+  });
+let _rlSpy = null;
 
 // QA-006: Freeze the clock so Date.now()-based tests are deterministic
 const FROZEN_TIME = new Date("2025-06-15T12:00:00Z").getTime();
@@ -356,5 +382,197 @@ describe("handleScores — payload validation", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe("slug already taken");
+  });
+});
+
+// ── PATCH /api/scores, board-scoped keys, idempotency ───────────────────────
+
+function makePatchRequest(opts = {}) {
+  const headers = new Headers(opts.headers || {});
+  if (!headers.has("x-postback-key")) headers.set("x-postback-key", "key");
+  if (!headers.has("x-postback-signature")) headers.set("x-postback-signature", "test-hmac-signature");
+  return new Request("https://yourrank.site/api/scores", {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(opts.body ?? { slug: "test", players: [{ name: "Alice", score: 5 }] }),
+  });
+}
+
+describe("score write pipeline — auth and buckets", () => {
+  beforeEach(() => {
+    _siteRow = site();
+    _ownerRow = proOwner();
+    _saveSiteResult = {};
+    _savedPayload = null;
+    _saveOptions = null;
+    _keySiteId = null;
+    _rlSpy = null;
+    _rateLimitCount = 0;
+    _idem = null;
+    _hashInput = null;
+  });
+
+  test("PATCH requires the postback key and signature headers", async () => {
+    const noKey = new Request("https://yourrank.site/api/scores", { method: "PATCH", body: "{}" });
+    expect((await invokeUpsert(noKey, makeEnv())).status).toBe(401);
+    const noSig = new Request("https://yourrank.site/api/scores", { method: "PATCH", headers: { "x-postback-key": "k" }, body: "{}" });
+    expect((await invokeUpsert(noSig, makeEnv())).status).toBe(401);
+  });
+
+  test("rate-limit bucket uses the key hash, not the plaintext key", async () => {
+    _rlSpy = async (env, bucket) => { _rlBucket = bucket; return { ok: true }; };
+    const res = await invokeUpsert(makePatchRequest({ headers: { "x-postback-key": "secret-key-123" } }), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_rlBucket).toBe("scores-upsert:hash:secret-key-123");
+    expect(_rlBucket).not.toContain("secret-key-123:");
+  });
+});
+
+describe("board-scoped API keys", () => {
+  beforeEach(() => {
+    _siteRow = site();
+    _ownerRow = proOwner();
+    _saveSiteResult = {};
+    _keySiteId = null;
+  });
+
+  test("a scoped key updates its own board via slug", async () => {
+    _keySiteId = "site-1";
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(200);
+  });
+
+  test("a scoped key is rejected for another board via slug", async () => {
+    _keySiteId = "site-9";
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toContain("scoped to another board");
+  });
+
+  test("a scoped key is rejected for another board via siteId and via header", async () => {
+    _keySiteId = "site-9";
+    const byBody = await invokeScores(makeRequest({ headers: { "x-postback-key": "key" }, body: { siteId: "11111111-1111-4111-8111-111111111111", players: [] } }), makeEnv());
+    expect(byBody.status).toBe(403);
+    const byHeader = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "x-postback-site": "test" }, body: { players: [] } }), makeEnv());
+    expect(byHeader.status).toBe(403);
+  });
+
+  test("an account-level key still works across boards", async () => {
+    _keySiteId = null;
+    _siteRow = { id: "site-2", user_id: "user-1" };
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("PATCH /api/scores", () => {
+  beforeEach(() => {
+    _siteRow = site();
+    _ownerRow = proOwner();
+    _saveSiteResult = { ok: true, patch: { total: 4, updated: 1, created: 1 } };
+    _savedPayload = null;
+    _saveOptions = null;
+    _keySiteId = null;
+    _rateLimitCount = 0;
+    _hashInput = null;
+  });
+
+  test("passes the submitted players to the server-side merge and returns counts", async () => {
+    const res = await invokeUpsert(makePatchRequest({ body: { slug: "test", players: [{ name: "Alice", score: 50 }, { name: "New", wagered: 5 }] } }), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_saveOptions.scorePatch).toEqual([{ name: "Alice", score: 50 }, { name: "New", wagered: 5 }]);
+    expect(_savedPayload.players).toBeUndefined();
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, players: 4, updated: 1, created: 1 });
+  });
+
+  test("rejects an empty players array", async () => {
+    const res = await invokeUpsert(makePatchRequest({ body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(400);
+  });
+
+  test("rejects duplicate player names", async () => {
+    const res = await invokeUpsert(makePatchRequest({ body: { slug: "test", players: [{ name: "A" }, { name: " a " }] } }), makeEnv());
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("Duplicate player name");
+  });
+
+  test("keeps the replay guard with a distinct kind when no Idempotency-Key is sent", async () => {
+    const res = await invokeUpsert(makePatchRequest(), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_hashInput.kind).toBe("scores-upsert");
+    expect(_saveOptions.scoreReplay).toEqual({ userId: "user-1", hash: "replay-hash" });
+  });
+
+  test("free-plan owner gets 403 and a closed board gets 409", async () => {
+    _ownerRow = { plan: "free", plan_expires_at: null, status: "active" };
+    expect((await invokeUpsert(makePatchRequest(), makeEnv())).status).toBe(403);
+    _ownerRow = proOwner();
+    _siteRow = { ...site(), ends_at: new Date(Date.now() - 1000).toISOString() };
+    expect((await invokeUpsert(makePatchRequest(), makeEnv())).status).toBe(409);
+  });
+});
+
+describe("Idempotency-Key", () => {
+  beforeEach(() => {
+    _siteRow = site();
+    _ownerRow = proOwner();
+    _saveSiteResult = {};
+    _savedPayload = null;
+    _saveOptions = null;
+    _keySiteId = null;
+    _rateLimitCount = 0;
+    _hashInput = null;
+    _idem = { reserve: { state: "reserved" }, completed: [], released: [], hashInput: null, reserveArgs: null };
+  });
+
+  test("completes the reservation on a 2xx and skips the replay guard", async () => {
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_idem.completed).toHaveLength(1);
+    expect(_idem.completed[0]).toMatchObject({ userId: "user-1", siteId: "site-1", endpoint: "POST /api/scores", key: "abc", status: 200 });
+    expect(_idem.reserveArgs.requestHash).toBe("req-hash");
+    expect(_hashInput).toBeNull();
+    expect(_saveOptions.scoreReplay).toBeUndefined();
+  });
+
+  test("releases the reservation on a 4xx so the key can be retried", async () => {
+    _saveSiteResult = { error: "slug already taken" };
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [{ name: "A", wagered: 1 }] } }), makeEnv());
+    expect(res.status).toBe(400);
+    expect(_idem.released).toHaveLength(1);
+    expect(_idem.completed).toHaveLength(0);
+  });
+
+  test("replays the stored response with Idempotency-Replayed", async () => {
+    _idem.reserve = { state: "replay", status: 200, body: { ok: true, players: 3 } };
+    const res = await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [] } }), makeEnv());
+    expect(res.status).toBe(200);
+    expect(res.headers.get("idempotency-replayed")).toBe("true");
+    expect(await res.json()).toEqual({ ok: true, players: 3 });
+    expect(_savedPayload).toBeNull();
+  });
+
+  test("rejects a key reused with a different payload and one still processing", async () => {
+    _idem.reserve = { state: "mismatch" };
+    const req = () => makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "abc" }, body: { slug: "test", players: [] } });
+    expect((await invokeScores(req(), makeEnv())).status).toBe(422);
+    _idem.reserve = { state: "in_progress" };
+    expect((await invokeScores(req(), makeEnv())).status).toBe(409);
+  });
+
+  test("rejects an Idempotency-Key outside 1-200 characters", async () => {
+    const longKey = "x".repeat(201);
+    expect((await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": longKey }, body: { slug: "test", players: [] } }), makeEnv())).status).toBe(400);
+    expect((await invokeScores(makeRequest({ headers: { "x-postback-key": "key", "idempotency-key": "   " }, body: { slug: "test", players: [] } }), makeEnv())).status).toBe(400);
+  });
+
+  test("a completed PATCH replays identically", async () => {
+    _saveSiteResult = { ok: true, patch: { total: 2, updated: 1, created: 1 } };
+    const req = () => makePatchRequest({ headers: { "idempotency-key": "p1" } });
+    const res = await invokeUpsert(req(), makeEnv());
+    expect(res.status).toBe(200);
+    expect(_idem.completed[0].endpoint).toBe("PATCH /api/scores");
+    expect(_idem.completed[0].body).toEqual({ ok: true, players: 2, updated: 1, created: 1 });
   });
 });

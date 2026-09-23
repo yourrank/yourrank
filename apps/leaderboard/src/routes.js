@@ -52,7 +52,7 @@ import { handleContact } from "./handlers/contact.js";
 import { handleFeedback, handleSiteFeedback } from "./handlers/feedback.js";
 import { handleCspReport } from "./handlers/csp-report.js";
 import { handleLog } from "./handlers/log.js";
-import { handleScores } from "./handlers/scores.js";
+import { handleScores, handleScoresUpsert } from "./handlers/scores.js";
 import { handleQuickAdd } from "./handlers/quick-add.js";
 import { handleKickWebhook } from "./handlers/kick-webhook.js";
 import { handleGiveawayChatroom } from "./handlers/giveaway.js";
@@ -320,6 +320,7 @@ export const ROUTES = [
   { path: "/api/track/copy", method: "POST", handler: withHandler(handleTrackCopy) },
   { path: "/api/track/scroll", method: "POST", handler: withHandler(handleTrackScroll) },
   { path: "/api/scores", method: "POST", handler: withHandler(handleScores) },
+  { path: "/api/scores", method: "PATCH", handler: withHandler(handleScoresUpsert) },
   
   // Kick integration webhooks (CSRF-exempt)
   { path: "/webhooks/kick", method: "POST", handler: withHandler(handleKickWebhook) },
