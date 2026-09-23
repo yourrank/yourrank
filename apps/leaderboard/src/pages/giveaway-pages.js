@@ -300,7 +300,7 @@ ${tabs}
                 <p class="hint">Account age and follow duration are unavailable: reliable Kick data is not connected.</p>
               </section>
               <section class="gw-settings-section" aria-labelledby="gw-abuse-title">
-                <h3 id="gw-abuse-title">Advanced anti-abuse</h3>
+                <h3 id="gw-abuse-title">Anti-abuse</h3>
                 <label class="cr-toggle-row"><span><b>One account per IP</b><small id="gw-ip-requirement">Locked — Requires Verified Entry</small></span><input id="gw-opt-ip" type="checkbox" class="v3-toggle" disabled aria-describedby="gw-ip-requirement"></label>
                 <label class="cr-toggle-row"><span><b>VPN / Proxy detection</b><small id="gw-vpn-requirement">Locked — Requires Verified Entry and a detection provider</small></span><input type="checkbox" disabled aria-describedby="gw-vpn-requirement"></label>
                 <label class="cr-toggle-row"><span><b>Duplicate device detection</b><small id="gw-device-requirement">Locked — Requires Verified Entry and a supported device check</small></span><input type="checkbox" disabled aria-describedby="gw-device-requirement"></label>
