@@ -116,7 +116,8 @@ const SCALAR_CONFIG = {
   hideDarkModeToggle: true,
   hideClientButton: true,
   withDefaultFonts: false,
-  hideTestRequestButton: false,
+  hideTestRequestButton: true,
+  agent: { disabled: true },
   defaultOpenAllTags: true,
   showSidebar: true,
   layout: "modern",
@@ -669,7 +670,7 @@ X-Postback-Signature: ${EXAMPLE_SIGNATURE}
 const DOCS_CSS = `
 :root{--yr-bg:#0b0d10;--yr-panel:#11151a;--yr-line:#1f262e;--yr-ink:#e6e9ee;--yr-ink-soft:#9aa4b2;--yr-accent:#7cf0c4;--yr-code:#0a0c0f}
 html,body{margin:0;background:var(--yr-bg);color:var(--yr-ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,sans-serif}
-.yr-docs-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 20px;background:rgba(11,13,16,.92);border-bottom:1px solid var(--yr-line);backdrop-filter:blur(8px)}
+.yr-docs-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;padding:10px 20px;background:rgba(11,13,16,.92);border-bottom:1px solid var(--yr-line);backdrop-filter:blur(8px)}
 .yr-docs-brand{display:flex;align-items:center;gap:12px;color:var(--yr-ink);text-decoration:none;font-weight:600;letter-spacing:-.01em}
 .yr-docs-brand img{width:24px;height:24px;border-radius:6px}
 .yr-docs-brand span{color:var(--yr-ink-soft);font-weight:500}
@@ -678,7 +679,7 @@ html,body{margin:0;background:var(--yr-bg);color:var(--yr-ink);font-family:ui-sa
 .yr-docs-links a{font:500 13px/1 inherit;color:var(--yr-ink-soft);text-decoration:none;padding:7px 10px;border:1px solid var(--yr-line);border-radius:6px}
 .yr-docs-links a:hover{color:var(--yr-ink);border-color:#38424d}
 .yr-docs-links a.yr-docs-primary{color:#07110d;background:var(--yr-accent);border-color:var(--yr-accent)}
-.yr-docs-warning{margin:0;padding:10px 20px;font-size:13px;color:#ffd9a3;background:#2a1d0a;border-bottom:1px solid #4a3410}
+.yr-docs-warning{margin:0;padding:10px 20px;font-size:13px;overflow-wrap:anywhere;color:#ffd9a3;background:#2a1d0a;border-bottom:1px solid #4a3410}
 .yr-docs-warning code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#ffe7c2}
 .scalar-app,.light-mode,.dark-mode{
   --scalar-background-1:var(--yr-bg);--scalar-background-2:var(--yr-panel);--scalar-background-3:#171c23;
@@ -696,8 +697,10 @@ html,body{margin:0;background:var(--yr-bg);color:var(--yr-ink);font-family:ui-sa
 .scalar-app .dark-mode,.scalar-app{--scalar-background-1:var(--yr-bg)}
 .scalar-app blockquote{border-left:3px solid #ffb570;background:#2a1d0a;color:#ffd9a3;padding:10px 14px;border-radius:6px}
 .scalar-app blockquote strong{color:#ffe7c2}
-.scalar-api-client__send-request-button{display:none!important}
-.narrow-references-container>header[aria-label="Developer Tools"],.darklight-reference,.t-doc__sidebar button.bg-sidebar-b-search.whitespace-nowrap,.show-api-client-button,.agent-button-container{display:none!important}
+.markdown table{width:100%!important;table-layout:auto!important}
+.markdown th{white-space:nowrap!important;word-break:normal!important}
+.markdown td{word-break:normal!important;overflow-wrap:anywhere!important}
+.narrow-references-container>header[aria-label="Developer Tools"],.darklight-reference{display:none!important}
 `;
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
