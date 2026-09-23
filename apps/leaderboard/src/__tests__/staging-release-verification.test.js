@@ -390,13 +390,22 @@ describe("F-012 staging release verification", () => {
     }
   });
 
-  it("staging bootstrap seeds a placeholder web Worker for the apex service binding", async () => {
+  it("staging bootstrap ensures every staging Worker exists and is deployed", async () => {
     const bootstrap = await bootstrapWorkflowPromise;
-    const step = bootstrap.match(/Ensure service-binding target Workers exist \(placeholder\)[\s\S]*?(?=\n {6}- name:)/);
+    const step = bootstrap.match(/Ensure staging Workers exist and are deployed[\s\S]*?(?=\n {6}- name:)/);
     expect(step).not.toBeNull();
     expect(step[0]).toContain("set +x");
-    expect(step[0]).toContain("yourrank-web-staging");
+    for (const name of [
+      "yourrank-site-staging",
+      "yourrank-bot-staging",
+      "yourrank-consumer-staging",
+      "yourrank-monitor-staging",
+      "yourrank-web-staging",
+    ]) {
+      expect(step[0]).toContain(name);
+    }
     expect(step[0]).toContain("wrangler@$WRANGLER_VERSION deploy");
+    expect(step[0]).toContain("versions deploy");
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {
