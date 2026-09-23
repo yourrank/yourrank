@@ -265,6 +265,12 @@ jobs:
         env:
           STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
         run: node scripts/staging-preflight.mjs render
+      - name: Ensure Worker's latest version is deployed (staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: "4.106.0"
+        run: node scripts/ensure-worker-deployed.mjs yourrank-site-staging
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
@@ -313,6 +319,12 @@ jobs:
         env:
           STAGING_HYPERDRIVE_ID: ${{ vars.STAGING_HYPERDRIVE_ID }}
         run: node scripts/staging-preflight.mjs render
+      - name: Ensure Worker's latest version is deployed (staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: "4.106.0"
+        run: node scripts/ensure-worker-deployed.mjs yourrank-bot-staging
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
@@ -366,6 +378,12 @@ jobs:
         run: |
           WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
             node ../../scripts/staging-preflight.mjs worker-secrets
+      - name: Ensure Worker's latest version is deployed (staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: "4.106.0"
+        run: node scripts/ensure-worker-deployed.mjs yourrank-consumer-staging
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -475,6 +493,12 @@ jobs:
       - name: Typecheck monitor
         working-directory: apps/monitor
         run: bun run typecheck
+      - name: Ensure Worker's latest version is deployed (staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: "4.106.0"
+        run: node scripts/ensure-worker-deployed.mjs yourrank-monitor-staging
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           MONITOR_CHECK_SECRET: ${{ secrets.STAGING_MONITOR_CHECK_SECRET }}
@@ -538,6 +562,12 @@ jobs:
         run: |
           WORKER_SECRET_LIST=$(bunx wrangler secret list --env staging --format json) \
             node ../../scripts/staging-preflight.mjs worker-secrets
+      - name: Ensure Worker's latest version is deployed (staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_VERSION: "4.106.0"
+        run: node scripts/ensure-worker-deployed.mjs yourrank-web-staging
       - name: Deploy web worker tagged with the release SHA
         working-directory: apps/web
         env:

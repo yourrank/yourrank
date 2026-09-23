@@ -404,8 +404,32 @@ describe("F-012 staging release verification", () => {
     ]) {
       expect(step[0]).toContain(name);
     }
-    expect(step[0]).toContain("wrangler@$WRANGLER_VERSION deploy");
-    expect(step[0]).toContain("versions deploy");
+    expect(step[0]).toContain('node scripts/ensure-worker-deployed.mjs "$NAME" --placeholder');
+  });
+
+  it("every staging deploy job ensures the Worker's latest version is deployed first", async () => {
+    const staging = await stagingWorkflowPromise;
+    const cases = [
+      ["deploy-leaderboard-staging:", "yourrank-site-staging", "wrangler-action"],
+      ["deploy-bot-staging:", "yourrank-bot-staging", "wrangler-action"],
+      ["deploy-consumer-staging:", "yourrank-consumer-staging", "wrangler-action"],
+      ["deploy-monitor-staging:", "yourrank-monitor-staging", "wrangler-action"],
+      ["deploy-web-staging:", "yourrank-web-staging", "Deploy web worker tagged with the release SHA"],
+    ];
+    for (const [jobAnchor, workerName, deployAnchor] of cases) {
+      const jobStart = staging.indexOf(jobAnchor);
+      expect(jobStart).toBeGreaterThan(-1);
+      const ensure = staging.indexOf(
+        `node scripts/ensure-worker-deployed.mjs ${workerName}`,
+        jobStart,
+      );
+      const deploy = staging.indexOf(deployAnchor, jobStart);
+      expect(ensure).toBeGreaterThan(-1);
+      expect(deploy).toBeGreaterThan(ensure);
+    }
+    expect(
+      staging.match(/Ensure Worker's latest version is deployed \(staging\)/g),
+    ).toHaveLength(5);
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {

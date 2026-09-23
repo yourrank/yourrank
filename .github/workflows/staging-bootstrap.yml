@@ -142,38 +142,8 @@ jobs:
           # service binding also requires yourrank-web-staging to exist before
           # the apex deploys, so every staging Worker must exist and serve its
           # latest version.
-          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts"
-          WORK_DIR="$RUNNER_TEMP/bootstrap-workers"
-          mkdir -p "$WORK_DIR"
-          printf 'export default { fetch: () => new Response("staging bootstrap placeholder", { status: 503 }) };\n' > "$WORK_DIR/worker.mjs"
           for NAME in yourrank-web-staging yourrank-site-staging yourrank-bot-staging yourrank-consumer-staging yourrank-monitor-staging; do
-            STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/$NAME" || true)
-            if [ "$STATUS" = "404" ]; then
-              printf 'name = "%s"\nmain = "worker.mjs"\ncompatibility_date = "2026-08-16"\n' "$NAME" > "$WORK_DIR/wrangler.toml"
-              (cd "$WORK_DIR" && bunx wrangler@$WRANGLER_VERSION deploy)
-              echo "::notice::Created placeholder Worker $NAME — the first staging release replaces it."
-              continue
-            fi
-            if [ "$STATUS" != "200" ]; then
-              echo "::error::Unexpected HTTP $STATUS checking for $NAME."
-              exit 1
-            fi
-            LATEST=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/$NAME/versions" \
-              | jq -r '[.result.items[] | {id: .id, created: (.metadata.created_on // "")}] | sort_by(.created) | .[-1].id // empty')
-            DEPLOYED=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API/$NAME/deployments" \
-              | jq -r '[.result.deployments[] | {created: .created_on, versions: [.versions[].version_id]}] | sort_by(.created) | .[-1].versions[]?' 2>/dev/null || true)
-            if [ -z "$LATEST" ]; then
-              echo "::error::Could not determine the latest version id of $NAME."
-              exit 1
-            fi
-            if printf '%s\n' "$DEPLOYED" | grep -qx "$LATEST"; then
-              echo "$NAME is deployed at its latest version."
-              continue
-            fi
-            printf 'name = "%s"\nmain = "worker.mjs"\ncompatibility_date = "2026-08-16"\n' "$NAME" > "$WORK_DIR/wrangler.toml"
-            (cd "$WORK_DIR" && bunx wrangler@$WRANGLER_VERSION versions deploy "$LATEST@100%" -y)
-            echo "::notice::Deployed pending version $LATEST of $NAME."
+            node scripts/ensure-worker-deployed.mjs "$NAME" --placeholder
           done
 
       - name: Report workers.dev subdomain URLs

@@ -87,15 +87,18 @@ workflow, `environment: staging`). It:
   (a DNS 403 warns but does not fail the job).
 
 It also ensures every staging Worker exists *and has its latest version
-deployed*. On a fresh account it seeds each missing Worker with a 503
-placeholder — the apex Worker's `MARKETING` service binding must resolve to an
-existing script at deploy time, but the real web Worker deploys later in the
-release chain. And when a Worker exists with an undeployed latest version (the
-remnant of a failed first deploy), bootstrap promotes that version to 100% —
-wrangler-action uploads secrets before deploying and Cloudflare rejects secret
-edits on a Worker whose latest version is undeployed. The placeholders are
-replaced by the first staging release; re-running bootstrap is a no-op once
-everything is deployed.
+deployed* (`scripts/ensure-worker-deployed.mjs --placeholder`). On a fresh
+account it seeds each missing Worker with a 503 placeholder — the apex
+Worker's `MARKETING` service binding must resolve to an existing script at
+deploy time, but the real web Worker deploys later in the release chain. And
+when a Worker exists with an undeployed latest version (the remnant of a
+failed first deploy whose finalizer restored the baseline), the version is
+promoted to 100% — wrangler-action uploads secrets before deploying and
+Cloudflare rejects secret edits on a Worker whose latest version is
+undeployed (code 10215). The same ensure step also runs inside each staging
+deploy job, immediately before secret upload. The placeholders are replaced
+by the first staging release; re-running bootstrap is a no-op once everything
+is deployed.
 
 The staging release enforces the DB identity: `backend-readiness-staging` runs
 `node scripts/verify-db-identity.mjs health staging` and fails unless `/health`
