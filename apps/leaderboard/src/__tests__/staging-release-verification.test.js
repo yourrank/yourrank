@@ -59,6 +59,7 @@ const validEnvironment = () => ({
 });
 
 const stagingWorkflowPromise = rootFile(".github/workflows/staging.yml");
+const bootstrapWorkflowPromise = rootFile(".github/workflows/staging-bootstrap.yml");
 const deployWorkflowPromise = rootFile(".github/workflows/deploy.yml");
 const rollbackWorkflowPromise = rootFile(".github/workflows/rollback.yml");
 const contractWorkflowPromise = rootFile(".github/workflows/contract-migration.yml");
@@ -387,6 +388,15 @@ describe("F-012 staging release verification", () => {
       }
       expect(production).not.toContain("RELEASE_ENVIRONMENT=staging");
     }
+  });
+
+  it("staging bootstrap seeds a placeholder web Worker for the apex service binding", async () => {
+    const bootstrap = await bootstrapWorkflowPromise;
+    const step = bootstrap.match(/Ensure service-binding target Workers exist \(placeholder\)[\s\S]*?(?=\n {6}- name:)/);
+    expect(step).not.toBeNull();
+    expect(step[0]).toContain("set +x");
+    expect(step[0]).toContain("yourrank-web-staging");
+    expect(step[0]).toContain("wrangler@$WRANGLER_VERSION deploy");
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {

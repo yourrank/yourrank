@@ -86,6 +86,12 @@ workflow, `environment: staging`). It:
   token has Zone.DNS edit, otherwise prints the exact record to add by hand
   (a DNS 403 warns but does not fail the job).
 
+On a fresh account it also seeds a placeholder `yourrank-web-staging` Worker:
+the apex Worker's `MARKETING` service binding must resolve to an existing
+script at deploy time, but the real web Worker deploys later in the release
+chain. The placeholder (a 503 stub) is replaced by the first staging release;
+re-running bootstrap is a no-op once the script exists.
+
 The staging release enforces the DB identity: `backend-readiness-staging` runs
 `node scripts/verify-db-identity.mjs health staging` and fails unless `/health`
 reports `db_identity.expected=true`, `superuser=false`, `bypassrls=false`,

@@ -131,6 +131,34 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Ensure service-binding target Workers exist (placeholder)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set +x
+          # The apex staging Worker's MARKETING service binding must resolve at
+          # deploy time; on a fresh account yourrank-web-staging does not exist yet
+          # (it deploys later in the chain), so seed a minimal placeholder that the
+          # first staging release replaces.
+          STATUS=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/yourrank-web-staging" || true)
+          if [ "$STATUS" = "200" ]; then
+            echo "yourrank-web-staging already exists — skipping."
+            exit 0
+          fi
+          if [ "$STATUS" != "404" ]; then
+            echo "::error::Unexpected HTTP $STATUS checking for yourrank-web-staging."
+            exit 1
+          fi
+          WORK_DIR="$RUNNER_TEMP/placeholder"
+          mkdir -p "$WORK_DIR"
+          printf 'export default { fetch: () => new Response("staging bootstrap placeholder", { status: 503 }) };\n' > "$WORK_DIR/worker.mjs"
+          printf 'name = "yourrank-web-staging"\nmain = "worker.mjs"\ncompatibility_date = "2026-08-16"\n' > "$WORK_DIR/wrangler.toml"
+          (cd "$WORK_DIR" && bunx wrangler@$WRANGLER_VERSION deploy)
+          echo "::notice::Created placeholder Worker yourrank-web-staging — the first staging release replaces it."
+
       - name: Report workers.dev subdomain URLs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
