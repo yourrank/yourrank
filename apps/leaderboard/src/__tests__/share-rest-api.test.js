@@ -18,19 +18,34 @@ for (const key of ["window", "document", "location", "history", "navigator", "HT
 globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 0);
 window.Element.prototype.getClientRects = function () { return [{}]; };
 
-// Fake the two postback endpoints the Share UI talks to.
-const server = { activeKey: null, requests: [], created: 0 };
+// Fake the board-scoped key-management endpoints the Share UI talks to.
+const server = { keys: [], requests: [], created: 0 };
 globalThis.fetch = async (url, init = {}) => {
   const path = String(url);
-  server.requests.push({ path, method: init.method || "GET" });
+  const method = init.method || "GET";
+  server.requests.push({ path, method });
   const reply = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
-  if (path === "/api/account/postbacks") {
-    return reply({ ok: true, postback: server.activeKey ? { key: server.activeKey } : null, canRotate: true });
+  const boardKey = (id, key) => ({ id, scope: "board", label: "kick-cup", createdAt: "2026-01-01T00:00:00Z", lastUsedAt: null, expiresAt: null, key });
+  if (path === "/api/sites/site-1/api-keys") {
+    if (method === "POST") {
+      server.created += 1;
+      const key = boardKey(`key-board-${server.created}`, `pk_board_${server.created}`);
+      server.keys = [...server.keys.filter((entry) => entry.scope !== "board"), key];
+      return reply({ ok: true, key });
+    }
+    return reply({ ok: true, keys: server.keys });
   }
-  if (path === "/api/account/postbacks/rotate") {
+  const rotateMatch = path.match(/^\/api\/sites\/site-1\/api-keys\/([^/]+)\/rotate$/);
+  if (rotateMatch && method === "POST") {
     server.created += 1;
-    server.activeKey = `pk_rotated_${server.created}`;
-    return reply({ ok: true, postback: { key: server.activeKey } });
+    const key = boardKey(`key-board-rot-${server.created}`, `pk_rotated_${server.created}`);
+    server.keys = server.keys.map((entry) => (entry.id === rotateMatch[1] ? key : entry));
+    return reply({ ok: true, key });
+  }
+  const deleteMatch = path.match(/^\/api\/sites\/site-1\/api-keys\/([^/]+)$/);
+  if (deleteMatch && method === "DELETE") {
+    server.keys = server.keys.filter((entry) => entry.id !== deleteMatch[1]);
+    return reply({ ok: true });
   }
   return reply({ ok: true });
 };
@@ -119,9 +134,14 @@ describe("REST API entitlement (server)", () => {
   });
 });
 
+const accountKey = (key = "pk_account") => ({ id: "key-account", scope: "account", label: "account", createdAt: "2026-01-01T00:00:00Z", lastUsedAt: null, expiresAt: null, key });
+const boardKeyRow = (id = "key-board-1", key = "pk_board_1") => ({ id, scope: "board", label: "kick-cup", createdAt: "2026-01-01T00:00:00Z", lastUsedAt: null, expiresAt: null, key });
+const keyRows = () => [...document.querySelectorAll("#apiKeyList .api-key-row")];
+const rowButton = (row, text) => [...row.querySelectorAll("button")].find((b) => b.textContent === text);
+
 describe("REST API in Developer tools (dashboard)", () => {
   beforeEach(() => {
-    server.activeKey = null;
+    server.keys = [];
     server.requests.length = 0;
     server.created = 0;
     clipboard.length = 0;
@@ -146,50 +166,97 @@ describe("REST API in Developer tools (dashboard)", () => {
     expect(server.requests).toEqual([]);
   });
 
-  it("Pro creates a key through the rotate endpoint when none exists yet", async () => {
+  it("Pro lists the board's signing keys without auto-creating one", async () => {
     setPlan("pro");
     renderApiAccess();
     await settle();
     expect($("apiAccess").classList.contains("locked")).toBe(false);
     expect($("apiSetup").hidden).toBe(false);
-    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/account/postbacks", "POST /api/account/postbacks/rotate"]);
-    expect($("apiKeyValue").dataset.masked).toBe("1");
+    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/sites/site-1/api-keys"]);
+    expect($("apiKeyCreate").hidden).toBe(false);
+  });
+
+  it("Create board key posts a board-scoped key and renders it masked", async () => {
+    setPlan("pro");
+    renderApiAccess();
+    await settle();
+    $("apiKeyCreate").click();
+    await settle();
+    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/sites/site-1/api-keys", "POST /api/sites/site-1/api-keys"]);
+    const rows = keyRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].querySelector(".api-key-scope").textContent).toBe("This board");
+    const value = rows[0].querySelector(".api-key");
+    expect(value.dataset.masked).toBe("1");
+    expect(value.textContent).not.toContain("pk_board_1");
     expect($("apiKeyHint").textContent).toContain("Key created.");
+    expect($("apiKeyCreate").hidden).toBe(true);
   });
 
-  it("Team reuses the existing postback key, masked until revealed, and copies the raw key", async () => {
-    server.activeKey = "pk_existing_team";
+  it("Team sees board and account keys with scope badges; account key links to Connections", async () => {
+    server.keys = [boardKeyRow(), accountKey()];
     setPlan("team");
     renderApiAccess();
     await settle();
-    expect($("apiAccess").classList.contains("locked")).toBe(false);
-    expect($("apiSetup").hidden).toBe(false);
-    expect($("apiLockedNote").hidden).toBe(true);
-    expect(server.requests.map((r) => r.path)).toEqual(["/api/account/postbacks"]);
-    expect($("apiKeyValue").textContent).not.toContain("pk_existing_team");
-    expect($("apiKeyValue").dataset.masked).toBe("1");
-    $("apiKeyReveal").click();
-    expect($("apiKeyValue").textContent).toBe("pk_existing_team");
-    expect($("apiKeyReveal").textContent).toBe("Hide");
-    $("apiKeyCopy").click();
-    await settle();
-    expect(clipboard).toEqual(["pk_existing_team"]);
+    expect(server.requests.map((r) => r.path)).toEqual(["/api/sites/site-1/api-keys"]);
+    const rows = keyRows();
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector(".api-key-scope").textContent).toBe("This board");
+    expect(rowButton(rows[0], "Rotate")).toBeTruthy();
+    expect(rowButton(rows[0], "Revoke")).toBeTruthy();
+    expect(rows[1].querySelector(".api-key-scope").textContent).toBe("Account · all boards");
+    expect(rowButton(rows[1], "Rotate")).toBeFalsy();
+    expect(rowButton(rows[1], "Revoke")).toBeFalsy();
+    const manage = rows[1].querySelector("a");
+    expect(manage.getAttribute("href")).toBe("/dashboard/settings/connections");
+    expect(manage.textContent).toBe("Manage in Connections");
   });
 
-  it("Rotate key confirms, calls the rotate endpoint and re-masks the new key", async () => {
-    server.activeKey = "pk_before";
+  it("a board key stays masked until revealed and copies the raw key", async () => {
+    server.keys = [boardKeyRow()];
     setPlan("team");
     renderApiAccess();
     await settle();
-    $("apiKeyReveal").click();
-    expect($("apiKeyValue").textContent).toBe("pk_before");
+    const row = keyRows()[0];
+    const value = row.querySelector(".api-key");
+    expect(value.textContent).not.toContain("pk_board_1");
+    rowButton(row, "Reveal").click();
+    expect(value.textContent).toBe("pk_board_1");
+    expect(rowButton(row, "Hide")).toBeTruthy();
+    rowButton(row, "Copy").click();
+    await settle();
+    expect(clipboard).toEqual(["pk_board_1"]);
+  });
+
+  it("Rotate confirms, calls the rotate endpoint and re-masks the new key", async () => {
+    server.keys = [boardKeyRow()];
+    setPlan("team");
+    renderApiAccess();
+    await settle();
+    let row = keyRows()[0];
+    rowButton(row, "Reveal").click();
+    expect(row.querySelector(".api-key").textContent).toBe("pk_board_1");
     window.YRDialog = { confirm: async () => true };
-    $("apiKeyRotate").click();
+    rowButton(row, "Rotate").click();
     await settle();
-    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/account/postbacks", "POST /api/account/postbacks/rotate"]);
-    expect($("apiKeyValue").dataset.masked).toBe("1");
-    $("apiKeyReveal").click();
-    expect($("apiKeyValue").textContent).toBe("pk_rotated_1");
+    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/sites/site-1/api-keys", "POST /api/sites/site-1/api-keys/key-board-1/rotate"]);
+    row = keyRows()[0];
+    expect(row.querySelector(".api-key").dataset.masked).toBe("1");
+    rowButton(row, "Reveal").click();
+    expect(row.querySelector(".api-key").textContent).toBe("pk_rotated_1");
+  });
+
+  it("Revoke confirms, deletes the key and brings back Create board key", async () => {
+    server.keys = [boardKeyRow()];
+    setPlan("team");
+    renderApiAccess();
+    await settle();
+    window.YRDialog = { confirm: async () => true };
+    rowButton(keyRows()[0], "Revoke").click();
+    await settle();
+    expect(server.requests.map((r) => `${r.method} ${r.path}`)).toEqual(["GET /api/sites/site-1/api-keys", "DELETE /api/sites/site-1/api-keys/key-board-1"]);
+    expect(keyRows()).toHaveLength(0);
+    expect($("apiKeyCreate").hidden).toBe(false);
   });
 
   it("a moderator on a Team board never sees the raw key", () => {
@@ -205,19 +272,24 @@ describe("REST API in Developer tools (dashboard)", () => {
 });
 
 describe("Developer tools markup", () => {
-  it("exposes the compact REST API setup and the documentation link", () => {
+  it("exposes both endpoints, the API signing key and the documentation link", () => {
     const start = jsx.indexOf('id="apiAccessDetails"');
     const block = jsx.slice(start, jsx.indexOf("</details>", start));
     expect(block).toContain('<b class="font-14">REST API</b>');
     expect(block).toContain("Use the API to update leaderboard scores from your own system.");
     expect(block).toContain("POST /api/scores");
-    for (const id of ["apiKeyValue", "apiKeyReveal", "apiKeyCopy", "apiKeyRotate", "apiDocsLink"]) {
+    expect(block).toContain("PATCH /api/scores");
+    expect(block).toContain("Replace player list");
+    expect(block).toContain("Update players");
+    expect(block).toContain("Use the bulk endpoint to replace a leaderboard or the incremental endpoint to update individual players.");
+    expect(block).toContain("API signing key");
+    for (const id of ["apiKeyList", "apiKeyCreate", "apiDocsLink"]) {
       expect(block).toContain(`id="${id}"`);
     }
-    expect(block).toContain('href="/api/docs"');
-    expect(block).toContain("X-Postback-Key");
-    expect(block).toContain("X-Postback-Signature");
-    expect(block).toContain("HMAC-SHA256");
+    expect(block).toContain('href="/docs/api"');
+    expect(block).not.toContain("Postback key");
+    expect(block).not.toContain("X-Postback-Key");
+    expect(block).not.toContain("X-Postback-Signature");
     expect(block).not.toContain("> Pro</span>");
   });
 });

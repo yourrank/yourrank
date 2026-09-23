@@ -68,6 +68,35 @@ export function validateAndNormalizePlayers(players) {
   return { players: normalized };
 }
 
+const PATCH_FIELDS = ["wagered", "prize", "score", "hands", "netProfit", "winRate", "change"];
+
+// Incremental score merge: patch players match existing rows by normalized
+// name and overlay only the fields they explicitly provide; unmatched patch
+// players are appended in patch order. Returns the merged list plus counts.
+export function mergePlayerPatch(existing, patch) {
+  const players = existing.map((player) => ({ ...player }));
+  const byName = new Map(players.map((player, index) => [normalizePlayerName(player.name), index]));
+  let updated = 0;
+  let created = 0;
+  for (const entry of patch) {
+    if (!entry || typeof entry !== "object") continue;
+    const identity = normalizePlayerName(entry.name);
+    const index = byName.get(identity);
+    if (index === undefined) {
+      byName.set(identity, players.length);
+      players.push({ ...entry });
+      created += 1;
+      continue;
+    }
+    for (const field of PATCH_FIELDS) {
+      if (Object.hasOwn(entry, field)) players[index][field] = entry[field];
+    }
+    players[index].name = entry.name;
+    updated += 1;
+  }
+  return { players, updated, created };
+}
+
 export function validateIncrementAmount(value) {
   const result = numberField(value, { field: "Amount", min: 0, max: SCORE_MAX, fallback: 0 });
   return result.error ? { error: result.error, code: "invalid_amount" } : { amount: result.value };

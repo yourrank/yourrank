@@ -52,8 +52,9 @@ import { handleContact } from "./handlers/contact.js";
 import { handleFeedback, handleSiteFeedback } from "./handlers/feedback.js";
 import { handleCspReport } from "./handlers/csp-report.js";
 import { handleLog } from "./handlers/log.js";
-import { handleScores } from "./handlers/scores.js";
+import { handleScores, handleScoresUpsert } from "./handlers/scores.js";
 import { handleQuickAdd } from "./handlers/quick-add.js";
+import { handleListApiKeys, handleCreateApiKey, handleRotateApiKey, handleDeleteApiKey } from "./handlers/api-keys.js";
 import { handleKickWebhook } from "./handlers/kick-webhook.js";
 import { handleGiveawayChatroom } from "./handlers/giveaway.js";
 import {
@@ -222,7 +223,7 @@ import {
   handleViewerExportStatus,
   handleViewerExportDownload,
 } from "./handlers/viewer-export.js";
-import { handleApiDocs, handleOpenApiJson } from "./handlers/docs.js";
+import { handleApiDocs, handleDocsPage, handleOpenApiJson, DOCS_PATH, OPENAPI_PATH, LEGACY_OPENAPI_PATH } from "./handlers/docs.js";
 import { handleUserPayments, handleAccountUsage } from "./billing.js";
 import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook } from "./handlers/polar-billing.js";
 import {
@@ -285,6 +286,10 @@ export const ROUTES = [
   { path: "/api/site/duplicate", method: "POST", handler: withHandler(handleDuplicateBoard) },
   { path: "/api/site/archive", method: "POST", handler: withHandler(handleArchive) },
   { path: "/api/sites/:id/quick-add", method: "POST", handler: withHandler(handleQuickAdd) },
+  { path: "/api/sites/:id/api-keys", method: "GET", handler: withHandler(handleListApiKeys) },
+  { path: "/api/sites/:id/api-keys", method: "POST", handler: withHandler(handleCreateApiKey) },
+  { path: "/api/sites/:id/api-keys/:keyId/rotate", method: "POST", handler: withHandler(handleRotateApiKey) },
+  { path: "/api/sites/:id/api-keys/:keyId", method: "DELETE", handler: withHandler(handleDeleteApiKey) },
   { path: "/api/site/archive/delete", method: "POST", handler: withHandler(handleArchiveDelete) },
   { path: "/api/site/archive/restore", method: "POST", handler: withHandler(handleRestoreArchive) },
   { path: "/api/site/active", method: "POST", handler: withHandler(handleSetActive) },
@@ -320,6 +325,7 @@ export const ROUTES = [
   { path: "/api/track/copy", method: "POST", handler: withHandler(handleTrackCopy) },
   { path: "/api/track/scroll", method: "POST", handler: withHandler(handleTrackScroll) },
   { path: "/api/scores", method: "POST", handler: withHandler(handleScores) },
+  { path: "/api/scores", method: "PATCH", handler: withHandler(handleScoresUpsert) },
   
   // Kick integration webhooks (CSRF-exempt)
   { path: "/webhooks/kick", method: "POST", handler: withHandler(handleKickWebhook) },
@@ -488,8 +494,10 @@ export const ROUTES = [
   { path: "/api/games/fairness/rotate", method: "POST", handler: withHandler(handleGamesFairnessRotate) },
 
   // Public API routes (CSRF-exempt)
+  { path: DOCS_PATH, method: "GET", handler: withHandler(handleDocsPage) },
+  { path: OPENAPI_PATH, method: "GET", handler: withHandler(handleOpenApiJson) },
   { path: "/api/docs", method: "GET", handler: withHandler(handleApiDocs) },
-  { path: "/api/openapi.json", method: "GET", handler: withHandler(handleOpenApiJson) },
+  { path: LEGACY_OPENAPI_PATH, method: "GET", handler: withHandler(handleOpenApiJson) },
   { path: "/api/public/:slug/standings", method: "GET", handler: withHandler(handlePublicStandings) },
   { path: "/api/public/:slug/players", method: "GET", handler: withHandler(handlePublicPlayers) },
   { path: "/api/public/:slug/stream", method: "GET", handler: withHandler(handlePublicStream) },

@@ -20,9 +20,11 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241218.0",
+    "@seriousme/openapi-schema-validator": "2.9.1",
     "@types/node": "^20.14.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "ajv": "8.20.0",
     "autoprefixer": "^10.5.4",
     "eslint": "^8.57.0",
     "happy-dom": "20.14.3",

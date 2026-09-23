@@ -38,7 +38,7 @@ describe("postback conversion durability", () => {
       claimed,
       app: buildHonoApp({
         postbackDeps: {
-          findPostbackOwner: async () => ({ id: "key-1", userId: "user-1" }),
+          findPostbackOwner: async () => ({ id: "key-1", userId: "user-1", siteId: null }),
           computeReplayHash: async () => "replay-1",
           recordReplayHash: async (_userId, replayHash) => {
             if (claimed.has(replayHash)) return false;

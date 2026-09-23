@@ -1,4 +1,4 @@
-const READ_API = /^\/api\/(?:docs|openapi\.json|public\/[^/]+(?:\/(?:standings|players|rank|stats))?)$/;
+const READ_API = /^(?:\/openapi\.json|\/api\/(?:docs|openapi\.json|public\/[^/]+(?:\/(?:standings|players|rank|stats))?))$/;
 const WRITE_API = /^\/api\/scores$/;
 
 function policy(path) {
@@ -10,8 +10,8 @@ function policy(path) {
   }
   if (WRITE_API.test(path)) {
     return {
-      methods: "POST, OPTIONS",
-      requestHeaders: "Content-Type, X-Postback-Key, X-Postback-Signature, X-Postback-Site",
+      methods: "POST, PATCH, OPTIONS",
+      requestHeaders: "Content-Type, X-Postback-Key, X-Postback-Signature, X-Postback-Site, Idempotency-Key",
     };
   }
   return null;
@@ -24,7 +24,7 @@ function corsHeaders(path) {
     "access-control-allow-origin": "*",
     "access-control-allow-methods": routePolicy.methods,
     "access-control-allow-headers": routePolicy.requestHeaders,
-    "access-control-expose-headers": "ETag, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After",
+    "access-control-expose-headers": "ETag, X-RateLimit-Limit, X-RateLimit-Remaining, Retry-After, Idempotency-Replayed",
   };
 }
 

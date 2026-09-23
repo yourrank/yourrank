@@ -731,3 +731,45 @@ describe("Main / Loyalty public boards", () => {
     expect((rail.match(/href="\/loyal\/leaderboard"/g) || []).length).toBe(1);
   });
 });
+
+describe("developer docs routing", () => {
+  it("sends /docs/api and /openapi.json to the Worker API handler, not marketing", async () => {
+    const seen = [];
+    const apiApp = {
+      fetch: async (request) => {
+        seen.push(new URL(request.url).pathname);
+        return new Response("api", { status: 200 });
+      },
+    };
+    const marketing = { fetch: async () => new Response("marketing", { status: 200 }) };
+
+    for (const path of ["/docs/api", "/openapi.json"]) {
+      const response = await handleRequest(
+        req(`https://yourrank.site${path}`),
+        { MARKETING: marketing },
+        ctx,
+        {},
+        { resolveCustomDomain: async () => null, apiApp },
+      );
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe("api");
+    }
+    expect(seen).toEqual(["/docs/api", "/openapi.json"]);
+  });
+
+  it("still proxies /docs to marketing", async () => {
+    const apiApp = {
+      fetch: async () => { throw new Error("api router must not see /docs"); },
+    };
+    const marketing = { fetch: async () => new Response("marketing", { status: 200 }) };
+    const response = await handleRequest(
+      req("https://yourrank.site/docs"),
+      { MARKETING: marketing },
+      ctx,
+      {},
+      { resolveCustomDomain: async () => null, apiApp },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("marketing");
+  });
+});

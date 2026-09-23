@@ -117,7 +117,7 @@ export default function DocsPage() {
             </Section>
 
             <Section id="api" title="API reference — read-only endpoints">
-              <p className={P}>Public read endpoints require no authentication. Replace <span className={IC}>&#123;slug&#125;</span> with the board&apos;s public handle. Base URL: <span className={IC}>https://yourrank.site</span>.</p>
+              <p className={P}>Public read endpoints require no authentication. Replace <span className={IC}>&#123;slug&#125;</span> with the board&apos;s public handle. Base URL: <span className={IC}>https://yourrank.site</span>. The full interactive reference — including the signed <span className={IC}>POST</span>/<span className={IC}>PATCH /api/scores</span> write endpoints, API signing keys and idempotency — lives at <a href="/docs/api" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">/docs/api</a>.</p>
               <div className="mt-6 overflow-x-auto rounded-[2px] border border-devin-line" role="region" aria-label="API endpoints" tabIndex={0}>
                 <table className="w-full min-w-[560px] border-collapse text-sm">
                   <thead>
@@ -131,9 +131,9 @@ export default function DocsPage() {
                     {[
                       ["GET", "/api/public/{slug}", "Full leaderboard data object."],
                       ["GET", "/api/public/{slug}/standings", "Sorted player standings with positions and countdown."],
-                      ["GET", "/api/public/{slug}/players", "Lightweight sorted player array."],
+                      ["GET", "/api/public/{slug}/players", "Paginated players (limit, offset, search)."],
                       ["GET", "/api/public/{slug}/rank?user=PLAYER", "Plain-text rank lookup for chat bots."],
-                      ["GET", "/api/public/{slug}/stats", "Views, copies, clicks, and a 14-day series."],
+                      ["GET", "/api/public/{slug}/stats", "Views, copies, clicks, and a 30-day series."],
                     ].map(([method, path, description]) => (
                       <tr key={path} className="border-b border-devin-line last:border-b-0">
                         <td className="px-4 py-3 font-mono text-xs">{method}</td>
@@ -158,7 +158,7 @@ console.log(data.players[0].name);`}</Code>
             </Section>
 
             <Section id="openapi" title="OpenAPI spec">
-              <p className={P}>Download the machine-readable spec at <a href="/api/openapi.json" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">/api/openapi.json</a>.</p>
+              <p className={P}>Browse the interactive reference at <a href="/docs/api" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">/docs/api</a> or download the machine-readable OpenAPI 3.1 spec at <a href="/openapi.json" className="text-devin-ink underline underline-offset-4 hover:text-devin-primary">/openapi.json</a>.</p>
             </Section>
           </div>
         </div>

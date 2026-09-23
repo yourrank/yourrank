@@ -1,14 +1,14 @@
 // Shared postback key lifecycle: creation, hashed lookup, rotation,
 // revocation, and replay-guard deduplication.
 
-import { one, exec } from "./db.js";
+import { one, exec, query } from "./db.js";
 import { hashToken, newPostbackKey, safeEqual } from "./crypto.js";
 import { encrypt, decrypt } from "./crypto.js";
 
 const DEFAULT_TTL_S = 24 * 60 * 60;
 const KEY_TTL_S = 365 * 24 * 60 * 60;
 
-export interface PostbackOwner { id: string; userId: string; }
+export interface PostbackOwner { id: string; userId: string; siteId: string | null; }
 export type PostbackUsage = "signed" | "unsigned";
 
 export const POSTBACK_SUNSET = "2026-10-01";
@@ -46,8 +46,8 @@ export async function findPostbackOwner(
   usage?: PostbackUsage
 ): Promise<PostbackOwner | null> {
   const hash = await hashPostbackKey(key);
-  const row = await one<{ id: string; user_id: string }>(
-    `SELECT id, user_id FROM postback_keys
+  const row = await one<{ id: string; user_id: string; site_id: string | null }>(
+    `SELECT id, user_id, site_id FROM postback_keys
        WHERE key_hash = $1
          AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > now())
@@ -79,7 +79,7 @@ export async function findPostbackOwner(
       ts: new Date().toISOString(),
     }));
   }
-  return { id: row.id, userId: row.user_id as string };
+  return { id: row.id, userId: row.user_id as string, siteId: row.site_id ?? null };
 }
 
 export async function getActivePostbackKey(userId: string): Promise<string | null> {
@@ -102,35 +102,121 @@ export async function getActivePostbackKey(userId: string): Promise<string | nul
   return null;
 }
 
-export async function createPostbackKey(
+export interface CreatedPostbackKey {
+  key: string;
+  id: string | null;
+  createdAt: string | null;
+  expiresAt: string | null;
+}
+
+export async function createPostbackKeyRecord(
   userId: string,
-  { label, revokeOthers = false }: { label?: string; revokeOthers?: boolean } = {}
-): Promise<string> {
+  { label, revokeOthers = false, siteId = null, execImpl = exec }: { label?: string; revokeOthers?: boolean; siteId?: string | null; execImpl?: typeof exec } = {}
+): Promise<CreatedPostbackKey> {
   const raw = newPostbackKey();
   const hash = await hashPostbackKey(raw);
   const hexKey = await getEncKey();
   const keyEnc = await encrypt(raw, hexKey);
-  const inserted = await exec(
-    `INSERT INTO postback_keys (user_id, key_hash, key_plaintext, key_enc, label, created_at, expires_at)
-     VALUES ($1, $2, NULL, $3, $4, now(), now() + make_interval(secs => $5))
-     RETURNING id`,
-    [userId, hash, keyEnc, label || null, KEY_TTL_S]
+  const inserted = await execImpl(
+    `INSERT INTO postback_keys (user_id, site_id, key_hash, key_plaintext, key_enc, label, created_at, expires_at)
+     VALUES ($1, $2, $3, NULL, $4, $5, now(), now() + make_interval(secs => $6))
+     RETURNING id, created_at, expires_at`,
+    [userId, siteId, hash, keyEnc, label || null, KEY_TTL_S]
   );
-  const rowId = Array.isArray(inserted) && inserted[0]?.id;
-  if (revokeOthers && rowId) {
-    await revokePostbackKeys(userId, rowId);
+  const row = Array.isArray(inserted) ? inserted[0] : null;
+  if (revokeOthers && row?.id) {
+    await revokePostbackKeys(userId, row.id, { siteId, execImpl });
   }
-  return raw;
+  return { key: raw, id: row?.id ?? null, createdAt: row?.created_at ?? null, expiresAt: row?.expires_at ?? null };
 }
 
-export async function revokePostbackKeys(userId: string, keyId?: string | null): Promise<number> {
-  const result = await exec(
+export async function createPostbackKey(
+  userId: string,
+  options: { label?: string; revokeOthers?: boolean; siteId?: string | null; execImpl?: typeof exec } = {}
+): Promise<string> {
+  const created = await createPostbackKeyRecord(userId, options);
+  return created.key;
+}
+
+export async function revokePostbackKeys(
+  userId: string,
+  keyId?: string | null,
+  { siteId, execImpl = exec }: { siteId?: string | null; execImpl?: typeof exec } = {}
+): Promise<number> {
+  // Without a siteId the revocation stays account-scoped (site_id IS NULL) so
+  // account flows can never revoke board keys, and vice versa.
+  const siteClause = siteId ? "AND site_id = $3::uuid" : "AND site_id IS NULL";
+  const params: unknown[] = [userId, keyId || null];
+  if (siteId) params.push(siteId);
+  const result = await execImpl(
     `UPDATE postback_keys SET revoked_at = now()
        WHERE user_id = $1 AND revoked_at IS NULL AND ($2::uuid IS NULL OR id != $2::uuid)
+         ${siteClause}
        RETURNING id`,
-    [userId, keyId || null]
+    params
   );
   return Array.isArray(result) ? result.length : 0;
+}
+
+// Revokes exactly one board-scoped key owned by the user. Returns the number
+// of rows revoked (0 when the key does not exist, is already revoked, or is
+// scoped to a different board).
+export async function revokePostbackKeyById(
+  userId: string,
+  keyId: string,
+  siteId: string,
+  { execImpl = exec }: { execImpl?: typeof exec } = {}
+): Promise<number> {
+  const result = await execImpl(
+    `UPDATE postback_keys SET revoked_at = now()
+       WHERE id = $1::uuid AND user_id = $2 AND site_id = $3::uuid
+         AND revoked_at IS NULL
+       RETURNING id`,
+    [keyId, userId, siteId]
+  );
+  return Array.isArray(result) ? result.length : 0;
+}
+
+export interface ApiKeyInfo {
+  id: string;
+  siteId: string | null;
+  label: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  key: string;
+}
+
+export async function listApiKeys(userId: string, siteId?: string | null): Promise<ApiKeyInfo[]> {
+  // Account keys (site_id IS NULL) plus keys scoped to the requested board.
+  const rows = await query<{ id: string; site_id: string | null; label: string | null; created_at: string; last_used_at: string | null; expires_at: string | null; key_plaintext: string | null; key_enc: string | null }>(
+    `SELECT id, site_id, label, created_at, last_used_at, expires_at, key_plaintext, key_enc
+       FROM postback_keys
+      WHERE user_id = $1
+        AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
+        AND (site_id IS NULL OR site_id = $2::uuid)
+      ORDER BY created_at DESC`,
+    [userId, siteId || null]
+  );
+  const hexKey = await getEncKey();
+  const keys: ApiKeyInfo[] = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    let raw: string | null = null;
+    if (row.key_enc) raw = await decrypt(row.key_enc, hexKey);
+    else if (row.key_plaintext) raw = row.key_plaintext;
+    if (!raw) continue;
+    keys.push({
+      id: row.id,
+      siteId: row.site_id ?? null,
+      label: row.label,
+      createdAt: row.created_at,
+      lastUsedAt: row.last_used_at,
+      expiresAt: row.expires_at,
+      key: raw,
+    });
+  }
+  return keys;
 }
 
 export async function recordReplayHash(

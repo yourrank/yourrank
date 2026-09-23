@@ -267,6 +267,11 @@ export async function handlePostback(request, env) {
       await one("UPDATE site_clicks SET converted_at=now() WHERE click_ref=$1", [clickRef]);
     }
   }
+  // A board-scoped key can only attribute conversions to its own board.
+  if (owner.siteId) {
+    if (siteId && siteId !== owner.siteId) return bad("This postback key is scoped to another board.", 403);
+    siteId = siteId || owner.siteId;
+  }
 
   await recordConversion(owner.userId, out, siteId, (id) => notifyLiveBoard(env, id));
   return json({ ok: true }, 200, legacyHeaders);

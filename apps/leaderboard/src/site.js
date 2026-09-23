@@ -16,7 +16,7 @@ import { verifyBoardPasswordCookie } from "./board-password.js";
 import { detectImageMime, validateBannerData, validateLogoData } from "./logo-validation.js";
 import { invalidatePublicBoardCache } from "./public-html-cache.js";
 import { notifyLiveBoard } from "./live-board-config.js";
-import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers } from "./player-rules.js";
+import { normalizePlayerName, rankField, sortPlayersForRanking, validateAndNormalizePlayers, mergePlayerPatch } from "./player-rules.js";
 import { getSiteRole as sharedGetSiteRole } from "@yourrank/shared/team";
 import { VIEWER_OAUTH_PROVIDERS, resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 import { EMPTY_CREATOR_CONTACT, hasCreatorContactMethod, normalizeCreatorContact, validateCreatorContact } from "@yourrank/shared/creator-contact";
@@ -1051,7 +1051,7 @@ function isProPlan(plan) {
   return plan === "pro" || plan === "team";
 }
 
-export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null, deps = {} } = {}) {
+export async function saveSite(env, user, payload, siteId, request = null, { scoreReplay = null, scorePatch = null, deps = {} } = {}) {
   const oneImpl = deps.one || one;
   const queryImpl = deps.query || query;
   const withTransactionImpl = deps.withTransaction || withTransaction;
@@ -1321,6 +1321,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   }
 
   const txResult = await withTransactionImpl(async (tx) => {
+    let patchResult = null;
     // QA-004 / C-07: Lock the site row and re-read updated_at inside the same
     // transaction so the optimistic concurrency check is authoritative.
     const locked = await tx.one(
@@ -1337,6 +1338,37 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
           error: "This board was modified by another session. Refresh and try again.",
           code: "concurrency_conflict",
           currentUpdatedAt: locked.updated_at,
+        };
+      }
+    }
+
+    // The signed score API's incremental patch merge happens under the site
+    // row lock so concurrent patches serialize. It is an internal option,
+    // never accepted from a dashboard save payload.
+    if (scorePatch) {
+      const existingRows = await tx.unsafe(
+        `SELECT name, wagered, prize, score, hands, net_profit AS "netProfit", win_rate AS "winRate", change FROM players WHERE site_id=$1 ORDER BY sort`,
+        [site.id]
+      );
+      const merged = mergePlayerPatch(existingRows, scorePatch);
+      const validation = validateAndNormalizePlayers(merged.players);
+      if (validation.error) return validation;
+      validatedPlayers = validation.players;
+      patchResult = { total: validatedPlayers.length, updated: merged.updated, created: merged.created };
+      let effectiveSitePlan = plan;
+      if (site.user_id !== uid) {
+        const owner = await tx.one(
+          "SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1",
+          [site.user_id]
+        );
+        if (owner) effectiveSitePlan = effectivePlan(owner);
+      }
+      if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
+        return {
+          error: effectiveSitePlan === "pro" || effectiveSitePlan === "team"
+            ? `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players.`
+            : `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players. Upgrade for more.`,
+          code: "player_limit",
         };
       }
     }
@@ -1423,7 +1455,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
         [site.id]
       );
     }
-    return { ok: true };
+    return { ok: true, patch: patchResult };
   });
   if (txResult.error) return txResult;
 
@@ -1538,7 +1570,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
     },
   });
 
-  return { ok: true, updatedAt: updatedSite?.updated_at, publishedAt: updatedSite?.published_at, slug: updatedSite?.slug || slugRename || site.slug, siteId: updatedSite?.id || site.id };
+  return { ok: true, updatedAt: updatedSite?.updated_at, publishedAt: updatedSite?.published_at, slug: updatedSite?.slug || slugRename || site.slug, siteId: updatedSite?.id || site.id, patch: txResult.patch };
 }
 
 export async function deleteBoard(env, uid, siteId, request = null) {

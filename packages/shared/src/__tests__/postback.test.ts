@@ -1,5 +1,8 @@
 import { describe, expect, it, spyOn } from "bun:test";
 import {
+  createPostbackKey,
+  revokePostbackKeyById,
+  revokePostbackKeys,
   logPostbackIntake,
   purgeExpiredReplayHashes,
   recordReplayHash,
@@ -104,5 +107,65 @@ describe("postback replay guard", () => {
     expect(calls[0][0]).toContain("LIMIT $1");
     expect(calls[0][1]).toEqual([2]);
     expect(calls[1][1]).toEqual([2]);
+  });
+});
+
+process.env.TOKEN_ENC_KEY = process.env.TOKEN_ENC_KEY || "00".repeat(32);
+
+describe("board-scoped API keys", () => {
+  it("revokes only account keys when no site scope is given", async () => {
+    let sql = "";
+    let params: unknown[] = [];
+    await revokePostbackKeys("user-1", null, {
+      execImpl: async (q, p) => { sql = q; params = p; return [{ id: "k1" }]; },
+    });
+    expect(sql).toContain("site_id IS NULL");
+    expect(params).toEqual(["user-1", null]);
+  });
+
+  it("revokes only the scoped board's keys when a siteId is given", async () => {
+    let sql = "";
+    let params: unknown[] = [];
+    await revokePostbackKeys("user-1", "keep-1", {
+      siteId: "site-9",
+      execImpl: async (q, p) => { sql = q; params = p; return [{ id: "k1" }, { id: "k2" }]; },
+    });
+    expect(sql).toContain("site_id = $3::uuid");
+    expect(sql).not.toContain("site_id IS NULL");
+    expect(params).toEqual(["user-1", "keep-1", "site-9"]);
+  });
+
+  it("persists the site scope on creation and scopes revokeOthers to it", async () => {
+    const calls: unknown[][] = [];
+    await createPostbackKey("user-1", {
+      label: "board",
+      revokeOthers: true,
+      siteId: "site-9",
+      execImpl: async (...args) => {
+        calls.push(args);
+        return [{ id: "new-key" }];
+      },
+    });
+    expect(calls[0][1][1]).toBe("site-9");
+    expect(calls[1][0]).toContain("site_id = $3::uuid");
+    expect(calls[1][1]).toEqual(["user-1", "new-key", "site-9"]);
+  });
+
+  it("revokes a single board key by id scoped to user and site", async () => {
+    let sql = "";
+    let params: unknown[] = [];
+    const revoked = await revokePostbackKeyById("user-1", "key-1", "site-9", {
+      execImpl: async (q, p) => { sql = q; params = p; return [{ id: "key-1" }]; },
+    });
+    expect(revoked).toBe(1);
+    expect(sql).toContain("id = $1::uuid AND user_id = $2 AND site_id = $3::uuid");
+    expect(params).toEqual(["key-1", "user-1", "site-9"]);
+  });
+
+  it("revokePostbackKeyById touches nothing when the site scope does not match", async () => {
+    const revoked = await revokePostbackKeyById("user-1", "key-1", "site-other", {
+      execImpl: async () => [],
+    });
+    expect(revoked).toBe(0);
   });
 });
