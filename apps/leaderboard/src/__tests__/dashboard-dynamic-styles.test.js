@@ -10,10 +10,32 @@ import { PAGES } from "../pages.jsx";
 import { giveawaysConfig } from "../pages/giveaways.jsx";
 import { activitiesConfig } from "../pages/activities.jsx";
 import { renderFragmentPayload, resolveFragment } from "../index.js";
+import { clearSession } from "../assets/dashboard/session.js";
 
 const user = { display_name: "Test operator", plan: "pro" };
 const ENGAGEMENT_CSS = "/assets/giveaways.css";
 const ACTIVITIES_CSS = "/assets/activities.css";
+
+// This file can share a process with other test files, so every replaced
+// global is restored in afterEach.
+const BROWSER_GLOBALS = ["document", "window", "location", "fetch", "setTimeout", "clearTimeout"];
+const originalGlobals = Object.fromEntries(BROWSER_GLOBALS.map((k) => [k, globalThis[k]]));
+
+/** Real timers, usable even while the loader's timers are controlled. */
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+// Real-timer ids handed out while a test runs; afterEach clears the leftovers
+// so a pending callback (e.g. a toast auto-dismiss) cannot fire into a later test.
+const pendingTimers = new Set();
+function tick(ms = 10) {
+  return new Promise((resolve) => realSetTimeout(resolve, ms));
+}
+function restoreBrowserGlobals() {
+  for (const name of BROWSER_GLOBALS) {
+    if (originalGlobals[name] === undefined) delete globalThis[name];
+    else globalThis[name] = originalGlobals[name];
+  }
+}
 
 /**
  * Minimal DOM the loader needs: a head that collects stylesheet links, plus
@@ -60,6 +82,10 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
       remove() {
         const at = links.indexOf(this);
         if (at !== -1) links.splice(at, 1);
+        const siblings = this.parentNode?.children;
+        const ci = siblings ? siblings.indexOf(this) : -1;
+        if (ci !== -1) siblings.splice(ci, 1);
+        this.parentNode = null;
       },
       addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
       removeEventListener(type, fn) { listeners[type] = (listeners[type] || []).filter((f) => f !== fn); },
@@ -73,12 +99,23 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
   };
 
   const elements = new Map([["lbDynamic", container]]);
+  const head = {
+    children: [],
+    appendChild(link) { links.push(link); this.children.push(link); link.parentNode = this; },
+  };
+  const body = makeElement();
+  const documentElement = makeElement();
+  const contains = (node) => {
+    const walk = (el) => el === node || (el.children || []).some(walk);
+    return head.children.some(walk) || walk(body) || walk(documentElement);
+  };
   globalThis.document = {
     cookie: "",
     title: "",
-    head: { appendChild(link) { links.push(link); } },
-    body: makeElement(),
-    documentElement: makeElement(),
+    head,
+    body,
+    documentElement,
+    contains,
     addEventListener() {},
     removeEventListener() {},
     getElementById(id) { return elements.get(id) || null; },
@@ -87,7 +124,7 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
       if (selector === 'link[rel="stylesheet"][href]') return links.filter((l) => l.getAttribute("href"));
       return [];
     },
-    createElement() { return makeLink(); },
+    createElement(tag) { return tag === "link" ? makeLink() : makeElement(); },
     createDocumentFragment() { return makeElement(); },
   };
   globalThis.location = {
@@ -114,6 +151,18 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
       return id;
     };
     globalThis.clearTimeout = (id) => timers.delete(id);
+  } else {
+    // Real timers still fire, but their ids are tracked so teardown can
+    // cancel anything the test left pending.
+    globalThis.setTimeout = (fn, ms, ...args) => {
+      const id = realSetTimeout(fn, ms, ...args);
+      pendingTimers.add(id);
+      return id;
+    };
+    globalThis.clearTimeout = (id) => {
+      pendingTimers.delete(id);
+      realClearTimeout(id);
+    };
   }
   const runTimers = () => {
     const due = [...timers.values()];
@@ -124,37 +173,48 @@ function installBrowserGlobals({ failing = [], stalled = [], pathname = "/dashbo
   return { container, links, requests, network, runTimers, clickRetry: () => retryHandler?.() };
 }
 
-/** Real timers, usable even while the loader's timers are controlled. */
-const realSetTimeout = globalThis.setTimeout;
-const realClearTimeout = globalThis.clearTimeout;
-function tick(ms = 10) {
-  return new Promise((resolve) => realSetTimeout(resolve, ms));
-}
-function restoreTimers() {
-  globalThis.setTimeout = realSetTimeout;
-  globalThis.clearTimeout = realClearTimeout;
-}
-
 function makeElement() {
   return {
     attributes: {},
     children: [],
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     hidden: false,
     innerHTML: "",
+    style: {},
+    textContent: "",
+    parentNode: null,
+    get firstElementChild() { return this.children[0] ?? null; },
     setAttribute(name, value) { this.attributes[name] = String(value); },
     removeAttribute(name) { delete this.attributes[name]; },
     querySelector() { return null; },
     querySelectorAll() { return []; },
-    appendChild(child) { this.children.push(child); },
+    appendChild(child) { this.children.push(child); child.parentNode = this; return child; },
+    addEventListener() {},
+    removeEventListener() {},
+    remove() {
+      const siblings = this.parentNode?.children;
+      const at = siblings ? siblings.indexOf(this) : -1;
+      if (at !== -1) siblings.splice(at, 1);
+      this.parentNode = null;
+    },
   };
 }
 
 /** Fragment response for a section, as the Worker endpoint returns it. */
 function fragmentResponder(payload) {
-  return async () => new Response(JSON.stringify(payload), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
+  return async (input) => {
+    const path = String(input).split("?")[0];
+    if (!path.startsWith("/dashboard/_content")) {
+      return new Response(JSON.stringify({ ok: false, error: "unavailable in test" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
 }
 
 function stylesheetHrefs(links) {
@@ -195,14 +255,25 @@ describe("Engagement style requirements are declared by one owner", () => {
 
 describe("dynamic navigation waits for the destination's stylesheets", () => {
   let loadDynamicSection;
+  let leaveDynamicSection;
 
   beforeEach(async () => {
     // The loader's module graph reads `document` at import time.
     installBrowserGlobals();
-    ({ loadDynamicSection } = await import("../assets/dashboard/dynamic-section.js"));
+    clearSession();
+    ({ loadDynamicSection, leaveDynamicSection } = await import("../assets/dashboard/dynamic-section.js"));
   });
 
-  afterEach(restoreTimers);
+  afterEach(async () => {
+    try { leaveDynamicSection(); } catch { /* no section may be entered yet */ }
+    // Drain any fire-and-forget boot continuation while the fake DOM is installed.
+    await tick();
+    await tick();
+    for (const id of pendingTimers) realClearTimeout(id);
+    pendingTimers.clear();
+    clearSession();
+    restoreBrowserGlobals();
+  });
 
   it("loads a required stylesheet before the fragment markup is injected", async () => {
     // A distinct URL per test keeps the loader's in-document dedupe state from
