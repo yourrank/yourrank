@@ -1,6 +1,7 @@
 import { describe, expect, it, spyOn } from "bun:test";
 import {
   createPostbackKey,
+  revokePostbackKeyById,
   revokePostbackKeys,
   logPostbackIntake,
   purgeExpiredReplayHashes,
@@ -148,5 +149,23 @@ describe("board-scoped API keys", () => {
     expect(calls[0][1][1]).toBe("site-9");
     expect(calls[1][0]).toContain("site_id = $3::uuid");
     expect(calls[1][1]).toEqual(["user-1", "new-key", "site-9"]);
+  });
+
+  it("revokes a single board key by id scoped to user and site", async () => {
+    let sql = "";
+    let params: unknown[] = [];
+    const revoked = await revokePostbackKeyById("user-1", "key-1", "site-9", {
+      execImpl: async (q, p) => { sql = q; params = p; return [{ id: "key-1" }]; },
+    });
+    expect(revoked).toBe(1);
+    expect(sql).toContain("id = $1::uuid AND user_id = $2 AND site_id = $3::uuid");
+    expect(params).toEqual(["key-1", "user-1", "site-9"]);
+  });
+
+  it("revokePostbackKeyById touches nothing when the site scope does not match", async () => {
+    const revoked = await revokePostbackKeyById("user-1", "key-1", "site-other", {
+      execImpl: async () => [],
+    });
+    expect(revoked).toBe(0);
   });
 });

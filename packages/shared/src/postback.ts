@@ -102,10 +102,17 @@ export async function getActivePostbackKey(userId: string): Promise<string | nul
   return null;
 }
 
-export async function createPostbackKey(
+export interface CreatedPostbackKey {
+  key: string;
+  id: string | null;
+  createdAt: string | null;
+  expiresAt: string | null;
+}
+
+export async function createPostbackKeyRecord(
   userId: string,
   { label, revokeOthers = false, siteId = null, execImpl = exec }: { label?: string; revokeOthers?: boolean; siteId?: string | null; execImpl?: typeof exec } = {}
-): Promise<string> {
+): Promise<CreatedPostbackKey> {
   const raw = newPostbackKey();
   const hash = await hashPostbackKey(raw);
   const hexKey = await getEncKey();
@@ -113,14 +120,22 @@ export async function createPostbackKey(
   const inserted = await execImpl(
     `INSERT INTO postback_keys (user_id, site_id, key_hash, key_plaintext, key_enc, label, created_at, expires_at)
      VALUES ($1, $2, $3, NULL, $4, $5, now(), now() + make_interval(secs => $6))
-     RETURNING id`,
+     RETURNING id, created_at, expires_at`,
     [userId, siteId, hash, keyEnc, label || null, KEY_TTL_S]
   );
-  const rowId = Array.isArray(inserted) && inserted[0]?.id;
-  if (revokeOthers && rowId) {
-    await revokePostbackKeys(userId, rowId, { siteId, execImpl });
+  const row = Array.isArray(inserted) ? inserted[0] : null;
+  if (revokeOthers && row?.id) {
+    await revokePostbackKeys(userId, row.id, { siteId, execImpl });
   }
-  return raw;
+  return { key: raw, id: row?.id ?? null, createdAt: row?.created_at ?? null, expiresAt: row?.expires_at ?? null };
+}
+
+export async function createPostbackKey(
+  userId: string,
+  options: { label?: string; revokeOthers?: boolean; siteId?: string | null; execImpl?: typeof exec } = {}
+): Promise<string> {
+  const created = await createPostbackKeyRecord(userId, options);
+  return created.key;
 }
 
 export async function revokePostbackKeys(
@@ -139,6 +154,25 @@ export async function revokePostbackKeys(
          ${siteClause}
        RETURNING id`,
     params
+  );
+  return Array.isArray(result) ? result.length : 0;
+}
+
+// Revokes exactly one board-scoped key owned by the user. Returns the number
+// of rows revoked (0 when the key does not exist, is already revoked, or is
+// scoped to a different board).
+export async function revokePostbackKeyById(
+  userId: string,
+  keyId: string,
+  siteId: string,
+  { execImpl = exec }: { execImpl?: typeof exec } = {}
+): Promise<number> {
+  const result = await execImpl(
+    `UPDATE postback_keys SET revoked_at = now()
+       WHERE id = $1::uuid AND user_id = $2 AND site_id = $3::uuid
+         AND revoked_at IS NULL
+       RETURNING id`,
+    [keyId, userId, siteId]
   );
   return Array.isArray(result) ? result.length : 0;
 }

@@ -49,62 +49,148 @@ export function canManageApiKey(boards = state.BOARDS, activeSiteId = state.ACTI
 }
 
 const API_KEY_MASK = "•".repeat(20);
-let apiKey = "";
-let apiKeyRevealed = false;
+let apiKeys = [];
+const apiKeyRevealed = new Set();
 let apiKeyLoading = null;
 
-function paintApiKey() {
-  const value = $("apiKeyValue");
-  const reveal = $("apiKeyReveal");
-  if (value) {
-    value.textContent = apiKey ? (apiKeyRevealed ? apiKey : API_KEY_MASK) : "No key yet";
-    value.dataset.masked = apiKeyRevealed ? "0" : "1";
-  }
-  if (reveal) {
-    reveal.textContent = apiKeyRevealed ? "Hide" : "Reveal";
-    reveal.setAttribute("aria-pressed", apiKeyRevealed ? "true" : "false");
-    reveal.disabled = !apiKey;
-  }
-  const copy = $("apiKeyCopy");
-  if (copy) copy.disabled = !apiKey;
+function apiKeysUrl(path = "") {
+  return `/api/sites/${encodeURIComponent(state.ACTIVE_SITE_ID || "")}/api-keys${path}`;
 }
 
-// GET returns the account's active postback key; the first rotate creates one.
-// Reuses the postback_keys infrastructure shared with deposit tracking.
-async function loadApiKey() {
+function apiKeyRow(row) {
+  const item = document.createElement("div");
+  item.className = "api-key-row";
+  item.dataset.keyId = row.id;
+
+  const badge = document.createElement("span");
+  badge.className = "api-key-scope";
+  badge.textContent = row.scope === "board" ? "This board" : "Account · all boards";
+  item.append(badge);
+
+  const value = document.createElement("code");
+  value.className = "overlay-url api-key";
+  value.dataset.masked = "1";
+  value.setAttribute("aria-live", "polite");
+  value.textContent = API_KEY_MASK;
+  item.append(value);
+
+  const actions = document.createElement("div");
+  actions.className = "api-key-actions";
+
+  const reveal = document.createElement("button");
+  reveal.className = "btn btn--sm btn--ghost";
+  reveal.type = "button";
+  reveal.setAttribute("aria-pressed", "false");
+  reveal.textContent = "Reveal";
+  reveal.addEventListener("click", () => {
+    if (apiKeyRevealed.has(row.id)) apiKeyRevealed.delete(row.id);
+    else apiKeyRevealed.add(row.id);
+    const shown = apiKeyRevealed.has(row.id);
+    value.textContent = shown ? row.key : API_KEY_MASK;
+    value.dataset.masked = shown ? "0" : "1";
+    reveal.textContent = shown ? "Hide" : "Reveal";
+    reveal.setAttribute("aria-pressed", shown ? "true" : "false");
+  });
+  actions.append(reveal);
+
+  const copy = document.createElement("button");
+  copy.className = "btn btn--sm btn--accent";
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    const ok = await copyToClipboard(row.key);
+    flashButton(copy, ok ? "Copied!" : "Copy failed");
+  });
+  actions.append(copy);
+
+  if (row.scope === "board") {
+    const rotate = document.createElement("button");
+    rotate.className = "btn btn--sm btn--ghost";
+    rotate.type = "button";
+    rotate.textContent = "Rotate";
+    rotate.addEventListener("click", () => rotateBoardKey(row, rotate));
+    actions.append(rotate);
+
+    const revoke = document.createElement("button");
+    revoke.className = "btn btn--sm btn--ghost";
+    revoke.type = "button";
+    revoke.textContent = "Revoke";
+    revoke.addEventListener("click", () => revokeBoardKey(row, revoke));
+    actions.append(revoke);
+  } else {
+    const manage = document.createElement("a");
+    manage.className = "btn btn--sm btn--ghost";
+    manage.href = "/dashboard/settings/connections";
+    manage.textContent = "Manage in Connections";
+    actions.append(manage);
+  }
+
+  item.append(actions);
+  return item;
+}
+
+function paintApiKeys() {
+  const list = $("apiKeyList");
+  if (list) {
+    list.replaceChildren(...apiKeys.map(apiKeyRow));
+    if (!apiKeys.length) {
+      const empty = document.createElement("p");
+      empty.className = "hint";
+      empty.textContent = "No API signing key yet.";
+      list.append(empty);
+    }
+  }
+  const create = $("apiKeyCreate");
+  if (create) create.hidden = apiKeys.some((row) => row.scope === "board");
+}
+
+// Lists every active signing key that can update this board: the account key
+// (all boards) plus keys scoped to this board. Loading never creates a key.
+async function loadApiKeys() {
   if (apiKeyLoading) return apiKeyLoading;
   apiKeyLoading = (async () => {
     const hint = $("apiKeyHint");
-    apiKeyRevealed = false;
+    apiKeyRevealed.clear();
     try {
-      const r = await fetch("/api/account/postbacks", { credentials: "include" });
+      const r = await fetch(apiKeysUrl(), { credentials: "include" });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.ok) throw new Error(d.error || `postbacks ${r.status}`);
-      if (d.postback?.key) {
-        apiKey = d.postback.key;
-        if (hint) hint.textContent = "";
-      } else {
-        const created = await fetch("/api/account/postbacks/rotate", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
-        const cd = await created.json().catch(() => ({}));
-        if (!created.ok || !cd.ok || !cd.postback?.key) throw new Error(cd.error || `postbacks ${created.status}`);
-        apiKey = cd.postback.key;
-        if (hint) hint.textContent = "Key created. Keep it secret — anyone holding it can post scores to your boards.";
-      }
+      if (!r.ok || !d.ok) throw new Error(d.error || `api-keys ${r.status}`);
+      apiKeys = Array.isArray(d.keys) ? d.keys : [];
+      if (hint) hint.textContent = "";
       const details = $("apiAccessDetails");
       if (details) details._apiLoaded = true;
     } catch (err) {
-      logError("load-api-key", err);
-      apiKey = "";
-      if (hint) hint.textContent = "Could not load your API key. Reload to try again.";
+      logError("load-api-keys", err);
+      apiKeys = [];
+      if (hint) hint.textContent = "Could not load your API keys. Reload to try again.";
     } finally {
       apiKeyLoading = null;
-      paintApiKey();
+      paintApiKeys();
     }
   })();
   return apiKeyLoading;
 }
 
-async function rotateApiKey(button) {
+async function createBoardKey(button) {
+  button.disabled = true;
+  const hint = $("apiKeyHint");
+  try {
+    const r = await fetch(apiKeysUrl(), { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok || !d.key?.key) throw new Error(d.error || `api-keys ${r.status}`);
+    apiKeys = [...apiKeys, d.key];
+    if (hint) hint.textContent = "Key created. Keep it secret — anyone holding it can post scores to this board.";
+    showToast("API signing key created.", "success");
+  } catch (err) {
+    logError("create-api-key", err);
+    showToast(err.message || "Could not create the key.", "error");
+  } finally {
+    button.disabled = false;
+    paintApiKeys();
+  }
+}
+
+async function rotateBoardKey(row, button) {
   const confirmed = await showConfirmModal(
     "Rotate API key",
     "The current key stops working immediately. Update any system that posts scores with the new key.",
@@ -115,11 +201,11 @@ async function rotateApiKey(button) {
   button.disabled = true;
   const hint = $("apiKeyHint");
   try {
-    const r = await fetch("/api/account/postbacks/rotate", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+    const r = await fetch(apiKeysUrl(`/${encodeURIComponent(row.id)}/rotate`), { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok || !d.postback?.key) throw new Error(d.error || `rotate ${r.status}`);
-    apiKey = d.postback.key;
-    apiKeyRevealed = false;
+    if (!r.ok || !d.ok || !d.key?.key) throw new Error(d.error || `rotate ${r.status}`);
+    apiKeys = apiKeys.map((entry) => (entry.id === row.id ? d.key : entry));
+    apiKeyRevealed.delete(row.id);
     if (hint) hint.textContent = "Key rotated. The previous key has been revoked.";
     showToast("API key rotated.", "success");
   } catch (err) {
@@ -127,7 +213,34 @@ async function rotateApiKey(button) {
     showToast(err.message || "Could not rotate the key.", "error");
   } finally {
     button.disabled = false;
-    paintApiKey();
+    paintApiKeys();
+  }
+}
+
+async function revokeBoardKey(row, button) {
+  const confirmed = await showConfirmModal(
+    "Revoke API key",
+    "This key stops working immediately. Any system still using it can no longer post scores.",
+    "Revoke",
+    true,
+  );
+  if (!confirmed) return;
+  button.disabled = true;
+  const hint = $("apiKeyHint");
+  try {
+    const r = await fetch(apiKeysUrl(`/${encodeURIComponent(row.id)}`), { method: "DELETE", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || `revoke ${r.status}`);
+    apiKeys = apiKeys.filter((entry) => entry.id !== row.id);
+    apiKeyRevealed.delete(row.id);
+    if (hint) hint.textContent = "Key revoked.";
+    showToast("API key revoked.", "success");
+  } catch (err) {
+    logError("revoke-api-key", err);
+    showToast(err.message || "Could not revoke the key.", "error");
+  } finally {
+    button.disabled = false;
+    paintApiKeys();
   }
 }
 
@@ -155,32 +268,15 @@ export function renderApiAccess() {
   }
   if (!unlocked || !owner) return;
 
-  const reveal = $("apiKeyReveal");
-  if (reveal && !reveal._wired) {
-    reveal._wired = true;
-    reveal.addEventListener("click", () => {
-      apiKeyRevealed = !apiKeyRevealed;
-      paintApiKey();
-    });
+  const create = $("apiKeyCreate");
+  if (create && !create._wired) {
+    create._wired = true;
+    create.addEventListener("click", () => createBoardKey(create));
   }
-  const copy = $("apiKeyCopy");
-  if (copy && !copy._wired) {
-    copy._wired = true;
-    copy.addEventListener("click", async () => {
-      if (!apiKey) return;
-      const ok = await copyToClipboard(apiKey);
-      flashButton(copy, ok ? "Copied!" : "Copy failed");
-    });
-  }
-  const rotate = $("apiKeyRotate");
-  if (rotate && !rotate._wired) {
-    rotate._wired = true;
-    rotate.addEventListener("click", () => rotateApiKey(rotate));
-  }
-  paintApiKey();
-  // Fetch (or create) the key only once the creator opens Developer tools.
+  paintApiKeys();
+  // Fetch the keys only once the creator opens Developer tools.
   const details = $("apiAccessDetails");
-  const ensureKey = () => { if (details?.open && (!apiKey || !details._apiLoaded)) loadApiKey(); };
+  const ensureKey = () => { if (details?.open && !details._apiLoaded) loadApiKeys(); };
   if (details && !details._apiWired) {
     details._apiWired = true;
     details.addEventListener("toggle", ensureKey);

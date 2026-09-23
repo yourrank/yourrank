@@ -54,6 +54,7 @@ import { handleCspReport } from "./handlers/csp-report.js";
 import { handleLog } from "./handlers/log.js";
 import { handleScores, handleScoresUpsert } from "./handlers/scores.js";
 import { handleQuickAdd } from "./handlers/quick-add.js";
+import { handleListApiKeys, handleCreateApiKey, handleRotateApiKey, handleDeleteApiKey } from "./handlers/api-keys.js";
 import { handleKickWebhook } from "./handlers/kick-webhook.js";
 import { handleGiveawayChatroom } from "./handlers/giveaway.js";
 import {
@@ -285,6 +286,10 @@ export const ROUTES = [
   { path: "/api/site/duplicate", method: "POST", handler: withHandler(handleDuplicateBoard) },
   { path: "/api/site/archive", method: "POST", handler: withHandler(handleArchive) },
   { path: "/api/sites/:id/quick-add", method: "POST", handler: withHandler(handleQuickAdd) },
+  { path: "/api/sites/:id/api-keys", method: "GET", handler: withHandler(handleListApiKeys) },
+  { path: "/api/sites/:id/api-keys", method: "POST", handler: withHandler(handleCreateApiKey) },
+  { path: "/api/sites/:id/api-keys/:keyId/rotate", method: "POST", handler: withHandler(handleRotateApiKey) },
+  { path: "/api/sites/:id/api-keys/:keyId", method: "DELETE", handler: withHandler(handleDeleteApiKey) },
   { path: "/api/site/archive/delete", method: "POST", handler: withHandler(handleArchiveDelete) },
   { path: "/api/site/archive/restore", method: "POST", handler: withHandler(handleRestoreArchive) },
   { path: "/api/site/active", method: "POST", handler: withHandler(handleSetActive) },
