@@ -142,7 +142,7 @@ const pySample = (method, body) => `import hmac, hashlib, json, os, uuid
 import requests
 
 api_key = os.environ["YOURRANK_API_KEY"]  # never hard-code it
-body = json.dumps(${JSON.stringify(body, null, 2).replace(/\n/g, "\n")}, separators=(",", ":"))
+body = json.dumps(${JSON.stringify(body, null, 2).replace(/\n/g, "\\n")}, separators=(",", ":"))
 signature = hmac.new(api_key.encode(), body.encode(), hashlib.sha256).hexdigest()
 
 res = requests.request(
