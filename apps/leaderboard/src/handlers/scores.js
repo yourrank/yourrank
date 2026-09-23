@@ -66,7 +66,7 @@ const noDuplicateNames = (body, ctx) => {
   }
 };
 
-const scoreBodySchema = z
+export const scoreBodySchema = z
   .object({
     slug: z.string().trim().min(1).max(80).optional(),
     siteId: z.string().uuid().optional(),
@@ -75,7 +75,7 @@ const scoreBodySchema = z
   .strict()
   .superRefine(noDuplicateNames);
 
-const scorePatchBodySchema = z
+export const scorePatchBodySchema = z
   .object({
     slug: z.string().trim().min(1).max(80).optional(),
     siteId: z.string().uuid().optional(),

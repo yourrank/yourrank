@@ -108,6 +108,26 @@ const patchBodyExample = {
   ],
 };
 
+const SCALAR_CONFIG = {
+  url: OPENAPI_PATH,
+  proxyUrl: "",
+  darkMode: true,
+  forceDarkModeState: "dark",
+  hideDarkModeToggle: true,
+  hideClientButton: true,
+  withDefaultFonts: false,
+  hideTestRequestButton: false,
+  defaultOpenAllTags: true,
+  showSidebar: true,
+  layout: "modern",
+  theme: "none",
+  hiddenClients: true,
+  defaultHttpClient: { targetKey: "shell", clientKey: "curl" },
+  metaData: { title: "Developer API — YourRank" },
+  documentDownloadType: "json",
+};
+const SCALAR_CONFIG_JSON = JSON.stringify(SCALAR_CONFIG);
+
 const curlSample = (method, body) => `BODY='${JSON.stringify(body)}'
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$YOURRANK_API_KEY" | sed 's/^.* //')
 curl -X ${method} https://yourrank.site/api/scores \\
@@ -116,24 +136,6 @@ curl -X ${method} https://yourrank.site/api/scores \\
   -H "X-Postback-Signature: $SIG" \\
   -H "Idempotency-Key: $(uuidgen)" \\
   --data-binary "$BODY"`;
-
-const jsSample = (method, body) => `import { createHmac, randomUUID } from "node:crypto";
-
-const apiKey = process.env.YOURRANK_API_KEY; // never hard-code it
-const body = JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, "\n")});
-const signature = createHmac("sha256", apiKey).update(body).digest("hex");
-
-const res = await fetch("https://yourrank.site/api/scores", {
-  method: "${method}",
-  headers: {
-    "Content-Type": "application/json",
-    "X-Postback-Key": apiKey,
-    "X-Postback-Signature": signature,
-    "Idempotency-Key": randomUUID(),
-  },
-  body, // send the exact string that was signed
-});
-console.log(res.status, await res.json());`;
 
 const pySample = (method, body) => `import hmac, hashlib, json, os, uuid
 import requests
@@ -154,6 +156,24 @@ res = requests.request(
     data=body,  # send the exact string that was signed
 )
 print(res.status_code, res.json())`;
+
+const jsSample = (method, body) => `import { createHmac, randomUUID } from "node:crypto";
+
+const apiKey = process.env.YOURRANK_API_KEY; // never hard-code it
+const body = JSON.stringify(${JSON.stringify(body, null, 2).replace(/\n/g, "\n")});
+const signature = createHmac("sha256", apiKey).update(body).digest("hex");
+
+const res = await fetch("https://yourrank.site/api/scores", {
+  method: "${method}",
+  headers: {
+    "Content-Type": "application/json",
+    "X-Postback-Key": apiKey,
+    "X-Postback-Signature": signature,
+    "Idempotency-Key": randomUUID(),
+  },
+  body, // send the exact string that was signed
+});
+console.log(res.status, await res.json());`;
 
 const codeSamples = (method, body) => [
   { lang: "shell", label: "cURL", source: curlSample(method, body) },
@@ -644,24 +664,7 @@ X-Postback-Signature: ${EXAMPLE_SIGNATURE}
   },
 };
 
-const SCALAR_CONFIG = {
-  url: OPENAPI_PATH,
-  proxyUrl: "",
-  darkMode: true,
-  forceDarkModeState: "dark",
-  hideDarkModeToggle: true,
-  hideClientButton: true,
-  withDefaultFonts: false,
-  hideTestRequestButton: false,
-  defaultOpenAllTags: true,
-  showSidebar: true,
-  layout: "modern",
-  theme: "none",
-  hiddenClients: true,
-  defaultHttpClient: { targetKey: "shell", clientKey: "curl" },
-  metaData: { title: "Developer API — YourRank" },
-  documentDownloadType: "json",
-};
+
 
 const DOCS_CSS = `
 :root{--yr-bg:#0b0d10;--yr-panel:#11151a;--yr-line:#1f262e;--yr-ink:#e6e9ee;--yr-ink-soft:#9aa4b2;--yr-accent:#7cf0c4;--yr-code:#0a0c0f}
@@ -706,7 +709,7 @@ function docsHeaders() {
 }
 
 export function renderDocsPage({ origin = "https://yourrank.site" } = {}) {
-  const config = JSON.stringify(SCALAR_CONFIG).replace(/</g, "\\u003c");
+  const config = SCALAR_CONFIG_JSON.replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
 <head>
