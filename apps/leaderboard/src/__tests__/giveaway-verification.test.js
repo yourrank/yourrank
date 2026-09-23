@@ -70,6 +70,27 @@ describe("giveaway draw and timeout", () => {
     expect(await drawGiveaway(run, { ...session, rules: {} })).toHaveProperty("error");
     expect(await drawGiveaway(async () => [eligible], { ...session, rules: { entryMode: "members" } })).toHaveProperty("error");
   });
+  it("excludes this giveaway's winners when winnerRepeat is once and reports no alternatives", async () => {
+    const run = async () => [{ ...eligible, already_drawn: true }];
+    expect(await drawGiveaway(run, { ...session, rules: {} })).toEqual({ error: "No other eligible entrants remain." });
+    const writes = [];
+    const mixed = async (sql, params) => {
+      if (sql.startsWith("SELECT")) return [{ ...eligible, already_drawn: true }, { ...eligible, id: "e2", provider_user_id: "43" }];
+      writes.push({ sql, params });
+      return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id }] : [];
+    };
+    expect(await drawGiveaway(mixed, { ...session, rules: {} })).toMatchObject({ winnerId: "e2" });
+  });
+  it("lets a previous winner of this giveaway be drawn again when winnerRepeat is again", async () => {
+    const writes = [];
+    const run = async (sql, params) => {
+      if (sql.startsWith("SELECT")) return [{ ...eligible, already_drawn: true }];
+      writes.push({ sql, params });
+      return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id }] : [];
+    };
+    expect(await drawGiveaway(run, { ...session, rules: { winnerRepeat: "again" } })).toMatchObject({ winnerId: "e1" });
+    expect(writes[0].sql).toContain("chat_giveaway_draws");
+  });
   it("records history and deadline for eligible draws", async () => {
     const writes = [];
     const run = async (sql, params) => {

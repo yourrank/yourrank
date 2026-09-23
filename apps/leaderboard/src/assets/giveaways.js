@@ -73,6 +73,7 @@ if (!window.__yrSpaShell) {
     // Wire the giveaway UI first so a failing shell request can never leave the
     // page unresponsive.
     wireEvents();
+    try { if (localStorage.getItem("yr:gw-advanced-open") === "1") $("gw-advanced-options").open = true; } catch { /* storage unavailable */ }
     loadBoardShell().then((shell) => {
       siteId = shell.activeSiteId || "";
       refreshChatGiveaway().finally(() => startPolling());
@@ -224,6 +225,7 @@ if (!window.__yrSpaShell) {
       subscriberOnly: !!$("gw-opt-subscriber")?.checked,
       vipOnly: !!$("gw-opt-vip")?.checked,
       excludePreviousWinners: !!$("gw-opt-skip-past")?.checked,
+      winnerRepeat: document.querySelector('input[name="gw-winner-repeat"]:checked')?.value || "once",
       onePerIp: !!$("gw-opt-ip")?.checked,
       winnerMustRespond: !!$("gw-opt-claim-req")?.checked,
       responseTimeout: Number($("gw-opt-claim-duration")?.value || 60),
@@ -242,6 +244,8 @@ if (!window.__yrSpaShell) {
     if ($("gw-device-requirement")) $("gw-device-requirement").textContent = verified ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check";
     if ($("gw-enable-verified")) $("gw-enable-verified").hidden = verified;
     const mustRespond = readRules().winnerMustRespond;
+    if ($("gw-claim-duration-wrap")) $("gw-claim-duration-wrap").hidden = !mustRespond;
+    if ($("gw-auto-reroll-wrap")) $("gw-auto-reroll-wrap").hidden = !mustRespond;
     if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").disabled = !mustRespond;
     if ($("gw-opt-auto-reroll")) {
       $("gw-opt-auto-reroll").disabled = !mustRespond;
@@ -253,12 +257,14 @@ if (!window.__yrSpaShell) {
     if (!session && settingsSessionId) {
       settingsSessionId = null;
       document.querySelector('input[name="gw-entry-mode"][value="chat"]')?.click();
+      document.querySelector('input[name="gw-winner-repeat"][value="once"]')?.click();
       for (const id of ["gw-opt-subscriber", "gw-opt-vip", "gw-opt-skip-past", "gw-opt-ip", "gw-opt-claim-req", "gw-opt-auto-reroll"]) if ($(id)) $(id).checked = false;
     }
     if (session && settingsSessionId !== session.id) {
       settingsSessionId = session.id;
       const r = session.rules || {};
       document.querySelector(`input[name="gw-entry-mode"][value="${["chat", "members", "verified"].includes(r.entryMode) ? r.entryMode : "chat"}"]`)?.click();
+      document.querySelector(`input[name="gw-winner-repeat"][value="${r.winnerRepeat === "again" ? "again" : "once"}"]`)?.click();
       for (const [id, key] of [["gw-opt-subscriber", "subscriberOnly"], ["gw-opt-vip", "vipOnly"], ["gw-opt-skip-past", "excludePreviousWinners"], ["gw-opt-ip", "onePerIp"], ["gw-opt-claim-req", "winnerMustRespond"], ["gw-opt-auto-reroll", "autoReroll"]]) {
         if ($(id)) $(id).checked = !!r[key];
       }
@@ -290,6 +296,10 @@ if (!window.__yrSpaShell) {
 
   function wireEvents() {
     $("gw-settings")?.addEventListener("change", renderRuleAvailability);
+    // Advanced disclosure state is a local preference, never a giveaway rule.
+    $("gw-advanced-options")?.addEventListener("toggle", (e) => {
+      try { localStorage.setItem("yr:gw-advanced-open", e.currentTarget.open ? "1" : "0"); } catch { /* storage unavailable */ }
+    });
     $("gw-enable-verified")?.addEventListener("click", () => {
       document.querySelector('input[name="gw-entry-mode"][value="verified"]')?.click();
       renderRuleAvailability();
@@ -817,7 +827,7 @@ if (!window.__yrSpaShell) {
     clearEngageError();
     if (!session || isRolling) return;
     let pool = getEligibleEntrantsPool();
-    if (Array.isArray(opts.excludeIds) && opts.excludeIds.length) {
+    if (Array.isArray(opts.excludeIds) && opts.excludeIds.length && session?.rules?.winnerRepeat !== "again") {
       const excluded = new Set(opts.excludeIds.map(String));
       const filtered = pool.filter((e) => !excluded.has(String(e.id)));
       if (filtered.length > 0) pool = filtered;

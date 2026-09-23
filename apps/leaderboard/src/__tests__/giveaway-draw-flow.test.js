@@ -14,7 +14,7 @@ const { document } = window;
 // This file runs inside a shared bun process with every other leaderboard
 // test: every global it installs must be restored in afterAll or later files
 // inherit a dead virtual clock and hang.
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "fetch", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "performance"];
+const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch", "setTimeout", "setInterval", "clearTimeout", "clearInterval", "requestAnimationFrame", "cancelAnimationFrame", "performance"];
 const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
 const originalDateNow = Date.now;
 for (const key of INSTALLED_GLOBALS.slice(0, 14)) {
@@ -23,6 +23,7 @@ for (const key of INSTALLED_GLOBALS.slice(0, 14)) {
 window.Element.prototype.scrollIntoView = function () {};
 if (!window.Element.prototype.scrollTo) window.Element.prototype.scrollTo = function () {};
 window.Element.prototype.getClientRects = function () { return [{}]; };
+globalThis.localStorage = window.localStorage;
 
 // ---- Virtual clock: timers, rAF, and performance.now all run on `now`. ----
 const realSetTimeout = globalThis.setTimeout;
@@ -92,9 +93,9 @@ const ENTRANTS = [
 ];
 
 const server = { session: null, entries: [], draws: [], requests: [] };
-function resetServer({ session } = {}) {
+function resetServer({ session, entries } = {}) {
   server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
-  server.entries = ENTRANTS.map((e) => ({ ...e }));
+  server.entries = (entries || ENTRANTS).map((e) => ({ ...e }));
   server.draws.length = 0;
   server.requests.length = 0;
 }
@@ -133,12 +134,15 @@ globalThis.fetch = async (input, init = {}) => {
     if (expectedId !== null && server.session.winner_finalized_at) {
       return json({ ok: false, error: "This winner is already confirmed and cannot be re-rolled.", session: server.session, entries: server.entries, winner: winnerEntry() }, 409);
     }
-    // The server picks from eligible entries not already drawn this session —
-    // the LAST of the pool, a pick the client could not have predicted. The
+    // The server picks from eligible entries; the persisted winnerRepeat rule
+    // decides whether earlier draws of this giveaway leave the pool. The LAST
+    // of the pool is picked, a pick the client could not have predicted. The
     // response rule comes only from the rules persisted at /start.
-    const pool = server.entries.filter((e) => e.eligibility_status === "eligible" && !server.draws.includes(e.id));
+    const once = (server.session.rules || {}).winnerRepeat !== "again";
+    const eligible = server.entries.filter((e) => e.eligibility_status === "eligible");
+    const pool = once ? eligible.filter((e) => !server.draws.includes(e.id)) : eligible;
     const winner = pool[pool.length - 1] || null;
-    if (!winner) return json({ ok: false, error: "No eligible entrants to draw from." }, 409);
+    if (!winner) return json({ ok: false, error: eligible.length ? "No other eligible entrants remain." : "No eligible entrants to draw from." }, 409);
     server.draws.push(winner.id);
     const rules = server.session.rules || {};
     const required = rules.winnerMustRespond === true;
@@ -211,6 +215,7 @@ describe("Giveaway draw flow", () => {
     // re-render keeps each test at exactly one listener set.
     document.body.innerHTML = giveawaysHtml;
     document.getElementById("gw-opt-claim-duration").value = "30";
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -572,5 +577,152 @@ describe("Giveaway draw flow", () => {
     enter();
     await clock.tick(50);
     expect(document.querySelector('input[name="gw-entry-mode"]:checked').value).toBe("verified");
+  });
+
+  it("Advanced options are collapsed by default", async () => {
+    await boot();
+    const details = $id("gw-advanced-options");
+    expect(details.open).toBe(false);
+    expect($id("gw-opt-subscriber").closest("#gw-advanced-options")).toBe(details);
+    expect($id("gw-opt-ip").closest("#gw-advanced-options")).toBe(details);
+  });
+
+  it("opening and closing Advanced options is a local preference, not a rule", async () => {
+    await boot();
+    const details = $id("gw-advanced-options");
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    expect(localStorage.getItem("yr:gw-advanced-open")).toBe("1");
+    details.open = false;
+    details.dispatchEvent(new Event("toggle"));
+    expect(localStorage.getItem("yr:gw-advanced-open")).toBe("0");
+    $id("gw-btn-listen").click();
+    await clock.tick(50);
+    const start = requestsTo("/api/giveaways/chat/start").at(-1);
+    expect(Object.keys(start.body.rules).sort()).toEqual(
+      ["entryMode", "subscriberOnly", "vipOnly", "excludePreviousWinners", "winnerRepeat", "onePerIp", "winnerMustRespond", "responseTimeout", "autoReroll"].sort(),
+    );
+  });
+
+  it("advanced settings keep their values while collapsed", async () => {
+    await boot();
+    $id("gw-advanced-options").open = true;
+    $id("gw-opt-subscriber").checked = true;
+    $id("gw-advanced-options").open = false;
+    $id("gw-btn-listen").click();
+    await clock.tick(50);
+    expect(requestsTo("/api/giveaways/chat/start").at(-1).body.rules.subscriberOnly).toBe(true);
+  });
+
+  it("the default winner rule is Win once per giveaway", async () => {
+    await boot();
+    expect($id("gw-winner-repeat-once").checked).toBe(true);
+    $id("gw-btn-listen").click();
+    await clock.tick(50);
+    expect(requestsTo("/api/giveaways/chat/start").at(-1).body.rules.winnerRepeat).toBe("once");
+  });
+
+  it("Win once excludes the current winner from a later re-roll", async () => {
+    await boot();
+    await drawWinner();
+    const firstId = server.session.winner_entry_id;
+    $id("gw-btn-reroll").click();
+    await tickUntilReveal();
+    expect(server.session.winner_entry_id).not.toBe(firstId);
+    expect(server.draws).toContain(firstId);
+    expect(server.draws).toContain(server.session.winner_entry_id);
+  });
+
+  it("Can win again lets a re-roll land on the same participant", async () => {
+    resetServer({ entries: [ENTRANTS[0]] });
+    await boot();
+    $id("gw-winner-repeat-again").click();
+    $id("gw-btn-listen").click();
+    await clock.tick(50);
+    expect(server.session.rules.winnerRepeat).toBe("again");
+    await drawWinner();
+    const firstId = server.session.winner_entry_id;
+    $id("gw-btn-reroll").click();
+    await tickUntilReveal();
+    expect(server.session.winner_entry_id).toBe(firstId);
+    expect($id("gw-page-alert").textContent).toBe("");
+    expect($id("gw-winner-stage").hidden).toBe(false);
+  });
+
+  it("with no other eligible entrant a Win-once re-roll shows a clear error", async () => {
+    resetServer({ entries: [ENTRANTS[0]] });
+    await boot();
+    await drawWinner();
+    $id("gw-btn-reroll").click();
+    await clock.tick(3000);
+    expect($id("gw-page-alert").textContent).toContain("No other eligible entrants remain.");
+    // The reveal that already happened is untouched by the failed re-roll.
+    expect(server.session.winner_entry_id).toBe("e1");
+    expect($id("gw-winner-name").textContent).toBe("alpha");
+  });
+
+  it("a reload preserves the persisted winner repeat rule", async () => {
+    server.session.rules = { winnerRepeat: "again" };
+    await boot();
+    expect($id("gw-winner-repeat-again").checked).toBe(true);
+    leave();
+    document.body.innerHTML = giveawaysHtml;
+    enter();
+    await clock.tick(50);
+    expect($id("gw-winner-repeat-again").checked).toBe(true);
+  });
+
+  it("a stale tab's re-roll follows the server-persisted rule", async () => {
+    resetServer({ entries: [ENTRANTS[0]] });
+    await boot();
+    await drawWinner();
+    // The fieldset is locked while the giveaway runs; even a forged control
+    // change cannot alter the rule persisted at start.
+    $id("gw-winner-repeat-again").checked = true;
+    $id("gw-btn-reroll").click();
+    await clock.tick(3000);
+    expect(server.session.rules.winnerRepeat ?? "once").toBe("once");
+    expect($id("gw-page-alert").textContent).toContain("No other eligible entrants remain.");
+  });
+
+  it("historical past-winner exclusion stays separate from winner repeat", async () => {
+    await boot();
+    $id("gw-opt-skip-past").checked = true;
+    $id("gw-btn-listen").click();
+    await clock.tick(50);
+    const rules = requestsTo("/api/giveaways/chat/start").at(-1).body.rules;
+    expect(rules.excludePreviousWinners).toBe(true);
+    expect(rules.winnerRepeat).toBe("once");
+    expect($id("gw-opt-skip-past").closest("label").textContent).toContain("Exclude past giveaway winners");
+  });
+
+  it("response timeout appears only when the winner must respond", async () => {
+    await boot();
+    expect($id("gw-claim-duration-wrap").hidden).toBe(true);
+    $id("gw-opt-claim-req").click();
+    expect($id("gw-claim-duration-wrap").hidden).toBe(false);
+    expect($id("gw-opt-claim-duration").disabled).toBe(false);
+    $id("gw-opt-claim-req").click();
+    expect($id("gw-claim-duration-wrap").hidden).toBe(true);
+  });
+
+  it("the winner instruction lives inside Advanced options", async () => {
+    await boot();
+    expect($id("gw-custom-rule-text").closest("#gw-advanced-options")).toBeTruthy();
+    const fieldset = $id("gw-settings");
+    for (const section of fieldset.querySelectorAll(":scope > .gw-settings-section")) {
+      expect(section.querySelector("#gw-custom-rule-text")).toBeNull();
+    }
+  });
+
+  it("auto re-roll follows the response verification toggle", async () => {
+    await boot();
+    expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
+    $id("gw-opt-claim-req").click();
+    expect($id("gw-auto-reroll-wrap").hidden).toBe(false);
+    expect($id("gw-opt-auto-reroll").disabled).toBe(false);
+    $id("gw-opt-claim-req").click();
+    expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
+    expect($id("gw-opt-auto-reroll").checked).toBe(false);
   });
 });

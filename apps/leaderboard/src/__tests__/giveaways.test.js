@@ -174,10 +174,16 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).toContain('Duplicate device detection');
     expect(giveawaysHtml).toContain('Winner verification');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-req"');
+    expect(giveawaysHtml).toContain('id="gw-advanced-options"');
+    expect(giveawaysHtml).not.toContain('<details class="gw-setup-advanced" id="gw-advanced-options" open');
+    expect(giveawaysHtml).toContain('id="gw-winner-repeat-once" value="once" checked');
+    expect(giveawaysHtml).toContain('Exclude past giveaway winners');
+    expect(giveawaysHtml).not.toContain('>Exclude previous winners<');
     expect(giveawaysHtml).toContain('id="gw-opt-claim-duration"');
     expect(giveawaysHtml).toContain('<option value="60" selected>60 seconds</option>');
     expect(giveawaysHtml).not.toContain('id="gw-opt-claim-req" checked');
     expect(giveawaysHtml).toContain('id="gw-custom-rule-text"');
+    expect(giveawaysHtml.indexOf('id="gw-custom-rule-text"')).toBeGreaterThan(giveawaysHtml.indexOf('id="gw-advanced-options"'));
     expect(giveawaysHtml).toContain('id="gw-roller-track"');
     expect(giveawaysHtml).toContain('id="gw-winner-stage" role="status" aria-live="polite"');
     expect(giveawaysHtml).toContain('id="gw-roller-track" aria-hidden="true"');

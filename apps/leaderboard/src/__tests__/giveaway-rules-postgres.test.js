@@ -276,6 +276,49 @@ describe("Giveaway entry rules (Postgres)", () => {
     await stopSession(session);
   });
 
+  integrationIt("winner repeat is enforced from persisted server draw history", async () => {
+    const d = creatorDeps();
+    const draw = (body) => handleChatGiveawayDraw(new Request("https://yourrank.site/api/giveaways/chat/draw", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }), {}, d);
+
+    const start = await handleChatGiveawayStart(new Request("https://yourrank.site/api/giveaways/chat/start", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keyword: "!repeat", rules: { entryMode: "chat" } }),
+    }), {}, d);
+    expect(start.status).toBe(200);
+    const { session: once } = await start.json();
+    expect(once.rules).toMatchObject({ winnerRepeat: "once" });
+    await addChatEntry(once, "repeat-a");
+    await addChatEntry(once, "repeat-b");
+    await stopSession(once);
+
+    const first = await draw({ sessionId: once.id });
+    expect(first.status).toBe(200);
+    const firstSession = (await first.json()).session;
+    const second = await draw({ sessionId: once.id, expectedWinnerEntryId: firstSession.winner_entry_id, expectedDrawnAt: firstSession.drawn_at });
+    expect(second.status).toBe(200);
+    const secondSession = (await second.json()).session;
+    expect(secondSession.winner_entry_id).not.toBe(firstSession.winner_entry_id);
+    const third = await draw({ sessionId: once.id, expectedWinnerEntryId: secondSession.winner_entry_id, expectedDrawnAt: secondSession.drawn_at });
+    expect(third.status).toBe(409);
+    expect((await third.json()).error).toBe("No other eligible entrants remain.");
+
+    const again = await createSession({ entryMode: "chat", winnerRepeat: "again" });
+    await addChatEntry(again, "repeat-solo");
+    await stopSession(again);
+    const a1 = await draw({ sessionId: again.id });
+    expect(a1.status).toBe(200);
+    const a1Session = (await a1.json()).session;
+    const a2 = await draw({ sessionId: again.id, expectedWinnerEntryId: a1Session.winner_entry_id, expectedDrawnAt: a1Session.drawn_at });
+    expect(a2.status).toBe(200);
+    const a2View = await a2.json();
+    expect(a2View.session.winner_entry_id).toBe(a1Session.winner_entry_id);
+    expect(a2View.winner.provider_user_id).toBe("repeat-solo");
+    await stopSession(again);
+  });
+
   integrationIt("enforces new check constraints, indexes, and foreign keys", async () => {
     const session = await createSession({ entryMode: "chat" });
     const viewer = await createViewer("fk-viewer");
