@@ -585,13 +585,15 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     steps:
-      - name: "Web: staging marketing Worker serves its homepage and pricing directly"
-        env:
-          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
+      # The OpenNext Worker cannot be probed on its workers.dev hostname (it
+      # answers Cloudflare error 1042 there, in production too); like the
+      # production check it is reached through the apex Worker's MARKETING
+      # service binding.
+      - name: "Web: staging marketing Worker serves its homepage and pricing through the apex"
         run: |
           for i in $(seq 1 12); do
-            HOME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/" || true)
-            PRICING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/pricing" || true)
+            HOME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_APEX/" || true)
+            PRICING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_APEX/pricing" || true)
             if [ "$HOME_STATUS" = "200" ] && [ "$PRICING_STATUS" = "200" ]; then
               echo "OK: staging web Worker home=$HOME_STATUS pricing=$PRICING_STATUS (attempt $i)"
               exit 0
