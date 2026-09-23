@@ -79,9 +79,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set +x
-          EXISTING=$(bunx wrangler@$WRANGLER_VERSION queues list 2>/dev/null | grep -oE '"(yourrank-events-staging|yourrank-events-staging-dlq)"' | tr -d '"' | sort -u || true)
           for QUEUE in yourrank-events-staging yourrank-events-staging-dlq; do
-            if printf '%s\n' "$EXISTING" | grep -qx "$QUEUE"; then
+            if bunx wrangler@$WRANGLER_VERSION queues info "$QUEUE" >/dev/null 2>&1; then
               echo "Queue $QUEUE already exists — skipping."
             else
               bunx wrangler@$WRANGLER_VERSION queues create "$QUEUE"
