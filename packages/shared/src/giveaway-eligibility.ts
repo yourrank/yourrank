@@ -8,6 +8,7 @@ export const giveawayRulesSchema = z.object({
   subscriberOnly: z.boolean().default(false),
   vipOnly: z.boolean().default(false),
   excludePreviousWinners: z.boolean().default(false),
+  winnerRepeat: z.enum(["once", "again"]).default("once"),
   onePerIp: z.boolean().default(false),
   vpnDetection: z.literal(false).default(false),
   duplicateDevice: z.literal(false).default(false),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { evaluateGiveawayEligibility as evaluate, giveawayRules as rules } from "../giveaway-eligibility.js";
+import { evaluateGiveawayEligibility as evaluate, giveawayRules as rules, giveawayRulesSchema } from "../giveaway-eligibility.js";
 
 describe("giveaway eligibility", () => {
   it("allows chat entrants and rejects duplicate accounts", () => {
@@ -30,5 +30,8 @@ describe("giveaway eligibility", () => {
     for (const r of [{ onePerIp: true }, { vpnDetection: true }, { duplicateDevice: true }, { minimumAccountAge: 1 }, { autoReroll: true }]) {
       expect(() => rules(r)).toThrow();
     }
+    expect(rules({}).winnerRepeat).toBe("once");
+    expect(rules({ winnerRepeat: "again" }).winnerRepeat).toBe("again");
+    expect(giveawayRulesSchema.safeParse({ winnerRepeat: "sometimes" }).success).toBe(false);
   });
 });

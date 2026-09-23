@@ -11,6 +11,7 @@ export const giveawayTransaction = (fn) => withTransaction((tx) => fn((sql, para
 
 export const DRAW_CHANGED_ERROR = "The giveaway draw changed. Refresh the current draw before drawing again.";
 export const DRAW_FINALIZED_ERROR = "This winner is already confirmed and cannot be re-rolled.";
+export const NO_OTHER_ENTRANTS_ERROR = "No other eligible entrants remain.";
 
 function randomIndex(max) {
   const values = new Uint32Array(1);
@@ -56,14 +57,15 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
         WHERE vi.provider='kick' AND vi.external_user_id=e.provider_user_id AND vi.status='active'
           AND vi.linked_at IS NOT NULL AND v.is_system=false LIMIT 1) AS linked_viewer_id
     FROM chat_giveaway_entries e WHERE e.giveaway_session_id=$1 ORDER BY entered_at`, [session.id, session.site_id]);
-  const pool = entries.filter((entry) => !entry.already_drawn && entry.eligibility_status === "eligible" &&
+  const eligible = entries.filter((entry) => entry.eligibility_status === "eligible" &&
     evaluateGiveawayEligibility({ badges: entry.badges, viewerId: entry.linked_viewer_id,
       kickLinked: !!entry.linked_viewer_id, previousWinner: entry.previous_winner,
       verified: !!entry.verified_at && entry.viewer_id === entry.linked_viewer_id,
       ipAvailable: !!entry.ip_hash }, rules).status === "eligible");
+  const pool = rules.winnerRepeat === "again" ? eligible : eligible.filter((entry) => !entry.already_drawn);
   if (!pool.length) {
     if (automatic) await run("UPDATE chat_giveaway_sessions SET winner_response_deadline=NULL WHERE id=$1", [session.id]);
-    return { error: "No eligible entrants to draw from." };
+    return { error: eligible.length ? NO_OTHER_ENTRANTS_ERROR : "No eligible entrants to draw from." };
   }
   const winner = pool[randomIndex(pool.length)];
   await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id) VALUES ($1,$2,$3)`,
