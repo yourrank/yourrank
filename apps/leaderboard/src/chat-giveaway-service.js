@@ -20,7 +20,7 @@ function randomIndex(max) {
   return values[0] % max;
 }
 
-const sameInstant = (a, b) => Date.parse(a) === Date.parse(b);
+const sameInstant = (a, b) => new Date(a).getTime() === new Date(b).getTime();
 
 /**
  * Caller holds the session row lock (SELECT ... FOR UPDATE). All draw paths use
