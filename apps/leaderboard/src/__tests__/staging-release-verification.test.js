@@ -432,6 +432,15 @@ describe("F-012 staging release verification", () => {
     ).toHaveLength(5);
   });
 
+  it("staging smoke evaluates monitor checks via the staging verdict script", async () => {
+    const staging = await stagingWorkflowPromise;
+    expect(staging).toContain("node scripts/staging-monitor-verdict.mjs");
+    const smoke = staging.slice(staging.indexOf("release-smoke-staging:"));
+    expect(smoke.indexOf("actions/checkout")).toBeLessThan(
+      smoke.indexOf("monitor Worker health and protected manual check"),
+    );
+  });
+
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {
     const index = await rootFile("apps/leaderboard/src/index.js");
     expect(index).toContain('env.ENVIRONMENT === "staging" && host === `staging.${PLATFORM_HOST}`');

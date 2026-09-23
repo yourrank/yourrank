@@ -229,6 +229,15 @@ Preflight, migrate and bootstrap all run `scripts/release-target-guard.mjs
 staging` first: a wrong ref, project, Hyperdrive id or database URL fails the
 run before Cloudflare or Supabase is touched.
 
+In `release-smoke-staging`, two monitor `/check` failures are tolerated as
+staging-structural by `scripts/staging-monitor-verdict.mjs`:
+`GET /api/health/backup` (restore drills only run against production, so no
+record exists) and `GET /health` — tolerated only while the leaderboard body
+is `degraded` *solely* via the stale consumer heartbeat (`db` and
+`db_identity.expected` true, empty `dlq.degraded_reasons`,
+`consumer.healthy === false`), which staging's `crons = []` and absent queue
+traffic make permanent. Any other failing check still fails the smoke.
+
 The finalizer runs `scripts/release-recovery-state.mjs` with
 `RELEASE_ENVIRONMENT=staging`: it captures/observes the five `-staging` Workers,
 restores exact prior version allocations on failure, keeps migrations applied,
