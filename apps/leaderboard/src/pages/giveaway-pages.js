@@ -353,16 +353,16 @@ ${tabs}
         <div class="gw-stage-body">
           <!-- Active Winner Card (Hidden until drawn) -->
           <div class="gw-winner-stage" id="gw-winner-stage" role="status" aria-live="polite" hidden>
+            <div class="gw-confetti" id="gw-confetti" aria-hidden="true"></div>
             <div class="gw-winner-podium">
-              <div class="gw-winner-crown">👑</div>
+              <div class="gw-winner-crown" aria-hidden="true">👑</div>
               <img class="gw-winner-avatar" id="gw-winner-avatar" src="" alt="Winner avatar" />
               <div class="gw-winner-meta">
                 <div class="gw-winner-badges-row">
-                  <span class="gw-winner-badge">WINNER DRAWN</span>
+                  <span class="gw-winner-badge">Winner drawn</span>
                   <span class="gw-trust-badge gw-trust-badge--high" id="gw-winner-trust">Viewer</span>
                 </div>
                 <h3 class="gw-winner-username" id="gw-winner-name">Username</h3>
-                <p class="gw-winner-msg" id="gw-winner-message">"entry message"</p>
               </div>
             </div>
 
@@ -370,7 +370,7 @@ ${tabs}
             <div class="gw-claim-box" id="gw-claim-box">
               <div class="gw-claim-header">
                 <span class="gw-claim-dot gw-claim-dot--waiting" id="gw-claim-dot"></span>
-                <strong id="gw-claim-status">Waiting for winner to type in chat…</strong>
+                <strong id="gw-claim-status">Waiting for winner response…</strong>
                 <span class="gw-claim-countdown" id="gw-claim-countdown">60s</span>
               </div>
               <div class="gw-claim-bar-bg">
@@ -379,18 +379,27 @@ ${tabs}
             </div>
 
             <div class="gw-winner-actions">
-              <button class="btn btn--accent" id="gw-btn-copy-winner" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg> Copy Info</button>
-              <button class="btn btn--ghost font-danger" id="gw-btn-reroll" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.2-6.5L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/></svg> Re-roll Winner</button>
+              <button class="btn btn--ghost btn--sm" id="gw-btn-copy-winner" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg> Copy Info</button>
+              <button class="btn btn--ghost btn--sm" id="gw-btn-reroll" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.2-6.5L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/></svg> Re-roll Winner</button>
+              <button class="btn btn--accent" id="gw-btn-confirm" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Confirm Winner</button>
+            </div>
+          </div>
+
+          <!-- Roulette Draw Stage (hidden until drawing) -->
+          <div class="gw-roulette" id="gw-roulette" hidden>
+            <div class="gw-roulette-window">
+              <div class="gw-roulette-track" id="gw-roller-track" aria-hidden="true"></div>
+              <div class="gw-roulette-centerline" aria-hidden="true"></div>
             </div>
           </div>
 
           <!-- Pre-Draw Idle Stage -->
-          <div class="gw-stage-idle gw-roller" id="gw-stage-idle">
+          <div class="gw-stage-idle" id="gw-stage-idle">
             <div class="gw-idle-wheel">
               <div class="gw-idle-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="7" rx="2"/><path d="M12 7v14M3 11h18M12 7H8.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7Zm0 0h3.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7Z"/></svg></div>
             </div>
-            <div class="gw-roller-track" id="gw-roller-track" aria-hidden="true">Ready to draw</div>
-            <p>Everyone who types your keyword lands here. Draw once entries are in.</p>
+            <h3 class="gw-idle-title">Ready to draw</h3>
+            <p class="gw-idle-sub"><span id="gw-idle-entrant-count">0</span> entrants waiting. Everyone who types your keyword lands here.</p>
             <button class="btn btn--accent btn--lg" id="gw-btn-roll" type="button" disabled>
               Draw Random Winner
             </button>
@@ -645,19 +654,28 @@ ${tabs}
   </div>
 </div>
 
-<!-- Winner Celebration Pop-up Modal -->
+<!-- Winner Verification Modal -->
 <div class="gw-modal-backdrop" id="gw-winner-modal" hidden>
-  <div class="gw-modal-content" role="dialog" aria-modal="true" aria-labelledby="gw-modal-name">
-    <div class="gw-modal-hero">
-      <button class="gw-modal-close-btn" id="gw-modal-close" type="button" aria-label="Close modal">✕</button>
-      <div class="gw-modal-crown" aria-hidden="true">👑</div>
-      <img class="gw-modal-avatar" id="gw-modal-avatar" src="" alt="Winner avatar" />
-      <div class="gw-winner-badges-row gw-winner-badges-row--center">
-        <span class="gw-winner-badge">WINNER DRAWN</span>
-        <span class="gw-trust-badge gw-trust-badge--high" id="gw-modal-trust-badge">Viewer</span>
+  <div class="gw-modal-content" role="dialog" aria-modal="true" aria-labelledby="gw-modal-title">
+    <div class="gw-modal-head">
+      <div class="gw-modal-title-row">
+        <span class="gw-modal-crown" aria-hidden="true">👑</span>
+        <div class="gw-modal-title-text">
+          <h2 class="gw-modal-title" id="gw-modal-title">Winner Drawn</h2>
+          <p class="gw-modal-sub">The giveaway has finished. Verify the winner below.</p>
+        </div>
       </div>
-      <h2 class="gw-modal-name" id="gw-modal-name">Winner</h2>
+      <button class="gw-modal-close-btn" id="gw-modal-close" type="button" aria-label="Close modal">✕</button>
+    </div>
+
+    <div class="gw-modal-hero">
+      <img class="gw-modal-avatar" id="gw-modal-avatar" src="" alt="Winner avatar" />
+      <h3 class="gw-modal-name" id="gw-modal-name">Winner</h3>
       <p class="gw-winner-msg" id="gw-modal-msg">"!"</p>
+      <div class="gw-winner-badges-row gw-winner-badges-row--center">
+        <span class="gw-trust-badge gw-trust-badge--high" id="gw-modal-trust-badge">Viewer</span>
+        <span class="gw-verify-chip" id="gw-modal-verify-chip" hidden>Confirmed active</span>
+      </div>
     </div>
 
     <div class="gw-modal-body">
@@ -665,14 +683,14 @@ ${tabs}
       <div class="gw-claim-box gw-claim-box--modal" id="gw-modal-claim-box">
         <div class="gw-claim-header">
           <span class="gw-claim-dot gw-claim-dot--waiting" id="gw-modal-claim-dot"></span>
-          <strong id="gw-modal-claim-status" class="gw-claim-status">Waiting for winner to chat in live stream…</strong>
+          <strong id="gw-modal-claim-status" class="gw-claim-status">Waiting for winner response…</strong>
           <span class="gw-claim-countdown" id="gw-modal-claim-countdown">60s</span>
         </div>
         <div class="gw-claim-bar-bg">
           <div class="gw-claim-bar-fill" id="gw-modal-claim-fill"></div>
         </div>
-        <p class="hint gw-claim-hint">
-          Ask the winner to send a message in chat. Their live responses appear in the isolated box below.
+        <p class="hint gw-claim-hint" id="gw-modal-claim-hint">
+          Ask the winner to send a message in chat. Their live responses appear in the log below.
         </p>
       </div>
 
@@ -680,7 +698,7 @@ ${tabs}
       <div class="gw-winner-chat-card">
         <div class="gw-winner-chat-head">
           <span>Winner's Live Chat Log</span>
-          <span class="gw-winner-chat-tag">Live Filtered</span>
+          <span class="gw-winner-chat-tag"><span class="gw-live-dot" aria-hidden="true"></span>Live</span>
         </div>
         <div class="gw-winner-chat-feed" id="gw-winner-chat-feed" aria-live="polite">
           <div class="gw-winner-chat-empty" id="gw-winner-chat-empty">
@@ -691,9 +709,9 @@ ${tabs}
     </div>
 
     <div class="gw-modal-footer">
-      <button class="btn btn--sm btn--ghost" id="gw-modal-reroll" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.2-6.5L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/></svg> Re-roll</button>
-      <button class="btn btn--sm btn--accent" id="gw-modal-copy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg> Copy Winner Info</button>
-      <button class="btn btn--sm btn--ghost" id="gw-modal-done" type="button">Done &amp; Close</button>
+      <button class="btn btn--sm btn--ghost" id="gw-modal-reroll" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.2-6.5L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/></svg> Re-roll Winner</button>
+      <button class="btn btn--sm btn--ghost" id="gw-modal-copy" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg> Copy Winner Info</button>
+      <button class="btn btn--sm btn--accent" id="gw-modal-confirm" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Confirm Winner</button>
     </div>
   </div>
 </div>

@@ -2178,3 +2178,322 @@
     min-width: 0;
   }
 }
+
+/* ==========================================================================
+   Giveaway draw redesign: roulette, reveal, verification modal
+   ========================================================================== */
+
+/* Pre-draw idle state: compact and centered */
+.gw-stage-idle {
+  margin: 16px 20px 20px;
+  padding: 28px 24px;
+  background: var(--ws-surface-soft);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius);
+  text-align: center;
+  color: var(--ws-text);
+}
+
+.gw-idle-title {
+  margin: 2px 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ws-text);
+}
+
+.gw-idle-sub {
+  max-width: 34rem;
+  margin: 0 auto 16px;
+  font-size: 13px;
+  color: var(--ws-text-soft);
+}
+
+/* Roulette: fixed window, vertical track, accent center selection line */
+.gw-roulette {
+  margin: 16px 20px 20px;
+  padding: 20px 24px;
+  background: var(--ws-surface-soft);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius);
+}
+
+.gw-roulette-window {
+  position: relative;
+  height: 138px; /* exactly 3 items */
+  overflow: hidden;
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 28%, #000 72%, transparent);
+}
+
+.gw-roulette-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+  transition: filter 0.15s ease;
+}
+
+.gw-roulette-track--blur {
+  filter: blur(1.6px);
+}
+
+.gw-roulette-item {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ws-mono, ui-monospace, monospace);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ws-text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+.gw-roulette-centerline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46px; /* middle row */
+  height: 46px;
+  border-top: 1px solid rgb(var(--ws-accent-rgb) / 0.55);
+  border-bottom: 1px solid rgb(var(--ws-accent-rgb) / 0.55);
+  background: rgb(var(--ws-accent-rgb) / 0.08);
+  box-shadow: 0 0 18px rgb(var(--ws-accent-rgb) / 0.18);
+  pointer-events: none;
+}
+
+/* Winner reveal: neutral dark card, accent accents, green only when verified */
+.gw-winner-stage {
+  background: var(--ws-surface-soft);
+  border: 1px solid var(--ws-line);
+}
+
+.gw-winner-stage--reveal .gw-winner-avatar {
+  animation: gw-winner-avatar-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gw-winner-stage--reveal .gw-winner-crown {
+  animation: gw-winner-crown-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+
+.gw-winner-stage--reveal .gw-winner-meta {
+  animation: gwFadeIn 0.5s ease 0.25s both;
+}
+
+@keyframes gw-winner-avatar-in {
+  0% { opacity: 0; transform: scale(0.6); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes gw-winner-crown-in {
+  0% { opacity: 0; transform: translateY(-16px) scale(0.7); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.gw-winner-avatar {
+  border-color: var(--ws-accent);
+  background: var(--ws-surface);
+  box-shadow: 0 0 24px rgb(var(--ws-accent-rgb) / 0.35);
+}
+
+.gw-winner-crown {
+  animation: none;
+}
+
+.gw-winner-badge {
+  background: var(--ws-accent);
+  text-transform: uppercase;
+}
+
+.gw-winner-stage--confirmed {
+  border-color: var(--ws-success);
+}
+
+.gw-winner-stage--confirmed .gw-winner-badge {
+  background: var(--ws-success);
+}
+
+.gw-winner-actions {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Small confetti burst, brand palette only */
+.gw-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.gw-confetti-piece {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: 7px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--gw-cc, var(--ws-accent));
+  opacity: 0;
+  animation: gw-confetti-pop var(--gw-cd, 1.2s) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes gw-confetti-pop {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  12% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--gw-cx, 60px), var(--gw-cy, -120px)) rotate(var(--gw-cr, 180deg)); }
+}
+
+/* Verification modal header */
+.gw-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.gw-modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gw-modal-title-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gw-modal-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ws-text);
+}
+
+.gw-modal-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ws-text-mute);
+}
+
+.gw-modal-crown {
+  font-size: 26px;
+  line-height: 1;
+  animation: none;
+}
+
+/* Modal hero: dark card instead of accent gradient */
+.gw-modal-hero {
+  background: var(--ws-surface-soft);
+  color: var(--ws-text);
+  border-bottom: 1px solid var(--ws-line);
+  padding: 20px;
+}
+
+.gw-modal-avatar {
+  width: 88px;
+  height: 88px;
+  border-color: var(--ws-accent);
+  box-shadow: 0 0 22px rgb(var(--ws-accent-rgb) / 0.35);
+}
+
+.gw-modal-name {
+  color: var(--ws-text);
+  margin: 0 0 2px;
+}
+
+.gw-modal-hero .gw-winner-msg {
+  margin-bottom: 8px;
+}
+
+.gw-modal-close-btn {
+  position: static;
+  flex-shrink: 0;
+  background: var(--ws-surface-strong);
+  color: var(--ws-text-soft);
+}
+
+.gw-modal-close-btn:hover {
+  background: var(--ws-line);
+}
+
+/* Verified chip: green reserved for success states */
+.gw-verify-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--ws-radius);
+  background: var(--ws-success-soft);
+  color: var(--ws-success);
+  border: 1px solid var(--ws-success);
+}
+
+.gw-verify-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ws-success);
+}
+
+/* Confirmed primary button */
+.gw-btn-confirmed {
+  background: var(--ws-success);
+  border-color: var(--ws-success);
+  color: #ffffff;
+  cursor: default;
+  opacity: 0.9;
+}
+
+/* Live indicator on the winner chat log */
+.gw-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ws-success);
+  animation: gw-live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes gw-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gw-confetti-piece,
+  .gw-live-dot,
+  .gw-winner-stage--reveal .gw-winner-avatar,
+  .gw-winner-stage--reveal .gw-winner-crown,
+  .gw-winner-stage--reveal .gw-winner-meta {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .gw-winner-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .gw-modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .gw-modal-footer .btn {
+    width: 100%;
+  }
+}

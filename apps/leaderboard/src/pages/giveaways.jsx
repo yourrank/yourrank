@@ -39,7 +39,7 @@ export const giveawaysConfig = {
     "/assets/giveaways.css",
   ],
   scripts: [
-    '<script src="/assets/giveaways.js?v=1" type="module"></script>',
+    '<script src="/assets/giveaways.js?v=2" type="module"></script>',
     '<script src="/assets/tournaments.js?v=1" type="module"></script>',
     '<script src="/assets/shell-nav.js?v=4" defer></script>',
   ],

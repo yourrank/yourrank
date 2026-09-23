@@ -177,8 +177,10 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysCssSource).toContain("@media (prefers-reduced-motion: reduce)");
     expect(giveawaysCssSource).toContain(".gw-winner-stage");
     expect(giveawaysCssSource).toContain(".gw-winner-crown");
-    expect(giveawaysSource).toContain('track?.classList.add("gw-roller-track--spinning")');
-    expect(giveawaysSource).toContain('track?.classList.remove("gw-roller-track--spinning")');
+    expect(giveawaysSource).toContain('classList.toggle("gw-roulette-track--blur"');
+    expect(giveawaysSource).toContain('classList.remove("gw-roulette-track--blur")');
+    expect(giveawaysCssSource).toContain(".gw-roulette-track--blur");
+    expect(giveawaysCssSource).toContain(".gw-roulette-centerline");
     expect(giveawaysHtml).not.toContain('id="gw-roller-track" aria-live="polite"');
     expect(giveawaysHtml).toContain('id="gw-stat-time"');
     expect(giveawaysHtml).not.toContain("نعم");

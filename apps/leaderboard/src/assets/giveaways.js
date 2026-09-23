@@ -49,6 +49,21 @@ if (!window.__yrSpaShell) {
   let winnerClaimed = false;
   let isRolling = false;
   let pastWinners = new Set();
+  let modalOpenTimer = null;
+  // Per-draw claim state is derived from the session row the server persists
+  // at draw time (winner_response_required / winner_response_timeout_seconds),
+  // so a reload or another device renders the same rule. `claimExpired` mirrors
+  // the derived window state; final acceptance is server truth only
+  // (session.winner_finalized_at).
+  let claimExpired = false;
+
+  function drawRules() {
+    const required = Boolean(session?.winner_response_required);
+    const timeoutSecs = Number(session?.winner_response_timeout_seconds) || 60;
+    const drawnAt = session?.drawn_at ? Date.parse(session.drawn_at) : NaN;
+    const elapsed = Number.isFinite(drawnAt) ? Math.max(0, Math.floor((Date.now() - drawnAt) / 1000)) : 0;
+    return { required, timeoutSecs, remainingSecs: Math.max(0, timeoutSecs - elapsed) };
+  }
 
   function pastWinnersKey() {
     return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
@@ -223,8 +238,9 @@ if (!window.__yrSpaShell) {
     });
 
     $("gw-btn-roll")?.addEventListener("click", () => rollWinner());
-    $("gw-btn-reroll")?.addEventListener("click", () => rollWinner());
+    $("gw-btn-reroll")?.addEventListener("click", () => rollWinner({ excludeIds: currentWinner ? [currentWinner.id] : [] }));
     $("gw-btn-copy-winner")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
+    $("gw-btn-confirm")?.addEventListener("click", () => confirmWinner());
     $("gw-btn-export")?.addEventListener("click", () => exportCSV());
 
     $("gw-search-entrants")?.addEventListener("input", (e) => {
@@ -232,16 +248,18 @@ if (!window.__yrSpaShell) {
     });
 
     const closeModal = () => {
+      clearTimeout(modalOpenTimer);
       const m = $("gw-winner-modal");
       if (m) m.hidden = true;
     };
     $("gw-modal-close")?.addEventListener("click", closeModal);
-    $("gw-modal-done")?.addEventListener("click", closeModal);
     $("gw-modal-reroll")?.addEventListener("click", () => {
+      const exclude = currentWinner ? [currentWinner.id] : [];
       closeModal();
-      rollWinner();
+      rollWinner({ excludeIds: exclude });
     });
     $("gw-modal-copy")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
+    $("gw-modal-confirm")?.addEventListener("click", () => confirmWinner());
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && pollTimer) refreshChatGiveaway();
@@ -524,6 +542,7 @@ if (!window.__yrSpaShell) {
     const count = entrants.length;
     if ($("gw-stat-entrants")) $("gw-stat-entrants").textContent = count.toLocaleString();
     if ($("gw-count-header")) $("gw-count-header").textContent = count.toLocaleString();
+    if ($("gw-idle-entrant-count")) $("gw-idle-entrant-count").textContent = count.toLocaleString();
 
     const rollBtn = $("gw-btn-roll");
     const exportBtn = $("gw-btn-export");
@@ -593,10 +612,189 @@ if (!window.__yrSpaShell) {
     return pool;
   }
 
-  async function rollWinner() {
+  // Vertical roulette: usernames scroll through a fixed center selection line,
+  // fast at first, then easing down, then one final step onto the real winner.
+  // The animation NEVER picks the winner — it only lands on the server's pick.
+  const ROULETTE_ITEM_H = 46;
+
+  function buildRouletteSequence(pool, winner) {
+    const names = [...new Set(pool.map((e) => e.username))];
+    const pick = () => names[Math.floor(Math.random() * names.length)];
+    const seq = [];
+    let prev = null;
+    for (let i = 0; i < 22; i++) {
+      let n = pick();
+      while (names.length > 1 && n === prev) n = pick();
+      seq.push(n);
+      prev = n;
+    }
+    let decoy = pick();
+    while (names.length > 1 && decoy === winner.username) decoy = pick();
+    seq.push(decoy, winner.username);
+    return seq;
+  }
+
+  function runRoulette(track, pool, winner) {
+    return new Promise((resolve) => {
+      if (!track) return resolve();
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      const seq = buildRouletteSequence(pool, winner);
+      track.innerHTML = "";
+      for (const name of seq) {
+        const item = document.createElement("div");
+        item.className = "gw-roulette-item";
+        item.textContent = `@${name}`;
+        track.appendChild(item);
+      }
+      if (reduced) {
+        track.style.transform = `translateY(${(1 - (seq.length - 1)) * ROULETTE_ITEM_H}px)`;
+        setTimeout(resolve, 500);
+        return;
+      }
+
+      const lastIdx = seq.length - 1;      // winner
+      const decoyIdx = seq.length - 2;     // near-miss before the winner
+      const MAIN_MS = 2600;                // fast then gradually slowing
+      const PAUSE_MS = 380;                // "almost stops" on the decoy
+      const FINAL_MS = 620;                // one more step onto the winner
+      const easeOutQuint = (t) => 1 - Math.pow(1 - t, 5);
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+      const setPos = (p) => {
+        track.style.transform = `translateY(${(1 - p) * ROULETTE_ITEM_H}px)`;
+      };
+      setPos(0);
+
+      const animate = (from, to, ms, ease) => new Promise((done) => {
+        const t0 = performance.now();
+        let lastT = t0;
+        let lastP = from;
+        const step = (now) => {
+          const t = Math.min(1, (now - t0) / ms);
+          const p = from + (to - from) * ease(t);
+          // motion blur while the track moves fast
+          const vel = Math.abs(p - lastP) / Math.max(1, now - lastT) * 1000; // items/sec
+          track.classList.toggle("gw-roulette-track--blur", vel > 6);
+          lastT = now;
+          lastP = p;
+          setPos(p);
+          if (t < 1) requestAnimationFrame(step);
+          else { track.classList.remove("gw-roulette-track--blur"); done(); }
+        };
+        requestAnimationFrame(step);
+      });
+
+      (async () => {
+        await animate(0, decoyIdx, MAIN_MS, easeOutQuint);
+        await new Promise((r) => setTimeout(r, PAUSE_MS));
+        await animate(decoyIdx, lastIdx, FINAL_MS, easeOutCubic);
+        setPos(lastIdx);
+        setTimeout(resolve, 260);
+      })();
+    });
+  }
+
+  function launchConfetti() {
+    const box = $("gw-confetti");
+    if (!box) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    box.innerHTML = "";
+    const colors = ["var(--ws-accent)", "#8b5cf6", "#c4b5fd", "#e2e8f0"];
+    for (let i = 0; i < 24; i++) {
+      const piece = document.createElement("span");
+      piece.className = "gw-confetti-piece";
+      piece.style.setProperty("--gw-cx", `${(Math.random() * 2 - 1) * 150}px`);
+      piece.style.setProperty("--gw-cy", `${-(50 + Math.random() * 150)}px`);
+      piece.style.setProperty("--gw-cr", `${Math.random() * 420 - 210}deg`);
+      piece.style.setProperty("--gw-cd", `${0.9 + Math.random() * 0.7}s`);
+      piece.style.setProperty("--gw-cc", colors[i % colors.length]);
+      box.appendChild(piece);
+    }
+    setTimeout(() => { box.innerHTML = ""; }, 2400);
+  }
+
+  // Single renderer for the draw actions: derives everything from state so
+  // live draws, polls, and reloads all land on the same button treatment.
+  function updateWinnerActions() {
+    const finalized = Boolean(session?.winner_finalized_at);
+    const rules = drawRules();
+    if (rules.required && !winnerClaimed && rules.remainingSecs <= 0) claimExpired = true;
+    const awaitingResponse = !finalized && rules.required && !winnerClaimed;
+    for (const id of ["gw-btn-confirm", "gw-modal-confirm"]) {
+      const b = $(id);
+      if (!b) continue;
+      b.classList.remove("btn--accent", "btn--ghost", "gw-btn-confirmed");
+      b.removeAttribute("title");
+      if (finalized) {
+        b.setAttribute("disabled", "true");
+        b.classList.add("gw-btn-confirmed");
+      } else if (awaitingResponse) {
+        // No override path: confirm never bypasses a required chat response.
+        b.setAttribute("disabled", "true");
+        b.classList.add("btn--ghost");
+        b.title = claimExpired
+          ? "The winner did not respond — re-roll to pick another winner"
+          : "Waiting for the winner to respond in chat";
+      } else {
+        b.removeAttribute("disabled");
+        b.classList.add("btn--accent");
+      }
+    }
+    for (const id of ["gw-btn-reroll", "gw-modal-reroll"]) {
+      const b = $(id);
+      if (!b) continue;
+      b.classList.remove("btn--accent", "btn--ghost");
+      b.classList.add(awaitingResponse && claimExpired ? "btn--accent" : "btn--ghost");
+    }
+    const stage = $("gw-winner-stage");
+    if (stage) stage.classList.toggle("gw-winner-stage--confirmed", finalized);
+    const chip = $("gw-modal-verify-chip");
+    if (chip) chip.hidden = !winnerClaimed;
+    if (finalized) {
+      clearTimeout(modalOpenTimer);
+      clearInterval(claimTimerInterval);
+      const modal = $("gw-winner-modal");
+      if (modal) modal.hidden = true;
+    }
+  }
+
+  async function confirmWinner() {
+    if (!currentWinner || session?.winner_finalized_at) return;
+    // A required chat response can never be bypassed by the confirm button.
+    if (drawRules().required && !winnerClaimed) return;
+    clearEngageError();
+    try {
+      const res = await chatApi("/finalize", {
+        sessionId: session.id,
+        winnerEntryId: session.winner_entry_id,
+        drawnAt: session.drawn_at,
+        siteId: siteId || undefined,
+      });
+      const data = await responseData(res);
+      if (!res.ok) {
+        // The draw may have changed underneath us; resync before showing why.
+        if (data.session) await refreshChatGiveaway();
+        showEngageError(data.error || "Could not confirm the winner.");
+        return;
+      }
+      applyState({ connection, ...data });
+      updateWinnerActions();
+    } catch {
+      showEngageError("Network error confirming the winner.");
+    }
+    const modal = $("gw-winner-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  async function rollWinner(opts = {}) {
     clearEngageError();
     if (!session || isRolling) return;
-    const pool = getEligibleEntrantsPool();
+    let pool = getEligibleEntrantsPool();
+    if (Array.isArray(opts.excludeIds) && opts.excludeIds.length) {
+      const excluded = new Set(opts.excludeIds.map(String));
+      const filtered = pool.filter((e) => !excluded.has(String(e.id)));
+      if (filtered.length > 0) pool = filtered;
+    }
     if (pool.length === 0) {
       if (entrants.length === 0) return;
       showEngageError("No entrants meet your active giveaway rules. Try changing your rules.");
@@ -604,33 +802,48 @@ if (!window.__yrSpaShell) {
     }
 
     const rollBtn = $("gw-btn-roll");
-    const roller = $("gw-stage-idle");
+    const idle = $("gw-stage-idle");
+    const roulette = $("gw-roulette");
     const track = $("gw-roller-track");
     const showcase = $("gw-winner-stage");
 
+    claimExpired = false;
     isRolling = true;
     rollBtn?.setAttribute("disabled", "true");
     if (showcase) showcase.hidden = true;
-    if (roller) roller.hidden = false;
-    track?.classList.add("gw-roller-track--spinning");
+    if (idle) idle.hidden = true;
+    if (roulette) roulette.hidden = false;
     clearInterval(claimTimerInterval);
+    clearTimeout(modalOpenTimer);
 
-    // Fast-cycle suspense names while the server draws.
-    const suspense = setInterval(() => {
-      const randomCandidate = pool[Math.floor(Math.random() * pool.length)];
-      if (track && randomCandidate) track.textContent = randomCandidate.username;
-    }, 80);
-    const minSpin = new Promise((resolve) => setTimeout(resolve, 2200));
+    // The server draws the winner immediately; the roulette only visualizes it.
+    const drawPromise = (async () => {
+      const res = await chatApi("/draw", {
+        sessionId: session.id,
+        entryIds: pool.map((e) => e.id),
+        expectedWinnerEntryId: session.winner_entry_id ?? null,
+        expectedDrawnAt: session.drawn_at ?? null,
+        siteId: siteId || undefined,
+        responseRequired: Boolean($("gw-opt-claim-req")?.checked),
+        responseTimeoutSeconds: parseInt($("gw-opt-claim-duration")?.value || "60", 10),
+      });
+      const data = await responseData(res);
+      return { res, data };
+    })();
+    const minSpin = new Promise((resolve) => setTimeout(resolve, 600));
 
     try {
-      const res = await chatApi("/draw", { sessionId: session.id, entryIds: pool.map((e) => e.id), siteId: siteId || undefined });
-      const data = await responseData(res);
-      await minSpin;
-      if (!res.ok) {
+      const [{ res, data }] = await Promise.all([drawPromise, minSpin]);
+      if (!res.ok || !data.winner) {
+        // A 409 means another draw won the race; resync instead of revealing.
+        // isRolling must clear first or the resynced winner won't re-render.
+        isRolling = false;
+        if (data.session) await refreshChatGiveaway();
         showEngageError(data.error || "Could not draw a winner.");
         return;
       }
       const winner = data.winner;
+      await runRoulette(track, pool, winner);
       pastWinners.add(String(winner.username).toLowerCase());
       try {
         localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
@@ -638,19 +851,20 @@ if (!window.__yrSpaShell) {
       applyState({ connection, ...data });
       displayWinner(winner);
       playWinnerSound();
-      if ($("gw-opt-claim-req")?.checked) {
-        startClaimTimer(winner);
+      const rules = drawRules();
+      if (rules.required) {
+        // The roulette consumed part of the window: the countdown derives from
+        // drawn_at, the same clock a reload uses.
+        startClaimTimer(winner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.remainingSecs });
       } else if ($("gw-claim-box")) {
         $("gw-claim-box").hidden = true;
       }
     } catch {
-      await minSpin;
       showEngageError("Network error drawing a winner.");
     } finally {
-      clearInterval(suspense);
-      track?.classList.remove("gw-roller-track--spinning");
       isRolling = false;
-      if (roller && currentWinner) roller.hidden = true;
+      if (roulette) roulette.hidden = true;
+      if (!currentWinner && idle) idle.hidden = false;
       updateEntrantsCount();
     }
   }
@@ -660,20 +874,36 @@ if (!window.__yrSpaShell) {
   function renderWinner(previousWinnerId) {
     const showcase = $("gw-winner-stage");
     const idle = $("gw-stage-idle");
+    const roulette = $("gw-roulette");
     if (!currentWinner) {
       if (showcase) showcase.hidden = true;
       if (idle && !isRolling) idle.hidden = false;
       return;
     }
+    if (idle) idle.hidden = true;
+    if (roulette && !isRolling) roulette.hidden = true;
     if (currentWinner.id !== previousWinnerId && !isRolling) {
+      // A reloaded winner derives its claim state from the session row:
+      // confirmed -> verified boxes; a required-but-unanswered draw resumes
+      // the countdown from drawn_at; anything else has no claim UI.
       fillWinnerViews(currentWinner);
-      if (idle) idle.hidden = true;
       if (showcase) showcase.hidden = false;
-      if ($("gw-claim-box")) $("gw-claim-box").hidden = !session?.winner_confirmed_at;
+      const rules = drawRules();
+      claimExpired = rules.required && !winnerClaimed && rules.remainingSecs <= 0;
+      if (session?.winner_confirmed_at) {
+        if ($("gw-claim-box")) $("gw-claim-box").hidden = false;
+        if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = false;
+      } else if (rules.required) {
+        startClaimTimer(currentWinner, { totalSecs: rules.timeoutSecs, remainingSecs: rules.remainingSecs });
+      } else {
+        if ($("gw-claim-box")) $("gw-claim-box").hidden = true;
+        if ($("gw-modal-claim-box")) $("gw-modal-claim-box").hidden = true;
+      }
     }
     if (session?.winner_confirmed_at && !winnerClaimed) {
       confirmWinnerLiveClaim(session.winner_confirmation_message || "");
     }
+    if (currentWinner) updateWinnerActions();
   }
 
   function winnerBadgeLabel(winner) {
@@ -686,7 +916,6 @@ if (!window.__yrSpaShell) {
     const msgText = customRule ? `"${winner.message}" — Requirement: ${customRule}` : `"${winner.message}"`;
 
     if ($("gw-winner-name")) $("gw-winner-name").textContent = winner.username;
-    if ($("gw-winner-message")) $("gw-winner-message").textContent = msgText;
     if ($("gw-winner-avatar")) $("gw-winner-avatar").src = safeAvatarUrl(winner.avatar_url, DEFAULT_AVATAR);
 
     if ($("gw-modal-name")) $("gw-modal-name").textContent = winner.username;
@@ -708,14 +937,29 @@ if (!window.__yrSpaShell) {
 
   function displayWinner(winner) {
     winnerClaimed = false;
+    claimExpired = false;
     fillWinnerViews(winner);
-    setModalClaimVisible(true);
+    const required = drawRules().required;
+    if ($("gw-claim-box")) $("gw-claim-box").hidden = !required;
+    setModalClaimVisible(required);
+    updateWinnerActions();
     if ($("gw-stage-idle")) $("gw-stage-idle").hidden = true;
+    if ($("gw-roulette")) $("gw-roulette").hidden = true;
     const showcase = $("gw-winner-stage");
-    const modal = $("gw-winner-modal");
-    if (showcase) showcase.hidden = false;
-    if (modal) modal.hidden = false;
-    if (showcase) showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (showcase) {
+      showcase.hidden = false;
+      showcase.classList.remove("gw-winner-stage--reveal");
+      void showcase.offsetWidth; // restart the reveal animation
+      showcase.classList.add("gw-winner-stage--reveal");
+      showcase.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    launchConfetti();
+    // Let the reveal land before the verification modal opens over it.
+    clearTimeout(modalOpenTimer);
+    modalOpenTimer = setTimeout(() => {
+      const modal = $("gw-winner-modal");
+      if (modal && currentWinner && !session?.winner_finalized_at) modal.hidden = false;
+    }, 950);
   }
 
   function confirmWinnerLiveClaim(messageText) {
@@ -731,7 +975,7 @@ if (!window.__yrSpaShell) {
 
       if (box) box.hidden = false;
       if (status) {
-        status.textContent = `Confirmed active. Responded: "${messageText}"`;
+        status.textContent = messageText ? `Responded: "${messageText}"` : "Responded in chat";
         status.classList.remove("gw-claim-status--waiting", "gw-claim-status--expired");
         status.classList.add("gw-claim-status--confirmed");
       }
@@ -746,6 +990,9 @@ if (!window.__yrSpaShell) {
 
     updateElem("gw-claim-box", "gw-claim-status", "gw-claim-dot", "gw-claim-fill", "gw-claim-countdown");
     updateElem("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill", "gw-modal-claim-countdown");
+    const hint = $("gw-modal-claim-hint");
+    if (hint) hint.textContent = "The winner responded within the response window.";
+    updateWinnerActions();
     if (currentWinner && messageText) {
       appendWinnerChatMessage(currentWinner.username, messageText, formatEnteredAt(session?.winner_confirmed_at));
     }
@@ -784,10 +1031,11 @@ if (!window.__yrSpaShell) {
     if (box) box.hidden = !visible;
   }
 
-  function startClaimTimer(winner) {
-    const totalSecs = parseInt($("gw-opt-claim-duration")?.value || "60", 10);
+  function startClaimTimer(winner, options = {}) {
+    const totalSecs = Number(options.totalSecs) || parseInt($("gw-opt-claim-duration")?.value || "60", 10);
+    const remaining = options.remainingSecs === undefined ? totalSecs : Math.max(0, Number(options.remainingSecs) || 0);
     winnerClaimed = false;
-    claimSecondsRemaining = totalSecs;
+    claimSecondsRemaining = remaining;
 
     const setInitial = (boxId, statusId, dotId, countId, fillId) => {
       const box = $(boxId);
@@ -798,20 +1046,48 @@ if (!window.__yrSpaShell) {
 
       if (box) box.hidden = false;
       if (status) {
-        status.textContent = `Waiting for @${winner.username} to chat...`;
+        status.textContent = "Waiting for winner response…";
         status.classList.remove("gw-claim-status--confirmed", "gw-claim-status--expired");
         status.classList.add("gw-claim-status--waiting");
       }
       if (dot) dot.className = "gw-claim-dot gw-claim-dot--waiting";
-      if (count) count.textContent = `${totalSecs}s`;
+      if (count) count.textContent = `${remaining}s`;
       if (fill) {
-        fill.style.width = "100%";
+        fill.style.width = `${Math.max(0, (remaining / totalSecs) * 100)}%`;
         fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning", "gw-claim-bar-fill--expired");
       }
     };
 
     setInitial("gw-claim-box", "gw-claim-status", "gw-claim-dot", "gw-claim-countdown", "gw-claim-fill");
     setInitial("gw-modal-claim-box", "gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-countdown", "gw-modal-claim-fill");
+
+    // The window may already be over (e.g. reloaded long after the draw):
+    // render the expired state immediately instead of running a timer.
+    if (remaining <= 0) {
+      for (const [statusId, dotId, fillId] of [
+        ["gw-claim-status", "gw-claim-dot", "gw-claim-fill"],
+        ["gw-modal-claim-status", "gw-modal-claim-dot", "gw-modal-claim-fill"],
+      ]) {
+        const status = $(statusId);
+        const dot = $(dotId);
+        const fill = $(fillId);
+        if (status) {
+          status.textContent = `Winner did not respond within ${totalSecs} seconds`;
+          status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
+          status.classList.add("gw-claim-status--expired");
+        }
+        if (dot) dot.className = "gw-claim-dot gw-claim-dot--expired";
+        if (fill) {
+          fill.style.width = "0%";
+          fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
+          fill.classList.add("gw-claim-bar-fill--expired");
+        }
+      }
+      claimExpired = true;
+      clearInterval(claimTimerInterval);
+      updateWinnerActions();
+      return;
+    }
 
     clearInterval(claimTimerInterval);
     claimTimerInterval = setInterval(() => {
@@ -835,7 +1111,7 @@ if (!window.__yrSpaShell) {
 
         if (claimSecondsRemaining <= 0 && !winnerClaimed) {
           if (status) {
-            status.textContent = `@${winner.username} did not respond within ${totalSecs}s.`;
+            status.textContent = `Winner did not respond within ${totalSecs} seconds`;
             status.classList.remove("gw-claim-status--waiting", "gw-claim-status--confirmed");
             status.classList.add("gw-claim-status--expired");
           }
@@ -844,6 +1120,8 @@ if (!window.__yrSpaShell) {
             fill.classList.remove("gw-claim-bar-fill--confirmed", "gw-claim-bar-fill--warning");
             fill.classList.add("gw-claim-bar-fill--expired");
           }
+          claimExpired = true;
+          updateWinnerActions();
         }
       };
 
@@ -1472,6 +1750,7 @@ if (!window.__yrSpaShell) {
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
+    claimExpired = false;
     init();
     initEventsHub();
   }
@@ -1480,6 +1759,8 @@ if (!window.__yrSpaShell) {
     clearInterval(pollTimer); pollTimer = null;
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
+    clearTimeout(modalOpenTimer); modalOpenTimer = null;
+    claimExpired = false;
     // Remove the document-level drawer focus trap (added in wireEvents).
     document.removeEventListener("keydown", trapEventDrawerFocus);
   }
