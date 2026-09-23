@@ -1,6 +1,7 @@
 // Server-backed Chat Giveaways: sessions and entrants persisted per site,
 // fed by official Kick `chat.message.sent` webhooks routed through the verified
 // community channel binding. No browser listener is involved.
+import { giveawayRules, evaluateGiveawayEligibility, giveawayParticipantFacts } from "./giveaway-eligibility.js";
 import type { ProviderId } from "./providers/types.js";
 import type { SqlRunner } from "./viewer-identity.js";
 
@@ -16,6 +17,7 @@ export interface ChatGiveawaySession {
   site_id: string;
   provider: string;
   keyword: string;
+  rules?: unknown;
   status: ChatGiveawayStatus;
   started_at: string;
   stopped_at: string | null;
@@ -96,6 +98,7 @@ interface RoutedSessionRow {
   id: string;
   site_id: string;
   keyword: string;
+  rules?: unknown;
   status: ChatGiveawayStatus;
   winner_entry_id: string | null;
   winner_confirmed_at: string | null;
@@ -115,7 +118,7 @@ async function routedSessionsForChannel(
   run: SqlRunner, provider: ProviderId, externalChannelId: string,
 ): Promise<RoutedSessionRow[]> {
   const rows = (await run(
-    `SELECT gs.id, gs.site_id, gs.keyword, gs.status, gs.winner_entry_id, gs.winner_confirmed_at,
+    `SELECT gs.id, gs.site_id, gs.keyword, gs.rules, gs.status, gs.winner_entry_id, gs.winner_confirmed_at,
             we.provider_user_id AS winner_provider_user_id
        FROM chat_giveaway_sessions gs
        LEFT JOIN chat_giveaway_entries we ON we.id = gs.winner_entry_id
@@ -175,10 +178,15 @@ export async function ingestChatGiveawayMessage(
       outcome.sessionId = session.id;
       if (!chatMessageMatchesKeyword(input.content, session.keyword)) continue;
       outcome.matched = true;
+      const rules = giveawayRules(session.rules);
+      const facts = rules.entryMode !== "chat" || rules.excludePreviousWinners
+        ? await giveawayParticipantFacts(run, session.site_id, input.senderUserId) : {};
+      const eligibility = evaluateGiveawayEligibility({ ...facts, badges: input.badges }, rules);
       const inserted = (await run(
         `INSERT INTO chat_giveaway_entries
-           (giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at)
-         SELECT $1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now())
+           (giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at,
+            eligibility_status, eligibility_reason)
+         SELECT $1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now()), $9, $10
            FROM chat_giveaway_sessions gs
           WHERE gs.id = $1 AND gs.status = 'active'
           FOR SHARE OF gs
@@ -187,7 +195,7 @@ export async function ingestChatGiveawayMessage(
         [
           session.id, input.provider, input.senderUserId, input.senderUsername.slice(0, 120),
           input.senderAvatarUrl, input.content.slice(0, 500), input.badges ?? [],
-          input.occurredAt || null,
+          input.occurredAt || null, eligibility.status, eligibility.reason,
         ],
       )) as { id: string }[];
       if (inserted.length > 0) outcome.entered = true;

@@ -48,7 +48,8 @@ if (!window.__yrSpaShell) {
   let claimSecondsRemaining = 60;
   let winnerClaimed = false;
   let isRolling = false;
-  let pastWinners = new Set();
+  let settingsSessionId = null;
+  let autoRerollInFlight = false;
   let modalOpenTimer = null;
   // Per-draw claim state is derived from the session row the server persists
   // at draw time (winner_response_required / winner_response_timeout_seconds),
@@ -65,18 +66,6 @@ if (!window.__yrSpaShell) {
     return { required, timeoutSecs, remainingSecs: Math.max(0, timeoutSecs - elapsed) };
   }
 
-  function pastWinnersKey() {
-    return `yr_past_winners:${siteId || new URLSearchParams(location.search).get("siteId") || "default"}`;
-  }
-
-  function loadPastWinners() {
-    try {
-      const savedWinners = JSON.parse(localStorage.getItem(pastWinnersKey()) || "[]");
-      pastWinners = new Set(savedWinners.map((w) => String(w).toLowerCase()));
-    } catch {}
-  }
-  loadPastWinners();
-
   // DOM Elements
   const $ = (id) => document.getElementById(id);
 
@@ -86,7 +75,6 @@ if (!window.__yrSpaShell) {
     wireEvents();
     loadBoardShell().then((shell) => {
       siteId = shell.activeSiteId || "";
-      loadPastWinners();
       refreshChatGiveaway().finally(() => startPolling());
       window.__yrBoot?.signal();
     }).catch((error) => {
@@ -230,7 +218,82 @@ if (!window.__yrSpaShell) {
   }
 
 
+  function readRules() {
+    return {
+      entryMode: document.querySelector('input[name="gw-entry-mode"]:checked')?.value || "chat",
+      subscriberOnly: !!$("gw-opt-subscriber")?.checked,
+      vipOnly: !!$("gw-opt-vip")?.checked,
+      excludePreviousWinners: !!$("gw-opt-skip-past")?.checked,
+      onePerIp: !!$("gw-opt-ip")?.checked,
+      winnerMustRespond: !!$("gw-opt-claim-req")?.checked,
+      responseTimeout: Number($("gw-opt-claim-duration")?.value || 60),
+      autoReroll: !!$("gw-opt-auto-reroll")?.checked,
+    };
+  }
+
+  function renderRuleAvailability() {
+    const verified = readRules().entryMode === "verified";
+    if ($("gw-opt-ip")) {
+      $("gw-opt-ip").disabled = !verified;
+      if (!verified) $("gw-opt-ip").checked = false;
+    }
+    if ($("gw-ip-requirement")) $("gw-ip-requirement").textContent = verified ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry";
+    if ($("gw-vpn-requirement")) $("gw-vpn-requirement").textContent = verified ? "Unavailable — Detection provider required" : "Locked — Requires Verified Entry and a detection provider";
+    if ($("gw-device-requirement")) $("gw-device-requirement").textContent = verified ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check";
+    if ($("gw-enable-verified")) $("gw-enable-verified").hidden = verified;
+    const mustRespond = readRules().winnerMustRespond;
+    if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").disabled = !mustRespond;
+    if ($("gw-opt-auto-reroll")) {
+      $("gw-opt-auto-reroll").disabled = !mustRespond;
+      if (!mustRespond) $("gw-opt-auto-reroll").checked = false;
+    }
+  }
+
+  function renderRules() {
+    if (!session && settingsSessionId) {
+      settingsSessionId = null;
+      document.querySelector('input[name="gw-entry-mode"][value="chat"]')?.click();
+      for (const id of ["gw-opt-subscriber", "gw-opt-vip", "gw-opt-skip-past", "gw-opt-ip", "gw-opt-claim-req", "gw-opt-auto-reroll"]) if ($(id)) $(id).checked = false;
+    }
+    if (session && settingsSessionId !== session.id) {
+      settingsSessionId = session.id;
+      const r = session.rules || {};
+      document.querySelector(`input[name="gw-entry-mode"][value="${["chat", "members", "verified"].includes(r.entryMode) ? r.entryMode : "chat"}"]`)?.click();
+      for (const [id, key] of [["gw-opt-subscriber", "subscriberOnly"], ["gw-opt-vip", "vipOnly"], ["gw-opt-skip-past", "excludePreviousWinners"], ["gw-opt-ip", "onePerIp"], ["gw-opt-claim-req", "winnerMustRespond"], ["gw-opt-auto-reroll", "autoReroll"]]) {
+        if ($(id)) $(id).checked = !!r[key];
+      }
+      if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").value = String(r.responseTimeout || 60);
+    }
+    renderRuleAvailability();
+    if ($("gw-settings")) $("gw-settings").disabled = isActive();
+    if ($("gw-settings-note")) $("gw-settings-note").textContent = isActive() ? "These rules are saved and locked for the current giveaway." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway.";
+    const verification = session?.rules?.entryMode === "verified";
+    if ($("gw-verification-link-wrap")) $("gw-verification-link-wrap").hidden = !verification;
+    if (verification && $("gw-verification-link")) $("gw-verification-link").href = `/giveaways/verify?sessionId=${encodeURIComponent(session.id)}`;
+  }
+
+  async function checkAutoReroll() {
+    if (autoRerollInFlight || isRolling || !session?.rules?.autoReroll || session.winner_confirmed_at || session.winner_finalized_at
+      || !session.winner_response_deadline || Date.parse(session.winner_response_deadline) > Date.now()) return;
+    autoRerollInFlight = true;
+    try {
+      const response = await chatApi("/draw", {
+        sessionId: session.id, siteId: siteId || undefined, automatic: true,
+        expectedWinnerEntryId: session.winner_entry_id, expectedDrawnAt: session.drawn_at,
+      });
+      const data = await responseData(response);
+      if (response.ok) applyState({ connection, ...data });
+      else showEngageError(data.error || "Auto re-roll failed.");
+    } catch { showEngageError("Network error during auto re-roll."); }
+    finally { autoRerollInFlight = false; }
+  }
+
   function wireEvents() {
+    $("gw-settings")?.addEventListener("change", renderRuleAvailability);
+    $("gw-enable-verified")?.addEventListener("click", () => {
+      document.querySelector('input[name="gw-entry-mode"][value="verified"]')?.click();
+      renderRuleAvailability();
+    });
     document.addEventListener("keydown", trapEventDrawerFocus);
     $("gw-setup-form")?.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -300,6 +363,7 @@ if (!window.__yrSpaShell) {
         return;
       }
       applyState(data);
+      await checkAutoReroll();
     } catch {
       // transient; next poll retries
     } finally {
@@ -315,6 +379,7 @@ if (!window.__yrSpaShell) {
     currentWinner = data.winner || null;
 
     renderConnection();
+    renderRules();
     renderSessionControls();
     renderEntrants();
     renderWinner(previousWinnerId);
@@ -394,7 +459,7 @@ if (!window.__yrSpaShell) {
     const button = $("gw-btn-listen");
     if (button) button.disabled = true;
     try {
-      const res = await chatApi("/start", { keyword, siteId: siteId || undefined });
+      const res = await chatApi("/start", { keyword, rules: readRules(), siteId: siteId || undefined });
       const data = await responseData(res);
       if (!res.ok) {
         showEngageError(data.error || "Could not start the giveaway.");
@@ -430,8 +495,8 @@ if (!window.__yrSpaShell) {
 
   function entrantBadges(entrant) {
     const badges = Array.isArray(entrant.badges) ? entrant.badges : [];
-    const isSub = badges.some((b) => b?.type === "subscriber" || b?.type === "founder" || b?.type === "sub_gifter");
-    const isVip = badges.some((b) => b?.type === "vip" || b?.type === "moderator" || b?.type === "broadcaster");
+    const isSub = badges.some((b) => b?.type === "subscriber");
+    const isVip = badges.some((b) => b?.type === "vip");
     return { isSub, isVip };
   }
 
@@ -493,6 +558,8 @@ if (!window.__yrSpaShell) {
       statusBadge.className = "gw-trust-badge gw-trust-badge--high";
       statusBadge.textContent = "Entered";
     }
+    if (entrant.eligibility_status === "pending_verification") statusBadge.textContent = "Pending verification";
+    if (entrant.eligibility_status === "rejected") statusBadge.textContent = `Rejected: ${String(entrant.eligibility_reason || "ineligible").replaceAll("_", " ")}`;
     statusCell.append(statusBadge);
 
     const messageCell = document.createElement("td");
@@ -548,7 +615,7 @@ if (!window.__yrSpaShell) {
     const exportBtn = $("gw-btn-export");
     const emptyState = $("gw-entrants-empty");
 
-    if (count > 0 && !isRolling) {
+    if (getEligibleEntrantsPool().length > 0 && !isRolling) {
       rollBtn?.removeAttribute("disabled");
     } else {
       rollBtn?.setAttribute("disabled", "true");
@@ -567,49 +634,9 @@ if (!window.__yrSpaShell) {
     });
   }
 
-  // Eligibility filters run over the persisted entrants; the server then draws
-  // only from the ids we send back, so the pool can never contain anyone who
-  // did not enter this session.
+  // Animation uses eligible entries only; the server independently selects the pool.
   function getEligibleEntrantsPool() {
-    if (entrants.length === 0) return [];
-
-    const optExcludePrev = $("gw-opt-skip-past")?.checked;
-    const subsPerk = $("gw-opt-subs-perk")?.value || "all";
-
-    let pool = entrants;
-
-    loadPastWinners();
-    if (optExcludePrev) {
-      const filtered = pool.filter((e) => !pastWinners.has(String(e.username).toLowerCase()));
-      if (filtered.length > 0) pool = filtered;
-    }
-
-    if (subsPerk === "subs_only") {
-      const filtered = pool.filter((e) => { const b = entrantBadges(e); return b.isSub || b.isVip; });
-      if (filtered.length > 0) {
-        pool = filtered;
-      } else {
-        showEngageError("No subscribers or VIPs found in the entrants pool yet. Try 'Equal Chance' or wait for subscribers to enter.");
-        return [];
-      }
-    }
-
-    let mult = 1;
-    if (subsPerk === "subs_2x") mult = 2;
-    else if (subsPerk === "subs_3x") mult = 3;
-    else if (subsPerk === "subs_5x") mult = 5;
-
-    if (mult > 1) {
-      const weighted = [];
-      pool.forEach((e) => {
-        const b = entrantBadges(e);
-        const times = (b.isSub || b.isVip) ? mult : 1;
-        for (let i = 0; i < times; i++) weighted.push(e);
-      });
-      pool = weighted;
-    }
-
-    return pool;
+    return entrants.filter((entry) => entry.eligibility_status === "eligible");
   }
 
   // Vertical roulette: usernames scroll through a fixed center selection line,
@@ -797,7 +824,7 @@ if (!window.__yrSpaShell) {
     }
     if (pool.length === 0) {
       if (entrants.length === 0) return;
-      showEngageError("No entrants meet your active giveaway rules. Try changing your rules.");
+      showEngageError("No eligible entries. Pending viewers must verify before the draw.");
       return;
     }
 
@@ -820,12 +847,9 @@ if (!window.__yrSpaShell) {
     const drawPromise = (async () => {
       const res = await chatApi("/draw", {
         sessionId: session.id,
-        entryIds: pool.map((e) => e.id),
         expectedWinnerEntryId: session.winner_entry_id ?? null,
         expectedDrawnAt: session.drawn_at ?? null,
         siteId: siteId || undefined,
-        responseRequired: Boolean($("gw-opt-claim-req")?.checked),
-        responseTimeoutSeconds: parseInt($("gw-opt-claim-duration")?.value || "60", 10),
       });
       const data = await responseData(res);
       return { res, data };
@@ -844,10 +868,6 @@ if (!window.__yrSpaShell) {
       }
       const winner = data.winner;
       await runRoulette(track, pool, winner);
-      pastWinners.add(String(winner.username).toLowerCase());
-      try {
-        localStorage.setItem(pastWinnersKey(), JSON.stringify(Array.from(pastWinners)));
-      } catch {}
       applyState({ connection, ...data });
       displayWinner(winner);
       playWinnerSound();
@@ -1091,7 +1111,7 @@ if (!window.__yrSpaShell) {
 
     clearInterval(claimTimerInterval);
     claimTimerInterval = setInterval(() => {
-      claimSecondsRemaining--;
+      claimSecondsRemaining = drawRules().remainingSecs;
 
       const updateTick = (countId, fillId, statusId, dotId) => {
         const count = $(countId);
@@ -1130,6 +1150,7 @@ if (!window.__yrSpaShell) {
 
       if (claimSecondsRemaining <= 0) {
         clearInterval(claimTimerInterval);
+        checkAutoReroll();
       }
     }, 1000);
   }
@@ -1750,7 +1771,7 @@ if (!window.__yrSpaShell) {
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
-    claimExpired = false;
+    claimExpired = false; settingsSessionId = null; autoRerollInFlight = false;
     init();
     initEventsHub();
   }

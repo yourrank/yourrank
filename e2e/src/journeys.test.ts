@@ -59,7 +59,23 @@ async function login(pw: string) {
   return client.post("/api/auth/login", { email, password: pw });
 }
 
+describe("giveaway verification E2E", () => {
+  it(`${tag("giveaway-verification-boundary")} verification page cannot switch to a different giveaway from the posted body`, async () => {
+    const guest = new Client(BASE_URL);
+    await guest.get("/login");
+    const giveawayId = crypto.randomUUID();
+    const otherGiveawayId = crypto.randomUUID();
+    const page = await guest.get(`/giveaways/verify?sessionId=${giveawayId}`);
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("Verify giveaway entry");
+    const switched = await guest.post(`/api/viewer/giveaway?sessionId=${giveawayId}`, { sessionId: otherGiveawayId });
+    expect(switched.status).toBe(400);
+    expect(switched.json?.error).toContain("Giveaway link mismatch");
+  });
+ });
+
 describe("release-gate journeys", () => {
+
   beforeAll(async () => {
     client = new Client(BASE_URL);
     // Seeds the __csrf cookie. "/" is proxied to the MARKETING worker binding,

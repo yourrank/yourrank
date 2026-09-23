@@ -1,3 +1,4 @@
+import { runGiveawayTimeouts } from "./chat-giveaway-service.js";
 import { RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { destroySession, cookieClear, readToken, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
@@ -352,6 +353,7 @@ export default {
 async function handleScheduled(event, env, ctx) {
   populateEnv(env, { setGlobalEnv: true });
   if (event.cron === "*/5 * * * *") {
+    ctx.waitUntil(runGiveawayTimeouts().catch(() => console.error("[scheduled] giveaway timeout processing failed")));
     ctx.waitUntil(
       runAutoReset(env).catch((err) => {
         console.error("[scheduled] auto-reset failed:", err);
@@ -1192,7 +1194,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
 
       // Pass all /api/ endpoints, Kick webhooks, and auth routes to Hono router.
-      if (path.startsWith("/api/") || path.startsWith("/overlay/") || path === "/webhooks/kick" || path.startsWith("/auth/")) {
+      if (path === "/giveaways/verify" || path.startsWith("/api/") || path.startsWith("/overlay/") || path === "/webhooks/kick" || path.startsWith("/auth/")) {
         const apiResponse = await apiAppImpl.fetch(request, { workerContext: { request, env, ctx, meta } }, ctx);
         // Return the handler's response, INCLUDING a legitimate 404 it produced.
         // Only fall through to page routing when no API route matched at all,
