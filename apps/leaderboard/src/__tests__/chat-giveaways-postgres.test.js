@@ -153,6 +153,22 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(next.status).toBe("active");
   });
 
+  integrationIt("a stop between routing and insert cannot add a late entrant", async () => {
+    await run("DELETE FROM chat_giveaway_sessions WHERE site_id=$1", [siteC]);
+    const session = await startSession(siteC);
+    let stopped = false;
+    const raceRun = async (text, params = []) => {
+      if (text.startsWith("INSERT INTO chat_giveaway_entries")) {
+        stopped = true;
+        await run("UPDATE chat_giveaway_sessions SET status='stopped', stopped_at=now() WHERE id=$1", [session.id]);
+      }
+      return run(text, params);
+    };
+    const outcome = await ingestChatGiveawayMessage(raceRun, msg(channelC, "late-user", "!win"));
+    expect(stopped).toBe(true);
+    expect(outcome.entered).toBe(false);
+    expect(await run("SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=$1", [session.id])).toHaveLength(0);
+  });
   integrationIt("finalizing stamps who confirmed and persists across re-reads", async () => {
     // Uses site A's stopped "!win" session so site B's active giveaway is untouched.
     const [a] = await sql`SELECT id FROM chat_giveaway_sessions WHERE site_id=${siteA} AND status='stopped'`;
@@ -250,9 +266,37 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(ms(row.winner_confirmed_at)).toBe(Date.parse(occurredAt));
   });
 
+  integrationIt("a reroll between routing and response write cannot confirm the replacement winner", async () => {
+    const d = await completedDraw({ drawnAgoSecs: 10, timeout: 60 });
+    const [replacement] = await run(
+      "INSERT INTO chat_giveaway_entries (giveaway_session_id, provider_user_id, username) VALUES ($1, $2, $3) RETURNING id",
+      [d.id, "replacement-user", "replacement-user"],
+    );
+    let rerolled = false;
+    const raceRun = async (text, params = []) => {
+      if (text.includes("UPDATE chat_giveaway_sessions") && text.includes("winner_confirmed_at =")) {
+        rerolled = true;
+        await run(
+          "UPDATE chat_giveaway_sessions SET winner_entry_id=$2, drawn_at=now() - interval '1 second', winner_confirmed_at=NULL, winner_confirmation_message=NULL WHERE id=$1",
+          [d.id, replacement.id],
+        );
+      }
+      return run(text, params);
+    };
+    const outcome = await ingestChatGiveawayMessage(raceRun, winnerMsg(new Date().toISOString()));
+    expect(rerolled).toBe(true);
+    expect(outcome.winnerConfirmed).toBe(false);
+    const [after] = await run(
+      "SELECT winner_entry_id, winner_confirmed_at FROM chat_giveaway_sessions WHERE id=$1",
+      [d.id],
+    );
+    expect(after.winner_entry_id).toBe(replacement.id);
+    expect(after.winner_confirmed_at).toBeNull();
+    expect((await ingestChatGiveawayMessage(run, msg(channelC, "replacement-user", "yes here"))).winnerConfirmed).toBe(true);
+  });
   // The draw/finalize CAS statements, verbatim from the dashboard handler: the
   // UPDATE is the arbiter, so a stale or racing request must match zero rows.
-  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
+  const DRAW_SET = `SET winner_entry_id = $2, drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond'), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
             winner_finalized_at = NULL, winner_finalized_by = NULL,
             winner_response_required = $4, winner_response_timeout_seconds = $5,
             status = 'completed', stopped_at = COALESCE(stopped_at, now())`;
@@ -317,6 +361,19 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(row.winner_entry_id).toBe(entries[1].id);
   });
 
+  integrationIt("a same-winner reroll advances the draw identity even within one millisecond", async () => {
+    const { session, entries } = await freshSessionWithEntries("x1");
+    await initialDraw(session.id, entries[0].id);
+    await run(
+      "UPDATE chat_giveaway_sessions SET drawn_at = date_trunc('milliseconds', clock_timestamp()) + interval '1 second' WHERE id=$1",
+      [session.id],
+    );
+    const [before] = await run("SELECT drawn_at FROM chat_giveaway_sessions WHERE id=$1", [session.id]);
+    const expectedDrawnAt = new Date(ms(before.drawn_at)).toISOString();
+    const [after] = await reroll(session.id, entries[0].id, entries[0].id, expectedDrawnAt);
+    expect(ms(after.drawn_at)).toBeGreaterThan(ms(before.drawn_at));
+    expect(await reroll(session.id, entries[0].id, entries[0].id, expectedDrawnAt)).toHaveLength(0);
+  });
   integrationIt("a re-roll cannot overwrite a finalized draw", async () => {
     const d = await completedDraw({ drawnAgoSecs: 10, finalized: true });
     const drawnAt = new Date(ms(d.drawn_at)).toISOString();

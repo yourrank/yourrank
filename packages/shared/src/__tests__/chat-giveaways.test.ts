@@ -101,7 +101,7 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
   const entries = new Set<string>();
   const inserts: unknown[][] = [];
   const run = async (sql: string, params: unknown[] = []) => {
-    if (sql.includes("FROM chat_giveaway_sessions gs")) {
+    if (sql.startsWith("SELECT gs.id")) {
       const [provider, channel] = params as [string, string];
       expect(provider).toBe("kick");
       return (sessionsByChannel[channel] || []).map((s) => ({
@@ -228,10 +228,11 @@ describe("ingestChatGiveawayMessage winner confirmation", () => {
     expect(outcome.winnerConfirmed).toBe(true);
     expect(db.updates).toHaveLength(1);
     const { sql, params } = db.updates[0];
-    expect(params).toEqual(["gs-a", "here!", occurredAt]);
+    expect(params).toEqual(["gs-a", "here!", occurredAt, "kick", "u1"]);
     // The deadline is enforced in SQL against drawn_at, not just on routing.
     expect(sql).toContain("winner_response_required = true");
     expect(sql).toContain("winner_finalized_at IS NULL");
+    expect(sql).toContain("winner.provider_user_id = $5");
     expect(sql).toContain("$3::timestamptz >= drawn_at");
     expect(sql).toContain("$3::timestamptz <= drawn_at + make_interval(secs => COALESCE(winner_response_timeout_seconds, 60))");
   });

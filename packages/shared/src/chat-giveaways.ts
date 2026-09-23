@@ -178,7 +178,10 @@ export async function ingestChatGiveawayMessage(
       const inserted = (await run(
         `INSERT INTO chat_giveaway_entries
            (giveaway_session_id, provider, provider_user_id, username, avatar_url, message, badges, entered_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now()))
+         SELECT $1, $2, $3, $4, $5, $6, $7::jsonb, COALESCE($8::timestamptz, now())
+           FROM chat_giveaway_sessions gs
+          WHERE gs.id = $1 AND gs.status = 'active'
+          FOR SHARE OF gs
          ON CONFLICT (giveaway_session_id, provider_user_id) DO NOTHING
          RETURNING id`,
         [
@@ -197,14 +200,20 @@ export async function ingestChatGiveawayMessage(
         `UPDATE chat_giveaway_sessions
             SET winner_confirmed_at = $3::timestamptz, winner_confirmation_message = $2
           WHERE id = $1
+            AND status = 'completed'
             AND winner_response_required = true
             AND winner_confirmed_at IS NULL
             AND winner_finalized_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM chat_giveaway_entries winner
+              WHERE winner.id = chat_giveaway_sessions.winner_entry_id
+                AND winner.provider = $4 AND winner.provider_user_id = $5
+            )
             AND drawn_at IS NOT NULL
             AND $3::timestamptz >= drawn_at
             AND $3::timestamptz <= drawn_at + make_interval(secs => COALESCE(winner_response_timeout_seconds, 60))
           RETURNING id`,
-        [session.id, input.content.slice(0, 500), at],
+        [session.id, input.content.slice(0, 500), at, input.provider, input.senderUserId],
       )) as { id: string }[];
       outcome.winnerConfirmed = confirmed.length > 0;
     }

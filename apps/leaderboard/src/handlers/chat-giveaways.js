@@ -172,7 +172,7 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
   }
 
   const winner = pool[randomIndex(pool.length)];
-  const drawSet = `SET winner_entry_id = $2, drawn_at = now(), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
+  const drawSet = `SET winner_entry_id = $2, drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond'), winner_confirmed_at = NULL, winner_confirmation_message = NULL,
             winner_finalized_at = NULL, winner_finalized_by = NULL,
             winner_response_required = $4, winner_response_timeout_seconds = $5,
             status = 'completed', stopped_at = COALESCE(stopped_at, now())`;

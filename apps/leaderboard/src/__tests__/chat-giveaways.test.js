@@ -255,6 +255,7 @@ describe("Chat Giveaway API", () => {
     expect(data.winner.id).toBe("e2");
     expect(update.params).toEqual(["gs-1", "e2", siteA.id, false, null]);
     expect(update.text).toContain("status = 'completed'");
+    expect(update.text).toContain("drawn_at = GREATEST(clock_timestamp(), drawn_at + interval '1 millisecond')");
     // An initial draw only lands while no winner exists yet.
     expect(update.text).toContain("winner_entry_id IS NULL");
     // A re-roll clears any previous streamer-side confirmation.
