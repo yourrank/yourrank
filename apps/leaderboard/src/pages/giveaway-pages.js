@@ -288,7 +288,6 @@ ${tabs}
               <div id="gw-auto-reroll-wrap" hidden>
                 <label class="cr-toggle-row"><span><b>Auto re-roll on timeout</b><small>Runs at expiry while this page is open, or on the next server check within five minutes.</small></span><input id="gw-opt-auto-reroll" type="checkbox" class="v3-toggle" disabled></label>
               </div>
-              <div class="field"><label for="gw-custom-rule-text">Winner instruction (optional)</label><textarea id="gw-custom-rule-text" rows="2" placeholder="e.g. Say your in-game name in chat"></textarea><span class="hint">A display instruction on this page; not an eligibility check.</span></div>
             </section>
             <details class="gw-setup-advanced" id="gw-advanced-options"><summary>Advanced options<span class="gw-advanced-summary-state" aria-hidden="true">▾</span></summary><div class="gw-setup-advanced-body">
               <section class="gw-settings-section" aria-labelledby="gw-advanced-eligibility-title">
@@ -306,6 +305,10 @@ ${tabs}
                 <label class="cr-toggle-row"><span><b>Duplicate device detection</b><small id="gw-device-requirement">Locked — Requires Verified Entry and a supported device check</small></span><input type="checkbox" disabled aria-describedby="gw-device-requirement"></label>
                 <p class="hint">Participants must verify through YourRank because Kick chat does not expose IP or device information.</p>
                 <button class="btn btn--ghost" id="gw-enable-verified" type="button">Enable Verified Entry</button>
+              </section>
+              <section class="gw-settings-section" aria-labelledby="gw-winner-instruction-title">
+                <h3 id="gw-winner-instruction-title">Winner instruction</h3>
+                <div class="field"><label for="gw-custom-rule-text">Winner instruction (optional)</label><textarea id="gw-custom-rule-text" rows="2" placeholder="e.g. Say your in-game name in chat"></textarea><span class="hint">A display instruction on this page; not an eligibility check.</span></div>
               </section>
             </div></details>
           </fieldset>

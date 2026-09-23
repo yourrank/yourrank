@@ -183,6 +183,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).toContain('<option value="60" selected>60 seconds</option>');
     expect(giveawaysHtml).not.toContain('id="gw-opt-claim-req" checked');
     expect(giveawaysHtml).toContain('id="gw-custom-rule-text"');
+    expect(giveawaysHtml.indexOf('id="gw-custom-rule-text"')).toBeGreaterThan(giveawaysHtml.indexOf('id="gw-advanced-options"'));
     expect(giveawaysHtml).toContain('id="gw-roller-track"');
     expect(giveawaysHtml).toContain('id="gw-winner-stage" role="status" aria-live="polite"');
     expect(giveawaysHtml).toContain('id="gw-roller-track" aria-hidden="true"');

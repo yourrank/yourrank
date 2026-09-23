@@ -706,6 +706,15 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
   });
 
+  it("the winner instruction lives inside Advanced options", async () => {
+    await boot();
+    expect($id("gw-custom-rule-text").closest("#gw-advanced-options")).toBeTruthy();
+    const fieldset = $id("gw-settings");
+    for (const section of fieldset.querySelectorAll(":scope > .gw-settings-section")) {
+      expect(section.querySelector("#gw-custom-rule-text")).toBeNull();
+    }
+  });
+
   it("auto re-roll follows the response verification toggle", async () => {
     await boot();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
