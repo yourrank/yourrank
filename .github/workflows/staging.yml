@@ -573,6 +573,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # opennextjs-cloudflare deploy resolves bindings via getPlatformProxy, which insists on a
+          # local Hyperdrive fallback even though nothing connects to it during a deploy. The staging
+          # config deliberately has no localConnectionString (staging-preflight forbids it).
+          CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgresql://postgres:postgres@localhost:5432/yourrank
         run: bun run deploy:ci -- --env staging --tag "${{ github.sha }}" --message staging-${{ github.sha }}-run-${{ github.run_id }}
 
   web-readiness-staging:
