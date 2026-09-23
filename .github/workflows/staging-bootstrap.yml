@@ -7,8 +7,10 @@ name: Staging bootstrap
 #   - the workers.dev subdomain URLs (-> STAGING_WEB_URL / STAGING_MONITOR_URL vars)
 #   - the staging.yourrank.site DNS record (proxied AAAA, or manual instructions)
 #
-# Manual trigger only; `environment: staging` scopes every secret/variable to the
-# staging GitHub environment. The release-target guard runs first so a
+# Triggers: manual dispatch (once merged to main) or, mirroring staging.yml, a
+# same-repository PR carrying the `bootstrap-staging` label — the only way to run
+# a workflow that does not yet exist on the default branch. `environment: staging`
+# scopes every secret/variable to the staging GitHub environment. The release-target guard runs first so a
 # misconfigured environment fails closed before Cloudflare is touched.
 #
 # Secrets used (staging environment): CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID,
@@ -19,6 +21,8 @@ name: Staging bootstrap
 
 on:
   workflow_dispatch: {}
+  pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
@@ -34,6 +38,10 @@ env:
 jobs:
   bootstrap:
     name: Provision staging infrastructure (idempotent)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.label.name == 'bootstrap-staging')
     runs-on: ubuntu-latest
     environment: staging
     steps:

@@ -45,6 +45,14 @@ automated from CI. Do them once; the preflight verifies the result.
    supabase link --project-ref <staging-ref> --password '<db-password>'
    supabase db push --include-all
    ```
+   New Supabase projects ship a platform-installed `public.rls_auto_enable()`
+   plus the `ensure_rls` event trigger; the production baseline dump creates the
+   same function, so `00000000000000_baseline.sql` fails with "function already
+   exists" on a fresh project. Drop the pre-installed copy first
+   (`DROP FUNCTION public.rls_auto_enable() CASCADE;`) and re-run the push — the
+   chain recreates it and `20260718000004_revoke_and_rls.sql` removes it again,
+   so the end state matches production. Never edit the baseline to work around
+   this.
 
 ### 1.2 Backend login role (manual — the only CLI step left)
 
