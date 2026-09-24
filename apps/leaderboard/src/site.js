@@ -1,5 +1,6 @@
 // Site + players data helpers for the Worker.
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
+import { checkLimit, limitDenial } from "@yourrank/shared/entitlements";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { rankEventPlayers } from "@yourrank/shared/event-leaderboards";
@@ -417,7 +418,7 @@ export function playerStreak(player, currentRank, archives) {
 export const ARCHIVE_LIMITS = { free: 6, pro: 12, team: 24 };
 export const PUBLIC_ARCHIVE_LIMIT = 24;
 
-export async function getArchives(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free, queryImpl = query) {
+export async function getArchives(env, siteId, limit = 6, historyDays = getPlanLimit("free", "history_days"), queryImpl = query) {
     const rows = await queryImpl(
       `SELECT id, label, top3_json, winner_name,
               (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at
@@ -432,7 +433,7 @@ export async function getArchives(env, siteId, limit = 6, historyDays = HISTORY_
 
 // Expensive detail-only read. Never use this on the board render path: it
 // transfers the full archived player snapshots instead of derived summaries.
-export async function getArchiveSnapshots(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free, queryImpl = query) {
+export async function getArchiveSnapshots(env, siteId, limit = 6, historyDays = getPlanLimit("free", "history_days"), queryImpl = query) {
   const rows = await queryImpl(
     `SELECT id, label, snapshot_json,
             (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at
@@ -445,7 +446,7 @@ export async function getArchiveSnapshots(env, siteId, limit = 6, historyDays = 
   return rows || [];
 }
 
-async function getArchivePlayerCounts(env, siteId, limit = 6, historyDays = HISTORY_DAYS.free) {
+async function getArchivePlayerCounts(env, siteId, limit = 6, historyDays = getPlanLimit("free", "history_days")) {
   const rows = await query(
     `SELECT id, label, top3_json, winner_name,
             jsonb_array_length(public.archive_snapshot_array(snapshot_json)) AS player_count,
@@ -592,7 +593,7 @@ export async function getPublicSite(env, slug, request = null, playerOptions = n
       getPlayers(env, site.id, { ...(boundedPlayers ? playerOptions : {}), rankBy: site.rank_by }),
       totalCountPromise,
       matchCountPromise,
-      getArchives(env, site.id, archiveLimit, HISTORY_DAYS[plan]), // DB-003-v8: fetch only entitled history
+      getArchives(env, site.id, archiveLimit, getPlanLimit(plan, "history_days")), // DB-003-v8: fetch only entitled history
     ]);
     const boards = shapePublicBoards(fromJsonb(owner?.public_boards) || []);
     const data = publicShape(site, players, archives, !!site.has_logo, playerCount, !!site.has_banner);
@@ -649,7 +650,7 @@ export async function getUserSite(env, uid, plan) {
       const selectedPlan = await planForSelectedSite(site, uid, plan);
       const archiveLimit = ARCHIVE_LIMITS[selectedPlan] || 6;
       // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[selectedPlan]);
+      const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, getPlanLimit(selectedPlan, "history_days"));
     return {
         id: site.id, slug: site.slug, published: !!site.published, plan: selectedPlan,
         isDraft: !!site.is_draft,
@@ -730,7 +731,7 @@ export async function getUserSiteById(env, uid, siteId, plan) {
     const selectedPlan = await planForSelectedSite(site, uid, plan);
     const archiveLimit = ARCHIVE_LIMITS[selectedPlan] || 6;
     // PERF-005: has_logo is now in SITE_COLUMNS — no separate query needed.
-    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, HISTORY_DAYS[selectedPlan]);
+    const archives = await getArchivePlayerCounts(env, site.id, archiveLimit, getPlanLimit(selectedPlan, "history_days"));
   return {
     id: site.id, slug: site.slug, published: !!site.published, plan: selectedPlan,
     isDraft: !!site.is_draft,
@@ -756,14 +757,21 @@ export async function getUserSiteById(env, uid, siteId, plan) {
 
 // Multi-board: create a new board for a user.
 export async function createBoard(env, uid, { slug, name, casino = "", code = "", published = false, is_draft = true, seed = false } = {}, request = null, tx = null) {
+  if (!tx) {
+    // The plan-limit count + insert must be atomic: hold the users row lock
+    // for the whole unit so concurrent creates cannot both pass the check.
+    return withTransaction((innerTx) => createBoard(env, uid, { slug, name, casino, code, published, is_draft, seed }, request, innerTx));
+  }
   const dbOne = tx ? (text, params) => tx.one(text, params) : one;
   const dbExec = tx ? (text, params) => tx.unsafe(text, params) : exec;
   const dbQuery = tx ? (text, params) => tx.query(text, params) : query;
-  const plan = effectivePlan(await dbOne("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [uid]));
-  const limit = BOARD_LIMITS[plan] || 1;
+  const ownerRow = await dbOne("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1 FOR UPDATE", [uid]);
+  const plan = effectivePlan(ownerRow);
+  const limit = getPlanLimit(plan, "sites") || 1;
   const boards = await dbQuery(`SELECT ${SITE_COLUMNS} FROM sites WHERE user_id=$1 ORDER BY id ASC`, [uid]);
   if (boards.length >= limit) {
-    return { error: `Your ${plan} plan allows up to ${limit} leaderboard${limit > 1 ? "s" : ""}. Upgrade to create more.`, code: "board_limit" };
+    const denial = limitDenial(plan, "sites", boards.length);
+    return { error: denial.error, code: "board_limit", denial };
   }
   const existing = await dbOne("SELECT id FROM sites WHERE slug=$1", [slug]);
   if (existing) return { error: "That URL is already taken. Pick another.", code: "slug_taken" };
@@ -847,13 +855,6 @@ async function uniqueSlug(env, base) {
 export async function duplicateBoard(env, uid, siteId, request = null) {
   const source = await getBoardById(env, uid, siteId);
   if (!source) return { error: "no site" };
-  const owner = await one("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [uid]);
-  const plan = effectivePlan(owner);
-  const limit = BOARD_LIMITS[plan] || 1;
-  const boards = await getAllBoards(env, uid);
-  if (boards.length >= limit) {
-    return { error: `Your ${plan} plan allows up to ${limit} leaderboard${limit > 1 ? "s" : ""}. Upgrade to create more.`, code: "board_limit" };
-  }
   const newSlug = await uniqueSlug(env, source.slug);
   const newId = crypto.randomUUID();
   const players = await getPlayers(env, siteId);
@@ -866,7 +867,17 @@ export async function duplicateBoard(env, uid, siteId, request = null) {
   const bannerData = logoRow?.banner_data || "";
   const boardOrder = (source.board_order || 0) + 1;
 
-  await withTransaction(async (tx) => {
+  const result = await withTransaction(async (tx) => {
+    // Atomic under the users row lock — concurrent duplicates cannot both
+    // pass the plan-limit count check.
+    const owner = await tx.one("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1 FOR UPDATE", [uid]);
+    const plan = effectivePlan(owner);
+    const limit = getPlanLimit(plan, "sites") || 1;
+    const countRow = await tx.one("SELECT count(*)::int AS count FROM sites WHERE user_id=$1", [uid]);
+    if (Number(countRow?.count || 0) >= limit) {
+      const denial = limitDenial(plan, "sites", Number(countRow?.count || 0));
+      return { error: denial.error, code: "board_limit", denial };
+    }
     await tx.unsafe(
       `INSERT INTO sites (id,user_id,slug,name,tagline,casino,code,cta_url,prize_pool,period,starts_at,ends_at,rank_by,reset_note,blurb,published,is_draft,extra_json,logo_data,banner_data,theme_json,board_order)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb,$19,$20,$21::jsonb,$22)`,
@@ -890,7 +901,9 @@ export async function duplicateBoard(env, uid, siteId, request = null) {
         params
       );
     }
+    return { ok: true };
   });
+  if (result?.error) return result;
   invalidateUserCache(env, uid);
   await logAudit({
     actorId: uid,
@@ -1129,14 +1142,8 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       const owner = await oneImpl("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
       if (owner) effectiveSitePlan = effectivePlan(owner);
     }
-    if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
-      return {
-        error: effectiveSitePlan === "pro" || effectiveSitePlan === "team"
-          ? `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players.`
-          : `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players. Upgrade for more.`,
-        code: "player_limit",
-      };
-    }
+    const denial = checkLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
+    if (denial) return { error: denial.error, code: "player_limit", denial };
   }
   const b = payload.brand || {};
   // Validate the referral/CTA link server-side (the client only rejects it at
@@ -1363,14 +1370,8 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
         );
         if (owner) effectiveSitePlan = effectivePlan(owner);
       }
-      if (validatedPlayers.length > PLAN_LIMITS[effectiveSitePlan]) {
-        return {
-          error: effectiveSitePlan === "pro" || effectiveSitePlan === "team"
-            ? `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players.`
-            : `Your plan allows up to ${PLAN_LIMITS[effectiveSitePlan]} players. Upgrade for more.`,
-          code: "player_limit",
-        };
-      }
+      const denial = checkLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
+      if (denial) return { error: denial.error, code: "player_limit", denial };
     }
 
     // The signed score API's replay identity commits with this exact mutation.

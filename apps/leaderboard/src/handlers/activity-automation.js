@@ -3,7 +3,7 @@ import {
   query as defaultQuery,
   exec as defaultExec,
 } from "@yourrank/shared/db";
-import { effectivePlan, canUseAutomation } from "@yourrank/shared/plans";
+import { effectivePlan, canUseFeature } from "@yourrank/shared/plans";
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { requireUser as defaultRequireUser, bad, json, readJsonLimited } from "../auth.js";
@@ -88,8 +88,8 @@ export function automationListFromRows({ templates = [], schedules = [], plan })
   return {
     entitlement: {
       plan,
-      canAutomate: canUseAutomation(plan),
-      message: canUseAutomation(plan)
+      canAutomate: canUseFeature(plan, "activity_automation"),
+      message: canUseFeature(plan, "activity_automation")
         ? null
         : "Manual code drops remain available. Templates and scheduling require Pro or Team.",
     },
@@ -136,7 +136,7 @@ async function authorize(request, env, deps, { body = null, mutate = false, requ
   if (!entitlement.owner || entitlement.owner.status === "suspended") {
     return { res: bad("Site owner is unavailable.", 403) };
   }
-  if (requirePaid && !canUseAutomation(entitlement.plan)) {
+  if (requirePaid && !canUseFeature(entitlement.plan, "activity_automation")) {
     return { res: bad("Activity automation requires Pro or Team. Your saved configuration remains available.", 403) };
   }
   if (requirePaid && (site.suspended || site.is_draft || !site.published)) {

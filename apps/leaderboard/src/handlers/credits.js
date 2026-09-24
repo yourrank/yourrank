@@ -17,11 +17,9 @@ import {
 } from "@yourrank/shared/kick-oauth";
 import {
   effectivePlan,
-  CREDITS_REWARD_LIMITS,
-  CREDITS_SHOP_LIMITS,
+  getPlanLimit,
   CREDITS_PENDING_REDEMPTIONS_LIMITS,
   CREDITS_REDEMPTIONS_PER_30D_LIMITS,
-  CREDITS_VIEWERS_PER_30D_LIMITS,
 } from "@yourrank/shared/plans";
 import { requireSiteCapability } from "../site-authorization.js";
 import { hasSiteCapability } from "@yourrank/shared/team";
@@ -410,11 +408,11 @@ export async function handleCreditsStatus(request, env) {
       public: site.viewer_public_redeem_enabled,
     },
     limits: {
-      rewardMappings: CREDITS_REWARD_LIMITS[plan],
-      shopItems: CREDITS_SHOP_LIMITS[plan],
+      rewardMappings: getPlanLimit(plan, "reward_mappings"),
+      shopItems: getPlanLimit(plan, "shop_items"),
       pendingRedemptions: CREDITS_PENDING_REDEMPTIONS_LIMITS[plan],
       redemptionsPer30Days: CREDITS_REDEMPTIONS_PER_30D_LIMITS[plan],
-      activeViewersPer30Days: CREDITS_VIEWERS_PER_30D_LIMITS[plan],
+      activeViewersPer30Days: getPlanLimit(plan, "active_viewers_30d"),
     },
     capabilities: {
       manageRewards: hasSiteCapability(authorization.role, "canRoleManageRewards"),
@@ -494,7 +492,7 @@ export async function handleCreditsSaveReward(request, env, deps = creditsGrowth
   }
 
   const plan = await effectiveSitePlan(site, user, deps.one);
-  const limit = CREDITS_REWARD_LIMITS[plan];
+  const limit = getPlanLimit(plan, "reward_mappings");
 
   const txResult = await deps.withTransaction(async (tx) => {
     await tx.unsafe("SELECT id FROM sites WHERE id=$1 FOR UPDATE", [site.id]);
@@ -569,7 +567,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
 
   // Enforce plan limit before calling Kick (re-checked under a lock below).
   const plan = effectivePlan(user);
-  const limit = CREDITS_REWARD_LIMITS[plan];
+  const limit = getPlanLimit(plan, "reward_mappings");
   const preCount = await deps.one(
     "SELECT count(*)::int AS count FROM credit_reward_mappings WHERE site_id=$1 AND active=true",
     [site.id]
@@ -789,7 +787,7 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
   }
 
   const plan = await effectiveSitePlan(site, user, deps.one);
-  const limit = CREDITS_SHOP_LIMITS[plan];
+  const limit = getPlanLimit(plan, "shop_items");
   let previousImageKey;
   let imageKey = null;
 

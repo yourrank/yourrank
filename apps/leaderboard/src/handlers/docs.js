@@ -2,7 +2,7 @@
 // leaderboard API, served raw at /openapi.json and rendered at /docs/api.
 import { json } from "../auth.js";
 import { SECURE_HTML } from "../middleware/headers.js";
-import { PLAN_LIMITS } from "@yourrank/shared/plans";
+import { getPlanLimit } from "@yourrank/shared/plans";
 import { SCORE_MAX, WIN_RATE_MAX, INT32_MAX, INT32_MIN } from "../player-rules.js";
 import { IDEMPOTENCY_KEY_MAX_LENGTH } from "@yourrank/shared/api-idempotency";
 
@@ -240,7 +240,7 @@ The read endpoints under \`/api/public/{slug}\` return the published board. Pass
 - a new name → the player is created; omitted numeric fields default to \`0\` (\`netProfit\` defaults to \`prize - wagered\`);
 - players you do not mention are not modified or removed.
 
-The merged board still has to respect your plan's player limit (Pro ${PLAN_LIMITS.pro.toLocaleString("en-US")}, Team ${PLAN_LIMITS.team.toLocaleString("en-US")}).
+The merged board still has to respect your plan's player limit (Pro ${getPlanLimit("pro","players_per_site").toLocaleString("en-US")}, Team ${getPlanLimit("team","players_per_site").toLocaleString("en-US")}).
 
 ## Idempotency
 
@@ -459,7 +459,7 @@ Requires Pro or Team, a board reference, and a valid signature. Rejected with \`
                     type: "array",
                     maxItems: 9999,
                     items: { $ref: "#/components/schemas/PlayerWrite" },
-                    description: `The complete new player list. May be empty (clears the board). After validation the count must not exceed your plan limit: Pro ${PLAN_LIMITS.pro.toLocaleString("en-US")}, Team ${PLAN_LIMITS.team.toLocaleString("en-US")}.`,
+                    description: `The complete new player list. May be empty (clears the board). After validation the count must not exceed your plan limit: Pro ${getPlanLimit("pro","players_per_site").toLocaleString("en-US")}, Team ${getPlanLimit("team","players_per_site").toLocaleString("en-US")}.`,
                   },
                 },
               },

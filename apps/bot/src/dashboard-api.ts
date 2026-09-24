@@ -13,8 +13,11 @@ import {
 } from "@yourrank/shared/postback";
 import { getMe, setWebhook, deleteWebhook, getWebhookInfo, sendMessage, sendPhoto } from "./telegram.js";
 import { syncMyCommands, syncMyCommandsForBot } from "./botEngine.js";
-import { withPlanLimit, getUserPlan } from "./plans.js";
-import { checkFeature, PLANS } from "./plans.js";
+import { withPlanLimit, getUserPlan, botPlanView } from "./plans.js";
+import { checkFeature } from "./plans.js";
+import { limitDenial, type EntitlementDenial } from "@yourrank/shared/entitlements";
+import { PLAN_TIERS, getPlanLimit } from "@yourrank/shared/plans";
+import { getUsageSummary } from "@yourrank/shared/usage-meters";
 import { rateLimit } from "./ratelimit.js";
 import { sameOrigin } from "./dashboard-auth.js";
 import { resolveSession, type SessionEnv } from "@yourrank/shared/session";
@@ -213,7 +216,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       await tx.query(`INSERT INTO short_links (offer_id, slug, source) VALUES ($1, $2, 'telegram')`, [offer.id, linkSlug]);
       return { offer_id: offer.id, tracked_link: `${config.publicBaseUrl}/r/${linkSlug}` };
     });
-    if ("error" in out) return c.json({ error: out.error }, 402);
+    if ("denial" in out) return c.json(out.denial, 403);
     return c.json(out.result);
   });
 
@@ -410,7 +413,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
         [uid, bot.id]
       );
       if ((cnt?.n ?? 0) >= plan.maxBots) {
-        return c.json({ error: `Your ${plan.label} plan allows ${plan.maxBots} bots. Upgrade or remove an active bot first.` }, 402);
+        return c.json(limitDenial(plan.tier, "telegram_bots", cnt?.n ?? 0), 403);
       }
     }
 
@@ -533,7 +536,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
     // encryptToken requires TOKEN_ENC_KEY to be a valid 32-byte hex secret.
     // Wrap so a misconfigured key returns a clear 500 rather than an opaque
     // Hono-default {"message":"Internal Server Error"} that the client can't
-    // distinguish from a plan-limit 402 or a Telegram error 400.
+    // distinguish from a plan-limit 403 or a Telegram error 400.
     let encToken: Buffer;
     try { encToken = await encryptToken(token); }
     catch (err) {
@@ -542,7 +545,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       }
     // count-check + INSERT run atomically under a per-user advisory lock so two
     // concurrent connect-bot requests can't both pass the count and both insert.
-    let out: { error: string } | { result: { bot_id: string; username: string; secret: string } };
+    let out: { denial: EntitlementDenial } | { result: { bot_id: string; username: string; secret: string } };
     try {
       out = await withPlanLimit(uid, "bots", async (tx) => {
         const row = (await tx.one<{ id: string; username: string }>(
@@ -567,7 +570,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
         console.error("[POST /bots] DB error:", msg);
         return c.json({ error: "Database error — please try again in a moment" }, 500);
       }
-    if ("error" in out) return c.json({ error: out.error }, 402);
+    if ("denial" in out) return c.json(out.denial, 403);
     // H-20: set the Telegram webhook before marking the bot active. Only activate
     // once Telegram confirms the webhook is set, so a failed setWebhook never
     // leaves an active row that will not receive updates.
@@ -748,7 +751,24 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       daysLeft,
       warning,
       upgradeUrl: `${origin}/dashboard/settings`,
-      plans: Object.values(PLANS),
+      plans: PLAN_TIERS.map(botPlanView),
+    });
+  });
+
+  // ---- usage meters ----
+  api.get("/usage", async (c) => {
+    const uid = c.get("uid");
+    const plan = await getUserPlan(uid);
+    const used = await getUsageSummary({ one, exec: query }, uid);
+    return c.json({
+      telegram_interactions: {
+        used: used.telegram_interactions ?? 0,
+        allowance: getPlanLimit(plan.tier, "telegram_interactions_per_month"),
+      },
+      broadcast_deliveries: {
+        used: used.broadcast_deliveries ?? 0,
+        allowance: getPlanLimit(plan.tier, "broadcast_deliveries_per_month"),
+      },
     });
   });
 
@@ -799,7 +819,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
   api.post("/broadcasts", async (c) => {
     const uid = c.get("uid");
     const gateErr = await checkFeature(uid, "broadcasts");
-    if (gateErr) return c.json({ error: gateErr }, 402);
+    if (gateErr) return c.json(gateErr, 403);
 
     const parsed = await validatedBody(c, broadcastSchema);
     if (parsed instanceof Response) return parsed;
@@ -823,6 +843,28 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
     return c.json({ ...row, segment: parseSegment(segmentValue) });
   });
 
+  // Resume a monthly-quota-paused broadcast early — allowed only when the
+  // owner has deliveries left this period (e.g. after upgrading).
+  api.post("/broadcasts/:id/resume", async (c) => {
+    const uid = c.get("uid");
+    const usage = await getUsageSummary({ one, exec: query }, uid);
+    const allowance = getPlanLimit((await getUserPlan(uid)).tier, "broadcast_deliveries_per_month");
+    if (allowance - (usage.broadcast_deliveries ?? 0) <= 0) {
+      return c.json({ error: "Monthly delivery allowance reached. Resumes next month or after upgrading." }, 403);
+    }
+    const result = await exec(
+      `UPDATE broadcasts b
+          SET status = 'scheduled', stop_reason = NULL, paused_period_start = NULL
+         FROM bots bo
+        WHERE b.id = $1 AND b.bot_id = bo.id AND bo.owner_id = $2
+          AND b.status = 'paused' AND b.stop_reason = 'monthly_quota'
+        RETURNING b.id`,
+      [c.req.param("id"), uid]
+    );
+    if (!result || result.length === 0) return c.json({ error: "broadcast not found or not paused" }, 404);
+    return c.json({ ok: true });
+  });
+
   // Cancel a scheduled broadcast. Already sent/delivered broadcasts can't be
   // canceled; the cron processor will skip rows with status = 'canceled'.
   api.delete("/broadcasts/:id", async (c) => {
@@ -842,7 +884,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
   api.post("/postback-key", async (c) => {
     const uid = c.get("uid");
     const gateErr = await checkFeature(uid, "postbacks");
-    if (gateErr) return c.json({ error: gateErr }, 402);
+    if (gateErr) return c.json(gateErr, 403);
 
     // H-04: read or create the active postback key from postback_keys.
     let key = await getActivePostbackKey(uid);
@@ -859,7 +901,7 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
   api.post("/postback-key/rotate", async (c) => {
     const uid = c.get("uid");
     const gateErr = await checkFeature(uid, "postbacks");
-    if (gateErr) return c.json({ error: gateErr }, 402);
+    if (gateErr) return c.json(gateErr, 403);
 
     const key = await createPostbackKey(uid, { label: "bot-dashboard", revokeOthers: true });
     return c.json({

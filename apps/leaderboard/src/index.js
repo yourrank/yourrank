@@ -10,7 +10,7 @@ import { LiveBoard } from "./live-board.js";
 import { populateEnv } from "@yourrank/shared/env";
 import { getPublicSite, getBySlug, getClickRedirectSite, getArchiveSnapshots, ARCHIVE_LIMITS, PUBLIC_ARCHIVE_LIMIT } from "./site.js";
 import { fromJsonb } from "@yourrank/shared/jsonb";
-import { HISTORY_DAYS } from "@yourrank/shared/plans";
+import { getPlanLimit, canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
@@ -260,7 +260,7 @@ async function buildPlayerHistory(env, siteId, rawName, plan, rankByValue) {
     env,
     siteId,
     Math.min(ARCHIVE_LIMITS[plan] || 6, PUBLIC_ARCHIVE_LIMIT),
-    HISTORY_DAYS[plan] || HISTORY_DAYS.free,
+    getPlanLimit(plan, "history_days") || getPlanLimit("free", "history_days"),
   );
   const out = [];
   for (const a of archives) {
@@ -524,6 +524,18 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // user's custom domain. If yes, serve their leaderboard at /.
       if (isCustomHost(host)) {
         const customSlug = await resolveCustomDomainImpl(env, host);
+        if (customSlug) {
+          // The custom_domain feature is owner-scoped: when the site owner is
+          // no longer entitled, keep the record but serve from the platform
+          // URL instead of the custom host.
+          const domainOwner = await one(
+            `SELECT u.plan, u.plan_expires_at, u.status FROM sites s JOIN users u ON u.id = s.user_id WHERE s.slug=$1`,
+            [customSlug]
+          );
+          if (!canUseFeature(effectivePlan(domainOwner), "custom_domain")) {
+            return new Response(null, { status: 302, headers: { location: `https://${PLATFORM_HOST}/${customSlug}` } });
+          }
+        }
         if (!customSlug) {
           // An unrecognized custom host is never a platform authorization
           // context. Failing closed prevents stale or unverified hostnames from
@@ -1318,18 +1330,15 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         if (RESERVED_COMMUNITY_HANDLES.has(slug)) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const r = await getPublicSite(env, slug, request, { limit: 100, offset: 0 });
         if (!r || r.suspended || r.requiresPassword) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
-        const paid = r.plan !== "free";
-        if (!paid) {
-          // Upsell page for free users
-          const upsell = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>OBS Overlay — Pro Feature</title><style nonce="${nonce}">*{margin:0;padding:0;box-sizing:border-box}body{width:320px;background:rgba(8,8,12,0.95);font-family:'Segoe UI',system-ui,sans-serif;color:#fff;padding:20px;border-radius:12px;text-align:center}
-h2{font-size:16px;margin-bottom:8px;background:linear-gradient(135deg,#5b5bf5,#5b5bf5);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-p{font-size:11px;color:rgba(255,255,255,0.5);line-height:1.5}
-a{color:#5b5bf5;text-decoration:none;font-weight:600}</style></head><body>
-<h2>🎬 OBS Overlay</h2>
-<p>This is a Pro feature.<br/>Upgrade at <a href="/" target="_blank">yourrank.site</a> to unlock the live stream overlay with animated rankings.</p>
-</body></html>`;
-          return new Response(upsell, { headers: { ...HTML_N, "cache-control": "no-store" } });
+        // Free/basic tier: still render an overlay (public surface, never 403)
+        // but ignore advanced config — basic card layout only, no canvas
+        // positioning, and the footer always carries "Powered by YourRank".
+        if (!canUseFeature(r.plan, "advanced_overlays")) {
+          overlayOpts.layout = "card";
+          overlayOpts.canvas = false;
+          delete overlayOpts.x;
+          delete overlayOpts.y;
+          delete overlayOpts.scale;
         }
         const overlayHtml = PAGES.overlay(r.data, overlayOpts);
         return new Response(overlayHtml, { headers: { ...HTML_N, "cache-control": "no-store" } });

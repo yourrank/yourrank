@@ -160,7 +160,7 @@ export async function handleTeamInvite(request, env, overrides) {
 
   const result = await deps.createSiteInvite(site.id, user.id, email, role);
   if (!result.ok) {
-    const status = ["forbidden", "requires_team", "seat_limit"].includes(result.code) ? 403 : 400;
+    const status = ["forbidden", "entitlement_required", "plan_limit_reached"].includes(result.code) ? 403 : 400;
     return privateBad(result.error || "Failed to create invitation.", status, result.code);
   }
 

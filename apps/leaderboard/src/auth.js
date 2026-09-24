@@ -2,6 +2,9 @@
 import { one, withTransaction } from "@yourrank/shared/db";
 import { addAuthMs } from "@yourrank/shared/request-id";
 import { rateLimit as kvRateLimit } from "@yourrank/shared/ratelimit";
+import { logAudit } from "@yourrank/shared/audit";
+import { effectivePlan } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 // SHARED cross-Worker session: same cookie (yr_session) + same Postgres
 // sessions table as the bot Worker. See packages/shared/src/session.ts
 import {
@@ -179,6 +182,35 @@ export function slugify(s) {
 export const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 export const bad = (msg, status = 400, headers = {}) => json({ ok: false, error: msg }, status, headers);
 export const ok = (data = {}) => json({ ok: true, ...data });
+
+// Canonical entitlement denial: ALWAYS 403 with the shared denial object.
+// When a request context is available, the denial is also funnel-logged so the
+// paywall surface is measurable (billing.feature_blocked / usage_limit_reached).
+export function denied(denial, { actorId = null, request = null } = {}) {
+  if (actorId || request) {
+    const details = denial.code === "entitlement_required"
+      ? { feature: denial.feature, current_plan: denial.current_plan, required_plan: denial.required_plan }
+      : { limit: denial.limit, current_plan: denial.current_plan, required_plan: denial.required_plan, usage: denial.usage, allowance: denial.allowance };
+    void logAudit({
+      actorId,
+      action: denial.code === "entitlement_required" ? "billing.feature_blocked" : "billing.usage_limit_reached",
+      entityType: "plan",
+      entityId: actorId,
+      request,
+      details,
+    });
+  }
+  return json({ ok: false, ...denial }, 403);
+}
+
+// Site-scoped feature gate: resolves the site OWNER's effective plan and
+// returns the canonical 403 denial Response when the feature is not included.
+// Returns null when entitled. Pass the site row and the feature key.
+export async function requireSiteFeature(site, feature, { actorId = null, request = null, oneImpl = one } = {}) {
+  const owner = await oneImpl("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
+  const gate = assertFeature(effectivePlan(owner), feature);
+  return gate ? denied(gate, { actorId, request }) : null;
+}
 
 export function rateLimitHeaders(rl) {
   const h = { "X-RateLimit-Limit": String(rl.limit), "X-RateLimit-Remaining": String(rl.remaining) };

@@ -1,9 +1,10 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
-import { requireUser, json, bad, ok, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
+import { requireUser, json, bad, ok, denied, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
 import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, HISTORY_DAYS } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 import { one, exec, query } from "@yourrank/shared/db";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { logAudit } from "@yourrank/shared/audit";
@@ -239,7 +240,7 @@ export async function handleListBoards(request, env) {
   if (user.status === "suspended") return bad("This account is suspended.", 403);
   const plan = effectivePlan(user);
   const boards = await getUserBoardsList(env, user.id);
-  return json({ ok: true, boards, limits: { boards: BOARD_LIMITS[plan], players: PLAN_LIMITS[plan] }, plan });
+  return json({ ok: true, boards, limits: { boards: getPlanLimit(plan, "sites"), players: getPlanLimit(plan, "players_per_site") }, plan });
 }
 
 export async function handleCreateBoard(request, env) {
@@ -332,7 +333,7 @@ export async function handleRestoreArchive(request, env) {
     `SELECT snapshot_json FROM archives
       WHERE id=$1 AND site_id=$2
         AND created_at >= now() - ($3::int * interval '1 day')`,
-    [body.archiveId, site.id, HISTORY_DAYS[plan]],
+    [body.archiveId, site.id, getPlanLimit(plan, "history_days")],
   );
   if (!archive) return bad("Archive not found.");
   const snap = fromJsonb(archive.snapshot_json) || [];
@@ -634,7 +635,8 @@ export async function handleDomainVerify(request, env) {
     if (res) return res;
     if (user.status === "suspended") return bad("This account is suspended.", 403);
     const plan = effectivePlan(user);
-    if (plan !== "pro" && plan !== "team") return bad("Custom domains require Pro or Team.", 403);
+    const domainGate = assertFeature(plan, "custom_domain");
+    if (domainGate) return denied(domainGate, { actorId: user.id, request });
 
     const body = await readJson(request);
     if (!body) return bad("Domain required");

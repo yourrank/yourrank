@@ -1,7 +1,8 @@
 // Score postback handlers (authenticated via X-Postback-Key + HMAC-SHA256 signature)
-import { json, bad, rateLimit as defaultRateLimit, rateLimitHeaders } from "../auth.js";
+import { json, bad, denied, rateLimit as defaultRateLimit, rateLimitHeaders } from "../auth.js";
 import { saveSite as defaultSaveSite } from "../site.js";
-import { effectivePlan, PLAN_LIMITS } from "@yourrank/shared/plans";
+import { effectivePlan } from "@yourrank/shared/plans";
+import { checkLimit, assertFeature } from "@yourrank/shared/entitlements";
 import { one as defaultOne } from "@yourrank/shared/db";
 import { verifyHmacSha256Hex as defaultVerifyHmacSha256Hex, hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import {
@@ -136,10 +137,11 @@ async function handleScoreWrite(request, env, deps, { method, rateLimitPerMinute
     const site = await one("SELECT s.id, s.user_id, s.slug, s.name, s.tagline, s.casino, s.code, s.cta_url, s.prize_pool, s.period, s.starts_at, s.ends_at, s.reset_note, s.blurb, s.extra_json, s.published, s.theme_json, s.updated_at FROM sites s WHERE s.user_id=$1 AND (s.slug=$2 OR s.id::text=$2)", [keyOwner.userId, boardRef]);
     if (!site) return bad("Invalid postback key or board reference.", 401);
     if (keyOwner.siteId && keyOwner.siteId !== site.id) return bad("This API key is scoped to another board.", 403);
-    // Gate behind Pro plan
+    // Gate behind the signed_api feature (site owner's plan decides).
     const owner = await one("SELECT id, plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
     const plan = effectivePlan(owner);
-    if (plan !== "pro" && plan !== "team") return bad("The signed score API requires Pro or Team.", 403);
+    const featureGate = assertFeature(plan, "signed_api");
+    if (featureGate) return denied(featureGate, { actorId: keyOwner.userId, request });
     if (site.starts_at && new Date(site.starts_at).getTime() > Date.now()) {
       return bad("This leaderboard has not started yet. Change the start date before posting scores.", 409);
     }
@@ -207,7 +209,8 @@ export async function handleScores(request, env, deps = {}) {
       const validation = validateAndNormalizePlayers(body.players);
       if (validation.error) return bad(validation.error, 400);
       const validPlayers = validation.players;
-      if (validPlayers.length > PLAN_LIMITS[plan]) return bad(`Your plan allows up to ${PLAN_LIMITS[plan]} players.`, 400);
+      const playerDenial = checkLimit(plan, "players_per_site", validPlayers.length);
+      if (playerDenial) return denied(playerDenial, { actorId: keyOwner.userId, request });
       const r = await saveSiteImpl(env, user, { ...brandPayload(site), players: validPlayers }, site.id, request, {
         scoreReplay: replayHash ? { userId: keyOwner.userId, hash: replayHash } : undefined,
       });

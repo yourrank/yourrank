@@ -1,5 +1,5 @@
 // Attribution analytics and casino postback endpoint.
-import { json, bad, requireUser, rateLimit } from "../auth.js";
+import { json, bad, denied, requireUser, rateLimit } from "../auth.js";
 import { one, query } from "@yourrank/shared/db";
 import { verifyHmacSha256Hex } from "@yourrank/shared/crypto";
 import {
@@ -15,7 +15,8 @@ import {
 } from "@yourrank/shared/postback";
 import { recordConversion } from "@yourrank/shared/conversions";
 import { notifyLiveBoard } from "../live-board-config.js";
-import { effectivePlan } from "@yourrank/shared/plans";
+import { effectivePlan, canUseFeature } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 
 const MAX_DAYS = 365;
 
@@ -85,9 +86,9 @@ export async function handleAttribution(request, env) {
   const days = getDays(url);
 
   // H-04: active postback key is read from postback_keys; if none exists, create
-  // one for paid plans. Revocation/rotation is exposed under /api/attribution.
-  let key = effectivePlan(user) !== "free" ? await getActivePostbackKey(user.id) : null;
-  if (effectivePlan(user) !== "free" && !key) {
+  // one for entitled plans. Revocation/rotation is exposed under /api/attribution.
+  let key = canUseFeature(effectivePlan(user), "telegram_postbacks") ? await getActivePostbackKey(user.id) : null;
+  if (canUseFeature(effectivePlan(user), "telegram_postbacks") && !key) {
     key = await createPostbackKey(user.id, { label: "leaderboard-attribution" });
   }
   const postback = key ? {
@@ -153,7 +154,10 @@ export async function handleAttributionExport(request, env) {
 export async function handleRotatePostbackKey(request, env) {
   const { user, res } = await requireUser(request, env);
   if (!user) return res;
-  if (effectivePlan(user) === "free") return bad("Postbacks require a paid plan.", 402);
+  {
+    const gate = assertFeature(effectivePlan(user), "telegram_postbacks");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (!(await rateLimit(env, `rotate-pb:${user.id}`, 10, 60)).ok) {
     return bad("Too many rotations. Try again later.", 429);
   }
@@ -213,6 +217,11 @@ export async function handlePostback(request, env) {
   // H-04: lookup by key hash, then reject exact replays and support revocation.
   const owner = await findPostbackOwner(key, unsigned ? "unsigned" : "signed");
   if (!owner) return bad("Unknown postback key.", 404, legacyHeaders);
+  // Entitlement is re-checked at ingest: a key created while paid must not
+  // keep accepting conversions after the owner's plan lapses.
+  const ownerUser = await one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [owner.userId]);
+  const ingestGate = assertFeature(effectivePlan(ownerUser), "telegram_postbacks");
+  if (ingestGate) return denied(ingestGate, { actorId: owner.userId, request });
   logPostbackIntake(unsigned ? "api_postback_unsigned" : "pb_signed", owner, !unsigned);
 
   const clone = request.clone();

@@ -4,16 +4,12 @@ import { json, bad, ok, requireUser } from "./auth.js";
 import { one, query, withTransaction } from "@yourrank/shared/db";
 
 import {
-  PLAN_LIMITS as _PL,
-  BOARD_LIMITS as _BL,
+  getPlanLimit,
   PLAN_PRICES as _PP,
   PLAN_PRICING as _PRICING,
   PLAN_META as _PM,
-  CREDITS_REWARD_LIMITS as _CRL,
-  CREDITS_SHOP_LIMITS as _CSL,
   CREDITS_PENDING_REDEMPTIONS_LIMITS as _CPRL,
   CREDITS_REDEMPTIONS_PER_30D_LIMITS as _CR30L,
-  ACTIVE_VIEWER_LIMITS as _AVL,
   effectivePlan as _effectivePlan,
   priceUsd as _priceUsd,
   isPlanTier,
@@ -21,8 +17,6 @@ import {
 import { reconcileAccountActiveViewerUsage } from "@yourrank/shared/plan-usage";
 import { getPolarBillingStatus } from "./handlers/polar-billing.js";
 
-export const PLAN_LIMITS = _PL;
-export const BOARD_LIMITS = _BL;
 export const PLAN_PRICES = _PP;
 export const PLAN_PRICING = _PRICING;
 export const PLAN_META = _PM;
@@ -141,24 +135,24 @@ export async function handleAccountUsage(request, env) {
       site: activeSite ? { id: activeSite.id, name: activeSite.name } : null,
       activeViewers: activeViewers ? {
         ...activeViewers,
-        upgradeAllowance: plan === "free" ? _AVL.pro : null,
+        upgradeAllowance: plan === "free" ? getPlanLimit("pro", "active_viewers_30d") : null,
       } : null,
       leaderboard: {
-        sites: usageValue(siteIds.length, _BL[plan]),
-        players: usageValue(playerCount?.count || 0, _PL[plan]),
+        sites: usageValue(siteIds.length, getPlanLimit(plan, "sites")),
+        players: usageValue(playerCount?.count || 0, getPlanLimit(plan, "players_per_site")),
       },
       credits: activeSite && creditsUsage ? {
-        rewardMappings: usageValue(creditsUsage.rewardMappings, _CRL[plan]),
-        shopItems: usageValue(creditsUsage.shopItems, _CSL[plan]),
+        rewardMappings: usageValue(creditsUsage.rewardMappings, getPlanLimit(plan, "reward_mappings")),
+        shopItems: usageValue(creditsUsage.shopItems, getPlanLimit(plan, "shop_items")),
         pendingRedemptions: usageValue(creditsUsage.pendingRedemptions, _CPRL[plan]),
         redemptionsPer30Days: usageValue(creditsUsage.redemptionsPer30Days, _CR30L[plan]),
       } : null,
       limits: {
-        sites: _BL[plan],
-        playersPerSite: _PL[plan],
-        activeViewers: _AVL[plan],
-        rewardMappings: _CRL[plan],
-        shopItems: _CSL[plan],
+        sites: getPlanLimit(plan, "sites"),
+        playersPerSite: getPlanLimit(plan, "players_per_site"),
+        activeViewers: getPlanLimit(plan, "active_viewers_30d"),
+        rewardMappings: getPlanLimit(plan, "reward_mappings"),
+        shopItems: getPlanLimit(plan, "shop_items"),
       },
       billing: await getPolarBillingStatus(env, user.id),
     });

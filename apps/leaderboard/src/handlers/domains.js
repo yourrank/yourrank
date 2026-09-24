@@ -7,7 +7,8 @@ import { rateLimit } from "@yourrank/shared/ratelimit";
 import { PLATFORM_HOST } from "../constants.js";
 import { invalidateCustomDomain, verifiedProviderHostname } from "../middleware/custom-domain.js";
 import { logAudit } from "@yourrank/shared/audit";
-import { effectivePlan, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 import { requireSiteCapability } from "../site-authorization.js";
 
 const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/;
@@ -106,7 +107,8 @@ export async function handleDomainPurchase(request, env, {
     if (authorization.res) return authorization.res;
 
     const plan = effectivePlan(user);
-    if (plan !== "pro" && plan !== "team") return bad("Custom domains require Pro or Team.", 403);
+    const domainGate = assertFeature(plan, "custom_domain");
+    if (domainGate) return bad(domainGate.error, 403);
     const activeOrderFilter = "status NOT IN ('cancelled', 'expired') AND expires_at > now()";
     const siteOrder = await oneImpl(
       `SELECT id FROM domain_orders WHERE site_id=$1 AND ${activeOrderFilter} LIMIT 1`,
@@ -117,8 +119,8 @@ export async function handleDomainPurchase(request, env, {
       `SELECT count(*)::int AS count FROM domain_orders WHERE user_id=$1 AND ${activeOrderFilter}`,
       [user.id]
     );
-    if (Number(userOrderCount?.count || 0) >= (BOARD_LIMITS[plan] || 1)) {
-      return bad(`Your plan allows up to ${BOARD_LIMITS[plan]} active domain orders.`, 400);
+    if (Number(userOrderCount?.count || 0) >= (getPlanLimit(plan, "sites") || 1)) {
+      return bad(`Your plan allows up to ${getPlanLimit(plan, "sites")} active domain orders.`, 400);
     }
 
     // Check if domain is already owned in our database
