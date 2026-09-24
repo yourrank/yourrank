@@ -62,6 +62,19 @@ async function login(pw: string) {
   return client.post("/api/auth/login", { email, password: pw });
 }
 
+// Deployed Workers keep a per-isolate L1 site cache (site.js L1_TTL = 25s);
+// invalidation clears only the isolate that served the write, so a public page
+// can stay stale on other isolates until the TTL lapses.
+async function waitForStatus(path: string, expected: number, timeoutMs = 40_000) {
+  const deadline = Date.now() + timeoutMs;
+  let res = await client.get(path);
+  while (DEPLOYED_TARGET && res.status !== expected && Date.now() < deadline) {
+    await Bun.sleep(2_000);
+    res = await client.get(path);
+  }
+  return res;
+}
+
 describe("giveaway verification E2E", () => {
   it(`${tag("giveaway-verification-boundary")} verification page cannot switch to a different giveaway from the posted body`, async () => {
     const guest = new Client(BASE_URL);
@@ -666,9 +679,9 @@ describe("release-gate journeys", () => {
     expect(draft.status).toBe(200);
     expect(draft.json?.ok).toBe(true);
 
-    const hidden = await client.get(`/${slug}`);
+    const hidden = await waitForStatus(`/${slug}`, 404);
     expect(hidden.status).toBe(404);
-    const hiddenApi = await client.get(`/api/public/${slug}`);
+    const hiddenApi = await waitForStatus(`/api/public/${slug}`, 404);
     expect(hiddenApi.status).toBe(404);
 
     // The owner still sees the board, now flagged as a draft.
@@ -678,9 +691,9 @@ describe("release-gate journeys", () => {
 
     const republished = await client.put("/api/site", { siteId, published: true });
     expect(republished.json?.ok).toBe(true);
-    const visibleAgain = await client.get(`/${slug}`);
+    const visibleAgain = await waitForStatus(`/${slug}`, 200);
     expect(visibleAgain.status).toBe(200);
-  });
+  }, 120_000);
 });
 
 /**
