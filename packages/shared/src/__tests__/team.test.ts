@@ -262,7 +262,7 @@ describe("createSiteInvite & lifecycle", () => {
         }) as any,
         exec: (async (sql: string) => { writes.push(sql); return []; }) as any,
       });
-      expect(result).toMatchObject({ ok: false, code: "requires_team" });
+      expect(result).toMatchObject({ ok: false, code: "entitlement_required" });
       expect(writes).toHaveLength(0);
     }
   });
@@ -294,7 +294,7 @@ describe("createSiteInvite & lifecycle", () => {
     expect(fifth.result).toMatchObject({ ok: true, inviteId: "invite-4" });
     expect(fifth.reads.some((sql) => sql.includes("FOR UPDATE OF u"))).toBe(true);
     const sixth = await inviteAtUsage(5);
-    expect(sixth.result).toMatchObject({ ok: false, code: "seat_limit" });
+    expect(sixth.result).toMatchObject({ ok: false, code: "plan_limit_reached" });
     expect(sixth.writes.some((sql) => sql.includes("INSERT INTO site_invites"))).toBe(false);
   });
 
@@ -443,7 +443,7 @@ describe("createSiteInvite & lifecycle", () => {
       }) as any,
       exec: (async (sql: string) => { writes.push(sql); return []; }) as any,
     });
-    expect(result).toMatchObject({ ok: false, code: "seat_limit" });
+    expect(result).toMatchObject({ ok: false, code: "plan_limit_reached" });
     expect(reads.some((sql) => sql.includes("FOR UPDATE OF si, u"))).toBe(true);
     expect(writes).toHaveLength(0);
   });
