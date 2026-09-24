@@ -35,7 +35,7 @@ const dbMock = () => ({
   exec: (...args: any[]) => mockExec(...args),
   query: (...args: any[]) => mockQuery(...args),
   getSql: () => null,
-  withTransaction: async (fn: any) => fn({ one: (...a: any[]) => mockOne(...a), exec: (...a: any[]) => mockExec(...a), query: (...a: any[]) => mockQuery(...a) }),
+  withTransaction: async (fn: any) => fn({ one: (...a: any[]) => mockOne(...a), exec: (...a: any[]) => mockExec(...a), query: (...a: any[]) => mockQuery(...a), unsafe: (...a: any[]) => mockQuery(...a) }),
 });
 
 const cryptoMock = () => ({
@@ -406,7 +406,7 @@ describe("broadcasts", () => {
       dashReq("/broadcasts", "POST", { bot_id: "11111111-1111-1111-1111-111111111111", body: "hi" }),
       testEnv
     );
-    expect(res.status).toBe(402);
+    expect(res.status).toBe(403);
   });
 
   it("cancel only works before sending starts", async () => {
@@ -437,12 +437,17 @@ describe("broadcast worker", () => {
   function mockClaim(overrides: Partial<typeof bc> = {}, subs: any[] = []) {
     mockOne.mockImplementation((sql: string) => {
       if (sql.includes("UPDATE broadcasts SET status = 'sending'")) return Promise.resolve({ ...bc, ...overrides });
-      if (sql.includes("FROM bots")) return Promise.resolve({ token_encrypted: "enc:tok", status: "active" });
+      if (sql.includes("FROM bots")) return Promise.resolve({ token_encrypted: "enc:tok", status: "active", owner_id: "u-1" });
+      if (sql.includes("FROM users")) return Promise.resolve({ plan: "team", plan_expires_at: null, status: "active" });
       return Promise.resolve(null);
     });
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes("FROM bot_subscribers")) return Promise.resolve(subs);
+      if (sql.includes("FROM account_usage_meters")) return Promise.resolve([]);
       if (sql.includes("RETURNING id") && sql.includes("processing_lease_expires_at")) {
+        return Promise.resolve([{ id: bc.id }]);
+      }
+      if (sql.includes("UPDATE broadcasts") && sql.includes("RETURNING id")) {
         return Promise.resolve([{ id: bc.id }]);
       }
       return Promise.resolve([]);

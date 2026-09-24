@@ -493,7 +493,7 @@ function broadcastRow(b){
   const canCancel = status === 'scheduled';
   const isPaused = status === 'paused' && b.stop_reason === 'monthly_quota';
   const statusCell = isPaused
-    ? '<span class="badge paused">Paused</span><div class="muted" style="font-size:12px">Monthly delivery allowance reached (' +
+    ? '<span class="badge paused">Paused</span><div class="muted">Monthly delivery allowance reached (' +
       esc(String(__usage.broadcast_deliveries?.used ?? '—')) + ' / ' + esc(String(__usage.broadcast_deliveries?.allowance ?? '—')) +
       '). Resumes next month or after upgrading.</div>'
     : '<span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status))+'</span>';
