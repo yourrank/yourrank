@@ -1,7 +1,7 @@
 import { one, query, withTransaction } from "@yourrank/shared/db";
 import { decryptToken } from "@yourrank/shared/crypto";
 import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
-import { getUsage, recordUsage, currentPeriodStartSql } from "@yourrank/shared/usage-meters";
+import { reserveUsage, releaseUsage, currentPeriodStartSql } from "@yourrank/shared/usage-meters";
 import { parseSegment, buildSegmentWhere } from "./broadcast-segment.js";
 
 /** Escape user content for Telegram HTML parse_mode */
@@ -92,7 +92,8 @@ export function buildBroadcastTotalCountUpdate(
  * Process one batch of the oldest due broadcast.
  * Returns true if there is (possibly) more work to do.
  */
-export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
+export async function processBroadcastBatch(batchSize = 300, deps: BroadcastWorkerDeps = {}): Promise<boolean> {
+  const sendFn = deps.sendTelegram ?? sendTelegram;
   // Auto-resume broadcasts whose monthly-quota pause predates the current
   // UTC month. One statement per tick; quota-blocked rows never re-claim in
   // the same period because paused broadcasts are not claimable.
@@ -148,17 +149,21 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
   const token = await decryptToken(Buffer.from(bot.token_encrypted));
   const segment = parseSegment(bc.segment);
 
-  // Monthly delivery quota (commercial metering). Attempts already made are
-  // recorded post-hoc, so the gate only bounds how many NEW sends this batch
-  // may start.
+  // Monthly delivery quota (commercial metering): reserve up to
+  // `batchSize` attempts atomically BEFORE any outbound work. The meter
+  // row lock serializes same-account reservations, so concurrent workers
+  // can never oversubscribe. Unused units are released at every exit —
+  // including workers that lose their lease, which release the whole
+  // grant so a stale worker never consumes quota.
   const owner = await one<{ plan: string; plan_expires_at: string | null; status: string }>(
     `SELECT plan, plan_expires_at, status FROM users WHERE id = $1`,
     [bot.owner_id]
   );
   const deliveryAllowance = getPlanLimit(effectivePlan(owner), "broadcast_deliveries_per_month");
-  const deliveriesUsed = await getUsage({ one }, bot.owner_id, "broadcast_deliveries");
-  const deliveriesRemaining = deliveryAllowance - deliveriesUsed;
-  if (deliveriesRemaining <= 0) {
+  const reservation = await withTransaction(async (tx) =>
+    reserveUsage({ one: (sql, params) => tx.one(sql, params) }, bot.owner_id, "broadcast_deliveries", batchSize, deliveryAllowance)
+  );
+  if (reservation.granted === 0) {
     await query(
       `UPDATE broadcasts
           SET status = 'paused', stop_reason = 'monthly_quota',
@@ -192,7 +197,7 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
            ${subClause ? `AND ${subClause}` : ""}
       ORDER BY bs.tg_user_id
       LIMIT $3`,
-    [bc.bot_id, bc.cursor_tg_user_id, Math.min(batchSize, deliveriesRemaining), ...subValues]
+    [bc.bot_id, bc.cursor_tg_user_id, reservation.granted, ...subValues]
   );
 
   if (subs.length === 0) {
@@ -241,12 +246,7 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
 
     const method = hasMedia ? "sendPhoto" : "sendMessage";
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15_000),
-      });
+      const res = await sendFn(token, method, payload);
       if (res.ok) {
         sent++;
       } else if (res.status === 403) {
@@ -273,55 +273,91 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
     await sleep(MSG_INTERVAL_MS);
   }
 
-  if (lastProcessedId >= claimCursor) {
-    // End of batch with progress: advance the cursor to the last subscriber
-    // actually processed, RELEASE the lease, and meter the attempts — one
-    // transaction, so only the worker that still owns the lease records
-    // usage. A stale-lease worker's UPDATE matches 0 rows and records
-    // nothing (no double count). The 429 break is not an attempt.
-    const attempts = sent + failed;
-    const newUsed = await withTransaction(async (tx) => {
-      const updated = await tx.unsafe(
-        `UPDATE broadcasts
-            SET cursor_tg_user_id = $1,
-                sent_count = sent_count + $2,
-                fail_count = fail_count + $3,
-                processing_lease_token = NULL,
-                processing_lease_expires_at = NULL
-          WHERE id = $4 AND processing_lease_token = $5
-          RETURNING id`,
-        [lastProcessedId, sent, failed, bc.id, leaseToken]
-      );
-      if (!updated.length) return null;
-      return attempts > 0
-        ? recordUsage({ one: (sql, params) => tx.one(sql, params) }, bot.owner_id, "broadcast_deliveries", attempts)
-        : deliveriesUsed;
-    });
-    if (newUsed != null && newUsed >= deliveryAllowance && subs.length === Math.min(batchSize, deliveriesRemaining)) {
-      // Quota is now exhausted and more subscribers may remain — pause
-      // eagerly instead of letting the next tick re-claim and instantly pause.
-      await query(
+  // Final write: cursor/counters/lease release AND the release of unused
+  // reserved units happen in one transaction. A worker that lost its lease
+  // mid-batch matches 0 rows and releases the whole grant instead of the
+  // used remainder, so a stale worker never consumes quota. The 429 break
+  // is not an attempt. A thrown statement unwinds via the outer finally,
+  // which releases the full grant since nothing was committed.
+  let grantSettled = false;
+  try {
+    if (lastProcessedId >= claimCursor) {
+      const attempts = sent + failed;
+      const usedAfter = await withTransaction(async (tx) => {
+        const updated = await tx.unsafe(
+          `UPDATE broadcasts
+              SET cursor_tg_user_id = $1,
+                  sent_count = sent_count + $2,
+                  fail_count = fail_count + $3,
+                  processing_lease_token = NULL,
+                  processing_lease_expires_at = NULL
+            WHERE id = $4 AND processing_lease_token = $5
+            RETURNING id`,
+          [lastProcessedId, sent, failed, bc.id, leaseToken]
+        );
+        const meterDb = { one: (sql: string, params?: unknown[]) => tx.one(sql, params) };
+        if (!updated.length) {
+          // Lease lost before the batch write — release the whole grant.
+          await releaseUsage(meterDb, bot.owner_id, "broadcast_deliveries", reservation.granted, reservation.periodStart);
+          return null;
+        }
+        const unused = reservation.granted - attempts;
+        if (unused > 0) {
+          await releaseUsage(meterDb, bot.owner_id, "broadcast_deliveries", unused, reservation.periodStart);
+        }
+        return reservation.used - unused;
+      });
+      grantSettled = true;
+      if (usedAfter != null && usedAfter >= deliveryAllowance && subs.length === reservation.granted) {
+        // Quota is now exhausted and more subscribers may remain — pause
+        // eagerly instead of letting the next tick re-claim and instantly pause.
+        await query(
         `UPDATE broadcasts
             SET status = 'paused', stop_reason = 'monthly_quota',
                 paused_period_start = ${currentPeriodStartSql()}
           WHERE id = $1 AND status = 'sending'
             AND (SELECT COUNT(*) FROM bot_subscribers bs
                   WHERE bs.bot_id = $2 AND NOT bs.is_blocked AND bs.tg_user_id > $3) > 0`,
-        [bc.id, bc.bot_id, lastProcessedId]
-      );
+          [bc.id, bc.bot_id, lastProcessedId]
+        );
+      }
+    } else {
+      // Nothing was processed (the first recipient hit a rate limit): leave
+      // cursor and counters untouched, hand the lease back, and release the
+      // whole grant — the next tick retries that recipient and re-reserves.
+      await withTransaction(async (tx) => {
+        await tx.unsafe(
+          `UPDATE broadcasts
+              SET processing_lease_token = NULL,
+                  processing_lease_expires_at = NULL
+            WHERE id = $1 AND processing_lease_token = $2`,
+          [bc.id, leaseToken]
+        );
+        await releaseUsage({ one: (sql, params) => tx.one(sql, params) }, bot.owner_id, "broadcast_deliveries", reservation.granted, reservation.periodStart);
+      });
+      grantSettled = true;
     }
-  } else {
-    // Nothing was processed (the first recipient hit a rate limit): leave
-    // cursor and counters untouched and just hand the lease back, so the
-    // next tick retries the same recipient rather than stalling for the
-    // whole lease window.
-    await query(
-      `UPDATE broadcasts
-          SET processing_lease_token = NULL,
-              processing_lease_expires_at = NULL
-        WHERE id = $1 AND processing_lease_token = $2`,
-      [bc.id, leaseToken]
-    );
+  } finally {
+    // Any exit that left the grant unsettled (thrown error before the final
+    // write, or a lease-loss path that could not settle inside a tx) returns
+    // whatever remains — GREATEST(0, …) makes a double release harmless.
+    if (!grantSettled) {
+      await releaseUsage({ one }, bot.owner_id, "broadcast_deliveries", reservation.granted, reservation.periodStart);
+    }
   }
   return true;
+}
+
+type SendTelegram = (token: string, method: string, payload: Record<string, unknown>) => Promise<Response>;
+
+const sendTelegram: SendTelegram = (token, method, payload) =>
+  fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  });
+
+export interface BroadcastWorkerDeps {
+  sendTelegram?: SendTelegram;
 }
