@@ -3,20 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ACTIVE_VIEWER_LIMITS,
-  BOARD_LIMITS,
-  BOT_PLANS,
-  CREDITS_REWARD_LIMITS,
-  CREDITS_SHOP_LIMITS,
-  HISTORY_DAYS,
-  OPERATOR_SEAT_LIMITS,
-  PLAN_LIMITS,
+  getPlanLimit,
   PLAN_META,
   PLAN_PRICING,
   PLAN_TIERS,
   type BillingInterval,
   type PlanTier,
 } from "@yourrank/shared/plans";
+
+// Shorthand so the pricing tables stay readable.
+const limit = getPlanLimit;
 
 const number = (value: number) => value.toLocaleString("en-US");
 
@@ -35,41 +31,41 @@ function displayPrice(tier: PlanTier, interval: BillingInterval) {
 
 const strongestFeatures: Record<PlanTier, string[]> = {
   free: [
-    `${number(ACTIVE_VIEWER_LIMITS.free)} active viewers`,
-    `${BOARD_LIMITS.free} site · ${number(PLAN_LIMITS.free)} leaderboard players`,
-    `${CREDITS_REWARD_LIMITS.free} reward mappings · ${CREDITS_SHOP_LIMITS.free} shop items`,
+    `${number(limit("free","active_viewers_30d"))} active viewers`,
+    `${limit("free","sites")} site · ${number(limit("free","players_per_site"))} leaderboard players`,
+    `${limit("free","reward_mappings")} reward mappings · ${limit("free","shop_items")} shop items`,
     "Basic recent Insights",
     "Standard customization with YourRank badge",
   ],
   pro: [
-    `${number(ACTIVE_VIEWER_LIMITS.pro)} active viewers`,
-    `${BOARD_LIMITS.pro} sites · ${number(PLAN_LIMITS.pro)} players per site`,
+    `${number(limit("pro","active_viewers_30d"))} active viewers`,
+    `${limit("pro","sites")} sites · ${number(limit("pro","players_per_site"))} players per site`,
     "Custom domain and stronger branding",
-    `${CREDITS_REWARD_LIMITS.pro} reward mappings · ${CREDITS_SHOP_LIMITS.pro} shop items`,
+    `${limit("pro","reward_mappings")} reward mappings · ${limit("pro","shop_items")} shop items`,
     "CSV exports and automatic scores",
     "12 months of accessible history",
   ],
   team: [
-    `${number(ACTIVE_VIEWER_LIMITS.team)} active viewers`,
-    `${BOARD_LIMITS.team} sites · ${number(PLAN_LIMITS.team)} players per site`,
-    `${OPERATOR_SEAT_LIMITS.team} total operator seats`,
+    `${number(limit("team","active_viewers_30d"))} active viewers`,
+    `${limit("team","sites")} sites · ${number(limit("team","players_per_site"))} players per site`,
+    `${limit("team","operator_seats")} total operator seats`,
     "Owner and moderator roles",
-    `${CREDITS_REWARD_LIMITS.team} reward mappings · ${CREDITS_SHOP_LIMITS.team} shop items`,
+    `${limit("team","reward_mappings")} reward mappings · ${limit("team","shop_items")} shop items`,
     "24 months of accessible history",
   ],
 };
 
 const comparison = [
-  ["Active viewers · rolling 30 days", ...PLAN_TIERS.map((tier) => number(ACTIVE_VIEWER_LIMITS[tier]))],
-  ["Creator-owned sites", ...PLAN_TIERS.map((tier) => String(BOARD_LIMITS[tier]))],
-  ["Leaderboard players per site", ...PLAN_TIERS.map((tier) => number(PLAN_LIMITS[tier]))],
-  ["Accessible history", `${HISTORY_DAYS.free} days`, "12 months", "24 months"],
-  ["Reward mappings per site", ...PLAN_TIERS.map((tier) => number(CREDITS_REWARD_LIMITS[tier]))],
-  ["Shop items per site", ...PLAN_TIERS.map((tier) => number(CREDITS_SHOP_LIMITS[tier]))],
-  ["Connected Telegram bots", ...PLAN_TIERS.map((tier) => number(BOT_PLANS[tier].maxBots))],
+  ["Active viewers · rolling 30 days", ...PLAN_TIERS.map((tier) => number(limit(tier,"active_viewers_30d")))],
+  ["Creator-owned sites", ...PLAN_TIERS.map((tier) => String(limit(tier,"sites")))],
+  ["Leaderboard players per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"players_per_site")))],
+  ["Accessible history", `${limit("free","history_days")} days`, "12 months", "24 months"],
+  ["Reward mappings per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"reward_mappings")))],
+  ["Shop items per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"shop_items")))],
+  ["Connected Telegram bots", ...PLAN_TIERS.map((tier) => number(limit(tier,"telegram_bots")))],
   ["Custom domain", "Not included", "Included", "Included"],
   ["Automatic scores", "Not included", "Included", "Included"],
-  ["Operator seats", ...PLAN_TIERS.map((tier) => String(OPERATOR_SEAT_LIMITS[tier]))],
+  ["Operator seats", ...PLAN_TIERS.map((tier) => String(limit(tier,"operator_seats")))],
 ] as const;
 
 export function PricingPlans() {

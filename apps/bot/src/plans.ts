@@ -1,55 +1,73 @@
 import { one } from "@yourrank/shared/db";
-import { BOT_PLANS, effectivePlan } from "@yourrank/shared/plans";
-import type { BotPlanDef, PlanTier } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit, canUseFeature, PLAN_META } from "@yourrank/shared/plans";
+import { featureDenial, limitDenial, type EntitlementDenial } from "@yourrank/shared/entitlements";
+import type { PlanTier } from "@yourrank/shared/plans";
 
 // Re-export for consumers that import from this module.
-export type { BotPlanDef, PlanTier } from "@yourrank/shared/plans";
-export const PLANS = BOT_PLANS;
+export type { PlanTier } from "@yourrank/shared/plans";
+export { getPlanLimit } from "@yourrank/shared/plans";
 
 /**
- * Look up a bot plan def by tier string. Returns undefined for tiers that
- * are not valid bot plans, so callers can fall back to free. Every
- * DB-sourced tier MUST go through this lookup instead of indexing PLANS
+ * Look up a valid plan tier string. Returns undefined for tiers that
+ * are not valid plans, so callers can fall back to free. Every
+ * DB-sourced tier MUST go through this lookup instead of casting
  * directly.
  */
-export function getBotPlanDef(tier: string | null | undefined): BotPlanDef | undefined {
-  return (BOT_PLANS as Partial<Record<PlanTier, BotPlanDef>>)[tier as PlanTier];
+export function getPlanTier(tier: string | null | undefined): PlanTier | undefined {
+  return tier === "free" || tier === "pro" || tier === "team" ? tier : undefined;
 }
 
-export async function getUserPlan(userId: string): Promise<BotPlanDef> {
+export async function getUserPlanTier(userId: string): Promise<PlanTier> {
   const row = await one<{ plan: PlanTier; plan_expires_at: string | null }>(
     `SELECT plan, plan_expires_at FROM users WHERE id = $1`, [userId]
   );
-  return getBotPlanDef(effectivePlan(row)) ?? PLANS.free;
+  return effectivePlan(row);
 }
 
-/** Returns an error string if the user is at their plan limit, else null. */
+/** Bot-dashboard plan view derived from the canonical PLAN_LIMITS tables. */
+export function botPlanView(tier: PlanTier) {
+  return {
+    tier,
+    label: PLAN_META[tier].name,
+    maxBots: getPlanLimit(tier, "telegram_bots"),
+    maxOffers: getPlanLimit(tier, "telegram_offers"),
+    broadcasts: canUseFeature(tier, "telegram_broadcasts"),
+    postbacks: canUseFeature(tier, "telegram_postbacks"),
+  };
+}
+
+export async function getUserPlan(userId: string) {
+  return botPlanView(await getUserPlanTier(userId));
+}
+
+/** Returns an entitlement denial if the user is at their plan limit, else null. */
 export async function checkLimit(
   userId: string,
   kind: "bots" | "offers"
-): Promise<string | null> {
-  const plan = await getUserPlan(userId);
+): Promise<EntitlementDenial | null> {
+  const plan = await getUserPlanTier(userId);
   const table = kind === "bots" ? "bots" : "offers";
-  const max = kind === "bots" ? plan.maxBots : plan.maxOffers;
+  const limitKey = kind === "bots" ? "telegram_bots" : "telegram_offers";
   const row = await one<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${table} WHERE owner_id = $1` +
       (kind === "bots" ? ` AND status <> 'revoked'` : ``),
     [userId]
   );
-  if ((row?.n ?? 0) >= max) {
-    return `Your ${plan.label} plan allows ${max} ${kind}. Upgrade to add more.`;
+  if ((row?.n ?? 0) >= getPlanLimit(plan, limitKey)) {
+    return limitDenial(plan, limitKey, row?.n ?? 0);
   }
   return null;
 }
 
-/** Returns an error string if the feature is not in the user's plan, else null. */
+/** Returns an entitlement denial if the feature is not in the user's plan, else null. */
 export async function checkFeature(
   userId: string,
   feature: "broadcasts" | "postbacks"
-): Promise<string | null> {
-  const plan = await getUserPlan(userId);
-  if (!plan[feature]) {
-    return `${feature === "broadcasts" ? "Broadcasts" : "Postback tracking"} requires the Pro plan.`;
+): Promise<EntitlementDenial | null> {
+  const plan = await getUserPlanTier(userId);
+  const key = feature === "broadcasts" ? "telegram_broadcasts" : "telegram_postbacks";
+  if (!canUseFeature(plan, key)) {
+    return featureDenial(plan, key);
   }
   return null;
 }
@@ -64,13 +82,13 @@ export async function checkFeature(
  * so the lock is held for exactly the duration of that unit and released on
  * commit/rollback. Failure (INSERT throws) propagates and rolls back.
  *
- * Returns { error } if over limit, otherwise { result } = await fn(tx).
+ * Returns { denial } if over limit, otherwise { result } = await fn(tx).
  */
 export async function withPlanLimit<R>(
   userId: string,
   kind: "bots" | "offers",
   fn: (tx: import("@yourrank/shared/db").Tx) => Promise<R>
-): Promise<{ error: string } | { result: R }> {
+): Promise<{ denial: EntitlementDenial } | { result: R }> {
   const { withTransaction } = await import("@yourrank/shared/db");
   // Two stable int4 keys from userId + kind. Postgres pg_advisory_xact_lock
   // takes bigint; we pack (userIdHashHi, kindHashLo) into a stable pair.
@@ -87,16 +105,16 @@ export async function withPlanLimit<R>(
     const planRow = await tx.one<{ plan: PlanTier; plan_expires_at: string | null }>(
       `SELECT plan, plan_expires_at FROM users WHERE id = $1`, [userId]
     );
-    const plan = getBotPlanDef(effectivePlan(planRow)) ?? PLANS.free;
+    const plan = effectivePlan(planRow);
     const table = kind === "bots" ? "bots" : "offers";
-    const max = kind === "bots" ? plan.maxBots : plan.maxOffers;
+    const limitKey = kind === "bots" ? "telegram_bots" : "telegram_offers";
     const row = await tx.one<{ n: number }>(
       `SELECT count(*)::int AS n FROM ${table} WHERE owner_id = $1` +
         (kind === "bots" ? ` AND status <> 'revoked'` : ``),
       [userId]
     );
-    if ((row?.n ?? 0) >= max) {
-      return { error: `Your ${plan.label} plan allows ${max} ${kind}. Upgrade to add more.` };
+    if ((row?.n ?? 0) >= getPlanLimit(plan, limitKey)) {
+      return { denial: limitDenial(plan, limitKey, row?.n ?? 0) };
     }
     const result = await fn(tx);
     return { result };

@@ -1,5 +1,8 @@
 // Conversions data operations shared by the leaderboard and bot Workers.
 import { withTransaction } from "./db.js";
+import { effectivePlan, getPlanLimit } from "./plans.js";
+import { limitDenial } from "./entitlements.js";
+import { logAudit } from "./audit.js";
 
 /**
  * Parsed query type for casino postbacks.
@@ -106,27 +109,73 @@ export async function recordConversion(
       );
       resolvedSiteId = siteId ?? siteHit?.site_id ?? null;
 
-      const upsert = await tx.unsafe(
-        `WITH ins AS (
-           INSERT INTO players (id, site_id, name, normalized_name, ${column}, updated_at, version)
-           SELECT gen_random_uuid(), s.id, $2, $3, $4::numeric, now(), 1
+      // Existing players always update — the conversion must be projected
+      // even when the site is at its players_per_site allowance.
+      const updated = await tx.unsafe(
+        `WITH upd AS (
+           UPDATE players p
+              SET ${column} = p.${column} + $4::numeric,
+                  updated_at = now(),
+                  version = p.version + 1
              FROM sites s
-            WHERE s.user_id = $1
+            WHERE p.site_id = s.id
+              AND s.user_id = $1
+              AND p.normalized_name = $3
               AND ($5::uuid IS NULL OR s.id = $5::uuid)
-           ON CONFLICT (site_id, normalized_name) DO UPDATE
-           SET ${column} = players.${column} + EXCLUDED.${column},
-               updated_at = now(),
-               version = players.version + 1
-           RETURNING site_id
+            RETURNING p.site_id
          )
-         UPDATE sites SET updated_at = now() WHERE id IN (SELECT site_id FROM ins)`,
+         UPDATE sites SET updated_at = now() WHERE id IN (SELECT site_id FROM upd)
+         RETURNING id AS site_id`,
         [ownerId, playerName, playerNormalized, amount ?? 0, resolvedSiteId]
       );
-      for (const row of upsert || []) {
+      for (const row of updated || []) {
         if (row?.site_id) notifiedSiteIds.add(String(row.site_id));
       }
-      // `upsert` result is not needed; the side effect is the projection.
-      void upsert;
+
+      if (!updated?.length) {
+        // New player: bound the INSERT by the site owner's players_per_site
+        // allowance. Over-limit conversions are still recorded — only the
+        // player projection is skipped.
+        const ownerUser = await tx.one<{ plan: string; plan_expires_at: string | null; status: string }>(
+          `SELECT plan, plan_expires_at, status FROM users WHERE id = $1`, [ownerId]
+        );
+        const ownerPlan = effectivePlan(ownerUser);
+        const playerLimit = getPlanLimit(ownerPlan, "players_per_site");
+        const ins = await tx.unsafe(
+          `WITH ins AS (
+             INSERT INTO players (id, site_id, name, normalized_name, ${column}, updated_at, version)
+             SELECT gen_random_uuid(), s.id, $2, $3, $4::numeric, now(), 1
+               FROM sites s
+              WHERE s.user_id = $1
+                AND ($5::uuid IS NULL OR s.id = $5::uuid)
+                AND (SELECT count(*) FROM players p WHERE p.site_id = s.id) < $6
+             ON CONFLICT (site_id, normalized_name) DO UPDATE
+             SET ${column} = players.${column} + EXCLUDED.${column},
+                 updated_at = now(),
+                 version = players.version + 1
+             RETURNING site_id
+           )
+           UPDATE sites SET updated_at = now() WHERE id IN (SELECT site_id FROM ins)
+           RETURNING id AS site_id`,
+          [ownerId, playerName, playerNormalized, amount ?? 0, resolvedSiteId, playerLimit]
+        );
+        if (ins?.length) {
+          for (const row of ins) {
+            if (row?.site_id) notifiedSiteIds.add(String(row.site_id));
+          }
+        } else {
+          const denial = limitDenial(ownerPlan, "players_per_site", playerLimit);
+          await logAudit(
+            {
+              actorId: ownerId,
+              action: "billing.usage_limit_reached",
+              entityType: "plan",
+              details: { limit: "players_per_site", current_plan: ownerPlan, required_plan: denial.required_plan, usage: playerLimit, allowance: playerLimit },
+            },
+            { exec: (sql, params) => tx.unsafe(sql, params) }
+          );
+        }
+      }
     }
 
     // Update site_stats conversions/revenue for this conversion. This must

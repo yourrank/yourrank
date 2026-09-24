@@ -12,50 +12,172 @@ export function isPlanTier(value: unknown): value is PlanTier {
   return typeof value === "string" && PLAN_TIERS.includes(value as PlanTier);
 }
 
-/** Max leaderboard players per site. */
-export const PLAN_LIMITS: Record<PlanTier, number> = {
-  free: 50,
-  pro: 1_000,
-  team: 5_000,
+// ------------------------------------------------------------------
+// Commercial limits (quota-style allowances per tier)
+// ------------------------------------------------------------------
+
+export type PlanLimitKey =
+  | "sites"
+  | "players_per_site"
+  | "active_viewers_30d"
+  | "history_days"
+  | "reward_mappings"
+  | "shop_items"
+  | "telegram_bots"
+  | "telegram_offers"
+  | "telegram_interactions_per_month"
+  | "broadcast_deliveries_per_month"
+  | "operator_seats";
+
+export const PLAN_LIMITS: Record<PlanTier, Record<PlanLimitKey, number>> = {
+  free: {
+    sites: 1,
+    players_per_site: 10,
+    active_viewers_30d: 50,
+    history_days: 30,
+    reward_mappings: 3,
+    shop_items: 3,
+    telegram_bots: 1,
+    telegram_offers: 2,
+    telegram_interactions_per_month: 1_000,
+    broadcast_deliveries_per_month: 0,
+    operator_seats: 1,
+  },
+  pro: {
+    sites: 3,
+    players_per_site: 1_000,
+    active_viewers_30d: 2_500,
+    history_days: 365,
+    reward_mappings: 50,
+    shop_items: 100,
+    telegram_bots: 3,
+    telegram_offers: 20,
+    telegram_interactions_per_month: 50_000,
+    broadcast_deliveries_per_month: 10_000,
+    operator_seats: 1,
+  },
+  team: {
+    sites: 10,
+    players_per_site: 5_000,
+    active_viewers_30d: 10_000,
+    history_days: 730,
+    reward_mappings: 250,
+    shop_items: 500,
+    telegram_bots: 10,
+    telegram_offers: 100,
+    telegram_interactions_per_month: 250_000,
+    broadcast_deliveries_per_month: 50_000,
+    operator_seats: 5,
+  },
 };
 
-/** Max creator-owned sites per account. */
-export const BOARD_LIMITS: Record<PlanTier, number> = {
-  free: 1,
-  pro: 3,
-  team: 10,
+export function getPlanLimit(plan: PlanTier, key: PlanLimitKey): number {
+  return PLAN_LIMITS[plan][key];
+}
+
+export const LIMIT_LABELS: Record<PlanLimitKey, string> = {
+  sites: "Sites",
+  players_per_site: "Leaderboard players per site",
+  active_viewers_30d: "Active viewers (rolling 30 days)",
+  history_days: "Accessible history",
+  reward_mappings: "Reward mappings",
+  shop_items: "Shop items",
+  telegram_bots: "Telegram bots",
+  telegram_offers: "Telegram offers",
+  telegram_interactions_per_month: "Telegram interactions per month",
+  broadcast_deliveries_per_month: "Broadcast deliveries per month",
+  operator_seats: "Operator seats",
 };
 
-/** Distinct authenticated active viewers across all account-owned sites, rolling 30 days. */
-export const ACTIVE_VIEWER_LIMITS: Record<PlanTier, number> = {
-  free: 100,
-  pro: 2_500,
-  team: 10_000,
+// ------------------------------------------------------------------
+// Commercial features (minimum-tier unlocks)
+// ------------------------------------------------------------------
+
+export type PlanFeature =
+  | "custom_domain"
+  | "signed_api"
+  | "remove_branding"
+  | "advanced_insights"
+  | "advanced_overlays"
+  | "activity_automation" // templates + scheduling + recurring + automation
+  | "advanced_giveaways"
+  | "predictions"
+  | "tournaments"
+  | "wheel"
+  | "quests"
+  | "duels"
+  | "battlepass"
+  | "telegram_broadcasts" // broadcasts + scheduled campaigns + segmentation
+  | "telegram_postbacks"
+  | "team_collaboration"; // members, invites, roles, shared operation
+
+/** Minimum tier that unlocks each feature. */
+export const FEATURE_MIN_TIER: Record<PlanFeature, PlanTier> = {
+  custom_domain: "pro",
+  signed_api: "pro",
+  remove_branding: "pro",
+  advanced_insights: "pro",
+  advanced_overlays: "pro",
+  activity_automation: "pro",
+  advanced_giveaways: "pro",
+  predictions: "pro",
+  tournaments: "pro",
+  wheel: "pro",
+  quests: "pro",
+  duels: "pro",
+  battlepass: "pro",
+  telegram_broadcasts: "pro",
+  telegram_postbacks: "pro",
+  team_collaboration: "team",
 };
 
-/** Compatibility export; this is account-pooled active-viewer usage, never per-site signups. */
-export const CREDITS_VIEWERS_PER_30D_LIMITS = ACTIVE_VIEWER_LIMITS;
+export function tierIndex(tier: PlanTier | string): number {
+  return PLAN_TIERS.indexOf(tier as PlanTier);
+}
 
-/** Accessible history window. Data is retained when an account downgrades. */
-export const HISTORY_DAYS: Record<PlanTier, number> = {
-  free: 30,
-  pro: 365,
-  team: 730,
+export const PLAN_FEATURES: Record<PlanTier, readonly PlanFeature[]> = Object.fromEntries(
+  PLAN_TIERS.map((tier) => [
+    tier,
+    (Object.keys(FEATURE_MIN_TIER) as PlanFeature[]).filter(
+      (f) => tierIndex(FEATURE_MIN_TIER[f]) <= tierIndex(tier)
+    ),
+  ])
+) as unknown as Record<PlanTier, readonly PlanFeature[]>;
+
+export function canUseFeature(plan: PlanTier, feature: PlanFeature): boolean {
+  return tierIndex(plan) >= tierIndex(FEATURE_MIN_TIER[feature]);
+}
+
+export function requiredPlanFor(feature: PlanFeature): PlanTier {
+  return FEATURE_MIN_TIER[feature];
+}
+
+export const FEATURE_LABELS: Record<PlanFeature, { name: string; description: string }> = {
+  custom_domain: { name: "Custom domain", description: "Serve your leaderboard on your own domain." },
+  signed_api: { name: "Signed score API", description: "Update scores from your own system with signed requests." },
+  remove_branding: { name: "Remove YourRank branding", description: "Hide the Powered by YourRank attribution." },
+  advanced_insights: { name: "Advanced analytics", description: "Deeper breakdowns and a longer history window." },
+  advanced_overlays: { name: "Advanced overlays", description: "Custom OBS overlay styling and alerts without branding." },
+  activity_automation: { name: "Activity automation", description: "Templates, scheduling and recurring Activities." },
+  advanced_giveaways: { name: "Advanced giveaways", description: "Verified entry, anti-abuse rules and winner response checks." },
+  predictions: { name: "Predictions", description: "Run viewer predictions on your site." },
+  tournaments: { name: "Tournaments", description: "Brackets and signups for your community." },
+  wheel: { name: "Lucky wheel", description: "Spin-to-win engagement for viewers." },
+  quests: { name: "Quests", description: "Daily quests and progress rewards." },
+  duels: { name: "Duels", description: "Head-to-head viewer challenges." },
+  battlepass: { name: "Battlepass", description: "Season tiers and XP rewards." },
+  telegram_broadcasts: { name: "Telegram broadcasts", description: "Mass messages with scheduling and segmentation." },
+  telegram_postbacks: { name: "Telegram postbacks", description: "Conversion postbacks for tracked offers." },
+  team_collaboration: { name: "Team collaboration", description: "Operator seats, roles and shared site operation." },
 };
 
-export const CREDITS_REWARD_LIMITS: Record<PlanTier, number> = {
-  free: 3,
-  pro: 50,
-  team: 250,
-};
+// ------------------------------------------------------------------
+// Operational safeguards (not commercial levers)
+// ------------------------------------------------------------------
 
-export const CREDITS_SHOP_LIMITS: Record<PlanTier, number> = {
-  free: 5,
-  pro: 100,
-  team: 500,
-};
+export const ACTIVE_VIEWER_WINDOW_DAYS = 30;
+export const ACTIVE_VIEWER_GRACE_DAYS = 14;
 
-/** Existing operational safeguards, scaled with the commercial tiers. */
 export const CREDITS_PENDING_REDEMPTIONS_LIMITS: Record<PlanTier, number> = {
   free: 20,
   pro: 500,
@@ -68,26 +190,9 @@ export const CREDITS_REDEMPTIONS_PER_30D_LIMITS: Record<PlanTier, number> = {
   team: 10_000,
 };
 
-/** Total operator seats, including the owning creator. */
-export const OPERATOR_SEAT_LIMITS: Record<PlanTier, number> = {
-  free: 1,
-  pro: 1,
-  team: 5,
-};
-
-/** Creator automation is a paid operator capability; manual safe Activities stay free. */
-export const AUTOMATION_ENABLED: Record<PlanTier, boolean> = {
-  free: false,
-  pro: true,
-  team: true,
-};
-
-export function canUseAutomation(plan: PlanTier): boolean {
-  return AUTOMATION_ENABLED[plan];
-}
-
-export const ACTIVE_VIEWER_WINDOW_DAYS = 30;
-export const ACTIVE_VIEWER_GRACE_DAYS = 14;
+// ------------------------------------------------------------------
+// Pricing and marketing copy
+// ------------------------------------------------------------------
 
 export const PLAN_PRICING: Record<PlanTier, {
   monthlyUsd: number;
@@ -112,71 +217,52 @@ export const PLAN_META: Record<PlanTier, {
   highlight: boolean;
   features: string[];
   cta: string;
-  /** Shown inside a paid card while recurring checkout is not open; empty for Free. */
+  /** Shown inside a paid card while recurring checkout is not open; empty when checkout is live. */
   availability: string;
 }> = {
   free: {
     name: "Free",
-    positioning: "Launch your community",
+    positioning: "Start your community",
     highlight: false,
     features: [
-      "100 active viewers",
-      "1 site and 50 leaderboard players",
-      "Basic Rewards and Insights",
-      "Standard customization",
-      "30 days of accessible history",
+      `${PLAN_LIMITS.free.sites} site · ${PLAN_LIMITS.free.players_per_site} leaderboard players · ${PLAN_LIMITS.free.active_viewers_30d} active viewers`,
+      "Basic leaderboard, rewards and shop",
+      "Manual Code Drops and chat giveaways",
+      `${PLAN_LIMITS.free.telegram_bots} Telegram bot with basic commands and ${PLAN_LIMITS.free.telegram_offers} offers`,
+      `Branded OBS overlay · ${PLAN_LIMITS.free.history_days} days of history`,
     ],
     cta: "Start free",
     availability: "",
   },
   pro: {
     name: "Pro",
-    positioning: "Run a growing community",
+    positioning: "Grow and automate your community",
     highlight: true,
     features: [
-      "2,500 active viewers",
-      "3 sites and 1,000 players per site",
-      "Custom domain and stronger branding",
-      "Higher Rewards and integration limits",
-      "Activity templates and scheduling",
-      "12 months of accessible history",
+      `Everything in Free, at scale: ${PLAN_LIMITS.pro.sites} sites · ${PLAN_LIMITS.pro.players_per_site.toLocaleString("en-US")} players · ${PLAN_LIMITS.pro.active_viewers_30d.toLocaleString("en-US")} viewers`,
+      "Activity templates, scheduling and automation",
+      "Predictions, tournaments, wheel, quests, duels, battlepass",
+      `Telegram broadcasts, scheduling, postbacks and segmentation (${PLAN_LIMITS.pro.broadcast_deliveries_per_month.toLocaleString("en-US")} deliveries/mo)`,
+      "Custom domain, signed API and no YourRank branding",
+      `Advanced analytics · 12 months of history`,
     ],
-    cta: "Start free, Pro selected",
-    availability: "Pro checkout is not open yet. Your account starts on Free at no charge; Pro activates from Billing only after a verified payment.",
+    cta: "Get Pro",
+    availability: "",
   },
   team: {
     name: "Team",
-    positioning: "Operate together",
+    positioning: "Run your community with a team",
     highlight: false,
     features: [
-      "10,000 active viewers",
-      "10 sites and 5,000 players per site",
-      "5 operator seats",
-      "Roles and permissions",
-      "Team-operated Activity automation",
-      "24 months of accessible history",
+      `Everything in Pro: ${PLAN_LIMITS.team.sites} sites · ${PLAN_LIMITS.team.players_per_site.toLocaleString("en-US")} players · ${PLAN_LIMITS.team.active_viewers_30d.toLocaleString("en-US")} viewers`,
+      `${PLAN_LIMITS.team.operator_seats} operator seats with roles and permissions`,
+      "Shared site operation and team-run automation",
+      `${PLAN_LIMITS.team.telegram_bots} Telegram bots · ${PLAN_LIMITS.team.telegram_interactions_per_month.toLocaleString("en-US")} interactions/mo · ${PLAN_LIMITS.team.broadcast_deliveries_per_month.toLocaleString("en-US")} deliveries/mo`,
+      `24 months of history`,
     ],
-    cta: "Start free, Team selected",
-    availability: "Team checkout is not open yet. Your account starts on Free at no charge; Team activates from Billing only after a verified payment.",
+    cta: "Get Team",
+    availability: "",
   },
-};
-
-export interface BotPlanDef {
-  tier: PlanTier;
-  label: string;
-  maxBots: number;
-  maxOffers: number;
-  broadcasts: boolean;
-  postbacks: boolean;
-  priceUsd: number;
-}
-
-export type BotPlanTier = PlanTier;
-
-export const BOT_PLANS: Record<BotPlanTier, BotPlanDef> = {
-  free: { tier: "free", label: "Free", maxBots: 1, maxOffers: 3, broadcasts: false, postbacks: false, priceUsd: PLAN_PRICES.free },
-  pro: { tier: "pro", label: "Pro", maxBots: 3, maxOffers: 50, broadcasts: true, postbacks: true, priceUsd: PLAN_PRICES.pro },
-  team: { tier: "team", label: "Team", maxBots: 10, maxOffers: 250, broadcasts: true, postbacks: true, priceUsd: PLAN_PRICES.team },
 };
 
 /**
@@ -192,10 +278,6 @@ export function priceUsd(
   const plan = typeof envOrPlan === "string" ? envOrPlan : requestedPlan || "pro";
   if (!isPlanTier(plan)) return PLAN_PRICING.pro.monthlyUsd;
   return interval === "annual" ? PLAN_PRICING[plan].annualUsd : PLAN_PRICING[plan].monthlyUsd;
-}
-
-export function tierIndex(tier: PlanTier | string): number {
-  return PLAN_TIERS.indexOf(tier as PlanTier);
 }
 
 const MS_PER_DAY = 86_400_000;
@@ -284,7 +366,7 @@ export function activeViewerUsageState(args: {
   expansionRestricted: boolean;
 } {
   const nowMs = args.nowMs ?? Date.now();
-  const allowance = ACTIVE_VIEWER_LIMITS[args.plan];
+  const allowance = getPlanLimit(args.plan, "active_viewers_30d");
   const activeViewers = Math.max(0, Math.trunc(args.activeViewers));
   const percentage = allowance === 0 ? 0 : Math.round((activeViewers / allowance) * 100);
   const overLimit = activeViewers > allowance;
