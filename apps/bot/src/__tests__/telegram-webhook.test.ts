@@ -129,6 +129,7 @@ describe("Telegram webhook admission", () => {
     const recovered = await recoverTelegramWebhookUpdates({
       findRecoverable: async () => rows,
       loadBot: async (botId) => ({ id: botId }),
+      meter: null,
       process: async (_bot, current) => { processed.push(current.update_id); },
       complete: async (botId, updateId) => { completed.push(`${botId}:${updateId}`); },
       logger: { error: (...args) => errors.push(args) },
@@ -140,4 +141,35 @@ describe("Telegram webhook admission", () => {
     expect(errors).toHaveLength(1);
     expect(String(errors[0][0])).toContain("abandoned stale update");
   });
+});
+
+
+it("recovery meters a claimed-but-unmetered update before processing", async () => {
+  const processed: number[] = [];
+  const metered: number[] = [];
+  const rows = [{ bot_id: "bot-a", update_id: 21, update_json: update(21), status: "processing" as const }];
+  const recovered = await recoverTelegramWebhookUpdates({
+    findRecoverable: async () => rows,
+    complete: async () => {},
+    loadBot: async () => ({ id: "bot-a" }),
+    process: async (_bot, u) => { processed.push(u.update_id); },
+    meter: async (_botId, updateId) => { metered.push(updateId); return "process"; },
+  });
+  expect(recovered).toBe(1);
+  expect(metered).toEqual([21]);
+  expect(processed).toEqual([21]);
+});
+
+it("recovery skips processing when the meter reports blocked", async () => {
+  const processed: number[] = [];
+  const rows = [{ bot_id: "bot-a", update_id: 22, update_json: update(22), status: "processing" as const }];
+  const recovered = await recoverTelegramWebhookUpdates({
+    findRecoverable: async () => rows,
+    complete: async () => {},
+    loadBot: async () => ({ id: "bot-a" }),
+    process: async (_bot, u) => { processed.push(u.update_id); },
+    meter: async () => "blocked",
+  });
+  expect(recovered).toBe(0);
+  expect(processed).toEqual([]);
 });
