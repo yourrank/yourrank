@@ -2,8 +2,7 @@
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { effectivePlan } from "@yourrank/shared/plans";
 import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
-import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { denied, requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteOwner as defaultRequireSiteOwner } from "../site-authorization.js";
 import {

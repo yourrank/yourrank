@@ -1,7 +1,4 @@
 // Tournament & Elimination Brackets Handlers.
-import { effectivePlan } from "@yourrank/shared/plans";
-import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
 import {
   requireUser as defaultRequireUser,
   ok,
@@ -9,6 +6,7 @@ import {
   readJson,
   rateLimit as defaultRateLimit,
   clientIp as defaultClientIp,
+  requireSiteFeature,
 } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteOwner } from "../site-authorization.js";
@@ -70,10 +68,6 @@ function clampTrustScore(value) {
   return Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null;
 }
 
-async function getOwnerPlan(oneImpl, site) {
-  return oneImpl("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
-}
-
 async function getTournamentForMutation(request, user, one, requireSiteCapabilityImpl) {
   const tournamentId = tournamentIdFromRequest(request);
   if (!tournamentId) return { error: bad("tournamentId is required.") };
@@ -92,9 +86,8 @@ async function getTournamentForMutation(request, user, one, requireSiteCapabilit
     { id: tournament.site_id, user_id: tournament.site_user_id }
   );
   if (authorization.res) return { error: authorization.res };
-  const owner = await one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [tournament.site_user_id]);
-  const gate = assertFeature(effectivePlan(owner), "tournaments");
-  if (gate) return { error: denied(gate, { actorId: tournament.site_user_id, request }) };
+  const gateRes = await requireSiteFeature({ user_id: tournament.site_user_id }, "tournaments", { request });
+  if (gateRes) return { error: gateRes };
   return { tournament };
 }
 
@@ -200,9 +193,8 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const authorization = await requireSiteCapabilityImpl(user, site);
   if (authorization.res) return authorization.res;
   {
-    const owner = await getOwnerPlan(defaultOne, site);
-    const gate = assertFeature(effectivePlan(owner), "tournaments");
-    if (gate) return denied(gate, { actorId: site.user_id, request });
+    const gateRes = await requireSiteFeature(site, "tournaments", { request });
+    if (gateRes) return gateRes;
   }
 
   const result = await withTransaction(async (tx) => {
@@ -787,9 +779,8 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
       );
       if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
       {
-        const owner = await tx.one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [match.site_user_id]);
-        const gate = assertFeature(effectivePlan(owner), "tournaments");
-        if (gate) return { error: gate.error, status: 403 };
+        const gateRes = await requireSiteFeature({ user_id: match.site_user_id }, "tournaments", { request, oneImpl: tx.one });
+        if (gateRes) return { error: "Tournaments are not available on this site's plan.", status: 403 };
       }
 
       if (match.tournament_status === "completed" || match.tournament_status === "cancelled") {

@@ -1,11 +1,8 @@
 // Seasonal Battle Pass & Viewer Progression Handlers.
 import { fromJsonb } from "@yourrank/shared/jsonb";
-import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { requireUser as defaultRequireUser, ok, bad, readJson, requireSiteFeature } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
-import { effectivePlan } from "@yourrank/shared/plans";
-import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
 import {
   one as defaultOne,
   exec as defaultExec,
@@ -140,9 +137,8 @@ export async function handleCreateSeason(request, env, deps = {}) {
   const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
   if (authorization.res) return authorization.res;
   {
-    const owner = await one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
-    const gate = assertFeature(effectivePlan(owner), "battlepass");
-    if (gate) return denied(gate, { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request });
+    if (gateRes) return gateRes;
   }
 
   // Close previous active seasons
@@ -290,9 +286,8 @@ export async function handleAwardXp(request, env, deps = {}) {
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
   {
-    const owner = await one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
-    const gate = assertFeature(effectivePlan(owner), "battlepass");
-    if (gate) return denied(gate, { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request });
+    if (gateRes) return gateRes;
   }
 
   const season = await one("SELECT id, tiers_json FROM seasons WHERE site_id=$1 AND status='active' ORDER BY season_number DESC LIMIT 1", [siteId]);

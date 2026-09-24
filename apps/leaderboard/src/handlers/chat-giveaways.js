@@ -1,9 +1,6 @@
 // Chat Giveaways dashboard API: server-backed sessions and entrants fed by the
 // verified connected Kick channel's chat webhooks (see shared/chat-giveaways).
-import { requireUser as defaultRequireUser, ok, bad, readJson, json } from "../auth.js";
-import { effectivePlan } from "@yourrank/shared/plans";
-import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
+import { requireUser as defaultRequireUser, ok, bad, readJson, json, requireSiteFeature } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability as defaultRequireSiteCapability } from "../site-authorization.js";
 import { one as defaultOne, query as defaultQuery, exec as defaultExec } from "@yourrank/shared/db";
@@ -98,9 +95,8 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   // winnerRepeat, excludePreviousWinners. Advanced fields require the
   // advanced_giveaways feature (site owner's plan decides).
   if (usesAdvancedGiveawayRules(parsedRules.data)) {
-    const owner = await d.one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
-    const gate = assertFeature(effectivePlan(owner), "advanced_giveaways");
-    if (gate) return denied(gate, { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "advanced_giveaways", { actorId: user.id, request, oneImpl: d.one });
+    if (gateRes) return gateRes;
   }
   const keyword = normalizeGiveawayKeyword(body.keyword);
   if (!keyword) return bad("Enter the keyword viewers should type.", 400);

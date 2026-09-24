@@ -1,8 +1,5 @@
 // Daily Quests & Streaks Engine Handlers.
-import { ok, bad, readJson } from "../auth.js";
-import { effectivePlan } from "@yourrank/shared/plans";
-import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
+import { ok, bad, readJson, requireSiteFeature } from "../auth.js";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -153,9 +150,9 @@ export async function handleClaimQuestReward(request, env, deps = {}) {
   );
   if (!quest) return bad("Quest not found.", 404);
   {
-    const owner = await one("SELECT plan, plan_expires_at, status FROM users u JOIN sites s ON s.user_id=u.id WHERE s.id=$1", [quest.site_id]);
-    const gate = assertFeature(effectivePlan(owner), "quests");
-    if (gate) return denied(gate, { actorId: null, request });
+    const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [quest.site_id]);
+    const gateRes = await requireSiteFeature(siteRow, "quests", { request });
+    if (gateRes) return gateRes;
   }
 
   const siteViewer = await one("SELECT id, balance FROM site_viewers WHERE site_id=$1 AND viewer_id=$2", [quest.site_id, viewerId]);
@@ -241,9 +238,9 @@ export async function handleTrackQuestProgress(request, env, deps = {}) {
   );
   if (!quest) return ok({ message: "No active quest for this key today." });
   {
-    const owner = await one("SELECT plan, plan_expires_at, status FROM users u JOIN sites s ON s.user_id=u.id WHERE s.id=$1", [siteId]);
-    const gate = assertFeature(effectivePlan(owner), "quests");
-    if (gate) return denied(gate, { actorId: null, request });
+    const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [siteId]);
+    const gateRes = await requireSiteFeature(siteRow, "quests", { request });
+    if (gateRes) return gateRes;
   }
 
   const siteViewer = await one("SELECT id FROM site_viewers WHERE site_id=$1 AND viewer_id=$2", [siteId, viewerId]);

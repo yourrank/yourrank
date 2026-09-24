@@ -1,10 +1,9 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
-import { requireUser, json, bad, ok, denied, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
+import { requireUser, json, bad, ok, requireSiteFeature, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
 import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
 import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
-import { assertFeature } from "@yourrank/shared/entitlements";
 import { one, exec, query } from "@yourrank/shared/db";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { logAudit } from "@yourrank/shared/audit";
@@ -328,7 +327,8 @@ export async function handleRestoreArchive(request, env) {
   if (!site) return bad("no site");
   const authorization = await requireSiteCapability(user, site, "canRoleManageBoard");
   if (authorization.res) return authorization.res;
-  const plan = effectivePlan(user);
+  const siteOwner = await one("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
+  const plan = effectivePlan(siteOwner);
   const archive = await one(
     `SELECT snapshot_json FROM archives
       WHERE id=$1 AND site_id=$2
@@ -557,8 +557,6 @@ export async function handleNotifyTest(request, env, {
   const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
   if (user.status === "suspended") return bad("This account is suspended.", 403);
-  if (effectivePlan(user) === "free") return bad("Notifications are a Pro feature. Upgrade to unlock.", 403);
-
   const body = await readJson(request);
   if (!body) return bad("Invalid request");
   const channel = String(body.channel || "").trim(); // "discord" or "telegram"
@@ -569,6 +567,8 @@ export async function handleNotifyTest(request, env, {
   if (!site) return bad("No site found", 404);
   const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return authorization.res;
+  const siteOwner = await oneImpl("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
+  if (effectivePlan(siteOwner) === "free") return bad("Notifications are a Pro feature. Upgrade to unlock.", 403);
 
   if (channel === "discord") {
     let webhookUrl = body.webhook_url ? String(body.webhook_url).trim() : null;
@@ -634,10 +634,6 @@ export async function handleDomainVerify(request, env) {
     const { user, res } = await requireUser(request, env);
     if (res) return res;
     if (user.status === "suspended") return bad("This account is suspended.", 403);
-    const plan = effectivePlan(user);
-    const domainGate = assertFeature(plan, "custom_domain");
-    if (domainGate) return denied(domainGate, { actorId: user.id, request });
-
     const body = await readJson(request);
     if (!body) return bad("Domain required");
 
@@ -646,6 +642,8 @@ export async function handleDomainVerify(request, env) {
     if (!site) return bad("No site found", 404);
     const authorization = await requireSiteCapability(user, site, "canRoleManageBilling");
     if (authorization.res) return authorization.res;
+    const domainGateRes = await requireSiteFeature(site, "custom_domain", { actorId: user.id, request });
+    if (domainGateRes) return domainGateRes;
 
     const zoneId = env.CF_ZONE_ID;
     const cfToken = env.CF_API_TOKEN;

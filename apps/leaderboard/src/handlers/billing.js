@@ -49,10 +49,14 @@ const FUNNEL_EVENTS = new Set(["paywall_viewed", "upgrade_clicked"]);
 // POST /api/billing/funnel — allowlisted client-side billing funnel events.
 // Accepts {event, feature?, limit?}; rejects anything else. Rate limited so a
 // noisy client cannot flood the audit log.
-export async function handleBillingFunnel(request, env) {
-  const { user, res } = await requireUser(request, env);
+export async function handleBillingFunnel(request, env, {
+  requireUserImpl = requireUser,
+  rateLimitImpl = rateLimit,
+  logAuditImpl = logAudit,
+} = {}) {
+  const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
-  const rl = await rateLimit(env, `billing-funnel:${user.id}`, 60, 60);
+  const rl = await rateLimitImpl(env, `billing-funnel:${user.id}`, 60, 60);
   if (!rl.ok) return bad("Too many requests.", 429, rateLimitHeaders(rl));
   const body = await request.json().catch(() => null);
   const event = typeof body?.event === "string" ? body.event : null;
@@ -60,7 +64,7 @@ export async function handleBillingFunnel(request, env) {
   const details = { event };
   if (typeof body.feature === "string" && body.feature.length <= 64) details.feature = body.feature;
   if (typeof body.limit === "string" && body.limit.length <= 64) details.limit = body.limit;
-  await logAudit({
+  await logAuditImpl({
     actorId: user.id,
     action: `billing.${event}`,
     entityType: "plan",

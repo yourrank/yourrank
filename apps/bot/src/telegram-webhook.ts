@@ -68,12 +68,14 @@ export async function recoverTelegramWebhookUpdates<TBot extends object>({
   complete = completeTelegramUpdate,
   loadBot,
   process,
+  meter = meterTelegramUpdate,
   logger = console,
 }: {
   findRecoverable?: () => Promise<WebhookUpdateRow[]>;
   complete?: (botId: string, updateId: number) => Promise<void>;
   loadBot: (botId: string) => Promise<TBot | undefined>;
   process: (bot: TBot, update: Update) => Promise<void>;
+  meter?: MeterFn | null;
   logger?: Pick<Console, "error">;
 }): Promise<number> {
   const rows = await findRecoverable();
@@ -92,6 +94,9 @@ export async function recoverTelegramWebhookUpdates<TBot extends object>({
         logger.error(
           `[telegram webhook] cannot recover update for missing bot ${row.bot_id}, update ${row.update_id}`,
         );
+        continue;
+      }
+      if (meter && (await meter(row.bot_id, row.update_id, row.update_json)) === "blocked") {
         continue;
       }
       await process(bot, row.update_json);

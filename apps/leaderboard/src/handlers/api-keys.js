@@ -2,9 +2,8 @@
 // used by the signed score API (POST/PATCH /api/scores). Board keys are the
 // same postback_keys rows with a site_id scope; account-level keys stay on
 // /api/account/postbacks and are read-only here.
-import { json, bad, requireUser as defaultRequireUser, rateLimit as defaultRateLimit } from "../auth.js";
+import { json, bad, requireUser as defaultRequireUser, rateLimit as defaultRateLimit, denied } from "../auth.js";
 import { assertFeature } from "@yourrank/shared/entitlements";
-import { denied } from "../auth.js";
 import { getBoardById as defaultGetBoardById } from "../site.js";
 import { effectivePlan as defaultEffectivePlan } from "@yourrank/shared/plans";
 import { one as defaultOne } from "@yourrank/shared/db";
