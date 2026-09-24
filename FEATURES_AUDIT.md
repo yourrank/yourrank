@@ -379,7 +379,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | `/logo/` |
 | `/overlay/` |
 | `/player/` |
-| `/ref/` |
 
 **Dynamic / per-site route categories**
 
@@ -397,7 +396,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | /setup → /dashboard redirect (legacy bookmark fixup) |
 | permanent demo leaderboard (always works, no DB needed) |
 | tracked Join redirect: /go/<slug> → streamer's referral URL |
-| referral redirect: /ref/<code> → /signup?ref=<code> |
 | OBS overlay: /<slug>/overlay |
 | per-site Hall of Fame at /<slug>/hall-of-fame |
 | embed widget: /<slug>/embed |

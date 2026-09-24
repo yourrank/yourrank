@@ -11,7 +11,7 @@ import { validatePassword } from "../password-rules.js";
 import { effectivePlan, getPlanLimit, priceUsd } from "@yourrank/shared/plans";
 import { getEnabledFeatureKeys } from "@yourrank/shared/features";
 import {
-  findUserByEmail, findSiteBySlug, findUserByReferralCode, createUser
+  findUserByEmail, findSiteBySlug, createUser
 } from "../data/auth.js";
 
 const defaultDependencies = {
@@ -57,7 +57,7 @@ async function issueVerificationEmail(env, userId, email, origin, sendVerificati
 
 export async function handleSignup(request, env, deps = {}) {
   const io = {
-    rateLimit, findUserByEmail, findSiteBySlug, findUserByReferralCode, generateUniqueReferralCode,
+    rateLimit, findUserByEmail, findSiteBySlug, generateUniqueReferralCode,
     withTransaction, createUser, createBoard, createSession, issueVerificationEmail, sendOnboardingEmail,
     trackActivation, waitUntil: (request, promise) => routeContext(request).waitUntil(promise),
     ...deps,
@@ -73,7 +73,6 @@ export async function handleSignup(request, env, deps = {}) {
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     const name = String(body.name || "").trim();
-    const refCode = String(body.ref || "").trim().toLowerCase();
     const defaultName = name || email.split("@")[0] || "my-board";
     // A URL the streamer typed is a choice, not a suggestion: signup used to
     // silently hand out `<slug>-2` (or a random suffix for reserved words), so
@@ -97,12 +96,6 @@ export async function handleSignup(request, env, deps = {}) {
     const { hash, salt } = await hashPassword(password);
     const userId = uuid();
 
-    let referrerId = null;
-    if (refCode) {
-      const referrer = await io.findUserByReferralCode(refCode);
-      if (referrer) referrerId = referrer.id;
-    }
-
     // created_at/updated_at default to now(); id generated in-app for consistency.
     // The slug check above is a TOCTOU race: two concurrent signups choosing the
     // same slug can both pass the SELECT, then the second INSERT hits sites.slug
@@ -113,7 +106,7 @@ export async function handleSignup(request, env, deps = {}) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await io.withTransaction(async (tx) => {
-          await io.createUser(tx, userId, email, hash, salt, referralCode, referrerId);
+          await io.createUser(tx, userId, email, hash, salt, referralCode);
           const board = await io.createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
           if (!board.ok) throw new Error(board.error || "board_create_failed");
         });
@@ -142,7 +135,7 @@ export async function handleSignup(request, env, deps = {}) {
     const verification = await io.issueVerificationEmail(env, userId, email, origin);
     const onboardingPromise = io.sendOnboardingEmail(env, 0, { id: userId, email, display_name: displayName, slug: finalSlug, origin });
     io.waitUntil(request, onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
-    io.trackActivation("leaderboard", userId, "signup", { email, referred: !!referrerId });
+    io.trackActivation("leaderboard", userId, "signup", { email });
     return json({ ok: true, user: { id: userId, email, slug: finalSlug, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": cookieSet(token, env) });
   } catch (e) {
     console.error("signup failed:", String(e?.message || e));
@@ -231,7 +224,7 @@ export async function handleDemoLogin(request, env) {
       finalSlug = `${baseSlug}-${n}`;
     }
     await withTransaction(async (tx) => {
-      await createUser(tx, userId, email, hash, salt, referralCode, null);
+      await createUser(tx, userId, email, hash, salt, referralCode);
       const board = await createBoard(env, userId, { slug: finalSlug, name: "Demo Board", published: false, is_draft: true, seed: true }, request, tx);
       if (!board.ok) throw new Error(board.error || "board_create_failed");
     });

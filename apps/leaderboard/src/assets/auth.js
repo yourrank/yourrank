@@ -225,8 +225,6 @@ form.addEventListener("submit", async (e) => {
         payload.slugError = handle.ok ? "" : handle.error;
       }
     }
-    const ref = new URLSearchParams(location.search).get("ref");
-    if (mode === "signup" && ref) payload.ref = ref;
   }
   if (mode === "login" || mode === "signup" || mode === "reset") {
     clearAllFieldErrors();

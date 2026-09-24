@@ -1318,14 +1318,6 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return trackedDestination(url.origin, slug, r.cta_url, clickRef);
       }
 
-      // --- referral redirect: /ref/<code> → /signup?ref=<code> ---
-      if (method === "GET" && path.startsWith("/ref/")) {
-        let code;
-        try { code = decodeURIComponent(path.slice(5).split("/")[0]); } catch { return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N }); }
-        if (!code) return new Response(notFoundPage("", nonce), { status: 404, headers: HTML_N });
-        return redirectResponse(`${url.origin}/signup?ref=${encodeURIComponent(code)}`, 302);
-      }
-
       // --- OBS overlay: /<slug>/overlay ---
       if (method === "GET" && /^\/[^/]+\/overlay$/.test(path)) {
         let slug;

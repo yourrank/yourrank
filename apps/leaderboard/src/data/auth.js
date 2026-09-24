@@ -9,10 +9,6 @@ export async function findUserByCredentials(email) {
   return await one("SELECT id,email,password_hash,password_salt,status FROM users WHERE email=$1", [email]);
 }
 
-export async function findUserByReferralCode(code) {
-  return await one("SELECT id FROM users WHERE referral_code=$1", [code]);
-}
-
 export async function findSiteByUserId(userId) {
   return await one("SELECT slug FROM sites WHERE user_id=$1", [userId]);
 }
@@ -29,10 +25,10 @@ export async function findSubscriptionByUserId(userId) {
   return await one("SELECT provider FROM subscriptions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1", [userId]);
 }
 
-export async function createUser(tx, userId, email, hash, salt, referralCode, referredBy) {
+export async function createUser(tx, userId, email, hash, salt, referralCode) {
   await tx.unsafe(
-    "INSERT INTO users (id,email,password_hash,password_salt,plan,status,referral_code,referred_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-    [userId, email, hash, salt, "free", "active", referralCode, referredBy || null]
+    "INSERT INTO users (id,email,password_hash,password_salt,plan,status,referral_code) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    [userId, email, hash, salt, "free", "active", referralCode]
   );
 }
 
