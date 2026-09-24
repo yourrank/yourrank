@@ -9,13 +9,14 @@ const describeDb = DB_URL ? describe : describe.skip;
 const sql = DB_URL ? postgres(DB_URL, { max: 8, onnotice: () => {} }) : (null as never);
 
 let tryConsumeUsage: typeof import("../usage-meters.js").tryConsumeUsage;
-let recordUsage: typeof import("../usage-meters.js").recordUsage;
+let reserveUsage: typeof import("../usage-meters.js").reserveUsage;
+let releaseUsage: typeof import("../usage-meters.js").releaseUsage;
 let getUsage: typeof import("../usage-meters.js").getUsage;
 let getUsageSummary: typeof import("../usage-meters.js").getUsageSummary;
 
 if (DB_URL) {
   process.env.DATABASE_URL = DB_URL;
-  ({ tryConsumeUsage, recordUsage, getUsage, getUsageSummary } = await import("../usage-meters.js"));
+  ({ tryConsumeUsage, reserveUsage, releaseUsage, getUsage, getUsageSummary } = await import("../usage-meters.js"));
 }
 
 const db = { one: (s: string, p?: unknown[]) => sql.unsafe(s, p as never[]).then((r) => r[0] ?? null) };
@@ -52,19 +53,27 @@ describeDb("account usage meters (real PostgreSQL)", () => {
     expect(rows[0].n).toBe(0);
   });
 
-  it("recordUsage adds unbounded and getUsageSummary aggregates", async () => {
+  it("reserveUsage grants up to the remaining allowance and releaseUsage returns unused units", async () => {
     const id = await mkAccount();
-    expect(await recordUsage(db, id, "broadcast_deliveries", 7)).toBe(7);
-    expect(await recordUsage(db, id, "broadcast_deliveries", 3)).toBe(10);
+    const r1 = await sql.begin(async (tx) =>
+      reserveUsage({ one: (s, p) => tx.unsafe(s, p as never[]).then((r) => r[0] ?? null) }, id, "broadcast_deliveries", 7, 10)
+    );
+    expect(r1).toMatchObject({ granted: 7, used: 7 });
+    const r2 = await sql.begin(async (tx) =>
+      reserveUsage({ one: (s, p) => tx.unsafe(s, p as never[]).then((r) => r[0] ?? null) }, id, "broadcast_deliveries", 5, 10)
+    );
+    expect(r2).toMatchObject({ granted: 3, used: 10 });
+    await releaseUsage(db, id, "broadcast_deliveries", 4, r2.periodStart);
+    expect(await getUsage(db, id, "broadcast_deliveries")).toBe(6);
     expect(await tryConsumeUsage(db, id, "telegram_interactions", 5, 100)).toMatchObject({ allowed: true, used: 5 });
     const summary = await getUsageSummary({ one: db.one, exec: (s, p) => sql.unsafe(s, p as never[]) }, id);
-    expect(summary.broadcast_deliveries).toBe(10);
+    expect(summary.broadcast_deliveries).toBe(6);
     expect(summary.telegram_interactions).toBe(5);
   });
 
   it("rows are keyed to the first day of the current UTC month", async () => {
     const id = await mkAccount();
-    await recordUsage(db, id, "telegram_interactions", 2);
+    await tryConsumeUsage(db, id, "telegram_interactions", 2, 100);
     const [row] = await sql`SELECT period_start FROM account_usage_meters WHERE account_id=${id}`;
     expect(row.period_start.getUTCDate()).toBe(1);
   });
