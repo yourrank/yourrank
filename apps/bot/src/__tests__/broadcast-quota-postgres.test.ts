@@ -52,6 +52,7 @@ const ok = () => new Response("{}", { status: 200 });
 describeDb("broadcast monthly quota (real PostgreSQL)", () => {
   let ownerId: string;
   let botId: string;
+  let botBId: string | null = null;
   let proAllowance: number;
   const broadcastIds: string[] = [];
   let tg = 70000;
@@ -72,9 +73,9 @@ describeDb("broadcast monthly quota (real PostgreSQL)", () => {
 
   afterAll(async () => {
     if (broadcastIds.length) await sql`DELETE FROM broadcasts WHERE id IN ${sql(broadcastIds)}`;
-    await sql`DELETE FROM bot_subscribers WHERE bot_id = ${botId}`;
+    await sql`DELETE FROM bot_subscribers WHERE bot_id IN (${botId}, ${botBId ?? botId})`;
     await sql`DELETE FROM account_usage_meters WHERE account_id = ${ownerId}`;
-    await sql`DELETE FROM bots WHERE id = ${botId}`;
+    await sql`DELETE FROM bots WHERE id IN (${botId}, ${botBId ?? botId})`;
     await sql`DELETE FROM users WHERE id = ${ownerId}`;
     await sql.end({ timeout: 1 });
   });
@@ -126,7 +127,23 @@ describeDb("broadcast monthly quota (real PostgreSQL)", () => {
   it("two concurrent workers cannot oversubscribe the remaining monthly allowance", async () => {
     const remaining = 7;
     await seedUsed(proAllowance - remaining);
-    const [first, second] = await newBroadcasts([[++tg, ++tg, ++tg, ++tg, ++tg], [++tg, ++tg, ++tg, ++tg, ++tg]]);
+    // Each broadcast needs its own bot so their subscriber pools are disjoint —
+    // a shared pool would let one broadcast's cursor land inside the other's
+    // list and make the pause point unreadable.
+    const token2 = await encryptToken("123:test-token-b");
+    const [botB] = await sql`
+      INSERT INTO bots (owner_id, token_encrypted, webhook_secret, status)
+      VALUES (${ownerId}, ${token2}, ${`wh-b-${Date.now()}`}, 'active') RETURNING id`;
+    botBId = botB.id;
+    const subsA = [++tg, ++tg, ++tg, ++tg, ++tg];
+    const subsB = [++tg, ++tg, ++tg, ++tg, ++tg];
+    for (const id of subsA) await sql`INSERT INTO bot_subscribers (bot_id, tg_user_id, first_name) VALUES (${botId}, ${id}, ${`u${id}`})`;
+    for (const id of subsB) await sql`INSERT INTO bot_subscribers (bot_id, tg_user_id, first_name) VALUES (${botB.id}, ${id}, ${`u${id}`})`;
+    const [rowA] = await sql`INSERT INTO broadcasts (bot_id, body, status, cursor_tg_user_id) VALUES (${botId}, 'hi {name}', 'scheduled', 0) RETURNING id`;
+    const [rowB] = await sql`INSERT INTO broadcasts (bot_id, body, status, cursor_tg_user_id) VALUES (${botB.id}, 'hi {name}', 'scheduled', 0) RETURNING id`;
+    const first = rowA.id as string;
+    const second = rowB.id as string;
+    broadcastIds.push(first, second);
 
     // Both workers see their own claim (SKIP LOCKED splits the broadcasts),
     // then race on the same meter row. Every fake send is recorded.
@@ -166,13 +183,16 @@ describeDb("broadcast monthly quota (real PostgreSQL)", () => {
     expect(paused?.stop_reason).toBe("monthly_quota");
     const unpaused = paused === a ? b : a;
     expect(Number(paused!.cursor_tg_user_id)).toBeGreaterThanOrEqual(0);
-    const [nextSub] = await sql`
-      SELECT tg_user_id FROM bot_subscribers
-       WHERE bot_id = ${botId} AND NOT is_blocked AND tg_user_id > ${paused!.cursor_tg_user_id}
-       ORDER BY tg_user_id LIMIT 1`;
-    // Any subscriber beyond the paused cursor belongs to the still-running
-    // broadcast or was never attempted — but never both sent and uncounted.
-    expect(nextSub === undefined || Number(nextSub.tg_user_id) >= Number(unpaused.cursor_tg_user_id) || paused === a).toBe(true);
+    // The unpaused broadcast drained its whole pool (status may still read
+    // "sending" until the next tick finds no more subscribers); the paused one
+    // holds at least one subscriber beyond its cursor that was never attempted.
+    expect(["sent", "sending"]).toContain(unpaused.status);
+    expect(Number(unpaused.sent_count) + Number(unpaused.fail_count)).toBe(5);
+    const pausedBot = paused === a ? botId : botB.id;
+    const leftBehind = await sql`
+      SELECT count(*)::int AS n FROM bot_subscribers
+       WHERE bot_id = ${pausedBot} AND NOT is_blocked AND tg_user_id > ${paused!.cursor_tg_user_id}`;
+    expect(leftBehind[0].n).toBeGreaterThan(0);
 
     // A follow-up tick re-claims nothing: the paused row is unclaimable and
     // the drained broadcast completed.
