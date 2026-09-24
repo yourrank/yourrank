@@ -1,7 +1,7 @@
 import { requireUser as defaultRequireUser, ok, bad } from "../auth.js";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { one as defaultOne, withTransaction as defaultTransaction } from "@yourrank/shared/db";
-import { polarConfig, polarRequest, polarRedirect, billingReturnUrl, validatePolarProduct, verifyPolarWebhook, isBillingId } from "../polar.js";
+import { polarConfig, polarRequest, PolarRequestError, polarRedirect, billingReturnUrl, validatePolarProduct, verifyPolarWebhook, isBillingId } from "../polar.js";
 import { planChangeFor } from "@yourrank/shared/plan-changes";
 
 const UNAVAILABLE = "Paid checkout is coming soon. Your current plan stays available.";
@@ -136,6 +136,12 @@ export async function handlePolarPortal(request, env, deps = {}) {
 
 const LIVE_SUB_STATUSES = ["active", "trialing", "past_due"];
 
+/** Operator log line: provider status/detail or DB error code, never request bodies or tokens. */
+function failureDetail(error) {
+  if (error instanceof PolarRequestError) return `${error.name} status=${error.status} detail=${JSON.stringify(error.detail)?.slice(0, 500)}`;
+  return `${error?.name || "Error"}${error?.code ? ` code=${error.code}` : ""} ${String(error?.message || "").slice(0, 300)}`;
+}
+
 const CHANGE_FAILED = "Could not update your subscription. Refresh Billing to see its current state before trying again.";
 
 /**
@@ -215,7 +221,7 @@ export async function handlePolarPlanChange(request, env, deps = {}) {
     }
     return ok({ change: result.change.kind, timing: result.change.timing, applied: result.applied, billing: await getPolarBillingStatus(env, user.id, deps) });
   } catch (error) {
-    console.error("[polar.plan_change]", error.name, error.message?.startsWith("Polar request failed") ? error.message : "plan_change_failed");
+    console.error("[polar.plan_change]", failureDetail(error));
     return bad(CHANGE_FAILED, 502);
   }
 }
@@ -332,7 +338,7 @@ export async function handlePolarWebhook(request, env, deps = {}) {
     });
     return ok({ received: true });
   } catch (error) {
-    console.error("[polar.webhook]", error.name, "processing_failed");
+    console.error("[polar.webhook]", event.type, failureDetail(error));
     return bad("Webhook processing failed. Retry delivery.", 500);
   }
 }
