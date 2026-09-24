@@ -238,6 +238,12 @@ is `degraded` *solely* via the stale consumer heartbeat (`db` and
 `consumer.healthy === false`), which staging's `crons = []` and absent queue
 traffic make permanent. Any other failing check still fails the smoke.
 
+`e2e-staging` sets `E2E_DEPLOYED_TARGET=1`, which switches the E2E suite into
+deployed-target mode: scenarios that need a wrangler-dev-only surface (the
+wave-k scheduler test via `/__scheduled`) report SKIPPED rather than blocking,
+and `/health` may be 503 `degraded` from the stale consumer heartbeat (crons
+disabled) as long as `db` and `db_identity.expected` stay true.
+
 The finalizer runs `scripts/release-recovery-state.mjs` with
 `RELEASE_ENVIRONMENT=staging`: it captures/observes the five `-staging` Workers,
 restores exact prior version allocations on failure, keeps migrations applied,

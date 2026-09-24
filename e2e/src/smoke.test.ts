@@ -34,6 +34,9 @@ const DB_URL = process.env.E2E_DB_URL?.trim() || "";
 const PUBLIC_ACCESS_AVAILABLE = Boolean(DB_URL);
 const MARKETING_AVAILABLE = process.env.E2E_MARKETING_AVAILABLE === "1";
 const BOT_AVAILABLE = process.env.E2E_BOT_AVAILABLE === "1";
+// Deployed-target mode (staging release): no wrangler dev surface, crons = []
+// so /health reports "degraded" solely via the consumer heartbeat.
+const DEPLOYED_TARGET = process.env.E2E_DEPLOYED_TARGET === "1";
 
 const id = randomId();
 const email = `e2e-${id}@yourrank.test`;
@@ -165,9 +168,22 @@ describe("YourRank E2E smoke", () => {
 
     it("GET /health returns ok and db true", async () => {
       const res = await client.get("/health");
-      expect(res.status).toBe(200);
-      expect(res.json?.status).toBe("ok");
+      if (!DEPLOYED_TARGET) {
+        expect(res.status).toBe(200);
+        expect(res.json?.status).toBe("ok");
+        expect(res.json?.db).toBe(true);
+        return;
+      }
+      // Staging runs crons = [], so /health is 503 "degraded" solely from the
+      // stale consumer heartbeat — same tolerance as staging-monitor-verdict.mjs.
+      expect([200, 503]).toContain(res.status);
       expect(res.json?.db).toBe(true);
+      expect(res.json?.db_identity?.expected).toBe(true);
+      expect(["ok", "degraded"]).toContain(res.json?.status);
+      if (res.json?.status === "degraded") {
+        expect(res.json?.consumer?.healthy).toBe(false);
+        expect(res.json?.dlq?.degraded_reasons ?? []).toEqual([]);
+      }
     });
 
     it.skipIf(!MARKETING_AVAILABLE)("GET /pricing returns the pricing page", async () => {
@@ -418,7 +434,7 @@ describe("YourRank E2E smoke", () => {
     it("GET /dashboard/telegram loads the bot dashboard", async () => {
       const res = await client.get("/dashboard/telegram");
       expect(res.status).toBe(200);
-      expect(res.body).toContain("Streamer Dashboard");
+      expect(res.body).toContain("/bot/dash/client.js");
     });
 
     it("GET /bot/dash/api/me returns the authenticated user", async () => {

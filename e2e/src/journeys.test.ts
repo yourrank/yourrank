@@ -29,6 +29,9 @@ if (process.env.E2E_ALLOW_MUTATIONS !== "1") {
 
 const BASE_URL = parsedBaseUrl.origin;
 const VIEWER_SESSION = process.env.E2E_VIEWER_SESSION?.trim() || "";
+// Deployed-target mode (staging release): /__scheduled only exists under
+// `wrangler dev --test-scheduled`, so local-only scenarios are skipped.
+const DEPLOYED_TARGET = process.env.E2E_DEPLOYED_TARGET === "1";
 
 /**
  * A board only becomes publicly reachable once the OWNER'S EMAIL IS VERIFIED:
@@ -567,7 +570,7 @@ describe("release-gate journeys", () => {
     }
   });
 
-  it.skipIf(!PUBLIC_ACCESS_AVAILABLE || !VIEWER_SESSION)(`${tag("wave-k-safe-activity-automation")} scheduled safe Activity executes once and records normal viewer participation`, async () => {
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE || !VIEWER_SESSION || DEPLOYED_TARGET)(`${tag("wave-k-safe-activity-automation")} scheduled safe Activity executes once and records normal viewer participation`, async () => {
     const template = await client.post("/api/activities/templates", {
       siteId,
       kind: "safe_code_drop",

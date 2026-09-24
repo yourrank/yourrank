@@ -91,12 +91,13 @@ function verdictFor(scenario) {
   return VERDICT.SKIPPED;
 }
 
+const deployed = process.env.E2E_DEPLOYED_TARGET === "1";
 const rows = SCENARIOS.map((scenario) => {
   const verdict = verdictFor(scenario);
   const ready = scenarioReady(scenario, process.env);
   const blocking =
     scenario.tier === "required"
-      ? verdict !== VERDICT.PASSED
+      ? verdict !== VERDICT.PASSED && !(deployed && scenario.localOnly)
       : scenario.tier === "conditional" && ready && verdict !== VERDICT.PASSED;
   return { scenario, verdict, ready, blocking };
 });
@@ -110,9 +111,11 @@ for (const { scenario, verdict, ready } of rows) {
       ? ""
       : scenario.tier === "conditional" && !ready
         ? `  (needs ${scenario.requires.join(", ")})`
-        : scenario.reason
-          ? `  (${scenario.reason})`
-          : "";
+        : deployed && scenario.localOnly
+          ? `  (local runtime only: ${scenario.reason})`
+          : scenario.reason
+            ? `  (${scenario.reason})`
+            : "";
   console.log(`${scenario.key.padEnd(width)}  ${verdict}${note}`);
 }
 console.log("-".repeat(width + 24));

@@ -700,6 +700,8 @@ jobs:
           # route), so both are exercised for real.
           E2E_MARKETING_AVAILABLE: '1'
           E2E_BOT_AVAILABLE: '1'
+          # Deployed Worker target: no /__scheduled test surface, crons disabled.
+          E2E_DEPLOYED_TARGET: '1'
         run: bun run gate
 
   staging-finalizer:

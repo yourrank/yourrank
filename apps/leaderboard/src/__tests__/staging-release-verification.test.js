@@ -441,6 +441,14 @@ describe("F-012 staging release verification", () => {
     );
   });
 
+  it("staging E2E sets E2E_DEPLOYED_TARGET while PR Check does not", async () => {
+    const staging = await stagingWorkflowPromise;
+    const e2e = staging.slice(staging.indexOf("e2e-staging:"));
+    expect(e2e).toContain("E2E_DEPLOYED_TARGET: '1'");
+    const prCheck = await rootFile(".github/workflows/pr-check.yml");
+    expect(prCheck).not.toContain("E2E_DEPLOYED_TARGET");
+  });
+
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {
     const index = await rootFile("apps/leaderboard/src/index.js");
     expect(index).toContain('env.ENVIRONMENT === "staging" && host === `staging.${PLATFORM_HOST}`');
