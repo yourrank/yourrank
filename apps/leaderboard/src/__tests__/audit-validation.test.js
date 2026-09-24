@@ -289,4 +289,20 @@ describe("saveSite Free player limit", () => {
       denial: { code: "plan_limit_reached", limit: "players_per_site", required_plan: "pro", current_plan: "free", allowance: 10, usage: 11 },
     });
   });
+
+  it("allows exactly 1,000 players on Pro", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const result = await saveSite(mockEnv(), { ...USER_ROW, plan: "pro" }, { players: players(1000) }, "site-1");
+    expect(result.code).not.toBe("player_limit");
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects the 1,001st player on Pro", async () => {
+    mockOne.mockResolvedValue(SITE);
+    const result = await saveSite(mockEnv(), { ...USER_ROW, plan: "pro" }, { players: players(1001) }, "site-1");
+    expect(result).toMatchObject({
+      code: "player_limit",
+      denial: { code: "plan_limit_reached", limit: "players_per_site", required_plan: "team", current_plan: "pro", allowance: 1000, usage: 1001 },
+    });
+  });
 });

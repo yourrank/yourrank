@@ -1,6 +1,6 @@
 // Site + players data helpers for the Worker.
 import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
-import { checkLimit, limitDenial } from "@yourrank/shared/entitlements";
+import { checkLimit, checkTotalWithinLimit, limitDenial } from "@yourrank/shared/entitlements";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { rankEventPlayers } from "@yourrank/shared/event-leaderboards";
@@ -1142,9 +1142,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       const owner = await oneImpl("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
       if (owner) effectiveSitePlan = effectivePlan(owner);
     }
-    const denial = validatedPlayers.length > getPlanLimit(effectiveSitePlan, "players_per_site")
-      ? limitDenial(effectiveSitePlan, "players_per_site", validatedPlayers.length)
-      : null;
+    const denial = checkTotalWithinLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
     if (denial) return { error: denial.error, code: "player_limit", denial };
   }
   const b = payload.brand || {};
@@ -1372,9 +1370,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
         );
         if (owner) effectiveSitePlan = effectivePlan(owner);
       }
-      const denial = validatedPlayers.length > getPlanLimit(effectiveSitePlan, "players_per_site")
-        ? limitDenial(effectiveSitePlan, "players_per_site", validatedPlayers.length)
-        : null;
+      const denial = checkTotalWithinLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
       if (denial) return { error: denial.error, code: "player_limit", denial };
     }
 

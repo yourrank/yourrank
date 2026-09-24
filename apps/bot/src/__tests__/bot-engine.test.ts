@@ -100,7 +100,7 @@ describe("esc (botEngine)", () => {
 
 // ── PLAN_LIMITS: real plan hierarchy from shared/plans ─────────────────
 describe("Plan limits (shared/plans)", () => {
-  it("free tier allows 50 players", () => {
+  it("free tier allows 10 players", () => {
     expect(getPlanLimit("free", "players_per_site")).toBe(10);
   });
 

@@ -79,6 +79,21 @@ export function assertFeature(plan: PlanTier, feature: PlanFeature): Entitlement
   return canUseFeature(plan, feature) ? null : featureDenial(plan, feature);
 }
 
+/**
+ * "Can I add one more?" — pass the PRE-CREATE count: denied once the
+ * current usage already reaches the allowance. For checks against a
+ * resulting total (e.g. a roster being replaced wholesale), use
+ * checkTotalWithinLimit instead.
+ */
 export function checkLimit(plan: PlanTier, limit: PlanLimitKey, usage: number): EntitlementDenial | null {
   return usage >= getPlanLimit(plan, limit) ? limitDenial(plan, limit, usage) : null;
+}
+
+/**
+ * "Is this resulting total allowed?" — pass the FINAL count the
+ * operation would leave behind: denied only when it exceeds the
+ * allowance, so exactly-allowance totals are permitted.
+ */
+export function checkTotalWithinLimit(plan: PlanTier, limit: PlanLimitKey, total: number): EntitlementDenial | null {
+  return total > getPlanLimit(plan, limit) ? limitDenial(plan, limit, total) : null;
 }

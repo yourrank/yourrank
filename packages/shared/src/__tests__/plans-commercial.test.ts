@@ -17,6 +17,7 @@ import {
   limitDenial,
   assertFeature,
   checkLimit,
+  checkTotalWithinLimit,
 } from "../entitlements.js";
 import { classifyTelegramUpdate } from "../telegram-interactions.js";
 
@@ -119,6 +120,18 @@ describe("entitlements", () => {
   it("checkLimit denies at exactly the allowance", () => {
     expect(checkLimit("free", "sites", 0)).toBeNull();
     expect(checkLimit("free", "sites", 1)?.code).toBe("plan_limit_reached");
+  });
+
+  it("checkTotalWithinLimit allows the resulting total at the allowance and denies above it", () => {
+    // checkLimit is the pre-create "can I add one more" check; at usage 1 on
+    // Free sites (allowance 1) it already denies. checkTotalWithinLimit is
+    // the resulting-total check: 1 site is allowed, 2 is denied.
+    expect(checkTotalWithinLimit("free", "sites", 1)).toBeNull();
+    expect(checkTotalWithinLimit("free", "sites", 2)?.code).toBe("plan_limit_reached");
+    expect(checkTotalWithinLimit("free", "players_per_site", 10)).toBeNull();
+    expect(checkTotalWithinLimit("free", "players_per_site", 11)?.allowance).toBe(10);
+    expect(checkTotalWithinLimit("pro", "players_per_site", 1000)).toBeNull();
+    expect(checkTotalWithinLimit("pro", "players_per_site", 1001)?.required_plan).toBe("team");
   });
 });
 

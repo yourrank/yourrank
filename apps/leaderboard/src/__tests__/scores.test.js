@@ -245,6 +245,35 @@ describe("handleScores — plan gate", () => {
   });
 });
 
+describe("handleScores — players_per_site allowance", () => {
+  const players = (count) => Array.from({ length: count }, (_, index) => ({ name: `Player ${index + 1}`, wagered: count - index }));
+  beforeEach(() => {
+    _siteRow = site();
+    _ownerRow = proOwner();
+    _existingSiteRow = existingSite();
+    _saveSiteResult = {};
+    _savedPayload = null;
+  });
+
+  test("allows exactly 1,000 players on Pro", async () => {
+    const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: players(1000) } });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(200);
+    expect(_savedPayload.players).toHaveLength(1000);
+  });
+
+  test("rejects the 1,001st player on Pro", async () => {
+    const req = makeRequest({ headers: { "x-postback-key": "key" }, body: { slug: "test", players: players(1001) } });
+    const res = await invokeScores(req, makeEnv());
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("plan_limit_reached");
+    expect(body.limit).toBe("players_per_site");
+    expect(body.allowance).toBe(1000);
+    expect(_savedPayload).toBeNull();
+  });
+});
+
 describe("handleScores — payload validation", () => {
   beforeEach(() => {
     _siteRow = site();
