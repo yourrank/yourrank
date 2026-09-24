@@ -337,6 +337,17 @@ jobs:
           POLAR_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test apps/leaderboard/src/__tests__/polar-billing.test.js
 
+      # Commercial plan model: atomic usage meters (concurrent bounded consume,
+      # allowance-0, month keying) and leaderboard site-limit gates
+      # (concurrent create, downgrade keeps rows, 403 denial contract).
+      - name: Usage meter and plan gate tests (against migrated schema)
+        env:
+          USAGE_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+          GATES_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: |
+          bun test packages/shared/src/__tests__/usage-meters-postgres.test.ts
+          bun test apps/leaderboard/src/__tests__/plan-gates.test.js
+
       - name: Verify schema consistency
         env:
           PGHOST: localhost

@@ -65,7 +65,7 @@ mock.module(cryptoUrlTs, cryptoMockFactory);
 // ── Import REAL functions after mocks are in place ─────────────────────
 import { esc } from "../botEngine.js";
 import { recordConversion } from "@yourrank/shared/conversions";
-import { PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { getPlanLimit } from "@yourrank/shared/plans";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 
 // ── esc: HTML-escape for Telegram parse_mode ───────────────────────────
@@ -101,25 +101,25 @@ describe("esc (botEngine)", () => {
 // ── PLAN_LIMITS: real plan hierarchy from shared/plans ─────────────────
 describe("Plan limits (shared/plans)", () => {
   it("free tier allows 50 players", () => {
-    expect(PLAN_LIMITS.free).toBe(50);
+    expect(getPlanLimit("free", "players_per_site")).toBe(10);
   });
 
   it("pro allows more players than free", () => {
-    expect(PLAN_LIMITS.pro).toBeGreaterThan(PLAN_LIMITS.free);
+    expect(getPlanLimit("pro", "players_per_site")).toBeGreaterThan(getPlanLimit("free", "players_per_site"));
   });
 
   it("team allows more boards than pro", () => {
-    expect(BOARD_LIMITS.team).toBeGreaterThan(BOARD_LIMITS.pro);
+    expect(getPlanLimit("team", "sites")).toBeGreaterThan(getPlanLimit("pro", "sites"));
   });
 
   it("pro allows more boards than free", () => {
-    expect(BOARD_LIMITS.pro).toBeGreaterThan(BOARD_LIMITS.free);
+    expect(getPlanLimit("pro", "sites")).toBeGreaterThan(getPlanLimit("free", "sites"));
   });
 
   it("all plan tiers exist", () => {
-    expect(PLAN_LIMITS).toHaveProperty("free");
-    expect(PLAN_LIMITS).toHaveProperty("pro");
-    expect(PLAN_LIMITS).toHaveProperty("team");
+    for (const tier of ["free", "pro", "team"] as const) {
+      expect(getPlanLimit(tier, "players_per_site")).toBeGreaterThan(0);
+    }
   });
 });
 

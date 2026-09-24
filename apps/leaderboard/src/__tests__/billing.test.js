@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  ACTIVE_VIEWER_LIMITS,
-  BOARD_LIMITS,
-  OPERATOR_SEAT_LIMITS,
-  PLAN_LIMITS,
+  getPlanLimit,
   PLAN_META,
   PLAN_PRICES,
   PLAN_PRICING,
@@ -34,10 +31,18 @@ describe("canonical Free / Pro / Team model", () => {
   });
 
   test("implements approved scale and operator limits", () => {
-    expect(PLAN_LIMITS).toEqual({ free: 50, pro: 1000, team: 5000 });
-    expect(BOARD_LIMITS).toEqual({ free: 1, pro: 3, team: 10 });
-    expect(ACTIVE_VIEWER_LIMITS).toEqual({ free: 100, pro: 2500, team: 10000 });
-    expect(OPERATOR_SEAT_LIMITS).toEqual({ free: 1, pro: 1, team: 5 });
+    expect(getPlanLimit("free", "players_per_site")).toBe(10);
+    expect(getPlanLimit("pro", "players_per_site")).toBe(1000);
+    expect(getPlanLimit("team", "players_per_site")).toBe(5000);
+    expect(getPlanLimit("free", "sites")).toBe(1);
+    expect(getPlanLimit("pro", "sites")).toBe(3);
+    expect(getPlanLimit("team", "sites")).toBe(10);
+    expect(getPlanLimit("free", "active_viewers_30d")).toBe(50);
+    expect(getPlanLimit("pro", "active_viewers_30d")).toBe(2500);
+    expect(getPlanLimit("team", "active_viewers_30d")).toBe(10000);
+    expect(getPlanLimit("free", "operator_seats")).toBe(1);
+    expect(getPlanLimit("pro", "operator_seats")).toBe(1);
+    expect(getPlanLimit("team", "operator_seats")).toBe(5);
   });
 
   test("implements approved monthly and annual prices", () => {
@@ -108,9 +113,9 @@ describe("canonical entitlement resolver", () => {
 });
 
 describe("Free active-viewer grace", () => {
-  test("99 remains under the allowance and 100 explains the limit without restricting", () => {
-    const under = activeViewerUsageState({ plan: "free", activeViewers: 99, nowMs: NOW });
-    const state = activeViewerUsageState({ plan: "free", activeViewers: 100, nowMs: NOW });
+  test("49 remains under the allowance and 50 explains the limit without restricting", () => {
+    const under = activeViewerUsageState({ plan: "free", activeViewers: 49, nowMs: NOW });
+    const state = activeViewerUsageState({ plan: "free", activeViewers: 50, nowMs: NOW });
     expect(under.overLimit).toBe(false);
     expect(under.expansionRestricted).toBe(false);
     expect(state.level).toBe("at_limit");
@@ -118,16 +123,16 @@ describe("Free active-viewer grace", () => {
     expect(state.expansionRestricted).toBe(false);
   });
 
-  test("101 starts in grace and restricts only after 14 days", () => {
+  test("51 starts in grace and restricts only after 14 days", () => {
     const graceStartedAt = NOW - 13 * 86_400_000;
-    expect(activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt, nowMs: NOW }).level).toBe("grace");
-    const expired = activeViewerUsageState({ plan: "free", activeViewers: 101, graceStartedAt: NOW - 14 * 86_400_000, nowMs: NOW });
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 51, graceStartedAt, nowMs: NOW }).level).toBe("grace");
+    const expired = activeViewerUsageState({ plan: "free", activeViewers: 51, graceStartedAt: NOW - 14 * 86_400_000, nowMs: NOW });
     expect(expired.level).toBe("restricted");
     expect(expired.expansionRestricted).toBe(true);
   });
 
   test("usage recovery and paid plans are never expansion-restricted", () => {
-    expect(activeViewerUsageState({ plan: "free", activeViewers: 100, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
+    expect(activeViewerUsageState({ plan: "free", activeViewers: 50, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
     expect(activeViewerUsageState({ plan: "pro", activeViewers: 3000, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
   });
 
@@ -137,18 +142,18 @@ describe("Free active-viewer grace", () => {
       return activeViewerUsageMarkup({
         ...state,
         activeViewers,
-        upgradeAllowance: ACTIVE_VIEWER_LIMITS.pro,
+        upgradeAllowance: getPlanLimit("pro", "active_viewers_30d"),
       });
     };
 
-    expect(render(69)).toContain('data-level="normal"');
-    expect(render(70)).toContain('data-level="informational"');
-    expect(render(85)).toContain('data-level="notice"');
-    expect(render(95)).toContain('data-level="warning"');
-    expect(render(100)).toContain('data-level="at_limit"');
-    expect(render(101, NOW - 13 * 86_400_000)).toContain('data-level="grace"');
-    expect(render(101, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
-    expect(render(101, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
-    expect(render(85)).toContain('href="/pricing"');
+    expect(render(34)).toContain('data-level="normal"');
+    expect(render(35)).toContain('data-level="informational"');
+    expect(render(43)).toContain('data-level="notice"');
+    expect(render(48)).toContain('data-level="warning"');
+    expect(render(50)).toContain('data-level="at_limit"');
+    expect(render(51, NOW - 13 * 86_400_000)).toContain('data-level="grace"');
+    expect(render(51, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
+    expect(render(51, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
+    expect(render(43)).toContain('href="/pricing"');
   });
 });

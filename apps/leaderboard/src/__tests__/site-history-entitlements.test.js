@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { HISTORY_DAYS } from "@yourrank/shared/plans";
+import { getPlanLimit } from "@yourrank/shared/plans";
 import { ARCHIVE_LIMITS, getArchives, getArchiveSnapshots } from "../site.js";
 
 describe("plan history entitlements", () => {
   it("keeps archive-count safeguards separate from accessible time windows", () => {
     expect(ARCHIVE_LIMITS).toEqual({ free: 6, pro: 12, team: 24 });
-    expect(HISTORY_DAYS).toEqual({ free: 30, pro: 365, team: 730 });
+    expect(getPlanLimit("free", "history_days")).toBe(30);
+    expect(getPlanLimit("pro", "history_days")).toBe(365);
+    expect(getPlanLimit("team", "history_days")).toBe(730);
   });
 
   it("filters public archive summaries by the effective plan window", async () => {
@@ -15,7 +17,7 @@ describe("plan history entitlements", () => {
       return [];
     };
 
-    await getArchives({}, "site-1", ARCHIVE_LIMITS.pro, HISTORY_DAYS.pro, query);
+    await getArchives({}, "site-1", ARCHIVE_LIMITS.pro, getPlanLimit("pro", "history_days"), query);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].sql).toContain("created_at >= now() - ($2::int * interval '1 day')");
@@ -29,7 +31,7 @@ describe("plan history entitlements", () => {
       return [];
     };
 
-    await getArchiveSnapshots({}, "site-1", ARCHIVE_LIMITS.team, HISTORY_DAYS.team, query);
+    await getArchiveSnapshots({}, "site-1", ARCHIVE_LIMITS.team, getPlanLimit("team", "history_days"), query);
 
     expect(calls).toHaveLength(1);
     expect(calls[0].sql).toContain("created_at >= now() - ($2::int * interval '1 day')");
