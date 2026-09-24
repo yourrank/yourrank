@@ -6,7 +6,7 @@ import { Hero } from "../components/home/hero";
 import { WorkspacePreview } from "../components/home/workspace-preview";
 import { ProofMarquee, HowItWorks, ComparisonSection, PricingSnapshot } from "../components/home/sections";
 import { ProductPage } from "../components/product-page";
-import { PricingPlans } from "../app/pricing/pricing-plans";
+import { PricingPlans, accountPlanAction } from "../app/pricing/pricing-plans";
 import { SiteFooter } from "../components/site-shell";
 import { MotionFooter } from "../components/home/motion-footer";
 
@@ -97,6 +97,39 @@ describe("Home & Product components", () => {
     expect(html).toMatch(/href="\/signup\?plan=pro&amp;interval=monthly">Get Pro<\/a>/);
     expect(html).toMatch(/href="\/signup\?plan=team&amp;interval=monthly">Get Team<\/a>/);
     expect(html).toMatch(/href="\/signup\?plan=free&amp;interval=monthly">Start free<\/a>/);
+  });
+
+  it("pricing shows the canonical Team capacity and the custom-scale CTA, without stale values", () => {
+    const html = renderToString(<PricingPlans />);
+    expect(html).toContain("25,000 active viewers");
+    expect(html).toContain("2,500 active viewers");
+    expect(html).toContain("Start your community");
+    expect(html).toContain("Grow and automate your community");
+    expect(html).toContain("Run your community with a team");
+    expect(html).toContain("Need more scale?");
+    expect(html).toContain("more than 25,000 active viewers");
+    expect(html).toMatch(/href="\/help\/support"[^>]*>Talk to us</);
+    expect(html).not.toContain("10,000 active viewers");
+    expect(html).not.toContain("100 active viewers");
+    expect(html).not.toContain("50 leaderboard players");
+    expect(html).not.toMatch(/Scale plan|Enterprise/);
+  });
+
+  it("signed-in pricing actions mirror the billing plan-change matrix", () => {
+    const proMonthly = { plan: "pro" as const, subscription: { plan: "pro" as const, interval: "monthly" as const } };
+    expect(accountPlanAction(proMonthly, "pro", "monthly")).toEqual({ label: "Current plan", href: null });
+    expect(accountPlanAction(proMonthly, "pro", "annual").label).toMatch(/annual/i);
+    expect(accountPlanAction(proMonthly, "team", "monthly").label).toMatch(/upgrade/i);
+    expect(accountPlanAction(proMonthly, "team", "annual").href).toBe("/dashboard/settings/billing?plan=team&interval=annual");
+    expect(accountPlanAction(proMonthly, "free", "monthly")).toEqual({ label: "Manage in billing", href: "/dashboard/settings/billing" });
+
+    const teamAnnual = { plan: "team" as const, subscription: { plan: "team" as const, interval: "annual" as const } };
+    expect(accountPlanAction(teamAnnual, "pro", "annual").label).toMatch(/downgrade/i);
+    expect(accountPlanAction(teamAnnual, "team", "monthly").label).toMatch(/monthly/i);
+
+    const free = { plan: "free" as const, subscription: null };
+    expect(accountPlanAction(free, "free", "monthly")).toEqual({ label: "Current plan", href: null });
+    expect(accountPlanAction(free, "pro", "annual")).toEqual({ label: "Upgrade to Pro", href: "/dashboard/settings/billing?plan=pro&interval=annual" });
   });
 
   it("renders ProductPage with content and steps", () => {

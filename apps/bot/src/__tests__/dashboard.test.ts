@@ -337,11 +337,11 @@ describe("buildDashboard", () => {
     expect(res.headers.get("set-cookie")).toContain("yr_session");
   });
 
-  it("POST /auth/logout redirects to /dashboard/telegram for form/logout button submission", async () => {
+  it("POST /auth/logout redirects to / for form/logout button submission", async () => {
     const req = new Request("http://localhost:8787/auth/logout", { method: "POST" });
     const res = await app.fetch(req, testEnv);
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/dashboard/telegram");
+    expect(res.headers.get("location")).toBe("/");
   });
 
   it("GET / returns the canonical app HTML when authenticated", async () => {

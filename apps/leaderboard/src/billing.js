@@ -170,7 +170,10 @@ export async function handleAccountUsage(request, env) {
       site: activeSite ? { id: activeSite.id, name: activeSite.name } : null,
       activeViewers: activeViewers ? {
         ...activeViewers,
-        upgradeAllowance: plan === "free" ? getPlanLimit("pro", "active_viewers_30d") : null,
+        plan,
+        upgradeAllowance: plan === "free"
+          ? getPlanLimit("pro", "active_viewers_30d")
+          : plan === "pro" ? getPlanLimit("team", "active_viewers_30d") : null,
       } : null,
       features: PLAN_FEATURES[plan] || [],
       overLimit,

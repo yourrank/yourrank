@@ -290,8 +290,10 @@ export function renderApiAccess() {
   ensureKey();
 }
 
-let billingInterval = "monthly";
-let billingIntervalTouched = false;
+const requestedInterval = typeof location !== "undefined" ? new URLSearchParams(location.search).get("interval") : null;
+const hasRequestedInterval = requestedInterval === "annual" || requestedInterval === "monthly";
+let billingInterval = hasRequestedInterval ? requestedInterval : "monthly";
+let billingIntervalTouched = hasRequestedInterval;
 let billingInfo = null;
 let billingBusy = false;
 const INTERVAL_LABEL = { monthly: "Monthly", annual: "Annual" };

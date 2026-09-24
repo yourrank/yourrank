@@ -327,7 +327,7 @@
       .then(function (res) {
         if (!res.ok) throw new Error("logout failed: " + res.status);
         try { localStorage.setItem("yr:logout", String(Date.now())); } catch (error) {}
-        location.href = res.url || "/login";
+        location.href = res.url || "/";
       })
       .catch(function () {
         // The fetch never proves the session survived, so guessing "sign out

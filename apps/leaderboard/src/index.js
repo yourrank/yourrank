@@ -492,6 +492,8 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
   const resolveCustomDomainImpl = deps.resolveCustomDomain || resolveCustomDomain;
   const oneImpl = deps.one || one;
   const apiAppImpl = deps.apiApp || apiApp;
+  const currentUserImpl = deps.currentUser || currentUser;
+  const destroySessionImpl = deps.destroySession || destroySession;
   const { log: workerLog, reqId } = meta || {};
     const nonce = crypto.randomUUID().replace(/-/g, "");
     const HTML_N = withNonce(HTML, nonce);
@@ -810,7 +812,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       const renderDashboardPage = async (pageKey, logLabel, tab) => {
         try {
-          const user = await currentUser(request, env);
+          const user = await currentUserImpl(request, env);
           if (!user) return redirectToLogin(url);
           const html = addCookieConsent(await renderHtmlPage(PAGES[pageKey], {
             activePath: url.pathname + url.search,
@@ -838,6 +840,16 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       if (marketingApex && (path.startsWith("/_next/") || path.startsWith("/brand/"))) {
         return proxyMarketingHome({ request, binding: env.MARKETING, workerLog });
       }
+      // The apex root is the only marketing page that redirects a signed-in
+      // account: guests get the homepage, a valid server-side session goes to
+      // the dashboard. Every other public page (pricing, docs, FAQ, ...) stays
+      // reachable while logged in. A session lookup failure renders the
+      // homepage rather than 500ing the landing page.
+      if (marketingApex && (path === "/" || path === "/index.html")) {
+        try {
+          if (await currentUserImpl(request, env)) return redirectResponse(new URL("/dashboard", url), 302);
+        } catch { /* render the homepage */ }
+      }
       if (marketingApex && MARKETING_PAGES.has(path)) {
         return proxyMarketingHome({ request, binding: env.MARKETING, workerLog });
       }
@@ -847,7 +859,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // server-side and redirect before rendering anything. On a DB hiccup,
         // fall through and render the form — never 500 the login page.
         try {
-          const existing = await currentUser(request, env);
+          const existing = await currentUserImpl(request, env);
           if (existing) {
             const next = safeNextPath(url.searchParams.get("next") || "", "/dashboard");
             return redirectResponse(new URL(next, url), 302);
@@ -859,13 +871,20 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       // <img src="/logout">. Now only POST is accepted. The in-page buttons
       // already hit POST /api/auth/logout; the nav link should use a form POST.
       if ((path === "/logout" || path === "/logout.html") && method === "POST") {
-        await destroySession(env, readToken(request));
-        const next = safeNextPath(url.searchParams.get("next") || "", "/dashboard");
-        const loginUrl = new URL("/login", url);
-        if (next) loginUrl.searchParams.set("next", next);
-        return new Response(null, { status: 302, headers: { "set-cookie": cookieClear(env), location: String(loginUrl) } });
+        await destroySessionImpl(env, readToken(request));
+        return new Response(null, {
+          status: 302,
+          headers: { "set-cookie": cookieClear(env), location: String(new URL("/", url)), "cache-control": "no-store" },
+        });
       }
-      if (path === "/signup" || path === "/signup.html") return new Response(addCookieConsent(await renderHtmlPage(PAGES.signup)), { headers: { ...SECURE_HTML, ...csrfHeader } });
+      if (path === "/signup" || path === "/signup.html") {
+        // A valid session never sees the signup form again; same server-side
+        // resolution as /login so no duplicate account flow can start.
+        try {
+          if (await currentUserImpl(request, env)) return redirectResponse(new URL("/dashboard", url), 302);
+        } catch { /* render the form */ }
+        return new Response(addCookieConsent(await renderHtmlPage(PAGES.signup)), { headers: { ...SECURE_HTML, ...csrfHeader } });
+      }
       if (path === "/verify-email" || path === "/verify-email.html") {
         // Verification happens server-side: the emailed link must work even if
         // client JavaScript fails to load or run.
@@ -877,7 +896,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         if (token) {
           const result = await verifyEmailToken(token);
           if (result.ok) {
-            const user = await currentUser(request, env);
+            const user = await currentUserImpl(request, env);
             if (user) {
               const next = url.searchParams.get("next") || "";
               const safeNext = safeNextPath(next, "/dashboard?verified=1");
@@ -913,7 +932,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
             headers: { ...SECURE_HTML, ...rateLimitHeaders(inviteRl) },
           });
         }
-        const user = await currentUser(request, env);
+        const user = await currentUserImpl(request, env);
         const html = addCookieConsent(await renderHtmlPage(PAGES.invite, { invite, token, user }));
         return new Response(html, {
           headers: { ...SECURE_HTML, ...csrfHeader, ...rateLimitHeaders(inviteRl) },
@@ -932,7 +951,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           : ["account", "team", "connections", "data"].includes(requestedTab)
             ? requestedTab
             : "account";
-        const user = await currentUser(request, env);
+        const user = await currentUserImpl(request, env);
         if (!user) return redirectToLogin(url);
         const html = addCookieConsent(await renderHtmlPage(PAGES.settingsUnified, {
           activePath: url.pathname + url.search,
@@ -951,7 +970,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const targetPath = url.searchParams.get("path");
         if (!targetPath) return new Response("Missing path", { status: 400, headers: { ...SECURE_HTML, ...csrfHeader } });
         try {
-          const user = await currentUser(request, env);
+          const user = await currentUserImpl(request, env);
           if (!user) return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json", ...csrfHeader } });
           const fragment = resolveFragment(targetPath);
           if (!fragment) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "content-type": "application/json", ...csrfHeader } });
@@ -1014,7 +1033,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           }, "nav_query");
         }
         try {
-          const user = await currentUser(request, env);
+          const user = await currentUserImpl(request, env);
           if (!user) return redirectToLogin(url);
           const html = addCookieConsent(await renderHtmlPage(PAGES.dashboard, {
             activePath: url.pathname + url.search,
@@ -1077,7 +1096,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         }
       }
       if (path.startsWith("/dashboard/")) {
-        const user = await currentUser(request, env);
+        const user = await currentUserImpl(request, env);
         if (!user) return redirectToLogin(url);
         try {
           const html = addCookieConsent(await renderHtmlPage(PAGES.dashboardNotFound, {
@@ -1136,7 +1155,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return new Response(addCookieConsent(await renderHtmlPage(PAGES.reset)), { headers: { ...SECURE_HTML, ...csrfHeader } });
       }
       if (path === "/admin") {
-        const u = await currentUser(request, env);
+        const u = await currentUserImpl(request, env);
         if (!u || !u.is_admin) return new Response(notFoundPage("admin", nonce), { status: 404, headers: HTML_N });
         // C-10: Mandatory admin MFA. Admins with no enrolled TOTP are forced
         // to the 2FA setup page; enrolled admins must have a fresh session flag.
@@ -1172,7 +1191,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/help") {
         const viewerHelp = await withViewerCommunity(env, resolveViewerHelp(url));
-        const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
+        const helpUser = viewerHelp ? null : await currentUserImpl(request, env).catch(() => null);
         const helpHtml = await renderHtmlPage(PAGES.helpHub, { activePath: "/help", user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });
       }
@@ -1182,7 +1201,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const pageKey = map[tab];
         if (!pageKey) return redirectResponse(new URL("/help/support", url), 302);
         const viewerHelp = await withViewerCommunity(env, resolveViewerHelp(url));
-        const helpUser = viewerHelp ? null : await currentUser(request, env).catch(() => null);
+        const helpUser = viewerHelp ? null : await currentUserImpl(request, env).catch(() => null);
         const helpHtml = await renderHtmlPage(PAGES[pageKey], { activePath: path, user: helpUser || undefined, viewerHelp, theme: viewerHelp ? "light" : "dark" });
         return new Response(addCookieConsent(helpHtml), { headers: { ...HTML_N, ...csrfHeader } });
       }

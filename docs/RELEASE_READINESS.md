@@ -162,9 +162,9 @@ One canonical plan owner defines:
 
 | Plan | Price | Active viewers / rolling 30d | Sites | Players/site | Operators | Safe automation |
 |---|---:|---:|---:|---:|---:|---|
-| Free | $0 | 100 | 1 | 50 | 1 | Manual safe Activities only |
+| Free | $0 | 50 | 1 | 10 | 1 | Manual safe Activities only |
 | Pro | $24/month or $240/year | 2,500 | 3 | 1,000 | 1 | Yes |
-| Team | $69/month or $690/year | 10,000 | 10 | 5,000 | 5 | Yes, including current Moderator capability |
+| Team | $69/month or $690/year | 25,000 | 10 | 5,000 | 5 | Yes, including current Moderator capability |
 
 Plan display, metadata, effective entitlement, site/player/operator limits, downgrade restrictions and viewer-right preservation are contract-tested. No environment variable can silently change canonical prices.
 
