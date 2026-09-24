@@ -75,7 +75,6 @@ describe("dashboard loading states", () => {
     const account = read("dashboard/account.js");
     const games = read("dashboard/games.js");
     const performance = read("dashboard/performance.js");
-    const referrals = read("dashboard/referrals.js");
     expect(site).toContain("setState({ STATS_STATUS: \"loading\" })");
     expect(site).toContain("setState({ STATS: s, STATS_STATUS: \"ready\" })");
     expect(site).toContain("setState({ CREDITS_STATUS: \"loading\" })");
@@ -83,7 +82,6 @@ describe("dashboard loading states", () => {
     expect(account).toContain("setState({ SESSIONS_STATUS: \"loading\" })");
     expect(games).toContain("setState({ GAMES_STATUS: \"loading\" })");
     expect(performance).toContain("setState({ HEATMAP_STATUS: \"loading\" })");
-    expect(referrals).toContain("setState({ REFERRALS_STATUS: \"loading\" })");
   });
 
   it("does not coerce credits payload fields to zero before resolution", () => {

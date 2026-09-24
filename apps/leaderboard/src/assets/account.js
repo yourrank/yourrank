@@ -6,7 +6,6 @@ import { state } from "./dashboard/state.js";
 import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
 import { registerRouteRenderer, requestDashboardRoute, syncRouteChrome } from "./dashboard/shell.js";
-import { renderReferrals } from "./dashboard/referrals.js";
 import { wirePlanLock, trackFunnel } from "./dashboard/plan-lock.js";
 import { renderPlan, loadHistory, loadPlanUsage } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
@@ -737,7 +736,6 @@ async function init() {
   }
   renderPlan();
   loadPlanUsage();
-  renderReferrals();
   loadHistory();
   await loadPostbacks();
   wirePostbacks();

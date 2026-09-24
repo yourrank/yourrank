@@ -23,7 +23,6 @@ export function createDashboardState({ requestId, onSubscriberError = (err) => c
     CREDITS_STATUS: "loading",
     CREDITS_PRODUCT_ENABLED: false,
     HEATMAP_STATUS: "loading",
-    REFERRALS_STATUS: "loading",
     USAGE_STATUS: "loading",
     SESSIONS_STATUS: "loading",
     GAMES_STATUS: "loading",

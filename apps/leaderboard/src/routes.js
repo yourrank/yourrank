@@ -35,7 +35,6 @@ import {
   handleGetInviteInfo,
 } from "./handlers/team.js";
 import { handleTrial, handleBillingFunnel } from "./handlers/billing.js";
-import { handleReferrals } from "./handlers/referrals.js";
 import { handleLead } from "./handlers/leads.js";
 import { handleAttribution, handleAttributionExport, handlePostback, handleRotatePostbackKey, handleRevokePostbackKey } from "./handlers/attribution.js";
 import {
@@ -506,7 +505,6 @@ export const ROUTES = [
   { path: "/api/public/:slug", method: "GET", handler: withHandler(handlePublicData) },
   
   // Referrals
-  { path: "/api/referrals", method: "GET", handler: withHandler(handleReferrals) },
 
   // Billing routes
   { path: "/api/billing/checkout", method: "POST", handler: withHandler(handlePolarCheckout) },

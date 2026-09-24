@@ -3458,24 +3458,6 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
 .v3-dash[data-auth-workspace] details.editor-more .field:last-child,
 .v3-dash[data-auth-workspace] details.editor-more > .d-flex:last-child { margin-bottom: 16px; }
 
-/* Referrals Link Row & Tiles */
-.v3-dash[data-auth-workspace] .v3-ref-link-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 16px 0;
-  max-width: 640px;
-}
-.v3-dash[data-auth-workspace] .v3-ref-link-row input {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1px solid var(--ws-line-strong);
-  border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface-soft);
-  color: var(--ws-text);
-  font-family: var(--ws-mono, monospace);
-  font-size: 13px;min-width:0;
-}
 .v3-dash[data-auth-workspace] .v3-stat-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
