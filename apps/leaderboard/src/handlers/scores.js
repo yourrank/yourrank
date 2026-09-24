@@ -1,8 +1,8 @@
 // Score postback handlers (authenticated via X-Postback-Key + HMAC-SHA256 signature)
 import { json, bad, denied, rateLimit as defaultRateLimit, rateLimitHeaders } from "../auth.js";
 import { saveSite as defaultSaveSite } from "../site.js";
-import { effectivePlan } from "@yourrank/shared/plans";
-import { checkLimit, assertFeature } from "@yourrank/shared/entitlements";
+import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
+import { checkLimit, limitDenial, assertFeature } from "@yourrank/shared/entitlements";
 import { one as defaultOne } from "@yourrank/shared/db";
 import { verifyHmacSha256Hex as defaultVerifyHmacSha256Hex, hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import {
@@ -209,7 +209,9 @@ export async function handleScores(request, env, deps = {}) {
       const validation = validateAndNormalizePlayers(body.players);
       if (validation.error) return bad(validation.error, 400);
       const validPlayers = validation.players;
-      const playerDenial = checkLimit(plan, "players_per_site", validPlayers.length);
+      const playerDenial = validPlayers.length > getPlanLimit(plan, "players_per_site")
+        ? limitDenial(plan, "players_per_site", validPlayers.length)
+        : null;
       if (playerDenial) return denied(playerDenial, { actorId: keyOwner.userId, request });
       const r = await saveSiteImpl(env, user, { ...brandPayload(site), players: validPlayers }, site.id, request, {
         scoreReplay: replayHash ? { userId: keyOwner.userId, hash: replayHash } : undefined,

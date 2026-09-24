@@ -1142,7 +1142,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
       const owner = await oneImpl("SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
       if (owner) effectiveSitePlan = effectivePlan(owner);
     }
-    const denial = checkLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
+    const denial = validatedPlayers.length > getPlanLimit(effectiveSitePlan, "players_per_site")
+      ? limitDenial(effectiveSitePlan, "players_per_site", validatedPlayers.length)
+      : null;
     if (denial) return { error: denial.error, code: "player_limit", denial };
   }
   const b = payload.brand || {};
@@ -1370,7 +1372,9 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
         );
         if (owner) effectiveSitePlan = effectivePlan(owner);
       }
-      const denial = checkLimit(effectiveSitePlan, "players_per_site", validatedPlayers.length);
+      const denial = validatedPlayers.length > getPlanLimit(effectiveSitePlan, "players_per_site")
+        ? limitDenial(effectiveSitePlan, "players_per_site", validatedPlayers.length)
+        : null;
       if (denial) return { error: denial.error, code: "player_limit", denial };
     }
 

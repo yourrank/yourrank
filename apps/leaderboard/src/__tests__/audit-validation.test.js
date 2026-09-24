@@ -274,19 +274,19 @@ describe("saveSite Free player limit", () => {
 
   beforeEach(() => { mockOne.mockReset(); mockQuery.mockReset(); mockExec.mockReset(); });
 
-  it("allows exactly 50 players on Free", async () => {
+  it("allows exactly 10 players on Free", async () => {
     mockOne.mockResolvedValue(SITE);
-    const result = await saveSite(mockEnv(), USER_ROW, { players: players(50) }, "site-1");
+    const result = await saveSite(mockEnv(), USER_ROW, { players: players(10) }, "site-1");
     expect(result.code).not.toBe("player_limit");
     expect(result.ok).toBe(true);
   });
 
-  it("rejects the 51st player on Free", async () => {
+  it("rejects the 11th player on Free", async () => {
     mockOne.mockResolvedValue(SITE);
-    const result = await saveSite(mockEnv(), USER_ROW, { players: players(51) }, "site-1");
-    expect(result).toEqual({
-      error: "Your plan allows up to 50 players. Upgrade for more.",
+    const result = await saveSite(mockEnv(), USER_ROW, { players: players(11) }, "site-1");
+    expect(result).toMatchObject({
       code: "player_limit",
+      denial: { code: "plan_limit_reached", limit: "players_per_site", required_plan: "pro", current_plan: "free", allowance: 10, usage: 11 },
     });
   });
 });
