@@ -92,6 +92,17 @@ SESSION_COOKIE_DOMAIN = ".yourrank.site"
 # In production this should be "false" unless you want a public demo account.
 ALLOW_DEMO_LOGIN = "false"
 DEMO_USER_EMAIL = "demo@yourrank.site"
+# Polar production organization "yourrank" (polar.sh). Product IDs are public;
+# POLAR_ACCESS_TOKEN and POLAR_WEBHOOK_SECRET are Worker secrets.
+POLAR_SERVER = "production"
+PUBLIC_BASE_URL = "https://yourrank.site"
+# Mirrors the "Grace period for benefit revocation" setting of the production org.
+POLAR_PAST_DUE_GRACE_DAYS = "7"
+POLAR_ORGANIZATION_ID = "5431b5a2-4ea8-4106-a76c-0b5a5ca9cf5a"
+POLAR_PRODUCT_PRO_MONTHLY = "5eb8a252-fdd5-4e62-9807-bc2d84120ff7"
+POLAR_PRODUCT_PRO_ANNUAL = "d3a345d1-4309-46a5-b6ba-c699f156ecae"
+POLAR_PRODUCT_TEAM_MONTHLY = "18b35be4-962f-4688-aee8-6604de31ea4e"
+POLAR_PRODUCT_TEAM_ANNUAL = "0a895095-b807-41f4-8e4f-f9c09f7e9573"
 # Optional Google Business Profile integration (/reviews page).
 # GBP_REVIEW_URL = "https://g.page/.../review"
 # GBP_PHOTO_URL = "https://yourrank.site/og.png"
