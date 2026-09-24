@@ -1,5 +1,5 @@
 // Domain purchase, automated DNS setup, and transfer management API handlers.
-import { requireUser, ok, bad, readJson } from "../auth.js";
+import { requireUser, ok, bad, denied, readJson } from "../auth.js";
 import { getByUser, getBoardById, invalidateSiteCache, invalidateUserCache } from "../site.js";
 import { one, exec, withTransaction } from "@yourrank/shared/db";
 import { getDomainProvider, SUPPORTED_TLDS } from "@yourrank/shared/domain-provider";
@@ -7,7 +7,8 @@ import { rateLimit } from "@yourrank/shared/ratelimit";
 import { PLATFORM_HOST } from "../constants.js";
 import { invalidateCustomDomain, verifiedProviderHostname } from "../middleware/custom-domain.js";
 import { logAudit } from "@yourrank/shared/audit";
-import { effectivePlan, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { effectivePlan } from "@yourrank/shared/plans";
+import { assertFeature, limitDenial } from "@yourrank/shared/entitlements";
 import { requireSiteCapability } from "../site-authorization.js";
 
 const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/;
@@ -106,7 +107,8 @@ export async function handleDomainPurchase(request, env, {
     if (authorization.res) return authorization.res;
 
     const plan = effectivePlan(user);
-    if (plan !== "pro" && plan !== "team") return bad("Custom domains require Pro or Team.", 403);
+    const domainGate = assertFeature(plan, "custom_domain");
+    if (domainGate) return denied(domainGate, { actorId: user.id, request });
     const activeOrderFilter = "status NOT IN ('cancelled', 'expired') AND expires_at > now()";
     const siteOrder = await oneImpl(
       `SELECT id FROM domain_orders WHERE site_id=$1 AND ${activeOrderFilter} LIMIT 1`,
@@ -117,9 +119,8 @@ export async function handleDomainPurchase(request, env, {
       `SELECT count(*)::int AS count FROM domain_orders WHERE user_id=$1 AND ${activeOrderFilter}`,
       [user.id]
     );
-    if (Number(userOrderCount?.count || 0) >= (BOARD_LIMITS[plan] || 1)) {
-      return bad(`Your plan allows up to ${BOARD_LIMITS[plan]} active domain orders.`, 400);
-    }
+    const domainOrderDenial = limitDenial(plan, "sites", Number(userOrderCount?.count || 0));
+    if (domainOrderDenial) return denied(domainOrderDenial, { actorId: user.id, request });
 
     // Check if domain is already owned in our database
     const existingOrder = await oneImpl("SELECT id, user_id FROM domain_orders WHERE domain=$1", [domain]);

@@ -34,7 +34,7 @@ import {
   handleTeamAcceptInvite,
   handleGetInviteInfo,
 } from "./handlers/team.js";
-import { handleTrial } from "./handlers/billing.js";
+import { handleTrial, handleBillingFunnel } from "./handlers/billing.js";
 import { handleReferrals } from "./handlers/referrals.js";
 import { handleLead } from "./handlers/leads.js";
 import { handleAttribution, handleAttributionExport, handlePostback, handleRotatePostbackKey, handleRevokePostbackKey } from "./handlers/attribution.js";
@@ -513,6 +513,7 @@ export const ROUTES = [
   { path: "/api/billing/portal", method: "POST", handler: withHandler(handlePolarPortal) },
   { path: "/api/billing/webhook/polar", method: "POST", handler: withHandler(handlePolarWebhook) },
   { path: "/api/billing/trial", method: "POST", handler: withHandler(handleTrial) },
+  { path: "/api/billing/funnel", method: "POST", handler: withHandler(handleBillingFunnel) },
   { path: "/api/account/payments", method: "GET", handler: withHandler(handleUserPayments) },
   { path: "/api/account/usage", method: "GET", handler: withHandler(handleAccountUsage) },
   

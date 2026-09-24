@@ -6,6 +6,7 @@ export function broadcastsPanel(): string {
       <div class="mb-md"><h2>Send update</h2></div>
       <p class="muted" id="bcDraftStatus" hidden>Draft loaded from your last visit.</p>
       <div id="bcPlanState" class="v3-note mt-md" aria-live="polite">Checking broadcast access…</div>
+      <div id="bcUsageState" class="v3-note mt-md" aria-live="polite"></div>
 
       <div id="bcSetupState" class="empty bg-panel border radius-md p-24 text-center mt-md" hidden>
         <h3>Connect Telegram to send updates</h3>

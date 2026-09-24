@@ -1,9 +1,9 @@
 import { exec as defaultExec, one as defaultOne } from "./db.js";
 import {
-  ACTIVE_VIEWER_LIMITS,
   ACTIVE_VIEWER_WINDOW_DAYS,
   activeViewerUsageState,
   effectivePlan,
+  getPlanLimit,
   type PlanTier,
 } from "./plans.js";
 
@@ -77,7 +77,7 @@ export async function reconcileAccountActiveViewerUsage(
   const exec = dependencies.exec ?? defaultExec;
   const plan = effectivePlan(rows.account);
   let graceStartedAt = rows.account.active_viewer_grace_started_at;
-  const overFreeAllowance = plan === "free" && rows.activeViewers > ACTIVE_VIEWER_LIMITS.free;
+  const overFreeAllowance = plan === "free" && rows.activeViewers > getPlanLimit("free", "active_viewers_30d");
 
   if (overFreeAllowance && !graceStartedAt) {
     const updated = await exec(

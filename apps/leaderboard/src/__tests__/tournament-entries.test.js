@@ -31,9 +31,13 @@ function request(path, body) {
 }
 
 function deps({ oneValues = [], queryValues = [], txOneValues = [], txQueryValues = [], authorized = true } = {}) {
-  const one = mock(async () => oneValues.shift());
+  const one = mock(async (sql) => String(sql).includes("FROM users")
+    ? { plan: "pro", plan_expires_at: null, status: "active" }
+    : oneValues.shift());
   const query = mock(async () => queryValues.shift() || []);
-  const txOne = mock(async () => txOneValues.shift());
+  const txOne = mock(async (sql) => String(sql).includes("FROM users")
+    ? { plan: "pro", plan_expires_at: null, status: "active" }
+    : txOneValues.shift());
   const txQuery = mock(async () => txQueryValues.shift() || []);
   return {
     one,
@@ -66,8 +70,8 @@ describe("tournament entry lifecycle", () => {
     const response = await handleOpenTournamentSignups(request("/api/tournaments/tournament-1/signups/open"), {}, d);
     expect(response.status).toBe(400);
     expect((await response.json()).error).toContain("Kick channel");
-    // No state transition may happen: only the access lookup ran.
-    expect(d._mocks.one).toHaveBeenCalledTimes(1);
+    // No state transition may happen: only the access and plan lookups ran.
+    expect(d._mocks.one).toHaveBeenCalledTimes(2);
   });
 
   it("persists the chat channel through settings", async () => {
@@ -83,7 +87,7 @@ describe("tournament entry lifecycle", () => {
       d,
     );
     expect(response.status).toBe(200);
-    const update = d._mocks.one.mock.calls[1];
+    const update = d._mocks.one.mock.calls[2];
     expect(update[0]).toContain("chat_channel=$1");
     expect(update[1][0]).toBe("StreamerChannel");
   });
@@ -281,7 +285,7 @@ describe("tournament entry lifecycle", () => {
     );
     expect(response.status).toBe(200);
     expect((await response.json()).tournament).toEqual(updated);
-    const [sql, params] = d._mocks.one.mock.calls[1];
+    const [sql, params] = d._mocks.one.mock.calls[2];
     const setClause = sql.split("RETURNING")[0];
     expect(setClause).toContain("anti_alt_enabled");
     expect(setClause).not.toContain("require_login");
@@ -300,6 +304,7 @@ describe("tournament entry lifecycle", () => {
     const d = {
       requireUser: mock(async () => ({ user: USER, res: null })),
       getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
+      one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
       requireSiteCapabilityImpl: mock(async () => ({ res: null })),
       withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
       logAudit: mock(async () => {}),
@@ -330,6 +335,7 @@ describe("tournament entry lifecycle", () => {
     const d = {
       requireUser: mock(async () => ({ user: USER, res: null })),
       getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
+      one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
       requireSiteCapabilityImpl: mock(async () => ({ res: null })),
       withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
       logAudit: mock(async () => {}),
@@ -360,7 +366,9 @@ describe("tournament entry lifecycle", () => {
     let queryCall = 0;
     const d = {
       requireUser: mock(async () => ({ user: USER, res: null })),
-      one: mock(async () => TOURNAMENT),
+      one: mock(async (sql) => String(sql).includes("FROM users")
+        ? { plan: "pro", plan_expires_at: null, status: "active" }
+        : TOURNAMENT),
       withTransaction: mock(async (fn) => fn({
         one: mock(async () => (++oneCall === 1 ? { ...TOURNAMENT, bracket_size: 4 } : { count: 4 })),
         query: mock(async () => (++queryCall === 1 ? picked : selected)),

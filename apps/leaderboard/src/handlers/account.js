@@ -1,8 +1,9 @@
 // Account-level API: postback keys, conversion log, profile data.
-import { json, bad, requireUser, rateLimit } from "../auth.js";
+import { json, bad, denied, requireUser, rateLimit } from "../auth.js";
 import { loadCreatorConnection } from "@yourrank/shared/provider-connections";
 import { one, query } from "@yourrank/shared/db";
 import { effectivePlan } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 import { handlePostback } from "./attribution.js";
 import { deriveKickConnectionHealth } from "../connection-health.js";
 import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
@@ -100,7 +101,10 @@ export async function handleAccountPostbacksRotate(request, env, injected = {}) 
   const deps = { requireUser, rateLimit, createPostbackKey, ...injected };
   const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
-  if (effectivePlan(user) === "free") return bad("Postbacks require a paid plan.", 402);
+  {
+    const gate = assertFeature(effectivePlan(user), "telegram_postbacks");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (!(await deps.rateLimit(env, `postback-rotate:${user.id}`, 10, 60)).ok) {
     return bad("Too many rotations. Try again later.", 429);
   }
@@ -123,7 +127,10 @@ export async function handleAccountPostbacksRevoke(request, env) {
 export async function handleAccountPostbacksTest(request, env) {
   const { user, res } = await requireUser(request, env);
   if (!user) return res;
-  if (effectivePlan(user) === "free") return bad("Postbacks require a paid plan.", 402);
+  {
+    const gate = assertFeature(effectivePlan(user), "telegram_postbacks");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (!(await rateLimit(env, `postback-test:${user.id}`, 10, 60)).ok) {
     return bad("Too many test conversions. Try again later.", 429);
   }

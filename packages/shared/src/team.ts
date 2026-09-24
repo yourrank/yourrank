@@ -10,7 +10,8 @@
 import { one as defaultOne, query as defaultQuery, exec as defaultExec, withTransaction as defaultWithTransaction } from "./db.js";
 import type { Tx } from "./db.js";
 import { hashToken } from "./crypto.js";
-import { effectivePlan, OPERATOR_SEAT_LIMITS } from "./plans.js";
+import { canUseFeature, effectivePlan, getPlanLimit } from "./plans.js";
+import { featureDenial, limitDenial, type EntitlementDenial } from "./entitlements.js";
 
 export type SiteRole = "owner" | "moderator";
 
@@ -396,7 +397,7 @@ export async function getOperatorSeatUsage(
   return {
     plan,
     used: await countAccountOperatorIdentities(owner.user_id, one),
-    limit: OPERATOR_SEAT_LIMITS[plan],
+    limit: getPlanLimit(plan, "operator_seats"),
   };
 }
 
@@ -409,7 +410,7 @@ export async function createSiteInvite(
   email: string,
   role: SiteRole,
   ops: DbOps = {}
-): Promise<{ ok: boolean; token?: string; inviteId?: string; error?: string; code?: string }> {
+): Promise<{ ok: boolean; token?: string; inviteId?: string; error?: string; code?: string; denial?: EntitlementDenial }> {
   const one = ops.one ?? defaultOne;
   const cleanEmail = String(email || "").trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes("@")) {
@@ -442,8 +443,10 @@ export async function createSiteInvite(
     if (site.user_id !== inviterId) {
       return { ok: false, error: "Only the site owner can invite team members.", code: "forbidden" };
     }
-    if (effectivePlan(site) !== "team") {
-      return { ok: false, error: "Additional operators require the Team plan.", code: "requires_team" };
+    const ownerPlan = effectivePlan(site);
+    if (!canUseFeature(ownerPlan, "team_collaboration")) {
+      const denial = featureDenial(ownerPlan, "team_collaboration");
+      return { ok: false, error: denial.error, code: denial.code, denial };
     }
 
     const targetUser = await tx.one("SELECT id FROM users WHERE lower(email)=$1", [cleanEmail]);
@@ -483,8 +486,9 @@ export async function createSiteInvite(
     }
 
     const seatCount = await countAccountOperatorIdentities(site.user_id, tx.one);
-    if (seatCount >= OPERATOR_SEAT_LIMITS.team) {
-      return { ok: false, error: "The Team plan includes 5 operator seats.", code: "seat_limit" };
+    if (seatCount >= getPlanLimit(ownerPlan, "operator_seats")) {
+      const denial = limitDenial(ownerPlan, "operator_seats", seatCount);
+      return { ok: false, error: denial.error, code: denial.code, denial };
     }
 
     const created = (await tx.unsafe(
@@ -641,7 +645,7 @@ export async function acceptSiteInvite(
   token: string,
   userId: string,
   ops: DbOps = {}
-): Promise<{ ok: boolean; siteId?: string; role?: SiteRole; error?: string; code?: string }> {
+): Promise<{ ok: boolean; siteId?: string; role?: SiteRole; error?: string; code?: string; denial?: EntitlementDenial }> {
   if (!token || !userId) {
     return { ok: false, error: "Invalid invite token or user.", code: "invalid_request" };
   }
@@ -696,8 +700,10 @@ export async function acceptSiteInvite(
     return { ok: false, error: "This invitation has an unsupported role.", code: "invalid_role" };
   }
 
-  if (effectivePlan({ plan: invite.plan, plan_expires_at: invite.plan_expires_at, status: invite.owner_status }) !== "team") {
-    return { ok: false, error: "The site owner needs the Team plan before this invitation can be accepted.", code: "requires_team" };
+  const ownerPlan = effectivePlan({ plan: invite.plan, plan_expires_at: invite.plan_expires_at, status: invite.owner_status });
+  if (!canUseFeature(ownerPlan, "team_collaboration")) {
+    const denial = featureDenial(ownerPlan, "team_collaboration");
+    return { ok: false, error: denial.error, code: denial.code, denial };
   }
 
   const existingAccountSeat = await tx.one(
@@ -716,8 +722,10 @@ export async function acceptSiteInvite(
         WHERE s.user_id=$1`,
       [invite.owner_id],
     );
-    if ((Number(seats?.count) || 0) >= OPERATOR_SEAT_LIMITS.team) {
-      return { ok: false, error: "The Team plan includes 5 operator seats.", code: "seat_limit" };
+    const seatsUsed = Number(seats?.count) || 0;
+    if (seatsUsed >= getPlanLimit(ownerPlan, "operator_seats")) {
+      const denial = limitDenial(ownerPlan, "operator_seats", seatsUsed);
+      return { ok: false, error: denial.error, code: denial.code, denial };
     }
   }
 

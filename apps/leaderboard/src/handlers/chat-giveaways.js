@@ -1,6 +1,6 @@
 // Chat Giveaways dashboard API: server-backed sessions and entrants fed by the
 // verified connected Kick channel's chat webhooks (see shared/chat-giveaways).
-import { requireUser as defaultRequireUser, ok, bad, readJson, json } from "../auth.js";
+import { requireUser as defaultRequireUser, ok, bad, readJson, json, requireSiteFeature } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability as defaultRequireSiteCapability } from "../site-authorization.js";
 import { one as defaultOne, query as defaultQuery, exec as defaultExec } from "@yourrank/shared/db";
@@ -10,6 +10,18 @@ import {
 } from "@yourrank/shared/chat-giveaways";
 
 const CAPABILITY = "canRoleManageRewards";
+
+// Rules that stay free; everything else is an advanced_giveaways feature.
+function usesAdvancedGiveawayRules(rules) {
+  return (
+    rules.entryMode === "verified" ||
+    rules.onePerIp === true ||
+    rules.vipOnly === true ||
+    rules.winnerMustRespond === true ||
+    rules.responseTimeout !== 60 ||
+    rules.autoReroll === true
+  );
+}
 import { giveawayRulesSchema, GIVEAWAY_CAPABILITIES } from "@yourrank/shared/giveaway-eligibility";
 import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
 
@@ -79,6 +91,13 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
 
   const parsedRules = giveawayRulesSchema.safeParse(body.rules ?? {});
   if (!parsedRules.success) return bad(parsedRules.error.issues[0]?.message || "Invalid giveaway rules.", 400);
+  // Basic giveaways are free: keyword, entryMode chat|members, subscriberOnly,
+  // winnerRepeat, excludePreviousWinners. Advanced fields require the
+  // advanced_giveaways feature (site owner's plan decides).
+  if (usesAdvancedGiveawayRules(parsedRules.data)) {
+    const gateRes = await requireSiteFeature(site, "advanced_giveaways", { actorId: user.id, request, oneImpl: d.one });
+    if (gateRes) return gateRes;
+  }
   const keyword = normalizeGiveawayKeyword(body.keyword);
   if (!keyword) return bad("Enter the keyword viewers should type.", 400);
   if (/\s/.test(keyword)) return bad("Use a single word or command (no spaces) as the keyword.", 400);

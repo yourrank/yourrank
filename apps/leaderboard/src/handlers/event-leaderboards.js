@@ -2,7 +2,7 @@ import { requireUser, readJson, bad, ok, rateLimit } from '../auth.js';
 import { getBoardById } from '../site.js';
 import { requireSiteCapability } from '../site-authorization.js';
 import { one, query, withTransaction } from '@yourrank/shared/db';
-import { effectivePlan, PLAN_LIMITS } from '@yourrank/shared/plans';
+import { effectivePlan, getPlanLimit } from '@yourrank/shared/plans';
 import { validateEventPlayers } from '@yourrank/shared/event-leaderboards';
 
 const defaults = { requireUser, getBoardById, requireSiteCapability, one, query, withTransaction, rateLimit };
@@ -15,7 +15,7 @@ export async function handleEventLeaderboards(request, env, deps = defaults) {
   const access = await deps.requireSiteCapability(user, site, 'canRoleManageBoard');
   if (access.res) return access.res;
   const owner = site.user_id === user.id ? user : await deps.one('SELECT plan, plan_expires_at, status FROM users WHERE id=$1', [site.user_id]);
-  const playerLimit = PLAN_LIMITS[effectivePlan(owner)];
+  const playerLimit = getPlanLimit(effectivePlan(owner), "players_per_site");
   if (request.method === 'GET') return ok({ playerLimit, events: await deps.query('SELECT id, name, players, published, updated_at FROM app_private.site_event_leaderboards WHERE site_id=$1 ORDER BY created_at, id', [site.id]) });
   if (!(await deps.rateLimit(env, `event-boards:${user.id}`, 30, 60)).ok) return bad('Too many changes. Try again shortly.', 429);
   const body = await readJson(request);

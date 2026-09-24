@@ -76,7 +76,7 @@ it('recovers unavailable event documents without mixing events into paginated re
 });
 
 it('exposes the site owner player limit and enforces it without writing Main or credit data', async () => {
-  expect((await (await harness({ plan: 'free' }).call(null, 'GET')).json()).playerLimit).toBe(50);
+  expect((await (await harness({ plan: 'free' }).call(null, 'GET')).json()).playerLimit).toBe(10);
   expect((await (await harness({ plan: 'free', member: true }).call(null, 'GET')).json()).playerLimit).toBe(5000);
   const h = harness({ plan: 'free' });
   expect((await h.call({ name: 'Limited', players: Array.from({ length: 51 }, (_, i) => ({ name: 'Player ' + i, score: i })) })).status).toBe(400);

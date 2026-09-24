@@ -1,4 +1,4 @@
-import { requireUser, json, bad, readJson, rateLimit } from "../auth.js";
+import { requireUser, json, bad, denied, readJson, rateLimit } from "../auth.js";
 import { getBoardById, getPlayers, saveSite } from "../site.js";
 import { logAudit } from "@yourrank/shared/audit";
 import { requireSiteCapability } from "../site-authorization.js";
@@ -74,6 +74,7 @@ export async function handleQuickAdd(request, env) {
   // Save against the version we read so a concurrent dashboard or API update is
   // rejected instead of being overwritten by this full-roster mutation.
   const r = await saveSite(env, user, { players: sortedPlayers, siteId: site.id, expectedUpdatedAt: site.updated_at }, site.id, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   if (r.error) return bad(r.error, 400);
 
   await logAudit({

@@ -580,6 +580,82 @@ describe("buildDashboard", () => {
     expect(res.status).toBe(400);
   });
 
+  it("GET /dash/api/usage returns monthly meter usage with plan allowances", async () => {
+    mockOne.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
+      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: null });
+      return Promise.resolve(null);
+    });
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
+      if (sql.includes("FROM account_usage_meters")) {
+        return Promise.resolve([
+          { meter: "telegram_interactions", used: 42 },
+          { meter: "broadcast_deliveries", used: 7 },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+    const req = new Request("http://localhost:8787/dash/api/usage", {
+      headers: { cookie: "yr_session=token123" },
+    });
+    const res = await app.fetch(req, testEnv);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.telegram_interactions.used).toBe(42);
+    expect(body.telegram_interactions.allowance).toBe(50000);
+    expect(body.broadcast_deliveries.used).toBe(7);
+    expect(body.broadcast_deliveries.allowance).toBe(10000);
+  });
+
+  it("POST /dash/api/broadcasts/:id/resume rejects when no deliveries remain", async () => {
+    mockOne.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
+      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: null });
+      return Promise.resolve(null);
+    });
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
+      if (sql.includes("FROM account_usage_meters")) {
+        return Promise.resolve([{ meter: "broadcast_deliveries", used: 10000 }]);
+      }
+      return Promise.resolve([]);
+    });
+    const req = new Request("http://localhost:8787/dash/api/broadcasts/bc-1/resume", {
+      method: "POST",
+      headers: { origin: "https://yourrank.site", cookie: "yr_session=token123" },
+    });
+    const res = await app.fetch(req, testEnv);
+    expect(res.status).toBe(403);
+    expect((await res.json() as any).error).toContain("allowance");
+  });
+
+  it("POST /dash/api/broadcasts/:id/resume resumes a quota-paused broadcast with headroom", async () => {
+    mockOne.mockImplementation((sql: string) => {
+      if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });
+      if (sql.includes("SELECT plan, plan_expires_at")) return Promise.resolve({ plan: "pro", plan_expires_at: null });
+      return Promise.resolve(null);
+    });
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes("FROM sessions")) return Promise.resolve([{ user_id: "u-1", created_at: new Date(), age: 0 }]);
+      if (sql.includes("FROM account_usage_meters")) {
+        return Promise.resolve([{ meter: "broadcast_deliveries", used: 10 }]);
+      }
+      return Promise.resolve([]);
+    });
+    mockExec.mockImplementation((sql: string) => {
+      if (sql.includes("UPDATE broadcasts")) return Promise.resolve([{ id: "bc-1" }]);
+      return Promise.resolve([]);
+    });
+    const req = new Request("http://localhost:8787/dash/api/broadcasts/bc-1/resume", {
+      method: "POST",
+      headers: { origin: "https://yourrank.site", cookie: "yr_session=token123" },
+    });
+    const res = await app.fetch(req, testEnv);
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).ok).toBe(true);
+  });
+
   it("DELETE /dash/api/broadcasts/:id cancels a scheduled broadcast", async () => {
     mockOne.mockImplementation((sql: string) => {
       if (sql.includes("SELECT status FROM users")) return Promise.resolve({ status: "active" });

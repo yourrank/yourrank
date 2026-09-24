@@ -7,6 +7,7 @@ import { wireAccount } from "./dashboard/account.js";
 import { wireDeleteAccountModal } from "./dashboard/account-delete-modal.js";
 import { registerRouteRenderer, requestDashboardRoute, syncRouteChrome } from "./dashboard/shell.js";
 import { renderReferrals } from "./dashboard/referrals.js";
+import { wirePlanLock, trackFunnel } from "./dashboard/plan-lock.js";
 import { renderPlan, loadHistory, loadPlanUsage } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
 import { parseDynamicPath } from "./dashboard/routes.js";
@@ -88,6 +89,7 @@ function renderPostback(pb, status, upgrade) {
     keyCard.hidden = true;
     advanced.hidden = true;
     upgradeEl.hidden = false;
+    wirePlanLock(upgradeEl, "telegram_postbacks");
     return;
   }
   upgradeEl.hidden = true;
@@ -458,6 +460,10 @@ function renderTeam(data) {
   const { members = [], invites = [], canManageTeam, currentRole, seats } = data;
   const openBtn = $("btnOpenInviteModal");
   const upgradeLink = $("teamUpgradeLink");
+  if (upgradeLink && !upgradeLink._funnelWired && typeof upgradeLink.addEventListener === "function") {
+    upgradeLink._funnelWired = true;
+    upgradeLink.addEventListener("click", () => trackFunnel("upgrade_clicked", "team_collaboration"));
+  }
   const seatUsage = $("teamSeatUsage");
   const seatContext = $("teamSeatContext");
   const planNotice = $("teamPlanNotice");

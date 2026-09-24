@@ -1,9 +1,10 @@
 import { requireUser as defaultRequireUser, ok, bad } from "../auth.js";
+import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { one as defaultOne, withTransaction as defaultTransaction } from "@yourrank/shared/db";
 import { polarConfig, polarRequest, polarRedirect, billingReturnUrl, validatePolarProduct, verifyPolarWebhook, isBillingId } from "../polar.js";
 
 const UNAVAILABLE = "Paid checkout is coming soon. Your current plan stays available.";
-const depsFor = (deps) => ({ requireUser: defaultRequireUser, one: defaultOne, transaction: defaultTransaction, request: polarRequest, ...deps });
+const depsFor = (deps) => ({ requireUser: defaultRequireUser, one: defaultOne, transaction: defaultTransaction, request: polarRequest, logAudit: defaultLogAudit, ...deps });
 
 export async function getPolarBillingStatus(env, userId, deps = {}) {
   const { one } = depsFor(deps);
@@ -97,6 +98,7 @@ export async function handlePolarCheckout(request, env, deps = {}) {
       await d.transaction(async (tx) => {
         await tx.unsafe("UPDATE app_private.polar_accounts SET checkout_url=$3,checkout_expires_at=$4,updated_at=now() WHERE user_id=$1 AND checkout_attempt_id=$2", [user.id,attemptId,url,checkout.expires_at]);
       });
+    await d.logAudit({ actorId: user.id, action: "billing.checkout_started", entityType: "plan", entityId: body.plan, details: { plan: body.plan, event: "checkout_started" }, request });
     return ok({ url });
   } catch (error) {
     console.error("[polar.checkout]", error.name, error.message?.startsWith("Polar request failed") ? error.message : "checkout_failed");
@@ -210,6 +212,7 @@ export async function handlePolarWebhook(request, env, deps = {}) {
             VALUES ($1,'polar',$2,$3,$4,$5,$6,$6,$7) ON CONFLICT(polar_order_id)
             DO UPDATE SET amount=$2,currency=$3,status=$4,payload_json=$7,updated_at=now() WHERE payments.user_id=$1`,
           [userId, Number(order.total_amount) / 100, String(order.currency).toUpperCase(), refunded ? "refunded" : "confirmed", mapping.plan, order.id, { refunded_amount: Number(order.refunded_amount) || 0 }]);
+          await defaultLogAudit({ actorId: userId, action: "billing.checkout_completed", entityType: "plan", entityId: mapping.plan, details: { plan: mapping.plan, event: "checkout_completed", order_id: order.id, status: refunded ? "refunded" : "confirmed" } });
         }
       }
       await tx.unsafe("INSERT INTO app_private.polar_webhook_events(id,event_type,user_id) VALUES ($1,$2,$3)", [request.headers.get("webhook-id"), event.type, userId]);

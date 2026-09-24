@@ -54,20 +54,18 @@ mock.module(cryptoUrl, cryptoMock);
 mock.module(cryptoUrlTs, cryptoMock);
 
 // ── Import after mocks ─────────────────────────────────────────────────
-import { PLANS } from "../plans.js";
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS } from "@yourrank/shared/plans";
+import { botPlanView } from "../plans.js";
+import { effectivePlan, getPlanLimit, PLAN_TIERS } from "@yourrank/shared/plans";
 
 // ── PLANS constant (bot-specific) ──────────────────────────────────────
-describe("PLANS constant", () => {
-  it("defines the Free, Pro, and Team bot tiers", () => {
-    expect(PLANS).toHaveProperty("free");
-    expect(PLANS).toHaveProperty("pro");
-    expect(PLANS).toHaveProperty("team");
-    expect(PLANS).not.toHaveProperty("starter");
+describe("botPlanView", () => {
+  it("derives a bot plan view for each canonical tier", () => {
+    const views = PLAN_TIERS.map(botPlanView);
+    expect(views.map((v) => v.tier)).toEqual(["free", "pro", "team"]);
   });
 
-  it("each plan has required fields", () => {
-    for (const [, plan] of Object.entries(PLANS)) {
+  it("each plan view has required fields", () => {
+    for (const plan of PLAN_TIERS.map(botPlanView)) {
       expect(plan).toHaveProperty("tier");
       expect(plan).toHaveProperty("label");
       expect(plan).toHaveProperty("maxBots");
@@ -106,10 +104,10 @@ describe("effectivePlan", () => {
 // ── PLAN_LIMITS hierarchy ──────────────────────────────────────────────
 describe("PLAN_LIMITS", () => {
   it("free has fewer players than pro", () => {
-    expect(PLAN_LIMITS.free).toBeLessThan(PLAN_LIMITS.pro);
+    expect(getPlanLimit("free", "players_per_site")).toBeLessThan(getPlanLimit("pro", "players_per_site"));
   });
 
-  it("BOARD_LIMITS: free has fewer boards than pro", () => {
-    expect(BOARD_LIMITS.free).toBeLessThan(BOARD_LIMITS.pro);
+  it("sites: free has fewer boards than pro", () => {
+    expect(getPlanLimit("free", "sites")).toBeLessThan(getPlanLimit("pro", "sites"));
   });
 });

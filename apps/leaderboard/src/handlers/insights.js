@@ -1,5 +1,5 @@
 import { queryWithTimeout, one } from "@yourrank/shared/db";
-import { effectivePlan, HISTORY_DAYS } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit, canUseFeature } from "@yourrank/shared/plans";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { requireUser, bad, json } from "../auth.js";
 import { getByUser, getBoardById } from "../site.js";
@@ -67,7 +67,7 @@ export async function handleInsights(request, env, injected = {}) {
   }
 
   const plan = await ownerPlan(site, user, deps);
-  const effectiveDays = Math.min(days, HISTORY_DAYS[plan] || HISTORY_DAYS.free);
+  const effectiveDays = Math.min(days, getPlanLimit(plan, "history_days") || getPlanLimit("free", "history_days"));
   const endsAt = new Date(deps.now());
   const startsAt = new Date(endsAt.getTime() - effectiveDays * 86_400_000);
   const params = [site.id, startsAt.toISOString(), endsAt.toISOString()];
@@ -150,6 +150,8 @@ export async function handleInsights(request, env, injected = {}) {
     deps.loadPeopleReviewCounts(site.id),
   ]);
 
+  // advanced_insights gates the sections beyond community/participation basics.
+  const advanced = canUseFeature(plan, "advanced_insights");
   const names = ["community", "participation", "rewards", "reviews"];
   settled.forEach((result, index) => {
     if (result.status === "rejected") {
@@ -159,8 +161,8 @@ export async function handleInsights(request, env, injected = {}) {
   const value = (index) => settled[index].status === "fulfilled" ? settled[index].value : null;
   const community = value(0);
   const participation = value(1);
-  const rewards = value(2);
-  const reviews = value(3);
+  const rewards = advanced ? value(2) : null;
+  const reviews = advanced ? value(3) : null;
   const availability = {
     community: community !== null,
     participation: participation !== null,

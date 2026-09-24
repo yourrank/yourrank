@@ -60,14 +60,14 @@ describe("account-pooled active-viewer usage", () => {
     expect(countCall?.sql).toContain("v.is_system=FALSE");
   });
 
-  test("starts grace at 101 and clears it when rolling usage returns to 100", async () => {
-    const over = usageDependencies({ activeViewers: 101 });
+  test("starts grace at 51 and clears it when rolling usage returns to 50", async () => {
+    const over = usageDependencies({ activeViewers: 51 });
     const started = await reconcileAccountActiveViewerUsage("owner-1", over);
     expect(started?.level).toBe("grace");
     expect(over.calls.some((call) => call.kind === "exec" && call.sql.includes("COALESCE(active_viewer_grace_started_at, now())"))).toBe(true);
 
     const recovered = usageDependencies({
-      activeViewers: 100,
+      activeViewers: 50,
       graceStartedAt: "2026-07-01T00:00:00.000Z",
     });
     const current = await reconcileAccountActiveViewerUsage("owner-1", recovered);

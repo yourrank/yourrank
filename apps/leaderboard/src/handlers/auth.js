@@ -8,7 +8,7 @@ import { trackActivation } from "@yourrank/shared/activation-funnel";
 import { createBoard, getUserBoardsList } from "../site.js";
 import { sendEmail, resetEmail, sendOnboardingEmail, sendVerificationEmail } from "../email.js";
 import { validatePassword } from "../password-rules.js";
-import { effectivePlan, PLAN_LIMITS, BOARD_LIMITS, priceUsd } from "@yourrank/shared/plans";
+import { effectivePlan, getPlanLimit, priceUsd } from "@yourrank/shared/plans";
 import { getEnabledFeatureKeys } from "@yourrank/shared/features";
 import {
   findUserByEmail, findSiteBySlug, findUserByReferralCode, createUser
@@ -305,7 +305,7 @@ export async function handleMe(request, env) {
       plan, planExpiresAt: user.plan_expires_at || 0,
       status: user.status, isAdmin: !!user.is_admin, emailVerified: !!user.email_verified,
       slug: site?.slug || null,
-      limits: { players: PLAN_LIMITS[plan], boards: BOARD_LIMITS[plan] },
+      limits: { players: getPlanLimit(plan, "players_per_site"), boards: getPlanLimit(plan, "sites") },
       proPrice: priceUsd(env, "pro"),
       hasTrial: !!user.has_trial,
       isTrial,

@@ -42,7 +42,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
     mockExec = mock();
     mockLogAudit = mock();
     mockWithTransaction = mock((fn) => fn({
-      one: mockOne,
+      one: (sql, ...a) => String(sql).includes("FROM users") ? Promise.resolve({ plan: "pro", plan_expires_at: null, status: "active" }) : String(sql).includes("SELECT user_id FROM sites") ? Promise.resolve({ user_id: "user-123" }) : mockOne(sql, ...a),
       unsafe: mockExec,
     }));
     mockExec.mockResolvedValue([{}]);
@@ -51,7 +51,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
       requireUser: mock().mockResolvedValue({ user: USER, res: null }),
       getByUser: mock().mockResolvedValue(SITE),
       getBoardById: mock().mockResolvedValue(SITE),
-      one: mockOne,
+      one: (sql, ...a) => String(sql).includes("FROM users") ? Promise.resolve({ plan: "pro", plan_expires_at: null, status: "active" }) : String(sql).includes("SELECT user_id FROM sites") ? Promise.resolve({ user_id: "user-123" }) : mockOne(sql, ...a),
       query: mockQuery,
       exec: mockExec,
       logAudit: mockLogAudit,
@@ -71,6 +71,9 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const pending = [];
       const txProxy = {
         one: async (...args) => {
+          const q = String(args[0]);
+          if (q.includes("FROM users")) return { plan: "pro", plan_expires_at: null, status: "active" };
+          if (q.includes("SELECT user_id FROM sites")) return { user_id: "user-123" };
           const res = await mockOne(...args);
           pending.push({ sql: args[0], params: args[1], res });
           return res;

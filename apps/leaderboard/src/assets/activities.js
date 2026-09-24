@@ -1,6 +1,7 @@
 import "./dashboard/command-palette.js";
 import { loadBoardShell, preserveSiteContextLinks, sitePath } from "./dashboard/board-shell.js";
 import { fetchDashboardJson, loginRedirectPath } from "./dashboard/request.js";
+import { wirePlanLock } from "./dashboard/plan-lock.js";
 import { clearSession } from "./dashboard/session.js";
 import {
   DEFAULT_PAGE_SIZE,
@@ -339,7 +340,11 @@ if (!window.__yrSpaShell) {
       entitlement.textContent = canAutomate ? `${automation.entitlement.plan === "team" ? "Team" : "Pro"} automation` : "Manual only";
       entitlement.dataset.state = canAutomate ? "available" : "locked";
     }
-    if ($("act-automation-gate")) $("act-automation-gate").hidden = canAutomate;
+    const gate = $("act-automation-gate");
+    if (gate) {
+      gate.hidden = canAutomate;
+      if (!canAutomate) wirePlanLock(gate, "activity_automation");
+    }
     if ($("act-template-new")) $("act-template-new").disabled = !canAutomate;
     if ($("act-schedule-new")) $("act-schedule-new").disabled = !canAutomate || !automation.templates?.length;
     renderTemplates();

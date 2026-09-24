@@ -236,7 +236,9 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
       body: JSON.stringify({ code: "PAUSED", pointsReward: 10, maxClaims: 5 }),
     }), mockEnv(), deps);
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toMatch(/New Activities are paused/);
+    const body = await res.json();
+    expect(body.code).toBe("plan_limit_reached");
+    expect(body.limit).toBe("active_viewers_30d");
     expect(mockOne).not.toHaveBeenCalled();
   });
 

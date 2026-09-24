@@ -116,7 +116,7 @@ describe("board API key management", () => {
     const { deps: d, calls } = deps(userFor("free"));
     const res = await handleListApiKeys(listReq(), {}, d);
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("The signed score API requires Pro or Team.");
+    expect((await res.json()).error).toBe("Signed score API is available on Pro and Team.");
     expect(calls.list).toBe(0);
   });
 

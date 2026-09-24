@@ -100,7 +100,10 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     expansionRestricted = true;
     const res = await handleCreditsCreateReward(req({ title: "VIP", cost: 100, credits: 10 }), {}, deps);
     expect(res.status).toBe(403);
-    expect((await res.json()).error).toMatch(/active-viewer allowance/i);
+    const body = await res.json();
+    expect(body.code).toBe("plan_limit_reached");
+    expect(body.limit).toBe("active_viewers_30d");
+    expect(body.required_plan).toBe("pro");
     expect(deps.oneResponses).toHaveLength(0);
   });
 

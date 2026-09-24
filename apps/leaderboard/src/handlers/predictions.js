@@ -1,6 +1,8 @@
 // Live Predictions & Voting Handlers.
 import { fromJsonb } from "@yourrank/shared/jsonb";
-import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { effectivePlan } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
+import { denied, requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteOwner as defaultRequireSiteOwner } from "../site-authorization.js";
 import {
@@ -121,6 +123,10 @@ export async function handleCreatePrediction(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteOwner(user, site);
   if (authorization.res) return authorization.res;
+  {
+    const gate = assertFeature(effectivePlan(user), "predictions");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
 
   const result = await one(
     `INSERT INTO predictions (site_id, title, options, min_bet, max_bet, lock_at)
@@ -167,6 +173,10 @@ export async function handleLockPrediction(request, env, deps = {}) {
   );
 
   if (!pred) return bad("Prediction not found or access denied.", 404);
+  {
+    const gate = assertFeature(effectivePlan(user), "predictions");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (pred.status !== "open") return bad("Prediction is not currently open.", 400);
 
   await exec("UPDATE predictions SET status='locked', updated_at=now() WHERE id=$1", [predictionId]);
@@ -214,6 +224,10 @@ export async function handleSettlePrediction(request, env, deps = {}) {
   );
 
   if (!pred) return bad("Prediction not found or access denied.", 404);
+  {
+    const gate = assertFeature(effectivePlan(user), "predictions");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (pred.status === "settled" || pred.status === "cancelled") {
     return bad("Prediction has already been resolved or cancelled.", 400);
   }
@@ -346,6 +360,10 @@ export async function handleCancelPrediction(request, env, deps = {}) {
   );
 
   if (!pred) return bad("Prediction not found or access denied.", 404);
+  {
+    const gate = assertFeature(effectivePlan(user), "predictions");
+    if (gate) return denied(gate, { actorId: user.id, request });
+  }
   if (pred.status === "settled" || pred.status === "cancelled") {
     return bad("Prediction is already resolved or cancelled.", 400);
   }

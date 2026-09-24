@@ -8,6 +8,7 @@ import { gateAndDeferTelegramUpdate } from "./telegram-webhook.js";
 import { getMe, setWebhook } from "./telegram.js";
 import { buildDashboard } from "./dashboard.js";
 import { withPlanLimit } from "./plans.js";
+import type { EntitlementDenial } from "@yourrank/shared/entitlements";
 import { rateLimit, type RateLimitKV } from "./ratelimit.js";
 import { createQueueProducer, type QueueEvent } from "@yourrank/shared/queue-producer";
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
@@ -450,7 +451,7 @@ export function buildHonoApp({
       return c.json({ error: "Server configuration error — TOKEN_ENC_KEY may be invalid" }, 500);
     }
 
-    let out: { error: string } | { result: { bot_id: string; secret: string } };
+    let out: { denial: EntitlementDenial } | { result: { bot_id: string; secret: string } };
     try {
       out = await withPlanLimit(owner_id, "bots", async (tx) => {
         const row = await tx.one<{ id: string }>(
@@ -476,7 +477,7 @@ export function buildHonoApp({
       console.error("[admin POST /bots] DB error:", msg);
       return c.json({ error: "Database error — please try again in a moment" }, 500);
     }
-    if ("error" in out) return c.json({ error: out.error }, 402);
+    if ("denial" in out) return c.json(out.denial, 403);
 
     // H-20: set the Telegram webhook before marking the bot active.
     try {
@@ -529,7 +530,7 @@ export function buildHonoApp({
       );
       return { offer_id: offer.id, tracked_link: `${config.publicBaseUrl}/r/${linkSlug}` };
     });
-    if ("error" in out) return c.json({ error: out.error }, 402);
+    if ("denial" in out) return c.json(out.denial, 403);
     return c.json(out.result);
   });
 

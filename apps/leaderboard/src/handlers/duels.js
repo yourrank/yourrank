@@ -1,5 +1,5 @@
 // Viewer 1v1 Duels & Wager Challenges Handlers.
-import { ok, bad, readJson } from "../auth.js";
+import { ok, bad, readJson, requireSiteFeature } from "../auth.js";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -74,8 +74,12 @@ export async function handleCreateDuel(request, env, deps = {}) {
   const rl = await rateLimit(env, `duel:create:${challengerViewerId}`, 10, 60);
   if (!rl.ok) return bad("Too many attempts. Please wait a minute.", 429);
 
-  const site = await one("SELECT id, name FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
+  const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
+  {
+    const gateRes = await requireSiteFeature(site, "duels", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const challengerSv = await one(
     "SELECT id, balance FROM site_viewers WHERE site_id=$1 AND viewer_id=$2",
@@ -161,6 +165,11 @@ export async function handleAcceptDuel(request, env, deps = {}) {
   );
 
   if (!duel) return bad("Duel not found.", 404);
+  {
+    const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [duel.site_id]);
+    const gateRes = await requireSiteFeature(siteRow, "duels", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
   if (duel.status !== "pending") return bad("Duel is no longer pending.", 400);
   if (duel.target_viewer_id !== targetViewerId) return bad("Only the challenged viewer can accept this duel.", 403);
 
@@ -265,6 +274,11 @@ export async function handleDeclineDuel(request, env, deps = {}) {
     [duelId]
   );
   if (!duel) return bad("Duel not found.", 404);
+  {
+    const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [duel.site_id]);
+    const gateRes = await requireSiteFeature(siteRow, "duels", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
   if (duel.status !== "pending") return bad("Duel is no longer pending.", 400);
 
   if (duel.challenger_viewer_id !== viewerId && duel.target_viewer_id !== viewerId) {

@@ -2,7 +2,7 @@ import {
   query as defaultQuery,
   withTransaction as defaultWithTransaction,
 } from "@yourrank/shared/db";
-import { effectivePlan, canUseAutomation } from "@yourrank/shared/plans";
+import { effectivePlan, canUseFeature } from "@yourrank/shared/plans";
 import {
   SAFE_AUTOMATION_KIND,
   createCanonicalCodeDrop,
@@ -116,7 +116,7 @@ function authorizationFailure(schedule, now) {
     plan_expires_at: schedule.owner_plan_expires_at,
     status: schedule.owner_status,
   }, now.getTime());
-  if (!canUseAutomation(plan)) return "entitlement_required";
+  if (!canUseFeature(plan, "activity_automation")) return "entitlement_required";
   if (!schedule.created_by || schedule.creator_status === "suspended" || !schedule.creator_status) {
     return "creator_unavailable";
   }

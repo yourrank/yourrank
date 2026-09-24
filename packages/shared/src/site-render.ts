@@ -11,6 +11,7 @@ import {
   formatWaitSeconds,
 } from "./public-render-helpers.js";
 import { gamesIslandHead, gamesIslandMount } from "./games-embed.js";
+import { canUseFeature } from "./plans.js";
 import { viewerNavigation, viewerIcon, viewerHelpHref, viewerAccountHref, VIEWER_DESIGN_CONTRACT } from "./viewer-shell.js";
 import { resolveViewerTemplate } from "./viewer-templates.js";
 import { guestGateHref, rewardDetailHref, viewerIntentCopy, viewerIntentReturnTo } from "./viewer-intent.js";
@@ -592,7 +593,10 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const homeUrl = String(opts.homeUrl || "https://yourrank.site").replace(/\/$/, "");
   const logoUrl = opts.logoUrl || null;
   const bannerUrl = opts.bannerUrl || null;
-  const watermark = data.sections?.poweredBy !== undefined ? !!data.sections?.poweredBy : r.plan === "free";
+  // Powered-by is mandatory unless the owner has the remove_branding feature;
+  // the explicit sections.poweredBy flag only controls entitlement-bearing plans.
+  const watermark = !canUseFeature(r.plan, "remove_branding") ? true
+    : (data.sections?.poweredBy !== undefined ? !!data.sections?.poweredBy : r.plan === "free");
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
   const viewerShell = section !== "games";

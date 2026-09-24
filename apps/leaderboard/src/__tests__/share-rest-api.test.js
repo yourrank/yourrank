@@ -122,12 +122,12 @@ describe("REST API entitlement (server)", () => {
       expect(calls.create).toEqual([{ ownerId: "user-1", opts: { label: "account", revokeOthers: true } }]);
     }
     const free = handlerDeps(userFor("free"));
-    expect((await handleAccountPostbacksRotate(rotateReq(), {}, free.deps)).status).toBe(402);
+    expect((await handleAccountPostbacksRotate(rotateReq(), {}, free.deps)).status).toBe(403);
     expect(free.calls.create).toEqual([]);
   });
 
   it("/api/scores keeps authorizing Pro and Team with signed postback keys", () => {
-    expect(scoresJs).toContain('if (plan !== "pro" && plan !== "team") return bad("The signed score API requires Pro or Team.", 403);');
+    expect(scoresJs).toContain('assertFeature(plan, "signed_api")');
     expect(scoresJs).toContain('request.headers.get("x-postback-key")');
     expect(scoresJs).toContain('request.headers.get("x-postback-signature")');
     expect(scoresJs).toContain("verifyHmacSha256Hex(postbackKey, rawBody, signature)");
@@ -163,7 +163,7 @@ describe("REST API in Developer tools (dashboard)", () => {
     expect($("apiLockedNote").textContent).toContain("Available on Pro and Team.");
     expect($("apiLockBadge").textContent.trim()).toBe("Pro & Team");
     expect($("apiSetup").hidden).toBe(true);
-    expect(server.requests).toEqual([]);
+    expect(server.requests).toEqual([{ method: "POST", path: "/api/billing/funnel" }]);
   });
 
   it("Pro lists the board's signing keys without auto-creating one", async () => {

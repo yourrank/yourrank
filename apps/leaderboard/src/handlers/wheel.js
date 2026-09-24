@@ -3,6 +3,7 @@ import { fromJsonb } from "@yourrank/shared/jsonb";
 import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
+import { requireSiteFeature } from "../auth.js";
 import {
   one as defaultOne,
   withTransaction as defaultWithTransaction,
@@ -49,8 +50,12 @@ export async function handleGetWheelConfig(request, env, deps = {}) {
   const siteSlugOrId = url.searchParams.get("site") || url.searchParams.get("siteId");
   if (!siteSlugOrId) return bad("Site identifier is required.");
 
-  const site = await one("SELECT id, name FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
+  const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
+  {
+    const gateRes = await requireSiteFeature(site, "wheel", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const config = await one("SELECT spin_cost, enabled, segments_json FROM wheel_configs WHERE site_id=$1", [site.id]);
 
@@ -103,6 +108,11 @@ export async function handleUpdateWheelConfig(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
   if (authorization.res) return authorization.res;
+  // Enabling the wheel requires the feature; disabling is always allowed.
+  if (enabled) {
+    const gateRes = await requireSiteFeature(site, "wheel", { actorId: user.id, request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const result = await one(
     `INSERT INTO wheel_configs (site_id, spin_cost, enabled, segments_json, updated_at)
@@ -152,8 +162,12 @@ export async function handleSpinWheel(request, env, deps = {}) {
   const rl = await rateLimit(env, `wheel:spin:${clientIp}:${viewerId}`, 30, 60);
   if (!rl.ok) return bad("Slow down! Please wait a moment between spins.", 429);
 
-  const site = await one("SELECT id, name FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
+  const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
+  {
+    const gateRes = await requireSiteFeature(site, "wheel", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const config = await one("SELECT spin_cost, enabled, segments_json FROM wheel_configs WHERE site_id=$1", [site.id]);
   const spinCost = config ? config.spin_cost : 50;

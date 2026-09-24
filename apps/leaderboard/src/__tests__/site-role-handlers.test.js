@@ -85,6 +85,7 @@ describe("archive and notification scope", () => {
       env,
       {
         requireUserImpl: async () => ({ user: proUser, res: null }),
+        oneImpl: async () => proUser,
         getBoardByIdImpl: async (_env, _uid, siteId) => {
           calls.push({ type: "getBoardById", siteId });
           return selectedSite;
@@ -118,6 +119,7 @@ describe("archive and notification scope", () => {
       env,
       {
         requireUserImpl: async () => ({ user: proUser, res: null }),
+        oneImpl: async () => proUser,
         getByUserImpl: async () => {
           calls.push({ type: "getByUser" });
           return site;

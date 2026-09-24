@@ -23,8 +23,17 @@ const mockUpdateSiteTheme = mock(() => Promise.resolve({
   branding: { accentA: null, accentB: null },
 }));
 const mockCreateBoard = mock(() => Promise.resolve({
-  error: "Your free plan allows up to 1 leaderboard. Upgrade to create more.",
+  error: "Your Free plan includes 1 leaderboard. Upgrade to Pro for 3.",
   code: "board_limit",
+  denial: {
+    code: "plan_limit_reached",
+    limit: "sites",
+    usage: 1,
+    allowance: 1,
+    current_plan: "free",
+    required_plan: "pro",
+    error: "Your Free plan includes 1 leaderboard. Upgrade to Pro for 3.",
+  },
 }));
 const mockGetBoardById = mock(() => Promise.resolve({
   id: "site-1", slug: "testboard", published: true, user_id: "user-1",
@@ -119,7 +128,7 @@ mock.module(dataSitesUrlTs, () => ({
 
 // ── Import after mocks ─────────────────────────────────────────────────
 import {
-  handleCreateBoard, handleGetSite, handleListBoards, handlePutTheme, handleStats, handleTrackCopy
+  handleCreateBoard, handleGetSite, handleListBoards, handlePutSite, handlePutTheme, handleStats, handleTrackCopy
 } from "../handlers/sites.js";
 import { handleQuickAdd } from "../handlers/quick-add.js";
 
@@ -219,23 +228,37 @@ describe("handleCreateBoard", () => {
     mockOne.mockReset();
     mockCreateBoard.mockReset();
     mockCreateBoard.mockResolvedValue({
-      error: "Your free plan allows up to 1 leaderboard. Upgrade to create more.",
-      code: "board_limit",
-    });
+  error: "Your Free plan includes 1 leaderboard. Upgrade to Pro for 3.",
+  code: "board_limit",
+  denial: {
+    code: "plan_limit_reached",
+    limit: "sites",
+    usage: 1,
+    allowance: 1,
+    current_plan: "free",
+    required_plan: "pro",
+    error: "Your Free plan includes 1 leaderboard. Upgrade to Pro for 3.",
+  },
+});
   });
 
-  it("preserves the board-limit code for dashboard upsells", async () => {
+  it("returns the canonical 403 plan_limit_reached denial for dashboard upsells", async () => {
     mockOne.mockResolvedValueOnce(USER_ROW);
     const res = await handleCreateBoard(req("https://test.com/api/site/create", "POST", {
       name: "Sponsor board",
       slug: "sponsor-board",
     }), mockEnv());
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
     const body = await res.json();
     expect(body).toEqual({
       ok: false,
-      error: "Your free plan allows up to 1 leaderboard. Upgrade to create more.",
-      code: "board_limit",
+      error: "Your Free plan includes 1 leaderboard. Upgrade to Pro for 3.",
+      code: "plan_limit_reached",
+      limit: "sites",
+      usage: 1,
+      allowance: 1,
+      current_plan: "free",
+      required_plan: "pro",
     });
   });
 });
@@ -365,5 +388,41 @@ describe("handleQuickAdd", () => {
     expect(res.status).toBe(200);
     const payload = mockSaveSite.mock.calls[0][2];
     expect(payload.players.find((player) => player.name === "Bob")).toMatchObject({ score: 50, wagered: 0 });
+  });
+});
+
+// ── handlePutSite denial propagation ────────────────────────────────────
+describe("handlePutSite", () => {
+  it("returns the canonical 403 plan_limit_reached denial when saveSite denies", async () => {
+    mockOne.mockResolvedValueOnce(USER_ROW);
+    mockSaveSite.mockResolvedValueOnce({
+      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+      code: "player_limit",
+      denial: {
+        error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+        code: "plan_limit_reached",
+        limit: "players_per_site",
+        usage: 11,
+        allowance: 10,
+        current_plan: "free",
+        required_plan: "pro",
+      },
+    });
+    const res = await handlePutSite(req("https://test.com/api/site", "PUT", {
+      siteId: "site-1",
+      players: Array.from({ length: 11 }, (_, i) => ({ name: `p${i}` })),
+    }), mockEnv());
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body).toEqual({
+      ok: false,
+      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+      code: "plan_limit_reached",
+      limit: "players_per_site",
+      usage: 11,
+      allowance: 10,
+      current_plan: "free",
+      required_plan: "pro",
+    });
   });
 });

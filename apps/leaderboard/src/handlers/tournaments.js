@@ -6,6 +6,7 @@ import {
   readJson,
   rateLimit as defaultRateLimit,
   clientIp as defaultClientIp,
+  requireSiteFeature,
 } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteOwner } from "../site-authorization.js";
@@ -85,6 +86,8 @@ async function getTournamentForMutation(request, user, one, requireSiteCapabilit
     { id: tournament.site_id, user_id: tournament.site_user_id }
   );
   if (authorization.res) return { error: authorization.res };
+  const gateRes = await requireSiteFeature({ user_id: tournament.site_user_id }, "tournaments", { request, oneImpl: one });
+  if (gateRes) return { error: gateRes };
   return { tournament };
 }
 
@@ -151,6 +154,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
+    one = defaultOne,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -189,6 +193,10 @@ export async function handleCreateTournament(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapabilityImpl(user, site);
   if (authorization.res) return authorization.res;
+  {
+    const gateRes = await requireSiteFeature(site, "tournaments", { request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const result = await withTransaction(async (tx) => {
     const tourn = await tx.one(
@@ -771,6 +779,10 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
         { id: match.site_id, user_id: match.site_user_id }
       );
       if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
+      {
+        const gateRes = await requireSiteFeature({ user_id: match.site_user_id }, "tournaments", { request, oneImpl: tx.one });
+        if (gateRes) return { error: "Tournaments are not available on this site's plan.", status: 403 };
+      }
 
       if (match.tournament_status === "completed" || match.tournament_status === "cancelled") {
         return { error: "Tournament is already finished.", status: 409 };

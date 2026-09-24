@@ -1,5 +1,5 @@
 // Community Events Handlers: Raffles (Ticket Draws) & Flash Code Drops.
-import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { requireUser as defaultRequireUser, ok, bad, denied, readJson } from "../auth.js";
 import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability, requireSiteOwner as defaultRequireSiteOwner } from "../site-authorization.js";
@@ -12,6 +12,8 @@ import {
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { creatorExpansionRestriction, markSiteViewerActive } from "@yourrank/shared/plan-usage";
+import { limitDenial } from "@yourrank/shared/entitlements";
+import { getPlanLimit } from "@yourrank/shared/plans";
 import { createCanonicalCodeDrop, validateCodeDropConfig } from "../code-drop-service.js";
 import { resolveJoinableCommunity as defaultResolveJoinableCommunity } from "../viewer-membership.js";
 function getCryptoRandomInt(max) {
@@ -256,7 +258,7 @@ export async function handleCreateCodeDrop(request, env, deps = {}) {
   if (authorization.res) return authorization.res;
   const expansion = await expansionRestriction(site.user_id || user.id);
   if (expansion.restricted) {
-    return bad("New Activities are paused because this Free account remains above its active-viewer allowance after grace. Existing viewer access continues.", 403);
+    return denied(limitDenial("free", "active_viewers_30d", Math.max(Number(expansion.usage?.activeViewers) || 0, getPlanLimit("free", "active_viewers_30d"))), { actorId: user.id, request });
   }
 
   try {

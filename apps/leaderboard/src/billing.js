@@ -4,25 +4,21 @@ import { json, bad, ok, requireUser } from "./auth.js";
 import { one, query, withTransaction } from "@yourrank/shared/db";
 
 import {
-  PLAN_LIMITS as _PL,
-  BOARD_LIMITS as _BL,
+  getPlanLimit,
   PLAN_PRICES as _PP,
   PLAN_PRICING as _PRICING,
   PLAN_META as _PM,
-  CREDITS_REWARD_LIMITS as _CRL,
-  CREDITS_SHOP_LIMITS as _CSL,
   CREDITS_PENDING_REDEMPTIONS_LIMITS as _CPRL,
   CREDITS_REDEMPTIONS_PER_30D_LIMITS as _CR30L,
-  ACTIVE_VIEWER_LIMITS as _AVL,
   effectivePlan as _effectivePlan,
   priceUsd as _priceUsd,
   isPlanTier,
 } from "@yourrank/shared/plans";
 import { reconcileAccountActiveViewerUsage } from "@yourrank/shared/plan-usage";
+import { PLAN_FEATURES } from "@yourrank/shared/plans";
+import { getUsageSummary } from "@yourrank/shared/usage-meters";
 import { getPolarBillingStatus } from "./handlers/polar-billing.js";
 
-export const PLAN_LIMITS = _PL;
-export const BOARD_LIMITS = _BL;
 export const PLAN_PRICES = _PP;
 export const PLAN_PRICING = _PRICING;
 export const PLAN_META = _PM;
@@ -126,13 +122,46 @@ export async function handleAccountUsage(request, env) {
         LIMIT 1`,
       [user.id],
     );
-    const [playerCount, creditsUsage, activeViewers] = await Promise.all([
-      activeSite
-        ? one("SELECT count(*)::int AS count FROM players WHERE site_id=$1", [activeSite.id])
+    const [playerMax, creditsUsage, activeViewers, telegramUsage, telegramAssets, seatCount] = await Promise.all([
+      siteIds.length
+        ? one("SELECT COALESCE(max(c),0)::int AS count FROM (SELECT count(*) AS c FROM players WHERE site_id=ANY($1::uuid[]) GROUP BY site_id) t", [siteIds])
         : { count: 0 },
       activeSite ? getSiteCreditsUsage(activeSite.id) : null,
       reconcileAccountActiveViewerUsage(user.id),
+      getUsageSummary({ one, exec: (sql, params) => query(sql, params) }, user.id).catch(() => ({})),
+      Promise.all([
+        one("SELECT count(*)::int AS count FROM bots WHERE owner_id=$1 AND status<>'revoked'", [user.id]),
+        one("SELECT count(*)::int AS count FROM offers WHERE owner_id=$1", [user.id]),
+      ]),
+      one(`WITH account_sites AS (SELECT id FROM sites WHERE user_id=$1), identities AS (
+            SELECT 'user:' || $1::text AS identity
+            UNION
+            SELECT 'user:' || sm.user_id::text FROM site_members sm JOIN account_sites a ON a.id=sm.site_id
+            UNION
+            SELECT COALESCE('user:' || invited.id::text, 'email:' || lower(si.email))
+              FROM site_invites si JOIN account_sites a ON a.id=si.site_id
+              LEFT JOIN users invited ON lower(invited.email)=lower(si.email)
+             WHERE si.status='pending' AND si.expires_at > now()
+          ) SELECT count(DISTINCT identity)::int AS count FROM identities`, [user.id]),
     ]);
+    const [botsUsed, offersUsed] = telegramAssets || [{}, {}];
+
+    const now = new Date();
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const limitEntry = (used, allowance, extra = {}) => ({ used: Number(used) || 0, allowance, ...extra });
+    const limitBlocks = {
+      sites: limitEntry(siteIds.length, getPlanLimit(plan, "sites")),
+      players_per_site: limitEntry(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
+      active_viewers_30d: limitEntry(activeViewers?.activeViewers || 0, getPlanLimit(plan, "active_viewers_30d"), { level: activeViewers?.level || "normal" }),
+      reward_mappings: limitEntry(creditsUsage?.rewardMappings || 0, getPlanLimit(plan, "reward_mappings")),
+      shop_items: limitEntry(creditsUsage?.shopItems || 0, getPlanLimit(plan, "shop_items")),
+      telegram_bots: limitEntry(botsUsed?.count || 0, getPlanLimit(plan, "telegram_bots")),
+      telegram_offers: limitEntry(offersUsed?.count || 0, getPlanLimit(plan, "telegram_offers")),
+      telegram_interactions_per_month: limitEntry(telegramUsage.telegram_interactions || 0, getPlanLimit(plan, "telegram_interactions_per_month"), { period_start: periodStart }),
+      broadcast_deliveries_per_month: limitEntry(telegramUsage.broadcast_deliveries || 0, getPlanLimit(plan, "broadcast_deliveries_per_month"), { period_start: periodStart }),
+      operator_seats: limitEntry(seatCount?.count || 0, getPlanLimit(plan, "operator_seats")),
+    };
+    const overLimit = Object.keys(limitBlocks).filter((k) => limitBlocks[k].used > limitBlocks[k].allowance && limitBlocks[k].allowance >= 0);
 
     return ok({
       plan,
@@ -141,25 +170,21 @@ export async function handleAccountUsage(request, env) {
       site: activeSite ? { id: activeSite.id, name: activeSite.name } : null,
       activeViewers: activeViewers ? {
         ...activeViewers,
-        upgradeAllowance: plan === "free" ? _AVL.pro : null,
+        upgradeAllowance: plan === "free" ? getPlanLimit("pro", "active_viewers_30d") : null,
       } : null,
+      features: PLAN_FEATURES[plan] || [],
+      overLimit,
       leaderboard: {
-        sites: usageValue(siteIds.length, _BL[plan]),
-        players: usageValue(playerCount?.count || 0, _PL[plan]),
+        sites: usageValue(siteIds.length, getPlanLimit(plan, "sites")),
+        players: usageValue(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
       },
       credits: activeSite && creditsUsage ? {
-        rewardMappings: usageValue(creditsUsage.rewardMappings, _CRL[plan]),
-        shopItems: usageValue(creditsUsage.shopItems, _CSL[plan]),
+        rewardMappings: usageValue(creditsUsage.rewardMappings, getPlanLimit(plan, "reward_mappings")),
+        shopItems: usageValue(creditsUsage.shopItems, getPlanLimit(plan, "shop_items")),
         pendingRedemptions: usageValue(creditsUsage.pendingRedemptions, _CPRL[plan]),
         redemptionsPer30Days: usageValue(creditsUsage.redemptionsPer30Days, _CR30L[plan]),
       } : null,
-      limits: {
-        sites: _BL[plan],
-        playersPerSite: _PL[plan],
-        activeViewers: _AVL[plan],
-        rewardMappings: _CRL[plan],
-        shopItems: _CSL[plan],
-      },
+      limits: limitBlocks,
       billing: await getPolarBillingStatus(env, user.id),
     });
   } catch (error) {

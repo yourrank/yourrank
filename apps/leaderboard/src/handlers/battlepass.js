@@ -1,6 +1,6 @@
 // Seasonal Battle Pass & Viewer Progression Handlers.
 import { fromJsonb } from "@yourrank/shared/jsonb";
-import { requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
+import { requireUser as defaultRequireUser, ok, bad, readJson, requireSiteFeature } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability } from "../site-authorization.js";
 import {
@@ -136,6 +136,10 @@ export async function handleCreateSeason(request, env, deps = {}) {
   if (!site) return bad("Site not found", 404);
   const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
   if (authorization.res) return authorization.res;
+  {
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   // Close previous active seasons
   await exec("UPDATE seasons SET status='ended', updated_at=now() WHERE site_id=$1 AND status='active'", [site.id]);
@@ -281,6 +285,10 @@ export async function handleAwardXp(request, env, deps = {}) {
   const site = siteId ? await getBoardById(env, user.id, siteId) : await getByUser(env, user.id);
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
+  {
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request, oneImpl: one });
+    if (gateRes) return gateRes;
+  }
 
   const season = await one("SELECT id, tiers_json FROM seasons WHERE site_id=$1 AND status='active' ORDER BY season_number DESC LIMIT 1", [siteId]);
   if (!season) return ok({ message: "No active season for XP." });

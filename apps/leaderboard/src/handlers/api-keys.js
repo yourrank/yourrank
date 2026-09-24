@@ -2,7 +2,8 @@
 // used by the signed score API (POST/PATCH /api/scores). Board keys are the
 // same postback_keys rows with a site_id scope; account-level keys stay on
 // /api/account/postbacks and are read-only here.
-import { json, bad, requireUser as defaultRequireUser, rateLimit as defaultRateLimit } from "../auth.js";
+import { json, bad, requireUser as defaultRequireUser, rateLimit as defaultRateLimit, denied } from "../auth.js";
+import { assertFeature } from "@yourrank/shared/entitlements";
 import { getBoardById as defaultGetBoardById } from "../site.js";
 import { effectivePlan as defaultEffectivePlan } from "@yourrank/shared/plans";
 import { one as defaultOne } from "@yourrank/shared/db";
@@ -35,7 +36,8 @@ async function resolveKeyOwnerSite(request, env, deps, user) {
   if (!site) return { res: bad("Board not found", 404) };
   if (site.user_id !== user.id) return { res: bad("Only the board owner can manage API keys.", 403) };
   const plan = deps.effectivePlan(user);
-  if (plan !== "pro" && plan !== "team") return { res: bad("The signed score API requires Pro or Team.", 403) };
+  const gate = assertFeature(plan, "signed_api");
+  if (gate) return { res: denied(gate, { actorId: user.id, request: null }) };
   return { site };
 }
 

@@ -3,11 +3,12 @@ export const DASHBOARD_REQUEST_TIMEOUT_MS = 10_000;
 const DASHBOARD_AUTH_ERROR_VALUES = new Set(["unauthorized"]);
 
 export class DashboardRequestError extends Error {
-  constructor(message, { code = "REQUEST_FAILED", status = 0, cause } = {}) {
+  constructor(message, { code = "REQUEST_FAILED", status = 0, cause, denial = null } = {}) {
     super(message, { cause });
     this.name = "DashboardRequestError";
     this.code = code;
     this.status = status;
+    this.denial = denial;
   }
 }
 
@@ -101,9 +102,13 @@ export async function fetchDashboardJson(input, init = {}, options = {}) {
     });
   }
   if (response.status === 403) {
+    // Entitlement denials carry the canonical code; surface it so callers can
+    // show the server message with an upgrade link instead of a generic error.
+    const denialCode = ["entitlement_required", "plan_limit_reached"].includes(body?.code) ? body.code : null;
     throw new DashboardRequestError(body?.error || "You don't have access to do that.", {
-      code: "FORBIDDEN",
+      code: denialCode || "FORBIDDEN",
       status: response.status,
+      denial: denialCode ? { feature: body.feature, limit: body.limit, required_plan: body.required_plan } : null,
     });
   }
   if (!response.ok) {
