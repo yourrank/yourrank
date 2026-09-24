@@ -39,6 +39,14 @@ describe("PLAN_LIMITS table", () => {
     expect(getPlanLimit("free", "players_per_site")).toBe(10);
     expect(getPlanLimit("pro", "players_per_site")).toBe(1_000);
     expect(getPlanLimit("team", "players_per_site")).toBe(5_000);
+    expect(getPlanLimit("free", "active_viewers_30d")).toBe(50);
+    expect(getPlanLimit("pro", "active_viewers_30d")).toBe(2_500);
+    expect(getPlanLimit("team", "active_viewers_30d")).toBe(25_000);
+    expect(getPlanLimit("free", "sites")).toBe(1);
+    expect(getPlanLimit("pro", "sites")).toBe(3);
+    expect(getPlanLimit("team", "sites")).toBe(10);
+    expect(getPlanLimit("team", "telegram_bots")).toBe(10);
+    expect(getPlanLimit("team", "telegram_offers")).toBe(100);
     expect(getPlanLimit("free", "broadcast_deliveries_per_month")).toBe(0);
     expect(getPlanLimit("pro", "broadcast_deliveries_per_month")).toBe(10_000);
     expect(getPlanLimit("free", "telegram_interactions_per_month")).toBe(1_000);

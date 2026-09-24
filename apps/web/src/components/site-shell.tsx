@@ -55,8 +55,25 @@ function CursorToggle() {
   );
 }
 
+// The Worker validates the session cookie on /api/auth/me; the header swaps
+// "Sign in / Get started" for "Dashboard" only when that server check passes.
+// No localStorage or other client state is trusted for this.
+function useAuthenticated(): boolean {
+  const [authenticated, setAuthenticated] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store", signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { ok?: boolean; user?: unknown } | null) => setAuthenticated(Boolean(data?.ok && data.user)))
+      .catch(() => setAuthenticated(false));
+    return () => controller.abort();
+  }, []);
+  return authenticated;
+}
+
 export function SiteHeader() {
   const pathname = usePathname();
+  const authenticated = useAuthenticated();
   const [mobileOpen, setMobileOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const isCurrent = (href: string) => !href.includes("#") && pathname === href;
@@ -108,18 +125,29 @@ export function SiteHeader() {
           >
             Demo
           </a>
-          <a
-            href="/login"
-            className="hidden min-h-11 items-center text-sm text-devin-ink-soft transition-colors hover:text-devin-ink sm:inline-flex"
-          >
-            Sign in
-          </a>
-          <a
-            href="/signup"
-            className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover"
-          >
-            Get started
-          </a>
+          {authenticated ? (
+            <a
+              href="/dashboard"
+              className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover"
+            >
+              Dashboard
+            </a>
+          ) : (
+            <>
+              <a
+                href="/login"
+                className="hidden min-h-11 items-center text-sm text-devin-ink-soft transition-colors hover:text-devin-ink sm:inline-flex"
+              >
+                Log in
+              </a>
+              <a
+                href="/signup"
+                className="inline-flex min-h-11 items-center rounded-[2px] bg-devin-primary px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-devin-primary-hover"
+              >
+                Get started
+              </a>
+            </>
+          )}
           <button
             ref={triggerRef}
             type="button"
@@ -159,9 +187,15 @@ export function SiteHeader() {
             <a href="/demo" className="flex min-h-11 items-center text-sm font-medium text-devin-ink" onClick={() => setMobileOpen(false)}>
               Demo
             </a>
-            <a href="/login" className="flex min-h-11 items-center text-sm font-medium text-devin-ink" onClick={() => setMobileOpen(false)}>
-              Sign in
-            </a>
+            {authenticated ? (
+              <a href="/dashboard" className="flex min-h-11 items-center text-sm font-medium text-devin-ink" onClick={() => setMobileOpen(false)}>
+                Dashboard
+              </a>
+            ) : (
+              <a href="/login" className="flex min-h-11 items-center text-sm font-medium text-devin-ink" onClick={() => setMobileOpen(false)}>
+                Log in
+              </a>
+            )}
           </div>
         </nav>
       )}

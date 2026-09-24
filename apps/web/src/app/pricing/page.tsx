@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { MagneticCursor } from "../../components/home/magnetic-cursor";
 import { MarketingShell } from "../../components/site-shell";
 import { PricingPlans } from "./pricing-plans";
+import { getPlanLimit } from "@yourrank/shared/plans";
+
+const FREE_VIEWERS = getPlanLimit("free", "active_viewers_30d").toLocaleString("en-US");
 
 export const metadata: Metadata = {
   title: "Pricing · YourRank",
@@ -16,8 +19,8 @@ const BILLING_FAQ = [
     a: "A signed-in Viewer Account that takes a verified community action during the preceding rolling 30 days. The same viewer counts once across every site you own.",
   },
   {
-    q: "What happens if Free goes over 100 active viewers?",
-    a: "You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over 100 after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.",
+    q: `What happens if Free goes over ${FREE_VIEWERS} active viewers?`,
+    a: `You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over ${FREE_VIEWERS} after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.`,
   },
   {
     q: "Can I pay for Pro or Team today?",

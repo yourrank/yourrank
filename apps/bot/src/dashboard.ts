@@ -155,7 +155,7 @@ export function buildDashboard(opts: { canonical?: boolean } = {}): Hono<DashEnv
       // JSON for the dashboard JS client; HTML redirect for the shared nav form.
       const accept = c.req.header("accept") || "";
       if (accept.includes("application/json")) return c.json({ ok: true });
-      return c.redirect("/dashboard/telegram");
+      return c.redirect("/");
     });
 
     // ---- session-scoped API ----

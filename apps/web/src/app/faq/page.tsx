@@ -2,6 +2,12 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { MagneticCursor } from "@/components/home/magnetic-cursor";
 import { MarketingShell } from "@/components/site-shell";
+import { getPlanLimit } from "@yourrank/shared/plans";
+
+const FREE_PLAYERS = getPlanLimit("free", "players_per_site").toLocaleString("en-US");
+const FREE_VIEWERS = getPlanLimit("free", "active_viewers_30d").toLocaleString("en-US");
+const FREE_MAPPINGS = getPlanLimit("free", "reward_mappings");
+const FREE_SHOP_ITEMS = getPlanLimit("free", "shop_items");
 
 export const metadata: Metadata = {
   title: "FAQ — YourRank",
@@ -31,7 +37,7 @@ const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string 
   {
     category: "Pricing & billing",
     items: [
-      { q: "Is YourRank free?", a: "Yes. Free includes one site, up to 50 leaderboard players, 100 distinct active viewers in the rolling 30-day account window, three reward mappings, and five shop items. Pro and Team add truthful operational capacity and existing paid capabilities." },
+      { q: "Is YourRank free?", a: `Yes. Free includes one site, up to ${FREE_PLAYERS} leaderboard players, ${FREE_VIEWERS} distinct active viewers in the rolling 30-day account window, ${FREE_MAPPINGS} reward mappings, and ${FREE_SHOP_ITEMS} shop items. Pro and Team add truthful operational capacity and existing paid capabilities.` },
       { q: "What payment methods do you accept?", a: PAYMENT_METHODS_ANSWER },
     ],
   },

@@ -1,15 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   getPlanLimit,
   PLAN_META,
   PLAN_PRICING,
   PLAN_TIERS,
+  tierIndex,
   type BillingInterval,
   type PlanTier,
 } from "@yourrank/shared/plans";
+import { planChangeFor, type CurrentSubscription } from "@yourrank/shared/plan-changes";
+
+/**
+ * Billing state of the signed-in account, read from the Worker's
+ * `/api/account/usage` (server-validated session). Null while loading or for
+ * guests, so cards render the public signup CTA by default.
+ */
+interface AccountBilling {
+  plan: PlanTier;
+  subscription: CurrentSubscription | null;
+}
+
+function isPlanTier(value: unknown): value is PlanTier {
+  return (PLAN_TIERS as readonly string[]).includes(String(value));
+}
+
+function isInterval(value: unknown): value is BillingInterval {
+  return value === "monthly" || value === "annual";
+}
+
+function parseAccountBilling(payload: unknown): AccountBilling | null {
+  if (!payload || typeof payload !== "object") return null;
+  const data = payload as { plan?: unknown; billing?: { subscription?: Record<string, unknown> | null } | null };
+  if (!isPlanTier(data.plan)) return null;
+  const sub = data.billing?.subscription ?? null;
+  let subscription: CurrentSubscription | null = null;
+  if (sub && isPlanTier(sub.plan) && sub.plan !== "free" && isInterval(sub.interval)) {
+    const pending = sub.pending as { plan?: unknown; interval?: unknown } | null | undefined;
+    subscription = {
+      plan: sub.plan,
+      interval: sub.interval,
+      cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+      pending: pending && isPlanTier(pending.plan) && pending.plan !== "free" && isInterval(pending.interval)
+        ? { plan: pending.plan, interval: pending.interval }
+        : null,
+    };
+  }
+  return { plan: data.plan, subscription };
+}
+
+/** Card action for a signed-in account; mirrors the dashboard billing matrix. */
+export function accountPlanAction(account: AccountBilling, tier: PlanTier, interval: BillingInterval): { label: string; href: string | null } {
+  const href = `/dashboard/settings/billing?plan=${tier}&interval=${interval}`;
+  if (account.subscription) {
+    const change = planChangeFor(account.subscription, { plan: tier, interval });
+    if (change.kind === "current" || change.kind === "pending") return { label: change.label, href: null };
+    if (change.kind === "cancel") return { label: "Manage in billing", href: "/dashboard/settings/billing" };
+    return { label: change.label, href };
+  }
+  if (tier === account.plan) return { label: "Current plan", href: null };
+  if (tierIndex(tier) > tierIndex(account.plan)) return { label: `Upgrade to ${PLAN_META[tier].name}`, href };
+  return { label: "Manage in billing", href: "/dashboard/settings/billing" };
+}
 
 // Shorthand so the pricing tables stay readable.
 const limit = getPlanLimit;
@@ -70,6 +124,22 @@ const comparison = [
 
 export function PricingPlans() {
   const [interval, setInterval] = useState<BillingInterval>("monthly");
+  const [account, setAccount] = useState<AccountBilling | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/account/usage", { credentials: "same-origin", cache: "no-store", signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        const parsed = parseAccountBilling(payload);
+        if (parsed) {
+          setAccount(parsed);
+          if (parsed.subscription) setInterval(parsed.subscription.interval);
+        }
+      })
+      .catch(() => { /* guest or offline: keep public CTAs */ });
+    return () => controller.abort();
+  }, []);
 
   return (
     <>
@@ -96,6 +166,10 @@ export function PricingPlans() {
             {PLAN_TIERS.map((tier) => {
               const plan = PLAN_META[tier];
               const price = displayPrice(tier, interval);
+              const action = account
+                ? accountPlanAction(account, tier, interval)
+                : { label: plan.cta, href: `/signup?plan=${tier}&interval=${interval}` };
+              const actionClass = "mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary";
               return (
                 <article key={tier} className={`relative flex flex-col bg-white p-7 sm:p-8 ${plan.highlight ? "outline outline-1 -outline-offset-1 outline-devin-primary" : ""}`}>
                   {plan.highlight && <span className="mb-5 self-start rounded-full bg-devin-primary px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white">Recommended</span>}
@@ -115,13 +189,30 @@ export function PricingPlans() {
                     ))}
                   </ul>
                   {plan.availability && <p className="mt-6 rounded-[8px] border border-devin-line bg-devin-secondary/35 px-3.5 py-3 text-xs leading-relaxed text-devin-ink" id={`plan-${tier}-availability`}>{plan.availability}</p>}
-                  <Link href={`/signup?plan=${tier}&interval=${interval}`} aria-describedby={plan.availability ? `plan-${tier}-availability` : undefined} data-magnetic className={`mt-8 inline-flex min-h-12 items-center justify-center rounded-[2px] px-5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
-                    {plan.cta}
-                  </Link>
+                  {action.href ? (
+                    <Link href={action.href} aria-describedby={plan.availability ? `plan-${tier}-availability` : undefined} data-magnetic className={`${actionClass} ${plan.highlight ? "bg-devin-primary text-white hover:bg-devin-primary-hover" : "border border-devin-line text-devin-ink hover:border-devin-ink/40"}`}>
+                      {action.label}
+                    </Link>
+                  ) : (
+                    <span aria-current="true" className={`${actionClass} border border-devin-line bg-devin-secondary/35 text-devin-ink-soft`}>
+                      {action.label}
+                    </span>
+                  )}
                 </article>
               );
             })}
           </div>
+          <aside className="mt-5 flex flex-col gap-4 rounded-[16px] border border-devin-line bg-white px-7 py-6 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="custom-scale-heading">
+            <div>
+              <h2 id="custom-scale-heading" className="text-lg font-medium tracking-[-0.02em] text-devin-ink">Need more scale?</h2>
+              <p className="mt-1 max-w-xl text-sm leading-relaxed text-devin-ink-soft">
+                {`For communities with more than ${number(limit("team", "active_viewers_30d"))} active viewers, higher limits are available.`}
+              </p>
+            </div>
+            <Link href="/help/support" data-magnetic className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-[2px] border border-devin-line px-5 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary">
+              Talk to us
+            </Link>
+          </aside>
           <p className="mt-5 max-w-3xl text-sm leading-relaxed text-devin-ink-soft">
             Free is available now. Pro and Team checkout is live — paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal.
           </p>

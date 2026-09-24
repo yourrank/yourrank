@@ -59,7 +59,7 @@ export const PLAN_LIMITS: Record<PlanTier, Record<PlanLimitKey, number>> = {
   team: {
     sites: 10,
     players_per_site: 5_000,
-    active_viewers_30d: 10_000,
+    active_viewers_30d: 25_000,
     history_days: 730,
     reward_mappings: 250,
     shop_items: 500,

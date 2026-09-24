@@ -39,7 +39,7 @@ describe("canonical Free / Pro / Team model", () => {
     expect(getPlanLimit("team", "sites")).toBe(10);
     expect(getPlanLimit("free", "active_viewers_30d")).toBe(50);
     expect(getPlanLimit("pro", "active_viewers_30d")).toBe(2500);
-    expect(getPlanLimit("team", "active_viewers_30d")).toBe(10000);
+    expect(getPlanLimit("team", "active_viewers_30d")).toBe(25000);
     expect(getPlanLimit("free", "operator_seats")).toBe(1);
     expect(getPlanLimit("pro", "operator_seats")).toBe(1);
     expect(getPlanLimit("team", "operator_seats")).toBe(5);
@@ -134,6 +134,25 @@ describe("Free active-viewer grace", () => {
   test("usage recovery and paid plans are never expansion-restricted", () => {
     expect(activeViewerUsageState({ plan: "free", activeViewers: 50, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
     expect(activeViewerUsageState({ plan: "pro", activeViewers: 3000, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW }).expansionRestricted).toBe(false);
+  });
+
+  test("Team allowance is 25,000: 25,000 is within limit, 25,001 is over limit and never destructive", () => {
+    const within = activeViewerUsageState({ plan: "team", activeViewers: 25_000, nowMs: NOW });
+    expect(within.allowance).toBe(25_000);
+    expect(within.overLimit).toBe(false);
+    expect(within.level).toBe("at_limit");
+    expect(within.expansionRestricted).toBe(false);
+
+    const over = activeViewerUsageState({ plan: "team", activeViewers: 25_001, graceStartedAt: NOW - 30 * 86_400_000, nowMs: NOW });
+    expect(over.allowance).toBe(25_000);
+    expect(over.overLimit).toBe(true);
+    expect(over.expansionRestricted).toBe(false);
+
+    const markup = activeViewerUsageMarkup({ ...over, plan: "team", activeViewers: 25_001, upgradeAllowance: null });
+    expect(markup).toContain("25,001 / 25,000");
+    expect(markup).toContain('href="/help/support"');
+    expect(markup).not.toContain("Compare Pro");
+    expect(markup).not.toContain("Free allowance");
   });
 
   test("renders low, threshold, grace, and restricted usage without a KPI wall", () => {
