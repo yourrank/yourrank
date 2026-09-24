@@ -10,7 +10,11 @@ import { generateCsrfToken, csrfCookie, SECURE_HTML } from "../middleware/index.
 import { PLATFORM_HOST } from "../constants.js";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const platformRequest = (request) => [PLATFORM_HOST, "localhost", "127.0.0.1"].includes(new URL(request.url).hostname);
+const platformRequest = (request, env) => {
+  const hostname = new URL(request.url).hostname;
+  return [PLATFORM_HOST, "localhost", "127.0.0.1"].includes(hostname) ||
+    (env?.ENVIRONMENT === "staging" && hostname === `staging.${PLATFORM_HOST}`);
+};
 const privateJson = (data, cookie) => {
   const response = json({ ok: true, ...data }, 200, { "cache-control": "private, no-store", vary: "Cookie" });
   if (cookie) response.headers.append("set-cookie", cookie);
@@ -27,7 +31,7 @@ export async function giveawayIpHash(raw, salt) {
 }
 
 export async function handleGiveawayVerification(request, env, deps = {}) {
-  if (!platformRequest(request)) return bad("Use the YourRank giveaway verification link.", 404);
+  if (!platformRequest(request, env)) return bad("Use the YourRank giveaway verification link.", 404);
   if (!requestIsSameOrigin(request)) return bad("Origin mismatch", 403);
   const d = { one, query, resolveViewer, transaction: giveawayTransaction, rateLimit, ...deps };
   const body = request.method === "POST" ? (await readJson(request)) || {} : {};
@@ -79,8 +83,8 @@ export async function handleGiveawayVerification(request, env, deps = {}) {
   return privateJson({ ...base, ...result }, cookie);
 }
 
-export function handleGiveawayVerificationPage(request) {
-  if (!platformRequest(request)) return bad("Use the YourRank giveaway verification link.", 404);
+export function handleGiveawayVerificationPage(request, env) {
+  if (!platformRequest(request, env)) return bad("Use the YourRank giveaway verification link.", 404);
   const token = generateCsrfToken();
   return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Verify giveaway entry · YourRank</title><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/ui.css"></head>

@@ -29,6 +29,9 @@ if (process.env.E2E_ALLOW_MUTATIONS !== "1") {
 
 const BASE_URL = parsedBaseUrl.origin;
 const VIEWER_SESSION = process.env.E2E_VIEWER_SESSION?.trim() || "";
+// Deployed-target mode (staging release): /__scheduled only exists under
+// `wrangler dev --test-scheduled`, so local-only scenarios are skipped.
+const DEPLOYED_TARGET = process.env.E2E_DEPLOYED_TARGET === "1";
 
 /**
  * A board only becomes publicly reachable once the OWNER'S EMAIL IS VERIFIED:
@@ -57,6 +60,19 @@ let accountCreated = false;
 
 async function login(pw: string) {
   return client.post("/api/auth/login", { email, password: pw });
+}
+
+// Deployed Workers keep a per-isolate L1 site cache (site.js L1_TTL = 25s);
+// invalidation clears only the isolate that served the write, so a public page
+// can stay stale on other isolates until the TTL lapses.
+async function waitForStatus(path: string, expected: number, timeoutMs = 40_000) {
+  const deadline = Date.now() + timeoutMs;
+  let res = await client.get(path);
+  while (DEPLOYED_TARGET && res.status !== expected && Date.now() < deadline) {
+    await Bun.sleep(2_000);
+    res = await client.get(path);
+  }
+  return res;
 }
 
 describe("giveaway verification E2E", () => {
@@ -567,7 +583,7 @@ describe("release-gate journeys", () => {
     }
   });
 
-  it.skipIf(!PUBLIC_ACCESS_AVAILABLE || !VIEWER_SESSION)(`${tag("wave-k-safe-activity-automation")} scheduled safe Activity executes once and records normal viewer participation`, async () => {
+  it.skipIf(!PUBLIC_ACCESS_AVAILABLE || !VIEWER_SESSION || DEPLOYED_TARGET)(`${tag("wave-k-safe-activity-automation")} scheduled safe Activity executes once and records normal viewer participation`, async () => {
     const template = await client.post("/api/activities/templates", {
       siteId,
       kind: "safe_code_drop",
@@ -663,9 +679,9 @@ describe("release-gate journeys", () => {
     expect(draft.status).toBe(200);
     expect(draft.json?.ok).toBe(true);
 
-    const hidden = await client.get(`/${slug}`);
+    const hidden = await waitForStatus(`/${slug}`, 404);
     expect(hidden.status).toBe(404);
-    const hiddenApi = await client.get(`/api/public/${slug}`);
+    const hiddenApi = await waitForStatus(`/api/public/${slug}`, 404);
     expect(hiddenApi.status).toBe(404);
 
     // The owner still sees the board, now flagged as a draft.
@@ -675,9 +691,9 @@ describe("release-gate journeys", () => {
 
     const republished = await client.put("/api/site", { siteId, published: true });
     expect(republished.json?.ok).toBe(true);
-    const visibleAgain = await client.get(`/${slug}`);
+    const visibleAgain = await waitForStatus(`/${slug}`, 200);
     expect(visibleAgain.status).toBe(200);
-  });
+  }, 120_000);
 });
 
 /**

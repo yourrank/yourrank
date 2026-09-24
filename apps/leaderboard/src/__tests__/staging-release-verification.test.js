@@ -55,9 +55,11 @@ const validEnvironment = () => ({
   STAGING_TOKEN_ENC_KEY: "a".repeat(64),
   STAGING_IP_HASH_SALT: "x",
   STAGING_MONITOR_CHECK_SECRET: "x",
+  STAGING_DATABASE_URL: "postgresql://postgres.abcdefghijklmnopqrst:x@aws-0-eu-west-1.pooler.supabase.com:5432/postgres",
 });
 
 const stagingWorkflowPromise = rootFile(".github/workflows/staging.yml");
+const bootstrapWorkflowPromise = rootFile(".github/workflows/staging-bootstrap.yml");
 const deployWorkflowPromise = rootFile(".github/workflows/deploy.yml");
 const rollbackWorkflowPromise = rootFile(".github/workflows/rollback.yml");
 const contractWorkflowPromise = rootFile(".github/workflows/contract-migration.yml");
@@ -372,12 +374,79 @@ describe("F-012 staging release verification", () => {
     expect(jobBlock(staging, "backend-readiness-staging")).toContain("if: ${{ inputs.inject_failure == 'after-backend-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}");
     expect(jobBlock(staging, "release-smoke-staging")).toContain("if: ${{ inputs.inject_failure == 'after-web-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}");
     const finalizer = jobBlock(staging, "staging-finalizer");
-    expect(finalizer).toContain("inputs.inject_failure == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging'");
-    expect(finalizer.match(/inputs\.inject_failure != 'recovery-command'/g)).toHaveLength(5);
+    expect(finalizer).toContain("(inputs.inject_failure || 'none') == 'recovery-command' && env.RELEASE_ENVIRONMENT == 'staging'");
+    expect(finalizer.match(/\(inputs\.inject_failure \|\| 'none'\) != 'recovery-command'/g)).toHaveLength(5);
+    // A first staging release has nothing to restore: each restore step must skip
+    // workers whose baseline capture reported them absent.
+    expect(finalizer.match(/_first_deploy != 'true'/g)).toHaveLength(5);
     for (const production of [deploy, rollback, contract]) {
       expect(production).not.toContain("inject_failure");
-      expect(production).not.toContain("RELEASE_ENVIRONMENT");
+      // Production workflows may set RELEASE_ENVIRONMENT only for the
+      // release-target guard, and only ever to "production".
+      for (const value of production.matchAll(/RELEASE_ENVIRONMENT: (\w+)/g)) {
+        expect(value[1]).toBe("production");
+      }
+      expect(production).not.toContain("RELEASE_ENVIRONMENT=staging");
     }
+  });
+
+  it("staging bootstrap ensures every staging Worker exists and is deployed", async () => {
+    const bootstrap = await bootstrapWorkflowPromise;
+    const step = bootstrap.match(/Ensure staging Workers exist and are deployed[\s\S]*?(?=\n {6}- name:)/);
+    expect(step).not.toBeNull();
+    expect(step[0]).toContain("set +x");
+    for (const name of [
+      "yourrank-site-staging",
+      "yourrank-bot-staging",
+      "yourrank-consumer-staging",
+      "yourrank-monitor-staging",
+      "yourrank-web-staging",
+    ]) {
+      expect(step[0]).toContain(name);
+    }
+    expect(step[0]).toContain('node scripts/ensure-worker-deployed.mjs "$NAME" --placeholder');
+  });
+
+  it("every staging deploy job ensures the Worker's latest version is deployed first", async () => {
+    const staging = await stagingWorkflowPromise;
+    const cases = [
+      ["deploy-leaderboard-staging:", "yourrank-site-staging", "wrangler-action"],
+      ["deploy-bot-staging:", "yourrank-bot-staging", "wrangler-action"],
+      ["deploy-consumer-staging:", "yourrank-consumer-staging", "wrangler-action"],
+      ["deploy-monitor-staging:", "yourrank-monitor-staging", "wrangler-action"],
+      ["deploy-web-staging:", "yourrank-web-staging", "Deploy web worker tagged with the release SHA"],
+    ];
+    for (const [jobAnchor, workerName, deployAnchor] of cases) {
+      const jobStart = staging.indexOf(jobAnchor);
+      expect(jobStart).toBeGreaterThan(-1);
+      const ensure = staging.indexOf(
+        `node scripts/ensure-worker-deployed.mjs ${workerName}`,
+        jobStart,
+      );
+      const deploy = staging.indexOf(deployAnchor, jobStart);
+      expect(ensure).toBeGreaterThan(-1);
+      expect(deploy).toBeGreaterThan(ensure);
+    }
+    expect(
+      staging.match(/Ensure Worker's latest version is deployed \(staging\)/g),
+    ).toHaveLength(5);
+  });
+
+  it("staging smoke evaluates monitor checks via the staging verdict script", async () => {
+    const staging = await stagingWorkflowPromise;
+    expect(staging).toContain("node scripts/staging-monitor-verdict.mjs");
+    const smoke = staging.slice(staging.indexOf("release-smoke-staging:"));
+    expect(smoke.indexOf("actions/checkout")).toBeLessThan(
+      smoke.indexOf("monitor Worker health and protected manual check"),
+    );
+  });
+
+  it("staging E2E sets E2E_DEPLOYED_TARGET while PR Check does not", async () => {
+    const staging = await stagingWorkflowPromise;
+    const e2e = staging.slice(staging.indexOf("e2e-staging:"));
+    expect(e2e).toContain("E2E_DEPLOYED_TARGET: '1'");
+    const prCheck = await rootFile(".github/workflows/pr-check.yml");
+    expect(prCheck).not.toContain("E2E_DEPLOYED_TARGET");
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {

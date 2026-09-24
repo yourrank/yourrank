@@ -4,10 +4,13 @@ import {
   BACKEND_WORKERS,
   RELEASE_STAGES,
   RELEASE_WORKERS,
+  STAGING_RELEASE_WORKERS,
   buildRecoveryPlan,
   buildReleaseManifest,
+  fetchReleaseState,
   shouldRunRecovery,
   versionSourceSha,
+  versionSpecs,
   versionTag,
 } from "../../../../scripts/release-recovery-state.mjs";
 
@@ -285,5 +288,73 @@ describe("F-005 coherent Web/backend production promotion", () => {
     expect(rollbackWorkflow).toContain("- web");
     expect(webWorkflow).not.toContain("group: deploy-web\n");
     expect(webWorkflow).toContain("group: staging-mutation");
+  });
+});
+
+describe("First deploy: absent staging Workers", () => {
+  const absentWorker = (scriptName) => ({ scriptName, absent: true, deploymentId: null, createdOn: null, versions: [] });
+
+  const ok = (result) => ({ ok: true, status: 200, json: async () => result });
+  const notFound = () => ({ ok: false, status: 404, json: async () => ({ errors: [{ message: "This Worker does not exist on your account." }] }) });
+
+  // Cloudflare deployments/versions + Supabase migration history behind one fake fetch.
+  const releaseFetch = ({ absentScript } = {}) => async (url) => {
+    if (url.includes("/database/migrations")) return ok([{ version: "20260907000000", name: "x" }]);
+    const script = url.match(/scripts\/([\w-]+)\//)?.[1];
+    if (url.endsWith("/deployments")) {
+      if (script === absentScript) return notFound();
+      return ok([{ id: "dep-1", created_on: "2026-09-01T00:00:00Z", versions: [{ version_id: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4", percentage: 100 }] }]);
+    }
+    if (url.includes("/versions/")) return ok({ annotations: { "workers/tag": OLD_SHA } });
+    throw new Error(`unexpected url ${url}`);
+  };
+
+  const fetchArgs = (fetchImpl, extra = {}) => ({
+    cloudflareAccountId: "acct",
+    cloudflareApiToken: "token",
+    supabaseProjectRef: "abcdefghijklmnopqrst",
+    supabaseAccessToken: "token",
+    fetchImpl,
+    releaseWorkers: STAGING_RELEASE_WORKERS,
+    ...extra,
+  });
+
+  it("captures an absent worker when allowAbsentWorkers tolerates the 404", async () => {
+    const state = await fetchReleaseState(fetchArgs(releaseFetch({ absentScript: "yourrank-site-staging" }), { allowAbsentWorkers: true }));
+    expect(state.workers.leaderboard).toMatchObject({ scriptName: "yourrank-site-staging", absent: true, versions: [] });
+    expect(state.workers.bot.versions).toHaveLength(1);
+    expect(state.workers.web.versions).toHaveLength(1);
+    expect(state.migrations.map(({ version }) => version)).toEqual(["20260907000000"]);
+    expect(versionSourceSha(state.workers.leaderboard)).toBeNull();
+  });
+
+  it("still throws on a worker 404 by default (production path unchanged)", async () => {
+    await expect(
+      fetchReleaseState(fetchArgs(releaseFetch({ absentScript: "yourrank-site-staging" }))),
+    ).rejects.toThrow("Release-state request failed for yourrank-site-staging deployments: This Worker does not exist on your account.");
+  });
+
+  it("plans a baseline-absent worker that appeared as a first deploy, not a restore", () => {
+    const baseline = releaseState();
+    baseline.workers.leaderboard = absentWorker("yourrank-site");
+    const plan = buildRecoveryPlan({ baseline, current: releaseState(), stages: allSuccess });
+    expect(plan.workers.leaderboard.changed).toBe(true);
+    expect(plan.workers.leaderboard.restoreSpecs).toBe("absent");
+    expect(plan.firstDeployWorkers).toEqual(["leaderboard"]);
+    expect(plan.restoreTargets).toEqual([]);
+    expect(plan.unchangedWorkers).not.toContain("leaderboard");
+    expect(plan.mutationObserved).toBe(true);
+    expect(versionSpecs(plan.workers.leaderboard.before)).toBe("absent");
+  });
+
+  it("reports no change when a worker was absent before and stays absent", () => {
+    const baseline = releaseState();
+    baseline.workers.leaderboard = absentWorker("yourrank-site");
+    const current = releaseState();
+    current.workers.leaderboard = absentWorker("yourrank-site");
+    const plan = buildRecoveryPlan({ baseline, current, stages: allSuccess });
+    expect(plan.workers.leaderboard.changed).toBe(false);
+    expect(plan.firstDeployWorkers).toEqual(["leaderboard"]);
+    expect(plan.restoreTargets).toEqual([]);
   });
 });

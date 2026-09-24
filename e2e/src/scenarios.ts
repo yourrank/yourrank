@@ -24,6 +24,8 @@ export interface Scenario {
   requires?: string[];
   /** Why a conditional/not-verifiable scenario cannot simply be run. */
   reason?: string;
+  /** Needs a wrangler-dev-only surface (e.g. /__scheduled); SKIPPED, not blocking, when E2E_DEPLOYED_TARGET=1. */
+  localOnly?: boolean;
 }
 
 export const SCENARIOS: Scenario[] = [
@@ -95,7 +97,8 @@ export const SCENARIOS: Scenario[] = [
     title: "A scheduled safe Activity executes once and records normal viewer participation",
     tier: "required",
     requires: ["E2E_DB_URL", "E2E_VIEWER_SESSION"],
-    reason: "The isolated gate provisions both the scheduler database and a viewer session.",
+    reason: "Drives the scheduler via /__scheduled, which only exists under wrangler dev --test-scheduled.",
+    localOnly: true,
   },
   {
     key: "games-bet-placement",

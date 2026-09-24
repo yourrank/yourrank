@@ -53,6 +53,16 @@ describe("giveaway verification boundary", () => {
     const req = request(); req.headers.set("origin", "https://other.example");
     expect((await handleGiveawayVerification(req, {}, setup())).status).toBe(403);
   });
+  it("accepts the staging host only when ENVIRONMENT is staging", async () => {
+    const stagingUrl = `https://staging.yourrank.site/api/viewer/giveaway?sessionId=${id}`;
+    // staging host + staging env reaches past the host check (400 = bad id, not 404)
+    const stagingEnv = { ENVIRONMENT: "staging" };
+    expect((await handleGiveawayVerification(new Request(stagingUrl), stagingEnv, setup())).status).not.toBe(404);
+    // same host with production env still 404s
+    expect((await handleGiveawayVerification(new Request(stagingUrl), { ENVIRONMENT: "production" }, setup())).status).toBe(404);
+    // production env + platform host unchanged: reaches past the host check
+    expect((await handleGiveawayVerification(new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`), { ENVIRONMENT: "production" }, setup())).status).not.toBe(404);
+  });
   it("rejects a body giveaway ID that differs from the signed link ID", async () => {
     const mismatched = new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`, {
       method: "POST", headers: { "content-type": "application/json" },
