@@ -205,7 +205,7 @@ export async function handlePolarPlanChange(request, env, deps = {}) {
           await d.request(env, `/subscriptions/${sub.id}`, { method: "PATCH", body: patch });
         } catch (error) {
           if (error.status === 402) return { error: "Polar could not charge your payment method for this change. Update it in Polar and try again.", status: 402 };
-          if (error.status === 403) return { error: "Your subscription is scheduled to cancel. Choose Keep current plan first, then change it.", status: 409 };
+          if (error.status === 403 && error.detail?.error === "AlreadyCanceledSubscription") return { error: "Your subscription is scheduled to cancel. Choose Keep current plan first, then change it.", status: 409 };
           if (error.status === 409) return { error: "Polar is still applying a previous change to this subscription. Refresh Billing in a moment.", status: 409 };
           throw error;
         }

@@ -204,6 +204,31 @@ describe("POST /api/billing/change (mocked Polar)", () => {
     await expectStatus(Object.assign(new Error("aborted"), { name: "AbortError" }), 502);
   });
 
+  test("PATCH 403 insufficient_scope (real Sandbox shape) is a provider configuration failure, not a scheduled cancellation", async () => {
+    const scopeError = new PolarRequestError(403, { error: "insufficient_scope", error_description: "The request requires higher privileges than provided by the access token." });
+    const logged = [];
+    const original = console.error;
+    console.error = (...args) => logged.push(args.join(" "));
+    let res, body;
+    try {
+      const f = fixture({ subs: [subOf("pro_monthly")], patchError: scopeError });
+      res = await handlePolarPlanChange(req({ plan: "team", interval: "monthly" }), env, f.deps);
+      body = await res.json();
+      expect(f.writes.some(([q]) => q.includes("UPDATE users") || q.includes("INSERT INTO subscriptions"))).toBe(false);
+    } finally {
+      console.error = original;
+    }
+    expect(res.status).toBe(502);
+    expect(body.error).not.toContain("scheduled to cancel");
+    expect(logged.some((l) => l.includes("[polar.plan_change]") && l.includes("status=403") && l.includes("insufficient_scope"))).toBe(true);
+    expect(logged.join("\n")).not.toContain(env.POLAR_ACCESS_TOKEN);
+    for (const detail of [null, {}, { error: "Forbidden" }]) {
+      const f = fixture({ subs: [subOf("pro_monthly")], patchError: new PolarRequestError(403, detail) });
+      console.error = () => {};
+      try { expect((await handlePolarPlanChange(req({ plan: "team", interval: "monthly" }), env, f.deps)).status).toBe(502); } finally { console.error = original; }
+    }
+  });
+
   test("a successful change is reconciled from provider state, not from the request", async () => {
     const sub = subOf("pro_monthly");
     // After Polar applies the PATCH, its list reflects the new product; the
