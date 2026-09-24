@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 const PAYMENT_METHODS_ANSWER =
-  "Recurring card checkout is not available yet. Paid access will only be activated after confirmation from a verified billing provider; YourRank does not silently fall back to crypto checkout.";
+  "Card checkout with Polar is live for monthly and annual billing. Paid access is activated only after a verified Polar confirmation; you can cancel anytime from the customer portal.";
 
 const FAQ_GROUPS: Array<{ category: string; items: Array<{ q: string; a: string }> }> = [
   {

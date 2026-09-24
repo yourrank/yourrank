@@ -21,7 +21,7 @@ const BILLING_FAQ = [
   },
   {
     q: "Can I pay for Pro or Team today?",
-    a: "Recurring card checkout is not available yet. We will only activate paid access through a verified billing provider; no crypto fallback or automatic charge is used.",
+    a: "Yes. Card checkout with Polar is live for monthly and annual billing; paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal.",
   },
   {
     q: "Do viewers pay?",

@@ -63,7 +63,7 @@ export function renderBoardSwitcher() {
       const d = await res.json();
       if (res.ok && d.ok) {
         requestDashboardRoute("board", "setup", { query: `board=${encodeURIComponent(d.id)}`, reload: true });
-      } else if (d.code === "board_limit") {
+      } else if (d.code === "plan_limit_reached" && d.limit === "sites") {
         $("newBoardForm").hidden = true;
         newBtn.hidden = false;
         showBoardLimitUpsell();
@@ -210,7 +210,7 @@ export async function duplicateBoard(siteId) {
     const d = await res.json();
     if (res.ok && d.ok) {
       requestDashboardRoute("home", "", { query: `board=${encodeURIComponent(d.id)}`, reload: true });
-    } else if (d.code === "board_limit") {
+    } else if (d.code === "plan_limit_reached" && d.limit === "sites") {
       showBoardLimitUpsell();
     } else {
       showToast(d.error || "Could not duplicate the site.", "error");

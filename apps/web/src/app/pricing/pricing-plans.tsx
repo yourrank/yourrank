@@ -123,7 +123,7 @@ export function PricingPlans() {
             })}
           </div>
           <p className="mt-5 max-w-3xl text-sm leading-relaxed text-devin-ink-soft">
-            Free is available now. Recurring card checkout for Pro and Team is not available yet; paid access will only be activated after a verified provider confirmation.
+            Free is available now. Pro and Team checkout is live — paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal.
           </p>
         </div>
       </section>
