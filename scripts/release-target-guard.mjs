@@ -117,6 +117,9 @@ function evaluateStaging(env, problems) {
     }
     if (PROD_HOSTS.includes(url.hostname)) problems.push(`${name} points at production host ${url.hostname}.`);
   }
+
+  // A production billing server must never be reachable from a staging release.
+  if (env.POLAR_SERVER === "production") problems.push("POLAR_SERVER is \"production\" in a staging release.");
 }
 
 // Returns a list of problems (variable names only); empty means the environment

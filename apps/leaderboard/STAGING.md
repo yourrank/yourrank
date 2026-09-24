@@ -177,7 +177,7 @@ Staging must not spam real users or pay real invoices. Any integration that is
 not configured with staging-safe credentials must be declared explicitly, e.g.
 
 ```
-STAGING_DISABLED_INTEGRATIONS=telegram,kick,nowpayments,lead-webhook,sentry,monitor-email
+STAGING_DISABLED_INTEGRATIONS=telegram,kick,nowpayments,lead-webhook,sentry,monitor-email,polar
 ```
 
 The preflight accepts a missing integration secret **only** when its integration
