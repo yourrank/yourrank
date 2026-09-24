@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { polarConfig, polarRequest, polarRedirect, validatePolarProduct, verifyPolarWebhook, assertPolarDeletionAllowed } from "../polar.js";
+import { polarConfig, polarRequest, PolarRequestError, polarRedirect, validatePolarProduct, verifyPolarWebhook, assertPolarDeletionAllowed } from "../polar.js";
 import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook, getPolarBillingStatus, syncPolarCustomer } from "../handlers/polar-billing.js";
 import { shouldRequireCsrf } from "../middleware/csrf.js";
 
@@ -158,7 +158,7 @@ describe("Polar lifecycle (mocked API)", () => {
     expect(write).toBeDefined();
     expect(write[0]).toContain("COALESCE(subscriptions.past_due_since, now())");
     expect(write[0]).toContain("GREATEST(");
-    expect(write[1]).toEqual([userId, "pro", 7, remote.id, false]);
+    expect(write[1]).toEqual([userId, "pro", 7, remote.id, false, "monthly", null, null, null]);
     // The grace end is anchored in SQL — no JS-computed timestamp may be bound.
     expect(write[1].some((p) => typeof p === "string" && Number.isFinite(Date.parse(p)))).toBe(false);
     const active = syncFixture({ remoteSubs: [subOf({})] });
@@ -197,6 +197,27 @@ describe("Polar lifecycle (mocked API)", () => {
     d = deps();
     expect((await handlePolarWebhook(await signedRequest({ type: "product.updated", data: {} }), env, d)).status).toBe(200);
     expect(d.writes.length).toBe(0);
+  });
+  test("webhook returns retryable 500 and logs provider status when the token lacks subscriptions:read (Sandbox 2026-09-24)", async () => {
+    // Real staging failure: customer state succeeded, then GET /subscriptions/ answered 403 insufficient_scope.
+    const scopeError = new PolarRequestError(403, { error: "insufficient_scope", error_description: "The request requires higher privileges than provided by the access token." });
+    const f = syncFixture({});
+    const request = async (e, path, options) => { if (path.startsWith("/subscriptions")) throw scopeError; return f.request(e, path, options); };
+    const logged = [];
+    const original = console.error;
+    console.error = (...args) => logged.push(args.join(" "));
+    try {
+      for (const type of ["subscription.created", "subscription.active", "customer.state_changed"]) {
+        const data = type.startsWith("customer.") ? customer : { id: crypto.randomUUID(), customer: { external_id: userId } };
+        const res = await handlePolarWebhook(await signedRequest({ type, data }), env, { transaction: (fn) => fn(f.tx), request });
+        expect(res.status).toBe(500);
+      }
+    } finally {
+      console.error = original;
+    }
+    expect(f.writes.some(([q]) => q.includes("UPDATE users") || q.includes("INSERT INTO subscriptions") || q.includes("polar_webhook_events"))).toBe(false);
+    expect(logged.filter((l) => l.includes("[polar.webhook]") && l.includes("status=403") && l.includes("insufficient_scope")).length).toBe(3);
+    expect(logged.join("\n")).not.toContain(env.POLAR_ACCESS_TOKEN);
   });
   test("environment mismatch and invalid grace fail closed", async () => {
     const stagingEnv = { ...env, ENVIRONMENT: "staging", PUBLIC_BASE_URL: "https://staging.yourrank.site" };

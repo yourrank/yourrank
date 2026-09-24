@@ -225,7 +225,7 @@ import {
 } from "./handlers/viewer-export.js";
 import { handleApiDocs, handleDocsPage, handleOpenApiJson, DOCS_PATH, OPENAPI_PATH, LEGACY_OPENAPI_PATH } from "./handlers/docs.js";
 import { handleUserPayments, handleAccountUsage } from "./billing.js";
-import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook } from "./handlers/polar-billing.js";
+import { handlePolarCheckout, handlePolarPortal, handlePolarPlanChange, handlePolarWebhook } from "./handlers/polar-billing.js";
 import {
   handleOverview, handleUsers, handleLeads, handlePayments, handleAction,
   handleSupportMessages, handleSupportReply, handleAudit,
@@ -511,6 +511,7 @@ export const ROUTES = [
   // Billing routes
   { path: "/api/billing/checkout", method: "POST", handler: withHandler(handlePolarCheckout) },
   { path: "/api/billing/portal", method: "POST", handler: withHandler(handlePolarPortal) },
+  { path: "/api/billing/change", method: "POST", handler: withHandler(handlePolarPlanChange) },
   { path: "/api/billing/webhook/polar", method: "POST", handler: withHandler(handlePolarWebhook) },
   { path: "/api/billing/trial", method: "POST", handler: withHandler(handleTrial) },
   { path: "/api/billing/funnel", method: "POST", handler: withHandler(handleBillingFunnel) },
