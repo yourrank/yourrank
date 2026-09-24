@@ -39,7 +39,7 @@ export async function polarRequest(env, path, { body, fetchFn = fetch, allowMiss
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query || {})) if (value !== undefined) params.set(key, String(value));
   const response = await fetchFn(`${config.base}/v1${path}${params.size ? `?${params}` : ""}`, {
-    method: body ? "POST" : "GET", redirect: "error", signal: AbortSignal.timeout(timeoutMs),
+    method: body ? "POST" : "GET", redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
     headers: { Authorization: `Bearer ${env.POLAR_ACCESS_TOKEN}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
