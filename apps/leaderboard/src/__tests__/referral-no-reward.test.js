@@ -4,6 +4,7 @@ import { describe, it, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { handleSignup } from "../handlers/auth.js";
+import { createUser } from "../data/auth.js";
 import { ROUTES } from "../routes.js";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { handlerSchemas } from "@yourrank/shared/validation";
@@ -19,11 +20,10 @@ function fakeSignup() {
     rateLimit: async () => ({ ok: true }),
     findUserByEmail: async () => null,
     findSiteBySlug: async () => null,
-    generateUniqueReferralCode: async () => "newcode1",
     withTransaction: async (fn) => fn(tx),
-    createUser: async (_tx, userId, email, _hash, _salt, referralCode, ...rest) => {
-      createdUser = { userId, email, plan: "free", referralCode, extraArgs: rest };
-      sql.push({ text: "INSERT INTO users", params: [userId, email, "free", referralCode] });
+    createUser: async (_tx, userId, email, hash, salt, ...rest) => {
+      createdUser = { userId, email, plan: "free", hash, salt, extraArgs: rest };
+      sql.push({ text: "INSERT INTO users", params: [userId, email, "free"] });
     },
     createBoard: async () => ({ ok: true }),
     createSession: async () => "session-token",
@@ -53,6 +53,7 @@ describe("referral signup grants no paid entitlement", () => {
       const res = await handleSignup(signupRequest({ email: "new@yourrank.site", password: "CorrectHorse!42", ...body }, query), {}, f.deps);
       expect(res.status).toBe(200);
       expect(f.user().plan).toBe("free");
+      expect(f.user().hash).toBeTruthy();
       expect(f.user().extraArgs).toEqual([]);
       expect(f.sql.filter(entitlementWrite)).toEqual([]);
       expect(f.sql.some(({ text }) => /UPDATE\s+users/i.test(text))).toBe(false);
@@ -64,6 +65,19 @@ describe("referral signup grants no paid entitlement", () => {
     expect(src).not.toMatch(/body\.ref\b|refCode|referrerId|findUserByReferralCode|referred_by/);
     expect(src).not.toMatch(/referral_rewards|applyReferralReward|REFERRAL_REWARD_DAYS|REFERRAL_FRIEND_DAYS/);
     expect(read("data/auth.js")).not.toMatch(/referred_by|findUserByReferralCode/);
+  });
+
+  it("new users are created without generating or inserting a referral code", async () => {
+    const inserts = [];
+    const tx = { unsafe: async (text, params) => { inserts.push({ text, params }); return []; } };
+    await createUser(tx, "u1", "new@yourrank.site", "hash", "salt");
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].text).not.toMatch(/referral_code/);
+    expect(inserts[0].params).toEqual(["u1", "new@yourrank.site", "hash", "salt", "free", "active"]);
+    expect(createUser.length).toBe(5);
+    for (const rel of ["handlers/auth.js", "data/auth.js", "auth.js"]) {
+      expect(read(rel)).not.toMatch(/generateUniqueReferralCode|newReferralCode|referralCode/);
+    }
   });
 
   it("the signup request schema does not accept a referral field", () => {

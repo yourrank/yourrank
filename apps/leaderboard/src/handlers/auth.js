@@ -1,6 +1,6 @@
 import { withTransaction as defaultWithTransaction, one as defaultOne, exec as defaultExec } from "@yourrank/shared/db";
 // Authentication handlers for signup, login, logout, password reset
-import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, generateUniqueReferralCode } from "../auth.js";
+import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp } from "../auth.js";
 import { hashToken } from "@yourrank/shared/crypto";
 import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { routeContext } from "../middleware/handler.js";
@@ -57,7 +57,7 @@ async function issueVerificationEmail(env, userId, email, origin, sendVerificati
 
 export async function handleSignup(request, env, deps = {}) {
   const io = {
-    rateLimit, findUserByEmail, findSiteBySlug, generateUniqueReferralCode,
+    rateLimit, findUserByEmail, findSiteBySlug,
     withTransaction, createUser, createBoard, createSession, issueVerificationEmail, sendOnboardingEmail,
     trackActivation, waitUntil: (request, promise) => routeContext(request).waitUntil(promise),
     ...deps,
@@ -100,13 +100,12 @@ export async function handleSignup(request, env, deps = {}) {
     // The slug check above is a TOCTOU race: two concurrent signups choosing the
     // same slug can both pass the SELECT, then the second INSERT hits sites.slug
     // UNIQUE and threw an unhandled 500. Wrap the inserts; on a unique violation
-    // (23505) on the slug or referral_code, regenerate and retry once.
-    let referralCode = await io.generateUniqueReferralCode();
+    // (23505) on the slug, regenerate and retry once.
     let created = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await io.withTransaction(async (tx) => {
-          await io.createUser(tx, userId, email, hash, salt, referralCode);
+          await io.createUser(tx, userId, email, hash, salt);
           const board = await io.createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
           if (!board.ok) throw new Error(board.error || "board_create_failed");
         });
@@ -115,12 +114,8 @@ export async function handleSignup(request, env, deps = {}) {
       } catch (e) {
         const msg = String(e?.message || e);
         if (/23505/.test(msg) && attempt < 2) {
-          if (/referral_code/i.test(msg)) {
-            referralCode = await io.generateUniqueReferralCode();
-          } else {
-            // unique violation — likely the slug raced; retry with a fresh suffix
-            finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-          }
+          // unique violation — likely the slug raced; retry with a fresh suffix
+          finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
           continue;
         }
         // users.email UNIQUE collision (already checked above, but concurrent) or
@@ -215,7 +210,6 @@ export async function handleDemoLogin(request, env) {
   if (!user) {
     const { hash, salt } = await hashPassword(crypto.randomUUID());
     const userId = uuid();
-    const referralCode = await generateUniqueReferralCode();
     const baseSlug = "demo-board";
     let finalSlug = baseSlug;
     for (let n = 2; ; n++) {
@@ -224,7 +218,7 @@ export async function handleDemoLogin(request, env) {
       finalSlug = `${baseSlug}-${n}`;
     }
     await withTransaction(async (tx) => {
-      await createUser(tx, userId, email, hash, salt, referralCode);
+      await createUser(tx, userId, email, hash, salt);
       const board = await createBoard(env, userId, { slug: finalSlug, name: "Demo Board", published: false, is_draft: true, seed: true }, request, tx);
       if (!board.ok) throw new Error(board.error || "board_create_failed");
     });
@@ -271,7 +265,6 @@ export async function handleMe(request, env) {
       subscriptionStatus,
       boards,
       features,
-      referralCode: user.referral_code || null,
     } });
   } catch (e) {
     console.error("handleMe error:", String(e?.message || e), String(e?.stack || ""));

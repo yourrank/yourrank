@@ -82,30 +82,6 @@ export async function verifyPassword(password, saltHex, expected) {
 export const uuid = () => crypto.randomUUID();
 export const newToken = () => bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
 
-const REFERRAL_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
-const REFERRAL_ALPHABET_LEN = REFERRAL_ALPHABET.length;
-const REFERRAL_REJECT_CUTOFF = 256 - (256 % REFERRAL_ALPHABET_LEN);
-function randReferralChar() {
-  // Rejection sampling removes modulo bias from 8-bit random values.
-  let n;
-  do { n = crypto.getRandomValues(new Uint8Array(1))[0]; } while (n >= REFERRAL_REJECT_CUTOFF);
-  return REFERRAL_ALPHABET[n % REFERRAL_ALPHABET_LEN];
-}
-export function newReferralCode(length = 8) {
-  let code = "";
-  for (let i = 0; i < length; i++) code += randReferralChar();
-  return code;
-}
-export async function generateUniqueReferralCode() {
-  for (let i = 0; i < 5; i++) {
-    const code = newReferralCode();
-    const existing = await one("SELECT 1 FROM users WHERE referral_code=$1", [code]);
-    if (!existing) return code;
-  }
-  // Last resort: append a random digit to reduce collisions.
-  return newReferralCode(10);
-}
-
 // Session mechanics delegate to the SHARED module (Postgres-backed).
 export const createSession = (env, userId) => _createSession(env, userId);
 export const destroySession = (env, token) => _destroySession(env, token);
@@ -124,7 +100,6 @@ const loadUser = (env, uid) =>
               status, is_admin, email_verified,
               telegram_user_id, telegram_username,
               (EXTRACT(EPOCH FROM created_at) * 1000)::double precision AS created_at,
-              referral_code,
               active_site_id,
               has_trial,
               kick_user_id, kick_username, kick_linked_at

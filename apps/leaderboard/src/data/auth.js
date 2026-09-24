@@ -25,10 +25,10 @@ export async function findSubscriptionByUserId(userId) {
   return await one("SELECT provider FROM subscriptions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1", [userId]);
 }
 
-export async function createUser(tx, userId, email, hash, salt, referralCode) {
+export async function createUser(tx, userId, email, hash, salt) {
   await tx.unsafe(
-    "INSERT INTO users (id,email,password_hash,password_salt,plan,status,referral_code) VALUES ($1,$2,$3,$4,$5,$6,$7)",
-    [userId, email, hash, salt, "free", "active", referralCode]
+    "INSERT INTO users (id,email,password_hash,password_salt,plan,status) VALUES ($1,$2,$3,$4,$5,$6)",
+    [userId, email, hash, salt, "free", "active"]
   );
 }
 
