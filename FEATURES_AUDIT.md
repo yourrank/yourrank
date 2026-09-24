@@ -246,7 +246,6 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/api/public/:slug/rank` | `handlePublicRank` | Handle GET /api/public/:slug/rank?user=X Returns plain-text rank lookup for Nightbot / Streamlabs custom commands |
 | GET | `/api/public/:slug/stats` | `handlePublicStats` | Handle GET /api/public/:slug/stats Public stats page for publishers/streamers to share. Returns summary counts and a 14-day views series. |
 | GET | `/api/public/:slug` | `handlePublicData` | Handle GET /api/public/:slug (generic endpoint) Returns the full leaderboard data as JSON |
-| GET | `/api/referrals` | `handleReferrals` | Referral dashboard API: returns the authenticated user's referral link and stats. |
 | POST | `/api/billing/checkout` | `handleCheckout` | Billing routes |
 | POST | `/api/billing/checkout-lifetime` | `handleCheckoutLifetime` |  |
 | GET | `/api/billing/pending` | `handlePendingPayment` |  |
@@ -1390,19 +1389,6 @@ Store API: `createDashboardState()` returns `getState`, `setState`, `subscribe`,
 - Event listeners: click=0, submit=0, change=0
 
 
-#### `apps/leaderboard/src/assets/dashboard/referrals.js`
-
-- Exports / purpose:
-
-  - `renderReferrals`
-
-- $ selector: `refCopy`, `refCount`, `refDays`, `refLink`, `refSaved`, `refStatus`
-
-- fetch endpoints: `/api/referrals`
-
-- Event listeners: click=1, submit=0, change=0
-
-
 #### `apps/leaderboard/src/assets/dashboard/request.js`
 
 - Exports / purpose:
@@ -2498,15 +2484,6 @@ Overview: Daily Quests & Streaks Engine Handlers.
 | Handler | Purpose |
 | --- | --- |
 | `handleQuickAdd` | POST /api/sites/:id/quick-add Takes { name: "Steve", amount: 500 } Updates existing player or creates new one, then saves board. |
-
-
-### `apps/leaderboard/src/handlers/referrals.js`
-
-Overview: Referral dashboard API: returns the authenticated user's referral link and stats.
-
-| Handler | Purpose |
-| --- | --- |
-| `handleReferrals` |  |
 
 
 ### `apps/leaderboard/src/handlers/scores.js`

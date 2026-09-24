@@ -85,15 +85,6 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         <div class="plan-usage" id="planUsage" aria-live="polite"><p class="hint">Loading usage…</p></div>
         </section>
 
-        <details class="account-settings-disclosure" id="planReferral" data-ui-advanced>
-          <summary>Invite streamers, earn Pro</summary>
-          <div class="account-settings-disclosure-body">
-          <p class="card-sub">Share your link. They get a free week of Pro — you get a free month when they join.</p>
-          <div class="v3-ref-link-row"><input id="refLink" readonly aria-label="Your referral link" value="" /><button class="v3-btn v3-btn--accent" id="refCopy" type="button">Copy link</button></div>
-          <div class="v3-stat-tiles" id="refStats" hidden><div><b id="refCount"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Streamers joined</span></div><div><b id="refDays"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Free Pro days earned</span></div><div><b id="refSaved"><span class="v3-skel-kpi" aria-hidden="true"></span></b><span>Estimated value</span></div></div>
-          <p id="refStatus" role="status" aria-live="polite"></p>
-          </div>
-        </details>
 
         <section class="account-settings-section" id="historyCard" hidden aria-labelledby="paymentHistoryTitle">
           <h2 id="paymentHistoryTitle">Payment history</h2>

@@ -65,9 +65,6 @@ const EXCEPTIONS = {
   "dashboard/utils.js": [
     { match: "location.href = loginRedirectPath();", reason: "401 on a dashboard API call: session gone, redirect to login" },
   ],
-  "dashboard/referrals.js": [
-    { match: "location.href = loginRedirectPath(); return;", reason: "401 loading referrals: session gone, redirect to login" },
-  ],
   "dashboard/session.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "auth failure: redirect to login" },
   ],

@@ -38,12 +38,6 @@ const pages = [
       "historyTable",
       "historyBody",
       "historyEmpty",
-      "refLink",
-      "refCopy",
-      "refCount",
-      "refDays",
-      "refSaved",
-      "refStatus",
     ],
   },
   {
@@ -131,7 +125,6 @@ describe("settings panels", () => {
     }
     // Site-level settings are a separate destination, not an account tab.
     expect(html).toContain('href="/dashboard/site"');
-    expect(html).toContain("Invite streamers, earn Pro");
     expect(html).toContain('href="/dashboard/site?tab=danger"');
     expect(html).not.toContain('data-settings-tab="board"');
     expect(html).not.toContain("/account/profile");
@@ -170,13 +163,17 @@ describe("settings panels", () => {
     }
   });
 
-  it("keeps Sources analytical and puts referrals in Billing", async () => {
+  it("keeps Sources analytical and offers no referral reward in Billing", async () => {
     const sources = PAGES.dashboard.Component({ activePath: "/dashboard/analytics/referrals", user: { email: "a@b.c" } }).toString();
     const plan = await UnifiedSettingsPage({ activePath: "/dashboard/settings/billing", tab: "plan", user: { email: "a@b.c" } }).toString();
     expect(sources).toContain('id="perf-referrers"');
-    expect(sources).not.toContain("Invite streamers, earn Pro");
-    expect(plan).toContain("Invite streamers, earn Pro");
-    expect(plan).toContain('id="refLink"');
+    for (const html of [sources, plan]) {
+      expect(html).not.toContain("Invite streamers, earn Pro");
+      expect(html).not.toMatch(/free (week|month) of Pro/i);
+      expect(html).not.toContain('id="refLink"');
+      expect(html).not.toContain('id="refCopy"');
+      expect(html).not.toContain('id="planReferral"');
+    }
     const site = PAGES.dashboard.Component({ activePath: "/dashboard/site", user: { email: "a@b.c" } }).toString();
     expect(site).toContain(">Advanced<");
     expect(site).not.toContain(">Integrations</button>");

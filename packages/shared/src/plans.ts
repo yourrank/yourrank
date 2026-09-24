@@ -282,7 +282,7 @@ export function priceUsd(
 
 const MS_PER_DAY = 86_400_000;
 
-/** Fixed-duration helper retained for authorized trials and referral credits. */
+/** Fixed-duration helper for authorized trials and manual grants. */
 export function computeProratedExpiry(args: {
   nowMs: number;
   currentPlan: PlanTier | string;

@@ -26,9 +26,6 @@ const withTransaction = defaultWithTransaction;
 const one = defaultOne;
 const exec = defaultExec;
 
-const REFERRAL_REWARD_DAYS = 31;
-const REFERRAL_FRIEND_DAYS = 7;
-const REFERRAL_MAX_EXTENSION_DAYS = 365;
 const VERIFICATION_TTL_HOURS = 24;
 
 export function emailVerificationDeliveryState(env = {}) {
@@ -58,45 +55,19 @@ async function issueVerificationEmail(env, userId, email, origin, sendVerificati
   }
 }
 
-async function applyReferralReward(referrerId, referredId) {
-  if (!referrerId || !referredId || referrerId === referredId) return;
-  const referrer = await one(
-    "SELECT plan, (EXTRACT(EPOCH FROM plan_expires_at) * 1000)::double precision AS plan_expires_at FROM users WHERE id=$1",
-    [referrerId]
-  );
-  if (!referrer) return;
-  const now = Date.now();
-  const currentExpiry = Number(referrer.plan_expires_at) || now;
-  const base = currentExpiry > now ? currentExpiry : now;
-  const maxMs = now + REFERRAL_MAX_EXTENSION_DAYS * 86400000;
-  const newExpiry = Math.min(base + REFERRAL_REWARD_DAYS * 86400000, maxMs);
-  const newPlan = effectivePlan(referrer) === "team" ? "team" : "pro";
-  await withTransaction(async (tx) => {
-    await tx.unsafe(
-      "INSERT INTO referral_rewards (referrer_id, referred_id, reward_days) VALUES ($1, $2, $3) ON CONFLICT (referred_id) DO NOTHING",
-      [referrerId, referredId, REFERRAL_REWARD_DAYS]
-    );
-    await tx.unsafe(
-      "UPDATE users SET plan=$1, plan_expires_at=to_timestamp($2 / 1000.0), updated_at=now() WHERE id=$3",
-      [newPlan, newExpiry, referrerId]
-    );
-    // Double-sided reward: the invited streamer gets a free Pro week that
-    // stands in for the self-serve trial (has_trial prevents a second week).
-    const friendExpiry = now + REFERRAL_FRIEND_DAYS * 86400000;
-    await tx.unsafe(
-      "UPDATE users SET plan='pro', plan_expires_at=to_timestamp($2 / 1000.0), has_trial=TRUE, updated_at=now() WHERE id=$1",
-      [referredId, friendExpiry]
-    );
-  });
-}
-
-export async function handleSignup(request, env) {
+export async function handleSignup(request, env, deps = {}) {
+  const io = {
+    rateLimit, findUserByEmail, findSiteBySlug, findUserByReferralCode, generateUniqueReferralCode,
+    withTransaction, createUser, createBoard, createSession, issueVerificationEmail, sendOnboardingEmail,
+    trackActivation, waitUntil: (request, promise) => routeContext(request).waitUntil(promise),
+    ...deps,
+  };
   try {
     const delivery = emailVerificationDeliveryState(env);
     if (delivery.required && !delivery.configured) {
       return bad("Account creation is temporarily unavailable because email delivery is not configured.", 503);
     }
-    if (!(await rateLimit(env, `signup:${clientIp(request)}`, 10, 3600)).ok) return bad("Too many attempts. Try again later.", 429);
+    if (!(await io.rateLimit(env, `signup:${clientIp(request)}`, 10, 3600)).ok) return bad("Too many attempts. Try again later.", 429);
     const body = await readJson(request);
     if (!body) return bad("Invalid request");
     const email = String(body.email || "").trim().toLowerCase();
@@ -115,20 +86,20 @@ export async function handleSignup(request, env) {
     const requestedSlug = requested ? requested.handle : "";
     let slug = requestedSlug || slugify(defaultName);
     if (!slug || RESERVED_COMMUNITY_HANDLES.has(slug)) slug = `${slug || "site"}-${Math.random().toString(36).slice(2, 6)}`;
-    const existing = await findUserByEmail(email);
+    const existing = await io.findUserByEmail(email);
     if (existing) return bad("If this email isn't already registered, check your inbox to confirm.");
-    if (requestedSlug && await findSiteBySlug(requestedSlug)) {
+    if (requestedSlug && await io.findSiteBySlug(requestedSlug)) {
       return json({ ok: false, error: "That page URL is already taken. Pick another.", field: "slug" }, 400);
     }
     let finalSlug = slug;
-    for (let n = 2; ; n++) { const c = await findSiteBySlug(finalSlug); if (!c) break; finalSlug = `${slug}-${n}`; }
+    for (let n = 2; ; n++) { const c = await io.findSiteBySlug(finalSlug); if (!c) break; finalSlug = `${slug}-${n}`; }
     const displayName = name || defaultName;
     const { hash, salt } = await hashPassword(password);
     const userId = uuid();
 
     let referrerId = null;
     if (refCode) {
-      const referrer = await findUserByReferralCode(refCode);
+      const referrer = await io.findUserByReferralCode(refCode);
       if (referrer) referrerId = referrer.id;
     }
 
@@ -137,13 +108,13 @@ export async function handleSignup(request, env) {
     // same slug can both pass the SELECT, then the second INSERT hits sites.slug
     // UNIQUE and threw an unhandled 500. Wrap the inserts; on a unique violation
     // (23505) on the slug or referral_code, regenerate and retry once.
-    let referralCode = await generateUniqueReferralCode();
+    let referralCode = await io.generateUniqueReferralCode();
     let created = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await withTransaction(async (tx) => {
-          await createUser(tx, userId, email, hash, salt, referralCode, referrerId);
-          const board = await createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
+        await io.withTransaction(async (tx) => {
+          await io.createUser(tx, userId, email, hash, salt, referralCode, referrerId);
+          const board = await io.createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
           if (!board.ok) throw new Error(board.error || "board_create_failed");
         });
         created = true;
@@ -152,7 +123,7 @@ export async function handleSignup(request, env) {
         const msg = String(e?.message || e);
         if (/23505/.test(msg) && attempt < 2) {
           if (/referral_code/i.test(msg)) {
-            referralCode = await generateUniqueReferralCode();
+            referralCode = await io.generateUniqueReferralCode();
           } else {
             // unique violation — likely the slug raced; retry with a fresh suffix
             finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
@@ -166,17 +137,12 @@ export async function handleSignup(request, env) {
     }
     if (!created) return bad("Sign-up failed, please try again", 500);
 
-    if (referrerId) {
-      const rewardPromise = applyReferralReward(referrerId, userId).catch((err) => console.error("[signup] referral reward failed:", err));
-      routeContext(request).waitUntil(rewardPromise);
-    }
-
-    const token = await createSession(env, userId);
+    const token = await io.createSession(env, userId);
     const origin = new URL(request.url).origin;
-    const verification = await issueVerificationEmail(env, userId, email, origin);
-    const onboardingPromise = sendOnboardingEmail(env, 0, { id: userId, email, display_name: displayName, slug: finalSlug, origin });
-    routeContext(request).waitUntil(onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
-    trackActivation("leaderboard", userId, "signup", { email, referred: !!referrerId });
+    const verification = await io.issueVerificationEmail(env, userId, email, origin);
+    const onboardingPromise = io.sendOnboardingEmail(env, 0, { id: userId, email, display_name: displayName, slug: finalSlug, origin });
+    io.waitUntil(request, onboardingPromise.catch((err) => console.error("[signup] onboarding day 0 failed:", err)));
+    io.trackActivation("leaderboard", userId, "signup", { email, referred: !!referrerId });
     return json({ ok: true, user: { id: userId, email, slug: finalSlug, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": cookieSet(token, env) });
   } catch (e) {
     console.error("signup failed:", String(e?.message || e));
