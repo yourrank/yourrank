@@ -146,19 +146,19 @@ export async function syncPolarCustomer(tx, env, userId, requestApi = polarReque
     const mapping = products[sub.product_id];
     if (sub.status === "past_due") {
       // Polar advances current_period_end into the unpaid period during dunning;
-      // keep only the previously confirmed period plus the configured grace.
-      const pastDueAt = Date.parse(sub.past_due_at ?? "") || Date.now();
-      const graceEnd = new Date(pastDueAt + graceDays * 86_400_000).toISOString();
-      await tx.unsafe(`INSERT INTO subscriptions(user_id, plan, status, provider, current_period_end, provider_subscription_id, cancel_at_period_end)
-        VALUES ($1,$2,'past_due','polar',$3,$4,$5) ON CONFLICT(provider_subscription_id) DO UPDATE
-        SET plan=$2,status='past_due',current_period_end=GREATEST(subscriptions.current_period_end, EXCLUDED.current_period_end),
+      // keep the confirmed period plus the configured grace, anchored to the
+      // first locally observed past_due transition so re-syncs cannot extend it.
+      await tx.unsafe(`INSERT INTO subscriptions(user_id, plan, status, provider, current_period_end, provider_subscription_id, cancel_at_period_end, past_due_since)
+        VALUES ($1,$2,'past_due','polar',now() + ($3::int * interval '1 day'),$4,$5,now()) ON CONFLICT(provider_subscription_id) DO UPDATE
+        SET plan=$2,status='past_due',past_due_since=COALESCE(subscriptions.past_due_since, now()),
+        current_period_end=GREATEST(subscriptions.current_period_end, COALESCE(subscriptions.past_due_since, now()) + ($3::int * interval '1 day')),
         cancel_at_period_end=$5 WHERE subscriptions.user_id=$1`,
-      [userId, mapping.plan, graceEnd, sub.id, !!sub.cancel_at_period_end]);
+      [userId, mapping.plan, graceDays, sub.id, !!sub.cancel_at_period_end]);
       continue;
     }
     await tx.unsafe(`INSERT INTO subscriptions(user_id, plan, status, provider, current_period_end, provider_subscription_id, cancel_at_period_end)
       VALUES ($1,$2,$3,'polar',$4,$5,$6) ON CONFLICT(provider_subscription_id) DO UPDATE
-      SET plan=$2,status=$3,current_period_end=$4,cancel_at_period_end=$6 WHERE subscriptions.user_id=$1`,
+      SET plan=$2,status=$3,current_period_end=$4,cancel_at_period_end=$6,past_due_since=NULL WHERE subscriptions.user_id=$1`,
     [userId, mapping.plan, sub.status, sub.current_period_end, sub.id, !!sub.cancel_at_period_end]);
   }
   // Preserve valid manual/trial grants. Polar revocation only removes Polar access.

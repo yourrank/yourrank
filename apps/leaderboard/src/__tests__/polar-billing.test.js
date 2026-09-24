@@ -151,15 +151,20 @@ const insertFor = (writes, status) => writes.find(([q]) => q.includes("INSERT IN
 describe("Polar lifecycle (mocked API)", () => {
   test("past_due keeps the confirmed period plus grace, never Polar's advanced period", async () => {
     const env7 = { ...env, POLAR_PAST_DUE_GRACE_DAYS: "7" };
-    const pastDueAt = new Date(Date.now() + 20 * 86400000).toISOString();
-    const remote = subOf({ status: "past_due", past_due_at: pastDueAt, current_period_end: new Date(Date.now() + 60 * 86400000).toISOString() });
+    const remote = subOf({ status: "past_due", current_period_end: new Date(Date.now() + 60 * 86400000).toISOString() });
     const { tx, writes, request } = syncFixture({ remoteSubs: [remote] });
     await syncPolarCustomer(tx, env7, userId, request);
     const write = insertFor(writes, "past_due");
     expect(write).toBeDefined();
-    expect(write[1][2]).toBe(new Date(Date.parse(pastDueAt) + 7 * 86400000).toISOString());
-    expect(write[1][2]).not.toBe(remote.current_period_end);
-    expect(writes.some(([q]) => q.includes("GREATEST"))).toBe(true);
+    expect(write[0]).toContain("COALESCE(subscriptions.past_due_since, now())");
+    expect(write[0]).toContain("GREATEST(");
+    expect(write[1]).toEqual([userId, "pro", 7, remote.id, false]);
+    // The grace end is anchored in SQL — no JS-computed timestamp may be bound.
+    expect(write[1].some((p) => typeof p === "string" && Number.isFinite(Date.parse(p)))).toBe(false);
+    const active = syncFixture({ remoteSubs: [subOf({})] });
+    await syncPolarCustomer(active.tx, env, userId, active.request);
+    const activeWrite = active.writes.find(([q]) => q.includes("INSERT INTO subscriptions") && !q.includes("'past_due'"));
+    expect(activeWrite[0]).toContain("past_due_since=NULL");
   });
   test("active and trialing upsert; canceled/paused/unpaid leave no access", async () => {
     const { tx, writes, request } = syncFixture({ remoteSubs: [subOf({}), subOf({ status: "trialing" }), subOf({ status: "canceled" }), subOf({ status: "paused" }), subOf({ status: "unpaid" })] });
@@ -255,7 +260,7 @@ describe("Polar lifecycle (mocked API)", () => {
 const dbUrl = process.env.POLAR_TEST_DATABASE_URL;
 test.skipIf(!dbUrl)("SQL: paid activation, duplicate, past_due grace, renewal, cancellation, revocation, preserved grant, rollback", async () => {
   const target = new URL(dbUrl);
-  if (!["localhost", "127.0.0.1"].includes(target.hostname) || !target.pathname.startsWith("/yourrank_ui_test_")) throw new Error("Polar SQL tests require an isolated localhost yourrank_ui_test_ database.");
+  if (!["localhost", "127.0.0.1"].includes(target.hostname) || !/^\/(yourrank_test|yourrank_ui_test_)/.test(target.pathname)) throw new Error("Polar SQL tests require an isolated localhost test database.");
   const { default: postgres } = await import("postgres");
   const db = postgres(dbUrl, { max: 2 });
   const fixtureId = crypto.randomUUID();
@@ -281,15 +286,15 @@ test.skipIf(!dbUrl)("SQL: paid activation, duplicate, past_due grace, renewal, c
     expect((await db.unsafe("SELECT plan FROM users WHERE id=$1", [fixtureId]))[0].plan).toBe("pro");
     expect((await db.unsafe("SELECT count(*)::int n FROM subscriptions WHERE user_id=$1", [fixtureId]))[0].n).toBe(1);
     // Failed renewal: Polar advances the period into the unpaid one; we keep the
-    // confirmed period extended only by the 7-day grace from past_due_at.
-    const pastDueAt = new Date(Date.now() + 28 * 86400000).toISOString();
-    const graceEnd = new Date(Date.parse(pastDueAt) + 7 * 86400000).toISOString();
+    // confirmed period, extended only by the 7-day grace from the first locally
+    // observed past_due transition (shorter than the confirmed period here).
     subs[0].status = "past_due";
-    subs[0].past_due_at = pastDueAt;
     subs[0].current_period_end = new Date(Date.now() + 60 * 86400000).toISOString();
     expect((await send()).status).toBe(200);
-    expect(new Date((await db.unsafe("SELECT plan_expires_at FROM users WHERE id=$1", [fixtureId]))[0].plan_expires_at).toISOString()).toBe(graceEnd);
-    expect((await db.unsafe("SELECT status FROM subscriptions WHERE user_id=$1 AND provider='polar'", [fixtureId]))[0].status).toBe("past_due");
+    const polarSub = (await db.unsafe("SELECT status, past_due_since FROM subscriptions WHERE user_id=$1 AND provider='polar'", [fixtureId]))[0];
+    expect(polarSub.status).toBe("past_due");
+    expect(polarSub.past_due_since).not.toBeNull();
+    expect(new Date((await db.unsafe("SELECT plan_expires_at FROM users WHERE id=$1", [fixtureId]))[0].plan_expires_at).toISOString()).toBe(end);
     subs[0].status = "active";
     subs[0].current_period_end = new Date(Date.now() + 60 * 86400000).toISOString();
     expect((await send()).status).toBe(200);
@@ -320,6 +325,100 @@ test.skipIf(!dbUrl)("SQL: paid activation, duplicate, past_due grace, renewal, c
     expect((await send(failedId)).status).toBe(500);
     expect((await db.unsafe("SELECT id FROM app_private.polar_webhook_events WHERE id=$1", [failedId])).length).toBe(0);
     expect((await db.unsafe("SELECT plan FROM users WHERE id=$1", [fixtureId]))[0].plan).toBe("team");
+  } finally {
+    await db.unsafe("DELETE FROM app_private.polar_webhook_events WHERE user_id=$1", [fixtureId]);
+    await db.unsafe("DELETE FROM users WHERE id=$1", [fixtureId]);
+    await db.end();
+  }
+}, 20000);
+
+test.skipIf(!dbUrl)("SQL: repeated past_due reconciliation never extends the grace window", async () => {
+  const target = new URL(dbUrl);
+  if (!["localhost", "127.0.0.1"].includes(target.hostname) || !/^\/(yourrank_test|yourrank_ui_test_)/.test(target.pathname)) throw new Error("Polar SQL tests require an isolated localhost test database.");
+  const { default: postgres } = await import("postgres");
+  const db = postgres(dbUrl, { max: 2 });
+  const fixtureId = crypto.randomUUID();
+  const subscriptionId = crypto.randomUUID();
+  const env7 = { ...env, POLAR_PAST_DUE_GRACE_DAYS: "7" };
+  const remoteCustomer = { ...customer, external_id: fixtureId, id: crypto.randomUUID() };
+  let subs = [];
+  const transaction = fn => db.begin(sql => fn({ one: async (q, args) => (await sql.unsafe(q, args))[0], unsafe: (q, args) => sql.unsafe(q, args) }));
+  const request = async (_env, path) => {
+    if (path.includes("/state")) return { ...remoteCustomer, active_subscriptions: subs.filter((s) => ["active", "trialing"].includes(s.status)) };
+    if (path.startsWith("/subscriptions")) return { items: subs.map((s) => ({ ...s, customer: { external_id: fixtureId } })), pagination: { max_page: 1, total_count: subs.length } };
+    return null;
+  };
+  const deps = { transaction, request };
+  const send = async (id = crypto.randomUUID()) => handlePolarWebhook(await signedRequest({ type: "customer.state_changed", data: { external_id: fixtureId } }, { id }), env7, deps);
+  const sub = async () => (await db.unsafe("SELECT status, current_period_end, past_due_since FROM subscriptions WHERE provider_subscription_id=$1", [subscriptionId]))[0];
+  const usr = async () => (await db.unsafe("SELECT plan, plan_expires_at FROM users WHERE id=$1", [fixtureId]))[0];
+  try {
+    await db.unsafe("INSERT INTO users(id,email) VALUES ($1,$2)", [fixtureId, `${fixtureId}@example.invalid`]);
+    // An already-expired paid period grants nothing (current_period_end > now required).
+    subs = [{ id: subscriptionId, product_id: productId, status: "active", current_period_end: new Date(Date.now() - 3600000).toISOString(), cancel_at_period_end: false }];
+    expect((await send()).status).toBe(200);
+    expect((await usr()).plan).toBe("free");
+    // First past_due observation anchors the grace window.
+    subs[0].status = "past_due";
+    subs[0].current_period_end = new Date(Date.now() + 30 * 86400000).toISOString();
+    const eventA = crypto.randomUUID();
+    expect((await send(eventA)).status).toBe(200);
+    let s = await sub();
+    const E1 = new Date(s.current_period_end).getTime();
+    const P1 = new Date(s.past_due_since).getTime();
+    expect(Number.isFinite(P1)).toBe(true);
+    expect((await db.unsafe("SELECT (current_period_end = past_due_since + interval '7 days') ok FROM subscriptions WHERE provider_subscription_id=$1", [subscriptionId]))[0].ok).toBe(true);
+    let u = await usr();
+    expect(u.plan).toBe("pro");
+    expect(new Date(u.plan_expires_at).getTime()).toBe(E1);
+    expect(E1 - Date.now()).toBeGreaterThan(7 * 86400000 - 60000);
+    expect(E1 - Date.now()).toBeLessThan(7 * 86400000 + 60000);
+    // Duplicate delivery, a fresh event while still past_due, and manual
+    // reconciliation must all leave the anchored window untouched.
+    expect((await send(eventA)).status).toBe(200);
+    expect((await send()).status).toBe(200);
+    await transaction((tx) => syncPolarCustomer(tx, env7, fixtureId, request));
+    s = await sub();
+    expect(new Date(s.current_period_end).getTime()).toBe(E1);
+    expect(new Date(s.past_due_since).getTime()).toBe(P1);
+    // Time passage: backdate the anchor as if 3 days elapsed; Polar keeps
+    // advancing its own period (now +90d). Re-syncs must not re-anchor.
+    await db.unsafe("UPDATE subscriptions SET past_due_since = past_due_since - interval '3 days', current_period_end = current_period_end - interval '3 days' WHERE provider_subscription_id=$1", [subscriptionId]);
+    subs[0].current_period_end = new Date(Date.now() + 90 * 86400000).toISOString();
+    expect((await send()).status).toBe(200);
+    expect((await send()).status).toBe(200);
+    s = await sub();
+    const E2 = new Date(s.current_period_end).getTime();
+    const P2 = new Date(s.past_due_since).getTime();
+    expect(E2).toBe(P2 + 7 * 86400000);
+    // Anchored to 3 days ago: ≈ now+4d. Old code would re-anchor to ≈ now+7d.
+    expect(E2).toBeLessThan(Date.now() + 5 * 86400000);
+    expect(new Date((await usr()).plan_expires_at).getTime()).toBe(E2);
+    // Recovery clears the anchor and takes Polar's confirmed period.
+    subs[0].status = "active";
+    const end60 = new Date(Date.now() + 60 * 86400000).toISOString();
+    subs[0].current_period_end = end60;
+    expect((await send()).status).toBe(200);
+    s = await sub();
+    expect(s.past_due_since).toBeNull();
+    expect(new Date(s.current_period_end).toISOString()).toBe(end60);
+    expect((await usr()).plan).toBe("pro");
+    // A later past_due starts a fresh window; the confirmed period still wins.
+    subs[0].status = "past_due";
+    expect((await send()).status).toBe(200);
+    s = await sub();
+    expect(s.past_due_since).not.toBeNull();
+    expect(new Date(s.past_due_since).getTime()).toBeGreaterThan(P1);
+    expect(new Date(s.current_period_end).toISOString()).toBe(end60);
+    // Unpaid then canceled revoke access entirely.
+    subs[0].status = "unpaid";
+    expect((await send()).status).toBe(200);
+    u = await usr();
+    expect(u.plan).toBe("free");
+    expect(u.plan_expires_at).toBeNull();
+    subs[0].status = "canceled";
+    expect((await send()).status).toBe(200);
+    expect((await usr()).plan).toBe("free");
   } finally {
     await db.unsafe("DELETE FROM app_private.polar_webhook_events WHERE user_id=$1", [fixtureId]);
     await db.unsafe("DELETE FROM users WHERE id=$1", [fixtureId]);

@@ -17,7 +17,7 @@ The integration is implemented in the Leaderboard Worker. The dashboard remains 
 
 2. Add an organization access token with `checkouts:read`, `checkouts:write`, `customer_sessions:write`, `customers:read`, `orders:read`, `products:read`, and `subscriptions:read` permissions. Set `POLAR_ACCESS_TOKEN` as a Worker secret. Never put this token in client code or commit it.
 
-3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the product IDs above, `POLAR_PAST_DUE_GRACE_DAYS` (must mirror the Polar organization's benefit-revocation grace period: 0, 2, 7, 14 or 21 days), and `PUBLIC_BASE_URL` to the canonical public origin.
+3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the product IDs above, `POLAR_PAST_DUE_GRACE_DAYS` (must mirror the Polar organization's benefit-revocation grace period: 0, 2, 7, 14 or 21 days), and `PUBLIC_BASE_URL` to the canonical public origin. The grace window is anchored to the first locally observed `past_due` reconciliation (`subscriptions.past_due_since`) and is not extended by later webhooks or re-syncs.
 
    | Setting | Staging | Production |
    | --- | --- | --- |
