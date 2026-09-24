@@ -15,15 +15,23 @@ The integration is implemented in the Leaderboard Worker. The dashboard remains 
 
    These prices come from `packages/shared/src/plans.ts`. The Worker validates each product's price, currency, interval, and organization before creating checkout. Leave an unconfigured interval blank to keep its checkout disabled. Do not reuse one product ID for multiple options or replace IDs used by existing subscriptions without a migration.
 
-2. Add an organization access token with `checkouts:write`, `customers:read`, `customer_sessions:write`, `products:read`, and `orders:read` permissions. Set `POLAR_ACCESS_TOKEN` as a Worker secret. Never put this token in client code or commit it.
+2. Add an organization access token with `checkouts:read`, `checkouts:write`, `customer_sessions:write`, `customers:read`, `orders:read`, `products:read`, and `subscriptions:read` permissions. Set `POLAR_ACCESS_TOKEN` as a Worker secret. Never put this token in client code or commit it.
 
-3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the product IDs above, and `PUBLIC_BASE_URL` to the canonical public origin. Production uses `POLAR_SERVER=production` and `PUBLIC_BASE_URL=https://yourrank.site`. Sandbox and production have different tokens, products, organizations, and webhook secrets.
+3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the product IDs above, `POLAR_PAST_DUE_GRACE_DAYS` (must mirror the Polar organization's benefit-revocation grace period: 0, 2, 7, 14 or 21 days), and `PUBLIC_BASE_URL` to the canonical public origin.
+
+   | Setting | Staging | Production |
+   | --- | --- | --- |
+   | `POLAR_SERVER` | `sandbox` | `production` |
+   | `PUBLIC_BASE_URL` | `https://staging.yourrank.site` | `https://yourrank.site` |
+   | token / org / products / webhook secret | sandbox Polar org | production Polar org |
+
+   The Worker fails closed (`polar_environment_mismatch`) when `ENVIRONMENT` and `POLAR_SERVER`/`PUBLIC_BASE_URL` disagree.
 
 4. Register a webhook endpoint on Polar:
 
    `https://yourrank.site/api/billing/webhook/polar`
 
-   For sandbox testing, use the public HTTPS address of your sandbox Worker. Subscribe to **customer.state_changed**, **order.paid**, and **order.refunded**. Copy its signing secret into `POLAR_WEBHOOK_SECRET` using your Worker secret manager. Secrets generated on/after September 8, 2026 use Standard Webhooks; leave `POLAR_WEBHOOK_LEGACY_SECRET` unset. Set it to `true` only for an older Polar HMAC secret.
+   For sandbox testing, use the public HTTPS address of your sandbox Worker. Subscribe to **customer.state_changed**, **customer.deleted**, all **subscription.\*** events, **order.paid**, and **order.refunded**. Use the **Raw** payload format. Copy the signing secret into `POLAR_WEBHOOK_SECRET` using your Worker secret manager — the verifier accepts both the raw UTF-8 secret (official SDK form) and the base64 `whsec_` form, so no derivation flag is needed.
 
 5. Apply `20260909120000_polar_provider.sql`, `20260909120100_polar_billing.sql`, and `20260909120200_polar_checkout_reservation.sql` in order as separate committed migrations before deploying this Worker. They add nullable unique provider keys, checkout reservations, and a receipt ledger in the existing backend-only `app_private` schema, with explicit `yourrank_app` grants. Existing subscription/payment rows remain valid with NULL provider keys; no uniqueness constraint is added to their existing transaction references. All three migrations are now reflected in the isolated local test database. No production migration was applied.
 

@@ -271,11 +271,25 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_VERSION: "4.106.0"
         run: node scripts/ensure-worker-deployed.mjs yourrank-site-staging
+      - name: Resolve billing secrets pushed by this release
+        id: billing_secrets
+        env:
+          HAS_POLAR_TOKEN: ${{ secrets.STAGING_POLAR_ACCESS_TOKEN != '' }}
+          HAS_POLAR_WEBHOOK: ${{ secrets.STAGING_POLAR_WEBHOOK_SECRET != '' }}
+        run: |
+          NAMES=$'RESEND_API_KEY\nMAIL_FROM\nTOKEN_ENC_KEY'
+          if [ "$HAS_POLAR_TOKEN" = "true" ] && [ "$HAS_POLAR_WEBHOOK" = "true" ]; then
+            NAMES="$NAMES"$'\n'"POLAR_ACCESS_TOKEN"$'\n'"POLAR_WEBHOOK_SECRET"
+          fi
+          { echo "names<<EOF"; echo "$NAMES"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          echo "Pushing billing secrets: $(echo "$NAMES" | tr '\n' ' ')"
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0
         env:
           RESEND_API_KEY: ${{ secrets.STAGING_RESEND_API_KEY }}
           MAIL_FROM: ${{ secrets.STAGING_MAIL_FROM }}
           TOKEN_ENC_KEY: ${{ secrets.STAGING_TOKEN_ENC_KEY }}
+          POLAR_ACCESS_TOKEN: ${{ secrets.STAGING_POLAR_ACCESS_TOKEN }}
+          POLAR_WEBHOOK_SECRET: ${{ secrets.STAGING_POLAR_WEBHOOK_SECRET }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -283,10 +297,7 @@ jobs:
           environment: staging
           command: deploy --env staging --tag ${{ github.sha }} --message staging-${{ github.sha }}-run-${{ github.run_id }}
           wranglerVersion: "4.106.0"
-          secrets: |
-            RESEND_API_KEY
-            MAIL_FROM
-            TOKEN_ENC_KEY
+          secrets: ${{ steps.billing_secrets.outputs.names }}
       - name: Verify deployed secret contract
         working-directory: apps/leaderboard
         env:

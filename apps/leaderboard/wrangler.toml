@@ -178,6 +178,13 @@ LIVE_BOARD_MAX_SUBSCRIBERS = "1000"
 # Staging cookies must not be visible to the production apex domain.
 SESSION_COOKIE_DOMAIN = ".staging.yourrank.site"
 # RESEND_API_KEY and MAIL_FROM are required before staging creator signup is enabled.
+POLAR_SERVER = "sandbox"
+PUBLIC_BASE_URL = "https://staging.yourrank.site"
+POLAR_PAST_DUE_GRACE_DAYS = "7"
+# set by staging Polar sandbox setup
+# POLAR_ORGANIZATION_ID / POLAR_PRODUCT_PRO_MONTHLY / POLAR_PRODUCT_PRO_ANNUAL /
+# POLAR_PRODUCT_TEAM_MONTHLY / POLAR_PRODUCT_TEAM_ANNUAL stay unset until real
+# sandbox ids exist, so billing reports not-ready instead of a partial config.
 
 [[env.staging.migrations]]
 tag = "v1"

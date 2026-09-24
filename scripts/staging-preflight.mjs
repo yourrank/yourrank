@@ -61,7 +61,7 @@ export const STAGING_WORKERS = Object.freeze([
     // Secrets that would enable production-only side effects (custom-domain /
     // registrar automation against the shared Cloudflare zone).
     forbiddenSecrets: Object.freeze(["DATABASE_URL", "CF_API_TOKEN"]),
-    integrations: Object.freeze(["telegram", "kick", "discord-monitoring", "lead-webhook", "nowpayments"]),
+    integrations: Object.freeze(["telegram", "kick", "discord-monitoring", "lead-webhook", "nowpayments", "polar"]),
   },
   {
     key: "bot",
@@ -146,6 +146,7 @@ export const STAGING_INTEGRATIONS = Object.freeze({
   "lead-webhook": Object.freeze(["LEAD_WEBHOOK_URL"]),
   sentry: Object.freeze(["SENTRY_DSN"]),
   "monitor-email": Object.freeze(["RESEND_API_KEY", "ALERT_EMAIL", "ALERT_FROM"]),
+  polar: Object.freeze(["POLAR_ACCESS_TOKEN", "POLAR_WEBHOOK_SECRET"]),
 });
 
 // GitHub `staging` environment contract (names only).
