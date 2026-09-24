@@ -13,7 +13,8 @@ import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from 
 import { requestBillingRedirect } from "./shell.js";
 import { effectiveBoardRole } from "./role-preview.js";
 import { activeViewerUsageMarkup } from "./plan-usage.js";
-import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
+import { wirePlanLock, trackFunnel } from "./plan-lock.js";
+import { PLAN_META, PLAN_PRICING, PLAN_FEATURES, FEATURE_LABELS } from "@yourrank/shared/plans";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
 export const DEFAULT_SECTIONS = {
@@ -259,10 +260,12 @@ export function renderApiAccess() {
   const setup = $("apiSetup");
   if (setup) setup.hidden = !unlocked || !owner;
   const upgrade = $("apiUpgrade");
+  if (!unlocked) wirePlanLock(apiEl, "signed_api");
   if (upgrade && !upgrade._wired) {
     upgrade._wired = true;
     upgrade.addEventListener("click", (event) => {
       event.preventDefault();
+      trackFunnel("upgrade_clicked", "signed_api");
       checkout("pro", event.currentTarget);
     });
   }
@@ -406,6 +409,9 @@ export function renderPlan() {
 
   const summary = $("planSummary");
   if (summary) {
+    const unlocks = plan === "free"
+      ? `<ul class="plan-unlocks">${(PLAN_FEATURES.pro || []).slice(0, 6).map((f) => `<li>${esc(FEATURE_LABELS[f]?.name || f)}</li>`).join("")}</ul><p class="hint">What Pro unlocks</p>`
+      : "";
     summary.innerHTML = `
       <div class="plan-status">
         <div class="plan-status-head">
@@ -413,7 +419,7 @@ export function renderPlan() {
           ${chipLabel ? `<span class="v3-chip ${chipClass}">${esc(chipLabel)}</span>` : ""}
         </div>
         ${dateLine ? `<p class="plan-status-meta">${esc(dateLine)}</p>` : ""}
-      </div>`;
+      </div>${unlocks}`;
   }
 
   const banner = $("planBanner");
@@ -542,16 +548,24 @@ export async function loadPlanUsage() {
     const pendingReturn = new URLSearchParams(location.search).get("billing") === "return" && !d.billing?.hasSubscription;
     if ($("billingStatus")) $("billingStatus").textContent = pendingReturn ? "Waiting for payment confirmation. Refresh usage in a moment to check your plan." : d.billing?.message || "";
     renderPlan();
+    const L = d.limits || {};
     const rows = [];
-    rows.push({ label: "Sites", product: "Across your account", used: d.leaderboard.sites.used, limit: d.leaderboard.sites.limit });
-    rows.push({ label: "Players", product: d.site?.name || "Active site", used: d.leaderboard.players.used, limit: d.leaderboard.players.limit });
-    if (d.credits) {
-      rows.push({ label: "Ways to earn", product: "Credits", used: d.credits.rewardMappings.used, limit: d.credits.rewardMappings.limit });
-      rows.push({ label: "Shop items", product: "Credits", used: d.credits.shopItems.used, limit: d.credits.shopItems.limit });
-      rows.push({ label: "Pending orders", product: "Credits", used: d.credits.pendingRedemptions.used, limit: d.credits.pendingRedemptions.limit });
-      rows.push({ label: "Orders / 30 days", product: "Credits", used: d.credits.redemptionsPer30Days.used, limit: d.credits.redemptionsPer30Days.limit });
-    }
-    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<p class="usage-scope">Site limits below apply to <strong>${esc(d.site?.name || "your active site")}</strong>. Each site has its own allowance.</p><div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product === "Credits" ? d.site?.name || "Active site" : r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} <small>/ ${Number(r.limit).toLocaleString()}</small></span><meter min="0" max="${Number(r.limit)}" value="${Math.min(Number(r.used), Number(r.limit))}" aria-label="${esc(r.label)} usage" aria-valuetext="${Number(r.used)} of ${Number(r.limit)} used"></meter></div>`).join("")}</div>`;
+    const add = (key, label, product) => {
+      const b = L[key];
+      if (b) rows.push({ key, label, product, used: b.used, limit: b.allowance });
+    };
+    add("sites", "Sites", "Across your account");
+    add("players_per_site", "Players", d.site?.name || "Active site");
+    add("reward_mappings", "Ways to earn", "Credits");
+    add("shop_items", "Shop items", "Credits");
+    add("telegram_bots", "Telegram bots", "Telegram");
+    add("telegram_offers", "Telegram offers", "Telegram");
+    add("telegram_interactions_per_month", "Bot interactions / month", "Telegram");
+    add("broadcast_deliveries_per_month", "Broadcast deliveries / month", "Telegram");
+    add("operator_seats", "Team seats", "Across your account");
+    const over = new Set(d.overLimit || []);
+    const overNote = `<p class="hint">Over your plan — existing items are kept. <a href="/dashboard/settings/billing">Upgrade</a> to add more.</p>`;
+    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<p class="usage-scope">Site limits below apply to <strong>${esc(d.site?.name || "your active site")}</strong>. Each site has its own allowance.</p><div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row${over.has(r.key) ? " plan-usage-row--over" : ""}"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product === "Credits" ? d.site?.name || "Active site" : r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} <small>/ ${Number(r.limit).toLocaleString()}</small></span><meter min="0" max="${Number(r.limit)}" value="${Math.min(Number(r.used), Number(r.limit))}" aria-label="${esc(r.label)} usage" aria-valuetext="${Number(r.used)} of ${Number(r.limit)} used"></meter>${over.has(r.key) ? overNote : ""}</div>`).join("")}</div>`;
   } catch (err) {
     setState({ USAGE_STATUS: "error" });
     logError("loadPlanUsage", err);
@@ -2883,11 +2897,13 @@ export function renderEmbedShare() {
     const obsLock = $("embedObsLock");
     if (obsLock) {
       obsLock.hidden = overlayAccess;
+      if (!overlayAccess) wirePlanLock(obsLock, "advanced_overlays");
       const upgrade = $("overlayUpgrade");
       if (upgrade && !upgrade._wired) {
         upgrade._wired = true;
         upgrade.addEventListener("click", (event) => {
           event.preventDefault();
+          trackFunnel("upgrade_clicked", "advanced_overlays");
           checkout("pro", event.currentTarget);
         });
       }

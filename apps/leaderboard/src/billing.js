@@ -15,6 +15,8 @@ import {
   isPlanTier,
 } from "@yourrank/shared/plans";
 import { reconcileAccountActiveViewerUsage } from "@yourrank/shared/plan-usage";
+import { PLAN_FEATURES } from "@yourrank/shared/plans";
+import { getUsageSummary } from "@yourrank/shared/usage-meters";
 import { getPolarBillingStatus } from "./handlers/polar-billing.js";
 
 export const PLAN_PRICES = _PP;
@@ -120,13 +122,37 @@ export async function handleAccountUsage(request, env) {
         LIMIT 1`,
       [user.id],
     );
-    const [playerCount, creditsUsage, activeViewers] = await Promise.all([
-      activeSite
-        ? one("SELECT count(*)::int AS count FROM players WHERE site_id=$1", [activeSite.id])
+    const [playerMax, creditsUsage, activeViewers, telegramUsage, telegramAssets, seatCount] = await Promise.all([
+      siteIds.length
+        ? one("SELECT COALESCE(max(c),0)::int AS count FROM (SELECT count(*) AS c FROM players WHERE site_id=ANY($1::uuid[]) GROUP BY site_id) t", [siteIds])
         : { count: 0 },
       activeSite ? getSiteCreditsUsage(activeSite.id) : null,
       reconcileAccountActiveViewerUsage(user.id),
+      getUsageSummary({ one, exec: (sql, params) => query(sql, params) }, user.id).catch(() => ({})),
+      Promise.all([
+        one("SELECT count(*)::int AS count FROM bots WHERE owner_id=$1 AND status<>'revoked'", [user.id]),
+        one("SELECT count(*)::int AS count FROM offers WHERE owner_id=$1", [user.id]),
+      ]),
+      one("SELECT count(DISTINCT user_id)::int AS count FROM site_members WHERE site_id IN (SELECT id FROM sites WHERE user_id=$1)", [user.id]),
     ]);
+    const [botsUsed, offersUsed] = telegramAssets || [{}, {}];
+
+    const now = new Date();
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const limitEntry = (used, allowance, extra = {}) => ({ used: Number(used) || 0, allowance, ...extra });
+    const limitBlocks = {
+      sites: limitEntry(siteIds.length, getPlanLimit(plan, "sites")),
+      players_per_site: limitEntry(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
+      active_viewers_30d: limitEntry(activeViewers?.activeViewers || 0, getPlanLimit(plan, "active_viewers_30d"), { level: activeViewers?.level || "normal" }),
+      reward_mappings: limitEntry(creditsUsage?.rewardMappings || 0, getPlanLimit(plan, "reward_mappings")),
+      shop_items: limitEntry(creditsUsage?.shopItems || 0, getPlanLimit(plan, "shop_items")),
+      telegram_bots: limitEntry(botsUsed?.count || 0, getPlanLimit(plan, "telegram_bots")),
+      telegram_offers: limitEntry(offersUsed?.count || 0, getPlanLimit(plan, "telegram_offers")),
+      telegram_interactions_per_month: limitEntry(telegramUsage.telegram_interactions || 0, getPlanLimit(plan, "telegram_interactions_per_month"), { period_start: periodStart }),
+      broadcast_deliveries_per_month: limitEntry(telegramUsage.broadcast_deliveries || 0, getPlanLimit(plan, "broadcast_deliveries_per_month"), { period_start: periodStart }),
+      operator_seats: limitEntry(seatCount?.count || 0, getPlanLimit(plan, "operator_seats")),
+    };
+    const overLimit = Object.keys(limitBlocks).filter((k) => limitBlocks[k].used >= limitBlocks[k].allowance && limitBlocks[k].allowance >= 0);
 
     return ok({
       plan,
@@ -137,9 +163,11 @@ export async function handleAccountUsage(request, env) {
         ...activeViewers,
         upgradeAllowance: plan === "free" ? getPlanLimit("pro", "active_viewers_30d") : null,
       } : null,
+      features: PLAN_FEATURES[plan] || [],
+      overLimit,
       leaderboard: {
         sites: usageValue(siteIds.length, getPlanLimit(plan, "sites")),
-        players: usageValue(playerCount?.count || 0, getPlanLimit(plan, "players_per_site")),
+        players: usageValue(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
       },
       credits: activeSite && creditsUsage ? {
         rewardMappings: usageValue(creditsUsage.rewardMappings, getPlanLimit(plan, "reward_mappings")),
@@ -147,13 +175,7 @@ export async function handleAccountUsage(request, env) {
         pendingRedemptions: usageValue(creditsUsage.pendingRedemptions, _CPRL[plan]),
         redemptionsPer30Days: usageValue(creditsUsage.redemptionsPer30Days, _CR30L[plan]),
       } : null,
-      limits: {
-        sites: getPlanLimit(plan, "sites"),
-        playersPerSite: getPlanLimit(plan, "players_per_site"),
-        activeViewers: getPlanLimit(plan, "active_viewers_30d"),
-        rewardMappings: getPlanLimit(plan, "reward_mappings"),
-        shopItems: getPlanLimit(plan, "shop_items"),
-      },
+      limits: limitBlocks,
       billing: await getPolarBillingStatus(env, user.id),
     });
   } catch (error) {

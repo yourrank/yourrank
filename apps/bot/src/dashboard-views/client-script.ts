@@ -175,7 +175,15 @@ async function api(path, opts) {
   }
   if (r.status === 401) { saveBroadcastDraft(); location.reload(); throw new Error('session expired'); }
   if (!r.ok) {
-    try { const data = await r.json(); if (data && data.error) return data; } catch {}
+    try {
+      const data = await r.json();
+      if (data && data.error) {
+        // Entitlement denials (403) carry code/required_plan — keep them so
+        // callers can show an upgrade path instead of a generic failure.
+        if (data.code === 'entitlement_required' || data.code === 'plan_limit_reached') data.upgrade = true;
+        return data;
+      }
+    } catch {}
     return { error: 'Server error (' + r.status + ') — try again or contact support' };
   }
   try { return await r.json(); }
@@ -190,6 +198,7 @@ let __planInfo = null;
 let __maxBots = Infinity;
 let __maxOffers = Infinity;
 let __canBroadcast = false;
+let __usage = {};
 let __testBotId = null;
 
 function showPage(p) {
@@ -482,7 +491,13 @@ function broadcastRow(b){
   const audience = b.total_count != null ? String(b.total_count) : '—';
   const status = String(b.status || 'unknown');
   const canCancel = status === 'scheduled';
-  return '<td><span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status))+'</span></td>'+
+  const isPaused = status === 'paused' && b.stop_reason === 'monthly_quota';
+  const statusCell = isPaused
+    ? '<span class="badge paused">Paused</span><div class="muted" style="font-size:12px">Monthly delivery allowance reached (' +
+      esc(String(__usage.broadcast_deliveries?.used ?? '—')) + ' / ' + esc(String(__usage.broadcast_deliveries?.allowance ?? '—')) +
+      '). Resumes next month or after upgrading.</div>'
+    : '<span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status))+'</span>';
+  return '<td>'+statusCell+'</td>'+
     '<td><b>'+esc(audience)+'</b> <span class="muted">subscribers</span></td>'+
     '<td><button class="link-button" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">'+esc(String(b.body || '').slice(0,90))+(String(b.body || '').length>90?'…':'')+'</button></td>'+
     '<td>'+esc(b.bot_username || '—')+'</td>'+
@@ -490,7 +505,8 @@ function broadcastRow(b){
     '<td>'+esc(String(b.sent_count ?? 0))+'</td>'+
     '<td>'+esc(String(b.fail_count ?? 0))+'</td>'+
     '<td><button class="ghost" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">View</button>'+
-      (canCancel ? ' <button class="ghost" data-action="cancelBroadcast" data-id="'+esc(b.id)+'" type="button">Cancel</button>' : '')+'</td>';
+      (canCancel ? ' <button class="ghost" data-action="cancelBroadcast" data-id="'+esc(b.id)+'" type="button">Cancel</button>' : '')+
+      (isPaused ? ' <button class="ghost" data-action="resumeBroadcast" data-id="'+esc(b.id)+'" type="button">Resume</button>' : '')+'</td>';
 }
 function broadcastAudienceText(b){
   const n = b.total_count != null ? String(b.total_count) : 'not recorded';
@@ -571,6 +587,15 @@ function renderOffers(){
   }
 }
 
+function renderUsageState(){
+  const el = $('bcUsageState');
+  if (!el) return;
+  const i = __usage.telegram_interactions || {};
+  const d = __usage.broadcast_deliveries || {};
+  const fmt = (b) => (Number(b.used)||0).toLocaleString()+' / '+Number(b.allowance||0).toLocaleString();
+  el.innerHTML = '<span class="muted">This month — interactions: <b>'+fmt(i)+'</b> · broadcast deliveries: <b>'+fmt(d)+'</b></span>';
+}
+
 function renderPlanState(plan){
   if (!plan || !plan.current) return;
   __planInfo = plan;
@@ -612,7 +637,7 @@ function renderPlanState(plan){
 async function loadExtras(){
   const bcListLoading = $('bcList');
   if (bcListLoading) bcListLoading.innerHTML = '<tr><td colspan="8" class="muted">Loading updates…</td></tr>';
-  const [plan, bcs, pbStatus] = await Promise.all([api('/plan'), api('/broadcasts'), api('/postback-status')]);
+  const [plan, bcs, pbStatus, usage] = await Promise.all([api('/plan'), api('/broadcasts'), api('/postback-status'), api('/usage')]);
   const errors = [plan.error, bcs.error, pbStatus.error].filter(Boolean);
 
   if (plan.error) {
@@ -621,6 +646,7 @@ async function loadExtras(){
   } else {
     renderPlanState(plan);
   }
+  if (usage && !usage.error) { __usage = usage; renderUsageState(); }
 
   if (bcs.error) {
     const bcList = $('bcList');
@@ -1441,6 +1467,15 @@ async function testBroadcast(btn){
   if (r.error) { setFormStatus('bcFormStatus', r.error + ' — click Send test again to retry.', true); return; }
   setFormStatus('bcFormStatus','Test sent — check that chat', false);
 }
+async function resumeBroadcast(btn){
+  setLoading(btn);
+  const r = await api('/broadcasts/'+btn.dataset.id+'/resume', { method: 'POST' });
+  restoreBtn(btn);
+  if (r && r.error) return toast(r.error + (r.upgrade ? ' Upgrade to raise your allowance.' : ''));
+  toast('Update resumed.');
+  await loadExtras();
+}
+
 async function cancelBroadcast(btn){
   if (!await confirmModal('Cancel update', 'This update will not be sent. Your subscribers receive nothing.', 'Cancel update', true)) return;
   setLoading(btn, 'Cancelling…');
@@ -1523,6 +1558,7 @@ async function handleAction(e) {
     else if (action === 'selectBroadcastWhen') { e.preventDefault(); selectBroadcastWhen(target); }
     else if (action === 'testBroadcast') { e.preventDefault(); await testBroadcast(target); }
     else if (action === 'cancelBroadcast') { e.preventDefault(); await cancelBroadcast(target); }
+    else if (action === 'resumeBroadcast') { e.preventDefault(); await resumeBroadcast(target); }
     else if (action === 'viewBroadcast') { e.preventDefault(); openBroadcastDetail(target.dataset.id); }
     else if (action === 'closeBroadcastDetail') { e.preventDefault(); closeBroadcastDetail(); }
     else if (action === 'retryBroadcasts') { e.preventDefault(); loadExtras(); }
