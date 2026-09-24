@@ -4,9 +4,10 @@ import {
   exec as defaultExec,
 } from "@yourrank/shared/db";
 import { effectivePlan, canUseFeature } from "@yourrank/shared/plans";
+import { assertFeature } from "@yourrank/shared/entitlements";
 import { rateLimit as defaultRateLimit } from "@yourrank/shared/ratelimit";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
-import { requireUser as defaultRequireUser, bad, json, readJsonLimited } from "../auth.js";
+import { requireUser as defaultRequireUser, bad, denied, json, readJsonLimited } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteCapability as defaultRequireSiteCapability } from "../site-authorization.js";
 import { SAFE_AUTOMATION_KIND, validateCodeDropConfig } from "../code-drop-service.js";
@@ -136,8 +137,9 @@ async function authorize(request, env, deps, { body = null, mutate = false, requ
   if (!entitlement.owner || entitlement.owner.status === "suspended") {
     return { res: bad("Site owner is unavailable.", 403) };
   }
-  if (requirePaid && !canUseFeature(entitlement.plan, "activity_automation")) {
-    return { res: bad("Activity automation requires Pro or Team. Your saved configuration remains available.", 403) };
+  const automationGate = requirePaid ? assertFeature(entitlement.plan, "activity_automation") : null;
+  if (automationGate) {
+    return { res: denied(automationGate, { actorId: user.id, request }) };
   }
   if (requirePaid && (site.suspended || site.is_draft || !site.published)) {
     return { res: bad("Publish this site before scheduling an Activity.", 409) };

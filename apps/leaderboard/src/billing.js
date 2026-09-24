@@ -133,7 +133,16 @@ export async function handleAccountUsage(request, env) {
         one("SELECT count(*)::int AS count FROM bots WHERE owner_id=$1 AND status<>'revoked'", [user.id]),
         one("SELECT count(*)::int AS count FROM offers WHERE owner_id=$1", [user.id]),
       ]),
-      one("SELECT count(DISTINCT user_id)::int AS count FROM site_members WHERE site_id IN (SELECT id FROM sites WHERE user_id=$1)", [user.id]),
+      one(`WITH account_sites AS (SELECT id FROM sites WHERE user_id=$1), identities AS (
+            SELECT 'user:' || $1::text AS identity
+            UNION
+            SELECT 'user:' || sm.user_id::text FROM site_members sm JOIN account_sites a ON a.id=sm.site_id
+            UNION
+            SELECT COALESCE('user:' || invited.id::text, 'email:' || lower(si.email))
+              FROM site_invites si JOIN account_sites a ON a.id=si.site_id
+              LEFT JOIN users invited ON lower(invited.email)=lower(si.email)
+             WHERE si.status='pending' AND si.expires_at > now()
+          ) SELECT count(DISTINCT identity)::int AS count FROM identities`, [user.id]),
     ]);
     const [botsUsed, offersUsed] = telegramAssets || [{}, {}];
 
@@ -152,7 +161,7 @@ export async function handleAccountUsage(request, env) {
       broadcast_deliveries_per_month: limitEntry(telegramUsage.broadcast_deliveries || 0, getPlanLimit(plan, "broadcast_deliveries_per_month"), { period_start: periodStart }),
       operator_seats: limitEntry(seatCount?.count || 0, getPlanLimit(plan, "operator_seats")),
     };
-    const overLimit = Object.keys(limitBlocks).filter((k) => limitBlocks[k].used >= limitBlocks[k].allowance && limitBlocks[k].allowance >= 0);
+    const overLimit = Object.keys(limitBlocks).filter((k) => limitBlocks[k].used > limitBlocks[k].allowance && limitBlocks[k].allowance >= 0);
 
     return ok({
       plan,

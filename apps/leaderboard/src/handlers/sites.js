@@ -1,5 +1,5 @@
 // Site handlers: get, put, list, create, archive, stats, heatmap, notifications, custom domain
-import { requireUser, json, bad, ok, requireSiteFeature, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
+import { requireUser, json, bad, ok, denied, requireSiteFeature, readJson, rateLimit, rateLimitHeaders, slugify, clientIp } from "../auth.js";
 import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 import { getByUser, getUserSite, getUserSiteById, getUserBoardsList, createBoard, duplicateBoard, createArchive, deleteArchive, deleteBoard, setActiveBoard, updateSiteTheme, invalidateSiteCache, invalidateUserCache, getBoardById, saveSite } from "../site.js";
 import { getStats, getHeatmap, getTopReferrers, isStatementTimeout } from "../stats.js";
@@ -255,6 +255,7 @@ export async function handleCreateBoard(request, env) {
   const name = String(body.name || "").trim().slice(0, 80) || slug;
   // Sponsor / prize source is optional; empty values are stored as-is.
   const r = await createBoard(env, user.id, { slug, name, casino: body.casino, code: body.code }, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error
     ? json({ ok: false, error: r.error, code: r.code || "create_failed" }, 400)
     : json({ ok: true, id: r.id, slug: r.slug });
@@ -350,6 +351,7 @@ export async function handleRestoreArchive(request, env) {
   })).filter((p) => p.name);
   if (!players.length) return bad("No valid players in archive.");
   const r = await saveSite(env, user, { players, siteId: site.id }, site.id, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   if (r.error) return bad(r.error, 400);
   await logAudit({
     actorId: user.id,
@@ -389,6 +391,7 @@ export async function handlePutSite(request, env, {
     moderatorEdit = { isBoardOnlyMutation, role: authorization.role };
   }
   const r = await saveSite(env, user, payload, payload.siteId || null, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   if (!r.error && moderatorEdit?.isBoardOnlyMutation && moderatorEdit.role === "moderator") {
     // P4-4: owners audit what moderators changed on the standings. Summary
     // only — sanitized details keep the row small and secrets out.
@@ -469,6 +472,7 @@ export async function handleFinishSetup(request, env, {
     if (authorization.res) return authorization.res;
   }
   const r = await saveSite(env, user, { isDraft: false, published: true }, payload.siteId || null, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error
     ? json({ ok: false, error: r.error, code: r.code || "publish_failed", currentUpdatedAt: r.currentUpdatedAt }, r.code === "concurrency_conflict" ? 409 : 400)
     : json({ ok: true, updatedAt: r.updatedAt, publishedAt: r.publishedAt, slug: r.slug, siteId: r.siteId });
@@ -539,6 +543,7 @@ export async function handleDuplicateBoard(request, env, {
   const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageBilling");
   if (authorization.res) return authorization.res;
   const r = await duplicateBoard(env, user.id, body.siteId, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error ? bad(r.error, 400) : json({ ok: true, id: r.id, slug: r.slug });
 }
 
@@ -871,6 +876,7 @@ export async function handlePostSiteSections(request, env) {
     if (authorization.res) return authorization.res;
   }
   const r = await saveSite(env, user, { siteSections: payload.siteSections }, siteId, request);
+  if (r.denial) return denied(r.denial, { actorId: user.id, request });
   return r.error ? bad(r.error, 400) : json({ ok: true, updatedAt: r.updatedAt, siteId: r.siteId });
 }
 

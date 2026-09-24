@@ -1,6 +1,6 @@
 // Site + players data helpers for the Worker.
 import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
-import { checkLimit, checkTotalWithinLimit, limitDenial } from "@yourrank/shared/entitlements";
+import { checkTotalWithinLimit, limitDenial } from "@yourrank/shared/entitlements";
 import { fromJsonb } from "@yourrank/shared/jsonb";
 import { VIEWER_TEMPLATES } from "@yourrank/shared/viewer-templates";
 import { rankEventPlayers } from "@yourrank/shared/event-leaderboards";

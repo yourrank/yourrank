@@ -4,7 +4,7 @@
 //  API endpoints for inviting, managing, and accepting V1 Moderator access
 // ============================================================================
 
-import { requireUser, json, readJson, rateLimit, rateLimitHeaders, clientIp } from "../auth.js";
+import { requireUser, denied, json, readJson, rateLimit, rateLimitHeaders, clientIp } from "../auth.js";
 import { getSiteById } from "../site.js";
 import { one as defaultOne } from "@yourrank/shared/db";
 import {
@@ -160,8 +160,8 @@ export async function handleTeamInvite(request, env, overrides) {
 
   const result = await deps.createSiteInvite(site.id, user.id, email, role);
   if (!result.ok) {
-    const status = ["forbidden", "entitlement_required", "plan_limit_reached"].includes(result.code) ? 403 : 400;
-    return privateBad(result.error || "Failed to create invitation.", status, result.code);
+    if (result.denial) return denied(result.denial, { actorId: user.id, request });
+    return privateBad(result.error || "Failed to create invitation.", result.code === "forbidden" ? 403 : 400, result.code);
   }
 
   return privateJson({
@@ -235,7 +235,8 @@ export async function handleTeamAcceptInvite(request, env, overrides) {
 
   const result = await deps.acceptSiteInvite(token, user.id);
   if (!result.ok) {
-    return privateBad(result.error || "Unable to accept invite", 400, result.code);
+    if (result.denial) return denied(result.denial, { actorId: user.id, request });
+    return privateBad(result.error || "Unable to accept invite", result.code === "forbidden" ? 403 : 400, result.code);
   }
 
   return privateJson({

@@ -2,7 +2,7 @@
 import { json, bad, denied, rateLimit as defaultRateLimit, rateLimitHeaders } from "../auth.js";
 import { saveSite as defaultSaveSite } from "../site.js";
 import { effectivePlan } from "@yourrank/shared/plans";
-import { checkLimit, checkTotalWithinLimit, assertFeature } from "@yourrank/shared/entitlements";
+import { checkTotalWithinLimit, assertFeature } from "@yourrank/shared/entitlements";
 import { one as defaultOne } from "@yourrank/shared/db";
 import { verifyHmacSha256Hex as defaultVerifyHmacSha256Hex, hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import {

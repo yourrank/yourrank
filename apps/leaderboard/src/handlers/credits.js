@@ -1,7 +1,8 @@
 // Dashboard API for the Kick credits / shop system.
-import { requireUser, bad, ok, json, readJson } from "../auth.js";
+import { requireUser, bad, ok, denied, json, readJson } from "../auth.js";
 import { getByUser, getBoardById, getPublicSite } from "../site.js";
 import { query, one, exec, withTransaction } from "@yourrank/shared/db";
+import { limitDenial } from "@yourrank/shared/entitlements";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { rateLimit } from "@yourrank/shared/ratelimit";
 import { claimNotificationSpec, insertViewerNotificationTx } from "./viewer-notifications.js";
@@ -487,7 +488,7 @@ export async function handleCreditsSaveReward(request, env, deps = creditsGrowth
   if (!existingGrowthRow?.active) {
     const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
     if (expansion.restricted) {
-      return bad("New reward mappings are paused while this Free account remains above its active-viewer allowance after grace. Existing rewards still work.", 403);
+      return denied(limitDenial("free", "active_viewers_30d", Math.max(Number(expansion.usage?.activeViewers) || 0, getPlanLimit("free", "active_viewers_30d"))), { actorId: user.id, request });
     }
   }
 
@@ -503,7 +504,7 @@ export async function handleCreditsSaveReward(request, env, deps = creditsGrowth
       id ? [site.id, id] : [site.id]
     );
     if ((countRow?.count || 0) >= limit) {
-      return { error: `Reward mapping limit reached for the ${plan} plan. Upgrade to add more.`, status: 403 };
+      return { denial: limitDenial(plan, "reward_mappings", countRow?.count || 0) };
     }
 
     const existing = id
@@ -534,6 +535,7 @@ export async function handleCreditsSaveReward(request, env, deps = creditsGrowth
     return { id: rows[0].id };
   });
 
+  if (txResult.denial) return denied(txResult.denial, { actorId: user.id, request });
   if (txResult.error) return bad(txResult.error, txResult.status);
   return ok({ id: txResult.id });
 }
@@ -562,7 +564,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
 
   const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
   if (expansion.restricted) {
-    return bad("New reward mappings are paused while this Free account remains above its active-viewer allowance after grace. Existing rewards still work.", 403);
+    return denied(limitDenial("free", "active_viewers_30d", Math.max(Number(expansion.usage?.activeViewers) || 0, getPlanLimit("free", "active_viewers_30d"))), { actorId: user.id, request });
   }
 
   // Enforce plan limit before calling Kick (re-checked under a lock below).
@@ -573,7 +575,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
     [site.id]
   );
   if ((preCount?.count || 0) >= limit) {
-    return bad(`Reward mapping limit reached for the ${plan} plan. Upgrade to add more.`, 403);
+    return denied(limitDenial(plan, "reward_mappings", preCount?.count || 0), { actorId: user.id, request });
   }
 
   // Load and refresh the streamer's Kick tokens.
@@ -673,7 +675,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
       [site.id]
     );
     if ((countRow?.count || 0) >= limit) {
-      return { error: `Reward mapping limit reached for the ${plan} plan. Upgrade to add more.`, status: 403 };
+      return { denial: limitDenial(plan, "reward_mappings", countRow?.count || 0) };
     }
 
     const existing = await tx.one(
@@ -701,6 +703,7 @@ export async function handleCreditsCreateReward(request, env, deps = creditsCrea
     );
     return { id: rows[0].id };
   });
+  if (txResult.denial) return denied(txResult.denial, { actorId: user.id, request });
   if (txResult.error) return bad(txResult.error, txResult.status);
   void notifyLiveBoard(env, site.id);
 
@@ -781,7 +784,7 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
       }
       const expansion = await deps.creatorExpansionRestriction(site.user_id || user.id);
       if (expansion.restricted) {
-        return bad("New shop items are paused while this Free account remains above its active-viewer allowance after grace. Existing orders and items remain available.", 403);
+        return denied(limitDenial("free", "active_viewers_30d", Math.max(Number(expansion.usage?.activeViewers) || 0, getPlanLimit("free", "active_viewers_30d"))), { actorId: user.id, request });
       }
     }
   }
@@ -800,7 +803,7 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
       id ? [site.id, id] : [site.id]
     );
     if (active && (countRow?.count || 0) >= limit) {
-      return { error: `Shop item limit reached for the ${plan} plan. Upgrade to add more.`, status: 403 };
+      return { denial: limitDenial(plan, "shop_items", countRow?.count || 0) };
     }
 
     if (id && imageData !== undefined) {
@@ -841,6 +844,7 @@ export async function handleCreditsSaveShopItem(request, env, deps = creditsGrow
     return { id: rows[0].id };
   });
 
+  if (txResult.denial) return denied(txResult.denial, { actorId: user.id, request });
   if (txResult.error) {
     if (imageKey) await removeRewardImage(env, imageKey, site.id);
     return bad(txResult.error, txResult.status);
