@@ -1,5 +1,5 @@
 // Site editing: plan, branding/theme, save, archive, domain, overlay, notifications.
-import { $, esc, getCsrf, guardAuth, logError, timeZoneOffsetLabel, validateScheduleValues, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError } from "./utils.js";
+import { $, esc, getCsrf, guardAuth, logError, timeZoneOffsetLabel, validateScheduleValues, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError, ensureDialog } from "./utils.js";
 import { serializeWebhookUrl } from "./notifications.js";
 import { resolveViewerTemplate } from "@yourrank/shared/viewer-templates";
 import { state, boardStatus, markDirty, setState, subscribe } from "./state.js";
@@ -15,6 +15,7 @@ import { effectiveBoardRole } from "./role-preview.js";
 import { activeViewerUsageMarkup } from "./plan-usage.js";
 import { wirePlanLock, trackFunnel } from "./plan-lock.js";
 import { PLAN_META, PLAN_PRICING, PLAN_FEATURES, FEATURE_LABELS } from "@yourrank/shared/plans";
+import { planChangeFor, formatPlanPrice } from "@yourrank/shared/plan-changes";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
 export const DEFAULT_SECTIONS = {
@@ -290,8 +291,20 @@ export function renderApiAccess() {
 }
 
 let billingInterval = "monthly";
+let billingIntervalTouched = false;
 let billingInfo = null;
 let billingBusy = false;
+const INTERVAL_LABEL = { monthly: "Monthly", annual: "Annual" };
+const fmtDate = (value) => {
+  const ms = value instanceof Date ? value.getTime() : typeof value === "number" ? value : Date.parse(value);
+  return Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
+};
+/** The exact Polar subscription (tier + interval) this account is billed on, or null. */
+function currentSubscription() {
+  const sub = billingInfo?.subscription;
+  if (!sub || !sub.plan || !sub.interval || sub.plan === "free") return null;
+  return { plan: sub.plan, interval: sub.interval, status: sub.status, cancelAtPeriodEnd: !!sub.cancel_at_period_end, periodEnd: sub.current_period_end, pending: sub.pending || null };
+}
 function planDefs() {
   return PLAN_ORDER.map((key) => ({ key, ...PLAN_META[key],
     priceStr: `$${billingInterval === "annual" ? PLAN_PRICING[key].effectiveAnnualMonthlyUsd : PLAN_PRICING[key].monthlyUsd}`,
@@ -346,6 +359,82 @@ async function openBilling(action, btn, body = {}) {
   }
 }
 
+function changeDetails(current, target, change) {
+  const rows = [["Current plan", `${PLAN_META[current.plan].name} · ${INTERVAL_LABEL[current.interval]} — ${formatPlanPrice(current.plan, current.interval)}`]];
+  const periodEnd = fmtDate(current.periodEnd) || "the end of your current period";
+  let title, body, confirmText, danger = false;
+  if (change.kind === "cancel") {
+    title = "Cancel subscription";
+    rows.push(["New plan", "Free — $0"], ["Takes effect", periodEnd]);
+    body = `You keep ${PLAN_META[current.plan].name} until ${periodEnd}, then your account moves to Free. Nothing is deleted — you just can't add more than Free allows. You can undo this any time before then.`;
+    confirmText = "Cancel subscription";
+    danger = true;
+  } else if (change.kind === "keep") {
+    title = "Keep current plan";
+    rows.push(["Renews", `${periodEnd} at ${formatPlanPrice(current.plan, current.interval)}`]);
+    body = current.cancelAtPeriodEnd ? "Your subscription will renew as normal and the scheduled cancellation is removed." : "The scheduled plan change is removed and your subscription continues unchanged.";
+    confirmText = "Keep current plan";
+  } else {
+    title = change.label;
+    rows.push(["New plan", `${PLAN_META[target.plan].name} · ${INTERVAL_LABEL[target.interval]} — ${formatPlanPrice(target.plan, target.interval)}`]);
+    if (change.timing === "immediate") {
+      rows.push(["Takes effect", "Immediately"]);
+      body = `Polar charges the prorated difference for the rest of your current period now and shows the exact amount on your invoice. From then on you're billed ${formatPlanPrice(target.plan, target.interval)}.`;
+    } else {
+      rows.push(["Takes effect", periodEnd]);
+      body = `You keep ${PLAN_META[current.plan].name} · ${INTERVAL_LABEL[current.interval]} until ${periodEnd}. No charge or credit now; the next invoice is ${formatPlanPrice(target.plan, target.interval)}.`;
+    }
+    confirmText = change.label;
+  }
+  return { title, body, rows, confirmText, danger };
+}
+
+async function confirmPlanChange(details) {
+  const YRDialog = await ensureDialog();
+  return new Promise((resolve) => {
+    YRDialog.open({
+      title: details.title, body: details.body, confirmText: details.confirmText, danger: details.danger, escapeValue: false, onClose: resolve,
+      render(card) {
+        const dl = document.createElement("dl");
+        dl.className = "plan-change-summary";
+        for (const [k, v] of details.rows) {
+          const dt = document.createElement("dt"); dt.textContent = k;
+          const dd = document.createElement("dd"); dd.textContent = v;
+          dl.append(dt, dd);
+        }
+        card.insertBefore(dl, card.querySelector("p") || card.querySelector(".modal-actions"));
+        return null;
+      },
+    });
+  });
+}
+
+async function requestPlanChange(payload, current, target, change, btn) {
+  if (billingBusy) return;
+  const details = changeDetails(current, target, change);
+  if (!(await confirmPlanChange(details))) return;
+  billingBusy = true;
+  const status = $("billingStatus");
+  const label = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Updating…"; }
+  if (status) status.textContent = "Updating your subscription with Polar…";
+  try {
+    const { body } = await fetchDashboardJson("/api/billing/change", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(payload) });
+    if (body?.billing) billingInfo = body.billing;
+    showToast(change.kind === "cancel" ? "Cancellation scheduled." : change.kind === "keep" ? "Your plan continues unchanged." : change.timing === "immediate" ? "Plan updated." : "Plan change scheduled.", "success");
+    billingBusy = false;
+    await loadPlanUsage();
+    return;
+  } catch (error) {
+    const message = error.message || "Could not update your subscription. Try again.";
+    if (status) status.textContent = message;
+    showToast(message, "error");
+  } finally {
+    billingBusy = false;
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
 async function loadPendingPayment() {
   const wrap = $("pendingPayment");
   const link = $("pendingPaymentLink");
@@ -354,16 +443,34 @@ async function loadPendingPayment() {
   wrap.hidden = true;
 }
 
-function renderPlanCard(p, isCurrent, isLower, cta, accent) {
+function renderPlanCard(p, isCurrent, cta, { accent = false, disabled = false, action = "checkout", tag = "" } = {}) {
   const classes = ["plan-card"];
-  if (isCurrent) classes.push("plan-card--current");
+  if (isCurrent) classes.push("plan-card--current", "is-current");
   if (p.highlight) classes.push("plan-card--popular");
-  const available = billingInfo?.options?.[p.key]?.[billingInterval];
-  const disabled = isCurrent || isLower || !available || billingInfo?.hasSubscription ? "disabled" : "";
-  const note = p.highlight ? '<span class="plan-card-note">Recommended</span>' : "";
+  const note = tag ? `<span class="plan-card-note">${esc(tag)}</span>` : p.highlight ? '<span class="plan-card-note">Recommended</span>' : "";
   const list = p.features.map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
-  const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" ${disabled}>${esc(cta)}</button>`;
+  const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" data-action="${esc(action)}" ${disabled ? "disabled" : ""}>${esc(cta)}</button>`;
   return `<article class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><p class="plan-card-sub">${esc(p.positioning)}</p><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div><p class="plan-card-sub">${esc(p.note)}</p></div>${ctaEl}<ul class="plan-card-features">${list}</ul></article>`;
+}
+
+/** Card action for a Polar subscriber: depends on current tier+interval, the selected interval, and scheduled changes. */
+function subscriberCard(p, current) {
+  const target = { plan: p.key, interval: billingInterval };
+  const change = planChangeFor(current, target);
+  const scheduledAway = current.cancelAtPeriodEnd || !!current.pending;
+  if (change.kind === "current") {
+    return scheduledAway
+      ? { cta: "Keep current plan", action: "keep", isCurrent: true, accent: true, tag: current.cancelAtPeriodEnd ? "Cancels soon" : "Changing soon" }
+      : { cta: "Current plan", action: "none", isCurrent: true, disabled: true, tag: "Current" };
+  }
+  if (change.kind === "pending") return { cta: `Scheduled for ${fmtDate(current.pending?.applies_at) || "next period"}`, action: "none", disabled: true, tag: "Scheduled" };
+  if (change.kind === "cancel") {
+    return current.cancelAtPeriodEnd
+      ? { cta: "Cancellation scheduled", action: "none", disabled: true, tag: "Scheduled" }
+      : { cta: "Cancel subscription", action: "change", disabled: !billingInfo?.changeAvailable };
+  }
+  const available = billingInfo?.options?.[p.key]?.[billingInterval];
+  return { cta: change.label, action: "change", accent: change.kind === "upgrade", disabled: !available || !billingInfo?.changeAvailable || current.cancelAtPeriodEnd };
 }
 
 export function renderPlan() {
@@ -377,6 +484,8 @@ export function renderPlan() {
   const subStatus = String(state.ME.subscriptionStatus || "").toLowerCase();
   const hasSubscription = Boolean(billingInfo?.hasSubscription);
   const planExpired = expiresMs != null && expiresMs <= Date.now();
+  const current = currentSubscription();
+  if (current && !billingIntervalTouched) billingInterval = current.interval;
 
   // Status chip + date line, instead of a bare "Active until …" string.
   let chipLabel = null, chipClass = "v3-chip--fulfilled", dateLine = "";
@@ -388,11 +497,17 @@ export function renderPlan() {
     chipLabel = "Trial";
     chipClass = "v3-chip--pending";
     dateLine = expiryDate ? `Trial ends ${expiryDate}.` : "";
-  } else if (subStatus === "canceled" || subStatus === "cancelled") {
+  } else if (current?.cancelAtPeriodEnd || subStatus === "canceled" || subStatus === "cancelled") {
     chipLabel = "Cancels";
     chipClass = "v3-chip--pending";
-    dateLine = expiryDate ? `Access ends ${expiryDate}.` : "";
-  } else if (subStatus === "past_due") {
+    const ends = fmtDate(current?.periodEnd) || expiryDate;
+    dateLine = ends ? `Access continues until ${ends}, then Free.` : "";
+  } else if (current?.pending) {
+    chipLabel = "Change scheduled";
+    chipClass = "v3-chip--pending";
+    const when = fmtDate(current.pending.applies_at) || fmtDate(current.periodEnd);
+    dateLine = `Moves to ${PLAN_META[current.pending.plan]?.name || current.pending.plan} · ${INTERVAL_LABEL[current.pending.interval] || current.pending.interval}${when ? ` on ${when}` : ""}.`;
+  } else if (current?.status === "past_due" || subStatus === "past_due") {
     chipLabel = "Past due";
     chipClass = "v3-chip--cancelled";
     dateLine = "A payment failed — update billing in the portal to keep access.";
@@ -402,10 +517,13 @@ export function renderPlan() {
     dateLine = expiryDate ? `Ended ${expiryDate}.` : "";
   } else if (plan !== "free") {
     chipLabel = "Active";
-    dateLine = expiryDate
-      ? (hasSubscription ? `Renews ${expiryDate}.` : `Access until ${expiryDate}.`)
+    const renews = fmtDate(current?.periodEnd) || expiryDate;
+    dateLine = renews
+      ? (hasSubscription ? `Renews ${renews}.` : `Access until ${renews}.`)
       : "";
   }
+  const priceLine = current ? formatPlanPrice(current.plan, current.interval) : null;
+  const displayName = current ? `${PLAN_META[current.plan]?.name || currentName} · ${INTERVAL_LABEL[current.interval]}` : currentName;
 
   const summary = $("planSummary");
   if (summary) {
@@ -415,9 +533,10 @@ export function renderPlan() {
     summary.innerHTML = `
       <div class="plan-status">
         <div class="plan-status-head">
-          <span class="plan-status-name">${esc(currentName)}</span>
+          <span class="plan-status-name">${esc(displayName)}</span>
           ${chipLabel ? `<span class="v3-chip ${chipClass}">${esc(chipLabel)}</span>` : ""}
         </div>
+        ${priceLine ? `<p class="plan-status-price">${esc(priceLine)}</p>` : ""}
         ${dateLine ? `<p class="plan-status-meta">${esc(dateLine)}</p>` : ""}
       </div>${unlocks}`;
   }
@@ -446,24 +565,38 @@ export function renderPlan() {
   if (grid) {
     const currentIdx = PLAN_ORDER.indexOf(plan);
     grid.innerHTML = planDefs().map((p) => {
+      if (current) {
+        const card = subscriberCard(p, current);
+        return renderPlanCard(p, !!card.isCurrent, card.cta, card);
+      }
       const pIdx = PLAN_ORDER.indexOf(p.key);
       const isCurrent = p.key === plan;
       const isLower = pIdx < currentIdx;
+      const available = billingInfo?.options?.[p.key]?.[billingInterval];
       let cta, accent = false;
       if (isCurrent) {
         cta = isTrial ? "Current (trial)" : "Current plan";
       } else if (isLower) {
         cta = "Included";
       } else {
-        cta = billingInfo?.hasSubscription ? "Manage in Polar" : billingInfo?.options?.[p.key]?.[billingInterval] ? `Get ${p.name}` : "Checkout coming soon";
+        cta = billingInfo?.hasSubscription ? "Manage in Polar" : available ? `Get ${p.name}` : "Checkout coming soon";
         accent = p.key === "pro";
       }
-      return renderPlanCard(p, isCurrent, isLower, cta, accent && !isCurrent);
+      return renderPlanCard(p, isCurrent, cta, { accent: accent && !isCurrent, disabled: isCurrent || isLower || !available || !!billingInfo?.hasSubscription });
     }).join("");
     if (!grid._wired) {
       grid.addEventListener("click", (e) => {
         const btn = e.target.closest("button[data-plan]");
-        if (btn) checkout(btn.dataset.plan, btn);
+        if (!btn || btn.disabled) return;
+        const action = btn.dataset.action || "checkout";
+        if (action === "checkout") return checkout(btn.dataset.plan, btn);
+        const cur = currentSubscription();
+        if (!cur || action === "none") return;
+        if (action === "keep") return requestPlanChange({ action: "keep" }, cur, null, { kind: "keep", timing: "none", label: "Keep current plan" }, btn);
+        const target = { plan: btn.dataset.plan, interval: billingInterval };
+        const change = planChangeFor(cur, target);
+        const payload = target.plan === "free" ? { plan: "free" } : target;
+        return requestPlanChange(payload, cur, target, change, btn);
       });
       grid._wired = true;
     }
@@ -473,7 +606,7 @@ export function renderPlan() {
     if (input._wired) return;
     input._wired = true;
     input.checked = input.value === billingInterval;
-    input.addEventListener("change", () => { billingInterval = input.value; renderPlan(); });
+    input.addEventListener("change", () => { billingInterval = input.value; billingIntervalTouched = true; renderPlan(); });
   });
   const portal = $("billingPortal");
   if (portal) {

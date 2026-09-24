@@ -3722,6 +3722,25 @@ body:has(.v3-dash[data-auth-workspace]) > .modal .modal-card p {
   color: var(--ws-text-soft);
   font-size: var(--ws-type-meta-size);
 }
+.v3-dash[data-auth-workspace] .plan-status-price {
+  margin: var(--ws-space-2) 0 0;
+  font: 600 var(--ws-type-meta-size) var(--ws-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ws-text);
+}
+/* Plan-change confirmation: what changes, to what, and when, before anything is sent to Polar. */
+body:has(.v3-dash[data-auth-workspace]) > .modal .plan-change-summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ws-space-2) var(--ws-space-4);
+  margin: 0 0 16px;
+  padding: var(--ws-space-3) var(--ws-space-4);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-soft);
+  font-size: 13.5px;
+}
+body:has(.v3-dash[data-auth-workspace]) > .modal .plan-change-summary dt { margin: 0; color: var(--ws-text-soft); }
+body:has(.v3-dash[data-auth-workspace]) > .modal .plan-change-summary dd { margin: 0; color: var(--ws-text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .v3-dash[data-auth-workspace] .plan-card-head { display: block; }
 .v3-dash[data-auth-workspace] .plan-trial { display: flex; align-items: center; flex-wrap: wrap; gap: var(--ws-space-3); margin-top: var(--ws-space-5); padding: var(--ws-space-4); border: 1px dashed var(--ws-accent-line); border-radius: var(--ws-radius-sm); }
 .v3-dash[data-auth-workspace] .plan-trial p { margin: 0; }

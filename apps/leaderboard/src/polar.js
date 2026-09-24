@@ -33,18 +33,31 @@ export function polarConfig(env) {
     base: env.POLAR_SERVER === "production" ? "https://api.polar.sh" : "https://sandbox-api.polar.sh" };
 }
 
-export async function polarRequest(env, path, { body, fetchFn = fetch, allowMissing = false, timeoutMs = 7000, query } = {}) {
+export class PolarRequestError extends Error {
+  constructor(status, detail) {
+    super(`Polar request failed (${status}).`);
+    this.name = "PolarRequestError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+export async function polarRequest(env, path, { body, method, fetchFn = fetch, allowMissing = false, timeoutMs = 7000, query } = {}) {
   const config = polarConfig(env);
   if (!config.ready) throw new Error("Billing is not connected yet.");
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query || {})) if (value !== undefined) params.set(key, String(value));
   const response = await fetchFn(`${config.base}/v1${path}${params.size ? `?${params}` : ""}`, {
-    method: body ? "POST" : "GET", redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
+    method: method || (body ? "POST" : "GET"), redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
     headers: { Authorization: `Bearer ${env.POLAR_ACCESS_TOKEN}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (allowMissing && response.status === 404) return null;
-  if (!response.ok) throw new Error(`Polar request failed (${response.status}).`);
+  if (!response.ok) {
+    let detail = null;
+    try { detail = await response.json(); } catch { detail = null; }
+    throw new PolarRequestError(response.status, detail);
+  }
   return response.json();
 }
 

@@ -174,7 +174,7 @@ export function hasLoadError(el) {
 // The dialog itself lives in /assets/dialog.js so the bot dashboard can use the
 // same one; these keep the call sites unchanged.
 let dialogReady;
-function ensureDialog() {
+export function ensureDialog() {
   if (window.YRDialog) return Promise.resolve(window.YRDialog);
   if (!dialogReady) {
     dialogReady = new Promise((resolve, reject) => {

@@ -158,7 +158,7 @@ describe("Polar lifecycle (mocked API)", () => {
     expect(write).toBeDefined();
     expect(write[0]).toContain("COALESCE(subscriptions.past_due_since, now())");
     expect(write[0]).toContain("GREATEST(");
-    expect(write[1]).toEqual([userId, "pro", 7, remote.id, false]);
+    expect(write[1]).toEqual([userId, "pro", 7, remote.id, false, "monthly", null, null, null]);
     // The grace end is anchored in SQL — no JS-computed timestamp may be bound.
     expect(write[1].some((p) => typeof p === "string" && Number.isFinite(Date.parse(p)))).toBe(false);
     const active = syncFixture({ remoteSubs: [subOf({})] });

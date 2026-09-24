@@ -44,7 +44,8 @@ Execute with Polar test payment details in sandbox:
 - Free account → Pro monthly checkout → payment confirmed → Pro entitlement and payment record.
 - Annual checkout → correct total ($240/$690) and annual period.
 - Abandoned checkout → return to Billing without paid access; retry reuses the unexpired session.
-- Existing subscriber → Manage subscription → invoices/payment method/cancellation and plan changes supported by your Polar portal configuration.
+- Existing subscriber → Manage subscription → invoices/payment method/cancellation supported by your Polar portal configuration.
+- In-app plan change (`POST /api/billing/change`, `PATCH /v1/subscriptions/{id}`): upgrade or monthly→annual → `proration_behavior: invoice`, product changes immediately and the prorated difference is invoiced; downgrade or annual→monthly → `next_period`, Polar returns `pending_update` and Billing shows "Scheduled"; paid→Free → `cancel_at_period_end: true`, access continues to period end; Keep current plan → `cancel_at_period_end: false` or `pending_update: null`. Changing plan while a cancellation is scheduled is refused until it is kept. Never a second active subscription. The subscription row caches `billing_interval`/`pending_*` from Polar only; entitlement still comes from plan/status/period.
 - Renewal → expiry advances once. Failed payment → no new unpaid access period. End-of-period cancellation retains confirmed access; revocation removes Polar access and preserves valid manual/trial grants.
 - Duplicate and reordered webhook deliveries → one payment/subscription record, current provider state wins.
 - Order refund → payment history shows the refund; subscription access follows Polar subscription state (a refund alone is not an instruction to revoke).
