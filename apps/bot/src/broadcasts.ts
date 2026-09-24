@@ -1,5 +1,7 @@
-import { one, query } from "@yourrank/shared/db";
+import { one, query, withTransaction } from "@yourrank/shared/db";
 import { decryptToken } from "@yourrank/shared/crypto";
+import { effectivePlan, getPlanLimit } from "@yourrank/shared/plans";
+import { getUsage, recordUsage, currentPeriodStartSql } from "@yourrank/shared/usage-meters";
 import { parseSegment, buildSegmentWhere } from "./broadcast-segment.js";
 
 /** Escape user content for Telegram HTML parse_mode */
@@ -91,6 +93,17 @@ export function buildBroadcastTotalCountUpdate(
  * Returns true if there is (possibly) more work to do.
  */
 export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
+  // Auto-resume broadcasts whose monthly-quota pause predates the current
+  // UTC month. One statement per tick; quota-blocked rows never re-claim in
+  // the same period because paused broadcasts are not claimable.
+  await query(
+    `UPDATE broadcasts
+        SET status = 'scheduled', stop_reason = NULL, paused_period_start = NULL
+      WHERE status = 'paused'
+        AND stop_reason = 'monthly_quota'
+        AND paused_period_start < ${currentPeriodStartSql()}`
+  );
+
   // Claim one due broadcast through a durable lease. SKIP LOCKED keeps
   // concurrent ticks from fighting over the same row at claim time; the
   // lease window then keeps them apart for the whole batch, which the old
@@ -115,8 +128,8 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
   );
   if (!bc) return false;
 
-  const bot = await one<{ token_encrypted: Buffer; status: string }>(
-    `SELECT token_encrypted, status FROM bots WHERE id = $1`,
+  const bot = await one<{ token_encrypted: Buffer; status: string; owner_id: string }>(
+    `SELECT token_encrypted, status, owner_id FROM bots WHERE id = $1`,
     [bc.bot_id]
   );
   if (!bot || bot.status !== "active") {
@@ -134,6 +147,29 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
   }
   const token = await decryptToken(Buffer.from(bot.token_encrypted));
   const segment = parseSegment(bc.segment);
+
+  // Monthly delivery quota (commercial metering). Attempts already made are
+  // recorded post-hoc, so the gate only bounds how many NEW sends this batch
+  // may start.
+  const owner = await one<{ plan: string; plan_expires_at: string | null; status: string }>(
+    `SELECT plan, plan_expires_at, status FROM users WHERE id = $1`,
+    [bot.owner_id]
+  );
+  const deliveryAllowance = getPlanLimit(effectivePlan(owner), "broadcast_deliveries_per_month");
+  const deliveriesUsed = await getUsage({ one }, bot.owner_id, "broadcast_deliveries");
+  const deliveriesRemaining = deliveryAllowance - deliveriesUsed;
+  if (deliveriesRemaining <= 0) {
+    await query(
+      `UPDATE broadcasts
+          SET status = 'paused', stop_reason = 'monthly_quota',
+              paused_period_start = ${currentPeriodStartSql()},
+              processing_lease_token = NULL,
+              processing_lease_expires_at = NULL
+        WHERE id = $1 AND processing_lease_token = $2`,
+      [bc.id, leaseToken]
+    );
+    return true;
+  }
 
   // Set total on first batch. Ownership-checked through the same lease.
   if (broadcastAtStart(bc.cursor_tg_user_id)) {
@@ -156,7 +192,7 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
            ${subClause ? `AND ${subClause}` : ""}
       ORDER BY bs.tg_user_id
       LIMIT $3`,
-    [bc.bot_id, bc.cursor_tg_user_id, batchSize, ...subValues]
+    [bc.bot_id, bc.cursor_tg_user_id, Math.min(batchSize, deliveriesRemaining), ...subValues]
   );
 
   if (subs.length === 0) {
@@ -239,20 +275,41 @@ export async function processBroadcastBatch(batchSize = 300): Promise<boolean> {
 
   if (lastProcessedId >= claimCursor) {
     // End of batch with progress: advance the cursor to the last subscriber
-    // actually processed and RELEASE the lease in the same ownership-checked
-    // write, so the next tick continues immediately instead of waiting out
-    // the lease window, while a superseded worker still cannot move another
-    // worker's cursor or counters.
-    await query(
-      `UPDATE broadcasts
-          SET cursor_tg_user_id = $1,
-              sent_count = sent_count + $2,
-              fail_count = fail_count + $3,
-              processing_lease_token = NULL,
-              processing_lease_expires_at = NULL
-        WHERE id = $4 AND processing_lease_token = $5`,
-      [lastProcessedId, sent, failed, bc.id, leaseToken]
-    );
+    // actually processed, RELEASE the lease, and meter the attempts — one
+    // transaction, so only the worker that still owns the lease records
+    // usage. A stale-lease worker's UPDATE matches 0 rows and records
+    // nothing (no double count). The 429 break is not an attempt.
+    const attempts = sent + failed;
+    const newUsed = await withTransaction(async (tx) => {
+      const updated = await tx.unsafe(
+        `UPDATE broadcasts
+            SET cursor_tg_user_id = $1,
+                sent_count = sent_count + $2,
+                fail_count = fail_count + $3,
+                processing_lease_token = NULL,
+                processing_lease_expires_at = NULL
+          WHERE id = $4 AND processing_lease_token = $5
+          RETURNING id`,
+        [lastProcessedId, sent, failed, bc.id, leaseToken]
+      );
+      if (!updated.length) return null;
+      return attempts > 0
+        ? recordUsage({ one: (sql, params) => tx.one(sql, params) }, bot.owner_id, "broadcast_deliveries", attempts)
+        : deliveriesUsed;
+    });
+    if (newUsed != null && newUsed >= deliveryAllowance && subs.length === Math.min(batchSize, deliveriesRemaining)) {
+      // Quota is now exhausted and more subscribers may remain — pause
+      // eagerly instead of letting the next tick re-claim and instantly pause.
+      await query(
+        `UPDATE broadcasts
+            SET status = 'paused', stop_reason = 'monthly_quota',
+                paused_period_start = ${currentPeriodStartSql()}
+          WHERE id = $1 AND status = 'sending'
+            AND (SELECT COUNT(*) FROM bot_subscribers bs
+                  WHERE bs.bot_id = $2 AND NOT bs.is_blocked AND bs.tg_user_id > $3) > 0`,
+        [bc.id, bc.bot_id, lastProcessedId]
+      );
+    }
   } else {
     // Nothing was processed (the first recipient hit a rate limit): leave
     // cursor and counters untouched and just hand the lease back, so the

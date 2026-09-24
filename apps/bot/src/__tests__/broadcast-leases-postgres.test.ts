@@ -54,8 +54,8 @@ describeDb("broadcast delivery leases (real PostgreSQL)", () => {
     // claim-scoped assertions see only this suite's rows.
     await sql`UPDATE broadcasts SET status = 'canceled' WHERE status IN ('scheduled', 'sending')`;
     const [user] = await sql`
-      INSERT INTO users (email, display_name, status)
-      VALUES (${`bcast-${Date.now()}@yourrank.test`}, 'bcast', 'active') RETURNING id`;
+      INSERT INTO users (email, display_name, plan, plan_expires_at, status)
+      VALUES (${`bcast-${Date.now()}@yourrank.test`}, 'bcast', 'team', now() + interval '30 days', 'active') RETURNING id`;
     ownerId = user.id;
     const token = await encryptToken("123:test-token");
     const [bot] = await sql`
