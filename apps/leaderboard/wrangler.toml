@@ -180,11 +180,14 @@ SESSION_COOKIE_DOMAIN = ".staging.yourrank.site"
 # RESEND_API_KEY and MAIL_FROM are required before staging creator signup is enabled.
 POLAR_SERVER = "sandbox"
 PUBLIC_BASE_URL = "https://staging.yourrank.site"
+# Mirrors the "Grace period for benefit revocation" setting of the sandbox org.
 POLAR_PAST_DUE_GRACE_DAYS = "7"
-# set by staging Polar sandbox setup
-# POLAR_ORGANIZATION_ID / POLAR_PRODUCT_PRO_MONTHLY / POLAR_PRODUCT_PRO_ANNUAL /
-# POLAR_PRODUCT_TEAM_MONTHLY / POLAR_PRODUCT_TEAM_ANNUAL stay unset until real
-# sandbox ids exist, so billing reports not-ready instead of a partial config.
+# Polar Sandbox organization "YourRank Staging" (sandbox.polar.sh); never production IDs.
+POLAR_ORGANIZATION_ID = "dd5cfed0-2eca-4f0b-89e0-f98347eca163"
+POLAR_PRODUCT_PRO_MONTHLY = "15bc2ad3-cbff-4380-823c-68cb20e56abf"
+POLAR_PRODUCT_PRO_ANNUAL = "c09b5f1e-4e0c-4e74-ba27-92cefb28611f"
+POLAR_PRODUCT_TEAM_MONTHLY = "784058df-5484-415f-b99d-beac2b46e218"
+POLAR_PRODUCT_TEAM_ANNUAL = "13d35993-8381-4d4d-8fe6-69a659e8b908"
 
 [[env.staging.migrations]]
 tag = "v1"
