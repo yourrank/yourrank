@@ -38,6 +38,7 @@ function dependencies({ user = { id: "owner-1", plan: "free", status: "active" }
 describe("selected-site Insights", () => {
   it("returns only aggregate community, participation, reward, and operations facts", async () => {
     const { calls, deps } = dependencies({
+      user: { id: "owner-1", plan: "pro", status: "active" },
       rows: [
         { new_members: 4, returning_members: 3 },
         { participants: 5, repeat_participants: 2, active_code_drops: 2 },
@@ -53,7 +54,7 @@ describe("selected-site Insights", () => {
     expect(body.window).toEqual({
       requestedDays: 7,
       effectiveDays: 7,
-      plan: "free",
+      plan: "pro",
       timeZone: "UTC",
       startsAt: "2026-08-23T12:00:00.000Z",
       endsAt: "2026-08-30T12:00:00.000Z",
@@ -136,7 +137,7 @@ describe("selected-site Insights", () => {
     ];
 
     for (const fixture of cases) {
-      const { deps } = dependencies();
+      const { deps } = dependencies({ user: { id: "owner-1", plan: "pro", status: "active" } });
       deps.analyticsQuery = async (sql, params) => {
         if (!String(sql).includes("window_claims")) return {};
         const start = Date.parse(params[1]);
@@ -154,14 +155,14 @@ describe("selected-site Insights", () => {
       expect(body.rewards?.claimsCompleted, fixture.name).toBe(fixture.expectedCompleted);
     }
 
-    const empty = dependencies();
+    const empty = dependencies({ user: { id: "owner-1", plan: "pro", status: "active" } });
     const emptyResponse = await handleInsights(request("/api/insights?siteId=site-1&days=30"), {}, empty.deps);
     const emptyBody = await emptyResponse.json();
     expect(emptyBody.rewards).toEqual({ claimsSubmitted: 0, claimsCompleted: 0, topReward: null });
   });
 
   it("keeps successful Insights sections available when one aggregate fails", async () => {
-    const { deps } = dependencies();
+    const { deps } = dependencies({ user: { id: "owner-1", plan: "pro", status: "active" } });
     deps.analyticsQuery = async (sql) => {
       const query = String(sql);
       if (query.includes("participant_activity")) throw new Error("statement timeout");

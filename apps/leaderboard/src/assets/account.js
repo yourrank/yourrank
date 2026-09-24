@@ -460,7 +460,7 @@ function renderTeam(data) {
   const { members = [], invites = [], canManageTeam, currentRole, seats } = data;
   const openBtn = $("btnOpenInviteModal");
   const upgradeLink = $("teamUpgradeLink");
-  if (upgradeLink && !upgradeLink._funnelWired) {
+  if (upgradeLink && !upgradeLink._funnelWired && typeof upgradeLink.addEventListener === "function") {
     upgradeLink._funnelWired = true;
     upgradeLink.addEventListener("click", () => trackFunnel("upgrade_clicked", "team_collaboration"));
   }

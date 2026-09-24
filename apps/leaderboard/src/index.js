@@ -490,6 +490,7 @@ async function bodyExceedsLimit(request, maxBytes) {
 
 export async function handleRequest(request, env, ctx, meta, deps = {}) {
   const resolveCustomDomainImpl = deps.resolveCustomDomain || resolveCustomDomain;
+  const oneImpl = deps.one || one;
   const apiAppImpl = deps.apiApp || apiApp;
   const { log: workerLog, reqId } = meta || {};
     const nonce = crypto.randomUUID().replace(/-/g, "");
@@ -528,7 +529,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           // The custom_domain feature is owner-scoped: when the site owner is
           // no longer entitled, keep the record but serve from the platform
           // URL instead of the custom host.
-          const domainOwner = await one(
+          const domainOwner = await oneImpl(
             `SELECT u.plan, u.plan_expires_at, u.status FROM sites s JOIN users u ON u.id = s.user_id WHERE s.slug=$1`,
             [customSlug]
           );

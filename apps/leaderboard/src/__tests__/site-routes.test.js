@@ -254,7 +254,7 @@ describe("parseSitePath", () => {
       {},
       ctx,
       {},
-      { resolveCustomDomain: async () => "streamer" },
+      { resolveCustomDomain: async () => "streamer", one: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }) },
     );
     expect(custom.status).toBe(301);
     expect(custom.headers.get("location")).toBe("https://streamer.example/activity?intent=join");
@@ -280,7 +280,7 @@ describe("parseSitePath", () => {
       {},
       ctx,
       {},
-      { resolveCustomDomain: async () => "streamer", apiApp },
+      { resolveCustomDomain: async () => "streamer", apiApp, one: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }) },
     );
 
     expect(response.status).toBe(200);
@@ -303,7 +303,7 @@ describe("parseSitePath", () => {
       {},
       ctx,
       {},
-      { resolveCustomDomain: async () => "streamer", apiApp },
+      { resolveCustomDomain: async () => "streamer", apiApp, one: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }) },
     );
 
     expect(response.status).toBe(200);
@@ -326,7 +326,7 @@ describe("parseSitePath", () => {
       {},
       ctx,
       {},
-      { resolveCustomDomain: async () => "streamer", apiApp },
+      { resolveCustomDomain: async () => "streamer", apiApp, one: async () => ({ plan: "pro", plan_expires_at: null, status: "active" }) },
     );
 
     expect(response.status).toBe(200);

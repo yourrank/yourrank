@@ -137,7 +137,7 @@ export async function handleCreateSeason(request, env, deps = {}) {
   const authorization = await requireSiteCapability(user, site, "canRoleManageBot");
   if (authorization.res) return authorization.res;
   {
-    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
@@ -286,7 +286,7 @@ export async function handleAwardXp(request, env, deps = {}) {
   const authorization = await requireSiteCapability(user, site, "canRoleManageCredits");
   if (authorization.res) return authorization.res;
   {
-    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "battlepass", { actorId: user.id, request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 

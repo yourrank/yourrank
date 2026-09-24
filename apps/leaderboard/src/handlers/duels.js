@@ -77,7 +77,7 @@ export async function handleCreateDuel(request, env, deps = {}) {
   const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
   {
-    const gateRes = await requireSiteFeature(site, "duels", { request });
+    const gateRes = await requireSiteFeature(site, "duels", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
@@ -167,7 +167,7 @@ export async function handleAcceptDuel(request, env, deps = {}) {
   if (!duel) return bad("Duel not found.", 404);
   {
     const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [duel.site_id]);
-    const gateRes = await requireSiteFeature(siteRow, "duels", { request });
+    const gateRes = await requireSiteFeature(siteRow, "duels", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
   if (duel.status !== "pending") return bad("Duel is no longer pending.", 400);
@@ -276,7 +276,7 @@ export async function handleDeclineDuel(request, env, deps = {}) {
   if (!duel) return bad("Duel not found.", 404);
   {
     const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [duel.site_id]);
-    const gateRes = await requireSiteFeature(siteRow, "duels", { request });
+    const gateRes = await requireSiteFeature(siteRow, "duels", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
   if (duel.status !== "pending") return bad("Duel is no longer pending.", 400);

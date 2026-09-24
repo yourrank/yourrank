@@ -86,7 +86,7 @@ async function getTournamentForMutation(request, user, one, requireSiteCapabilit
     { id: tournament.site_id, user_id: tournament.site_user_id }
   );
   if (authorization.res) return { error: authorization.res };
-  const gateRes = await requireSiteFeature({ user_id: tournament.site_user_id }, "tournaments", { request });
+  const gateRes = await requireSiteFeature({ user_id: tournament.site_user_id }, "tournaments", { request, oneImpl: one });
   if (gateRes) return { error: gateRes };
   return { tournament };
 }
@@ -154,6 +154,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
+    one = defaultOne,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -193,7 +194,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const authorization = await requireSiteCapabilityImpl(user, site);
   if (authorization.res) return authorization.res;
   {
-    const gateRes = await requireSiteFeature(site, "tournaments", { request });
+    const gateRes = await requireSiteFeature(site, "tournaments", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 

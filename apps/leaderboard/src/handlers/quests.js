@@ -151,7 +151,7 @@ export async function handleClaimQuestReward(request, env, deps = {}) {
   if (!quest) return bad("Quest not found.", 404);
   {
     const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [quest.site_id]);
-    const gateRes = await requireSiteFeature(siteRow, "quests", { request });
+    const gateRes = await requireSiteFeature(siteRow, "quests", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
@@ -239,7 +239,7 @@ export async function handleTrackQuestProgress(request, env, deps = {}) {
   if (!quest) return ok({ message: "No active quest for this key today." });
   {
     const siteRow = await one("SELECT user_id FROM sites WHERE id=$1", [siteId]);
-    const gateRes = await requireSiteFeature(siteRow, "quests", { request });
+    const gateRes = await requireSiteFeature(siteRow, "quests", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 

@@ -53,7 +53,7 @@ export async function handleGetWheelConfig(request, env, deps = {}) {
   const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
   {
-    const gateRes = await requireSiteFeature(site, "wheel", { request });
+    const gateRes = await requireSiteFeature(site, "wheel", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
@@ -110,7 +110,7 @@ export async function handleUpdateWheelConfig(request, env, deps = {}) {
   if (authorization.res) return authorization.res;
   // Enabling the wheel requires the feature; disabling is always allowed.
   if (enabled) {
-    const gateRes = await requireSiteFeature(site, "wheel", { actorId: user.id, request });
+    const gateRes = await requireSiteFeature(site, "wheel", { actorId: user.id, request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
@@ -165,7 +165,7 @@ export async function handleSpinWheel(request, env, deps = {}) {
   const site = await one("SELECT id, name, user_id FROM sites WHERE slug=$1 OR id::text=$1", [siteSlugOrId]);
   if (!site) return bad("Site not found.", 404);
   {
-    const gateRes = await requireSiteFeature(site, "wheel", { request });
+    const gateRes = await requireSiteFeature(site, "wheel", { request, oneImpl: one });
     if (gateRes) return gateRes;
   }
 
