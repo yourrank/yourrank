@@ -209,7 +209,7 @@ export async function handlePolarWebhook(request, env, deps = {}) {
           await tx.unsafe(`INSERT INTO payments(user_id,provider,amount,currency,status,plan_tier,tx_ref,polar_order_id,payload_json)
             VALUES ($1,'polar',$2,$3,$4,$5,$6,$6,$7) ON CONFLICT(polar_order_id)
             DO UPDATE SET amount=$2,currency=$3,status=$4,payload_json=$7,updated_at=now() WHERE payments.user_id=$1`,
-          [userId, Number(order.total_amount) / 100, String(order.currency).toUpperCase(), refunded ? "refunded" : "confirmed", mapping.plan, order.id, JSON.stringify({ refunded_amount: Number(order.refunded_amount) || 0 })]);
+          [userId, Number(order.total_amount) / 100, String(order.currency).toUpperCase(), refunded ? "refunded" : "confirmed", mapping.plan, order.id, { refunded_amount: Number(order.refunded_amount) || 0 }]);
         }
       }
       await tx.unsafe("INSERT INTO app_private.polar_webhook_events(id,event_type,user_id) VALUES ($1,$2,$3)", [request.headers.get("webhook-id"), event.type, userId]);
