@@ -4,10 +4,23 @@ import { PLAN_PRICING } from "@yourrank/shared/plans";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isBillingId = (id) => typeof id === "string" && UUID.test(id);
+const PAST_DUE_GRACE_DAYS = [0, 2, 7, 14, 21];
+
 export function polarConfig(env) {
   const products = {};
   const options = { pro: {}, team: {} };
-  const ready = ["sandbox", "production"].includes(env.POLAR_SERVER) && !!env.POLAR_ACCESS_TOKEN && !!env.POLAR_WEBHOOK_SECRET && isBillingId(env.POLAR_ORGANIZATION_ID);
+  const graceRaw = env.POLAR_PAST_DUE_GRACE_DAYS ?? "0";
+  const graceDays = PAST_DUE_GRACE_DAYS.includes(Number(graceRaw)) && String(Number(graceRaw)) === String(graceRaw).trim() ? Number(graceRaw) : null;
+  let error;
+  if (env.POLAR_SERVER) {
+    let host;
+    try { host = new URL(env.PUBLIC_BASE_URL || "https://yourrank.site").hostname; } catch { host = null; }
+    if (
+      (env.ENVIRONMENT === "staging" && !(env.POLAR_SERVER === "sandbox" && host === "staging.yourrank.site")) ||
+      (env.ENVIRONMENT === "production" && !(env.POLAR_SERVER === "production" && host === "yourrank.site"))
+    ) error = "polar_environment_mismatch";
+  }
+  const ready = ["sandbox", "production"].includes(env.POLAR_SERVER) && !!env.POLAR_ACCESS_TOKEN && !!env.POLAR_WEBHOOK_SECRET && isBillingId(env.POLAR_ORGANIZATION_ID) && graceDays !== null && !error;
   for (const plan of ["pro", "team"]) for (const interval of ["monthly", "annual"]) {
     const id = env[`POLAR_PRODUCT_${plan.toUpperCase()}_${interval.toUpperCase()}`];
     options[plan][interval] = ready && isBillingId(id);
@@ -16,15 +29,17 @@ export function polarConfig(env) {
       products[id] = { plan, interval, id };
     }
   }
-  return { ready, products, options, server: env.POLAR_SERVER,
+  return { ready, error, products, options, graceDays: graceDays ?? 0, server: env.POLAR_SERVER,
     base: env.POLAR_SERVER === "production" ? "https://api.polar.sh" : "https://sandbox-api.polar.sh" };
 }
 
-export async function polarRequest(env, path, { body, fetchFn = fetch, allowMissing = false } = {}) {
+export async function polarRequest(env, path, { body, fetchFn = fetch, allowMissing = false, timeoutMs = 7000, query } = {}) {
   const config = polarConfig(env);
   if (!config.ready) throw new Error("Billing is not connected yet.");
-  const response = await fetchFn(`${config.base}/v1${path}`, {
-    method: body ? "POST" : "GET", redirect: "error", signal: AbortSignal.timeout(7000),
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query || {})) if (value !== undefined) params.set(key, String(value));
+  const response = await fetchFn(`${config.base}/v1${path}${params.size ? `?${params}` : ""}`, {
+    method: body ? "POST" : "GET", redirect: "manual", signal: AbortSignal.timeout(timeoutMs),
     headers: { Authorization: `Bearer ${env.POLAR_ACCESS_TOKEN}`, "Content-Type": "application/json" },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
@@ -69,22 +84,30 @@ export async function assertPolarDeletionAllowed(tx, env, userId, requestApi = p
 }
 
 // Standard Webhooks: authenticated ID + timestamp + raw body; Web Crypto does
-// the constant-time HMAC comparison. New Polar secrets use this scheme.
-// Explicit legacy mode supports secrets created before 2026-09-08.
-export async function verifyPolarWebhook(raw, headers, secret, { now = Date.now(), legacy = false } = {}) {
+// the constant-time HMAC comparison. The official SDK keys HMAC with the raw
+// configured secret; the native whsec_<base64> form is accepted too.
+export async function verifyPolarWebhook(raw, headers, secret, { now = Date.now() } = {}) {
   const id = headers.get("webhook-id");
   const timestamp = headers.get("webhook-timestamp");
   const signatures = headers.get("webhook-signature") || "";
   if (!secret || !id || id.length > 200 || !/^\d+$/.test(timestamp || "") || Math.abs(now / 1000 - Number(timestamp)) > 300) throw new Error("Invalid webhook.");
   const encode = new TextEncoder();
-  const keyBytes = legacy ? encode.encode(secret) : Uint8Array.from(atob(secret.replace(/^whsec_/, "")), (c) => c.charCodeAt(0));
-  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const keyBytes = [encode.encode(secret)];
+  if (secret.startsWith("whsec_")) {
+    try { keyBytes.push(Uint8Array.from(atob(secret.slice("whsec_".length)), (c) => c.charCodeAt(0))); } catch { /* raw key remains */ }
+  }
+  const keys = [];
+  for (const bytes of keyBytes) {
+    keys.push(await crypto.subtle.importKey("raw", bytes, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]));
+  }
   for (const signature of signatures.split(" ")) {
     const [version, value] = signature.split(",");
     if (version !== "v1" || !value) continue;
     let bytes;
     try { bytes = Uint8Array.from(atob(value), (c) => c.charCodeAt(0)); } catch { continue; }
-    if (await crypto.subtle.verify("HMAC", key, bytes, encode.encode(`${id}.${timestamp}.${raw}`))) return JSON.parse(raw);
+    for (const key of keys) {
+      if (await crypto.subtle.verify("HMAC", key, bytes, encode.encode(`${id}.${timestamp}.${raw}`))) return JSON.parse(raw);
+    }
   }
   throw new Error("Invalid webhook signature.");
 }

@@ -46,6 +46,7 @@ describe("release-target-guard", () => {
 
   it("rejects production when a STAGING_ variable is present or the DB URL points off-project", () => {
     expect(evaluate("production", prodEnv({ STAGING_SUPABASE_PROJECT_REF: STAGING_REF })).join("\n")).toContain("STAGING_SUPABASE_PROJECT_REF");
+    expect(evaluate("production", prodEnv({ STAGING_POLAR_ACCESS_TOKEN: "x" })).join("\n")).toContain("STAGING_POLAR_ACCESS_TOKEN");
     expect(
       evaluate("production", prodEnv({ SUPABASE_DB_URL: `postgresql://postgres.${STAGING_REF}:x@aws-0-eu-west-1.pooler.supabase.com:5432/postgres` })).join("\n"),
     ).toContain("SUPABASE_DB_URL");
@@ -87,6 +88,8 @@ describe("release-target-guard", () => {
     expect(
       evaluate("staging", stagingEnv({ STAGING_DATABASE_URL: `postgresql://postgres.${PROD_REF}:x@aws-0-eu-west-1.pooler.supabase.com:5432/postgres` })).join("\n"),
     ).toContain("STAGING_DATABASE_URL");
+    expect(evaluate("staging", stagingEnv({ POLAR_SERVER: "production" })).join("\n")).toContain("POLAR_SERVER");
+    expect(evaluate("staging", stagingEnv({ POLAR_SERVER: "sandbox" })).join("\n")).not.toContain("POLAR_SERVER");
     expect(evaluate("staging", stagingEnv({ STAGING_DATABASE_URL: "postgresql://postgres:x@db.otherref.supabase.co:5432/postgres" })).join("\n")).toContain(
       "STAGING_DATABASE_URL",
     );
