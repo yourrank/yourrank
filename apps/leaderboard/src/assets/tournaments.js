@@ -558,6 +558,8 @@ async function handlePrimary() {
 // ---- Select participants modal -------------------------------------------
 
 let releaseSelectTrap = null;
+// Manual picks survive search filtering, which re-renders the checkbox list.
+const manualSelection = new Set();
 
 function setSelectError(text = "") {
   const el = $("tournament-select-error");
@@ -567,8 +569,13 @@ function setSelectError(text = "") {
 }
 
 function selectedIds() {
-  return [...$("ts-entry-list").querySelectorAll("input[type=checkbox]:checked")]
-    .map((box) => box.value);
+  return [...manualSelection];
+}
+
+function toggleManualSelection(box) {
+  if (box.checked) manualSelection.add(box.value);
+  else manualSelection.delete(box.value);
+  updateSelectCounter();
 }
 
 function updateSelectCounter() {
@@ -588,7 +595,7 @@ function renderSelectList() {
   $("ts-entry-list").innerHTML = visible.map((entry) => `
     <li class="tournament-select-row">
       <label>
-        <input type="checkbox" value="${esc(entry.id)}" />
+        <input type="checkbox" value="${esc(entry.id)}"${manualSelection.has(entry.id) ? " checked" : ""} />
         <span>${esc(entry.display_name)}</span>
       </label>
     </li>`).join("");
@@ -610,6 +617,7 @@ async function openSelectModal() {
   $("ts-mode-random").checked = true;
   $("ts-mode-manual").checked = false;
   $("ts-search").value = "";
+  manualSelection.clear();
   renderSelectList();
   syncSelectMode();
   setSelectError("");
@@ -883,7 +891,7 @@ document.addEventListener("submit", (event) => {
 
 document.addEventListener("change", (event) => {
   if (event.target.name === "tournament-select-mode") return syncSelectMode();
-  if (event.target.closest?.("#ts-entry-list")) return updateSelectCounter();
+  if (event.target.closest?.("#ts-entry-list")) return toggleManualSelection(event.target);
   if (event.target.id === "tc-entry-cap") {
     const custom = $("tc-entry-cap-custom");
     custom.hidden = event.target.value !== "custom";
