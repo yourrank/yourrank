@@ -12,10 +12,18 @@ import postgres from "postgres";
 
 const databaseUrl = process.env.TOURNAMENT_TEST_DATABASE_URL || process.env.AUDIT_TEST_DATABASE_URL || "";
 const integrationIt = (name, fn) => (databaseUrl ? it : it.skip)(name, fn, 60000);
-const migrationSource = readFileSync(
+const receiptsMigration = readFileSync(
   new URL("../../../../supabase/migrations/20261003000000_provider_webhook_receipts.sql", import.meta.url),
   "utf8",
 );
+const normalizeMigration = readFileSync(
+  new URL("../../../../supabase/migrations/20261003000100_lock_non_holder_open_tournaments.sql", import.meta.url),
+  "utf8",
+);
+const applyMigrations = async (tx) => {
+  await tx.unsafe(receiptsMigration);
+  await tx.unsafe(normalizeMigration);
+};
 
 const ROLLBACK = new Error("rollback");
 const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
@@ -30,7 +38,6 @@ async function inCase(fn) {
         VALUES (${ownerId}, ${`tos-${suffix}-${ownerId.slice(0, 8)}@yourrank.test`}, 'Owner', 'active', true)`;
       await tx`INSERT INTO sites (id, user_id, slug, name, published, is_draft)
         VALUES (${siteId}, ${ownerId}, ${`tos-${suffix}-${siteId.slice(0, 8)}`}, 'Site', true, false)`;
-      await tx.unsafe(migrationSource);
       await fn(tx, siteId);
       throw ROLLBACK;
     });
@@ -54,10 +61,11 @@ const states = async (tx, ids) =>
   );
 
 describe("one open tournament per site migration (Postgres)", () => {
-  it("migration source carries the expand marker and the normalization UPDATE", () => {
-    expect(migrationSource).toContain("yourrank:migration-phase: expand");
-    expect(migrationSource).toContain("NOT EXISTS (");
-    expect(migrationSource).toContain("SET signup_state = 'locked'");
+  it("normalization migration carries the expand marker and the locking UPDATE", () => {
+    expect(normalizeMigration).toContain("yourrank:migration-phase: expand");
+    expect(normalizeMigration).toContain("NOT EXISTS (");
+    expect(normalizeMigration).toContain("SET signup_state = 'locked'");
+    expect(receiptsMigration).toContain("tournament_open_signups");
   });
 
   integrationIt("newest of three open tournaments becomes the holder; the rest are locked", async () => {
@@ -65,7 +73,7 @@ describe("one open tournament per site migration (Postgres)", () => {
       const t0 = await addTournament(tx, { siteId, createdAt: "2026-09-01T00:00:00Z" });
       const t1 = await addTournament(tx, { siteId, createdAt: "2026-09-02T00:00:00Z" });
       const t2 = await addTournament(tx, { siteId, createdAt: "2026-09-03T00:00:00Z" });
-      await tx.unsafe(migrationSource);
+      await applyMigrations(tx);
 
       expect((await holder(tx, siteId))?.tournament_id).toBe(t2);
       expect(await states(tx, [t0, t1, t2])).toEqual({ [t0]: "locked", [t1]: "locked", [t2]: "open" });
@@ -78,7 +86,7 @@ describe("one open tournament per site migration (Postgres)", () => {
   integrationIt("a single open tournament remains open and is the holder", async () => {
     await inCase(async (tx, siteId) => {
       const t = await addTournament(tx, { siteId });
-      await tx.unsafe(migrationSource);
+      await applyMigrations(tx);
 
       expect((await holder(tx, siteId))?.tournament_id).toBe(t);
       expect(await states(tx, [t])).toEqual({ [t]: "open" });
@@ -89,7 +97,7 @@ describe("one open tournament per site migration (Postgres)", () => {
     await inCase(async (tx, siteId) => {
       const closed = await addTournament(tx, { siteId, signupState: "closed" });
       const locked = await addTournament(tx, { siteId, signupState: "locked" });
-      await tx.unsafe(migrationSource);
+      await applyMigrations(tx);
 
       expect(await holder(tx, siteId)).toBeUndefined();
       expect(await states(tx, [closed, locked])).toEqual({ [closed]: "closed", [locked]: "locked" });
@@ -101,7 +109,7 @@ describe("one open tournament per site migration (Postgres)", () => {
       const completed = await addTournament(tx, { siteId, status: "completed", createdAt: "2026-09-01T00:00:00Z" });
       const cancelled = await addTournament(tx, { siteId, status: "cancelled", createdAt: "2026-09-02T00:00:00Z" });
       const live = await addTournament(tx, { siteId, createdAt: "2026-09-03T00:00:00Z" });
-      await tx.unsafe(migrationSource);
+      await applyMigrations(tx);
 
       expect((await holder(tx, siteId))?.tournament_id).toBe(live);
       expect(await states(tx, [completed, cancelled, live])).toEqual({
