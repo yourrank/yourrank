@@ -22,6 +22,10 @@ function viewerMark(viewer) {
  * the page renders neither signed-in nor signed-out content until the client
  * resolves it.
  */
+export const GUEST_TITLE = "Your Viewer Account";
+export const GUEST_SUBTITLE = "Sign in to access your communities, rewards and balances.";
+const DEFAULT_SUBTITLE = "Manage the communities connected to your account. Your rewards and claims stay with each community.";
+
 export const VIEWER_AUTH_STATES = Object.freeze(["authenticated", "unauthenticated", "unresolved"]);
 
 /**
@@ -65,22 +69,17 @@ ${viewerNavigation({ accountHref, community, signedIn, viewerName: signedIn ? vi
   ${viewerCommunityReturnLink(community, "yr-sec-link vd-return")}
   <div class="vd-head">
     <p class="vd-breadcrumb" id="vd-breadcrumb" hidden>Settings <span aria-hidden="true">›</span> <span id="vd-breadcrumb-current"></span></p>
-    <h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>
-    <p class="vd-sub" id="vd-subtitle">Manage the communities connected to your account. Your rewards and claims stay with each community.</p>
+    <h1 class="vd-h1" id="vd-title" tabindex="-1">${unauthenticated ? GUEST_TITLE : "My communities"}</h1>
+    <p class="vd-sub" id="vd-subtitle">${unauthenticated ? GUEST_SUBTITLE : DEFAULT_SUBTITLE}</p>
   </div>
 
   <section id="vd-login-card" tabindex="-1"${unauthenticated ? "" : " hidden"}>
-    <div class="vd-login-copy"><h2>Your communities, together.</h2>
-    <p class="card-sub">Sign in to your Viewer Account with the provider you use in creator communities.</p>
-    <p class="vd-login-note">One account. Separate memberships, rewards and credit balances.</p></div>
-    <div class="vd-login-controls">
     <div class="vd-login-actions">
-      ${available.kick ? `<a class="btn${primaryProvider === "kick" ? " btn--accent" : ""}" id="vd-login-kick" href="${loginHref("kick")}">Log in with Kick</a>` : ""}
-      ${available.discord ? `<a class="btn${primaryProvider === "discord" ? " btn--accent" : ""}" id="vd-login-discord" href="${loginHref("discord")}">Log in with Discord</a>` : ""}
-      ${!primaryProvider ? '<p class="status" role="status">Sign-in is not available right now. Please try again later.</p>' : ""}
+      ${available.kick ? `<a class="btn${primaryProvider === "kick" ? " btn--accent" : ""}" id="vd-login-kick" href="${loginHref("kick")}">Sign in with Kick</a>` : ""}
+      ${available.discord ? `<a class="btn${primaryProvider === "discord" ? " btn--accent" : ""}" id="vd-login-discord" href="${loginHref("discord")}">Sign in with Discord</a>` : ""}
+      ${!primaryProvider ? '<p class="status" role="status">Viewer sign-in is not available on this site right now. Please try again later.</p>' : ""}
     </div>
     <p class="status" id="vd-login-status" role="status" aria-live="polite"></p>
-    </div>
   </section>
 
   <div class="vd-layout">

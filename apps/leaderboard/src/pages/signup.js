@@ -34,5 +34,5 @@ export const signupPage = `<!DOCTYPE html><html lang="en"><head>
   </ul>
   <span class="hint" id="pw-hint">Longer passphrases are stronger — the meter above is just a guide.</span></div>
   <div class="err" id="err" role="alert" aria-live="assertive"></div><button class="btn btn--accent w-full" type="submit" id="submit">Create account</button></form>
-<p class="foot">Already have one? <a href="/login">Sign in</a><span class="foot-sep">Are you a viewer? <a href="/me">Log in with Kick or Discord</a></span></p></div></main></div>
+<p class="foot">Already have one? <a href="/login">Sign in</a><span class="foot-sep">Are you a viewer? <a href="/me">Sign in to your Viewer Account</a></span></p></div></main></div>
 <script type="module" src="/assets/auth.js?v=4"></script></body></html>`;

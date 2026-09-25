@@ -479,12 +479,12 @@ describe("the global account page", () => {
 
   const page = viewerDashboardPage();
 
-  it("opens with My communities, not an operator dashboard head", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
+  it("opens with the Viewer Account gateway, not an operator dashboard head", () => {
+    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">Your Viewer Account</h1>');
     expect((page.match(/<h1\b/g) || []).length).toBe(1);
     expect(page).not.toContain("an-eyebrow");
     expect(page).not.toContain("an-title");
-    expect(page).toContain("Your rewards and claims stay with each community.");
+    expect(page).toContain("Sign in to access your communities, rewards and balances.");
   });
 
   it("keeps one identity row and one community membership list", () => {

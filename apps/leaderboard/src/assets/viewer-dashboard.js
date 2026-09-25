@@ -110,16 +110,18 @@ const accountViews = {
 };
 let exportId = "";
 const DEFAULT_SUBTITLE = "Manage the communities connected to your account. Your rewards and claims stay with each community.";
+const GUEST_TITLE = "Your Viewer Account";
+const GUEST_SUBTITLE = "Sign in to access your communities, rewards and balances.";
 const LOGIN_LINKS = ["vd-login-kick", "vd-login-discord"];
 
 // A guest who follows an account-settings link lands on the sign-in card, which
 // names the requested section and sends the provider back to it after login.
 function applyGuestGate(requested) {
   const label = requested ? accountViews[requested][0] : "";
-  $("vd-title").textContent = requested ? `Sign in to open ${label}` : "My communities";
+  $("vd-title").textContent = requested ? `Sign in to open ${label}` : GUEST_TITLE;
   $("vd-subtitle").textContent = requested
     ? `${label} is part of your Viewer Account. Sign in and you'll come straight back to it.`
-    : DEFAULT_SUBTITLE;
+    : GUEST_SUBTITLE;
   for (const id of LOGIN_LINKS) {
     const link = $(id);
     if (!link) continue;
