@@ -626,63 +626,83 @@ ${tabs}
         <div class="tournament-list-head">
           <div>
             <h2 id="tournament-settings-heading">Settings</h2>
-            <p class="tournament-muted">Basic details can change any time. Format and bracket size lock once they would invalidate entries or the bracket.</p>
+            <p class="tournament-muted">Basic details can change any time. Bracket size locks once the bracket has been created.</p>
           </div>
         </div>
-        <form id="tournament-settings-form" class="tournament-settings-grid">
-          <div class="field">
-            <label for="tournament-title">Tournament name</label>
-            <input id="tournament-title" name="title" type="text" placeholder="Community Tournament" maxlength="120" />
-          </div>
-          <div class="field">
-            <label for="tournament-game">Game</label>
-            <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" />
-          </div>
-          <div class="field">
-            <label for="tournament-keyword">Chat command</label>
-            <input id="tournament-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" />
-          </div>
-          <div class="field">
-            <label for="tournament-entry-cap">Signup limit</label>
-            <input id="tournament-entry-cap" name="entryCap" type="number" min="1" placeholder="Unlimited" inputmode="numeric" />
-            <span class="hint">How many viewers may register. Leave empty for unlimited. Separate from bracket size.</span>
-          </div>
-          <div class="field">
-            <label for="tournament-chat-channel">Kick channel</label>
-            <div class="gw-input-row">
-              <span class="gw-input-prefix">kick.com/</span>
-              <input id="tournament-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" />
+        <form id="tournament-settings-form" class="tournament-settings-form" novalidate>
+          <fieldset class="tournament-settings-group">
+            <legend>Tournament details</legend>
+            <div class="tournament-settings-fields">
+              <div class="field">
+                <label for="tournament-title">Tournament name</label>
+                <input id="tournament-title" name="title" type="text" placeholder="Community Tournament" maxlength="120" class="tournament-control" />
+              </div>
+              <div class="field">
+                <label for="tournament-game">Game</label>
+                <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" class="tournament-control" />
+              </div>
             </div>
-          </div>
-          <div class="field">
-            <label for="tournament-format">Format</label>
-            <select id="tournament-format" name="format" class="v3-select">
-              <option value="bracket">Bracket</option>
-              <option value="1v1">1v1</option>
-            </select>
-            <span class="hint" id="tournament-format-hint" hidden></span>
-          </div>
-          <div class="field">
-            <label for="tournament-bracket-size">Bracket size</label>
-            <select id="tournament-bracket-size" name="bracketSize" class="v3-select">
-              <option value="4">4 players</option>
-              <option value="8">8 players</option>
-              <option value="16">16 players</option>
-              <option value="32">32 players</option>
-            </select>
-            <span class="hint" id="tournament-bracket-size-hint" hidden></span>
-          </div>
+          </fieldset>
+          <fieldset class="tournament-settings-group">
+            <legend>Registration</legend>
+            <div class="tournament-settings-fields">
+              <div class="field">
+                <label for="tournament-chat-channel">Kick channel</label>
+                <div class="gw-input-row">
+                  <span class="gw-input-prefix">kick.com/</span>
+                  <input id="tournament-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" class="tournament-control" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="tournament-keyword">Chat command</label>
+                <input id="tournament-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tournament-control" />
+              </div>
+              <div class="field">
+                <label for="tournament-entry-cap-mode">Signup limit</label>
+                <select id="tournament-entry-cap-mode" name="entryCapMode" class="v3-select tournament-control">
+                  <option value="">Unlimited</option>
+                  <option value="custom">Custom…</option>
+                </select>
+                <input id="tournament-entry-cap" name="entryCap" type="number" min="1" inputmode="numeric" class="tournament-control" aria-label="Custom signup limit" placeholder="e.g. 40" hidden />
+                <span class="hint">How many viewers may register. Separate from bracket size.</span>
+                <span class="field-error" id="tournament-entry-cap-error" role="alert" hidden></span>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset class="tournament-settings-group">
+            <legend>Competition</legend>
+            <div class="tournament-settings-fields">
+              <div class="field">
+                <label for="tournament-bracket-size">Bracket size</label>
+                <select id="tournament-bracket-size" name="bracketSize" class="v3-select tournament-control">
+                  <option value="4">4 players</option>
+                  <option value="8">8 players</option>
+                  <option value="16">16 players</option>
+                  <option value="32">32 players</option>
+                </select>
+                <span class="hint" id="tournament-bracket-size-hint" hidden></span>
+                <span class="field-error" id="tournament-bracket-size-error" role="alert" hidden></span>
+              </div>
+            </div>
+          </fieldset>
           <details class="tournament-advanced" id="tournament-advanced">
             <summary>Advanced settings</summary>
-            <div class="field tournament-toggle-field">
-              <label for="tournament-anti-alt">Flag likely duplicate accounts</label>
+            <div class="tournament-setting-row">
+              <div class="tournament-setting-row-text">
+                <label for="tournament-anti-alt">Flag likely duplicate accounts</label>
+                <span class="hint">Flags suspicious entries for review; never rejects automatically.</span>
+              </div>
               <input id="tournament-anti-alt" name="antiAltEnabled" type="checkbox" class="v3-toggle" />
-              <span class="hint">Flags are shown for you to review; they never reject someone automatically.</span>
             </div>
           </details>
-          <div class="tournament-settings-actions">
-            <button class="btn btn--accent" type="submit">Save settings</button>
+          <div class="tournament-settings-bar" id="tournament-settings-bar" hidden>
+            <span>Unsaved changes</span>
+            <div class="tournament-settings-bar-actions">
+              <button class="btn btn--ghost" type="button" id="tournament-settings-discard">Discard</button>
+              <button class="btn btn--accent" type="submit" id="tournament-settings-save">Save changes</button>
+            </div>
           </div>
+          <p class="tournament-settings-saved" id="tournament-settings-saved" role="status" aria-live="polite" hidden>Settings saved.</p>
         </form>
       </section>
     </div>
@@ -693,22 +713,15 @@ ${tabs}
         <div class="tournament-create-grid">
           <div class="field">
             <label for="tc-title">Tournament name</label>
-            <input id="tc-title" name="title" type="text" value="Community Tournament" maxlength="120" required />
+            <input id="tc-title" name="title" type="text" value="Community Tournament" maxlength="120" required class="tournament-control" />
           </div>
           <div class="field">
             <label for="tc-game">Game</label>
-            <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" />
-          </div>
-          <div class="field">
-            <label for="tc-format">Format</label>
-            <select id="tc-format" name="format" class="v3-select">
-              <option value="bracket">Bracket</option>
-              <option value="1v1">1v1</option>
-            </select>
+            <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" class="tournament-control" />
           </div>
           <div class="field">
             <label for="tc-bracket-size">Bracket size</label>
-            <select id="tc-bracket-size" name="bracketSize" class="v3-select">
+            <select id="tc-bracket-size" name="bracketSize" class="v3-select tournament-control">
               <option value="4">4 players</option>
               <option value="8" selected>8 players</option>
               <option value="16">16 players</option>
@@ -718,23 +731,23 @@ ${tabs}
           </div>
           <div class="field">
             <label for="tc-entry-cap">Signup limit</label>
-            <select id="tc-entry-cap" name="entryCapMode" class="v3-select">
+            <select id="tc-entry-cap" name="entryCapMode" class="v3-select tournament-control">
               <option value="" selected>Unlimited</option>
               <option value="custom">Custom limit…</option>
             </select>
-            <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" hidden />
+            <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" class="tournament-control" hidden />
             <span class="hint">How many viewers may register. Participants are picked from the entries later.</span>
           </div>
           <div class="field">
             <label for="tc-chat-channel">Kick channel</label>
             <div class="gw-input-row">
               <span class="gw-input-prefix">kick.com/</span>
-              <input id="tc-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" />
+              <input id="tc-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" class="tournament-control" />
             </div>
           </div>
           <div class="field">
             <label for="tc-keyword">Chat command</label>
-            <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" />
+            <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tournament-control" />
           </div>
         </div>
         <p class="tournament-message is-error" id="tournament-create-error" role="alert" hidden></p>

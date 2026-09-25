@@ -5,6 +5,7 @@
 // Run: bun test src/__tests__/tournament-lifecycle-ui.test.js
 
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
 
@@ -26,12 +27,13 @@ window.YRDialog = { trap: () => () => {}, confirm: async () => true };
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
 
-const server = { tournaments: [], entries: [], matches: [], requests: [] };
+const server = { tournaments: [], entries: [], matches: [], requests: [], failSettings: false };
 function reset({ tournaments = [], entries = [], matches = [] } = {}) {
   server.tournaments = tournaments.map((t) => ({ ...t }));
   server.entries = entries.map((e) => ({ ...e }));
   server.matches = matches.map((m) => ({ ...m }));
   server.requests.length = 0;
+  server.failSettings = false;
 }
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const base = {
@@ -62,7 +64,18 @@ globalThis.fetch = async (input, init = {}) => {
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
   if (path.endsWith("/signups/open")) { current.signup_state = "open"; return json({ ok: true, tournament: current }); }
   if (path.endsWith("/signups/lock")) { current.signup_state = "locked"; return json({ ok: true, tournament: current }); }
-  if (path.endsWith("/settings")) { Object.assign(current, { title: body.title || current.title }); return json({ ok: true, tournament: current }); }
+  if (path.endsWith("/settings")) {
+    if (server.failSettings || body.bracketSize === 6) {
+      return json({ error: "Bracket size must be 4, 8, 16, or 32." }, 400);
+    }
+    Object.assign(current, {
+      title: body.title || current.title,
+      ...(body.bracketSize !== undefined ? { bracket_size: body.bracketSize } : {}),
+      ...(body.entryCap !== undefined ? { entry_cap: body.entryCap } : {}),
+      ...(body.chatChannel !== undefined ? { chat_channel: body.chatChannel } : {}),
+    });
+    return json({ ok: true, tournament: current });
+  }
   if (path === "/api/giveaways/chatroom") return json({ error: "offline" }, 404);
   return json({ ok: true });
 };
@@ -99,6 +112,10 @@ afterAll(() => {
 describe("tournament lifecycle UI", () => {
   beforeEach(async () => {
     reset();
+    // A previous test may leave the create modal open with its focus trap
+    // installed; close it so focus assertions aren't redirected into the modal.
+    const modal = $id("tournament-create-modal");
+    if (modal && !modal.hidden) await click("tournament-create-cancel");
     await mod.boot();
     await flush();
   });
@@ -132,7 +149,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-empty")).toBe(true);
     const sizes = [...$id("tc-bracket-size").options].map((o) => Number(o.value));
     expect(sizes).toEqual([4, 8, 16, 32]);
-    expect([...$id("tc-format").options].map((o) => o.value)).toEqual(["bracket", "1v1"]);
+    expect($id("tc-format")).toBeNull();
     expect($id("tc-bracket-size").value).toBe("8");
     expect($id("tc-entry-cap").value).toBe("");
     expect($id("tc-title").value).toBe("Community Tournament");
@@ -146,7 +163,6 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-create");
     $id("tc-title").value = "Friday Cup";
     $id("tc-game").value = "Fortnite";
-    $id("tc-format").value = "1v1";
     $id("tc-bracket-size").value = "4";
     $id("tc-chat-channel").value = "36_ates";
     $id("tc-keyword").value = "!cup";
@@ -154,7 +170,7 @@ describe("tournament lifecycle UI", () => {
 
     const [post] = requestsTo("/api/tournaments", "POST");
     expect(post.body).toEqual({
-      siteId: "site-1", title: "Friday Cup", gameName: "Fortnite", format: "1v1", bracketSize: 4,
+      siteId: "site-1", title: "Friday Cup", gameName: "Fortnite", bracketSize: 4,
       entryCap: null, chatChannel: "36_ates", entryKeyword: "!cup",
     });
     expect(visible("tournament-create-modal")).toBe(false);
@@ -162,7 +178,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-workspace")).toBe(true);
     expect(text("tournament-status")).toBe("Draft");
     expect(text("tournament-title-display")).toBe("Friday Cup");
-    expect(text("tournament-meta")).toBe("Fortnite · 1v1 · 4-player bracket");
+    expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket");
     expect(text("tournament-fact-channel")).toBe("36_ates");
     expect(text("tournament-fact-keyword")).toBe("!cup");
     expect(text("tournament-fact-cap")).toBe("Unlimited");
@@ -214,7 +230,7 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-settings");
     expect(visible("tournament-panel-settings")).toBe(true);
     expect(visible("tournament-settings-form")).toBe(true);
-    expect($id("tournament-format").disabled).toBe(false);
+    expect($id("tournament-format")).toBeNull();
     expect($id("tournament-bracket-size").disabled).toBe(false);
   });
 
@@ -239,10 +255,8 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-step-label")).toBe("Need 3 more eligible players.");
     expect(text("tournament-count")).toBe("5");
     expect(text("tournament-fact-spots")).toBe("8");
-    // Format is now locked because entries exist; bracket size is still open.
+    // Bracket size is still open in the settings tab.
     await click("tournament-tab-settings");
-    expect($id("tournament-format").disabled).toBe(true);
-    expect(visible("tournament-format-hint")).toBe(true);
     expect($id("tournament-bracket-size").disabled).toBe(false);
 
     server.entries = Array.from({ length: 8 }, (_, i) => ({ id: `e${i}`, display_name: `viewer${i}`, source: "chat", status: "pending" }));
@@ -256,13 +270,118 @@ describe("tournament lifecycle UI", () => {
     expect(pick.body).toEqual({ count: 8 });
   });
 
-  it("refuses to open signups without a Kick channel and points to Settings", async () => {
+  it("routes a draft without a Kick channel to Settings instead of opening signups", async () => {
     reset({ tournaments: [{ ...base, chat_channel: null }] });
     await mod.boot();
+    expect(text("tournament-primary")).toBe("Add Kick channel");
+    expect($id("tournament-step-label").textContent).toContain("Kick channel required");
     await click("tournament-primary");
     expect(requestsTo("/api/tournaments/t-1/signups/open", "POST")).toHaveLength(0);
-    expect(text("tournament-message")).toContain("Kick channel");
     expect(visible("tournament-panel-settings")).toBe(true);
+    expect(document.activeElement?.id).toBe("tournament-chat-channel");
+  });
+
+  it("offers Open signups directly when the draft has a Kick channel", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    expect(text("tournament-primary")).toBe("Open signups");
+    expect($id("tournament-primary").dataset.action).toBe("open");
+  });
+
+  it("lets a legacy active/no-bracket tournament change bracket size", async () => {
+    reset({ tournaments: [{ ...base, status: "active", signup_state: "closed", bracket_size: 8 }] });
+    await mod.boot();
+    expect(text("tournament-status")).toBe("Draft");
+    await click("tournament-tab-settings");
+    expect($id("tournament-bracket-size").disabled).toBe(false);
+    expect($id("tournament-entry-cap-mode").disabled).toBe(false);
+    $id("tournament-bracket-size").value = "16";
+    await submit("tournament-settings-form");
+    const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
+    expect(req.body.bracketSize).toBe(16);
+    expect(text("tournament-fact-spots")).toBe("16");
+  });
+
+  it("locks bracket size in Settings once matches exist", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      entries: [{ id: "e1", display_name: "a", source: "chat", status: "selected" }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", status: "pending" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "c", player2_name: "d", status: "pending" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    expect($id("tournament-bracket-size").disabled).toBe(true);
+    expect(visible("tournament-bracket-size-hint")).toBe(true);
+  });
+
+  it("drives the signup limit field through the Unlimited/Custom mode select", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    expect($id("tournament-entry-cap-mode").value).toBe("");
+    expect($id("tournament-entry-cap").hidden).toBe(true);
+    $id("tournament-entry-cap-mode").value = "custom";
+    $id("tournament-entry-cap-mode").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flush();
+    expect($id("tournament-entry-cap").hidden).toBe(false);
+    $id("tournament-entry-cap").value = "40";
+    await submit("tournament-settings-form");
+    const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
+    expect(req.body.entryCap).toBe(40);
+
+    reset({ tournaments: [{ ...base, entry_cap: 40 }] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    expect($id("tournament-entry-cap-mode").value).toBe("custom");
+    expect($id("tournament-entry-cap").hidden).toBe(false);
+    expect($id("tournament-entry-cap").value).toBe("40");
+  });
+
+  it("makes every settings control full-width via .tournament-control", () => {
+    const controls = $id("tournament-settings-form").querySelectorAll("select, input");
+    for (const el of controls) {
+      if (el.type === "checkbox") continue;
+      expect(el.classList.contains("tournament-control")).toBe(true);
+    }
+    const css = readFileSync(new URL("../assets/giveaways.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.tournament-app \.field select\.tournament-control[^{]*\{[^}]*width:\s*100%/);
+  });
+
+  it("shows a field error on a rejected save without touching the summary", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    server.failSettings = true;
+    $id("tournament-bracket-size").value = "16";
+    await submit("tournament-settings-form");
+    expect(visible("tournament-bracket-size-error")).toBe(true);
+    expect(text("tournament-bracket-size-error")).toContain("Bracket size");
+    expect(text("tournament-message")).toBe("");
+    expect(text("tournament-fact-spots")).toBe("8");
+  });
+
+  it("tracks dirty state with the settings bar, discard, and saved indicator", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    expect($id("tournament-settings-bar").hidden).toBe(true);
+    $id("tournament-title").value = "Renamed Cup";
+    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect($id("tournament-settings-bar").hidden).toBe(false);
+    await click("tournament-settings-discard");
+    expect($id("tournament-settings-bar").hidden).toBe(true);
+    expect($id("tournament-title").value).toBe("Community Tournament");
+    $id("tournament-title").value = "Renamed Cup";
+    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    await submit("tournament-settings-form");
+    expect($id("tournament-settings-bar").hidden).toBe(true);
+    expect(visible("tournament-settings-saved")).toBe(true);
   });
 
   it("shows the live bracket and locks bracket-critical settings once matches exist", async () => {
@@ -284,10 +403,32 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-bracket").querySelectorAll(".tournament-match")).toHaveLength(3);
     expect($id("tournament-bracket").querySelectorAll("[data-score-match]").length).toBeGreaterThan(0);
     await click("tournament-tab-settings");
-    expect($id("tournament-format").disabled).toBe(true);
     expect($id("tournament-bracket-size").disabled).toBe(true);
     expect(text("tournament-bracket-size-hint")).toContain("locked");
   });
+
+  for (const [status, winner_name] of [["completed", "alpha"], ["cancelled", null]]) {
+    it(`makes Settings fully read-only when the tournament is ${status}`, async () => {
+      reset({ tournaments: [{ ...base, status, winner_name, entry_cap: 40, chat_channel: "creator" }] });
+      await mod.boot();
+      await click("tournament-tab-settings");
+      for (const id of [
+        "tournament-title", "tournament-game", "tournament-chat-channel", "tournament-keyword",
+        "tournament-entry-cap-mode", "tournament-entry-cap", "tournament-bracket-size",
+        "tournament-anti-alt", "tournament-settings-save", "tournament-settings-discard",
+      ]) {
+        expect($id(id).disabled).toBe(true);
+      }
+      $id("tournament-title").value = "X";
+      $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+      $id("tournament-entry-cap-mode").value = "";
+      $id("tournament-entry-cap-mode").dispatchEvent(new window.Event("change", { bubbles: true }));
+      await flush();
+      expect($id("tournament-settings-bar").hidden).toBe(true);
+      await submit("tournament-settings-form");
+      expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(0);
+    });
+  }
 
   it("shows the champion and a New tournament action when completed", async () => {
     reset({
