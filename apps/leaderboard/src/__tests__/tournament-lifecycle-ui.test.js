@@ -66,6 +66,10 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/api/tournaments") return json({ ok: true, tournaments: server.tournaments, chatRegistration: server.chatRegistration });
   const current = server.tournaments[0];
   if (path.endsWith("/entries")) return json({ ok: true, entries: server.entries });
+  if (path.endsWith("/entries/select")) {
+    current.status = "active";
+    return json({ ok: true, entries: server.entries });
+  }
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
   if (path.endsWith("/signups/open")) { current.signup_state = "open"; return json({ ok: true, tournament: current }); }
   if (path.endsWith("/signups/lock")) { current.signup_state = "locked"; return json({ ok: true, tournament: current }); }
@@ -258,25 +262,25 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-primary");
     expect(requestsTo("/api/tournaments/t-1/signups/lock", "POST")).toHaveLength(1);
     expect(text("tournament-status")).toBe("Signups locked");
-    expect(text("tournament-primary")).toBe("Pick participants");
-    // The pick always fills the bracket: 5 eligible entries can't fill 8 spots.
-    expect($id("tournament-primary").disabled).toBe(true);
-    expect(text("tournament-step-label")).toBe("Need 3 more eligible players.");
+    // 5 eligible players for 8 spots: bracket_size is the max capacity, so
+    // the bracket can be created straight away.
+    expect(text("tournament-primary")).toBe("Create bracket with 5 players");
+    expect($id("tournament-primary").dataset.action).toBe("create-bracket");
+    expect($id("tournament-primary").disabled).toBe(false);
+    expect(text("tournament-step-label")).toBe("5 eligible players for up to 8 bracket spots. Players will be randomly placed in the bracket.");
+    expect(visible("tournament-reopen")).toBe(true);
     expect(text("tournament-count")).toBe("5");
     expect(text("tournament-fact-spots")).toBe("8");
     // Bracket size is still open in the settings tab.
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(false);
 
-    server.entries = Array.from({ length: 8 }, (_, i) => ({ id: `e${i}`, display_name: `viewer${i}`, source: "chat", status: "pending" }));
-    await mod.boot();
-    expect(text("tournament-step-label")).toBe("8 eligible entries for 8 bracket spots. Picking is random.");
-    expect($id("tournament-primary").disabled).toBe(false);
     // The real dialog.js may have replaced the stub; approve on whatever is live.
     window.YRDialog.confirm = async () => true;
+    await click("tournament-tab-entries");
     await click("tournament-primary");
-    const [pick] = requestsTo("/api/tournaments/t-1/entries/random-pick", "POST");
-    expect(pick.body).toEqual({ count: 8 });
+    const [pick] = requestsTo("/api/tournaments/t-1/entries/select", "POST");
+    expect(pick.body).toEqual({ mode: "random" });
   });
 
   it("derives chat registration status from the server, never the socket", async () => {
@@ -510,5 +514,141 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-bracket").querySelectorAll(".tournament-match")).toHaveLength(1);
     await click("tournament-new");
     expect(visible("tournament-create-modal")).toBe(true);
+  });
+
+  it("hides the primary action under 2 eligible players while signups are locked", async () => {
+    reset({
+      tournaments: [{ ...base, signup_state: "locked" }],
+      entries: [{ id: "e1", display_name: "solo", source: "chat", status: "pending" }],
+    });
+    await mod.boot();
+    expect(text("tournament-status")).toBe("Signups locked");
+    expect(text("tournament-step-label")).toBe("Need at least 2 eligible players to start.");
+    expect(visible("tournament-primary")).toBe(false);
+    expect(visible("tournament-reopen")).toBe(true);
+  });
+
+  it("creates the bracket with the eligible count when it fits the capacity", async () => {
+    reset({
+      tournaments: [{ ...base, signup_state: "locked" }],
+      entries: Array.from({ length: 6 }, (_, i) => ({ id: `e${i}`, display_name: `p${i}`, source: "chat", status: "pending" })),
+    });
+    await mod.boot();
+    expect(text("tournament-primary")).toBe("Create bracket with 6 players");
+
+    // Lowering the capacity below the eligible count switches to manual select.
+    await click("tournament-tab-settings");
+    $id("tournament-bracket-size").value = "4";
+    await submit("tournament-settings-form");
+    expect(requestsTo("/api/tournaments/t-1/settings", "POST")[0].body.bracketSize).toBe(4);
+    await click("tournament-tab-entries");
+    expect(text("tournament-primary")).toBe("Select participants");
+    expect($id("tournament-primary").dataset.action).toBe("select-participants");
+  });
+
+  it("drives the select-participants modal in random and manual modes", async () => {
+    reset({
+      tournaments: [{ ...base, signup_state: "locked", bracket_size: 8 }],
+      entries: Array.from({ length: 22 }, (_, i) => ({ id: `e${i}`, display_name: `player${String(i).padStart(2, "0")}`, source: "chat", status: "pending" })),
+    });
+    await mod.boot();
+    expect(text("tournament-primary")).toBe("Select participants");
+    await click("tournament-primary");
+    expect(visible("tournament-select-modal")).toBe(true);
+    expect(text("ts-random-text")).toBe("Randomly select 8 of 22 eligible players.");
+    expect(visible("ts-pane-random")).toBe(true);
+    expect(visible("ts-pane-manual")).toBe(false);
+
+    // Random submit posts mode only.
+    window.YRDialog.confirm = async () => true;
+    await click("tournament-select-submit");
+    const [randomReq] = requestsTo("/api/tournaments/t-1/entries/select", "POST");
+    expect(randomReq.body).toEqual({ mode: "random" });
+    expect(visible("tournament-select-modal")).toBe(false);
+
+    // Manual mode: checkboxes gate the submit on exactly CAP selections.
+    reset({
+      tournaments: [{ ...base, signup_state: "locked", bracket_size: 8 }],
+      entries: Array.from({ length: 22 }, (_, i) => ({ id: `e${i}`, display_name: `player${String(i).padStart(2, "0")}`, source: "chat", status: "pending" })),
+    });
+    await mod.boot();
+    await click("tournament-primary");
+    $id("ts-mode-manual").checked = true;
+    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flush();
+    expect(visible("ts-pane-manual")).toBe(true);
+    expect($id("ts-entry-list").querySelectorAll("input[type=checkbox]")).toHaveLength(22);
+    expect(text("ts-counter")).toBe("Selected 0 / 8");
+    expect($id("tournament-select-submit").disabled).toBe(true);
+
+    // Search filters the list client-side.
+    $id("ts-search").value = "player1";
+    $id("ts-search").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect($id("ts-entry-list").querySelectorAll("input[type=checkbox]")).toHaveLength(10);
+    $id("ts-search").value = "";
+    $id("ts-search").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+
+    const boxes = [...$id("ts-entry-list").querySelectorAll("input[type=checkbox]")];
+    for (const box of boxes.slice(0, 6)) {
+      box.checked = true;
+      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    await flush();
+    expect(text("ts-counter")).toBe("Selected 6 / 8");
+    expect($id("tournament-select-submit").disabled).toBe(true);
+    for (const box of boxes.slice(6, 8)) {
+      box.checked = true;
+      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    await flush();
+    expect(text("ts-counter")).toBe("Selected 8 / 8");
+    expect($id("tournament-select-submit").disabled).toBe(false);
+
+    await click("tournament-select-submit");
+    const manualReqs = requestsTo("/api/tournaments/t-1/entries/select", "POST");
+    const manualReq = manualReqs[manualReqs.length - 1];
+    expect(manualReq.body.mode).toBe("manual");
+    expect(manualReq.body.entryIds).toEqual(["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7"]);
+  });
+
+  it("renders BYE matches without score inputs", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      entries: [{ id: "e1", display_name: "Alice", source: "chat", status: "selected" }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "BYE", status: "completed", winner_name: "Alice" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "BYE", player2_name: "BYE", status: "completed", winner_name: "BYE" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const matches = [...$id("tournament-bracket").querySelectorAll(".tournament-match")];
+    expect(matches).toHaveLength(3);
+    // Alice vs BYE: no inputs, no score, advance caption.
+    expect(matches[0].querySelectorAll("input")).toHaveLength(0);
+    expect(matches[0].textContent).toContain("Alice advances automatically");
+    expect(matches[0].textContent).not.toContain("0 - 0");
+    // BYE vs BYE: compact empty card.
+    expect(matches[1].classList.contains("is-empty")).toBe(true);
+    expect(matches[1].textContent).toContain("No match");
+    expect(matches[1].querySelectorAll("input")).toHaveLength(0);
+    // TBD slot: still no inputs until both players are known.
+    expect(matches[2].querySelectorAll("input")).toHaveLength(0);
+  });
+
+  it("still shows score inputs for a real-versus-real pending match", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const match = $id("tournament-bracket").querySelector(".tournament-match");
+    expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
   });
 });

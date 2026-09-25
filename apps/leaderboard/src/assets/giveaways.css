@@ -2343,6 +2343,68 @@
   font-style: italic;
 }
 
+.tournament-match-bye {
+  color: var(--ws-text-mute, #6b7280);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.tournament-match-bye-note {
+  color: var(--ws-text-mute, #6b7280);
+  font-size: 12px;
+}
+
+.tournament-match.is-empty {
+  border-style: dashed;
+  background: transparent;
+  padding: 8px 12px;
+}
+
+.tournament-select-modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tournament-select-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.tournament-select-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tournament-select-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--ws-line, #e5e7eb);
+  border-radius: var(--ws-radius-sm, 6px);
+  cursor: pointer;
+}
+
+.tournament-select-row label:hover {
+  background: var(--ws-surface-alt, #f9fafb);
+}
+
+.tournament-select-counter {
+  font-size: 13px;
+  color: var(--ws-text-mute, #6b7280);
+  margin: 4px 0;
+}
+
 .tournament-bracket[hidden] { display: none; }
 
 .tournament-champion {

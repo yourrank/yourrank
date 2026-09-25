@@ -337,6 +337,13 @@ jobs:
           TOURNAMENT_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test apps/leaderboard/src/__tests__/tournament-open-signups-postgres.test.js
 
+      # Signup hard cap + undersubscribed brackets: concurrent entrants race
+      # the last slot, BYE matches auto-advance after scoring.
+      - name: Tournament signup-cap tests (against migrated schema)
+        env:
+          TOURNAMENT_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: bun test apps/leaderboard/src/__tests__/tournament-signup-cap-postgres.test.js
+
       # Polar billing SQL lifecycle, including the past-due grace regression:
       # repeated reconciliation must never extend the grace window.
       - name: Polar billing tests (against migrated schema)
