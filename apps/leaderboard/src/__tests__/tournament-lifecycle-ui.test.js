@@ -28,13 +28,17 @@ window.YRDialog = { trap: () => () => {}, confirm: async () => true };
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
 
-const server = { tournaments: [], entries: [], matches: [], requests: [], failSettings: false };
+const server = {
+  tournaments: [], entries: [], matches: [], requests: [], failSettings: false,
+  chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
+};
 function reset({ tournaments = [], entries = [], matches = [] } = {}) {
   server.tournaments = tournaments.map((t) => ({ ...t }));
   server.entries = entries.map((e) => ({ ...e }));
   server.matches = matches.map((m) => ({ ...m }));
   server.requests.length = 0;
   server.failSettings = false;
+  server.chatRegistration = { connected: false, chatReady: false, channelName: null, externalChannelId: null };
 }
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const base = {
@@ -59,7 +63,7 @@ globalThis.fetch = async (input, init = {}) => {
     server.tournaments.unshift(tournament);
     return json({ ok: true, tournament });
   }
-  if (path === "/api/tournaments") return json({ ok: true, tournaments: server.tournaments });
+  if (path === "/api/tournaments") return json({ ok: true, tournaments: server.tournaments, chatRegistration: server.chatRegistration });
   const current = server.tournaments[0];
   if (path.endsWith("/entries")) return json({ ok: true, entries: server.entries });
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
@@ -273,6 +277,30 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-primary");
     const [pick] = requestsTo("/api/tournaments/t-1/entries/random-pick", "POST");
     expect(pick.body).toEqual({ count: 8 });
+  });
+
+  it("derives chat registration status from the server, never the socket", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    expect(text("tournament-chat-status")).toBe("Chat registration off");
+
+    // Open but no confirmed Kick chat delivery: unavailable, and the browser
+    // never writes entries.
+    reset({ tournaments: [{ ...base, signup_state: "open" }] });
+    server.chatRegistration = { connected: true, chatReady: false, channelName: "creator", externalChannelId: "111" };
+    await mod.boot();
+    expect(text("tournament-chat-status")).toBe("Chat registration unavailable");
+    expect($id("tournament-chat-status").classList.contains("is-live")).toBe(false);
+
+    server.chatRegistration = { connected: true, chatReady: true, channelName: "creator", externalChannelId: "111" };
+    await mod.boot();
+    expect(text("tournament-chat-status")).toBe("Chat registration active");
+    expect($id("tournament-chat-status").classList.contains("is-live")).toBe(true);
+    // A channel mismatch keeps it unavailable.
+    server.chatRegistration = { connected: true, chatReady: true, channelName: "other", externalChannelId: "999" };
+    await mod.boot();
+    expect(text("tournament-chat-status")).toBe("Chat registration unavailable");
+    expect(requestsTo("/api/tournaments/t-1/entries", "POST")).toHaveLength(0);
   });
 
   it("routes a draft without a Kick channel to Settings instead of opening signups", async () => {

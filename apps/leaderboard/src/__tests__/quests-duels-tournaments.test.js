@@ -60,6 +60,12 @@ describe("Quests, Duels & Tournaments Suite", () => {
       rateLimit: mock().mockResolvedValue({ ok: true }),
       clientIp: mock().mockReturnValue("127.0.0.1"),
       requireSiteCapabilityImpl: mock().mockResolvedValue({ res: null }),
+      loadChatGiveawayConnection: mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "streamer", externalChannelId: "111",
+      }),
+      reconcileKickWebhookDelivery: mock().mockResolvedValue({
+        status: "ok", subscriptions: { rewardEvents: true, chatEvents: true }, failedEvents: [],
+      }),
     };
   });
 

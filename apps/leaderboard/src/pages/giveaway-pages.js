@@ -584,7 +584,7 @@ ${tabs}
           <div><dt>Signup limit</dt><dd id="tournament-fact-cap">Unlimited</dd></div>
           <div><dt>Bracket spots</dt><dd id="tournament-fact-spots">8</dd></div>
           <div><dt>Entries</dt><dd id="tournament-count" aria-live="polite">0</dd></div>
-          <div><dt>Chat</dt><dd><span class="tournament-live-dot" id="tournament-chat-status">Chat off</span></dd></div>
+          <div><dt>Chat registration</dt><dd><span class="tournament-live-dot" id="tournament-chat-status">Chat registration off</span></dd></div>
         </dl>
       </section>
 

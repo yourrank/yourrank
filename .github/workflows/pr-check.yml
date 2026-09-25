@@ -330,6 +330,13 @@ jobs:
           CLAIM_SUPPORT_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
         run: bun test apps/leaderboard/src/__tests__/claim-support-postgres.test.js
 
+      # One-open-tournament-per-site migration: lock-table backfill picks the
+      # newest open tournament per site and locks the remaining legacy open rows.
+      - name: Tournament open-signups migration tests (against migrated schema)
+        env:
+          TOURNAMENT_TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/yourrank_test
+        run: bun test apps/leaderboard/src/__tests__/tournament-open-signups-postgres.test.js
+
       # Polar billing SQL lifecycle, including the past-due grace regression:
       # repeated reconciliation must never extend the grace window.
       - name: Polar billing tests (against migrated schema)

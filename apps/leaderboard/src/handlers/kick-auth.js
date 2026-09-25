@@ -248,39 +248,21 @@ export async function handleKickAuthCallback(request, env, deps = {}) {
   }
 }
 
-// POST /api/kick/repair — reconcile the webhook subscriptions of the site's
-// verified Kick channel using the creator connection that verified it. The
-// authorization itself is never revoked here: only a provider-confirmed
-// rejection of the grant clears credentials (answered as
-// `kick_reconnect_required`, like reward operations do); every other failure
-// keeps the connection and reports delivery as still broken.
-export async function handleKickAuthRepair(request, env, deps = {}) {
+/**
+ * Reconcile the webhook subscriptions of the site's verified Kick channel
+ * using the creator connection that verified it. Shared by the repair
+ * endpoint and by flows (tournament signups) that need confirmed chat-event
+ * delivery; `subscriptions.chatEvents` says whether chat is confirmed.
+ */
+export async function reconcileKickWebhookDelivery(env, siteId, deps = {}) {
   const {
-    requireUser: requireUserImpl = requireUser,
-    rateLimit: rateLimitImpl = rateLimit,
     one: oneImpl = one,
     withTransaction: withTransactionImpl = withTransaction,
-    requireSiteCapability: requireSiteCapabilityImpl = requireSiteCapability,
-    readJson: readJsonImpl = readJson,
     getValidKickAccessToken: getValidKickAccessTokenImpl = getValidKickAccessToken,
     ensureKickWebhookSubscriptions: ensureKickWebhookSubscriptionsImpl = ensureKickWebhookSubscriptions,
     listKickWebhookSubscriptions: listKickWebhookSubscriptionsImpl = listKickWebhookSubscriptions,
     subscribeKickWebhookEvent: subscribeKickWebhookEventImpl = subscribeKickWebhookEvent,
   } = deps;
-  const { user, res } = await requireUserImpl(request, env);
-  if (res) return res;
-
-  const url = new URL(request.url);
-  const body = await readJsonImpl(request);
-  const siteId = url.searchParams.get("siteId") || body?.siteId || "";
-  if (!siteId) return bad("Select a site before repairing Kick delivery.");
-  const site = await oneImpl("SELECT id, user_id FROM sites WHERE id=$1", [siteId]);
-  if (!site) return bad("Site not found.", 404);
-  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
-  if (authorization.res) return authorization.res;
-  if (!(await rateLimitImpl(env, `kick-repair:${site.id}`, 5, 60)).ok) {
-    return bad("Too many repair attempts. Try again in a minute.", 429);
-  }
 
   // The channel must be verified for this site and routed to an active
   // connection of the site owner — the same rule loadChatGiveawayConnection
@@ -297,14 +279,10 @@ export async function handleKickAuthRepair(request, env, deps = {}) {
         AND cc.status = 'active'
         AND cc.linked_at IS NOT NULL
       WHERE ch.site_id = $1 AND ch.provider = 'kick' AND ch.status = 'active' AND ch.verified_at IS NOT NULL`,
-    [site.id],
+    [siteId],
   );
-  if (!connection) {
-    return json({ ok: false, error: "Connect Kick for this site before repairing delivery.", code: "kick_not_connected" }, 409);
-  }
-  if (!connection.access_token_enc) {
-    return kickReconnectRequired();
-  }
+  if (!connection) return { status: "not_connected" };
+  if (!connection.access_token_enc) return { status: "reconnect_required" };
 
   let tokens;
   try {
@@ -313,14 +291,14 @@ export async function handleKickAuthRepair(request, env, deps = {}) {
     );
   } catch (err) {
     if (isDefinitiveKickAuthorizationFailure(err)) {
-      console.warn("[kick-auth] repair: Kick rejected the saved authorization for site", site.id);
+      console.warn("[kick-auth] repair: Kick rejected the saved authorization for site", siteId);
       await withTransactionImpl(async (tx) => {
         await clearCreatorConnectionTokens((sql, params) => tx.unsafe(sql, params), connection.user_id, "kick");
       });
-      return kickReconnectRequired();
+      return { status: "reconnect_required" };
     }
     console.error("[kick-auth] repair: token refresh failed:", err?.message || err);
-    return bad("Kick did not answer the authorization refresh. Try again in a moment.", 502);
+    return { status: "refresh_failed" };
   }
 
   const subscriptions = await ensureKickWebhookSubscriptionsImpl(tokens.accessToken, KICK_CREATOR_WEBHOOK_EVENTS, {
@@ -341,14 +319,59 @@ export async function handleKickAuthRepair(request, env, deps = {}) {
         tokenExpiresAt: tokens.expiresAt,
       });
     }
-    await markChannelEventSubscriptions(run, site.id, "kick", delivery);
+    await markChannelEventSubscriptions(run, siteId, "kick", delivery);
   });
 
-  return ok({
-    repaired: subscriptions.failed.length === 0,
+  return {
+    status: "ok",
     subscriptions: delivery,
     // Event names only — provider error bodies stay in server logs.
     failedEvents: subscriptions.failed.map((failure) => failure.event),
+  };
+}
+
+// POST /api/kick/repair — reconcile the webhook subscriptions of the site's
+// verified Kick channel using the creator connection that verified it. The
+// authorization itself is never revoked here: only a provider-confirmed
+// rejection of the grant clears credentials (answered as
+// `kick_reconnect_required`, like reward operations do); every other failure
+// keeps the connection and reports delivery as still broken.
+export async function handleKickAuthRepair(request, env, deps = {}) {
+  const {
+    requireUser: requireUserImpl = requireUser,
+    rateLimit: rateLimitImpl = rateLimit,
+    one: oneImpl = one,
+    requireSiteCapability: requireSiteCapabilityImpl = requireSiteCapability,
+    readJson: readJsonImpl = readJson,
+  } = deps;
+  const { user, res } = await requireUserImpl(request, env);
+  if (res) return res;
+
+  const url = new URL(request.url);
+  const body = await readJsonImpl(request);
+  const siteId = url.searchParams.get("siteId") || body?.siteId || "";
+  if (!siteId) return bad("Select a site before repairing Kick delivery.");
+  const site = await oneImpl("SELECT id, user_id FROM sites WHERE id=$1", [siteId]);
+  if (!site) return bad("Site not found.", 404);
+  const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
+  if (authorization.res) return authorization.res;
+  if (!(await rateLimitImpl(env, `kick-repair:${site.id}`, 5, 60)).ok) {
+    return bad("Too many repair attempts. Try again in a minute.", 429);
+  }
+
+  const delivery = await reconcileKickWebhookDelivery(env, site.id, deps);
+  if (delivery.status === "not_connected") {
+    return json({ ok: false, error: "Connect Kick for this site before repairing delivery.", code: "kick_not_connected" }, 409);
+  }
+  if (delivery.status === "reconnect_required") return kickReconnectRequired();
+  if (delivery.status === "refresh_failed") {
+    return bad("Kick did not answer the authorization refresh. Try again in a moment.", 502);
+  }
+
+  return ok({
+    repaired: delivery.failedEvents.length === 0,
+    subscriptions: delivery.subscriptions,
+    failedEvents: delivery.failedEvents,
   });
 }
 

@@ -16,6 +16,11 @@ import {
   withTransaction as defaultWithTransaction,
 } from "@yourrank/shared/db";
 import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
+import {
+  kickChatMessageToIngestInput,
+  loadChatGiveawayConnection as defaultLoadChatGiveawayConnection,
+} from "@yourrank/shared/chat-giveaways";
+import { reconcileKickWebhookDelivery as defaultReconcileKickWebhookDelivery } from "./kick-auth.js";
 
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
@@ -118,6 +123,7 @@ export async function handleGetTournaments(request, env, deps = {}) {
     rateLimit = defaultRateLimit,
     clientIp = defaultClientIp,
     requireSiteOwner: requireSiteOwnerImpl = requireSiteOwner,
+    loadChatGiveawayConnection = defaultLoadChatGiveawayConnection,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -141,7 +147,10 @@ export async function handleGetTournaments(request, env, deps = {}) {
     [site.id]
   );
 
-  return ok({ tournaments: tournaments || [] });
+  return ok({
+    tournaments: tournaments || [],
+    chatRegistration: await loadChatGiveawayConnection(query, site.id, "kick"),
+  });
 }
 
 /**
@@ -269,8 +278,12 @@ async function updateSignupState(request, env, state, deps = {}) {
   const {
     requireUser = defaultRequireUser,
     one = defaultOne,
+    query = defaultQuery,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
+    loadChatGiveawayConnection = defaultLoadChatGiveawayConnection,
+    reconcileKickWebhookDelivery = defaultReconcileKickWebhookDelivery,
+    withTransaction = defaultWithTransaction,
   } = deps;
   const { user, res } = await requireUser(request, env);
   if (res) return res;
@@ -279,16 +292,86 @@ async function updateSignupState(request, env, state, deps = {}) {
   if (access.error) return access.error;
   // Signups are collected from Kick chat, so the server refuses to open them
   // until the channel to listen to is actually stored.
-  if (state === "open" && !normalizeChatChannel(access.tournament.chat_channel)) {
-    return bad("Add your Kick channel before opening signups.", 400);
+  if (state === "open") {
+    if (!normalizeChatChannel(access.tournament.chat_channel)) {
+      return bad("Add your Kick channel before opening signups.", 400);
+    }
+    // Entries are created by the Kick chat webhook, so opening signups also
+    // requires a routable connection and confirmed chat-event delivery; the
+    // reconcile repairs drift instead of failing on first sight.
+    const connection = await loadChatGiveawayConnection(query, access.tournament.site_id, "kick");
+    if (!connection.connected) {
+      return bad("Connect your Kick channel in Settings → Connections before opening signups.", 409);
+    }
+    if (normalizeChatChannel(access.tournament.chat_channel).toLowerCase() !== String(connection.channelName || "").toLowerCase()) {
+      return bad(`Signups are collected from your connected Kick channel (${connection.channelName}). Set this tournament's Kick channel to it before opening signups.`, 409);
+    }
+    const delivery = await reconcileKickWebhookDelivery(env, access.tournament.site_id, deps);
+    if (delivery.status !== "ok" || !delivery.subscriptions.chatEvents) {
+      return bad("Kick chat events could not be subscribed for this channel. Reconnect Kick in Settings → Connections, then open signups again.", 409);
+    }
   }
-  const result = await one(
-    `UPDATE tournaments
-        SET signup_state=$1, updated_at=now()
-      WHERE id=$2
-      RETURNING id, signup_state, entry_cap, entry_keyword, chat_channel`,
-    [state, access.tournament.id]
-  );
+  // One open tournament per site, enforced by the tournament_open_signups
+  // lock row inside the same transaction as the state change. The lock row is
+  // the concurrency authority; the tournaments scan is a friendly check for
+  // legacy rows that predate the lock table.
+  let result;
+  try {
+    result = await withTransaction(async (tx) => {
+      if (state === "open") {
+        const siteId = access.tournament.site_id;
+        const id = access.tournament.id;
+        const holder = await tx.one(
+          `SELECT l.tournament_id, t.signup_state, t.status
+             FROM tournament_open_signups l
+             JOIN tournaments t ON t.id = l.tournament_id
+            WHERE l.site_id = $1
+            FOR UPDATE`,
+          [siteId]
+        );
+        if (holder && holder.tournament_id !== id && holder.signup_state === "open"
+            && !["completed", "cancelled"].includes(holder.status)) {
+          return { conflict: true };
+        }
+        if (holder && holder.tournament_id !== id) {
+          // Stale holder (e.g. a finished tournament): release it first.
+          await tx.one("DELETE FROM tournament_open_signups WHERE site_id=$1 RETURNING site_id", [siteId]);
+        }
+        const other = await tx.one(
+          `SELECT id FROM tournaments
+            WHERE site_id=$1 AND id<>$2 AND signup_state='open'
+              AND status NOT IN ('completed','cancelled')
+            LIMIT 1`,
+          [siteId, id]
+        );
+        if (other) return { conflict: true };
+        const lock = await tx.one(
+          `INSERT INTO tournament_open_signups (site_id, tournament_id)
+           VALUES ($1, $2) ON CONFLICT (site_id) DO NOTHING RETURNING site_id`,
+          [siteId, id]
+        );
+        if (!lock && !(holder && holder.tournament_id === id)) return { conflict: true };
+      } else {
+        await tx.one("DELETE FROM tournament_open_signups WHERE tournament_id=$1 RETURNING site_id", [access.tournament.id]);
+      }
+      const tournament = await tx.one(
+        `UPDATE tournaments
+            SET signup_state=$1, updated_at=now()
+          WHERE id=$2
+          RETURNING id, signup_state, entry_cap, entry_keyword, chat_channel`,
+        [state, access.tournament.id]
+      );
+      return { tournament };
+    });
+  } catch (error) {
+    if (error?.code === "23505") {
+      return bad("Another tournament already has open signups. Lock or finish it before opening this one.", 409);
+    }
+    throw error;
+  }
+  if (result.conflict) {
+    return bad("Another tournament already has open signups. Lock or finish it before opening this one.", 409);
+  }
   await logAudit({
     actorId: user.id,
     action: `tournament_signups_${state}`,
@@ -297,7 +380,7 @@ async function updateSignupState(request, env, state, deps = {}) {
     request,
     details: { signupState: state },
   });
-  return ok({ tournament: result });
+  return ok({ tournament: result.tournament });
 }
 
 export function handleOpenTournamentSignups(request, env, deps = {}) {
@@ -464,6 +547,140 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
 }
 
 /**
+ * Insert (or reactivate) one entry under the tournament's row lock. Shared by
+ * the dashboard endpoint and the Kick chat webhook ingest; signups must be
+ * open regardless of the entry source.
+ */
+export async function addTournamentEntryTx(tx, tournamentId, { displayName, viewerId, source, trustScore, altFlag, altReason }) {
+  const tournament = await tx.one(
+    `SELECT id, signup_state, entry_cap
+       FROM tournaments
+      WHERE id=$1
+      FOR UPDATE`,
+    [tournamentId]
+  );
+  if (!tournament) return { error: "Tournament not found.", status: 404 };
+  if (tournament.signup_state !== "open") {
+    return { error: "Tournament signups are not open.", status: 409 };
+  }
+
+  const existing = await tx.one(
+    `SELECT id, display_name, status, source, trust_score, alt_flag, alt_reason, created_at
+       FROM tournament_entries
+      WHERE tournament_id=$1 AND lower(display_name)=lower($2)
+      FOR UPDATE`,
+    [tournament.id, displayName]
+  );
+  if (existing?.status === "blocked") {
+    return { error: "This name has been blocked from the tournament.", status: 409 };
+  }
+  if (existing && existing.status !== "removed") {
+    return { entry: existing, duplicate: true };
+  }
+
+  const eligible = await tx.one(
+    `SELECT count(*)::integer AS count
+       FROM tournament_entries
+      WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
+    [tournament.id]
+  );
+  const status = entryStateFor(tournament, eligible?.count || 0);
+  if (status === "waitlist" && tournament.signup_state === "open" && tournament.entry_cap) {
+    await tx.one(
+      "UPDATE tournaments SET signup_state='locked', updated_at=now() WHERE id=$1 RETURNING id",
+      [tournament.id]
+    );
+    await tx.one(
+      "DELETE FROM tournament_open_signups WHERE tournament_id=$1 RETURNING site_id",
+      [tournament.id]
+    );
+  }
+
+  if (existing) {
+    return {
+      entry: await tx.one(
+        `UPDATE tournament_entries
+            SET display_name=$1, viewer_id=$2, source=$3, status=$4, trust_score=$5,
+                alt_flag=$6, alt_reason=$7, updated_at=now()
+          WHERE id=$8
+          RETURNING id, tournament_id, display_name, viewer_id, source, status,
+                    trust_score, alt_flag, alt_reason, team_no, created_at, updated_at`,
+        [displayName, viewerId, source, status, trustScore, altFlag, altReason, existing.id]
+      ),
+      duplicate: false,
+    };
+  }
+  return {
+    entry: await tx.one(
+      `INSERT INTO tournament_entries
+         (tournament_id, display_name, viewer_id, source, status, trust_score, alt_flag, alt_reason)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, tournament_id, display_name, viewer_id, source, status,
+                 trust_score, alt_flag, alt_reason, team_no, created_at, updated_at`,
+      [tournament.id, displayName, viewerId, source, status, trustScore, altFlag, altReason]
+    ),
+    duplicate: false,
+  };
+}
+
+/**
+ * Turn one Kick `chat.message.sent` payload into a tournament entry: route the
+ * channel to a site through the verified binding (same rule as chat
+ * giveaways), match the tournament's entry keyword, and add the sender under
+ * the entry rules. Redelivered webhooks and repeated !join are idempotent.
+ */
+export async function ingestTournamentChatMessageTx(tx, payload) {
+  const input = kickChatMessageToIngestInput(payload);
+  const outcome = {
+    routed: false, matched: false, entered: false, duplicate: false,
+    rejected: null, tournamentId: null,
+  };
+  if (!input.externalChannelId) return outcome;
+  // Route through the open-signups lock row: one site can hold at most one,
+  // so a message can never pick among several open tournaments.
+  const route = await tx.one(
+    `SELECT t.id, t.entry_keyword
+       FROM community_channels ch
+       JOIN sites s ON s.id = ch.site_id
+       JOIN creator_connections cc ON cc.id = ch.creator_connection_id
+       JOIN tournament_open_signups l ON l.site_id = ch.site_id
+       JOIN tournaments t ON t.id = l.tournament_id
+      WHERE ch.provider = 'kick' AND ch.external_channel_id = $1
+        AND ch.status = 'active' AND ch.verified_at IS NOT NULL
+        AND cc.provider = ch.provider AND cc.user_id = s.user_id
+        AND cc.status = 'active' AND cc.linked_at IS NOT NULL
+        AND t.signup_state = 'open' AND t.status NOT IN ('completed','cancelled')
+        AND lower(t.chat_channel) IN (lower(ch.external_channel_name), lower($2))`,
+    [input.externalChannelId, String(payload.broadcaster?.channel_slug || "")]
+  );
+  if (!route) return outcome;
+  outcome.routed = true;
+  outcome.tournamentId = route.id;
+
+  const keyword = String(route.entry_keyword || "").trim().toLowerCase();
+  const firstToken = String(input.content || "").trim().split(/\s+/)[0]?.toLowerCase();
+  if (!keyword || firstToken !== keyword) return outcome;
+  outcome.matched = true;
+
+  const result = await addTournamentEntryTx(tx, route.id, {
+    displayName: input.senderUsername,
+    viewerId: null,
+    source: "chat",
+    trustScore: null,
+    altFlag: false,
+    altReason: null,
+  });
+  if (result.error) outcome.rejected = result.error;
+  else if (result.duplicate) outcome.duplicate = true;
+  else outcome.entered = true;
+  return outcome;
+}
+
+export async function ingestTournamentChatMessage(payload, { withTransaction = defaultWithTransaction } = {}) {
+  return withTransaction((tx) => ingestTournamentChatMessageTx(tx, payload));
+}
+
+/**
  * POST /api/tournaments/:id/entries — Add one streamer-sourced entry.
  */
 export async function handleAddTournamentEntry(request, env, deps = {}) {
@@ -490,70 +707,14 @@ export async function handleAddTournamentEntry(request, env, deps = {}) {
 
   let result;
   try {
-    result = await withTransaction(async (tx) => {
-      const tournament = await tx.one(
-        `SELECT id, signup_state, entry_cap
-           FROM tournaments
-          WHERE id=$1
-          FOR UPDATE`,
-        [access.tournament.id]
-      );
-      if (!tournament) return { error: "Tournament not found.", status: 404 };
-
-      const existing = await tx.one(
-        `SELECT id, display_name, status, source, trust_score, alt_flag, alt_reason, created_at
-           FROM tournament_entries
-          WHERE tournament_id=$1 AND lower(display_name)=lower($2)
-          FOR UPDATE`,
-        [tournament.id, displayName]
-      );
-      if (existing?.status === "blocked") {
-        return { error: "This name has been blocked from the tournament.", status: 409 };
-      }
-      if (existing && existing.status !== "removed") {
-        return { entry: existing, duplicate: true };
-      }
-
-      const eligible = await tx.one(
-        `SELECT count(*)::integer AS count
-           FROM tournament_entries
-          WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
-        [tournament.id]
-      );
-      const status = entryStateFor(tournament, eligible?.count || 0);
-      if (status === "waitlist" && tournament.signup_state === "open" && tournament.entry_cap) {
-        await tx.one(
-          "UPDATE tournaments SET signup_state='locked', updated_at=now() WHERE id=$1 RETURNING id",
-          [tournament.id]
-        );
-      }
-
-      if (existing) {
-        return {
-          entry: await tx.one(
-            `UPDATE tournament_entries
-                SET display_name=$1, viewer_id=$2, source=$3, status=$4, trust_score=$5,
-                    alt_flag=$6, alt_reason=$7, updated_at=now()
-              WHERE id=$8
-              RETURNING id, tournament_id, display_name, viewer_id, source, status,
-                        trust_score, alt_flag, alt_reason, team_no, created_at, updated_at`,
-            [displayName, viewerId, source, status, trustScore, altFlag, altReason, existing.id]
-          ),
-          duplicate: false,
-        };
-      }
-      return {
-        entry: await tx.one(
-          `INSERT INTO tournament_entries
-             (tournament_id, display_name, viewer_id, source, status, trust_score, alt_flag, alt_reason)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING id, tournament_id, display_name, viewer_id, source, status,
-                     trust_score, alt_flag, alt_reason, team_no, created_at, updated_at`,
-          [tournament.id, displayName, viewerId, source, status, trustScore, altFlag, altReason]
-        ),
-        duplicate: false,
-      };
-    });
+    result = await withTransaction(async (tx) => addTournamentEntryTx(tx, access.tournament.id, {
+      displayName,
+      viewerId,
+      source,
+      trustScore,
+      altFlag,
+      altReason,
+    }));
   } catch (error) {
     if (error?.code === "23505") return bad("This name is already entered.", 409);
     throw error;
@@ -921,6 +1082,8 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
         if (!tournUpdate || tournUpdate.length === 0) {
           throw new TournamentConflictError("Tournament already has a champion.", 409);
         }
+        // A completed tournament can never hold open signups again.
+        await tx.unsafe("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [match.tournament_id]);
       }
 
       return { matchId: match.id, winnerName, isFinals, roundNumber: match.round_number };
