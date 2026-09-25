@@ -552,105 +552,204 @@ ${tabs}
      ========================================================================= -->
 <div class="gw-tab-pane${active === "tournaments" ? " is-active" : ""}" id="pane-tournaments"${active === "tournaments" ? "" : " hidden"}>
   <div id="tournament-app" class="tournament-app">
-    <section class="tournament-status-card" aria-labelledby="tournament-status-heading">
-      <div class="tournament-status-head">
-        <div class="tournament-status-ident">
-          <h2 class="sr-only" id="tournament-status-heading">Current tournament</h2>
-          <h2 class="tournament-title-display" id="tournament-title-display" hidden></h2>
-          <p class="tournament-game-display" id="tournament-game-display" hidden></p>
-          <div class="tournament-status-meta">
-            <p class="tournament-step-label" id="tournament-step-label">Ready when you are</p>
-            <p class="tournament-count" id="tournament-count" aria-live="polite">No tournament yet</p>
-          </div>
-          <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
-        </div>
-        <div class="tournament-primary-wrap">
-          <label class="tournament-pick-count" id="tournament-pick-count-wrap" hidden>
-            <span>Pick</span>
-            <input id="tournament-pick-count" type="number" min="1" value="1" inputmode="numeric" />
-          </label>
-          <button class="btn btn--accent" id="tournament-primary" type="button">Set up a tournament</button>
-          <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
-          <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>Start new tournament</button>
-        </div>
-      </div>
+    <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
 
-      <div id="tournament-empty" hidden></div>
-
-      <div class="tournament-status-foot">
-        <label class="tournament-channel-field" for="tournament-chat-channel">
-          <span>Kick channel for signups</span>
-          <div class="gw-input-row">
-            <span class="gw-input-prefix">kick.com/</span>
-            <input id="tournament-chat-channel" type="text" placeholder="channelname" autocomplete="off" />
-          </div>
-        </label>
-      </div>
+    <!-- No tournament yet: one focused card. Nothing else renders until one exists. -->
+    <section class="tournament-empty-card" id="tournament-empty" aria-labelledby="tournament-empty-heading" hidden>
+      <h2 id="tournament-empty-heading">Tournaments</h2>
+      <p>Run a tournament for your community. Collect entries from your audience, select participants, then manage the bracket here.</p>
+      <button class="btn btn--accent" id="tournament-create" type="button">Create tournament</button>
     </section>
 
-    <section class="tournament-list-card" id="tournament-list-card" aria-labelledby="tournament-list-heading">
-      <div class="tournament-list-head">
-        <div>
-          <h2 id="tournament-list-heading">Viewer entries</h2>
-          <p class="tournament-muted">Review names before closing signups and picking participants.</p>
+    <div id="tournament-workspace" hidden>
+      <section class="tournament-summary-card" aria-labelledby="tournament-title-display">
+        <div class="tournament-summary-head">
+          <div class="tournament-summary-ident">
+            <div class="tournament-summary-title-row">
+              <h2 class="tournament-title-display" id="tournament-title-display"></h2>
+              <span class="tournament-status-chip" id="tournament-status" data-lifecycle=""></span>
+            </div>
+            <p class="tournament-game-display" id="tournament-meta"></p>
+            <p class="tournament-step-label" id="tournament-step-label"></p>
+          </div>
+          <div class="tournament-primary-wrap">
+            <label class="tournament-pick-count" id="tournament-pick-count-wrap" hidden>
+              <span>Pick</span>
+              <select id="tournament-pick-count" class="v3-select" aria-label="Participants to pick"></select>
+            </label>
+            <button class="btn btn--accent" id="tournament-primary" type="button" hidden></button>
+            <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
+            <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>New tournament</button>
+          </div>
         </div>
-        <span class="tournament-live-dot" id="tournament-chat-status">Chat off</span>
-      </div>
-      <div class="tournament-entries" id="tournament-entries">
-        <div id="tournament-entries-empty" hidden></div>
-        <ul class="tournament-entry-list" id="tournament-entry-list" aria-label="Tournament entries"></ul>
-      </div>
-    </section>
+        <dl class="tournament-facts">
+          <div><dt>Kick channel</dt><dd id="tournament-fact-channel">—</dd></div>
+          <div><dt>Join command</dt><dd id="tournament-fact-keyword">!join</dd></div>
+          <div><dt>Signup limit</dt><dd id="tournament-fact-cap">Unlimited</dd></div>
+          <div><dt>Bracket spots</dt><dd id="tournament-fact-spots">8</dd></div>
+          <div><dt>Entries</dt><dd id="tournament-count" aria-live="polite">0</dd></div>
+          <div><dt>Chat</dt><dd><span class="tournament-live-dot" id="tournament-chat-status">Chat off</span></dd></div>
+        </dl>
+      </section>
 
-    <details class="tournament-settings" id="tournament-settings">
-      <summary>Tournament settings <span>Title, format, entry limit, chat command, and review flags</span></summary>
-      <form id="tournament-settings-form" class="tournament-settings-grid">
-        <div class="field">
-          <label for="tournament-title">Tournament title</label>
-          <input id="tournament-title" name="title" type="text" placeholder="Community tournament" maxlength="120" />
+      <div class="tournament-tabs" role="tablist" aria-label="Tournament sections">
+        <button class="tournament-tab is-active" id="tournament-tab-entries" type="button" role="tab" aria-selected="true" aria-controls="tournament-panel-entries" data-tournament-tab="entries">Entries</button>
+        <button class="tournament-tab" id="tournament-tab-bracket" type="button" role="tab" aria-selected="false" aria-controls="tournament-panel-bracket" data-tournament-tab="bracket">Bracket</button>
+        <button class="tournament-tab" id="tournament-tab-settings" type="button" role="tab" aria-selected="false" aria-controls="tournament-panel-settings" data-tournament-tab="settings">Settings</button>
+      </div>
+
+      <section class="tournament-list-card" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries">
+        <div class="tournament-list-head">
+          <div>
+            <h2 id="tournament-list-heading">Entries</h2>
+            <p class="tournament-muted" id="tournament-list-sub">Review names before locking signups and picking participants.</p>
+          </div>
         </div>
-        <div class="field">
-          <label for="tournament-game">Game</label>
-          <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" />
+        <div class="tournament-entries" id="tournament-entries">
+          <div class="tournament-panel-empty" id="tournament-entries-empty" hidden></div>
+          <ul class="tournament-entry-list" id="tournament-entry-list" aria-label="Tournament entries"></ul>
         </div>
-        <div class="field">
-          <label for="tournament-format">Format</label>
-          <select id="tournament-format" name="format" class="v3-select">
-            <option value="bracket">Bracket</option>
-            <option value="1v1">1v1</option>
-            <option value="2v2">2v2 teams</option>
-          </select>
+      </section>
+
+      <section class="tournament-list-card" id="tournament-panel-bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket" hidden>
+        <div class="tournament-list-head">
+          <div>
+            <h2 id="tournament-bracket-heading">Bracket</h2>
+            <p class="tournament-muted">Enter scores for each match to advance the winner.</p>
+          </div>
         </div>
-        <div class="field">
-          <label for="tournament-entry-cap">Entry cap</label>
-          <input id="tournament-entry-cap" name="entryCap" type="number" min="1" placeholder="No limit" />
-          <span class="hint">Extra viewers wait when the cap is full.</span>
+        <div class="tournament-panel-empty" id="tournament-bracket-empty" hidden>
+          <b>Bracket not created yet.</b>
+          <span>Lock signups and select participants to generate the bracket.</span>
         </div>
-        <div class="field">
-          <label for="tournament-keyword">Chat command</label>
-          <input id="tournament-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" />
+        <div id="tournament-bracket" class="tournament-bracket"></div>
+        <p class="tournament-champion" id="tournament-champion" hidden></p>
+      </section>
+
+      <section class="tournament-list-card" id="tournament-panel-settings" role="tabpanel" aria-labelledby="tournament-tab-settings" hidden>
+        <div class="tournament-list-head">
+          <div>
+            <h2 id="tournament-settings-heading">Settings</h2>
+            <p class="tournament-muted">Basic details can change any time. Format and bracket size lock once they would invalidate entries or the bracket.</p>
+          </div>
         </div>
-        <div class="field tournament-toggle-field">
-          <label for="tournament-anti-alt">Flag likely duplicate accounts</label>
-          <input id="tournament-anti-alt" name="antiAltEnabled" type="checkbox" class="v3-toggle" />
-          <span class="hint">Flags are shown for you to review; they never reject someone automatically.</span>
+        <form id="tournament-settings-form" class="tournament-settings-grid">
+          <div class="field">
+            <label for="tournament-title">Tournament name</label>
+            <input id="tournament-title" name="title" type="text" placeholder="Community Tournament" maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="tournament-game">Game</label>
+            <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="tournament-keyword">Chat command</label>
+            <input id="tournament-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" />
+          </div>
+          <div class="field">
+            <label for="tournament-entry-cap">Signup limit</label>
+            <input id="tournament-entry-cap" name="entryCap" type="number" min="1" placeholder="Unlimited" inputmode="numeric" />
+            <span class="hint">How many viewers may register. Leave empty for unlimited. Separate from bracket size.</span>
+          </div>
+          <div class="field">
+            <label for="tournament-chat-channel">Kick channel</label>
+            <div class="gw-input-row">
+              <span class="gw-input-prefix">kick.com/</span>
+              <input id="tournament-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="tournament-format">Format</label>
+            <select id="tournament-format" name="format" class="v3-select">
+              <option value="bracket">Bracket</option>
+              <option value="1v1">1v1</option>
+              <option value="2v2">2v2 teams</option>
+            </select>
+            <span class="hint" id="tournament-format-hint" hidden></span>
+          </div>
+          <div class="field">
+            <label for="tournament-bracket-size">Bracket size</label>
+            <select id="tournament-bracket-size" name="bracketSize" class="v3-select">
+              <option value="4">4 players</option>
+              <option value="8">8 players</option>
+              <option value="16">16 players</option>
+              <option value="32">32 players</option>
+            </select>
+            <span class="hint" id="tournament-bracket-size-hint" hidden></span>
+          </div>
+          <details class="tournament-advanced" id="tournament-advanced">
+            <summary>Advanced settings</summary>
+            <div class="field tournament-toggle-field">
+              <label for="tournament-anti-alt">Flag likely duplicate accounts</label>
+              <input id="tournament-anti-alt" name="antiAltEnabled" type="checkbox" class="v3-toggle" />
+              <span class="hint">Flags are shown for you to review; they never reject someone automatically.</span>
+            </div>
+          </details>
+          <div class="tournament-settings-actions">
+            <button class="btn btn--accent" type="submit">Save settings</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal tournament-create-modal" id="tournament-create-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-create-heading" hidden>
+      <form class="modal-card tournament-create-card" id="tournament-create-form" novalidate>
+        <h3 id="tournament-create-heading">Create tournament</h3>
+        <div class="tournament-create-grid">
+          <div class="field">
+            <label for="tc-title">Tournament name</label>
+            <input id="tc-title" name="title" type="text" value="Community Tournament" maxlength="120" required />
+          </div>
+          <div class="field">
+            <label for="tc-game">Game</label>
+            <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" />
+          </div>
+          <div class="field">
+            <label for="tc-format">Format</label>
+            <select id="tc-format" name="format" class="v3-select">
+              <option value="bracket">Bracket</option>
+              <option value="1v1">1v1</option>
+              <option value="2v2">2v2 teams</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tc-bracket-size">Bracket size</label>
+            <select id="tc-bracket-size" name="bracketSize" class="v3-select">
+              <option value="4">4 players</option>
+              <option value="8" selected>8 players</option>
+              <option value="16">16 players</option>
+              <option value="32">32 players</option>
+            </select>
+            <span class="hint">How many participants play in the bracket.</span>
+          </div>
+          <div class="field">
+            <label for="tc-entry-cap">Signup limit</label>
+            <select id="tc-entry-cap" name="entryCapMode" class="v3-select">
+              <option value="" selected>Unlimited</option>
+              <option value="custom">Custom limit…</option>
+            </select>
+            <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" hidden />
+            <span class="hint">How many viewers may register. Participants are picked from the entries later.</span>
+          </div>
+          <div class="field">
+            <label for="tc-chat-channel">Kick channel</label>
+            <div class="gw-input-row">
+              <span class="gw-input-prefix">kick.com/</span>
+              <input id="tc-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="tc-keyword">Chat command</label>
+            <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" />
+          </div>
         </div>
-        <div class="tournament-settings-actions">
-          <button class="btn btn--ghost" type="submit">Save settings</button>
+        <p class="tournament-message is-error" id="tournament-create-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn--sm btn--ghost ghost" type="button" id="tournament-create-cancel">Cancel</button>
+          <button class="btn btn--sm btn--accent" type="submit" id="tournament-create-submit">Create tournament</button>
         </div>
       </form>
-    </details>
-
-    <section class="tournament-list-card" id="tournament-bracket-card" aria-labelledby="tournament-bracket-heading" hidden>
-      <div class="tournament-list-head">
-        <div>
-          <h2 id="tournament-bracket-heading">Bracket</h2>
-          <p class="tournament-muted">Enter scores for each match to advance the winner.</p>
-        </div>
-      </div>
-      <div id="tournament-bracket" class="tournament-bracket"></div>
-      <p class="tournament-champion" id="tournament-champion" hidden></p>
-    </section>
+    </div>
   </div>
 </div>
 
