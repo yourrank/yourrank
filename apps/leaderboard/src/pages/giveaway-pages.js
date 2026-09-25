@@ -573,10 +573,6 @@ ${tabs}
             <p class="tournament-step-label" id="tournament-step-label"></p>
           </div>
           <div class="tournament-primary-wrap">
-            <label class="tournament-pick-count" id="tournament-pick-count-wrap" hidden>
-              <span>Pick</span>
-              <select id="tournament-pick-count" class="v3-select" aria-label="Participants to pick"></select>
-            </label>
             <button class="btn btn--accent" id="tournament-primary" type="button" hidden></button>
             <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
             <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>New tournament</button>
@@ -663,7 +659,6 @@ ${tabs}
             <select id="tournament-format" name="format" class="v3-select">
               <option value="bracket">Bracket</option>
               <option value="1v1">1v1</option>
-              <option value="2v2">2v2 teams</option>
             </select>
             <span class="hint" id="tournament-format-hint" hidden></span>
           </div>
@@ -709,7 +704,6 @@ ${tabs}
             <select id="tc-format" name="format" class="v3-select">
               <option value="bracket">Bracket</option>
               <option value="1v1">1v1</option>
-              <option value="2v2">2v2 teams</option>
             </select>
           </div>
           <div class="field">

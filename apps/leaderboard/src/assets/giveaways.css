@@ -1264,21 +1264,6 @@
   color: var(--ws-text-soft, var(--ws-text-mute));
 }
 
-.tournament-pick-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ws-text-soft, var(--ws-text-mute));
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.tournament-pick-count select {
-  width: auto;
-  min-width: 72px;
-  padding: 8px;
-}
-
 .tournament-facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));

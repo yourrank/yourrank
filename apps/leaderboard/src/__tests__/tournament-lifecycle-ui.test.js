@@ -21,7 +21,7 @@ globalThis.localStorage = window.localStorage;
 window.matchMedia = (query) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
 globalThis.matchMedia = window.matchMedia;
 // Markup-hosted dialogs use YRDialog.trap; provide the contract without loading the asset.
-window.YRDialog = { trap: () => () => {} };
+window.YRDialog = { trap: () => () => {}, confirm: async () => true };
 
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
@@ -121,8 +121,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-panel-entries")).toBe(false);
     expect(visible("tournament-settings-form")).toBe(false);
     expect(visible("tournament-bracket")).toBe(false);
-    expect(visible("tournament-pick-count-wrap")).toBe(false);
-    expect(visible("tournament-chat-status")).toBe(false);
+      expect(visible("tournament-chat-status")).toBe(false);
     expect(visible("tournament-create-modal")).toBe(false);
   });
 
@@ -133,6 +132,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-empty")).toBe(true);
     const sizes = [...$id("tc-bracket-size").options].map((o) => Number(o.value));
     expect(sizes).toEqual([4, 8, 16, 32]);
+    expect([...$id("tc-format").options].map((o) => o.value)).toEqual(["bracket", "1v1"]);
     expect($id("tc-bracket-size").value).toBe("8");
     expect($id("tc-entry-cap").value).toBe("");
     expect($id("tc-title").value).toBe("Community Tournament");
@@ -170,7 +170,6 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-primary")).toBe("Open signups");
     expect($id("tournament-entries-empty").textContent).toContain("No entries yet.");
     expect($id("tournament-entries-empty").textContent).toContain("Open signups when you're ready for viewers to join.");
-    expect(visible("tournament-pick-count-wrap")).toBe(false);
   });
 
   it("sends a custom signup limit independently of the bracket size", async () => {
@@ -229,17 +228,15 @@ describe("tournament lifecycle UI", () => {
     expect(requestsTo("/api/tournaments/t-1/signups/open", "POST")).toHaveLength(1);
     expect(text("tournament-status")).toBe("Signups open");
     expect(text("tournament-primary")).toBe("Lock signups");
-    expect(visible("tournament-pick-count-wrap")).toBe(false);
 
     server.entries = Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, display_name: `viewer${i}`, source: "chat", status: "pending" }));
     await click("tournament-primary");
     expect(requestsTo("/api/tournaments/t-1/signups/lock", "POST")).toHaveLength(1);
     expect(text("tournament-status")).toBe("Signups locked");
     expect(text("tournament-primary")).toBe("Pick participants");
-    expect($id("tournament-primary").disabled).toBe(false);
-    expect(visible("tournament-pick-count-wrap")).toBe(true);
-    // Only supported sizes that fit both the bracket and the eligible entries.
-    expect([...$id("tournament-pick-count").options].map((o) => o.value)).toEqual(["4"]);
+    // The pick always fills the bracket: 5 eligible entries can't fill 8 spots.
+    expect($id("tournament-primary").disabled).toBe(true);
+    expect(text("tournament-step-label")).toBe("Need 3 more eligible players.");
     expect(text("tournament-count")).toBe("5");
     expect(text("tournament-fact-spots")).toBe("8");
     // Format is now locked because entries exist; bracket size is still open.
@@ -247,6 +244,16 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-format").disabled).toBe(true);
     expect(visible("tournament-format-hint")).toBe(true);
     expect($id("tournament-bracket-size").disabled).toBe(false);
+
+    server.entries = Array.from({ length: 8 }, (_, i) => ({ id: `e${i}`, display_name: `viewer${i}`, source: "chat", status: "pending" }));
+    await mod.boot();
+    expect(text("tournament-step-label")).toBe("8 eligible entries for 8 bracket spots. Picking is random.");
+    expect($id("tournament-primary").disabled).toBe(false);
+    // The real dialog.js may have replaced the stub; approve on whatever is live.
+    window.YRDialog.confirm = async () => true;
+    await click("tournament-primary");
+    const [pick] = requestsTo("/api/tournaments/t-1/entries/random-pick", "POST");
+    expect(pick.body).toEqual({ count: 8 });
   });
 
   it("refuses to open signups without a Kick channel and points to Settings", async () => {

@@ -38,6 +38,8 @@ const LIFECYCLE_LABELS = {
   cancelled: "Cancelled",
 };
 const ELIGIBLE = ["pending", "confirmed"];
+const isEligible = (entry, tourn) => ELIGIBLE.includes(entry.status)
+  && !(Number(tourn.entry_fee) === 0 && entry.alt_flag);
 const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
@@ -164,15 +166,6 @@ function renderEntries(lifecycle) {
   }).join("");
 }
 
-function renderPickOptions(eligibleCount) {
-  const select = $("tournament-pick-count");
-  if (!select) return [];
-  const sizes = SUPPORTED_BRACKET_SIZES.filter((size) => size <= tournament.bracket_size && size <= eligibleCount);
-  select.innerHTML = sizes.map((size) => `<option value="${size}">${size}</option>`).join("");
-  if (sizes.length) select.value = String(sizes[sizes.length - 1]);
-  return sizes;
-}
-
 function renderSummary(lifecycle, activeCount) {
   $("tournament-title-display").textContent = tournament.title || "Community Tournament";
   const chip = $("tournament-status");
@@ -197,6 +190,9 @@ function renderSettingsForm(lifecycle) {
 
   const format = $("tournament-format");
   const formatHint = $("tournament-format-hint");
+  if (tournament.format === "2v2" && ![...format.options].some((option) => option.value === "2v2")) {
+    format.insertAdjacentHTML("beforeend", '<option value="2v2">2v2 teams</option>');
+  }
   format.value = tournament.format || "bracket";
   const formatLocked = lifecycle !== "draft" || entries.length > 0;
   format.disabled = formatLocked;
@@ -220,13 +216,11 @@ function renderSettingsForm(lifecycle) {
 
 function renderPrimary(lifecycle, eligibleCount) {
   const primary = $("tournament-primary");
-  const pickWrap = $("tournament-pick-count-wrap");
   const reopen = $("tournament-reopen");
   const fresh = $("tournament-new");
   const step = $("tournament-step-label");
   primary.hidden = true;
   primary.disabled = false;
-  pickWrap.hidden = true;
   reopen.hidden = true;
   fresh.hidden = true;
   step.textContent = "";
@@ -243,16 +237,15 @@ function renderPrimary(lifecycle, eligibleCount) {
     primary.dataset.action = "lock";
     step.textContent = `Viewers join by typing ${tournament.entry_keyword || "!join"} in chat.`;
   } else if (lifecycle === "signups_locked") {
-    const sizes = renderPickOptions(eligibleCount);
-    pickWrap.hidden = sizes.length === 0;
+    const missing = tournament.bracket_size - eligibleCount;
     primary.hidden = false;
     primary.textContent = "Pick participants";
     primary.dataset.action = "pick";
-    primary.disabled = sizes.length === 0;
+    primary.disabled = missing > 0;
     reopen.hidden = false;
-    step.textContent = sizes.length
-      ? `${eligibleCount} eligible entries for ${tournament.bracket_size} bracket spots. Picking is random.`
-      : `Need at least ${SUPPORTED_BRACKET_SIZES[0]} eligible entries to pick participants.`;
+    step.textContent = missing > 0
+      ? `Need ${missing} more eligible ${missing === 1 ? "player" : "players"}.`
+      : `${eligibleCount} eligible entries for ${tournament.bracket_size} bracket spots. Picking is random.`;
   } else if (lifecycle === "bracket") {
     step.textContent = "Enter match results in the Bracket tab to advance winners.";
   } else if (lifecycle === "completed") {
@@ -277,7 +270,7 @@ function renderTournament() {
   workspace.hidden = false;
   const lifecycle = lifecycleOf(tournament, matches.length);
   const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
-  const eligibleCount = entries.filter((entry) => ELIGIBLE.includes(entry.status)).length;
+  const eligibleCount = entries.filter((entry) => isEligible(entry, tournament)).length;
   renderSummary(lifecycle, activeCount);
   renderPrimary(lifecycle, eligibleCount);
   renderEntries(lifecycle);
@@ -352,7 +345,7 @@ export function readCreateForm() {
     return { error: `Bracket size must be one of ${SUPPORTED_BRACKET_SIZES.join(", ")}.` };
   }
   const format = $("tc-format").value;
-  if (!Object.prototype.hasOwnProperty.call(FORMAT_LABELS, format)) return { error: "Choose a supported format." };
+  if (!["bracket", "1v1"].includes(format)) return { error: "Choose a supported format." };
   let entryCap = null;
   if ($("tc-entry-cap").value === "custom") {
     entryCap = parseInt($("tc-entry-cap-custom").value, 10);
@@ -509,8 +502,7 @@ async function handlePrimary() {
     return loadTournament();
   }
   if (action === "pick") {
-    const count = parseInt($("tournament-pick-count").value, 10);
-    if (!SUPPORTED_BRACKET_SIZES.includes(count)) return;
+    const count = tournament.bracket_size;
     if (!await showConfirmModal("Pick participants", `Randomly pick ${count} entries and create the bracket? This cannot be undone.`, "Pick and create bracket", true)) return;
     await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/random-pick`, {
       method: "POST",
