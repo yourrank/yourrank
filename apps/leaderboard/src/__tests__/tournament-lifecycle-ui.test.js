@@ -8,6 +8,7 @@ import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
+import { clearSession } from "../assets/dashboard/session.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments?siteId=site-1" });
 const { document } = window;
@@ -112,6 +113,10 @@ afterAll(() => {
 describe("tournament lifecycle UI", () => {
   beforeEach(async () => {
     reset();
+    site.kickChannelName = "";
+    // getSites() caches the parsed site list for the session; drop it so a
+    // per-test kickChannelName is picked up by the next boot.
+    clearSession();
     // A previous test may leave the create modal open with its focus trap
     // installed; close it so focus assertions aren't redirected into the modal.
     const modal = $id("tournament-create-modal");
@@ -277,8 +282,40 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-step-label").textContent).toContain("Kick channel required");
     await click("tournament-primary");
     expect(requestsTo("/api/tournaments/t-1/signups/open", "POST")).toHaveLength(0);
+    expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(0);
     expect(visible("tournament-panel-settings")).toBe(true);
+    expect($id("tournament-chat-channel").value).toBe("");
+    expect($id("tournament-chat-channel").placeholder).toBe("channelname");
     expect(document.activeElement?.id).toBe("tournament-chat-channel");
+  });
+
+  it("offers the connected site channel without presenting it as saved", async () => {
+    site.kickChannelName = "36-ates";
+    clearSession();
+    reset({ tournaments: [{ ...base, chat_channel: null }] });
+    await mod.boot();
+    // The site channel is only a suggestion: nothing is stored yet.
+    expect(text("tournament-fact-channel")).toBe("—");
+    expect($id("tournament-chat-channel").value).toBe("");
+    expect($id("tournament-chat-channel").placeholder).toBe("36-ates");
+    expect($id("tournament-settings-bar").hidden).toBe(true);
+    expect(text("tournament-primary")).toBe("Use 36-ates");
+    await click("tournament-primary");
+    const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
+    expect(req.body).toEqual({ chatChannel: "36-ates" });
+    expect(text("tournament-fact-channel")).toBe("36-ates");
+    expect(text("tournament-primary")).toBe("Open signups");
+  });
+
+  it("prefers the stored tournament channel over the site channel", async () => {
+    site.kickChannelName = "other-channel";
+    clearSession();
+    reset({ tournaments: [{ ...base, chat_channel: "saved-channel" }] });
+    await mod.boot();
+    expect(text("tournament-fact-channel")).toBe("saved-channel");
+    expect($id("tournament-chat-channel").value).toBe("saved-channel");
+    expect(text("tournament-primary")).toBe("Open signups");
+    expect(JSON.stringify(server.requests)).not.toContain("other-channel");
   });
 
   it("offers Open signups directly when the draft has a Kick channel", async () => {

@@ -190,7 +190,11 @@ function renderSettingsForm(lifecycle) {
   const cap = $("tournament-entry-cap");
   cap.value = tournament.entry_cap || "";
   cap.hidden = !tournament.entry_cap;
-  $("tournament-chat-channel").value = tournament.chat_channel || board.kickChannelName || "";
+  const channel = $("tournament-chat-channel");
+  channel.value = tournament.chat_channel || "";
+  channel.placeholder = tournament.chat_channel || !String(board.kickChannelName || "").trim()
+    ? "channelname"
+    : board.kickChannelName;
   $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
 
   const size = $("tournament-bracket-size");
@@ -228,9 +232,16 @@ function renderPrimary(lifecycle, eligibleCount) {
   if (lifecycle === "draft") {
     primary.hidden = false;
     if (!String(tournament.chat_channel || "").trim()) {
-      primary.textContent = "Add Kick channel";
-      primary.dataset.action = "add-channel";
-      step.innerHTML = "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
+      const siteChannel = String(board.kickChannelName || "").trim();
+      if (siteChannel) {
+        primary.textContent = `Use ${siteChannel}`;
+        primary.dataset.action = "use-site-channel";
+        step.innerHTML = "<b>Kick channel required.</b> Use your connected Kick channel to open signups.";
+      } else {
+        primary.textContent = "Add Kick channel";
+        primary.dataset.action = "add-channel";
+        step.innerHTML = "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
+      }
     } else {
       primary.textContent = "Open signups";
       primary.dataset.action = "open";
@@ -500,6 +511,15 @@ async function handlePrimary() {
   if (action === "add-channel") {
     switchTab("settings");
     $("tournament-chat-channel")?.focus();
+    return;
+  }
+  if (action === "use-site-channel") {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
+      method: "POST",
+      body: JSON.stringify({ chatChannel: board.kickChannelName }),
+    });
+    setMessage("");
+    await loadTournament();
     return;
   }
   if (action === "open") return openSignups();
