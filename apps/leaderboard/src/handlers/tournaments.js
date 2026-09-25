@@ -348,7 +348,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     );
     const hasEntries = (usage?.entries || 0) > 0 || access.tournament.signup_state !== "closed";
     const hasBracket = (usage?.matches || 0) > 0
-      || ["active", "completed", "cancelled"].includes(access.tournament.status);
+      || ["completed", "cancelled"].includes(access.tournament.status);
     if (wantsFormat && body.format !== access.tournament.format && (hasEntries || hasBracket)) {
       return bad("Format is locked once signups have opened or entries exist.", 409);
     }

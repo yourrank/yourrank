@@ -14,7 +14,6 @@ const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 
 // Mirrors the server: tournaments.bracket_size CHECK and SUPPORTED_BRACKET_SIZES.
 export const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
-const FORMAT_LABELS = { bracket: "Bracket", "1v1": "1v1", "2v2": "2v2 teams" };
 const SOURCE_LABELS = {
   chat: "Chat",
   page: "Signup page",
@@ -55,6 +54,8 @@ let entriesRefreshTimer = null;
 let entriesRefreshRunning = false;
 let entriesRefreshQueued = false;
 let releaseCreateTrap = null;
+let settingsBaseline = "";
+let settingsSavedTimer = null;
 
 function apiPath(path) {
   return siteId ? `${path}${path.includes("?") ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : path;
@@ -171,7 +172,7 @@ function renderSummary(lifecycle, activeCount) {
   const chip = $("tournament-status");
   chip.textContent = LIFECYCLE_LABELS[lifecycle] || lifecycle;
   chip.dataset.lifecycle = lifecycle;
-  const bits = [tournament.game_name || "Game", FORMAT_LABELS[tournament.format] || tournament.format, `${tournament.bracket_size}-player bracket`];
+  const bits = [tournament.game_name || "Game", `${tournament.bracket_size}-player bracket`];
   $("tournament-meta").textContent = bits.join(" · ");
   $("tournament-fact-channel").textContent = tournament.chat_channel || "—";
   $("tournament-fact-keyword").textContent = tournament.entry_keyword || "!join";
@@ -184,20 +185,12 @@ function renderSettingsForm(lifecycle) {
   $("tournament-title").value = tournament.title || "";
   $("tournament-game").value = tournament.game_name || "";
   $("tournament-keyword").value = tournament.entry_keyword || "!join";
-  $("tournament-entry-cap").value = tournament.entry_cap || "";
+  $("tournament-entry-cap-mode").value = tournament.entry_cap ? "custom" : "";
+  const cap = $("tournament-entry-cap");
+  cap.value = tournament.entry_cap || "";
+  cap.hidden = !tournament.entry_cap;
   $("tournament-chat-channel").value = tournament.chat_channel || board.kickChannelName || "";
   $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-
-  const format = $("tournament-format");
-  const formatHint = $("tournament-format-hint");
-  if (tournament.format === "2v2" && ![...format.options].some((option) => option.value === "2v2")) {
-    format.insertAdjacentHTML("beforeend", '<option value="2v2">2v2 teams</option>');
-  }
-  format.value = tournament.format || "bracket";
-  const formatLocked = lifecycle !== "draft" || entries.length > 0;
-  format.disabled = formatLocked;
-  formatHint.hidden = !formatLocked;
-  formatHint.textContent = formatLocked ? "Format is locked: changing it now would invalidate existing entries or the bracket." : "";
 
   const size = $("tournament-bracket-size");
   const sizeHint = $("tournament-bracket-size-hint");
@@ -209,9 +202,12 @@ function renderSettingsForm(lifecycle) {
 
   const finished = lifecycle === "completed" || lifecycle === "cancelled";
   for (const el of $("tournament-settings-form").querySelectorAll("input, button")) {
-    if (el.id === "tournament-format" || el.id === "tournament-bracket-size") continue;
+    if (el.id === "tournament-bracket-size") continue;
     el.disabled = finished;
   }
+
+  settingsBaseline = settingsSnapshot();
+  updateDirty();
 }
 
 function renderPrimary(lifecycle, eligibleCount) {
@@ -228,9 +224,15 @@ function renderPrimary(lifecycle, eligibleCount) {
 
   if (lifecycle === "draft") {
     primary.hidden = false;
-    primary.textContent = "Open signups";
-    primary.dataset.action = "open";
-    step.textContent = "Open signups when you're ready for viewers to join.";
+    if (!String(tournament.chat_channel || "").trim()) {
+      primary.textContent = "Add Kick channel";
+      primary.dataset.action = "add-channel";
+      step.innerHTML = "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
+    } else {
+      primary.textContent = "Open signups";
+      primary.dataset.action = "open";
+      step.textContent = "Open signups when you're ready for viewers to join.";
+    }
   } else if (lifecycle === "signups_open") {
     primary.hidden = false;
     primary.textContent = "Lock signups";
@@ -344,8 +346,6 @@ export function readCreateForm() {
   if (!SUPPORTED_BRACKET_SIZES.includes(bracketSize)) {
     return { error: `Bracket size must be one of ${SUPPORTED_BRACKET_SIZES.join(", ")}.` };
   }
-  const format = $("tc-format").value;
-  if (!["bracket", "1v1"].includes(format)) return { error: "Choose a supported format." };
   let entryCap = null;
   if ($("tc-entry-cap").value === "custom") {
     entryCap = parseInt($("tc-entry-cap-custom").value, 10);
@@ -356,7 +356,6 @@ export function readCreateForm() {
       siteId,
       title: $("tc-title").value.trim() || "Community Tournament",
       gameName: $("tc-game").value.trim() || "Game",
-      format,
       bracketSize,
       entryCap,
       chatChannel: $("tc-chat-channel").value.trim(),
@@ -495,6 +494,11 @@ async function openSignups() {
 async function handlePrimary() {
   if (!tournament) return openCreateModal();
   const action = $("tournament-primary").dataset.action;
+  if (action === "add-channel") {
+    switchTab("settings");
+    $("tournament-chat-channel")?.focus();
+    return;
+  }
   if (action === "open") return openSignups();
   if (action === "lock") {
     await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/lock`, { method: "POST", body: "{}" });
@@ -613,31 +617,89 @@ async function submitScore(matchId, target) {
 
 // ---- Settings ------------------------------------------------------------
 
+function setFieldError(inputId, message = "") {
+  const el = $(`${inputId}-error`);
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = !message;
+  el.closest(".field")?.classList.toggle("has-error", Boolean(message));
+}
+
+function clearFieldErrors() {
+  const form = $("tournament-settings-form");
+  if (!form) return;
+  for (const el of form.querySelectorAll(".field-error")) {
+    el.textContent = "";
+    el.hidden = true;
+    el.closest(".field")?.classList.remove("has-error");
+  }
+}
+
+function settingsSnapshot() {
+  return JSON.stringify({
+    title: $("tournament-title").value,
+    game: $("tournament-game").value,
+    keyword: $("tournament-keyword").value,
+    capMode: $("tournament-entry-cap-mode").value,
+    cap: $("tournament-entry-cap").value,
+    channel: $("tournament-chat-channel").value,
+    antiAlt: $("tournament-anti-alt").checked,
+    bracketSize: $("tournament-bracket-size").value,
+  });
+}
+
+function updateDirty() {
+  const bar = $("tournament-settings-bar");
+  if (bar) bar.hidden = settingsSnapshot() === settingsBaseline;
+}
+
 async function saveSettings(event) {
   event.preventDefault();
+  clearFieldErrors();
+  const capMode = $("tournament-entry-cap-mode").value;
+  let entryCap = null;
+  if (capMode === "custom") {
+    entryCap = parseInt($("tournament-entry-cap").value, 10);
+    if (!Number.isInteger(entryCap) || entryCap < 1) {
+      setFieldError("tournament-entry-cap", "Enter a signup limit of at least 1, or choose Unlimited.");
+      return;
+    }
+  }
   const body = {
     title: $("tournament-title").value.trim(),
     gameName: $("tournament-game").value.trim(),
-    entryCap: $("tournament-entry-cap").value,
+    entryCap,
     entryKeyword: $("tournament-keyword").value.trim() || "!join",
     antiAltEnabled: $("tournament-anti-alt").checked,
     chatChannel: $("tournament-chat-channel").value.trim(),
   };
   // Locked fields are disabled in the form and never sent, so the server
   // never has to refuse a change the UI already explained.
-  if (!$("tournament-format").disabled) body.format = $("tournament-format").value;
   if (!$("tournament-bracket-size").disabled) body.bracketSize = parseInt($("tournament-bracket-size").value, 10);
-  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    const m = error.message || "";
+    if (/bracket size/i.test(m)) setFieldError("tournament-bracket-size", m);
+    else if (/signup limit|entry cap|entryCap/i.test(m)) setFieldError("tournament-entry-cap", m);
+    else setMessage(m || "Could not save settings.", true);
+    return;
+  }
   const wasOpen = tournament.signup_state === "open";
   await loadTournament();
   if (wasOpen && tournament.signup_state === "open") {
     stopChat();
     await startChat();
   }
-  setMessage("Settings saved.");
+  const saved = $("tournament-settings-saved");
+  if (saved) {
+    saved.hidden = false;
+    clearTimeout(settingsSavedTimer);
+    settingsSavedTimer = setTimeout(() => { saved.hidden = true; }, 2500);
+  }
 }
 
 // ---- Boot ----------------------------------------------------------------
@@ -669,15 +731,26 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
-  if (event.target.id !== "tc-entry-cap") return;
-  const custom = $("tc-entry-cap-custom");
-  custom.hidden = event.target.value !== "custom";
-  if (!custom.hidden) custom.focus();
+  if (event.target.id === "tc-entry-cap") {
+    const custom = $("tc-entry-cap-custom");
+    custom.hidden = event.target.value !== "custom";
+    if (!custom.hidden) custom.focus();
+  }
+  if (event.target.id === "tournament-entry-cap-mode") {
+    const cap = $("tournament-entry-cap");
+    cap.hidden = event.target.value !== "custom";
+    if (!cap.hidden) cap.focus();
+  }
+  if (event.target.closest?.("#tournament-settings-form")) updateDirty();
+});
+
+document.addEventListener("input", (event) => {
+  if (event.target.closest?.("#tournament-settings-form")) updateDirty();
 });
 
 document.addEventListener("click", async (event) => {
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, [data-tournament-tab], [data-entry-action], [data-score-match]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, [data-tournament-tab], [data-entry-action], [data-score-match]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -692,6 +765,10 @@ document.addEventListener("click", async (event) => {
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
+    if (target.id === "tournament-settings-discard") {
+      renderSettingsForm(lifecycleOf(tournament, matches.length));
+      return clearFieldErrors();
+    }
     if (target.id === "tournament-primary") return await handlePrimary();
   } catch (error) {
     setMessage(error.message || "Action failed.", true);

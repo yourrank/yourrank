@@ -623,4 +623,44 @@ describe("tournament lifecycle foundation", () => {
     );
     expect(unsupportedResponse.status).toBe(400);
   });
+
+  it("treats legacy active/no-bracket tournaments as unlocked for bracket size and format", async () => {
+    // Legacy rows predate the draft state: status='active' with signups closed
+    // and zero matches never had a bracket, so neither field may be locked.
+    const legacy = { ...TOURNAMENT, status: "active", signup_state: "closed", bracket_size: 8, format: "bracket" };
+
+    const resized = deps({ oneValues: [legacy, { entries: 0, matches: 0 }, { ...legacy, bracket_size: 16 }] });
+    const resizedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 16 }),
+      {},
+      resized
+    );
+    expect(resizedResponse.status).toBe(200);
+    const [resizeSql] = resized._mocks.one.mock.calls[3];
+    expect(resizeSql.split("RETURNING")[0]).toContain("bracket_size");
+
+    const reformatted = deps({ oneValues: [legacy, { entries: 0, matches: 0 }, { ...legacy, format: "1v1" }] });
+    const formatResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { format: "1v1" }),
+      {},
+      reformatted
+    );
+    expect(formatResponse.status).toBe(200);
+
+    const withMatches = deps({ oneValues: [legacy, { entries: 8, matches: 7 }] });
+    const matchedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 16 }),
+      {},
+      withMatches
+    );
+    expect(matchedResponse.status).toBe(409);
+
+    const finished = deps({ oneValues: [{ ...legacy, status: "completed" }, { entries: 0, matches: 0 }] });
+    const finishedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 16 }),
+      {},
+      finished
+    );
+    expect(finishedResponse.status).toBe(409);
+  });
 });
