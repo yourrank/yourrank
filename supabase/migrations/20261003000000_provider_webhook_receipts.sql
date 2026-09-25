@@ -25,12 +25,25 @@ CREATE TABLE IF NOT EXISTS tournament_open_signups (
   opened_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Backfill: the newest currently-open tournament per site claims the row.
+-- Backfill: the newest currently-open tournament per site becomes the holder;
+-- every other open tournament on that site is locked by the normalization
+-- below.
 INSERT INTO tournament_open_signups (site_id, tournament_id)
 SELECT DISTINCT ON (site_id) site_id, id FROM tournaments
  WHERE signup_state = 'open' AND status NOT IN ('completed','cancelled')
  ORDER BY site_id, created_at DESC
 ON CONFLICT DO NOTHING;
+
+-- Normalize legacy rows: any open tournament that is not its site's holder
+-- can no longer receive chat signups, so it becomes locked. Completed and
+-- cancelled tournaments are untouched.
+UPDATE tournaments t
+   SET signup_state = 'locked', updated_at = now()
+ WHERE t.signup_state = 'open'
+   AND t.status NOT IN ('completed','cancelled')
+   AND NOT EXISTS (
+     SELECT 1 FROM tournament_open_signups l WHERE l.tournament_id = t.id
+   );
 
 -- RLS + service_role-only policy for provider_webhook_receipts and
 -- tournament_open_signups must ship in a later contract-phase migration; the
