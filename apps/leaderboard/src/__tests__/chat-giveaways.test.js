@@ -60,11 +60,13 @@ const chatPayload = (content, sender = { user_id: 222, username: "viewer" }) => 
 describe("Kick webhook: chat.message.sent", () => {
   it("passes a validly signed chat event to the chat-giveaway ingest", async () => {
     const seen = [];
+    const tournamentOutcome = { routed: false, matched: false, entered: false, duplicate: false, rejected: null, tournamentId: null };
     const res = await handleKickWebhook(await signedRequest("chat.message.sent", chatPayload("!win")), { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem }, {
       ingestChatMessage: async (payload) => { seen.push(payload); return { routed: true, matched: true, entered: true }; },
+      ingestTournamentMessage: async () => tournamentOutcome,
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, chat: { routed: true, matched: true, entered: true } });
+    expect(await res.json()).toEqual({ ok: true, chat: { routed: true, matched: true, entered: true }, tournament: tournamentOutcome });
     expect(seen).toHaveLength(1);
     expect(seen[0].broadcaster.user_id).toBe(111);
     expect(seen[0].content).toBe("!win");

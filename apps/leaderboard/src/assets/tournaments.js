@@ -1,6 +1,6 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
 import { ensureDialog, showConfirmModal } from "./dashboard/utils.js";
-import { computeTrustScore, connectKickChat } from "./chat-entry.js";
+import { connectKickChat } from "./chat-entry.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -48,8 +48,8 @@ let entries = [];
 let matches = [];
 let activeTab = "entries";
 let chatConnection = null;
-let chatHistory = new Map();
-let recentEntryTimestamps = [];
+let chatRegistration = null;
+let entriesPollTimer = null;
 let entriesRefreshTimer = null;
 let entriesRefreshRunning = false;
 let entriesRefreshQueued = false;
@@ -108,7 +108,33 @@ function setMessage(text = "", error = false) {
 function stopChat() {
   chatConnection?.close();
   chatConnection = null;
-  setChatStatus("Chat off");
+}
+
+// Chat registration is server-side (the Kick webhook), so the status reflects
+// the stored channel/connection state — never the browser socket.
+function updateChatStatus(lifecycle) {
+  const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
+  const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
+  if (lifecycle === "signups_open"
+      && chatRegistration?.connected && chatRegistration.chatReady && channel && channel === siteChannel) {
+    setChatStatus("Chat registration active", true);
+  } else if (lifecycle === "signups_open") {
+    setChatStatus("Chat registration unavailable");
+  } else {
+    setChatStatus("Chat registration off");
+  }
+}
+
+// Entries are created by the webhook; poll so they appear without the socket.
+function updateEntriesPolling(lifecycle) {
+  if (lifecycle === "signups_open") {
+    if (!entriesPollTimer) {
+      entriesPollTimer = setInterval(() => { refreshEntriesSoon(); }, 15000);
+    }
+  } else if (entriesPollTimer) {
+    clearInterval(entriesPollTimer);
+    entriesPollTimer = null;
+  }
 }
 
 function switchTab(name) {
@@ -285,6 +311,8 @@ function renderTournament() {
   empty.hidden = true;
   workspace.hidden = false;
   const lifecycle = lifecycleOf(tournament, matches.length);
+  updateChatStatus(lifecycle);
+  updateEntriesPolling(lifecycle);
   const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
   const eligibleCount = entries.filter((entry) => isEligible(entry, tournament)).length;
   renderSummary(lifecycle, activeCount);
@@ -310,6 +338,7 @@ async function loadEntries() {
 
 async function loadTournament() {
   const data = await api("/api/tournaments");
+  chatRegistration = data.chatRegistration || null;
   const tournaments = data.tournaments || [];
   // Prefer an unfinished tournament, but keep a completed/cancelled one visible
   // so the bracket and champion survive reload/back navigation.
@@ -404,7 +433,11 @@ async function submitCreate(event) {
   }
 }
 
-// ---- Chat ingestion (unchanged behaviour) --------------------------------
+// ---- Live entries refresh -----------------------------------------------
+//
+// Entries are created server-side by the Kick chat webhook; the socket below
+// is only a low-latency hint to refetch, and the 15s poll above is the
+// fallback when the socket is unavailable.
 
 async function refreshEntriesSoon() {
   entriesRefreshQueued = true;
@@ -428,63 +461,27 @@ async function refreshEntriesSoon() {
 async function startChat() {
   if (!tournament || tournament.signup_state !== "open" || chatConnection) return;
   const channel = String(tournament.chat_channel || "").trim();
-  if (!channel) {
-    setMessage("Add your Kick channel before opening signups.", true);
-    return;
-  }
-  setChatStatus("Connecting…");
+  if (!channel) return;
   try {
     const response = await fetch(`/api/giveaways/chatroom?channel=${encodeURIComponent(channel)}`);
     const data = await response.json();
     if (!response.ok || !data.chatroomId) throw new Error(data.error || "Could not find that Kick channel.");
     chatConnection = connectKickChat({
       chatroomId: data.chatroomId,
-      onOpen: () => setChatStatus("Chat listening", true),
-      onError: () => setChatStatus("Chat connection error"),
-      onClose: () => {
-        chatConnection = null;
-        setChatStatus("Chat off");
-      },
+      onError: () => { chatConnection = null; },
+      onClose: () => { chatConnection = null; },
       onMessage: handleChatMessage,
     });
   } catch {
-    setChatStatus("Chat unavailable");
+    chatConnection = null;
   }
 }
 
-async function handleChatMessage(chatData) {
-  const sender = chatData?.sender;
+function handleChatMessage(chatData) {
   const content = String(chatData?.content || "").trim();
-  if (!sender || !content) return;
-  const username = String(sender.username || sender.slug || "Anonymous").trim();
+  if (!content) return;
   const keyword = String(tournament?.entry_keyword || "!join").toLowerCase();
-  if (content.split(/\s+/)[0].toLowerCase() !== keyword) return;
-  const now = Date.now();
-  const nameKey = username.toLowerCase();
-  chatHistory.set(nameKey, (chatHistory.get(nameKey) || 0) + 1);
-  recentEntryTimestamps.push(now);
-  if (recentEntryTimestamps.length > 50) recentEntryTimestamps.shift();
-  const score = computeTrustScore(username, content, now, {
-    chatHistory,
-    recentEntryTimestamps,
-  });
-  try {
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`, {
-      method: "POST",
-      body: JSON.stringify({
-        displayName: username,
-        source: "chat",
-        trustScore: score.trustScore,
-        altFlag: tournament.anti_alt_enabled ? score.sybilFlag : false,
-        altReason: score.altReason,
-      }),
-    });
-    refreshEntriesSoon();
-  } catch (error) {
-    if (!String(error.message).toLowerCase().includes("blocked")) {
-      setMessage(error.message || "Could not add that entry.", true);
-    }
-  }
+  if (content.split(/\s+/)[0].toLowerCase() === keyword) refreshEntriesSoon();
 }
 
 // ---- Lifecycle actions ---------------------------------------------------
@@ -499,7 +496,12 @@ function requireChatChannel() {
 
 async function openSignups() {
   if (!tournament || !requireChatChannel()) return;
-  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/open`, { method: "POST", body: "{}" });
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/open`, { method: "POST", body: "{}" });
+  } catch (error) {
+    setMessage(error.message || "Could not open signups.", true);
+    return;
+  }
   setMessage("");
   await loadTournament();
   return startChat();

@@ -10,6 +10,7 @@ import {
   kickChatMessageToIngestInput,
 } from "@yourrank/shared/chat-giveaways";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
+import { ingestTournamentChatMessage } from "./tournaments.js";
 import {
   verifyKickWebhookSignature,
   isCreditableKickStatus,
@@ -32,7 +33,11 @@ async function ingestKickChatMessage(payload) {
   return ingestChatGiveawayMessage((sql, params) => query(sql, params), kickChatMessageToIngestInput(payload));
 }
 
-export async function handleKickWebhook(request, env, { ingestChatMessage = ingestKickChatMessage } = {}) {
+export async function handleKickWebhook(
+  request,
+  env,
+  { ingestChatMessage = ingestKickChatMessage, ingestTournamentMessage = ingestTournamentChatMessage } = {},
+) {
   const rawBody = await request.text();
   const messageId = request.headers.get("Kick-Event-Message-Id");
   const timestamp = request.headers.get("Kick-Event-Message-Timestamp");
@@ -79,7 +84,8 @@ export async function handleKickWebhook(request, env, { ingestChatMessage = inge
   if (eventType === KICK_CHAT_MESSAGE_EVENT) {
     try {
       const outcome = await ingestChatMessage(payload, env);
-      return json({ ok: true, chat: outcome });
+      const tournamentOutcome = await ingestTournamentMessage(payload, env);
+      return json({ ok: true, chat: outcome, tournament: tournamentOutcome });
     } catch (err) {
       console.error("[kick-webhook] chat ingest failed:", err?.message || err);
       return bad("Chat event processing failed", 500);
