@@ -64,9 +64,10 @@ describe("Kick webhook: chat.message.sent", () => {
     const res = await handleKickWebhook(await signedRequest("chat.message.sent", chatPayload("!win")), { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem }, {
       ingestChatMessage: async (payload) => { seen.push(payload); return { routed: true, matched: true, entered: true }; },
       ingestTournamentMessage: async () => tournamentOutcome,
+      withTransaction: async (fn) => fn({ one: async () => ({ message_id: "m-1" }), unsafe: async () => [] }),
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, chat: { routed: true, matched: true, entered: true }, tournament: tournamentOutcome });
+    expect(await res.json()).toEqual({ ok: true, duplicate: false, chat: { routed: true, matched: true, entered: true }, tournament: tournamentOutcome });
     expect(seen).toHaveLength(1);
     expect(seen[0].broadcaster.user_id).toBe(111);
     expect(seen[0].content).toBe("!win");

@@ -4,6 +4,7 @@ import {
   handleBlockTournamentEntry,
   handleCreateTournament,
   handleOpenTournamentSignups,
+  handleLockTournamentSignups,
   handleRandomPickTournamentEntries,
   handleListTournamentEntries,
   handleRemoveTournamentEntry,
@@ -55,10 +56,32 @@ function deps({ oneValues = [], queryValues = [], txOneValues = [], txQueryValue
 }
 
 describe("tournament entry lifecycle", () => {
+  // Answers the transaction reads updateSignupState makes for the open path:
+  // lock-holder FOR UPDATE, legacy-open scan, lock INSERT, state UPDATE; and
+  // DELETE + UPDATE for the lock path.
+  function signupTx({ holder = null, other = null, lock = { site_id: "site-1" } } = {}) {
+    const calls = [];
+    const tx = {
+      one: mock(async (sql, params) => {
+        const text = String(sql);
+        calls.push(text);
+        if (text.includes("tournament_open_signups") && text.includes("FOR UPDATE")) return holder;
+        if (text.includes("DELETE FROM tournament_open_signups")) return { site_id: params[0] };
+        if (text.includes("INSERT INTO tournament_open_signups")) return lock;
+        if (text.includes("id<>")) return other;
+        if (text.includes("UPDATE tournaments")) return { id: params[1], signup_state: params[0] };
+        return undefined;
+      }),
+      query: mock(async () => []),
+      unsafe: mock(async () => []),
+    };
+    return { tx, calls };
+  }
+
   it("opens signups and records the state transition", async () => {
-    const d = deps({
-      oneValues: [TOURNAMENT, { id: TOURNAMENT.id, signup_state: "open" }],
-    });
+    const { tx } = signupTx();
+    const d = deps({ oneValues: [TOURNAMENT] });
+    d.withTransaction = mock(async (fn) => fn(tx));
     d.loadChatGiveawayConnection = mock(async () => ({
       connected: true, chatReady: true, channelName: "streamerchannel", externalChannelId: "111",
     }));
@@ -70,6 +93,79 @@ describe("tournament entry lifecycle", () => {
     expect((await response.json()).tournament.signup_state).toBe("open");
     expect(d.requireSiteCapabilityImpl).toHaveBeenCalled();
     expect(d.reconcileKickWebhookDelivery).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows only one open tournament per site", async () => {
+    const open = () => request("/api/tournaments/tournament-1/signups/open");
+    const openDeps = (tx) => {
+      const d = deps({ oneValues: [TOURNAMENT] });
+      d.withTransaction = mock(async (fn) => fn(tx));
+      d.loadChatGiveawayConnection = mock(async () => ({
+        connected: true, chatReady: true, channelName: "streamerchannel", externalChannelId: "111",
+      }));
+      d.reconcileKickWebhookDelivery = mock(async () => ({
+        status: "ok", subscriptions: { rewardEvents: true, chatEvents: true }, failedEvents: [],
+      }));
+      return d;
+    };
+
+    // Another tournament already holds the open row.
+    const held = signupTx({ holder: { tournament_id: "tournament-a", signup_state: "open", status: "active" } });
+    const heldResponse = await handleOpenTournamentSignups(open(), {}, openDeps(held.tx));
+    expect(heldResponse.status).toBe(409);
+    expect((await heldResponse.json()).error).toBe(
+      "Another tournament already has open signups. Lock or finish it before opening this one."
+    );
+    expect(held.calls.some((sql) => sql.includes("SET signup_state"))).toBe(false);
+
+    // A legacy open tournament without a lock row is also a conflict.
+    const legacy = signupTx({ other: { id: "tournament-b" } });
+    const legacyResponse = await handleOpenTournamentSignups(open(), {}, openDeps(legacy.tx));
+    expect(legacyResponse.status).toBe(409);
+
+    // Two opens race for the lock row: the claim decides, one wins.
+    const won = signupTx();
+    const lost = signupTx({ lock: null });
+    const [wonResponse, lostResponse] = await Promise.all([
+      handleOpenTournamentSignups(open(), {}, openDeps(won.tx)),
+      handleOpenTournamentSignups(open(), {}, openDeps(lost.tx)),
+    ]);
+    expect(wonResponse.status).toBe(200);
+    expect(lostResponse.status).toBe(409);
+    expect(lost.calls.some((sql) => sql.includes("SET signup_state"))).toBe(false);
+
+    // A PK violation from a concurrent claim surfaces as the same conflict.
+    const raced = deps({ oneValues: [TOURNAMENT] });
+    raced.withTransaction = mock(async () => { throw Object.assign(new Error("duplicate key"), { code: "23505" }); });
+    raced.loadChatGiveawayConnection = mock(async () => ({
+      connected: true, chatReady: true, channelName: "streamerchannel", externalChannelId: "111",
+    }));
+    raced.reconcileKickWebhookDelivery = mock(async () => ({
+      status: "ok", subscriptions: { rewardEvents: true, chatEvents: true }, failedEvents: [],
+    }));
+    const racedResponse = await handleOpenTournamentSignups(open(), {}, raced);
+    expect(racedResponse.status).toBe(409);
+
+    // Re-opening the tournament that already holds the row is idempotent.
+    const self = signupTx({
+      holder: { tournament_id: "tournament-1", signup_state: "open", status: "draft" },
+      lock: null,
+    });
+    const selfResponse = await handleOpenTournamentSignups(open(), {}, openDeps(self.tx));
+    expect(selfResponse.status).toBe(200);
+    expect(self.calls.some((sql) => sql.includes("SET signup_state"))).toBe(true);
+  });
+
+  it("releases the open-signups row when signups are locked", async () => {
+    const { tx, calls } = signupTx();
+    const d = deps({ oneValues: [TOURNAMENT] });
+    d.withTransaction = mock(async (fn) => fn(tx));
+    const response = await handleLockTournamentSignups(request("/api/tournaments/tournament-1/signups/lock"), {}, d);
+    expect(response.status).toBe(200);
+    const lockDelete = calls.findIndex((sql) => sql.includes("DELETE FROM tournament_open_signups"));
+    const stateUpdate = calls.findIndex((sql) => sql.includes("UPDATE tournaments"));
+    expect(lockDelete).toBeGreaterThanOrEqual(0);
+    expect(stateUpdate).toBeGreaterThan(lockDelete);
   });
 
   it("requires a routable Kick channel and confirmed chat events to open signups", async () => {
@@ -162,6 +258,7 @@ describe("tournament entry lifecycle", () => {
         undefined,
         { count: 1 },
         { id: "tournament-1" },
+        { site_id: "site-1" }, // lock-row delete after the auto-lock
         { id: "entry-2", tournament_id: TOURNAMENT.id, display_name: "Bob", status: "waitlist" },
       ],
     });
@@ -172,7 +269,9 @@ describe("tournament entry lifecycle", () => {
     );
     expect(secondResponse.status).toBe(200);
     expect((await secondResponse.json()).entry.status).toBe("waitlist");
-    expect(second._mocks.txOne).toHaveBeenCalledTimes(5);
+    expect(second._mocks.txOne).toHaveBeenCalledTimes(6);
+    // The auto-lock also releases the site's open-signups row.
+    expect(second._mocks.txOne.mock.calls.some(([sql]) => String(sql).includes("DELETE FROM tournament_open_signups"))).toBe(true);
   });
 
   it("keeps blocked names from re-entering", async () => {

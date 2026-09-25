@@ -3,14 +3,14 @@
 // drop redemptions onto the shared events queue (the consumer durably grants
 // credits) and turn chat messages into chat-giveaway entries inline.
 import { json, bad } from "../auth.js";
-import { query } from "@yourrank/shared/db";
+import { query, withTransaction } from "@yourrank/shared/db";
 import {
   KICK_CHAT_MESSAGE_EVENT,
   ingestChatGiveawayMessage,
   kickChatMessageToIngestInput,
 } from "@yourrank/shared/chat-giveaways";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
-import { ingestTournamentChatMessage } from "./tournaments.js";
+import { ingestTournamentChatMessageTx } from "./tournaments.js";
 import {
   verifyKickWebhookSignature,
   isCreditableKickStatus,
@@ -29,14 +29,18 @@ async function processFallback(event, env) {
   return result;
 }
 
-async function ingestKickChatMessage(payload) {
-  return ingestChatGiveawayMessage((sql, params) => query(sql, params), kickChatMessageToIngestInput(payload));
+async function ingestKickChatMessage(payload, env, run = (sql, params) => query(sql, params)) {
+  return ingestChatGiveawayMessage(run, kickChatMessageToIngestInput(payload));
 }
 
 export async function handleKickWebhook(
   request,
   env,
-  { ingestChatMessage = ingestKickChatMessage, ingestTournamentMessage = ingestTournamentChatMessage } = {},
+  {
+    ingestChatMessage = ingestKickChatMessage,
+    ingestTournamentMessage = (payload, env, tx) => ingestTournamentChatMessageTx(tx, payload),
+    withTransaction: withTransactionImpl = withTransaction,
+  } = {},
 ) {
   const rawBody = await request.text();
   const messageId = request.headers.get("Kick-Event-Message-Id");
@@ -83,9 +87,23 @@ export async function handleKickWebhook(
 
   if (eventType === KICK_CHAT_MESSAGE_EVENT) {
     try {
-      const outcome = await ingestChatMessage(payload, env);
-      const tournamentOutcome = await ingestTournamentMessage(payload, env);
-      return json({ ok: true, chat: outcome, tournament: tournamentOutcome });
+      // The receipt row commits with the side effects or not at all: a failed
+      // transaction rolls it back so a Kick retry processes normally, and a
+      // concurrent duplicate blocks on the PK then sees the conflict.
+      const outcome = await withTransactionImpl(async (tx) => {
+        const run = (sql, params) => tx.unsafe(sql, params);
+        const claimed = await tx.one(
+          `INSERT INTO provider_webhook_receipts (provider, message_id, event_type)
+           VALUES ('kick', $1, $2) ON CONFLICT (provider, message_id) DO NOTHING
+           RETURNING message_id`,
+          [messageId, eventType]
+        );
+        if (!claimed) return { duplicate: true };
+        const chat = await ingestChatMessage(payload, env, run);
+        const tournament = await ingestTournamentMessage(payload, env, tx);
+        return { duplicate: false, chat, tournament };
+      });
+      return json({ ok: true, ...outcome });
     } catch (err) {
       console.error("[kick-webhook] chat ingest failed:", err?.message || err);
       return bad("Chat event processing failed", 500);

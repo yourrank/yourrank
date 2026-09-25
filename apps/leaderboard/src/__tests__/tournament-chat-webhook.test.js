@@ -6,7 +6,7 @@
 // Run: bun test src/__tests__/tournament-chat-webhook.test.js
 
 import { beforeAll, describe, expect, it, mock } from "bun:test";
-import { addTournamentEntryTx, ingestTournamentChatMessage } from "../handlers/tournaments.js";
+import { addTournamentEntryTx, ingestTournamentChatMessage, ingestTournamentChatMessageTx } from "../handlers/tournaments.js";
 import { handleKickWebhook } from "../handlers/kick-webhook.js";
 
 const ROUTE = { id: "tournament-1", entry_keyword: "!join" };
@@ -148,9 +148,8 @@ beforeAll(async () => {
   publicKeyPem = toPem(await crypto.subtle.exportKey("spki", pair.publicKey));
 });
 
-async function signedRequest(eventType, payload, { signWith = privateKey, timestamp = new Date().toISOString() } = {}) {
+async function signedRequest(eventType, payload, { signWith = privateKey, timestamp = new Date().toISOString(), messageId = crypto.randomUUID() } = {}) {
   const body = JSON.stringify(payload);
-  const messageId = crypto.randomUUID();
   const sig = await crypto.subtle.sign(
     { name: "RSASSA-PKCS1-v1_5" }, signWith, new TextEncoder().encode(`${messageId}.${timestamp}.${body}`),
   );
@@ -166,6 +165,15 @@ async function signedRequest(eventType, payload, { signWith = privateKey, timest
   });
 }
 
+// A tx whose `one` claims any receipt (returns a row) and answers nothing
+// else — enough for the webhook's claim before the injected ingests run.
+const claimedTx = {
+  one: mock(async () => ({ message_id: "m-1" })),
+  query: mock(async () => []),
+  unsafe: mock(async () => []),
+};
+const passThroughTx = async (fn) => fn(claimedTx);
+
 describe("Kick webhook → tournament ingest", () => {
   it("feeds a validly signed chat event into the tournament ingest", async () => {
     const outcome = { routed: true, matched: true, entered: true, duplicate: false, rejected: null, tournamentId: "tournament-1" };
@@ -176,10 +184,13 @@ describe("Kick webhook → tournament ingest", () => {
       {
         ingestChatMessage: async () => ({ routed: true, matched: true, entered: true }),
         ingestTournamentMessage,
+        withTransaction: passThroughTx,
       },
     );
     expect(res.status).toBe(200);
-    expect((await res.json()).tournament).toEqual(outcome);
+    const body = await res.json();
+    expect(body.tournament).toEqual(outcome);
+    expect(body.duplicate).toBe(false);
     expect(ingestTournamentMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -206,5 +217,178 @@ describe("Kick webhook → tournament ingest", () => {
     );
     expect(res.status).toBe(400);
     expect(ingestTournamentMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Delivery idempotency: the provider_webhook_receipts claim lives inside the
+// same transaction as the chat side effects, so a receipt commits only when
+// everything committed. The fakes below model that claim/rollback behavior.
+// ---------------------------------------------------------------------------
+
+// A fake "database" shared across transactions: receipts commit on success and
+// roll back when the callback throws, mirroring BEGIN/COMMIT.
+function chatDb() {
+  const committedReceipts = new Set();
+  const state = { entryStatus: null, entryWrites: 0 };
+  const makeTx = (staged) => ({
+    one: async (sql, params = []) => {
+      const text = String(sql);
+      if (text.includes("provider_webhook_receipts")) {
+        if (committedReceipts.has(params[0]) || staged.has(params[0])) return undefined;
+        staged.add(params[0]);
+        return { message_id: params[0] };
+      }
+      if (text.includes("community_channels")) return ROUTE;
+      if (text.includes("INSERT INTO tournament_entries")) {
+        state.entryWrites += 1;
+        state.entryStatus = "pending";
+        return { id: "entry-1", display_name: "viewer", status: "pending" };
+      }
+      if (text.includes("UPDATE tournament_entries")) {
+        state.entryWrites += 1;
+        return { id: "entry-1", display_name: "viewer", status: state.entryStatus };
+      }
+      if (text.includes("count(*)")) return { count: 0 };
+      if (text.includes("FROM tournament_entries")) {
+        return state.entryStatus ? { id: "entry-1", display_name: "viewer", status: state.entryStatus } : undefined;
+      }
+      if (text.includes("FROM tournaments")) return { id: "tournament-1", signup_state: "open", entry_cap: null };
+      return undefined;
+    },
+    query: async () => [],
+    unsafe: async () => [],
+  });
+  const withTransaction = async (fn) => {
+    const staged = new Set();
+    const out = await fn(makeTx(staged));
+    for (const id of staged) committedReceipts.add(id);
+    return out;
+  };
+  return { committedReceipts, state, withTransaction };
+}
+
+describe("Kick webhook delivery idempotency", () => {
+  const webhookDeps = (db, overrides = {}) => ({
+    ingestChatMessage: async () => ({ routed: true, matched: true, entered: true }),
+    ingestTournamentMessage: (payload, env, tx) => ingestTournamentChatMessageTx(tx, payload),
+    withTransaction: db.withTransaction,
+    ...overrides,
+  });
+
+  it("processes a redelivered message id exactly once", async () => {
+    const db = chatDb();
+    const messageId = crypto.randomUUID();
+    const payload = chatPayload("!join");
+    const first = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      webhookDeps(db),
+    );
+    const second = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      webhookDeps(db),
+    );
+    expect((await first.json()).duplicate).toBe(false);
+    expect(await second.json()).toEqual({ ok: true, duplicate: true });
+    expect(db.state.entryWrites).toBe(1);
+  });
+
+  it("never revives a removed entry when a delivered message is retried", async () => {
+    const db = chatDb();
+    const messageId = crypto.randomUUID();
+    const payload = chatPayload("!join");
+    const first = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      webhookDeps(db),
+    );
+    expect((await first.json()).tournament.entered).toBe(true);
+    // Organizer removes the entry after the first delivery.
+    db.state.entryStatus = "removed";
+    const second = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      webhookDeps(db),
+    );
+    expect((await second.json()).duplicate).toBe(true);
+    // The receipt conflict short-circuited before any entry write.
+    expect(db.state.entryWrites).toBe(1);
+    expect(db.state.entryStatus).toBe("removed");
+  });
+
+  it("lets exactly one of two concurrent deliveries process", async () => {
+    const committed = new Set();
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    let gatePassed = false;
+    const makeTx = () => ({
+      one: async (sql, params = []) => {
+        const text = String(sql);
+        if (text.includes("provider_webhook_receipts")) {
+          // First claimer waits at the gate like a row lock; whoever resumes
+          // first commits the claim before the loser re-checks.
+          if (!gatePassed) await gate;
+          if (committed.has(params[0])) return undefined;
+          committed.add(params[0]);
+          return { message_id: params[0] };
+        }
+        return undefined;
+      },
+      query: async () => [],
+      unsafe: async () => [],
+    });
+    const ingestTournamentMessage = mock(async () => ({ entered: true }));
+    const deps = {
+      ingestChatMessage: async () => ({}),
+      ingestTournamentMessage,
+      withTransaction: async (fn) => fn(makeTx()),
+    };
+    const messageId = crypto.randomUUID();
+    const payload = chatPayload("!join");
+    const [r1, r2] = [
+      handleKickWebhook(await signedRequest("chat.message.sent", payload, { messageId }), { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem }, deps),
+      handleKickWebhook(await signedRequest("chat.message.sent", payload, { messageId }), { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem }, deps),
+    ];
+    await new Promise((r) => setTimeout(r, 10));
+    gatePassed = true;
+    release();
+    const results = await Promise.all([r1, r2]);
+    const bodies = await Promise.all(results.map((r) => r.json()));
+    expect(bodies.filter((b) => b.duplicate === false)).toHaveLength(1);
+    expect(bodies.filter((b) => b.duplicate === true)).toHaveLength(1);
+    expect(ingestTournamentMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("rolls the receipt back when processing fails so a retry reprocesses", async () => {
+    const db = chatDb();
+    const messageId = crypto.randomUUID();
+    const payload = chatPayload("!join");
+    let attempts = 0;
+    const deps = webhookDeps(db, {
+      ingestTournamentMessage: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("database unavailable");
+        return { entered: true };
+      },
+    });
+    const first = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      deps,
+    );
+    expect(first.status).toBe(500);
+    // The failed transaction discarded its staged claim.
+    expect(db.committedReceipts.size).toBe(0);
+
+    const retry = await handleKickWebhook(
+      await signedRequest("chat.message.sent", payload, { messageId }),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+      deps,
+    );
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).duplicate).toBe(false);
+    expect(db.committedReceipts.has(messageId)).toBe(true);
   });
 });
