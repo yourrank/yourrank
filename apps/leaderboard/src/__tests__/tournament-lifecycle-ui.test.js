@@ -294,6 +294,7 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-status")).toBe("Draft");
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(false);
+    expect($id("tournament-entry-cap-mode").disabled).toBe(false);
     $id("tournament-bracket-size").value = "16";
     await submit("tournament-settings-form");
     const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
@@ -405,6 +406,29 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-bracket-size").disabled).toBe(true);
     expect(text("tournament-bracket-size-hint")).toContain("locked");
   });
+
+  for (const [status, winner_name] of [["completed", "alpha"], ["cancelled", null]]) {
+    it(`makes Settings fully read-only when the tournament is ${status}`, async () => {
+      reset({ tournaments: [{ ...base, status, winner_name, entry_cap: 40, chat_channel: "creator" }] });
+      await mod.boot();
+      await click("tournament-tab-settings");
+      for (const id of [
+        "tournament-title", "tournament-game", "tournament-chat-channel", "tournament-keyword",
+        "tournament-entry-cap-mode", "tournament-entry-cap", "tournament-bracket-size",
+        "tournament-anti-alt", "tournament-settings-save", "tournament-settings-discard",
+      ]) {
+        expect($id(id).disabled).toBe(true);
+      }
+      $id("tournament-title").value = "X";
+      $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+      $id("tournament-entry-cap-mode").value = "";
+      $id("tournament-entry-cap-mode").dispatchEvent(new window.Event("change", { bubbles: true }));
+      await flush();
+      expect($id("tournament-settings-bar").hidden).toBe(true);
+      await submit("tournament-settings-form");
+      expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(0);
+    });
+  }
 
   it("shows the champion and a New tournament action when completed", async () => {
     reset({

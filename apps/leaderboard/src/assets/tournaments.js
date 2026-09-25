@@ -56,6 +56,7 @@ let entriesRefreshQueued = false;
 let releaseCreateTrap = null;
 let settingsBaseline = "";
 let settingsSavedTimer = null;
+let settingsReadonly = false;
 
 function apiPath(path) {
   return siteId ? `${path}${path.includes("?") ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : path;
@@ -201,7 +202,9 @@ function renderSettingsForm(lifecycle) {
   sizeHint.textContent = sizeLocked ? "Bracket size is locked: the bracket has already been created." : "";
 
   const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  for (const el of $("tournament-settings-form").querySelectorAll("input, button")) {
+  settingsReadonly = finished;
+  $("tournament-settings-form").dataset.readonly = finished ? "true" : "";
+  for (const el of $("tournament-settings-form").querySelectorAll("input, select, button")) {
     if (el.id === "tournament-bracket-size") continue;
     el.disabled = finished;
   }
@@ -650,11 +653,12 @@ function settingsSnapshot() {
 
 function updateDirty() {
   const bar = $("tournament-settings-bar");
-  if (bar) bar.hidden = settingsSnapshot() === settingsBaseline;
+  if (bar) bar.hidden = settingsReadonly || settingsSnapshot() === settingsBaseline;
 }
 
 async function saveSettings(event) {
   event.preventDefault();
+  if (settingsReadonly) return;
   clearFieldErrors();
   const capMode = $("tournament-entry-cap-mode").value;
   let entryCap = null;
