@@ -239,7 +239,8 @@ describe("global Viewer Account client", () => {
     expect(env.activeElement()).toBe(env.$("vd-login-card"));
 
     env.navigateHash("");
-    expect(env.$("vd-title").textContent).toBe("My communities");
+    expect(env.$("vd-title").textContent).toBe("Your Viewer Account");
+    expect(env.$("vd-subtitle").textContent).toBe("Sign in to access your communities, rewards and balances.");
     expect(env.$("vd-login-kick").href).toBe("/api/viewer/auth/kick?returnTo=%2Fme%3Fcommunity%3Dalpha");
     expect(env.navigation.every(link => !link.attributes["aria-current"])).toBe(true);
   });
@@ -365,10 +366,12 @@ describe("global Viewer Account ownership", () => {
   });
 
   it("names the real account-to-membership hierarchy", () => {
-    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
-    expect(page).toContain("Your rewards and claims stay with each community.");
+    expect(page).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">Your Viewer Account</h1>');
+    expect(page).toContain("Sign in to access your communities, rewards and balances.");
+    const signedIn = viewerDashboardPage(null, providers, { state: "authenticated", viewer: { id: "v1", kick_username: "m", avatar_url: null, created_at: "2026-01-02T00:00:00.000Z" } });
+    expect(signedIn).toContain('<h1 class="vd-h1" id="vd-title" tabindex="-1">My communities</h1>');
+    expect(signedIn).toContain("Your rewards and claims stay with each community.");
     expect(page).toContain(">Your memberships<");
-    expect(page).toContain("Separate memberships, rewards and credit balances.");
     expect(page).toContain("You haven't joined any communities yet.");
     expect(page).not.toContain("appear here automatically");
     expect(page).not.toContain("Your sites");

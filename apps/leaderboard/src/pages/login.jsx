@@ -68,7 +68,7 @@ export function LoginPage() {
                 <div class="err" id="err" role="alert" aria-live="assertive"></div>
                 <button class="btn btn--accent w-full" type="submit" id="submit">Sign in</button>
               </form>
-              <p class="foot">No account? <a href="/signup">Create one</a> · <a href="/forgot">Forgot password?</a><span class="foot-sep" id="viewer-foot">Are you a viewer? <a href="/me">Log in with Kick or Discord</a></span></p>
+              <p class="foot">No account? <a href="/signup">Create one</a> · <a href="/forgot">Forgot password?</a><span class="foot-sep" id="viewer-foot">Are you a viewer? <a href="/me">Sign in to your Viewer Account</a></span></p>
             </div>
           </main>
         </div>

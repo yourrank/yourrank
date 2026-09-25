@@ -237,7 +237,7 @@ describe("Viewer provider availability rendering", () => {
     const none = viewerDashboardPage(null, { kick: false, discord: false });
     expect(none).not.toContain("/api/viewer/auth/kick");
     expect(none).not.toContain("/api/viewer/auth/discord");
-    expect(none).toContain("Sign-in is not available right now");
+    expect(none).toContain("Viewer sign-in is not available on this site right now");
   });
 
   test("games selects the available provider and falls back to /me", async () => {

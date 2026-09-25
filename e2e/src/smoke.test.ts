@@ -331,7 +331,8 @@ describe("YourRank E2E smoke", () => {
       // The global surface owns the Viewer Account and membership index;
       // each creator-scoped /<slug>/activity page owns My Community detail.
       expect(res.body).toContain("My communities");
-      expect(res.body).toContain("One account");
+      expect(res.body).toContain("Your Viewer Account");
+      expect(res.body).toContain("Sign in to access your communities, rewards and balances.");
       expect(res.body).toContain("Your memberships");
       expect(res.body).not.toContain(">My credits<");
     });
