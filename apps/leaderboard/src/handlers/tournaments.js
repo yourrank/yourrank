@@ -471,6 +471,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   const {
     requireUser = defaultRequireUser,
     one = defaultOne,
+    withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
   } = deps;
@@ -525,20 +526,12 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
       addUpdate("format", body.format);
     }
   }
-  if (Object.prototype.hasOwnProperty.call(body, "entryCap")) {
-    const entryCap = body.entryCap === "" || body.entryCap === null
+  const wantsEntryCap = Object.prototype.hasOwnProperty.call(body, "entryCap");
+  const entryCap = !wantsEntryCap ? undefined
+    : body.entryCap === "" || body.entryCap === null
       ? null
       : Math.max(1, parseInt(body.entryCap, 10) || 1);
-    if (typeof entryCap === "number") {
-      const active = await one(
-        `SELECT count(*)::integer AS count FROM tournament_entries
-          WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
-        [access.tournament.id]
-      );
-      if (entryCap < (active?.count || 0)) {
-        return bad(`Signup limit cannot be lower than the current ${active.count} registrations.`, 400);
-      }
-    }
+  if (wantsEntryCap) {
     addUpdate("entry_cap", entryCap);
   }
   if (Object.prototype.hasOwnProperty.call(body, "antiAltEnabled")) {
@@ -560,25 +553,68 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     addUpdate("chat_channel", normalizeChatChannel(body.chatChannel) || null);
   }
 
+  const returning = `id, title, game_name, bracket_size, status, signup_state, entry_cap, format,
+                     anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
+                     chat_channel`;
   let tournament = access.tournament;
+  let autoLocked = false;
   if (updates.length) {
-    values.push(access.tournament.id);
-    tournament = await one(
-      `UPDATE tournaments
-          SET ${updates.join(", ")}, updated_at=now()
-        WHERE id=$${values.length}
-        RETURNING id, title, game_name, bracket_size, status, signup_state, entry_cap, format,
-                  anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
-                  chat_channel`,
-      values
-    );
+    if (wantsEntryCap) {
+      // The cap is checked and applied under the tournament row lock so a
+      // concurrent signup can never land between the count and the update.
+      const outcome = await withTransaction(async (tx) => {
+        const locked = await tx.one(
+          "SELECT id, signup_state, entry_cap, status FROM tournaments WHERE id=$1 FOR UPDATE",
+          [access.tournament.id]
+        );
+        const active = await tx.one(
+          `SELECT count(*)::integer AS count FROM tournament_entries
+            WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
+          [access.tournament.id]
+        );
+        if (entryCap !== null && entryCap < (active?.count || 0)) {
+          return { error: `Signup limit cannot be lower than the current ${active.count} registrations.`, status: 400 };
+        }
+        const txValues = [...values, access.tournament.id];
+        let updated = await tx.one(
+          `UPDATE tournaments
+              SET ${updates.join(", ")}, updated_at=now()
+            WHERE id=$${txValues.length}
+            RETURNING ${returning}`,
+          txValues
+        );
+        let lockedNow = false;
+        if (locked?.signup_state === "open" && entryCap !== null && (active?.count || 0) >= entryCap) {
+          updated = await tx.one(
+            `UPDATE tournaments SET signup_state='locked', updated_at=now()
+              WHERE id=$1 RETURNING ${returning}`,
+            [access.tournament.id]
+          );
+          await tx.unsafe("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [access.tournament.id]);
+          lockedNow = true;
+        }
+        return { tournament: updated, autoLocked: lockedNow };
+      });
+      if (outcome.error) return bad(outcome.error, outcome.status);
+      tournament = outcome.tournament;
+      autoLocked = outcome.autoLocked;
+    } else {
+      values.push(access.tournament.id);
+      tournament = await one(
+        `UPDATE tournaments
+            SET ${updates.join(", ")}, updated_at=now()
+          WHERE id=$${values.length}
+          RETURNING ${returning}`,
+        values
+      );
+    }
     await logAudit({
       actorId: user.id,
       action: "tournament_settings_update",
       entityType: "tournament",
       entityId: access.tournament.id,
       request,
-      details: { fields: updates.map((update) => update.split("=")[0]) },
+      details: { fields: updates.map((update) => update.split("=")[0]), ...(autoLocked ? { autoLocked: true } : {}) },
     });
   }
   return ok({ tournament });
@@ -951,7 +987,10 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
   const { user, res } = await requireUser(request, env);
   if (res) return res;
   const body = await readJson(request);
-  const mode = body?.mode === "manual" ? "manual" : "random";
+  const mode = body?.mode;
+  if (mode !== "random" && mode !== "manual") {
+    return bad("Unsupported selection mode.", 400);
+  }
   const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
   if (access.error) return access.error;
 
@@ -986,6 +1025,9 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
     if (eligibleCount < MIN_BRACKET_PARTICIPANTS) {
       return { error: `Need at least ${MIN_BRACKET_PARTICIPANTS} eligible players to start.`, status: 409 };
     }
+    if (mode === "manual" && eligibleCount <= tournament.bracket_size) {
+      return { error: "All eligible players fit the bracket; use random selection.", status: 400 };
+    }
 
     let picked;
     if (mode === "manual") {
@@ -996,11 +1038,8 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
       if (new Set(entryIds).size !== entryIds.length) {
         return { error: "Duplicate entry IDs.", status: 400 };
       }
-      if (eligibleCount > tournament.bracket_size && entryIds.length !== tournament.bracket_size) {
+      if (entryIds.length !== tournament.bracket_size) {
         return { error: `Select exactly ${tournament.bracket_size} participants.`, status: 400 };
-      }
-      if (entryIds.length < MIN_BRACKET_PARTICIPANTS || entryIds.length > tournament.bracket_size) {
-        return { error: `Select between ${MIN_BRACKET_PARTICIPANTS} and ${tournament.bracket_size} participants.`, status: 400 };
       }
       const eligibleIds = new Set(eligible.map((entry) => entry.id));
       if (!entryIds.every((id) => eligibleIds.has(id))) {

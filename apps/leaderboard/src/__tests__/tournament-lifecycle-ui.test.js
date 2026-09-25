@@ -614,12 +614,13 @@ describe("tournament lifecycle UI", () => {
   });
 
   it("renders BYE matches without score inputs", async () => {
+    const BYE_SLOT = "__YOURRANK_INTERNAL_BYE__";
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       entries: [{ id: "e1", display_name: "Alice", source: "chat", status: "selected" }],
       matches: [
-        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "BYE", status: "completed", winner_name: "Alice" },
-        { id: "m2", round_number: 1, match_index: 1, player1_name: "BYE", player2_name: "BYE", status: "completed", winner_name: "BYE" },
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: BYE_SLOT, status: "completed", winner_name: "Alice" },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: BYE_SLOT, player2_name: BYE_SLOT, status: "completed", winner_name: BYE_SLOT },
         { id: "m3", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending" },
       ],
     });
@@ -627,8 +628,10 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-bracket");
     const matches = [...$id("tournament-bracket").querySelectorAll(".tournament-match")];
     expect(matches).toHaveLength(3);
-    // Alice vs BYE: no inputs, no score, advance caption.
+    // Alice vs BYE: no inputs, no score, advance caption, sentinel rendered as BYE.
     expect(matches[0].querySelectorAll("input")).toHaveLength(0);
+    expect(matches[0].textContent).toContain("BYE");
+    expect(matches[0].textContent).not.toContain(BYE_SLOT);
     expect(matches[0].textContent).toContain("Alice advances automatically");
     expect(matches[0].textContent).not.toContain("0 - 0");
     // BYE vs BYE: compact empty card.
@@ -643,7 +646,8 @@ describe("tournament lifecycle UI", () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
-        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", status: "pending" },
+        // "BYE" here is a real player's display name, not the sentinel.
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "BYE", player2_name: "Bob", status: "pending" },
       ],
     });
     await mod.boot();

@@ -36,7 +36,10 @@ const LIFECYCLE_LABELS = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
-const BYE = "BYE";
+// Sentinel for BYE slots — must match BYE in lib/tournament-bracket.js.
+// BYE_LABEL is what the UI renders for it; a player named "BYE" stays normal.
+const BYE = "__YOURRANK_INTERNAL_BYE__";
+const BYE_LABEL = "BYE";
 const ELIGIBLE = ["pending", "confirmed"];
 const isEligible = (entry, tourn) => ELIGIBLE.includes(entry.status)
   && !(Number(tourn.entry_fee) === 0 && entry.alt_flag);
@@ -729,7 +732,7 @@ function renderMatch(match, finished) {
   const p2Winner = isComplete && match.winner_name === p2;
   const canScore = !finished && !isComplete && !bye1 && !bye2 && p1 !== "TBD" && p2 !== "TBD";
   const playerName = (name, bye, winner) => bye
-    ? `<span class="tournament-match-bye">${esc(BYE)}</span>`
+    ? `<span class="tournament-match-bye">${esc(BYE_LABEL)}</span>`
     : `<span class="tournament-match-player${winner ? " winner" : ""}">${esc(name)}${winner ? " 👑" : ""}</span>`;
   const scores = bye1 || bye2
     ? `<span class="tournament-match-bye-note">${esc(bye1 ? p2 : p1)} advances automatically</span>`

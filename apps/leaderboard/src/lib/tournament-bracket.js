@@ -1,6 +1,8 @@
 // Pure single-elimination bracket engine: seeding order, BYE placement and
 // BYE auto-advancement. No database access — callers persist the rows.
-export const BYE = "BYE";
+// Internal sentinel for BYE slots. Namespaced so a player literally named
+// "BYE" stays a normal entrant everywhere.
+export const BYE = "__YOURRANK_INTERNAL_BYE__";
 export const MIN_BRACKET_PARTICIPANTS = 2;
 
 export function isBye(name) {

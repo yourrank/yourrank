@@ -281,18 +281,37 @@ describe("tournament entry lifecycle", () => {
     expect(overSql.some((sql) => sql.includes("DELETE FROM tournament_open_signups"))).toBe(true);
   });
 
-  it("reserves the BYE sentinel name", async () => {
+  it("reserves the internal BYE sentinel name", async () => {
     const d = deps({
       oneValues: [TOURNAMENT],
       txOneValues: [{ id: TOURNAMENT.id, signup_state: "open", entry_cap: null }],
+    });
+    const response = await handleAddTournamentEntry(
+      request("/api/tournaments/tournament-1/entries", { displayName: "__YOURRANK_INTERNAL_BYE__", source: "manual" }),
+      {},
+      d
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("That name is reserved.");
+  });
+
+  it("accepts a player literally named BYE as a normal entrant", async () => {
+    const d = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, signup_state: "open", entry_cap: null },
+        undefined, // no existing entry with that name
+        { count: 0 },
+        { id: "entry-1", tournament_id: TOURNAMENT.id, display_name: "BYE", status: "pending" },
+      ],
     });
     const response = await handleAddTournamentEntry(
       request("/api/tournaments/tournament-1/entries", { displayName: " bye ", source: "manual" }),
       {},
       d
     );
-    expect(response.status).toBe(400);
-    expect((await response.json()).error).toBe("That name is reserved.");
+    expect(response.status).toBe(200);
+    expect((await response.json()).entry.status).toBe("pending");
   });
 
   it("refuses to restore an entry when the signup limit is reached", async () => {
@@ -645,8 +664,66 @@ describe("tournament entry lifecycle", () => {
     expect((await dupResponse.json()).error).toBe("Duplicate entry IDs.");
   });
 
+  it("rejects an unsupported selection mode before touching anything", async () => {
+    const d = deps({ oneValues: [TOURNAMENT] });
+    const response = await handleSelectTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/select", { mode: "manul" }),
+      {},
+      d
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("Unsupported selection mode.");
+    expect(d.withTransaction.mock.calls).toHaveLength(0);
+  });
+
+  it("selects every eligible player when they all fit the bracket", async () => {
+    const locked = { ...TOURNAMENT, bracket_size: 8, signup_state: "locked", entry_fee: 0 };
+    const eligible = [
+      { id: "e1", display_name: "BYE" }, // a real player named BYE is eligible
+      ...Array.from({ length: 4 }, (_, i) => ({ id: `e${i + 2}`, display_name: `P${i + 2}` })),
+    ];
+    const d = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [locked, { count: 0 }],
+      txQueryValues: [eligible, eligible.map((e) => ({ ...e, status: "selected" }))],
+    });
+    const response = await handleSelectTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/select", { mode: "random" }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const updateCall = d._mocks.txQuery.mock.calls.find(([sql]) => String(sql).includes("status='selected'"));
+    expect(updateCall[1][0].sort()).toEqual(eligible.map((e) => e.id).sort());
+  });
+
+  it("refuses manual selection when every eligible player fits the bracket", async () => {
+    const locked = { ...TOURNAMENT, bracket_size: 8, signup_state: "locked", entry_fee: 0 };
+    const eligible = Array.from({ length: 5 }, (_, i) => ({ id: `e${i + 1}`, display_name: `P${i + 1}` }));
+    const d = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [locked, { count: 0 }],
+      txQueryValues: [eligible],
+    });
+    const response = await handleSelectTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/select", { mode: "manual", entryIds: ["e1", "e2"] }),
+      {},
+      d
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe("All eligible players fit the bracket; use random selection.");
+    const updates = d._mocks.txQuery.mock.calls.filter(([sql]) => String(sql).includes("status='selected'"));
+    expect(updates).toHaveLength(0);
+  });
+
   it("rejects lowering the signup limit below active registrations", async () => {
-    const d = deps({ oneValues: [TOURNAMENT, { count: 20 }] });
+    const d = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, signup_state: "locked", entry_cap: null, status: "draft" },
+        { count: 20 },
+      ],
+    });
     const response = await handleUpdateTournamentSettings(
       request("/api/tournaments/tournament-1/settings", { entryCap: 10 }),
       {},
@@ -657,9 +734,16 @@ describe("tournament entry lifecycle", () => {
   });
 
   it("allows a signup limit below the bracket size", async () => {
-    const stored = { ...TOURNAMENT, bracket_size: 8 };
+    const stored = { ...TOURNAMENT, bracket_size: 8, signup_state: "locked" };
     const updated = { ...stored, entry_cap: 4 };
-    const d = deps({ oneValues: [stored, { count: 2 }, updated] });
+    const d = deps({
+      oneValues: [stored],
+      txOneValues: [
+        { id: stored.id, signup_state: "locked", entry_cap: null, status: "draft" },
+        { count: 2 },
+        updated,
+      ],
+    });
     const response = await handleUpdateTournamentSettings(
       request("/api/tournaments/tournament-1/settings", { entryCap: 4 }),
       {},
@@ -667,6 +751,37 @@ describe("tournament entry lifecycle", () => {
     );
     expect(response.status).toBe(200);
     expect((await response.json()).tournament.entry_cap).toBe(4);
+  });
+
+  it("locks signups when the new cap is already reached on an open tournament", async () => {
+    const stored = { ...TOURNAMENT, bracket_size: 8, signup_state: "open" };
+    const applied = { ...stored, entry_cap: 4 };
+    const lockedRow = { ...applied, signup_state: "locked" };
+    const d = deps({
+      oneValues: [stored],
+      txOneValues: [
+        { id: stored.id, signup_state: "open", entry_cap: null, status: "draft" },
+        { count: 4 },
+        applied,
+        lockedRow,
+      ],
+    });
+    const unsafe = mock(async () => []);
+    d.withTransaction = mock(async (fn) => fn({ one: d._mocks.txOne, query: d._mocks.txQuery, unsafe }));
+    const response = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { entryCap: 4 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const { tournament } = await response.json();
+    expect(tournament.signup_state).toBe("locked");
+    expect(tournament.entry_cap).toBe(4);
+    const txSql = d._mocks.txOne.mock.calls.map(([sql]) => String(sql));
+    expect(txSql.some((sql) => sql.includes("FOR UPDATE"))).toBe(true);
+    expect(txSql.some((sql) => sql.includes("signup_state='locked'"))).toBe(true);
+    const unsafeSql = unsafe.mock.calls.map(([sql]) => String(sql));
+    expect(unsafeSql.some((sql) => sql.includes("DELETE FROM tournament_open_signups"))).toBe(true);
   });
 });
 

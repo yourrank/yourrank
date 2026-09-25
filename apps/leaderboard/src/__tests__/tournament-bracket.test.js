@@ -57,6 +57,20 @@ describe("tournament bracket engine", () => {
     expect(MIN_BRACKET_PARTICIPANTS).toBe(2);
   });
 
+  it("treats a player literally named BYE as a normal participant", () => {
+    const matches = buildBracket(["BYE", "Alice"], 4);
+    const r1 = inRound(matches, 1);
+    // Both slots are real-vs-sentinel matches; the human "BYE" advances as a
+    // regular player, and no BYE-vs-BYE match exists.
+    expect(r1).toHaveLength(2);
+    expect(r1.every((m) => m.status === "completed")).toBe(true);
+    expect(r1.every((m) => (isBye(m.player1_name) || isBye(m.player2_name)) && !(isBye(m.player1_name) && isBye(m.player2_name)))).toBe(true);
+    expect(r1.map((m) => m.winner_name).sort()).toEqual(["Alice", "BYE"]);
+    const final = inRound(matches, 2)[0];
+    expect(final.status).toBe("pending");
+    expect([final.player1_name, final.player2_name].sort()).toEqual(["Alice", "BYE"]);
+  });
+
   it("never leaves a pending match with a BYE, for every fill of every size", () => {
     for (const size of [4, 8, 16]) {
       for (let n = 2; n <= size; n++) {

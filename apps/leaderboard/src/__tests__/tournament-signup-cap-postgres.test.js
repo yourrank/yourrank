@@ -10,7 +10,9 @@ import {
   addTournamentEntryTx,
   handleSelectTournamentEntries,
   handleUpdateMatchScore,
+  handleUpdateTournamentSettings,
 } from "../handlers/tournaments.js";
+import { BYE } from "../lib/tournament-bracket.js";
 
 const databaseUrl = process.env.TOURNAMENT_TEST_DATABASE_URL || process.env.AUDIT_TEST_DATABASE_URL || "";
 const integrationIt = (name, fn) => (databaseUrl ? it : it.skip)(name, fn, 60000);
@@ -137,7 +139,7 @@ describe("tournament signup cap (Postgres)", () => {
     const final = matches.find((m) => m.round_number === 3);
     expect(final.status).toBe("pending");
     expect([final.player1_name, final.player2_name].sort()).toEqual(["Alice", "Bob"]);
-    expect(matches.every((m) => m.status === "pending" && m.player1_name !== "BYE" && m.player2_name !== "BYE" || m.status === "completed")).toBe(true);
+    expect(matches.every((m) => m.status === "pending" && m.player1_name !== BYE && m.player2_name !== BYE || m.status === "completed")).toBe(true);
 
     const scored = await handleUpdateMatchScore(
       post(`/api/tournaments/${tournamentId}/score`, { matchId: (await sql`SELECT id FROM tournament_matches WHERE tournament_id=${tournamentId} AND round_number=3`)[0].id, player1Score: 1, player2Score: 0 }),
@@ -167,7 +169,7 @@ describe("tournament signup cap (Postgres)", () => {
     // 3 players in an 8-slot bracket: one real r1 match; its winner faces a
     // BYE in r2 and must auto-advance once scored.
     const [realMatch] = await sql`SELECT id, player1_name, player2_name FROM tournament_matches
-      WHERE tournament_id=${tournamentId} AND status='pending' AND player1_name <> 'BYE' AND player2_name <> 'BYE'
+      WHERE tournament_id=${tournamentId} AND status='pending' AND player1_name <> ${BYE} AND player2_name <> ${BYE}
         AND player1_name <> 'TBD' AND player2_name <> 'TBD'`;
     expect(realMatch).toBeTruthy();
     const scored = await handleUpdateMatchScore(
@@ -180,9 +182,77 @@ describe("tournament signup cap (Postgres)", () => {
     // After scoring, no pending match may still contain a BYE.
     const pendingBye = await sql`SELECT count(*)::int AS n FROM tournament_matches
       WHERE tournament_id=${tournamentId} AND status='pending'
-        AND (player1_name='BYE' OR player2_name='BYE')`;
+        AND (player1_name=${BYE} OR player2_name=${BYE})`;
     expect(pendingBye[0].n).toBe(0);
     const [tournament] = await sql`SELECT status FROM tournaments WHERE id=${tournamentId}`;
     expect(tournament.status).toBe("active");
+  });
+
+  integrationIt("a concurrent signup never lands between the settings cap check and update", async () => {
+    const siteId = await seedSite();
+    const tournamentId = await seedTournament(siteId, { entryCap: null, signupState: "open" });
+    for (let i = 0; i < 9; i++) {
+      await sql`INSERT INTO tournament_entries (tournament_id, display_name, source, status)
+        VALUES (${tournamentId}, ${`seeded-${i}`}, 'chat', 'pending')`;
+    }
+
+    // Race: settings drops the cap to 9 while an entrant takes slot #10.
+    const [settingsOutcome, entrantOutcome] = await Promise.allSettled([
+      handleUpdateTournamentSettings(
+        post(`/api/tournaments/${tournamentId}/settings`, { entryCap: 9 }),
+        {},
+        handlerDeps()
+      ),
+      sql.begin((tx) => addTournamentEntryTx(wrapTx(tx), tournamentId, {
+        displayName: "racer", viewerId: null, source: "chat", trustScore: null, altFlag: false, altReason: null,
+      })),
+    ]);
+
+    const settingsRes = settingsOutcome.status === "fulfilled" ? settingsOutcome.value : null;
+    const entrant = entrantOutcome.status === "fulfilled" ? entrantOutcome.value : { error: entrantOutcome.reason?.message };
+    const [after] = await sql`SELECT entry_cap, signup_state FROM tournaments WHERE id=${tournamentId}`;
+    const [entries] = await sql`SELECT count(*)::int AS n FROM tournament_entries
+      WHERE tournament_id=${tournamentId} AND status IN ('pending','confirmed','selected')`;
+
+    // Invariant: the cap never reads below the active count afterwards.
+    expect(entries.n).toBeLessThanOrEqual(after.entry_cap ?? Infinity);
+    const holders = await sql`SELECT count(*)::int AS n FROM tournament_open_signups WHERE tournament_id=${tournamentId}`;
+    if (entrant?.entry) {
+      // The entrant won the row lock: 10 active means cap 9 must be refused
+      // (400) and signups legitimately stay open with no cap applied.
+      expect(entries.n).toBe(10);
+      expect(settingsRes?.status).toBe(400);
+      expect(after.signup_state).toBe("open");
+      expect(holders[0].n).toBe(1);
+    } else {
+      // The settings tx won: entrant is rejected and signups are locked.
+      expect(entries.n).toBe(9);
+      expect(after.entry_cap).toBe(9);
+      expect(settingsRes?.status).toBe(200);
+      expect(entrant?.status ?? 409).toBe(409);
+      expect(after.signup_state).toBe("locked");
+      expect(holders[0].n).toBe(0);
+    }
+  });
+
+  integrationIt("applying a cap that is already reached locks signups and releases the holder", async () => {
+    const siteId = await seedSite();
+    const tournamentId = await seedTournament(siteId, { entryCap: null, signupState: "open" });
+    for (let i = 0; i < 9; i++) {
+      await sql`INSERT INTO tournament_entries (tournament_id, display_name, source, status)
+        VALUES (${tournamentId}, ${`seeded-${i}`}, 'chat', 'pending')`;
+    }
+
+    const res = await handleUpdateTournamentSettings(
+      post(`/api/tournaments/${tournamentId}/settings`, { entryCap: 9 }),
+      {},
+      handlerDeps()
+    );
+    expect(res.status).toBe(200);
+    const { tournament } = await res.json();
+    expect(tournament.entry_cap).toBe(9);
+    expect(tournament.signup_state).toBe("locked");
+    const holders = await sql`SELECT count(*)::int AS n FROM tournament_open_signups WHERE tournament_id=${tournamentId}`;
+    expect(holders[0].n).toBe(0);
   });
 });
