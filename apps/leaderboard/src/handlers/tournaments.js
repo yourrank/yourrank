@@ -20,6 +20,7 @@ import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
 const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
+const CREATABLE_FORMATS = ["bracket", "1v1"];
 
 class TournamentConflictError extends Error {
   constructor(message, status = 409) {
@@ -163,8 +164,18 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const body = await readJson(request);
   const title = String(body?.title || "").trim() || "Community Tournament";
   const gameName = String(body?.gameName || "Game").trim();
-  const requestedBracketSize = [4, 8, 16, 32].includes(parseInt(body?.bracketSize, 10)) ? parseInt(body?.bracketSize, 10) : 8;
-  const tournamentFormat = ["bracket", "1v1", "2v2"].includes(body?.format) ? body.format : "bracket";
+  const requestedBracketSize = body?.bracketSize === undefined || body?.bracketSize === null || body?.bracketSize === ""
+    ? 8
+    : parseInt(body.bracketSize, 10);
+  if (!isSupportedBracketSize(requestedBracketSize)) {
+    return bad("Bracket size must be 4, 8, 16, or 32.");
+  }
+  const tournamentFormat = body?.format === undefined || body?.format === null || body?.format === ""
+    ? "bracket"
+    : body.format;
+  if (!CREATABLE_FORMATS.includes(tournamentFormat)) {
+    return bad("Unsupported tournament format.");
+  }
   const entryCap = body?.entryCap === "" || body?.entryCap === null || body?.entryCap === undefined
     ? null
     : Math.max(1, parseInt(body.entryCap, 10) || 1);
@@ -173,6 +184,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const minCredits = Math.max(0, parseInt(body?.minCredits, 10) || 0);
   const entryFee = Math.max(0, parseInt(body?.entryFee, 10) || 0);
   const entryKeyword = String(body?.entryKeyword || "!join").trim().slice(0, 40) || "!join";
+  const chatChannel = normalizeChatChannel(body?.chatChannel) || null;
 
   const rawParticipants = Array.isArray(body?.participants) ? body.participants : [];
   const providedParticipantCount = rawParticipants.length;
@@ -198,14 +210,19 @@ export async function handleCreateTournament(request, env, deps = {}) {
     if (gateRes) return gateRes;
   }
 
+  // A tournament is a draft until a bracket exists: either seeded from explicit
+  // participants now, or later by the participant pick.
+  const status = participants.length > 0 ? "active" : "draft";
   const result = await withTransaction(async (tx) => {
     const tourn = await tx.one(
       `INSERT INTO tournaments
-        (site_id, title, game_name, bracket_size, status, participants_json,
-         entry_cap, format, anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword)
-       VALUES ($1, $2, $3, $4, 'active', $5, $6, $7, $8, $9, $10, $11, $12)
+        (site_id, title, game_name, bracket_size, participants_json,
+         entry_cap, format, anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
+         chat_channel, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id, title, game_name, bracket_size, status, signup_state, entry_cap,
-              format, anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword, created_at`,
+              format, anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
+              chat_channel, created_at`,
       [
         site.id,
         title,
@@ -219,6 +236,8 @@ export async function handleCreateTournament(request, env, deps = {}) {
         minCredits,
         entryFee,
         entryKeyword,
+        chatChannel,
+        status,
       ]
     );
 
@@ -235,7 +254,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
     entityType: "tournament",
     entityId: result.id,
     request,
-    details: { title, gameName, bracketSize, tournamentFormat, entryCap, entryKeyword },
+    details: { title, gameName, bracketSize, tournamentFormat, entryCap, entryKeyword, status },
   });
 
   return ok({
@@ -317,8 +336,38 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   if (Object.prototype.hasOwnProperty.call(body, "gameName")) {
     addUpdate("game_name", String(body.gameName || "").trim() || access.tournament.game_name || "Game");
   }
-  if (Object.prototype.hasOwnProperty.call(body, "format")) {
-    addUpdate("format", ["bracket", "1v1", "2v2"].includes(body.format) ? body.format : "bracket");
+  const wantsFormat = Object.prototype.hasOwnProperty.call(body, "format");
+  const wantsBracketSize = Object.prototype.hasOwnProperty.call(body, "bracketSize");
+  if (wantsFormat || wantsBracketSize) {
+    // Format and bracket size shape entries and the seeded bracket. Once either
+    // exists, changing them would silently invalidate state, so refuse instead.
+    const usage = await one(
+      `SELECT (SELECT count(*)::integer FROM tournament_entries WHERE tournament_id=$1) AS entries,
+              (SELECT count(*)::integer FROM tournament_matches WHERE tournament_id=$1) AS matches`,
+      [access.tournament.id]
+    );
+    const hasEntries = (usage?.entries || 0) > 0 || access.tournament.signup_state !== "closed";
+    const hasBracket = (usage?.matches || 0) > 0
+      || ["active", "completed", "cancelled"].includes(access.tournament.status);
+    if (wantsFormat && body.format !== access.tournament.format && (hasEntries || hasBracket)) {
+      return bad("Format is locked once signups have opened or entries exist.", 409);
+    }
+    if (wantsBracketSize) {
+      const bracketSize = parseInt(body.bracketSize, 10);
+      if (!isSupportedBracketSize(bracketSize)) {
+        return bad("Bracket size must be 4, 8, 16, or 32.");
+      }
+      if (bracketSize !== access.tournament.bracket_size && hasBracket) {
+        return bad("Bracket size is locked once the bracket has been created.", 409);
+      }
+      if (bracketSize !== access.tournament.bracket_size) addUpdate("bracket_size", bracketSize);
+    }
+    if (wantsFormat && body.format !== access.tournament.format) {
+      if (!CREATABLE_FORMATS.includes(body.format)) {
+        return bad("Unsupported tournament format.");
+      }
+      addUpdate("format", body.format);
+    }
   }
   if (Object.prototype.hasOwnProperty.call(body, "entryCap")) {
     addUpdate(
@@ -354,7 +403,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
       `UPDATE tournaments
           SET ${updates.join(", ")}, updated_at=now()
         WHERE id=$${values.length}
-        RETURNING id, title, game_name, signup_state, entry_cap, format,
+        RETURNING id, title, game_name, bracket_size, status, signup_state, entry_cap, format,
                   anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
                   chat_channel`,
       values
@@ -651,17 +700,24 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
 
   const result = await withTransaction(async (tx) => {
     const tournament = await tx.one(
-      "SELECT id, bracket_size, format, status, entry_fee FROM tournaments WHERE id=$1 FOR UPDATE",
+      "SELECT id, bracket_size, format, status, signup_state, entry_fee FROM tournaments WHERE id=$1 FOR UPDATE",
       [access.tournament.id]
     );
     if (tournament.status === "completed" || tournament.status === "cancelled") {
       return { error: "Tournament is already finished.", status: 409 };
     }
-    if (!isSupportedBracketSize(count)) {
-      return { error: "Pick count must be a supported bracket size (4, 8, 16, or 32).", status: 400 };
+    if (tournament.signup_state !== "locked") {
+      return { error: "Lock signups before picking participants.", status: 409 };
     }
-    if (count > tournament.bracket_size) {
-      return { error: `Pick count cannot exceed the bracket size of ${tournament.bracket_size}.`, status: 400 };
+    const existing = await tx.one(
+      "SELECT count(*)::integer AS count FROM tournament_matches WHERE tournament_id=$1",
+      [tournament.id]
+    );
+    if ((existing?.count || 0) > 0) {
+      return { error: "Bracket already exists.", status: 409 };
+    }
+    if (count !== tournament.bracket_size) {
+      return { error: `Pick count must equal the bracket size of ${tournament.bracket_size}.`, status: 400 };
     }
     const available = await tx.one(
       `SELECT count(*)::integer AS count FROM tournament_entries
@@ -709,13 +765,11 @@ export async function handleRandomPickTournamentEntries(request, env, deps = {})
     if (selectedNames.length !== count) {
       return { error: "Could not select the requested number of entries.", status: 400 };
     }
-    const bracketSize = count;
     await tx.unsafe(
-      "UPDATE tournaments SET participants_json=$1, bracket_size=$2, updated_at=now() WHERE id=$3",
-      [selectedNames, bracketSize, tournament.id]
+      "UPDATE tournaments SET participants_json=$1, status='active', updated_at=now() WHERE id=$2",
+      [selectedNames, tournament.id]
     );
-    await tx.unsafe("DELETE FROM tournament_matches WHERE tournament_id=$1", [tournament.id]);
-    await seedTournamentMatches(tx, tournament.id, selectedNames, bracketSize);
+    await seedTournamentMatches(tx, tournament.id, selectedNames, tournament.bracket_size);
 
     return { entries: selected || [] };
   });

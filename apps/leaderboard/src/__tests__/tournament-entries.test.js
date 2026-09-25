@@ -212,7 +212,7 @@ describe("tournament entry lifecycle", () => {
     const selected = picked.map((entry) => ({ ...entry, status: "selected" }));
     const d = deps({
       oneValues: [TOURNAMENT],
-      txOneValues: [{ ...TOURNAMENT, bracket_size: 4 }, { count: 4 }],
+      txOneValues: [{ ...TOURNAMENT, bracket_size: 4, signup_state: "locked" }, { count: 0 }, { count: 4 }],
       txQueryValues: [picked, selected],
     });
     const response = await handleRandomPickTournamentEntries(
@@ -370,7 +370,7 @@ describe("tournament entry lifecycle", () => {
         ? { plan: "pro", plan_expires_at: null, status: "active" }
         : TOURNAMENT),
       withTransaction: mock(async (fn) => fn({
-        one: mock(async () => (++oneCall === 1 ? { ...TOURNAMENT, bracket_size: 4 } : { count: 4 })),
+        one: mock(async () => (++oneCall === 1 ? { ...TOURNAMENT, bracket_size: 4, signup_state: "locked" } : { count: oneCall === 2 ? 0 : 4 })),
         query: mock(async () => (++queryCall === 1 ? picked : selected)),
         unsafe: txUnsafe,
       })),
@@ -385,7 +385,242 @@ describe("tournament entry lifecycle", () => {
     expect(response.status).toBe(200);
     const unsafeSQL = txUnsafe.mock.calls.map((call) => call[0]).join(" ");
     expect(unsafeSQL).toContain("UPDATE tournaments SET participants_json");
-    expect(unsafeSQL).toContain("DELETE FROM tournament_matches");
+    expect(unsafeSQL).not.toContain("bracket_size=");
     expect(unsafeSQL).toContain("INSERT INTO tournament_matches");
+  });
+});
+
+describe("tournament lifecycle foundation", () => {
+  function createDeps(txOne) {
+    const txUnsafe = mock(async () => []);
+    return {
+      txUnsafe,
+      deps: {
+        requireUser: mock(async () => ({ user: USER, res: null })),
+        getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
+        one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
+        requireSiteCapabilityImpl: mock(async () => ({ res: null })),
+        withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
+        logAudit: mock(async () => {}),
+      },
+    };
+  }
+
+  it("creates an entry-list tournament as a draft with the selected values and chat channel", async () => {
+    const txOne = mock(async (sql, params) => ({ id: "tournament-1", status: params[13], bracket_size: params[3] }));
+    const { deps: d, txUnsafe } = createDeps(txOne);
+    const response = await handleCreateTournament(
+      request("/api/tournaments", {
+        siteId: "site-1",
+        title: "Friday Cup",
+        gameName: "Fortnite",
+        format: "1v1",
+        bracketSize: 4,
+        entryCap: null,
+        chatChannel: "https://kick.com/36_ates",
+        entryKeyword: "!cup",
+      }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const [sql, params] = txOne.mock.calls[0];
+    expect(sql).toContain("chat_channel");
+    expect(params.slice(0, 4)).toEqual(["site-1", "Friday Cup", "Fortnite", 4]);
+    expect(params[5]).toBeNull();
+    expect(params[6]).toBe("1v1");
+    expect(params[11]).toBe("!cup");
+    expect(params[12]).toBe("36_ates");
+    expect(params[13]).toBe("draft");
+    expect(txUnsafe).not.toHaveBeenCalled();
+  });
+
+  it("keeps a tournament with explicit participants active and treats bracket size as separate from the signup cap", async () => {
+    const txOne = mock(async (sql, params) => ({ id: "tournament-1", status: params[13] }));
+    const { deps: d } = createDeps(txOne);
+    const response = await handleCreateTournament(
+      request("/api/tournaments", { siteId: "site-1", bracketSize: 8, entryCap: 40 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const [, params] = txOne.mock.calls[0];
+    expect(params[3]).toBe(8);
+    expect(params[5]).toBe(40);
+    expect(params[13]).toBe("draft");
+
+    const seeded = mock(async (sql, params) => ({ id: "tournament-2", status: params[13] }));
+    const { deps: d2 } = createDeps(seeded);
+    await handleCreateTournament(
+      request("/api/tournaments", { siteId: "site-1", participants: ["A", "B", "C", "D"] }),
+      {},
+      d2
+    );
+    expect(seeded.mock.calls[0][1][13]).toBe("active");
+  });
+
+  it("rejects an unsupported bracket size instead of falling back", async () => {
+    const txOne = mock(async (sql, params) => ({ id: "tournament-1", bracket_size: params[3] }));
+    const { deps: d } = createDeps(txOne);
+    const response = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1", bracketSize: 6 }), {}, d);
+    expect(response.status).toBe(400);
+    expect(txOne).not.toHaveBeenCalled();
+
+    const defaultTxOne = mock(async (sql, params) => ({ id: "tournament-2", bracket_size: params[3] }));
+    const { deps: defaults } = createDeps(defaultTxOne);
+    const okResponse = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1" }), {}, defaults);
+    expect(okResponse.status).toBe(200);
+    expect(defaultTxOne.mock.calls[0][1][3]).toBe(8);
+  });
+
+  it("rejects formats that cannot be created", async () => {
+    for (const format of ["2v2", "swiss"]) {
+      const txOne = mock(async () => ({ id: "tournament-1" }));
+      const { deps: d } = createDeps(txOne);
+      const response = await handleCreateTournament(
+        request("/api/tournaments", { siteId: "site-1", format }),
+        {},
+        d
+      );
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toContain("Unsupported tournament format.");
+      expect(txOne).not.toHaveBeenCalled();
+    }
+
+    const draft = { ...TOURNAMENT, status: "draft", signup_state: "closed", format: "bracket", bracket_size: 8 };
+    const settings = deps({ oneValues: [draft, { entries: 0, matches: 0 }] });
+    const settingsResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { format: "2v2" }),
+      {},
+      settings
+    );
+    expect(settingsResponse.status).toBe(400);
+    expect((await settingsResponse.json()).error).toContain("Unsupported tournament format.");
+  });
+
+  it("marks the tournament active when the random pick seeds the bracket", async () => {
+    const picked = [
+      { id: "entry-1", display_name: "Alice" },
+      { id: "entry-2", display_name: "Bob" },
+      { id: "entry-3", display_name: "Carol" },
+      { id: "entry-4", display_name: "Dave" },
+    ];
+    const d = deps({
+      oneValues: [{ ...TOURNAMENT, signup_state: "locked" }],
+      txOneValues: [
+        { id: TOURNAMENT.id, bracket_size: 4, format: "bracket", status: "draft", signup_state: "locked", entry_fee: 0 },
+        { count: 0 },
+        { count: 4 },
+      ],
+      txQueryValues: [picked, picked],
+    });
+    const unsafe = mock(async () => []);
+    d.withTransaction = mock(async (fn) => fn({ one: d._mocks.txOne, query: d._mocks.txQuery, unsafe }));
+    const response = await handleRandomPickTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/random-pick", { count: 4 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const update = unsafe.mock.calls.find(([sql]) => String(sql).includes("UPDATE tournaments"));
+    expect(update[0]).toContain("status='active'");
+    expect(update[0]).not.toContain("bracket_size=");
+    expect(update[1]).toEqual([["Alice", "Bob", "Carol", "Dave"], TOURNAMENT.id]);
+    // Seeding uses the stored bracket size: a 4-player bracket is 3 matches.
+    const inserts = unsafe.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO tournament_matches"));
+    expect(inserts).toHaveLength(3);
+  });
+
+  it("requires locked signups, no existing bracket, and a pick equal to the bracket size", async () => {
+    const openPick = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [{ id: TOURNAMENT.id, bracket_size: 4, status: "draft", signup_state: "open", entry_fee: 0 }],
+    });
+    const openResponse = await handleRandomPickTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/random-pick", { count: 4 }),
+      {},
+      openPick
+    );
+    expect(openResponse.status).toBe(409);
+    expect((await openResponse.json()).error).toContain("Lock signups");
+
+    const seededPick = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, bracket_size: 4, status: "draft", signup_state: "locked", entry_fee: 0 },
+        { count: 2 },
+      ],
+    });
+    const seededResponse = await handleRandomPickTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/random-pick", { count: 4 }),
+      {},
+      seededPick
+    );
+    expect(seededResponse.status).toBe(409);
+    expect((await seededResponse.json()).error).toContain("Bracket already exists");
+
+    const mismatch = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, bracket_size: 8, status: "draft", signup_state: "locked", entry_fee: 0 },
+        { count: 0 },
+      ],
+    });
+    const mismatchResponse = await handleRandomPickTournamentEntries(
+      request("/api/tournaments/tournament-1/entries/random-pick", { count: 4 }),
+      {},
+      mismatch
+    );
+    expect(mismatchResponse.status).toBe(400);
+    expect((await mismatchResponse.json()).error).toContain("bracket size of 8");
+  });
+
+  it("changes format and bracket size only while nothing depends on them", async () => {
+    const draft = { ...TOURNAMENT, status: "draft", signup_state: "closed", format: "bracket", bracket_size: 8 };
+    const ok = deps({ oneValues: [draft, { entries: 0, matches: 0 }, { ...draft, format: "1v1", bracket_size: 4 }] });
+    const okResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { format: "1v1", bracketSize: 4 }),
+      {},
+      ok
+    );
+    expect(okResponse.status).toBe(200);
+    const [sql, params] = ok._mocks.one.mock.calls[3];
+    expect(sql.split("RETURNING")[0]).toContain("bracket_size");
+    expect(sql.split("RETURNING")[0]).toContain("format");
+    expect(params).toEqual([4, "1v1", TOURNAMENT.id]);
+
+    const withEntries = deps({ oneValues: [{ ...draft, signup_state: "open" }, { entries: 3, matches: 0 }] });
+    const formatResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { format: "2v2" }),
+      {},
+      withEntries
+    );
+    expect(formatResponse.status).toBe(409);
+    expect((await formatResponse.json()).error).toContain("Format is locked");
+
+    const sizeStillOpen = deps({ oneValues: [{ ...draft, signup_state: "open" }, { entries: 3, matches: 0 }, { ...draft, bracket_size: 16 }] });
+    const sizeResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 16 }),
+      {},
+      sizeStillOpen
+    );
+    expect(sizeResponse.status).toBe(200);
+
+    const seeded = deps({ oneValues: [{ ...draft, status: "active", signup_state: "locked" }, { entries: 8, matches: 7 }] });
+    const lockedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 4 }),
+      {},
+      seeded
+    );
+    expect(lockedResponse.status).toBe(409);
+    expect((await lockedResponse.json()).error).toContain("Bracket size is locked");
+
+    const unsupported = deps({ oneValues: [draft, { entries: 0, matches: 0 }] });
+    const unsupportedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 6 }),
+      {},
+      unsupported
+    );
+    expect(unsupportedResponse.status).toBe(400);
   });
 });
