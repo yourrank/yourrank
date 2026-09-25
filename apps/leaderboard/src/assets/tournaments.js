@@ -40,15 +40,16 @@ const LIFECYCLE_LABELS = {
 // BYE_LABEL is what the UI renders for it; a player named "BYE" stays normal.
 const BYE = "__YOURRANK_INTERNAL_BYE__";
 const BYE_LABEL = "BYE";
-const ELIGIBLE = ["pending", "confirmed"];
-const isEligible = (entry, tourn) => ELIGIBLE.includes(entry.status)
-  && !(Number(tourn.entry_fee) === 0 && entry.alt_flag);
 const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
 let board = {};
 let tournament = null;
 let entries = [];
+// Server-computed entry counts from /entries — eligibility is authoritative
+// server-side (people_review_allow makes flagged free entries eligible), so
+// the UI never approximates it from status/alt_flag.
+let entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
 let matches = [];
 let activeTab = "entries";
 let chatConnection = null;
@@ -324,9 +325,8 @@ function renderTournament() {
   updateChatStatus(lifecycle);
   updateEntriesPolling(lifecycle);
   const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
-  const eligibleCount = entries.filter((entry) => isEligible(entry, tournament)).length;
   renderSummary(lifecycle, activeCount);
-  renderPrimary(lifecycle, eligibleCount);
+  renderPrimary(lifecycle, entryCounts.eligible || 0);
   renderEntries(lifecycle);
   renderBracket(lifecycle);
   renderSettingsForm(lifecycle);
@@ -340,6 +340,7 @@ async function loadEntries() {
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/bracket`).catch(() => ({ matches: [] })),
   ]);
   entries = entryData.entries || [];
+  entryCounts = entryData.counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
   matches = bracketData.matches || [];
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
@@ -430,6 +431,7 @@ async function submitCreate(event) {
     const data = await api("/api/tournaments", { method: "POST", body: JSON.stringify(parsed.body) });
     tournament = data.tournament;
     entries = [];
+    entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
     matches = [];
     activeTab = "entries";
     closeCreateModal();
@@ -541,7 +543,7 @@ async function handlePrimary() {
     return loadTournament();
   }
   if (action === "create-bracket") {
-    const eligible = entries.filter((entry) => isEligible(entry, tournament)).length;
+    const eligible = entryCounts.eligible || 0;
     if (!await showConfirmModal(
       "Create bracket",
       `Create the bracket with ${eligible} players? Players will be randomly placed in the bracket. This cannot be undone.`,
@@ -591,7 +593,7 @@ function updateSelectCounter() {
 
 function renderSelectList() {
   const filter = String($("ts-search").value || "").trim().toLowerCase();
-  const eligible = entries.filter((entry) => isEligible(entry, tournament));
+  const eligible = entries.filter((entry) => entry.eligible === true);
   const visible = filter
     ? eligible.filter((entry) => String(entry.display_name || "").toLowerCase().includes(filter))
     : eligible;
@@ -614,7 +616,7 @@ function syncSelectMode() {
 async function openSelectModal() {
   const modal = $("tournament-select-modal");
   if (!modal) return;
-  const eligible = entries.filter((entry) => isEligible(entry, tournament)).length;
+  const eligible = entryCounts.eligible || 0;
   const cap = tournament?.bracket_size || 0;
   $("ts-random-text").textContent = `Randomly select ${cap} of ${eligible} eligible players.`;
   $("ts-mode-random").checked = true;

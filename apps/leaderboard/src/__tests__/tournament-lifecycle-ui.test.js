@@ -65,7 +65,22 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (path === "/api/tournaments") return json({ ok: true, tournaments: server.tournaments, chatRegistration: server.chatRegistration });
   const current = server.tournaments[0];
-  if (path.endsWith("/entries")) return json({ ok: true, entries: server.entries });
+  if (path.endsWith("/entries")) {
+    // The real server marks each row with the authoritative `eligible` flag;
+    // fixtures may override it explicitly, otherwise status decides.
+    const list = server.entries.map((entry) => ({
+      eligible: ["pending", "confirmed"].includes(entry.status),
+      ...entry,
+    }));
+    const counts = {
+      active: list.filter((e) => ["pending", "confirmed", "selected"].includes(e.status)).length,
+      eligible: list.filter((e) => e.eligible === true).length,
+      waitlist: list.filter((e) => e.status === "waitlist").length,
+      removed: list.filter((e) => e.status === "removed").length,
+      blocked: list.filter((e) => e.status === "blocked").length,
+    };
+    return json({ ok: true, entries: list, counts });
+  }
   if (path.endsWith("/entries/select")) {
     current.status = "active";
     return json({ ok: true, entries: server.entries });
@@ -611,6 +626,54 @@ describe("tournament lifecycle UI", () => {
     const manualReq = manualReqs[manualReqs.length - 1];
     expect(manualReq.body.mode).toBe("manual");
     expect(manualReq.body.entryIds).toEqual(["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7"]);
+  });
+
+  it("uses the server eligible flag — an approved flagged entrant counts and is selectable", async () => {
+    reset({
+      tournaments: [{ ...base, signup_state: "locked", bracket_size: 8 }],
+      entries: [
+        { id: "e1", display_name: "normal", source: "chat", status: "pending", eligible: true },
+        { id: "e2", display_name: "approved-flag", source: "chat", status: "pending", alt_flag: true, eligible: true },
+        { id: "e3", display_name: "unapproved-flag", source: "chat", status: "pending", alt_flag: true, eligible: false },
+      ],
+    });
+    await mod.boot();
+    // counts.eligible = 2: the unapproved flag is excluded by the server.
+    expect(text("tournament-primary")).toBe("Create bracket with 2 players");
+    expect(text("tournament-step-label")).toContain("2 eligible players");
+
+    // Oversubscribed: 9 eligible (one approved flag) for cap 8 → manual modal.
+    reset({
+      tournaments: [{ ...base, signup_state: "locked", bracket_size: 8 }],
+      entries: [
+        { id: "flag", display_name: "approved-flag", source: "chat", status: "pending", alt_flag: true, eligible: true },
+        ...Array.from({ length: 8 }, (_, i) => ({ id: `e${i}`, display_name: `player${i}`, source: "chat", status: "pending", eligible: true })),
+        { id: "inel", display_name: "not-eligible", source: "chat", status: "pending", alt_flag: true, eligible: false },
+      ],
+    });
+    await mod.boot();
+    expect(text("tournament-primary")).toBe("Select participants");
+    await click("tournament-primary");
+    $id("ts-mode-manual").checked = true;
+    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flush();
+    const boxes = [...$id("ts-entry-list").querySelectorAll("input[type=checkbox]")];
+    // The 9 eligible rows are listed; the ineligible one is not.
+    expect(boxes).toHaveLength(9);
+    expect(boxes.map((b) => b.value)).toContain("flag");
+    expect(boxes.map((b) => b.value)).not.toContain("inel");
+
+    for (const box of boxes.filter((b) => b.value !== "e0")) {
+      box.checked = true;
+      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+    }
+    await flush();
+    expect(text("ts-counter")).toBe("Selected 8 / 8");
+    await click("tournament-select-submit");
+    const reqs = requestsTo("/api/tournaments/t-1/entries/select", "POST");
+    const last = reqs[reqs.length - 1];
+    expect(last.body.entryIds).toContain("flag");
+    expect(last.body.entryIds).toHaveLength(8);
   });
 
   it("renders BYE matches without score inputs", async () => {

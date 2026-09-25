@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 import {
   addTournamentEntryTx,
+  handleListTournamentEntries,
   handleSelectTournamentEntries,
   handleUpdateMatchScore,
   handleUpdateTournamentSettings,
@@ -34,6 +35,8 @@ const handlerDeps = () => ({
   query: (text, params) => sql.unsafe(text, params),
   requireSiteCapabilityImpl: async () => ({ res: null }),
   withTransaction: (fn) => sql.begin((tx) => fn(wrapTx(tx))),
+  rateLimit: async () => ({ ok: true }),
+  clientIp: () => "127.0.0.1",
   logAudit: async () => {},
 });
 
@@ -60,6 +63,7 @@ async function seedTournament(siteId, { bracketSize = 8, entryCap = null, signup
 const post = (path, body) => new Request(`https://yourrank.site${path}`, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}),
 });
+const get = (path) => new Request(`https://yourrank.site${path}`);
 
 beforeAll(async () => {
   if (!databaseUrl) return;
@@ -254,5 +258,57 @@ describe("tournament signup cap (Postgres)", () => {
     expect(tournament.signup_state).toBe("locked");
     const holders = await sql`SELECT count(*)::int AS n FROM tournament_open_signups WHERE tournament_id=${tournamentId}`;
     expect(holders[0].n).toBe(0);
+  });
+
+  integrationIt("marks a flagged free entry ineligible until a people_review_allow audit exists", async () => {
+    const siteId = await seedSite();
+    // entry_fee 0 → flagged rows need an audit-log approval to be eligible.
+    const tournamentId = await seedTournament(siteId, { signupState: "locked" });
+    const [flagged] = await sql`INSERT INTO tournament_entries
+        (tournament_id, display_name, source, status, alt_flag)
+      VALUES (${tournamentId}, 'flagged', 'chat', 'pending', true)
+      RETURNING id`;
+
+    const listEntries = async () => (await (await handleListTournamentEntries(
+      get(`/api/tournaments/${tournamentId}/entries`), {}, handlerDeps()
+    )).json());
+
+    const before = await listEntries();
+    expect(before.entries[0].eligible).toBe(false);
+    expect(before.counts.eligible).toBe(0);
+
+    await sql`INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+      VALUES (NULL, 'people_review_allow', 'tournament_entry', ${String(flagged.id)}, '{}'::jsonb)`;
+    const after = await listEntries();
+    expect(after.entries[0].eligible).toBe(true);
+    expect(after.counts.eligible).toBe(1);
+  });
+
+  integrationIt("selects an approved flagged entrant alongside a normal one for a random bracket", async () => {
+    const siteId = await seedSite();
+    const tournamentId = await seedTournament(siteId, { bracketSize: 8, signupState: "locked" });
+    await sql`INSERT INTO tournament_entries (tournament_id, display_name, source, status)
+      VALUES (${tournamentId}, 'normal', 'chat', 'pending')`;
+    const [flagged] = await sql`INSERT INTO tournament_entries
+        (tournament_id, display_name, source, status, alt_flag)
+      VALUES (${tournamentId}, 'flagged-approved', 'chat', 'pending', true)
+      RETURNING id`;
+    await sql`INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+      VALUES (NULL, 'people_review_allow', 'tournament_entry', ${String(flagged.id)}, '{}'::jsonb)`;
+
+    const listed = await (await handleListTournamentEntries(
+      get(`/api/tournaments/${tournamentId}/entries`), {}, handlerDeps()
+    )).json();
+    expect(listed.counts.eligible).toBe(2);
+
+    const res = await handleSelectTournamentEntries(
+      post(`/api/tournaments/${tournamentId}/entries/select`, { mode: "random" }),
+      {},
+      handlerDeps()
+    );
+    expect(res.status).toBe(200);
+    const matches = await sql`SELECT player1_name, player2_name FROM tournament_matches
+      WHERE tournament_id=${tournamentId} AND round_number=3`;
+    expect([matches[0].player1_name, matches[0].player2_name].sort()).toEqual(["flagged-approved", "normal"]);
   });
 });

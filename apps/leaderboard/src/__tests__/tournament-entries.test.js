@@ -462,6 +462,51 @@ describe("tournament entry lifecycle", () => {
     expect(foreign._mocks.query).not.toHaveBeenCalled();
   });
 
+  it("computes eligibility server-side with the shared predicate in rows and counts", async () => {
+    const stored = { ...TOURNAMENT, entry_fee: 0 };
+    const rows = [
+      { id: "e1", display_name: "flagged-pending", status: "pending", alt_flag: true, eligible: false },
+      { id: "e2", display_name: "approved-flagged", status: "pending", alt_flag: true, eligible: true },
+      { id: "e3", display_name: "normal", status: "pending", alt_flag: false, eligible: true },
+      { id: "e4", display_name: "chosen", status: "selected", eligible: false },
+      { id: "e5", display_name: "waiting", status: "waitlist", eligible: false },
+      { id: "e6", display_name: "gone", status: "removed", eligible: false },
+      { id: "e7", display_name: "banned", status: "blocked", eligible: false },
+    ];
+    const d = deps({
+      oneValues: [stored, { active: 4, eligible: 3, waitlist: 1, removed: 1, blocked: 1 }],
+      queryValues: [rows],
+    });
+    const response = await handleListTournamentEntries(
+      request("/api/tournaments/tournament-1/entries"),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.counts).toEqual({ active: 4, eligible: 3, waitlist: 1, removed: 1, blocked: 1 });
+
+    // The same predicate expression drives the per-row column and the counts
+    // filter; a free tournament passes flagOnlyWhenFree=true to both.
+    const [entriesSql, entriesParams] = d._mocks.query.mock.calls[0];
+    const [countsSql, countsParams] = d._mocks.one.mock.calls[2];
+    expect(String(entriesSql)).toContain("people_review_allow");
+    expect(String(entriesSql)).toContain("AS eligible");
+    expect(String(countsSql)).toContain("people_review_allow");
+    expect(String(countsSql)).toContain("AS eligible");
+    expect(entriesParams[1]).toBe(true);
+    expect(countsParams[1]).toBe(true);
+
+    const byName = Object.fromEntries(body.entries.map((e) => [e.display_name, e]));
+    expect(byName["flagged-pending"].eligible).toBe(false);
+    expect(byName["approved-flagged"].eligible).toBe(true);
+    expect(byName["normal"].eligible).toBe(true);
+    expect(byName["chosen"].eligible).toBe(false);
+    expect(byName["waiting"].eligible).toBe(false);
+    expect(byName["gone"].eligible).toBe(false);
+    expect(byName["banned"].eligible).toBe(false);
+  });
+
   it("preserves untouched tournament settings during a partial update", async () => {
     const stored = {
       ...TOURNAMENT,

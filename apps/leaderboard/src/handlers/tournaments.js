@@ -642,25 +642,30 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
   if (!rl.ok) return bad("Rate limit exceeded. Try again shortly.", 429);
 
   const tournament = access.tournament;
+  // Eligibility is server-authoritative: the same predicate the select
+  // endpoint uses is computed per row and in the counts, so the dashboard
+  // never approximates the rule client-side. $2 = flag-only-when-free.
+  const flagOnlyWhenFree = Number(tournament.entry_fee) === 0;
   const entries = await query(
     `SELECT id, display_name, viewer_id, source, status, trust_score, alt_flag, alt_reason,
-            team_no, created_at, updated_at
+            team_no, created_at, updated_at, (${ELIGIBLE_ENTRY_PREDICATE}) AS eligible
        FROM tournament_entries
       WHERE tournament_id=$1
-      ORDER BY CASE WHEN $2::boolean AND alt_flag THEN 0 ELSE 1 END,
+      ORDER BY CASE WHEN $3::boolean AND alt_flag THEN 0 ELSE 1 END,
                created_at ASC`,
-    [tournamentId, tournament.anti_alt_enabled === true]
+    [tournamentId, flagOnlyWhenFree, tournament.anti_alt_enabled === true]
   );
   const counts = await one(
     `SELECT count(*) FILTER (WHERE status IN ('pending', 'confirmed', 'selected'))::integer AS active,
+            count(*) FILTER (WHERE ${ELIGIBLE_ENTRY_PREDICATE})::integer AS eligible,
             count(*) FILTER (WHERE status='waitlist')::integer AS waitlist,
             count(*) FILTER (WHERE status='removed')::integer AS removed,
             count(*) FILTER (WHERE status='blocked')::integer AS blocked
        FROM tournament_entries
       WHERE tournament_id=$1`,
-    [tournamentId]
+    [tournamentId, flagOnlyWhenFree]
   );
-  return ok({ tournament, entries: entries || [], counts: counts || { active: 0, waitlist: 0, removed: 0, blocked: 0 } });
+  return ok({ tournament, entries: entries || [], counts: counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
 }
 
 /**
