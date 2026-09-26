@@ -162,12 +162,25 @@ describe("engageCardState", () => {
     });
     expect(locked.tone).toBe("warn");
     expect(locked.label).toBe("Signups locked");
+    // An active bracket keeps signup_state "locked"; bracket lifecycle must win.
     const bracket = engageCardState("tournaments", {
-      tournaments: [{ title: "Cup", status: "active", signup_state: "closed", bracket_size: 8, participant_count: 9, selected_count: 8 }],
+      tournaments: [{ title: "Community tournament", status: "active", signup_state: "locked", bracket_size: 8, participant_count: 8, selected_count: 8 }],
     });
     expect(bracket.tone).toBe("live");
     expect(bracket.label).toBe("Bracket in progress");
-    expect(bracket.meta).toEqual(["Cup", "8 participants · 8 slots"]);
+    expect(bracket.meta).toEqual(["Community tournament", "8 participants · 8 slots"]);
+    expect(bracket.action.label).toBe("Open tournament");
+    const doneLocked = engageCardState("tournaments", {
+      tournaments: [{ title: "Cup", status: "completed", signup_state: "locked", bracket_size: 8, participant_count: 8, selected_count: 8 }],
+    });
+    expect(doneLocked.tone).toBe("done");
+    expect(doneLocked.label).toBe("Completed");
+    const draftClosed = engageCardState("tournaments", {
+      tournaments: [{ title: "Cup", status: "draft", signup_state: "closed", bracket_size: 8, participant_count: 0, selected_count: 0 }],
+    });
+    expect(draftClosed.tone).toBe("warn");
+    expect(draftClosed.label).toBe("Draft");
+    expect(draftClosed.meta).toEqual(["Cup"]);
   });
 });
 

@@ -100,10 +100,20 @@ export function engageCardState(feature, payload = {}) {
     const participants = Number(bracketed ? latest.selected_count : latest.participant_count) || 0;
     const slots = Number(latest.bracket_size) || 0;
     const counts = `${plural(participants, "participant")} · ${plural(slots, "slot")}`;
+    // Bracket lifecycle outranks registration lifecycle: an active bracket
+    // keeps signup_state "locked", which must not shadow "Bracket in progress".
     if (latest.status === "completed") {
       return {
         tone: "done",
         label: "Completed",
+        meta: [latest.title, counts],
+        action: openAction("Open tournament"),
+      };
+    }
+    if (latest.status === "active") {
+      return {
+        tone: "live",
+        label: "Bracket in progress",
         meta: [latest.title, counts],
         action: openAction("Open tournament"),
       };
@@ -124,23 +134,12 @@ export function engageCardState(feature, payload = {}) {
         action: openAction("Open tournament"),
       };
     }
-    if (latest.status === "active") {
-      return {
-        tone: "live",
-        label: "Bracket in progress",
-        meta: [latest.title, counts],
-        action: openAction("Open tournament"),
-      };
-    }
-    if (latest.status === "draft") {
-      return {
-        tone: "warn",
-        label: "Draft",
-        meta: [latest.title],
-        action: openAction("Open tournament"),
-      };
-    }
-    return none;
+    return {
+      tone: "warn",
+      label: "Draft",
+      meta: [latest.title],
+      action: openAction("Open tournament"),
+    };
   }
 
   return none;
