@@ -7,6 +7,11 @@
 //      └──────── send failed, attempts left ──────┘  ├── body invalid ──▶ invalid (terminal)
 //                                                    └── attempts exhausted ─▶ failed (terminal)
 //
+// Every terminal transition also stamps `resolution` + `resolved_at`
+// ('replayed' | 'invalid' | 'exhausted'). Actionable rows are
+// `resolved_at IS NULL`; `replayed_at` remains the pure delivery marker and
+// is never written by failure paths.
+//
 // A lease that expires while `replaying` (caller crashed between enqueue and
 // completion) is reclaimable by the next caller; the message body — and with it
 // the original eventId/correlationId of an envelope — is re-sent verbatim, so
@@ -20,35 +25,44 @@ import { errMessage } from "./errors.js";
 export const DLQ_REPLAY_LEASE_SECONDS = 120;
 
 const DLQ_SUMMARY_SQL = `SELECT event_type,
-       count(*)::int AS pending,
-       count(*) FILTER (WHERE replay_state IN ('failed', 'invalid'))::int AS terminal,
-       min(received_at) AS oldest_received_at,
+       count(*) FILTER (WHERE resolved_at IS NULL)::int AS pending,
+       count(*) FILTER (WHERE resolution = 'invalid')::int AS invalid,
+       count(*) FILTER (WHERE resolution = 'exhausted')::int AS exhausted,
+       min(received_at) FILTER (WHERE resolved_at IS NULL) AS oldest_received_at,
        max(replay_attempts)::int AS max_attempts
 FROM queue_dlq_events
-WHERE replayed_at IS NULL
+WHERE resolution IS DISTINCT FROM 'replayed'
 GROUP BY event_type
 ORDER BY pending DESC`;
 
-const DLQ_PAGE_SQL = `SELECT message_id, queue_name, event_type, event_id, correlation_id, received_at,
-       replay_attempts, replay_state, replay_lease_expires_at, last_replay_error
+const pageSql = (includeTerminal: boolean) => `SELECT message_id, queue_name, event_type, event_id, correlation_id, received_at,
+       replay_attempts, replay_state, replay_lease_expires_at, last_replay_error,
+       resolved_at, resolution
 FROM queue_dlq_events
-WHERE replayed_at IS NULL
+WHERE ${includeTerminal ? "resolution IS DISTINCT FROM 'replayed'" : "resolved_at IS NULL"}
 ORDER BY received_at ASC
 LIMIT $1`;
+
+const DLQ_PAGE_SQL = pageSql(false);
+const DLQ_PAGE_TERMINAL_SQL = pageSql(true);
 
 const DLQ_PAGE_BODY_SQL = `SELECT message_id, body
 FROM queue_dlq_events
 WHERE message_id = ANY($1::text[])`;
 
+export type DlqPageOptions = { includeBody?: boolean; includeTerminal?: boolean };
+
 // Rows still marked replaying whose lease expired after the attempt budget was
 // spent can never be claimed again; make that terminal and visible.
 const DLQ_EXPIRE_EXHAUSTED_SQL = `UPDATE queue_dlq_events
 SET replay_state = 'failed',
+    resolved_at = now(),
+    resolution = 'exhausted',
     replay_lease_token = NULL,
     replay_lease_expires_at = NULL,
     replay_state_changed_at = now(),
     last_replay_error = coalesce(last_replay_error, 'replay lease expired after max attempts')
-WHERE replayed_at IS NULL
+WHERE resolved_at IS NULL
   AND replay_state = 'replaying'
   AND replay_lease_expires_at < now()
   AND replay_attempts >= $1
@@ -58,7 +72,7 @@ function claimSql(byIds: boolean): string {
   return `WITH candidate AS (
   SELECT message_id, replay_state AS prior_state
   FROM queue_dlq_events
-  WHERE replayed_at IS NULL
+  WHERE resolved_at IS NULL
     AND replay_attempts < $1
     AND (COALESCE(replay_state, 'pending') = 'pending'
          OR (replay_state = 'replaying' AND replay_lease_expires_at < now()))
@@ -86,18 +100,22 @@ const DLQ_CLAIM_OLDEST_SQL = claimSql(false);
 // so a stale holder can never overwrite a newer lease's outcome.
 const DLQ_MARK_REPLAYED_SQL = `UPDATE queue_dlq_events
 SET replay_state = 'replayed', replayed_at = now(),
+    resolved_at = now(), resolution = 'replayed',
     replay_lease_token = NULL, replay_lease_expires_at = NULL, replay_state_changed_at = now()
 WHERE message_id = $1 AND replay_state = 'replaying' AND replay_lease_token = $2
 RETURNING message_id`;
 
 const DLQ_MARK_INVALID_SQL = `UPDATE queue_dlq_events
 SET replay_state = 'invalid', last_replay_error = left($3, 500),
+    resolved_at = now(), resolution = 'invalid',
     replay_lease_token = NULL, replay_lease_expires_at = NULL, replay_state_changed_at = now()
 WHERE message_id = $1 AND replay_state = 'replaying' AND replay_lease_token = $2
 RETURNING message_id`;
 
 const DLQ_MARK_SEND_FAILED_SQL = `UPDATE queue_dlq_events
 SET replay_state = CASE WHEN replay_attempts >= $4 THEN 'failed' ELSE 'pending' END,
+    resolved_at = CASE WHEN replay_attempts >= $4 THEN now() END,
+    resolution = CASE WHEN replay_attempts >= $4 THEN 'exhausted' END,
     last_replay_error = left($3, 500),
     replay_lease_token = NULL, replay_lease_expires_at = NULL, replay_state_changed_at = now()
 WHERE message_id = $1 AND replay_state = 'replaying' AND replay_lease_token = $2
@@ -131,13 +149,13 @@ function boundedLimit(value: unknown, fallback: number, cap: number): number {
 
 export async function getDlqPage(
   limit = 50,
-  includeBody = false,
+  { includeBody = false, includeTerminal = false }: DlqPageOptions = {},
   { queryImpl = query }: DlqDb = {},
 ): Promise<{ summary: unknown[]; rows: unknown[] }> {
   const pageLimit = boundedLimit(limit, 50, 200);
   const [summary, rows] = await Promise.all([
     queryImpl(DLQ_SUMMARY_SQL),
-    queryImpl(DLQ_PAGE_SQL, [pageLimit]),
+    queryImpl(includeTerminal ? DLQ_PAGE_TERMINAL_SQL : DLQ_PAGE_SQL, [pageLimit]),
   ]);
 
   if (!includeBody || rows.length === 0) return { summary, rows };
@@ -272,6 +290,7 @@ export async function replayDlq(
 export const dlqSql = {
   summary: DLQ_SUMMARY_SQL,
   page: DLQ_PAGE_SQL,
+  pageTerminal: DLQ_PAGE_TERMINAL_SQL,
   expireExhausted: DLQ_EXPIRE_EXHAUSTED_SQL,
   claimByIds: DLQ_CLAIM_BY_IDS_SQL,
   claimOldest: DLQ_CLAIM_OLDEST_SQL,

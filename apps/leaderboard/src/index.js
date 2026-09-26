@@ -758,6 +758,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           oldest_pending_at: dlq.oldest_pending_at,
           oldest_pending_age_seconds: dlq.oldest_pending_age_seconds,
           pending_capped: dlq.pending_capped,
+          terminal: dlq.terminal,
           degraded_reasons: dlq.degraded_reasons,
         };
         if (dlq.error) result.dlq.error = dlq.error;

@@ -6,12 +6,15 @@ describe("DLQ health", () => {
     const health = await readDlqHealth(async () => ({
       pending: 0,
       oldest_received_at: null,
+      terminal_invalid: 2,
+      terminal_exhausted: 1,
     }));
 
     expect(health).toMatchObject({
       pending: 0,
       pending_capped: false,
       oldest_pending_age_seconds: null,
+      terminal: { invalid: 2, exhausted: 1 },
       degraded: false,
       degraded_reasons: [],
       error: null,
@@ -72,6 +75,7 @@ describe("DLQ health", () => {
       oldest_pending_at: null,
       oldest_pending_age_seconds: null,
       pending_capped: false,
+      terminal: { invalid: null, exhausted: null },
       degraded: true,
       degraded_reasons: ["probe_failed"],
       error: "probe_failed",

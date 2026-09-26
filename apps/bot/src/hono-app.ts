@@ -555,7 +555,8 @@ export function buildHonoApp({
   api.get("/dlq", async (c) => {
     const limit = Number(c.req.query("limit") ?? "50");
     const includeBody = ["1", "true", "yes"].includes((c.req.query("include_body") ?? "").toLowerCase());
-    const page = await getDlqPage(limit, includeBody, dlqDb);
+    const includeTerminal = ["1", "true", "yes"].includes((c.req.query("include_terminal") ?? "").toLowerCase());
+    const page = await getDlqPage(limit, { includeBody, includeTerminal }, dlqDb);
     return c.json(page);
   });
 
