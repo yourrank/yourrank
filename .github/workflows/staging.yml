@@ -18,6 +18,9 @@ name: Staging release
 # mutation, after Web mutation, or make the recovery command itself fail so the run
 # stays red. Every mutation step is preceded by scripts/release-target-guard.mjs so
 # a misconfigured environment fails closed before Cloudflare or Supabase is touched.
+# `recover_dlq` (manual dispatch only) replays actionable staging DLQ rows
+# through the bot's /bot/api/dlq/replay after the fixed Bot is live, then
+# requires the actionable backlog to drain before the release continues.
 #
 # GitHub `staging` environment contract (validated by scripts/staging-preflight.mjs):
 #   vars:    STAGING_HYPERDRIVE_ID, STAGING_SUPABASE_PROJECT_REF, STAGING_WEB_URL,
@@ -30,6 +33,10 @@ name: Staging release
 on:
   workflow_dispatch:
     inputs:
+      recover_dlq:
+        description: "Staging-only: replay actionable DLQ rows through /bot/api/dlq/replay after the fixed Bot is live (manual dispatch only)"
+        type: boolean
+        default: false
       inject_failure:
         description: "Staging-only failure injection for finalizer verification"
         type: choice
@@ -410,6 +417,7 @@ jobs:
     name: Backend-local readiness (staging)
     needs: [deploy-leaderboard-staging, deploy-bot-staging, deploy-consumer-staging]
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
@@ -483,6 +491,47 @@ jobs:
             echo "FAIL: /health could not read the staging DLQ table through Hyperdrive — response: $BODY"; exit 1
           fi
           echo "OK: staging DLQ health readable (pending=$(printf '%s' "$BODY" | jq -r '.dlq.pending'))"
+      - name: "Recovery: replay actionable staging DLQ rows (manual recover_dlq only)"
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_dlq == true && env.RELEASE_ENVIRONMENT == 'staging' }}
+        env:
+          STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STAGING_ADMIN_API_KEY:-}" ]; then
+            echo "::error::STAGING_ADMIN_API_KEY is not configured in the staging environment"
+            exit 1
+          fi
+          curl -sS --fail --max-time 120 -X POST \
+            -H "x-api-key: $STAGING_ADMIN_API_KEY" \
+            -H 'content-type: application/json' \
+            --data '{"limit":100,"maxAttempts":3}' \
+            "$STAGING_APEX/bot/api/dlq/replay" \
+            -o "$RUNNER_TEMP/dlq-replay.json"
+          COUNTS=$(jq -r '"replayed=\(.replayed.count) failed=\(.failed.count) invalid=\(.invalid.count) skipped=\(.skipped.count) exhausted=\(.exhausted.count) reclaimed=\(.reclaimed.count)"' "$RUNNER_TEMP/dlq-replay.json")
+          printf '%s\n' "$COUNTS"
+          printf 'DLQ recovery replay: %s\n' "$COUNTS" >> "$GITHUB_STEP_SUMMARY"
+          NONOK=$(( $(jq -r '.failed.count' "$RUNNER_TEMP/dlq-replay.json") \
+                  + $(jq -r '.invalid.count' "$RUNNER_TEMP/dlq-replay.json") \
+                  + $(jq -r '.exhausted.count' "$RUNNER_TEMP/dlq-replay.json") ))
+          if [ "$NONOK" -gt 0 ]; then
+            echo "::error::DLQ replay produced terminal/failed rows; not continuing"
+            exit 1
+          fi
+      - name: "Recovery: staging DLQ must be actionable-clean before smoke"
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.recover_dlq == true && env.RELEASE_ENVIRONMENT == 'staging' }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            BODY=$(curl -sS -L --max-time 20 "$STAGING_APEX/health" || true)
+            echo "DLQ check $attempt/12: pending=$(printf '%s' "$BODY" | jq -r '.dlq.pending // "?"') oldest_age=$(printf '%s' "$BODY" | jq -r '.dlq.oldest_pending_age_seconds // "?"') reasons=$(printf '%s' "$BODY" | jq -c '.dlq.degraded_reasons // []') terminal=$(printf '%s' "$BODY" | jq -c '.dlq.terminal // {}')"
+            if printf '%s' "$BODY" | jq -e '.dlq.pending == 0 and (.dlq.degraded_reasons|length) == 0' >/dev/null 2>&1; then
+              echo "OK: staging DLQ is actionable-clean"
+              exit 0
+            fi
+            [ "$attempt" = "12" ] || sleep 10
+          done
+          echo "::error::Staging DLQ still has actionable rows after replay and consumer drain."
+          exit 1
       - name: Staging-only failure injection (after backend mutation)
         if: ${{ inputs.inject_failure == 'after-backend-mutation' && env.RELEASE_ENVIRONMENT == 'staging' }}
         run: |
