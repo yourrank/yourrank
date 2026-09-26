@@ -64,6 +64,7 @@ const deployWorkflowPromise = rootFile(".github/workflows/deploy.yml");
 const rollbackWorkflowPromise = rootFile(".github/workflows/rollback.yml");
 const contractWorkflowPromise = rootFile(".github/workflows/contract-migration.yml");
 const webWorkflowPromise = rootFile(".github/workflows/deploy-web.yml");
+const dlqReplayWorkflowPromise = rootFile(".github/workflows/staging-dlq-replay.yml");
 
 const workerState = (scriptName, versionId, tag) => ({
   scriptName,
@@ -477,6 +478,53 @@ describe("F-012 staging release verification", () => {
     expect(verdict).toContain("dlq.degraded_reasons is not empty");
     const smoke = staging.slice(staging.indexOf("release-smoke-staging:"));
     expect(smoke).toContain("node scripts/staging-monitor-verdict.mjs");
+  });
+
+  describe("staging DLQ replay workflow", () => {
+    it("replays pending rows only through the bot admin API with sanitized reporting", async () => {
+      const workflow = await dlqReplayWorkflowPromise;
+      // Manual-only trigger; it must never run as part of a push or a PR.
+      expect(workflow).toContain("workflow_dispatch");
+      const onBlock = workflow.slice(workflow.indexOf("\non:"), workflow.indexOf("\npermissions:"));
+      expect(onBlock).not.toMatch(/\bpush:/);
+      expect(onBlock).not.toMatch(/\bpull_request:/);
+      // Staging-scoped: environment, concurrency lock shared with the release,
+      // and the staging apex — never a production host or path.
+      expect(workflow).toContain("environment: staging");
+      expect(workflow).toContain("group: staging-mutation");
+      expect(workflow).toContain("STAGING_APEX: https://staging.yourrank.site");
+      expect(workflow).toContain('"$STAGING_APEX/bot/api/dlq/replay"');
+      expect(workflow).not.toMatch(/yourrank\.site\/bot\//);
+      // Auth comes only from the staging environment secret and is never echoed.
+      expect(workflow).toContain("secrets.STAGING_ADMIN_API_KEY");
+      expect(workflow).not.toContain("set -x");
+      for (const line of workflow.split("\n")) {
+        if (/echo/i.test(line)) expect(line).not.toMatch(/\$\{?STAGING_ADMIN_API_KEY/);
+      }
+      // The request payload (which carries messageIds) is never logged.
+      expect(workflow).not.toContain('cat "$RUNNER_TEMP/replay.json"');
+      expect(workflow).not.toContain("Replay request:");
+      const printedLines = workflow
+        .split("\n")
+        .filter((line) => /^\s*(echo|printf|cat)\b/.test(line));
+      for (const line of printedLines) {
+        expect(line).not.toContain("INPUT_MESSAGE_ID");
+        expect(line).not.toContain("replay.json");
+        expect(line).not.toContain("messageIds");
+      }
+      // Reporting is sanitized: counts only, no ids/bodies, and no SQL writes.
+      expect(workflow).toContain(".replayed.count");
+      expect(workflow).not.toMatch(/jq\s+\./);
+      expect(workflow).not.toMatch(/cat\s+"?\$RUNNER_TEMP\/replay-response\.json"?/);
+      expect(workflow).not.toContain(".ids");
+      // Replays only via the admin API — no direct SQL mutation of the table.
+      expect(workflow).not.toMatch(/\bDELETE\s+FROM\b/i);
+      expect(workflow).not.toMatch(/\bUPDATE\s+queue_dlq_events\b/i);
+      expect(workflow).not.toMatch(/SET\s+replayed_at/i);
+      // The health verdict is untouched.
+      const verdict = await rootFile("scripts/staging-monitor-verdict.mjs");
+      expect(verdict).toContain("dlq.degraded_reasons is not empty");
+    });
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {
