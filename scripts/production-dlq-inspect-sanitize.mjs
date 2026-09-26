@@ -6,19 +6,9 @@
 
 import { readFileSync } from "node:fs";
 import { parseQueueMessage } from "../packages/shared/dist/queue-producer.js";
-
-const ENVELOPE_KEYS = ["v", "eventId", "eventType", "createdAt", "payload"];
-const LEGACY_KEYS = ["type", "kind", "siteId"];
-
-const keysOf = (value) =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? Object.keys(value).sort()
-    : [];
+import { ENVELOPE_KEYS, LEGACY_KEYS, hasAll, isTop3Notify, keysOf } from "./lib/dlq-inspect-shared.mjs";
 
 const shape = (body) => `${Array.isArray(body) ? "array" : typeof body}:${keysOf(body).join(",")}`;
-
-const hasAll = (obj, keys) =>
-  obj !== null && typeof obj === "object" && !Array.isArray(obj) && keys.every((k) => k in obj);
 
 // last_replay_error is free-form runtime text and is never emitted; it is
 // reduced to a kind plus structural Zod diagnostics when it parses as a Zod
@@ -64,16 +54,6 @@ const groupBy = (rows, keyOf, emit) => {
     groups.get(key).push(row);
   }
   return [...groups.entries()].map(([key, group]) => emit(key, group));
-};
-
-const isTop3Notify = (row) => {
-  const body = row.body;
-  if (hasAll(body, ENVELOPE_KEYS)) {
-    const payload = body.payload;
-    return payload !== null && typeof payload === "object" &&
-      payload.type === "notify" && payload.kind === "top3";
-  }
-  return hasAll(body, LEGACY_KEYS) && body.type === "notify" && body.kind === "top3";
 };
 
 const top3Changes = (row) => {

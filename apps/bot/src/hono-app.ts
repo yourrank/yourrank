@@ -12,7 +12,7 @@ import type { EntitlementDenial } from "@yourrank/shared/entitlements";
 import { rateLimit, type RateLimitKV } from "./ratelimit.js";
 import { createQueueProducer, type QueueEvent } from "@yourrank/shared/queue-producer";
 import { directQueueFallback } from "@yourrank/shared/queue-effects";
-import { getDlqPage, replayDlq, type DlqDb } from "./dlq-ops.js";
+import { acknowledgeDlq, DlqAcknowledgeInputError, getDlqPage, replayDlq, type DlqDb } from "./dlq-ops.js";
 import { recordConversion, type PostbackQuery } from "@yourrank/shared/conversions";
 import {
   POSTBACK_SUNSET,
@@ -583,6 +583,31 @@ export function buildHonoApp({
     }, dlqDb);
     console.log(JSON.stringify({ event: "dlq_replay", ...result }));
     return c.json(result);
+  });
+
+  api.post("/dlq/acknowledge", async (c) => {
+    let body: { messageIds?: string[]; reason?: string };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid JSON body" }, 400);
+    }
+    if (!body || typeof body !== "object") return c.json({ error: "JSON object required" }, 400);
+    if (!Array.isArray(body.messageIds)) {
+      return c.json({ error: "messageIds must be an array" }, 400);
+    }
+    try {
+      const result = await acknowledgeDlq(
+        { messageIds: body.messageIds, reason: body.reason as string },
+        dlqDb,
+      );
+      return c.json(result);
+    } catch (err) {
+      if (err instanceof DlqAcknowledgeInputError) {
+        return c.json({ error: err.message }, 400);
+      }
+      throw err;
+    }
   });
 
   // POST /api/reencrypt — re-encrypt all bot tokens with the current key.

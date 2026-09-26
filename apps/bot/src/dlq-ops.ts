@@ -7,8 +7,11 @@
 //      └──────── send failed, attempts left ──────┘  ├── body invalid ──▶ invalid (terminal)
 //                                                    └── attempts exhausted ─▶ failed (terminal)
 //
+// Operators can also dispose of an actionable row directly:
+//   pending ──acknowledge (operator, bounded reason)──▶ acknowledged (terminal)
+//
 // Every terminal transition also stamps `resolution` + `resolved_at`
-// ('replayed' | 'invalid' | 'exhausted'). Actionable rows are
+// ('replayed' | 'invalid' | 'exhausted' | 'acknowledged'). Actionable rows are
 // `resolved_at IS NULL`; `replayed_at` remains the pure delivery marker and
 // is never written by failure paths.
 //
@@ -28,6 +31,7 @@ const DLQ_SUMMARY_SQL = `SELECT event_type,
        count(*) FILTER (WHERE resolved_at IS NULL)::int AS pending,
        count(*) FILTER (WHERE resolution = 'invalid')::int AS invalid,
        count(*) FILTER (WHERE resolution = 'exhausted')::int AS exhausted,
+       count(*) FILTER (WHERE resolution = 'acknowledged')::int AS acknowledged,
        min(received_at) FILTER (WHERE resolved_at IS NULL) AS oldest_received_at,
        max(replay_attempts)::int AS max_attempts
 FROM queue_dlq_events
@@ -37,7 +41,7 @@ ORDER BY pending DESC`;
 
 const pageSql = (includeTerminal: boolean) => `SELECT message_id, queue_name, event_type, event_id, correlation_id, received_at,
        replay_attempts, replay_state, replay_lease_expires_at, last_replay_error,
-       resolved_at, resolution
+       resolved_at, resolution, ack_reason
 FROM queue_dlq_events
 WHERE ${includeTerminal ? "resolution IS DISTINCT FROM 'replayed'" : "resolved_at IS NULL"}
 ORDER BY received_at ASC
@@ -287,6 +291,66 @@ export async function replayDlq(
   return summarizeReplay(result);
 }
 
+export const DLQ_ACK_MAX_IDS = 200;
+export const DLQ_ACK_REASON_MAX = 200;
+
+export class DlqAcknowledgeInputError extends Error {}
+
+// Operator acknowledgement: a single atomic statement so a row can never be
+// half-disposed. Already-resolved rows (replayed/invalid/exhausted) and rows
+// still under a live replay lease are never touched; `replay_state`,
+// `replayed_at`, body, `last_replay_error`, and `replay_attempts` are left
+// untouched so the acknowledge disposition stays a pure audit overlay.
+const DLQ_ACKNOWLEDGE_SQL = `WITH requested AS (
+  SELECT message_id, resolution FROM queue_dlq_events WHERE message_id = ANY($1::text[])
+), updated AS (
+  UPDATE queue_dlq_events q
+  SET resolution = 'acknowledged', resolved_at = now(), replay_state_changed_at = now(),
+      replay_lease_token = NULL, replay_lease_expires_at = NULL, ack_reason = left($2, ${DLQ_ACK_REASON_MAX})
+  WHERE q.message_id = ANY($1::text[]) AND q.resolved_at IS NULL
+    AND (q.replay_state IS DISTINCT FROM 'replaying' OR q.replay_lease_expires_at < now())
+  RETURNING q.message_id
+)
+SELECT (SELECT count(*)::int FROM updated) AS acknowledged,
+       (SELECT count(*)::int FROM requested WHERE resolution = 'acknowledged') AS already_acknowledged,
+       (SELECT count(*)::int FROM requested WHERE resolution IS NOT NULL AND resolution <> 'acknowledged') AS skipped_resolved,
+       (SELECT count(*)::int FROM requested WHERE resolution IS NULL) - (SELECT count(*)::int FROM updated) AS skipped_leased,
+       $3::int - (SELECT count(*)::int FROM requested) AS unknown`;
+
+export type DlqAcknowledgeResult = {
+  requested: number;
+  acknowledged: number;
+  already_acknowledged: number;
+  skipped_resolved: number;
+  skipped_leased: number;
+  unknown: number;
+};
+
+export async function acknowledgeDlq(
+  { messageIds, reason }: { messageIds: string[]; reason: string },
+  { queryImpl = query }: DlqDb = {},
+): Promise<DlqAcknowledgeResult> {
+  if (!Array.isArray(messageIds) || messageIds.length === 0) {
+    throw new DlqAcknowledgeInputError("messageIds must be a non-empty array");
+  }
+  const ids = [...new Set(messageIds)].filter(
+    (id): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id),
+  );
+  if (ids.length !== messageIds.length) {
+    throw new DlqAcknowledgeInputError("messageIds must be non-empty bounded identifier strings");
+  }
+  if (ids.length > DLQ_ACK_MAX_IDS) {
+    throw new DlqAcknowledgeInputError(`messageIds must not exceed ${DLQ_ACK_MAX_IDS} entries`);
+  }
+  if (typeof reason !== "string" || !/^[a-z0-9_.:-]{1,200}$/.test(reason)) {
+    throw new DlqAcknowledgeInputError(`reason must match ^[a-z0-9_.:-]{1,${DLQ_ACK_REASON_MAX}}$`);
+  }
+  const [counts] = await queryImpl(DLQ_ACKNOWLEDGE_SQL, [ids, reason, ids.length]);
+  const result = { requested: ids.length, ...(counts as Omit<DlqAcknowledgeResult, "requested">) };
+  console.log(JSON.stringify({ event: "dlq_acknowledge", ...result }));
+  return result;
+}
+
 export const dlqSql = {
   summary: DLQ_SUMMARY_SQL,
   page: DLQ_PAGE_SQL,
@@ -297,4 +361,5 @@ export const dlqSql = {
   markReplayed: DLQ_MARK_REPLAYED_SQL,
   markInvalid: DLQ_MARK_INVALID_SQL,
   markSendFailed: DLQ_MARK_SEND_FAILED_SQL,
+  acknowledge: DLQ_ACKNOWLEDGE_SQL,
 };
