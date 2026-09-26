@@ -186,6 +186,7 @@ export function resolveFragment(targetPath) {
   // Safe Activities foundation
   if (clean === "/dashboard/activities") return { pageKey: "activities", tab: "overview" };
   // Engagement
+  if (clean === "/dashboard/giveaways") return { pageKey: "giveaways", tab: "hub" };
   if (clean.startsWith("/dashboard/giveaways/")) {
     const tab = clean.slice("/dashboard/giveaways/".length);
     if (["chat", "raffles", "tournaments"].includes(tab)) return { pageKey: "giveaways", tab };
@@ -1066,6 +1067,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         redirectUrl.searchParams.set("area", "dashboard");
         redirectUrl.searchParams.set("return", "/dashboard");
         return redirectResponse(redirectUrl, 302);
+      }
+      if (path === "/dashboard/giveaways") {
+        return renderDashboardPage("giveaways", "giveaways_render_failed", "hub");
       }
       if (path.startsWith("/dashboard/giveaways/")) {
         const tab = path.slice("/dashboard/giveaways/".length);

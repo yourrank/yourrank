@@ -21,7 +21,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
   it("no longer models Giveaways → Drops as a dashboard route or tab", () => {
     expect(DASHBOARD_ROUTES.find((r) => r.id === "giveaways.drops")).toBeUndefined();
     expect(DASHBOARD_ROUTES.find((r) => r.canonicalPath === LEGACY_DROPS)).toBeUndefined();
-    expect(DYNAMIC_SECTIONS.giveaways.tabs).toEqual(["chat", "raffles", "preds", "tournaments"]);
+    expect(DYNAMIC_SECTIONS.giveaways.tabs).toEqual(["hub", "chat", "raffles", "preds", "tournaments"]);
     expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds", "tournaments"]);
     expect(parseDynamicPath(LEGACY_DROPS)).toBeNull();
     expect(resolveFragment(LEGACY_DROPS)).toBeNull();
@@ -63,8 +63,8 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
       expect(html, tab).not.toContain('id="btn-create-drop"');
       expect(html, tab).not.toContain(LEGACY_DROPS);
     }
-    // An unknown/removed tab falls back to the primary Chat giveaways tab.
-    expect(renderGiveawaysContentHtml("drops")).toContain('id="tab-btn-chat" href="/dashboard/giveaways/chat" data-tab="chat" role="tab" aria-selected="true"');
+    // An unknown/removed tab falls back to the primary Chat giveaways pane.
+    expect(renderGiveawaysContentHtml("drops")).toContain('id="pane-chat"');
 
     const controller = read("../assets/giveaways.js");
     expect(controller).not.toContain("/api/events/drops");
@@ -110,17 +110,20 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
     expect(quick).toContain("drop: `/dashboard/activities");
   });
 
-  it("keeps Giveaways ordered as Chat (primary) with secondary mechanics behind More", () => {
+  it("keeps the four Giveaways feature panes reachable through the Engage hub cards", () => {
     const html = renderGiveawaysContentHtml("chat");
-    expect(html).toContain('id="tab-btn-chat"');
-    expect(html).not.toMatch(/id="tab-btn-chat"[^>]*data-tabs-legacy/);
-    expect(html).toContain('id="tab-btn-gw-more"');
-    for (const tab of ["raffles", "preds", "tournaments"]) {
-      expect(html).toMatch(new RegExp(`id="tab-btn-${tab}"[^>]*data-tabs-legacy hidden`));
+    expect(html).toContain('id="pane-chat"');
+    expect(html).not.toContain("gw-tab-btn");
+    expect(html).not.toContain("data-tabs-more");
+    const hub = renderGiveawaysContentHtml("hub");
+    for (const [feature, href] of [
+      ["chat", "/dashboard/giveaways/chat"],
+      ["tournaments", "/dashboard/giveaways/tournaments"],
+      ["raffles", "/dashboard/giveaways/raffles"],
+      ["preds", "/dashboard/giveaways/predictions"],
+    ]) {
+      expect(hub).toContain(`data-feature="${feature}"`);
+      expect(hub).toContain(`href="${href}"`);
     }
-    const chatIndex = html.indexOf('id="tab-btn-chat"');
-    const moreIndex = html.indexOf('id="tab-btn-gw-more"');
-    expect(chatIndex).toBeGreaterThan(-1);
-    expect(moreIndex).toBeGreaterThan(chatIndex);
   });
 });
