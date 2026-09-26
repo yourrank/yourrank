@@ -3,11 +3,11 @@ import { errMessage } from "@yourrank/shared/errors";
 
 const DLQ_HEALTH_LIMIT = 1000;
 
-const DLQ_HEALTH_SQL = `SELECT count(*)::int AS pending,
-       min(received_at) AS oldest_received_at
-FROM (
-  SELECT received_at FROM queue_dlq_events WHERE replayed_at IS NULL ORDER BY received_at ASC LIMIT $1
-) t`;
+const DLQ_HEALTH_SQL = `SELECT p.pending, p.oldest_received_at,
+       (SELECT count(*)::int FROM queue_dlq_events WHERE resolution = 'invalid') AS terminal_invalid,
+       (SELECT count(*)::int FROM queue_dlq_events WHERE resolution = 'exhausted') AS terminal_exhausted
+FROM (SELECT count(*)::int AS pending, min(received_at) AS oldest_received_at
+      FROM (SELECT received_at FROM queue_dlq_events WHERE resolved_at IS NULL ORDER BY received_at ASC LIMIT $1) t) p`;
 
 export async function readDlqHealth(
   queryImpl = one,
@@ -36,6 +36,10 @@ export async function readDlqHealth(
       oldest_pending_at: oldestPendingAt,
       oldest_pending_age_seconds: oldestPendingAgeSeconds,
       pending_capped: pending >= limit,
+      terminal: {
+        invalid: Number(row?.terminal_invalid || 0),
+        exhausted: Number(row?.terminal_exhausted || 0),
+      },
       degraded: countDegraded || ageDegraded,
       degraded_reasons: [countDegraded ? "count_threshold" : null, ageDegraded ? "oldest_pending_age" : null].filter(Boolean),
       error: null,
@@ -52,6 +56,7 @@ export async function readDlqHealth(
       oldest_pending_at: null,
       oldest_pending_age_seconds: null,
       pending_capped: false,
+      terminal: { invalid: null, exhausted: null },
       degraded: true,
       degraded_reasons: ["probe_failed"],
       error: "probe_failed",

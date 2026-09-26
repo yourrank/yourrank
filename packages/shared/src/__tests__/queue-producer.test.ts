@@ -1,5 +1,13 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createQueueProducer, parseQueueEvent, type QueueEvent } from "../queue-producer.js";
+import {
+  createQueueProducer,
+  parseQueueEvent,
+  parseQueueMessage,
+  QueueEventValidationError,
+  type QueueEvent,
+} from "../queue-producer.js";
+import { QueueEventValidationError as PackageQueueEventValidationError } from "@yourrank/shared/queue-producer";
+import { detectTop3Changes } from "../notifications.js";
 
 const clickEvent: QueueEvent = {
   type: "click",
@@ -84,5 +92,105 @@ describe("createQueueProducer", () => {
 
     expect(fallback).toHaveBeenCalledTimes(3);
     expect(fallback.mock.calls.map(([event]) => event.playerName)).toEqual(["A", "B", "C"]);
+  });
+
+  describe("top3 notify contract", () => {
+    const fakeQueue = () => {
+      const sent: unknown[] = [];
+      return { sent, send: async (message: unknown) => { sent.push(message); } };
+    };
+    const noFallback = async () => { throw new Error("fallback must not run"); };
+
+    it("carries score and rankBy through the envelope and back through parseQueueMessage", async () => {
+      const changes = detectTop3Changes(
+        [{ name: "A", wagered: 10, score: 5 }],
+        [
+          { name: "B", wagered: 20, score: 42 },
+          { name: "C", wagered: 15, score: 11 },
+        ],
+        "score",
+      );
+      expect(changes[0]).toMatchObject({ name: "B", score: 42, rankBy: "score" });
+      const queue = fakeQueue();
+      const producer = createQueueProducer(queue, noFallback);
+      await producer.send({
+        type: "notify",
+        kind: "top3",
+        siteId: "site-1",
+        siteName: "Arena",
+        changes,
+      });
+      const parsed = parseQueueMessage(queue.sent[0]);
+      expect(parsed.legacy).toBe(false);
+      expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
+    });
+
+    it("accepts rankBy wagered changes without a score key", async () => {
+      const changes = detectTop3Changes(
+        [],
+        [{ name: "A", wagered: 99 }],
+        "wagered",
+      );
+      expect(changes).toEqual([{ name: "A", rank: 1, wagered: 99, score: undefined, rankBy: "wagered" }]);
+      const queue = fakeQueue();
+      const producer = createQueueProducer(queue, noFallback);
+      await producer.send({ type: "notify", kind: "top3", siteId: "site-1", siteName: "Arena", changes });
+      const parsed = parseQueueMessage(queue.sent[0]);
+      expect(parsed.legacy).toBe(false);
+      expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
+    });
+  });
+
+  describe("producer boundary validation", () => {
+    const badEvent = {
+      type: "notify",
+      kind: "top3",
+      siteId: "site-1",
+      siteName: "Arena",
+      changes: [{ name: "A", rank: 1, wagered: 5, bogus: "SENTINEL_VALUE" }],
+    } as unknown as QueueEvent;
+
+    it("exports QueueEventValidationError from the package entry point", () => {
+      expect(PackageQueueEventValidationError.name).toBe("QueueEventValidationError");
+      expect(PackageQueueEventValidationError.prototype).toBeInstanceOf(Error);
+      expect(new PackageQueueEventValidationError([]).issues).toEqual([]);
+      const error = new QueueEventValidationError([{ code: "unrecognized_keys", path: ["changes", 0], keys: ["bogus"], message: "x" }]);
+      expect(error.message).toContain("changes.0: unrecognized_keys");
+      expect(error.issues).toHaveLength(1);
+    });
+
+    it("rejects non-canonical events before any queue send or fallback on every path", async () => {
+      const sent: unknown[] = [];
+      const batched: unknown[] = [];
+      const fallback = mock(async () => {});
+      const queueWithBatch = {
+        send: async (m: unknown) => { sent.push(m); },
+        sendBatch: async (ms: Iterable<{ body: unknown }>) => { for (const m of ms) batched.push(m); },
+      };
+      const queueNoBatch = { send: async (m: unknown) => { sent.push(m); } };
+
+      // (a) queue present, send
+      await expect(createQueueProducer(queueWithBatch, fallback).send(badEvent)).rejects.toBeInstanceOf(QueueEventValidationError);
+      // (b) queue present, sendBatch
+      await expect(createQueueProducer(queueWithBatch, fallback).sendBatch([badEvent])).rejects.toBeInstanceOf(QueueEventValidationError);
+      // (c) no-queue fallback, send
+      await expect(createQueueProducer(undefined, fallback).send(badEvent)).rejects.toBeInstanceOf(QueueEventValidationError);
+      // (d) no-queue fallback, sendBatch
+      await expect(createQueueProducer(undefined, fallback).sendBatch([badEvent])).rejects.toBeInstanceOf(QueueEventValidationError);
+      // (e) queue.sendBatch missing → fallbackBatch path still validates first
+      await expect(createQueueProducer(queueNoBatch, fallback).sendBatch([badEvent])).rejects.toBeInstanceOf(QueueEventValidationError);
+
+      expect(sent).toEqual([]);
+      expect(batched).toEqual([]);
+      expect(fallback).toHaveBeenCalledTimes(0);
+
+      let message = "";
+      try {
+        await createQueueProducer(queueWithBatch, fallback).send(badEvent);
+      } catch (err) {
+        message = (err as Error).message;
+      }
+      expect(message).not.toContain("SENTINEL_VALUE");
+    });
   });
 });

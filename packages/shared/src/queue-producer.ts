@@ -43,6 +43,8 @@ const top3NotifyEventSchema = z.object({
     name: label,
     rank: z.number().int().positive(),
     wagered: z.number().finite(),
+    score: z.number().finite().optional(),
+    rankBy: z.enum(["wagered", "score"]).optional(),
   }).strict()).max(3),
 }).strict();
 
@@ -177,18 +179,35 @@ export interface EnvelopeOptions {
   causationId?: string | null;
 }
 
+/**
+ * Thrown when an event fails the canonical queue schema at the producer
+ * boundary. The message carries issue paths and codes only — never values —
+ * so it is safe to log and surface.
+ */
+export class QueueEventValidationError extends Error {
+  issues: z.ZodIssue[];
+
+  constructor(issues: z.ZodIssue[]) {
+    super(`queue event failed canonical schema validation: ${issues.map((issue) => `${issue.path.join(".")}: ${issue.code}`).join(", ")}`);
+    this.name = "QueueEventValidationError";
+    this.issues = issues;
+  }
+}
+
 export function buildQueueEnvelope(event: QueueEvent, options: EnvelopeOptions = {}): QueueEnvelope {
+  const parsed = queueEventSchema.safeParse(event);
+  if (!parsed.success) throw new QueueEventValidationError(parsed.error.issues);
   const envelope: QueueEnvelope = {
     v: QUEUE_ENVELOPE_VERSION,
     eventId: options.eventId || newQueueEventId(),
-    eventType: event.type,
+    eventType: parsed.data.type,
     createdAt: new Date().toISOString(),
-    payload: event,
+    payload: parsed.data,
   };
   const correlationId = options.correlationId === undefined ? currentCorrelationId() : options.correlationId;
   if (correlationId) envelope.correlationId = String(correlationId).slice(0, 160);
   if (options.causationId) envelope.causationId = options.causationId;
-  return envelope;
+  return queueEnvelopeSchema.parse(envelope);
 }
 
 export type QueueFallback = (event: QueueEvent, env: any, envelope: QueueEnvelope) => Promise<void>;

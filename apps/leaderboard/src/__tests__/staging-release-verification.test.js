@@ -86,6 +86,13 @@ const jobBlock = (workflow, job) => {
   return match[1];
 };
 
+const stepBlockFrom = (workflow, name) => {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = workflow.match(new RegExp(`- name: "?${escaped}"?([\\s\\S]*?)(?=\\n      - name:|$)`));
+  if (!match) throw new Error(`step "${name}" missing`);
+  return match[1];
+};
+
 describe("F-012 staging release verification", () => {
   it("fails closed while the checked-in configs still carry the Hyperdrive placeholder", async () => {
     const problems = await checkStagingConfigs(readRepoConfig);
@@ -525,6 +532,29 @@ describe("F-012 staging release verification", () => {
       const verdict = await rootFile("scripts/staging-monitor-verdict.mjs");
       expect(verdict).toContain("dlq.degraded_reasons is not empty");
     });
+  });
+
+  it("recover_dlq gates a sanitized replay plus an actionable-clean check behind manual dispatch", async () => {
+    const staging = await stagingWorkflowPromise;
+    // Manual-only recovery input, default off.
+    expect(staging).toContain("recover_dlq:");
+    const inputBlock = staging.slice(staging.indexOf("recover_dlq:"), staging.indexOf("inject_failure:"));
+    expect(inputBlock).toContain("type: boolean");
+    expect(inputBlock).toContain("default: false");
+    const gate = "github.event_name == 'workflow_dispatch' && inputs.recover_dlq == true";
+    const replayStep = stepBlockFrom(staging, "Recovery: replay actionable staging DLQ rows (manual recover_dlq only)");
+    const cleanStep = stepBlockFrom(staging, "Recovery: staging DLQ must be actionable-clean before smoke");
+    for (const step of [replayStep, cleanStep]) expect(step).toContain(gate);
+    // The replay body is fixed and the response is only ever reduced to counts.
+    expect(replayStep).toContain("--data '{\"limit\":100,\"maxAttempts\":3}'");
+    expect(replayStep).toContain("secrets.STAGING_ADMIN_API_KEY");
+    expect(replayStep).not.toContain(".ids");
+    expect(replayStep).not.toMatch(/jq\s+\./);
+    expect(replayStep).not.toMatch(/cat\s+"?\$RUNNER_TEMP\/dlq-replay\.json"?/);
+    // The post-replay gate requires the actionable backlog to be empty.
+    expect(cleanStep).toContain(".dlq.pending == 0");
+    const verdict = await rootFile("scripts/staging-monitor-verdict.mjs");
+    expect(verdict).toContain("dlq.degraded_reasons is not empty");
   });
 
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {

@@ -218,6 +218,45 @@ describe("DLQ replay operations", () => {
     expect(outcomes).toContain("lease_lost_after_send");
   });
 
+  it("tracks resolution columns instead of replayed_at for actionable state", async () => {
+    for (const sql of Object.values(dlqSql)) {
+      expect(sql).not.toContain("replayed_at IS NULL");
+    }
+    for (const key of ["claimOldest", "claimByIds", "expireExhausted"] as const) {
+      expect(dlqSql[key]).toContain("resolved_at IS NULL");
+    }
+    expect(dlqSql.markReplayed).toContain("resolved_at = now(), resolution = 'replayed'");
+    expect(dlqSql.markInvalid).toContain("resolved_at = now(), resolution = 'invalid'");
+    expect(dlqSql.markSendFailed).toContain("resolution = CASE WHEN replay_attempts >= $4 THEN 'exhausted' END");
+    expect(dlqSql.expireExhausted).toContain("resolution = 'exhausted'");
+    expect(dlqSql.summary).toContain("resolution IS DISTINCT FROM 'replayed'");
+    expect(dlqSql.page).toContain("resolved_at IS NULL");
+    expect(dlqSql.pageTerminal).toContain("resolution IS DISTINCT FROM 'replayed'");
+  });
+
+  it("serves the page and summary through the admin route, with include_terminal switching the page", async () => {
+    process.env.ADMIN_API_KEY = "test-admin-key";
+    const queries: string[] = [];
+    const queryImpl = async (text: string) => {
+      queries.push(text);
+      return [];
+    };
+    const app = buildHonoApp({ dlqDb: { queryImpl } });
+    const get = (path: string) => app.request(`https://bot.example${path}`, {
+      headers: { "x-api-key": "test-admin-key" },
+    }, { RL_FAIL_OPEN: "true" });
+
+    let response = await get("/api/dlq");
+    expect(response.status).toBe(200);
+    expect(queries[1]).toBe(dlqSql.page);
+
+    queries.length = 0;
+    response = await get("/api/dlq?include_terminal=1");
+    expect(response.status).toBe(200);
+    expect(queries[1]).toBe(dlqSql.pageTerminal);
+    expect(queries[1]).not.toBe(dlqSql.page);
+  });
+
   it("serves replay through the authenticated admin route", async () => {
     process.env.ADMIN_API_KEY = "test-admin-key";
     const sent: unknown[] = [];
