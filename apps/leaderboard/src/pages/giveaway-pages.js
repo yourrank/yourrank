@@ -757,6 +757,37 @@ ${tabs}
         </div>
       </form>
     </div>
+
+    <div class="modal tournament-create-modal" id="tournament-select-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-select-heading" hidden>
+      <div class="modal-card tournament-create-card" id="tournament-select-card">
+        <h3 id="tournament-select-heading">Select participants</h3>
+        <div class="tournament-select-modes" role="radiogroup" aria-label="Selection mode">
+          <label class="tournament-select-mode">
+            <input type="radio" name="tournament-select-mode" id="ts-mode-random" value="random" checked />
+            <span>Random</span>
+          </label>
+          <label class="tournament-select-mode">
+            <input type="radio" name="tournament-select-mode" id="ts-mode-manual" value="manual" />
+            <span>Manual</span>
+          </label>
+        </div>
+        <div id="ts-pane-random">
+          <p id="ts-random-text"></p>
+          <p class="hint">Players will be randomly placed in the bracket.</p>
+        </div>
+        <div id="ts-pane-manual" hidden>
+          <input id="ts-search" type="search" placeholder="Search entries" aria-label="Search entries" autocomplete="off" class="tournament-control" />
+          <ul id="ts-entry-list" class="tournament-select-list"></ul>
+          <p class="tournament-select-counter" id="ts-counter" aria-live="polite">Selected 0 / 8</p>
+          <p class="hint">Players will be randomly placed in the bracket.</p>
+        </div>
+        <p class="tournament-message is-error" id="tournament-select-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="btn btn--sm btn--ghost ghost" type="button" id="tournament-select-cancel">Cancel</button>
+          <button class="btn btn--sm btn--accent" type="button" id="tournament-select-submit">Create bracket</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

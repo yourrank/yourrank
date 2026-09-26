@@ -36,15 +36,20 @@ const LIFECYCLE_LABELS = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
-const ELIGIBLE = ["pending", "confirmed"];
-const isEligible = (entry, tourn) => ELIGIBLE.includes(entry.status)
-  && !(Number(tourn.entry_fee) === 0 && entry.alt_flag);
+// Sentinel for BYE slots — must match BYE in lib/tournament-bracket.js.
+// BYE_LABEL is what the UI renders for it; a player named "BYE" stays normal.
+const BYE = "__YOURRANK_INTERNAL_BYE__";
+const BYE_LABEL = "BYE";
 const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
 let board = {};
 let tournament = null;
 let entries = [];
+// Server-computed entry counts from /entries — eligibility is authoritative
+// server-side (people_review_allow makes flagged free entries eligible), so
+// the UI never approximates it from status/alt_flag.
+let entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
 let matches = [];
 let activeTab = "entries";
 let chatConnection = null;
@@ -279,15 +284,21 @@ function renderPrimary(lifecycle, eligibleCount) {
     primary.dataset.action = "lock";
     step.textContent = `Viewers join by typing ${tournament.entry_keyword || "!join"} in chat.`;
   } else if (lifecycle === "signups_locked") {
-    const missing = tournament.bracket_size - eligibleCount;
-    primary.hidden = false;
-    primary.textContent = "Pick participants";
-    primary.dataset.action = "pick";
-    primary.disabled = missing > 0;
+    const cap = tournament.bracket_size;
     reopen.hidden = false;
-    step.textContent = missing > 0
-      ? `Need ${missing} more eligible ${missing === 1 ? "player" : "players"}.`
-      : `${eligibleCount} eligible entries for ${tournament.bracket_size} bracket spots. Picking is random.`;
+    if (eligibleCount < 2) {
+      step.textContent = "Need at least 2 eligible players to start.";
+    } else if (eligibleCount <= cap) {
+      primary.hidden = false;
+      primary.textContent = `Create bracket with ${eligibleCount} players`;
+      primary.dataset.action = "create-bracket";
+      step.textContent = `${eligibleCount} eligible players for up to ${cap} bracket spots. Players will be randomly placed in the bracket.`;
+    } else {
+      primary.hidden = false;
+      primary.textContent = "Select participants";
+      primary.dataset.action = "select-participants";
+      step.textContent = `${eligibleCount} eligible players for ${cap} bracket spots. Select the participants who will compete.`;
+    }
   } else if (lifecycle === "bracket") {
     step.textContent = "Enter match results in the Bracket tab to advance winners.";
   } else if (lifecycle === "completed") {
@@ -314,9 +325,8 @@ function renderTournament() {
   updateChatStatus(lifecycle);
   updateEntriesPolling(lifecycle);
   const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
-  const eligibleCount = entries.filter((entry) => isEligible(entry, tournament)).length;
   renderSummary(lifecycle, activeCount);
-  renderPrimary(lifecycle, eligibleCount);
+  renderPrimary(lifecycle, entryCounts.eligible || 0);
   renderEntries(lifecycle);
   renderBracket(lifecycle);
   renderSettingsForm(lifecycle);
@@ -330,6 +340,7 @@ async function loadEntries() {
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/bracket`).catch(() => ({ matches: [] })),
   ]);
   entries = entryData.entries || [];
+  entryCounts = entryData.counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
   matches = bracketData.matches || [];
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
@@ -420,6 +431,7 @@ async function submitCreate(event) {
     const data = await api("/api/tournaments", { method: "POST", body: JSON.stringify(parsed.body) });
     tournament = data.tournament;
     entries = [];
+    entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
     matches = [];
     activeTab = "entries";
     closeCreateModal();
@@ -530,15 +542,125 @@ async function handlePrimary() {
     stopChat();
     return loadTournament();
   }
-  if (action === "pick") {
-    const count = tournament.bracket_size;
-    if (!await showConfirmModal("Pick participants", `Randomly pick ${count} entries and create the bracket? This cannot be undone.`, "Pick and create bracket", true)) return;
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/random-pick`, {
+  if (action === "create-bracket") {
+    const eligible = entryCounts.eligible || 0;
+    if (!await showConfirmModal(
+      "Create bracket",
+      `Create the bracket with ${eligible} players? Players will be randomly placed in the bracket. This cannot be undone.`,
+      "Create bracket",
+      true
+    )) return;
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/select`, {
       method: "POST",
-      body: JSON.stringify({ count }),
+      body: JSON.stringify({ mode: "random" }),
     });
     activeTab = "bracket";
     await loadEntries();
+  }
+  if (action === "select-participants") return openSelectModal();
+}
+
+// ---- Select participants modal -------------------------------------------
+
+let releaseSelectTrap = null;
+// Manual picks survive search filtering, which re-renders the checkbox list.
+const manualSelection = new Set();
+
+function setSelectError(text = "") {
+  const el = $("tournament-select-error");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+function selectedIds() {
+  return [...manualSelection];
+}
+
+function toggleManualSelection(box) {
+  if (box.checked) manualSelection.add(box.value);
+  else manualSelection.delete(box.value);
+  updateSelectCounter();
+}
+
+function updateSelectCounter() {
+  const cap = tournament?.bracket_size || 0;
+  const count = selectedIds().length;
+  $("ts-counter").textContent = `Selected ${count} / ${cap}`;
+  $("tournament-select-submit").disabled =
+    $("ts-mode-manual").checked && count !== cap;
+}
+
+function renderSelectList() {
+  const filter = String($("ts-search").value || "").trim().toLowerCase();
+  const eligible = entries.filter((entry) => entry.eligible === true);
+  const visible = filter
+    ? eligible.filter((entry) => String(entry.display_name || "").toLowerCase().includes(filter))
+    : eligible;
+  $("ts-entry-list").innerHTML = visible.map((entry) => `
+    <li class="tournament-select-row">
+      <label>
+        <input type="checkbox" value="${esc(entry.id)}"${manualSelection.has(entry.id) ? " checked" : ""} />
+        <span>${esc(entry.display_name)}</span>
+      </label>
+    </li>`).join("");
+}
+
+function syncSelectMode() {
+  const manual = $("ts-mode-manual").checked;
+  $("ts-pane-random").hidden = manual;
+  $("ts-pane-manual").hidden = !manual;
+  updateSelectCounter();
+}
+
+async function openSelectModal() {
+  const modal = $("tournament-select-modal");
+  if (!modal) return;
+  const eligible = entryCounts.eligible || 0;
+  const cap = tournament?.bracket_size || 0;
+  $("ts-random-text").textContent = `Randomly select ${cap} of ${eligible} eligible players.`;
+  $("ts-mode-random").checked = true;
+  $("ts-mode-manual").checked = false;
+  $("ts-search").value = "";
+  manualSelection.clear();
+  renderSelectList();
+  syncSelectMode();
+  setSelectError("");
+  modal.hidden = false;
+  document.documentElement.classList.add("yr-modal-open");
+  const dialog = await ensureDialog().catch(() => null);
+  releaseSelectTrap = dialog ? dialog.trap(modal, closeSelectModal) : null;
+  $("ts-mode-random").focus();
+}
+
+function closeSelectModal() {
+  const modal = $("tournament-select-modal");
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  document.documentElement.classList.remove("yr-modal-open");
+  if (releaseSelectTrap) releaseSelectTrap();
+  releaseSelectTrap = null;
+}
+
+async function submitSelect() {
+  const submit = $("tournament-select-submit");
+  const body = $("ts-mode-manual").checked
+    ? { mode: "manual", entryIds: selectedIds() }
+    : { mode: "random" };
+  submit.disabled = true;
+  setSelectError("");
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/select`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    closeSelectModal();
+    activeTab = "bracket";
+    await loadEntries();
+  } catch (error) {
+    setSelectError(error.message || "Could not create the bracket.");
+  } finally {
+    submit.disabled = false;
   }
 }
 
@@ -597,24 +719,40 @@ function renderMatch(match, finished) {
   const p1 = match.player1_name || "TBD";
   const p2 = match.player2_name || "TBD";
   const isComplete = match.status === "completed";
+  const bye1 = p1 === BYE;
+  const bye2 = p2 === BYE;
+  if (bye1 && bye2) {
+    return `
+    <div class="tournament-match is-empty" data-match-id="${esc(match.id)}">
+      <div class="tournament-match-players">
+        <span class="tournament-match-bye">No match</span>
+      </div>
+    </div>
+  `;
+  }
   const p1Winner = isComplete && match.winner_name === p1;
   const p2Winner = isComplete && match.winner_name === p2;
-  const canScore = !finished && !isComplete && p1 !== "TBD" && p2 !== "TBD";
-  const scores = isComplete
-    ? `<span class="tournament-match-score">${match.player1_score ?? 0} - ${match.player2_score ?? 0}</span>`
-    : canScore
-      ? `<input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
-         <span class="tournament-match-divider">–</span>
-         <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
-         <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>`
-      : `<span class="tournament-match-tbd">Waiting for both players</span>`;
+  const canScore = !finished && !isComplete && !bye1 && !bye2 && p1 !== "TBD" && p2 !== "TBD";
+  const playerName = (name, bye, winner) => bye
+    ? `<span class="tournament-match-bye">${esc(BYE_LABEL)}</span>`
+    : `<span class="tournament-match-player${winner ? " winner" : ""}">${esc(name)}${winner ? " 👑" : ""}</span>`;
+  const scores = bye1 || bye2
+    ? `<span class="tournament-match-bye-note">${esc(bye1 ? p2 : p1)} advances automatically</span>`
+    : isComplete
+      ? `<span class="tournament-match-score">${match.player1_score ?? 0} - ${match.player2_score ?? 0}</span>`
+      : canScore
+        ? `<input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
+           <span class="tournament-match-divider">–</span>
+           <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
+           <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>`
+        : `<span class="tournament-match-tbd">Waiting for both players</span>`;
   return `
     <div class="tournament-match" data-match-id="${esc(match.id)}">
       <div class="tournament-match-players">
-        <span class="tournament-match-player${p1Winner ? " winner" : ""}">${esc(p1)}${p1Winner ? " 👑" : ""}</span>
+        ${playerName(p1, bye1, p1Winner)}
       </div>
       <div class="tournament-match-players">
-        <span class="tournament-match-player${p2Winner ? " winner" : ""}">${esc(p2)}${p2Winner ? " 👑" : ""}</span>
+        ${playerName(p2, bye2, p2Winner)}
       </div>
       <div class="tournament-match-actions">${scores}</div>
     </div>
@@ -757,6 +895,8 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.name === "tournament-select-mode") return syncSelectMode();
+  if (event.target.closest?.("#ts-entry-list")) return toggleManualSelection(event.target);
   if (event.target.id === "tc-entry-cap") {
     const custom = $("tc-entry-cap-custom");
     custom.hidden = event.target.value !== "custom";
@@ -771,16 +911,21 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  if (event.target.id === "ts-search") return renderSelectList();
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
 });
 
 document.addEventListener("click", async (event) => {
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, [data-tournament-tab], [data-entry-action], [data-score-match]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, [data-tournament-tab], [data-entry-action], [data-score-match]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
     if (event.target === target) closeCreateModal();
+    return;
+  }
+  if (target.id === "tournament-select-modal") {
+    if (event.target === target) closeSelectModal();
     return;
   }
   event.preventDefault();
@@ -791,6 +936,8 @@ document.addEventListener("click", async (event) => {
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
+    if (target.id === "tournament-select-cancel") return closeSelectModal();
+    if (target.id === "tournament-select-submit") return await submitSelect();
     if (target.id === "tournament-settings-discard") {
       renderSettingsForm(lifecycleOf(tournament, matches.length));
       return clearFieldErrors();

@@ -135,7 +135,7 @@ import {
   handleRemoveTournamentEntry,
   handleBlockTournamentEntry,
   handleRestoreTournamentEntry,
-  handleRandomPickTournamentEntries,
+  handleSelectTournamentEntries,
 } from "./handlers/tournaments.js";
 import {
   handleExportRaffleWinnersCsv,
@@ -410,7 +410,7 @@ export const ROUTES = [
   { path: "/api/tournaments/:id/entries/:entryId/remove", method: "POST", handler: withHandler(handleRemoveTournamentEntry) },
   { path: "/api/tournaments/:id/entries/:entryId/block", method: "POST", handler: withHandler(handleBlockTournamentEntry) },
   { path: "/api/tournaments/:id/entries/:entryId/restore", method: "POST", handler: withHandler(handleRestoreTournamentEntry) },
-  { path: "/api/tournaments/:id/entries/random-pick", method: "POST", handler: withHandler(handleRandomPickTournamentEntries) },
+  { path: "/api/tournaments/:id/entries/select", method: "POST", handler: withHandler(handleSelectTournamentEntries) },
 
   // One-Click CSV Data Exports
   { path: "/api/export/raffle-winners.csv", method: "GET", handler: withHandler(handleExportRaffleWinnersCsv) },

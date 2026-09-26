@@ -43,6 +43,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
     mockLogAudit = mock();
     mockWithTransaction = mock((fn) => fn({
       one: (sql, ...a) => String(sql).includes("FROM users") ? Promise.resolve({ plan: "pro", plan_expires_at: null, status: "active" }) : String(sql).includes("SELECT user_id FROM sites") ? Promise.resolve({ user_id: "user-123" }) : mockOne(sql, ...a),
+      query: mockQuery,
       unsafe: mockExec,
     }));
     mockExec.mockResolvedValue([{}]);
@@ -81,6 +82,11 @@ describe("Quests, Duels & Tournaments Suite", () => {
           if (q.includes("FROM users")) return { plan: "pro", plan_expires_at: null, status: "active" };
           if (q.includes("SELECT user_id FROM sites")) return { user_id: "user-123" };
           const res = await mockOne(...args);
+          pending.push({ sql: args[0], params: args[1], res });
+          return res;
+        },
+        query: async (...args) => {
+          const res = await mockQuery(...args);
           pending.push({ sql: args[0], params: args[1], res });
           return res;
         },
@@ -434,6 +440,31 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(body.ok).toBe(true);
       expect(body.winnerName).toBe("Alice");
       expect(body.isFinals).toBe(false);
+    });
+
+    it("treats a player literally named BYE as a normal, scorable player", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "match-1",
+        tournament_id: "tourn-1",
+        round_number: 1,
+        match_index: 0,
+        player1_name: "BYE",
+        player2_name: "Bob",
+        bracket_size: 8,
+        site_id: "site-456",
+        site_user_id: "owner-1",
+      }); // find match
+      mockOne.mockResolvedValueOnce({ player1_name: "TBD", status: "pending" }); // downstream slot
+
+      const req = new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "match-1", player1Score: 2, player2Score: 0 }),
+      });
+      const res = await handleUpdateMatchScore(req, mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.winnerName).toBe("BYE");
     });
 
     it("denies a board-managing team member before updating a restricted match score", async () => {
