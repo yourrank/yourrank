@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { selectAcknowledgeIds } from "../../../../scripts/production-dlq-acknowledge-select.mjs";
+import { verifyAcknowledgedCleanup } from "../../../../scripts/production-dlq-acknowledge-verify.mjs";
 
 const rootFile = (path) => readFile(new URL(`../../../../${path}`, import.meta.url), "utf8");
 
@@ -82,6 +83,64 @@ describe("production DLQ acknowledge selector", () => {
   });
 });
 
+describe("production DLQ acknowledge rerun verifier", () => {
+  const REASON = "stale_top3_notification_after_schema_fix";
+  const termRow = (i, overrides = {}) => ({
+    message_id: `SENTINEL_MID_${i}`,
+    replay_state: "invalid",
+    resolved_at: "2026-01-01T00:00:00.000Z",
+    resolution: "acknowledged",
+    ack_reason: REASON,
+    received_at: "SENTINEL_RECEIVED",
+    ...overrides,
+  });
+  const termPage = (n, mutate) => ({
+    summary: [],
+    rows: Array.from({ length: n }, (_, i) => mutate ? mutate(termRow(i), i) : termRow(i)),
+  });
+  const expectVerifyRefusal = (page, expected = 16) => {
+    try {
+      verifyAcknowledgedCleanup(page, expected, REASON);
+      expect.unreachable();
+    } catch (err) {
+      expect(err.message).toMatch(/^refused:/);
+      for (const sentinel of ["SENTINEL", "SECRET", "other_reason", "stale_top3"]) {
+        expect(err.message).not.toContain(sentinel);
+      }
+      return err.message;
+    }
+  };
+
+  it("accepts a rerun page of fully acknowledged rows and reports counts", () => {
+    const page = termPage(16, (row, i) => i === 0 ? { ...row, resolution: "invalid", ack_reason: null } : row);
+    const counts = verifyAcknowledgedCleanup(termPage(15), 15, REASON);
+    expect(counts).toEqual({ acknowledged: 15, acknowledged_with_reason: 15, actionable: 0, invalid: 0, exhausted: 0 });
+    expect(verifyAcknowledgedCleanup(page, 15, REASON))
+      .toMatchObject({ acknowledged: 15, invalid: 1, exhausted: 0 });
+  });
+
+  it("refuses when acknowledged count differs, reasons mismatch, or rows remain actionable", () => {
+    expect(expectVerifyRefusal(termPage(15), 16)).toContain("15 != expected 16");
+    // one acknowledged row carrying a different reason
+    expect(expectVerifyRefusal(termPage(16, (row, i) => i === 4 ? { ...row, ack_reason: "other_reason" } : row)))
+      .toContain("different ack_reason");
+    // mixed resolutions do not count toward acknowledged
+    expect(expectVerifyRefusal(termPage(15).rows.concat([termRow(99, { resolution: "invalid", ack_reason: null })])
+      .reduce((p, r) => ({ rows: [...(p.rows ?? []), r] }), {}), 16)).toContain("15 != expected 16");
+    expect(expectVerifyRefusal(termPage(15).rows.concat([termRow(99, { resolution: "exhausted", ack_reason: null })])
+      .reduce((p, r) => ({ rows: [...(p.rows ?? []), r] }), {}), 16)).toContain("15 != expected 16");
+    // an unresolved row is still actionable
+    expect(expectVerifyRefusal(termPage(16, (row, i) => i === 7 ? { ...row, resolved_at: null, resolution: null, ack_reason: null } : row)))
+      .toContain("still unresolved");
+  });
+
+  it("refuses an empty page and a possibly truncated page", () => {
+    expect(expectVerifyRefusal({ rows: [] })).toBeTruthy();
+    expect(expectVerifyRefusal({})).toBeTruthy();
+    expect(expectVerifyRefusal(termPage(200))).toContain(">= limit");
+  });
+});
+
 describe("production DLQ acknowledge workflow", () => {
   it("is guarded, production-gated, and never prints ids or bodies", async () => {
     const workflow = await rootFile(".github/workflows/production-dlq-acknowledge.yml");
@@ -102,7 +161,21 @@ describe("production DLQ acknowledge workflow", () => {
       expect(run).not.toMatch(/echo\s+.*ack-request\.json/);
       expect(run).not.toMatch(/jq\s+\.\s/);
     }
-    expect(workflow).not.toContain("include_terminal");
+    // fresh / rerun mode gating
+    expect(workflow).toContain("id: mode");
+    expect(workflow).toContain("actionable total $COUNT is neither 0 nor expected $EXPECTED");
+    const freshSteps = workflow.match(/if: steps\.mode\.outputs\.mode == 'fresh'/g);
+    const rerunSteps = workflow.match(/if: steps\.mode\.outputs\.mode == 'rerun'/g);
+    expect(freshSteps).toHaveLength(2);
+    expect(rerunSteps).toHaveLength(2);
+    // include_terminal appears only on the rerun terminal fetch, never the actionable fetch
+    expect(workflow).toContain("/bot/api/dlq?limit=200&include_terminal=true");
+    expect(workflow.match(/include_terminal=true/g)).toHaveLength(1);
+    expect(workflow).not.toContain("include_body=true&include_terminal");
+    // the unreachable already_acknowledged success branch is gone
+    expect(workflow).not.toContain("idempotent re-run");
+    expect(workflow).not.toContain("ALREADY");
+    expect(workflow).toContain('acknowledged=$ACKED != expected=$EXPECTED');
     expect(workflow).toContain(".dlq.pending == 0");
     expect(workflow).toContain(".dlq.terminal.acknowledged == $expected");
     expect(workflow).not.toContain("upload-artifact");

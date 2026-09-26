@@ -1,12 +1,17 @@
 # Production DLQ Acknowledge — one-time defensive cleanup of the inspected
-# backlog. Every actionable row must match the expected profile (pending,
-# unresolved, event_type 'notify', current-schema-valid Top-3 notify) or the
-# selection script refuses before anything is written. Acknowledge is a
-# resolution overlay, NOT a replay: no row is re-sent to the queue and
-# replay_state/replayed_at/body are never touched. Nothing here prints
-# message ids, bodies, error text, or secrets — the request file is written
-# to disk and referenced only via --data @file, and only counts are echoed.
-# Shares the `production-mutation` lock with deploy/rollback/inspect.
+# backlog, in two modes chosen by the current actionable count:
+#   fresh — the actionable page has exactly `expected_actionable` rows; every
+#     one must match the inspected profile (pending, unresolved, event_type
+#     'notify', current-schema-valid Top-3 notify) or the selector refuses
+#     before anything is written.
+#   rerun — the actionable page is empty because a prior pass already ran;
+#     the terminal page (include_terminal, no bodies) must instead show
+#     exactly `expected` rows acknowledged with the given reason.
+# Acknowledge is a resolution overlay, NOT a replay: no row is re-sent to the
+# queue and replay_state/replayed_at/body are never touched. Nothing here
+# prints message ids, bodies, error text, or secrets — request/response/page
+# files are written to disk and referenced only by path, and only counts are
+# echoed. Shares the `production-mutation` lock with deploy/rollback/inspect.
 
 name: Production DLQ Acknowledge
 
@@ -69,12 +74,29 @@ jobs:
             echo "::error::DLQ inspect request failed with HTTP $STATUS"
             exit 1
           fi
+      - name: Determine mode
+        id: mode
+        run: |
+          set -euo pipefail
+          COUNT=$(jq '.rows|length' "$RUNNER_TEMP/dlq.json")
+          if [ "$COUNT" = "$EXPECTED" ]; then
+            MODE=fresh
+          elif [ "$COUNT" = "0" ]; then
+            MODE=rerun
+          else
+            echo "::error::actionable total $COUNT is neither 0 nor expected $EXPECTED"
+            exit 1
+          fi
+          echo "mode: $MODE (actionable rows: $COUNT)"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
       - name: Select rows to acknowledge (refuses on any deviation)
+        if: steps.mode.outputs.mode == 'fresh'
         run: |
           set -euo pipefail
           node scripts/production-dlq-acknowledge-select.mjs "$RUNNER_TEMP/dlq.json" "$EXPECTED" \
             > "$RUNNER_TEMP/ack-request.json"
       - name: Acknowledge selected rows
+        if: steps.mode.outputs.mode == 'fresh'
         env:
           PRODUCTION_ADMIN_API_KEY: ${{ secrets.PRODUCTION_ADMIN_API_KEY }}
         run: |
@@ -94,15 +116,33 @@ jobs:
           printf '%s\n' "$COUNTS"
           printf 'DLQ acknowledge: %s\n' "$(printf '%s' "$COUNTS" | jq -c .)" >> "$GITHUB_STEP_SUMMARY"
           ACKED=$(jq -r '.acknowledged' "$RUNNER_TEMP/ack-response.json")
-          ALREADY=$(jq -r '.already_acknowledged' "$RUNNER_TEMP/ack-response.json")
-          if [ "$ACKED" = "$EXPECTED" ]; then
-            echo "OK: $ACKED actionable rows acknowledged"
-          elif [ "$ACKED" = "0" ] && [ "$ALREADY" = "$EXPECTED" ]; then
-            echo "OK: idempotent re-run — all $ALREADY rows already acknowledged"
-          else
-            echo "::error::acknowledged=$ACKED already_acknowledged=$ALREADY != expected=$EXPECTED"
+          if [ "$ACKED" != "$EXPECTED" ]; then
+            echo "::error::acknowledged=$ACKED != expected=$EXPECTED"
             exit 1
           fi
+          echo "OK: $ACKED actionable rows acknowledged"
+      - name: Fetch terminal DLQ rows for rerun verification
+        if: steps.mode.outputs.mode == 'rerun'
+        env:
+          PRODUCTION_ADMIN_API_KEY: ${{ secrets.PRODUCTION_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS --max-time 60 -w '%{http_code}' \
+            -H "x-api-key: $PRODUCTION_ADMIN_API_KEY" \
+            "$PRODUCTION_APEX/bot/api/dlq?limit=200&include_terminal=true" \
+            -o "$RUNNER_TEMP/dlq-terminal.json" || true)
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::DLQ terminal request failed with HTTP $STATUS"
+            exit 1
+          fi
+      - name: Verify prior acknowledge (sanitized counts only)
+        if: steps.mode.outputs.mode == 'rerun'
+        run: |
+          set -euo pipefail
+          COUNTS=$(node scripts/production-dlq-acknowledge-verify.mjs \
+            "$RUNNER_TEMP/dlq-terminal.json" "$EXPECTED")
+          printf '%s\n' "$COUNTS"
+          printf 'DLQ acknowledge rerun verify: %s\n' "$(printf '%s' "$COUNTS" | jq -c .)" >> "$GITHUB_STEP_SUMMARY"
       - name: Production DLQ must be actionable-clean
         run: |
           set -euo pipefail
