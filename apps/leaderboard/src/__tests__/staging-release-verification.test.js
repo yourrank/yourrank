@@ -517,6 +517,24 @@ describe("F-012 staging release verification", () => {
       expect(workflow).not.toMatch(/jq\s+\./);
       expect(workflow).not.toMatch(/cat\s+"?\$RUNNER_TEMP\/replay-response\.json"?/);
       expect(workflow).not.toContain(".ids");
+      // Inspect mode: read-only shape diagnostics; the body-bearing response is
+      // never written to disk or echoed — it streams straight into jq.
+      expect(workflow).toContain("- name: Inspect unresolved DLQ rows (sanitized)");
+      expect(workflow).toContain("include_body=true");
+      const inspectCurl = workflow.split("\n").find((line) => line.includes("bot/api/dlq?limit=200&include_body=true"));
+      expect(inspectCurl).toBeDefined();
+      expect(inspectCurl).not.toContain(" -o ");
+      const dlqGetLines = workflow.split("\n").filter((line) => line.includes("include_body=true") || line.includes("inspect.jq"));
+      expect(dlqGetLines.join("\n")).toMatch(/\|\s*\\?\s*\n?\s*jq|jq --arg target/);
+      expect(workflow).toMatch(/if: \$\{\{ inputs\.action == 'inspect' \}\}/);
+      const replaySteps = workflow.match(/if: \$\{\{ inputs\.action == 'replay' \}\}/g) ?? [];
+      expect(replaySteps.length).toBe(2);
+      // The jq program only ever reduces `.body` to type/keys — never a value.
+      for (const line of workflow.split("\n")) {
+        if (line.includes(".body")) {
+          expect(line).toMatch(/type|keysOf|hasAll|shape/);
+        }
+      }
       // Replays only via the admin API — no direct SQL mutation of the table.
       expect(workflow).not.toMatch(/\bDELETE\s+FROM\b/i);
       expect(workflow).not.toMatch(/\bUPDATE\s+queue_dlq_events\b/i);
