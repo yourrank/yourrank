@@ -862,19 +862,20 @@ jobs:
           echo "::error::Recovered staging Worker versions did not return to a coherent healthy state."
           exit 1
 
+      # The OpenNext Worker cannot be probed on its workers.dev hostname; like
+      # web-readiness-staging it is reached through the apex Worker's MARKETING
+      # service binding.
       - name: Verify recovered staging Web health with bounded retries
         if: ${{ always() && steps.plan.outputs.release_failed == 'true' && steps.plan.outputs.web_health_required == 'true' }}
-        env:
-          STAGING_WEB_URL: ${{ vars.STAGING_WEB_URL }}
         run: |
           for attempt in $(seq 1 6); do
-            WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_WEB_URL/" || true)
-            APEX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -L --max-time 20 "$STAGING_APEX/" || true)
-            if [ "$WEB_STATUS" = "200" ] && [ "$APEX_STATUS" = "200" ]; then
-              echo "Recovered staging Web is coherent (web=$WEB_STATUS, apex=$APEX_STATUS)."
+            HOME_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_APEX/" || true)
+            PRICING_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -H 'x-yr-marketing: 1' "$STAGING_APEX/pricing" || true)
+            if [ "$HOME_STATUS" = "200" ] && [ "$PRICING_STATUS" = "200" ]; then
+              echo "Recovered staging Web is coherent (home=$HOME_STATUS, pricing=$PRICING_STATUS)."
               exit 0
             fi
-            echo "Web recovery health attempt $attempt/6 failed (web=$WEB_STATUS, apex=$APEX_STATUS)."
+            echo "Web recovery health attempt $attempt/6 failed (home=$HOME_STATUS, pricing=$PRICING_STATUS)."
             [ "$attempt" = "6" ] || sleep 10
           done
           echo "::error::Recovered staging Web did not return to a healthy state."

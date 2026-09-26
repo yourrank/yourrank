@@ -449,6 +449,36 @@ describe("F-012 staging release verification", () => {
     expect(prCheck).not.toContain("E2E_DEPLOYED_TARGET");
   });
 
+  it("recovery verifies the restored Web Worker through the apex MARKETING path like web-readiness-staging", async () => {
+    const staging = await stagingWorkflowPromise;
+    const stepBlock = (name) => {
+      const match = staging.match(new RegExp(`- name: "?${name}"?([\\s\\S]*?)(?=\\n      - name:|$)`));
+      if (!match) throw new Error(`step "${name}" missing`);
+      return match[1];
+    };
+    const recovery = stepBlock("Verify recovered staging Web health with bounded retries");
+    const readiness = stepBlock("Web: staging marketing Worker serves its homepage and pricing through the apex");
+
+    expect(recovery).toContain('"$STAGING_APEX/"');
+    expect(recovery).toContain('"$STAGING_APEX/pricing"');
+    expect(recovery).toContain("-H 'x-yr-marketing: 1'");
+    expect(recovery).not.toContain("STAGING_WEB_URL");
+    expect(recovery).not.toMatch(/workers\.dev/);
+    expect(recovery).toContain("seq 1 6");
+
+    // The recovery probe uses the identical apex MARKETING targets as readiness.
+    for (const target of ['-H \'x-yr-marketing: 1\' "$STAGING_APEX/"', '-H \'x-yr-marketing: 1\' "$STAGING_APEX/pricing"']) {
+      expect(recovery).toContain(target);
+      expect(readiness).toContain(target);
+    }
+
+    // The health gate is unchanged: the monitor verdict still rejects DLQ degradation.
+    const verdict = await rootFile("scripts/staging-monitor-verdict.mjs");
+    expect(verdict).toContain("dlq.degraded_reasons is not empty");
+    const smoke = staging.slice(staging.indexOf("release-smoke-staging:"));
+    expect(smoke).toContain("node scripts/staging-monitor-verdict.mjs");
+  });
+
   it("staging apex proxies marketing routes only when the Worker runs as the staging environment", async () => {
     const index = await rootFile("apps/leaderboard/src/index.js");
     expect(index).toContain('env.ENVIRONMENT === "staging" && host === `staging.${PLATFORM_HOST}`');
