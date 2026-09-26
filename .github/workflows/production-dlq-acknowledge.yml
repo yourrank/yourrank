@@ -1,0 +1,117 @@
+# Production DLQ Acknowledge — one-time defensive cleanup of the inspected
+# backlog. Every actionable row must match the expected profile (pending,
+# unresolved, event_type 'notify', current-schema-valid Top-3 notify) or the
+# selection script refuses before anything is written. Acknowledge is a
+# resolution overlay, NOT a replay: no row is re-sent to the queue and
+# replay_state/replayed_at/body are never touched. Nothing here prints
+# message ids, bodies, error text, or secrets — the request file is written
+# to disk and referenced only via --data @file, and only counts are echoed.
+# Shares the `production-mutation` lock with deploy/rollback/inspect.
+
+name: Production DLQ Acknowledge
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_actionable:
+        description: "Exact actionable DLQ row count expected; any other total refuses before writing"
+        required: true
+        type: string
+        default: "16"
+      reason:
+        description: "Bounded audit reason stored on each acknowledged row (^[a-z0-9_.:-]{1,200}$)"
+        required: true
+        type: string
+        default: stale_top3_notification_after_schema_fix
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-mutation
+  cancel-in-progress: false
+
+jobs:
+  acknowledge:
+    name: Acknowledge production DLQ rows (guarded)
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      PRODUCTION_APEX: https://yourrank.site
+      EXPECTED: ${{ inputs.expected_actionable }}
+      ACK_REASON: ${{ inputs.reason }}
+    steps:
+      - name: Require production admin key
+        env:
+          PRODUCTION_ADMIN_API_KEY: ${{ secrets.PRODUCTION_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PRODUCTION_ADMIN_API_KEY:-}" ]; then
+            echo "::error::PRODUCTION_ADMIN_API_KEY is not configured in the production environment"
+            exit 1
+          fi
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.0'
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd packages/shared build
+      - name: Fetch actionable DLQ rows
+        env:
+          PRODUCTION_ADMIN_API_KEY: ${{ secrets.PRODUCTION_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS --max-time 60 -w '%{http_code}' \
+            -H "x-api-key: $PRODUCTION_ADMIN_API_KEY" \
+            "$PRODUCTION_APEX/bot/api/dlq?limit=200&include_body=true" \
+            -o "$RUNNER_TEMP/dlq.json" || true)
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::DLQ inspect request failed with HTTP $STATUS"
+            exit 1
+          fi
+      - name: Select rows to acknowledge (refuses on any deviation)
+        run: |
+          set -euo pipefail
+          node scripts/production-dlq-acknowledge-select.mjs "$RUNNER_TEMP/dlq.json" "$EXPECTED" \
+            > "$RUNNER_TEMP/ack-request.json"
+      - name: Acknowledge selected rows
+        env:
+          PRODUCTION_ADMIN_API_KEY: ${{ secrets.PRODUCTION_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS --max-time 60 -w '%{http_code}' -X POST \
+            -H "x-api-key: $PRODUCTION_ADMIN_API_KEY" \
+            -H 'content-type: application/json' \
+            --data @"$RUNNER_TEMP/ack-request.json" \
+            "$PRODUCTION_APEX/bot/api/dlq/acknowledge" \
+            -o "$RUNNER_TEMP/ack-response.json" || true)
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::DLQ acknowledge request failed with HTTP $STATUS"
+            exit 1
+          fi
+          COUNTS=$(jq '{requested,acknowledged,already_acknowledged,skipped_resolved,skipped_leased,unknown}' \
+            "$RUNNER_TEMP/ack-response.json")
+          printf '%s\n' "$COUNTS"
+          printf 'DLQ acknowledge: %s\n' "$(printf '%s' "$COUNTS" | jq -c .)" >> "$GITHUB_STEP_SUMMARY"
+          ACKED=$(jq -r '.acknowledged' "$RUNNER_TEMP/ack-response.json")
+          ALREADY=$(jq -r '.already_acknowledged' "$RUNNER_TEMP/ack-response.json")
+          if [ "$ACKED" = "$EXPECTED" ]; then
+            echo "OK: $ACKED actionable rows acknowledged"
+          elif [ "$ACKED" = "0" ] && [ "$ALREADY" = "$EXPECTED" ]; then
+            echo "OK: idempotent re-run — all $ALREADY rows already acknowledged"
+          else
+            echo "::error::acknowledged=$ACKED already_acknowledged=$ALREADY != expected=$EXPECTED"
+            exit 1
+          fi
+      - name: Production DLQ must be actionable-clean
+        run: |
+          set -euo pipefail
+          BODY=$(curl -sS -L --max-time 20 "$PRODUCTION_APEX/health" || true)
+          printf '%s\n' "$BODY" | jq '.dlq'
+          printf '%s' "$BODY" | jq -e --argjson expected "$EXPECTED" \
+            '.dlq.pending == 0 and (.dlq.degraded_reasons|length) == 0 and .dlq.terminal.acknowledged == $expected' \
+            >/dev/null || {
+              echo "::error::production DLQ is not actionable-clean after acknowledge"
+              exit 1
+            }
+          echo "OK: production DLQ actionable-clean (acknowledged=$EXPECTED)"

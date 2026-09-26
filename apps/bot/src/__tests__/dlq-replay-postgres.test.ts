@@ -10,7 +10,7 @@
 
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import postgres from "postgres";
-import { getDlqPage, replayDlq } from "../dlq-ops.js";
+import { acknowledgeDlq, getDlqPage, replayDlq } from "../dlq-ops.js";
 
 const DB_URL = process.env.DLQ_TEST_DATABASE_URL;
 const gateRequired = process.env.DLQ_REPLAY_GATE === "required";
@@ -235,5 +235,58 @@ describeDb("DLQ replay leases (real PostgreSQL)", () => {
     expect(row).toMatchObject({ replayed: true, resolved: true, resolution: "replayed" });
     const [eq] = await sql`SELECT resolved_at = replayed_at AS same FROM queue_dlq_events WHERE message_id = ${replayedId}`;
     expect(eq.same).toBe(true);
+  });
+
+  it("acknowledges only actionable rows and stays idempotent", async () => {
+    const queryFor = async (text: string, params: unknown[] = []) =>
+      (await sql.unsafe(text, params as never[])).map((r) => ({ ...r }));
+    const exec = execFor(sql);
+    const ackDb = { queryImpl: queryFor };
+
+    // actionable row → acknowledged
+    const pendingId = await newRow(envelope(crypto.randomUUID()));
+    // already-replayed row → skipped_resolved, untouched
+    const replayedId = await newRow(envelope(crypto.randomUUID()));
+    await replayDlq({ messageIds: [replayedId], sendImpl: async () => {} }, { execImpl: exec });
+
+    const result = await acknowledgeDlq(
+      { messageIds: [pendingId, replayedId, "unknown-id-1"], reason: "stale_top3_notification_after_schema_fix" },
+      ackDb,
+    );
+    expect(result).toEqual({
+      requested: 3, acknowledged: 1, already_acknowledged: 0,
+      skipped_resolved: 1, skipped_leased: 0, unknown: 1,
+    });
+
+    const [acked] = await sql`
+      SELECT resolution, resolved_at IS NOT NULL AS resolved, ack_reason,
+             replayed_at IS NULL AS not_replayed, replay_attempts, body
+      FROM queue_dlq_events WHERE message_id = ${pendingId}`;
+    expect(acked).toMatchObject({
+      resolution: "acknowledged", resolved: true,
+      ack_reason: "stale_top3_notification_after_schema_fix",
+      not_replayed: true, replay_attempts: 0,
+    });
+    const [untouched] = await sql`
+      SELECT resolution, ack_reason, replayed_at IS NOT NULL AS replayed
+      FROM queue_dlq_events WHERE message_id = ${replayedId}`;
+    expect(untouched).toMatchObject({ resolution: "replayed", ack_reason: null, replayed: true });
+
+    // excluded from the actionable page, listed with include_terminal
+    const defaultPage = await getDlqPage(50, {}, ackDb);
+    const terminalPage = await getDlqPage(50, { includeTerminal: true }, ackDb);
+    const ids = (p: { rows: unknown[] }) => (p.rows as { message_id: string }[]).map((r) => r.message_id);
+    expect(ids(defaultPage)).not.toContain(pendingId);
+    expect(ids(terminalPage)).toContain(pendingId);
+    const summaryRow = (terminalPage.summary as { event_type: string; acknowledged: number }[])
+      .find((row) => row.event_type === "click");
+    expect(summaryRow?.acknowledged).toBeGreaterThanOrEqual(1);
+
+    // idempotent re-run
+    const again = await acknowledgeDlq({ messageIds: [pendingId], reason: "stale_top3_notification_after_schema_fix" }, ackDb);
+    expect(again).toEqual({
+      requested: 1, acknowledged: 0, already_acknowledged: 1,
+      skipped_resolved: 0, skipped_leased: 0, unknown: 0,
+    });
   });
 });
