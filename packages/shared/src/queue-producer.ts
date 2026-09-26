@@ -34,6 +34,8 @@ const bumpEventSchema = z.object({
   timestamp,
 }).strict();
 
+export const TOP3_CHANGES_MAX = 10;
+
 const top3NotifyEventSchema = z.object({
   type: z.literal("notify"),
   kind: z.literal("top3"),
@@ -45,7 +47,7 @@ const top3NotifyEventSchema = z.object({
     wagered: z.number().finite(),
     score: z.number().finite().optional(),
     rankBy: z.enum(["wagered", "score"]).optional(),
-  }).strict()).max(3),
+  }).strict()).max(TOP3_CHANGES_MAX),
 }).strict();
 
 const resetNotifyEventSchema = z.object({

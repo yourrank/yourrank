@@ -4,6 +4,7 @@ import {
   parseQueueEvent,
   parseQueueMessage,
   QueueEventValidationError,
+  TOP3_CHANGES_MAX,
   type QueueEvent,
 } from "../queue-producer.js";
 import { QueueEventValidationError as PackageQueueEventValidationError } from "@yourrank/shared/queue-producer";
@@ -138,6 +139,75 @@ describe("createQueueProducer", () => {
       const parsed = parseQueueMessage(queue.sent[0]);
       expect(parsed.legacy).toBe(false);
       expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
+    });
+
+    const roundTrip = async (changes: ReturnType<typeof detectTop3Changes>) => {
+      const queue = fakeQueue();
+      await createQueueProducer(queue, noFallback).send({
+        type: "notify", kind: "top3", siteId: "site-1", siteName: "Arena", changes,
+      });
+      const parsed = parseQueueMessage(queue.sent[0]);
+      expect(parsed.legacy).toBe(false);
+      expect((parsed.event as { changes: unknown[] }).changes).toEqual(changes);
+    };
+
+    it("honors a four-way tie at rank 1 (competition ranking)", async () => {
+      const changes = detectTop3Changes(
+        [],
+        ["A", "B", "C", "D"].map((name) => ({ name, wagered: 1, score: 7 })),
+        "score",
+      );
+      expect(changes).toHaveLength(4);
+      expect(changes.every((c) => c.rank === 1)).toBe(true);
+      await roundTrip(changes);
+    });
+
+    it("includes everyone tied inside rank <=3 and excludes rank 4", async () => {
+      const changes = detectTop3Changes(
+        [],
+        [
+          { name: "leader", wagered: 1, score: 100 },
+          { name: "tied-a", wagered: 1, score: 50 },
+          { name: "tied-b", wagered: 1, score: 50 },
+          { name: "tied-c", wagered: 1, score: 50 },
+          { name: "below", wagered: 1, score: 10 },
+        ],
+        "score",
+      );
+      expect(changes.map((c) => c.rank)).toEqual([1, 2, 2, 2]);
+      await roundTrip(changes);
+    });
+
+    it("bounds a mass tie to TOP3_CHANGES_MAX in name order", async () => {
+      const players = Array.from({ length: 25 }, (_, i) => ({
+        name: `p${String(i).padStart(2, "0")}`, wagered: 0,
+      }));
+      const changes = detectTop3Changes([], players, "wagered");
+      expect(changes).toHaveLength(TOP3_CHANGES_MAX);
+      expect(changes.map((c) => c.name)).toEqual(
+        players.slice(0, TOP3_CHANGES_MAX).map((p) => p.name),
+      );
+      await roundTrip(changes);
+    });
+
+    it("never exceeds TOP3_CHANGES_MAX or throws at the envelope for n tied players", async () => {
+      for (let n = 1; n <= 30; n++) {
+        const players = Array.from({ length: n }, (_, i) => ({ name: `p${i}`, wagered: 0 }));
+        const changes = detectTop3Changes([], players, "wagered");
+        expect(changes.length).toBeLessThanOrEqual(TOP3_CHANGES_MAX);
+        await roundTrip(changes);
+      }
+    });
+
+    it("still rejects change arrays beyond the shared contract bound", () => {
+      const changes = Array.from({ length: TOP3_CHANGES_MAX + 1 }, (_, i) => ({
+        name: `p${i}`, rank: 1, wagered: 0,
+      }));
+      expect(() => parseQueueMessage({
+        v: 1, eventId: crypto.randomUUID(), eventType: "notify",
+        createdAt: new Date().toISOString(),
+        payload: { type: "notify", kind: "top3", siteId: "site-1", siteName: "Arena", changes },
+      })).toThrow();
     });
   });
 

@@ -15,6 +15,7 @@
 import { decryptToken, decryptCredential } from "./crypto.js";
 import { errMessage } from "./errors.js";
 import { runOnceWithLease, type LedgerIdentity } from "./queue-ledger.js";
+import { TOP3_CHANGES_MAX } from "./queue-producer.js";
 
 // ----------------------------------------------------------------------------
 // Telegram Markdown escaping
@@ -205,6 +206,8 @@ function requireDelivery(channel: string, result: DeliveryResult): void {
 
 /**
  * Compare old and new player lists and return any new top-3 entries.
+ * Competition ranking (1,2,2,4): ties within rank <=3 all count; the output
+ * is bounded to TOP3_CHANGES_MAX in ranking order (value desc, name asc).
  * @param oldPlayers — previous players (sorted by wagered desc)
  * @param newPlayers — new players (sorted by wagered desc)
  * @returns Array of top-3 changes
@@ -229,7 +232,7 @@ export function detectTop3Changes(
       changes.push({ name: p.name, rank: competitionRank, wagered: p.wagered, score: p.score, rankBy });
     }
   }
-  return changes;
+  return changes.slice(0, TOP3_CHANGES_MAX);
 }
 
 // ----------------------------------------------------------------------------
