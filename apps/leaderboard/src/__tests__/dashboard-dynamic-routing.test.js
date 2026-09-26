@@ -43,6 +43,7 @@ const EXPECTED = {
   giveaways: {
     boot: "giveaways",
     tabs: {
+      hub: "giveaways",
       chat: "giveaways",
       raffles: "giveaways",
       preds: "giveaways",
@@ -111,7 +112,7 @@ describe("dynamic section routing parity", () => {
   it("accepts the bare section prefix as its first tab", () => {
     expect(parseDynamicPath("/dashboard/activities")).toEqual({ page: "activities", tab: "overview", dynamic: true });
     expect(parseDynamicPath("/dashboard/rewards")).toEqual({ page: "rewards", tab: "overview", dynamic: true });
-    expect(parseDynamicPath("/dashboard/giveaways")).toEqual({ page: "giveaways", tab: "chat", dynamic: true });
+    expect(parseDynamicPath("/dashboard/giveaways")).toEqual({ page: "giveaways", tab: "hub", dynamic: true });
     expect(parseDynamicPath("/dashboard/settings")).toEqual({ page: "settings", tab: "account", dynamic: true });
     expect(resolveFragment("/dashboard/activities")).toEqual({ pageKey: "activities", tab: "overview" });
     expect(resolveFragment("/dashboard/rewards")).toEqual({ pageKey: "rewardsOverview", tab: "overview" });

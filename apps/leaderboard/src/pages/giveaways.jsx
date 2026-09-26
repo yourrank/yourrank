@@ -8,10 +8,11 @@ import { renderGiveawayDrawersHtml, renderGiveawaysContentHtml } from "./giveawa
 
 export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {}) {
   const chrome = chromeStateFor("giveaways", tab, { exact: true }) || chromeStateFor("giveaways", "chat");
+  const drawers = tab === "hub" ? "" : renderGiveawayDrawersHtml();
   const content = <div class="gw-workspace-content">
     <div id="gw-app" dangerouslySetInnerHTML={{ __html: renderGiveawaysContentHtml(tab) }}></div>
   </div>;
-  if (fragment) return <>{content}{raw(renderGiveawayDrawersHtml(tab))}</>;
+  if (fragment) return <>{content}{raw(drawers)}</>;
   return (
     <DashboardShell
       activeNav={chrome.navKey}
@@ -21,7 +22,7 @@ export function GiveawaysPage({ activePath, user, tab = "chat", fragment } = {})
       footer="rewards"
       rootId="gw-dash"
       user={user}
-      overlays={renderGiveawayDrawersHtml(tab)}
+      overlays={drawers}
     >
       {content}
     </DashboardShell>

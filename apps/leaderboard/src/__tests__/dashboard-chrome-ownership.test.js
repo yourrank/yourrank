@@ -178,6 +178,7 @@ function deriveRenderableRoutes() {
     routes.push({ path: section.path, render: "dashboard", hasSubnav, hasBreadcrumbs });
     for (const tab of tabs) routes.push({ path: `${section.path}/${tab}`, render: "dashboard", hasSubnav: true, hasBreadcrumbs: true });
   }
+  routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: true, hasBreadcrumbs: false });
   for (const [tab] of GIVEAWAY_TABS) {
     routes.push({ path: `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`, render: "giveaways", tab, hasSubnav: true, hasBreadcrumbs: true });
   }
@@ -351,7 +352,6 @@ describe("dashboard chrome ownership", () => {
     const allowlistedWorkerRoutes = new Map([
       ["/dashboard/preview", "POST endpoint for template preview, not a dashboard chrome page"],
       ["/dashboard/support", "redirect-only redirect to help"],
-      ["/dashboard/giveaways", "redirect-only section root to the default tab"],
       ["/dashboard/_content", "JSON fragment endpoint for persistent-shell navigation, not a chrome page"],
     ]);
     const workerRoutes = new Set(workerRouteLiterals(workerSource));

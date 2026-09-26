@@ -10,7 +10,76 @@ export const GIVEAWAY_TABS = [
   ["tournaments", "Tournaments"],
 ];
 
-const giveawayPath = (tab) => `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`;
+// Lucide 24x24 stroke icons (fill="none" stroke="currentColor" stroke-width="2"
+// stroke-linecap="round" stroke-linejoin="round"). One source for the hub cards.
+const ENGAGE_ICONS = {
+  "message-square": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
+  ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
+  "bar-chart-3": '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  "chevron-left": '<path d="m15 18-6-6 6-6"/>',
+};
+
+const engageIcon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ENGAGE_ICONS[name]}</svg>`;
+
+const ENGAGE_BACK = `<a class="engage-back" href="/dashboard/giveaways">${engageIcon("chevron-left")}Engage</a>`;
+
+// Engage feature hub: the four Engage tools as equal cards. Status copy is the
+// server-rendered "none" default; giveaways.js rewrites it from the APIs.
+const ENGAGE_FEATURES = [
+  {
+    feature: "chat", icon: "message-square", title: "Chat Giveaway", href: "/dashboard/giveaways/chat",
+    desc: "Run live giveaways from your chat.",
+    state: "No active giveaway", meta: "Create a giveaway to engage your viewers.", action: "Create giveaway",
+  },
+  {
+    feature: "tournaments", icon: "network", title: "Tournament", href: "/dashboard/giveaways/tournaments",
+    desc: "Run brackets and community competitions.",
+    state: "No active tournament", meta: "Set up a bracket for your community.", action: "Create tournament",
+  },
+  {
+    feature: "raffles", icon: "ticket", title: "Raffle", href: "/dashboard/giveaways/raffles",
+    desc: "Run ticket-based drawings for your community.",
+    state: "No active raffle", meta: "Set up a raffle to reward your community.", action: "Create raffle",
+  },
+  {
+    feature: "preds", icon: "bar-chart-3", title: "Prediction", href: "/dashboard/giveaways/predictions",
+    desc: "Let your viewers predict outcomes.",
+    state: "No active prediction", meta: "Create a prediction to get your community involved.", action: "Create prediction",
+  },
+];
+
+export function renderEngageHubHtml() {
+  const cards = ENGAGE_FEATURES.map((f) => `
+  <article class="engage-card" data-feature="${f.feature}" data-href="${f.href}">
+    <a class="engage-card__link" href="${f.href}" aria-label="Open ${f.title}"></a>
+    <div class="engage-card__top">
+      <span class="engage-card__icon" aria-hidden="true">${engageIcon(f.icon)}</span>
+      <div class="engage-card__text"><h2 class="engage-card__title">${f.title}</h2><p class="engage-card__desc">${f.desc}</p></div>
+      <span class="engage-card__chevron" aria-hidden="true">${engageIcon("chevron-right")}</span>
+    </div>
+    <div class="engage-card__foot">
+      <div class="engage-card__status" data-status-root>
+        <span class="engage-card__dot" data-status-dot></span>
+        <div><p class="engage-card__state" data-status-label>${f.state}</p><p class="engage-card__meta" data-status-meta><span>${f.meta}</span></p></div>
+      </div>
+      <a class="btn btn--sm btn--accent engage-card__action" data-action href="${f.href}">${f.action}</a>
+    </div>
+  </article>`).join("");
+  return `
+${engageTabsHtml("giveaways")}
+<div class="v3-head v3-head--row">
+  <div class="v3-head-col">
+    <h1>Engage</h1>
+    <p class="v3-head-sub">Interactive tools to grow your channel and engage your community.</p>
+  </div>
+</div>
+<p class="gw-page-alert" id="gw-page-alert" role="alert" aria-live="assertive" hidden></p>
+<div class="engage-hub" id="engage-hub">${cards}
+</div>
+`;
+}
 
 export function renderGiveawayDrawersHtml() {
   return `
@@ -178,6 +247,7 @@ export function renderGiveawayDrawersHtml() {
 }
 
 export function renderGiveawaysContentHtml(activeTab = "chat") {
+  if (activeTab === "hub") return renderEngageHubHtml();
   const active = GIVEAWAY_TABS.some(([tab]) => tab === activeTab) ? activeTab : "chat";
   const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Giveaways";
   const activeDescription = {
@@ -186,30 +256,17 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
     preds: "Run live prediction pools and settle them when the outcome is known.",
     tournaments: "Open chat signups, review the entry list, and seed a tournament.",
   }[active] || "Engage viewers with live community events.";
-  // Chat giveaways is the primary mechanic; secondary/legacy surfaces (ticket
-  // raffles, predictions, tournaments) still route but sit behind the More
-  // toggle.
-  const LEGACY_TABS = new Set(["raffles", "preds", "tournaments"]);
-  const legacyActive = LEGACY_TABS.has(active);
-  const tabLink = ([tab, label]) => `
-  <a class="gw-tab-btn v3-tab${tab === active ? " is-active is-on" : ""}" id="tab-btn-${tab}" href="${giveawayPath(tab)}" data-tab="${tab}" role="tab" aria-selected="${tab === active ? "true" : "false"}"${tab === active ? ' aria-current="page"' : ""}${LEGACY_TABS.has(tab) ? ` data-tabs-legacy${legacyActive ? "" : " hidden"}` : ""}>${label}</a>`;
-  const tabs = GIVEAWAY_TABS.filter(([tab]) => !LEGACY_TABS.has(tab)).map(tabLink).join("")
-    + `<button class="v3-tab" id="tab-btn-gw-more" type="button" data-tabs-more aria-expanded="${legacyActive ? "true" : "false"}">More</button>`
-    + GIVEAWAY_TABS.filter(([tab]) => LEGACY_TABS.has(tab)).map(tabLink).join("");
   const html = `
 ${engageTabsHtml("giveaways")}
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
+    ${ENGAGE_BACK}
     <h1>${activeLabel}</h1>
     <p class="v3-head-sub">${activeDescription}</p>
   </div>
   <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>
   </div>
-</div>
-
-<div class="gw-nav-tabs v3-tabs" role="tablist" aria-label="Giveaway types">
-${tabs}
 </div>
 
 <!-- The one place an Engage action reports a refusal. It lives outside the tab
@@ -857,7 +914,7 @@ ${tabs}
 }
 
 export function renderGiveawaysHtml(activeTab = "chat") {
-  return `${renderGiveawaysContentHtml(activeTab)}${renderGiveawayDrawersHtml()}`;
+  return `${renderGiveawaysContentHtml(activeTab)}${activeTab === "hub" ? "" : renderGiveawayDrawersHtml()}`;
 }
 
 export const giveawaysHtml = renderGiveawaysHtml();
