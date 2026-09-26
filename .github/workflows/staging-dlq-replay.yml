@@ -1,11 +1,13 @@
 name: Staging DLQ Replay
 
 # Manually replay staging `queue_dlq_events` rows through the bot's supported
-# `POST /bot/api/dlq/replay` admin endpoint. This workflow only re-sends message
-# bodies back onto the staging events queue — it never deletes rows and never
-# touches `replayed_at`; rows that fail again remain visible to the leaderboard
-# /health DLQ report exactly as before. The staging health verdict
-# (scripts/staging-monitor-verdict.mjs) is untouched.
+# `POST /bot/api/dlq/replay` admin endpoint, or inspect unresolved rows via the
+# read-only `GET /bot/api/dlq` shape diagnostics (inspect mode never prints
+# message bodies or message_id values — keys/types/counts only). Replay mode
+# only re-sends message bodies back onto the staging events queue — it never
+# deletes rows and never touches `replayed_at`; rows that fail again remain
+# visible to the leaderboard /health DLQ report exactly as before. The staging
+# health verdict (scripts/staging-monitor-verdict.mjs) is untouched.
 # Trigger from GitHub Actions tab → "Run workflow" → optionally pin a
 # message_id, or replay the oldest pending rows up to `limit`.
 # Shares the `staging-mutation` concurrency lock with the staging release so a
@@ -14,6 +16,14 @@ name: Staging DLQ Replay
 on:
   workflow_dispatch:
     inputs:
+      action:
+        description: "replay = POST /bot/api/dlq/replay; inspect = read-only shape diagnostics of unresolved rows (no bodies printed)"
+        required: true
+        type: choice
+        default: replay
+        options:
+          - replay
+          - inspect
       message_id:
         description: "Replay exactly this DLQ message_id; leave empty to replay oldest pending rows"
         required: false
@@ -65,6 +75,7 @@ jobs:
           echo "Staging admin key is configured."
 
       - name: Build replay request
+        if: ${{ inputs.action == 'replay' }}
         env:
           INPUT_MESSAGE_ID: ${{ inputs.message_id }}
           INPUT_LIMIT: ${{ inputs.limit }}
@@ -91,6 +102,7 @@ jobs:
           fi
 
       - name: Replay via bot admin API
+        if: ${{ inputs.action == 'replay' }}
         id: replay
         env:
           STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}
@@ -129,6 +141,73 @@ jobs:
           if [ "$NONOK" -gt 0 ]; then
             echo "::warning::$NONOK DLQ row(s) did not replay cleanly (failed/invalid/exhausted — see counts above). They remain pending for the health report."
           fi
+
+      - name: Inspect unresolved DLQ rows (sanitized)
+        if: ${{ inputs.action == 'inspect' }}
+        env:
+          STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}
+          INPUT_MESSAGE_ID: ${{ inputs.message_id }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/inspect.jq" <<'JQ'
+          def keysOf: if type=="object" then (keys|sort) else [] end;
+          def shape: (type) + ":" + (keysOf|join(","));
+          def envelopeKeys: ["v","eventId","eventType","createdAt","payload"];
+          def legacyKeys: ["type","kind","siteId"];
+          def hasAll($ks): . as $o | ($o|type)=="object" and ([$ks[] | in($o)] | all);
+          # last_replay_error is free-form runtime text and is never emitted. It is
+          # reduced to a kind, plus structural Zod diagnostics (codes / schema
+          # paths / unrecognized key names only) when it parses as a Zod issue list.
+          def zodIssues: (try (fromjson) catch null)
+            | if type=="array" and length>0 and all(.[]; type=="object" and has("code") and has("path")) then . else null end;
+          def errorKind: (.last_replay_error // "") as $e
+            | if $e == "" then "none"
+              elif ($e|zodIssues) != null then "zod_validation"
+              elif $e == "replay lease expired after max attempts" then "lease_failure"
+              elif .replay_state == "invalid" then "other"
+              else "send_failure" end;
+          def zodDiag: (.last_replay_error // "" | zodIssues)
+            | if . == null then null else map({
+                code: (.code|tostring),
+                path: (.path|map(tostring)|join(".")),
+                unrecognized_keys: (if .code=="unrecognized_keys" then ((.keys // [])|map(tostring)) else [] end)
+              }) end;
+          def diag: {
+            replay_state, replay_attempts, event_type, queue_name, received_at,
+            has_last_replay_error: ((.last_replay_error // "") != ""),
+            error_kind: errorKind,
+            zod_issues: zodDiag,
+            body_json_type: (.body|type),
+            top_level_keys: (.body|keysOf),
+            has_envelope_keys: (.body|hasAll(envelopeKeys)),
+            payload_json_type: (if (.body|type)=="object" and (.body|has("payload")) then (.body.payload|type) else null end),
+            payload_keys: (if (.body|type)=="object" and (.body|has("payload")) then (.body.payload|keysOf) else [] end),
+            has_legacy_notify_keys: (.body|hasAll(legacyKeys)),
+            payload_has_legacy_notify_keys: (if (.body|type)=="object" and (.body|has("payload")) then (.body.payload|hasAll(legacyKeys)) else false end)
+          };
+          {
+            summary,
+            total_unresolved: (.rows|length),
+            by_replay_state: (.rows | group_by(.replay_state // "pending") | map({state: (.[0].replay_state // "pending"), count: length})),
+            target: (if $target != "" then ([.rows[] | select(.message_id==$target)] | if length>0 then (.[0]|diag) else "not found among unresolved rows" end) else null end),
+            other_shapes: ([.rows[] | select(.message_id != $target)] | group_by(.body|shape) | map({shape: (.[0].body|shape), replay_states: (map(.replay_state // "pending")|unique), event_types: (map(.event_type)|unique), count: length})),
+            other_error_kinds: ([.rows[] | select(.message_id != $target)] | group_by(errorKind) | map({error_kind: (.[0]|errorKind), count: length}))
+          }
+          JQ
+          OUT=$(curl -sS --fail --max-time 60 \
+            -H "x-api-key: $STAGING_ADMIN_API_KEY" \
+            "$STAGING_APEX/bot/api/dlq?limit=200&include_body=true" | \
+            jq --arg target "$INPUT_MESSAGE_ID" -f "$RUNNER_TEMP/inspect.jq") || {
+            echo "::error::DLQ inspect request failed"
+            exit 1
+          }
+          printf '%s\n' "$OUT"
+          {
+            echo "## Staging DLQ inspect (sanitized)"
+            echo '```json'
+            printf '%s\n' "$OUT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report staging /health DLQ state
         if: always()
