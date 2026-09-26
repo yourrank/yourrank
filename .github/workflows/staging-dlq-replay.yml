@@ -1,0 +1,147 @@
+name: Staging DLQ Replay
+
+# Manually replay staging `queue_dlq_events` rows through the bot's supported
+# `POST /bot/api/dlq/replay` admin endpoint. This workflow only re-sends message
+# bodies back onto the staging events queue — it never deletes rows and never
+# touches `replayed_at`; rows that fail again remain visible to the leaderboard
+# /health DLQ report exactly as before. The staging health verdict
+# (scripts/staging-monitor-verdict.mjs) is untouched.
+# Trigger from GitHub Actions tab → "Run workflow" → optionally pin a
+# message_id, or replay the oldest pending rows up to `limit`.
+# Shares the `staging-mutation` concurrency lock with the staging release so a
+# manual replay never overlaps a coherent release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      message_id:
+        description: "Replay exactly this DLQ message_id; leave empty to replay oldest pending rows"
+        required: false
+        type: string
+        default: ""
+      limit:
+        description: "Max oldest pending rows to replay when message_id is empty"
+        required: false
+        type: string
+        default: "100"
+      max_attempts:
+        description: "Replay attempts budget per row"
+        required: false
+        type: string
+        default: "3"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-mutation
+  cancel-in-progress: false
+
+env:
+  STAGING_APEX: https://staging.yourrank.site
+
+jobs:
+  replay:
+    name: Replay staging DLQ rows
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      replayed: ${{ steps.replay.outputs.replayed }}
+      failed: ${{ steps.replay.outputs.failed }}
+      invalid: ${{ steps.replay.outputs.invalid }}
+      skipped: ${{ steps.replay.outputs.skipped }}
+      exhausted: ${{ steps.replay.outputs.exhausted }}
+      reclaimed: ${{ steps.replay.outputs.reclaimed }}
+    steps:
+      - name: Require staging admin key
+        env:
+          STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STAGING_ADMIN_API_KEY:-}" ]; then
+            echo "::error::STAGING_ADMIN_API_KEY is not configured in the staging environment"
+            exit 1
+          fi
+          echo "Staging admin key is configured."
+
+      - name: Build replay request
+        env:
+          INPUT_MESSAGE_ID: ${{ inputs.message_id }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_MAX_ATTEMPTS: ${{ inputs.max_attempts }}
+        run: |
+          set -euo pipefail
+          if [ -n "$INPUT_MESSAGE_ID" ] && ! printf '%s' "$INPUT_MESSAGE_ID" | grep -Eq '^[0-9a-f]{32}$'; then
+            echo "::error::message_id must be a 32-char lowercase hex id, got a non-matching value"
+            exit 1
+          fi
+          for pair in "limit:$INPUT_LIMIT" "max_attempts:$INPUT_MAX_ATTEMPTS"; do
+            name="${pair%%:*}"; value="${pair##*:}"
+            if ! printf '%s' "$value" | grep -Eq '^[1-9][0-9]*$'; then
+              echo "::error::${name} must be a positive integer"
+              exit 1
+            fi
+          done
+          if [ -n "$INPUT_MESSAGE_ID" ]; then
+            jq -n --arg id "$INPUT_MESSAGE_ID" --argjson max "$INPUT_MAX_ATTEMPTS" \
+              '{messageIds: [$id], maxAttempts: $max}' > "$RUNNER_TEMP/replay.json"
+          else
+            jq -n --argjson limit "$INPUT_LIMIT" --argjson max "$INPUT_MAX_ATTEMPTS" \
+              '{limit: $limit, maxAttempts: $max}' > "$RUNNER_TEMP/replay.json"
+          fi
+
+      - name: Replay via bot admin API
+        id: replay
+        env:
+          STAGING_ADMIN_API_KEY: ${{ secrets.STAGING_ADMIN_API_KEY }}
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sS -o "$RUNNER_TEMP/replay-response.json" -w '%{http_code}' --max-time 120 \
+            -X POST \
+            -H "x-api-key: $STAGING_ADMIN_API_KEY" \
+            -H 'content-type: application/json' \
+            --data @"$RUNNER_TEMP/replay.json" \
+            "$STAGING_APEX/bot/api/dlq/replay" || true)
+          if [ "$HTTP" != "200" ]; then
+            echo "::error::DLQ replay request failed with HTTP $HTTP"
+            jq -r '.error // empty' "$RUNNER_TEMP/replay-response.json" 2>/dev/null || true
+            exit 1
+          fi
+          SUMMARY=$(jq '{replayed:.replayed.count, failed:.failed.count, invalid:.invalid.count, skipped:.skipped.count, exhausted:.exhausted.count, reclaimed:.reclaimed.count}' "$RUNNER_TEMP/replay-response.json")
+          printf '%s\n' "$SUMMARY"
+          {
+            echo "replayed=$(jq -r '.replayed.count' "$RUNNER_TEMP/replay-response.json")"
+            echo "failed=$(jq -r '.failed.count' "$RUNNER_TEMP/replay-response.json")"
+            echo "invalid=$(jq -r '.invalid.count' "$RUNNER_TEMP/replay-response.json")"
+            echo "skipped=$(jq -r '.skipped.count' "$RUNNER_TEMP/replay-response.json")"
+            echo "exhausted=$(jq -r '.exhausted.count' "$RUNNER_TEMP/replay-response.json")"
+            echo "reclaimed=$(jq -r '.reclaimed.count' "$RUNNER_TEMP/replay-response.json")"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "## Staging DLQ replay"
+            echo '```json'
+            printf '%s\n' "$SUMMARY"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          NONOK=$(( $(jq -r '.failed.count' "$RUNNER_TEMP/replay-response.json") \
+                  + $(jq -r '.invalid.count' "$RUNNER_TEMP/replay-response.json") \
+                  + $(jq -r '.exhausted.count' "$RUNNER_TEMP/replay-response.json") ))
+          if [ "$NONOK" -gt 0 ]; then
+            echo "::warning::$NONOK DLQ row(s) did not replay cleanly (failed/invalid/exhausted — see counts above). They remain pending for the health report."
+          fi
+
+      - name: Report staging /health DLQ state
+        if: always()
+        run: |
+          set -euo pipefail
+          HTTP=$(curl -sS -o "$RUNNER_TEMP/health.json" -w '%{http_code}' --max-time 20 "$STAGING_APEX/health" || true)
+          echo "GET /health -> HTTP $HTTP"
+          STATUS=$(jq -r '.status' "$RUNNER_TEMP/health.json" 2>/dev/null || echo "unknown")
+          echo "health status: $STATUS"
+          jq '.dlq' "$RUNNER_TEMP/health.json" 2>/dev/null || true
+          {
+            echo "### Staging /health after replay (HTTP $HTTP, status: $STATUS)"
+            echo '```json'
+            jq '.dlq' "$RUNNER_TEMP/health.json" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
