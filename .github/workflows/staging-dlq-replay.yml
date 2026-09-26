@@ -89,8 +89,6 @@ jobs:
             jq -n --argjson limit "$INPUT_LIMIT" --argjson max "$INPUT_MAX_ATTEMPTS" \
               '{limit: $limit, maxAttempts: $max}' > "$RUNNER_TEMP/replay.json"
           fi
-          echo "Replay request:"
-          cat "$RUNNER_TEMP/replay.json"
 
       - name: Replay via bot admin API
         id: replay

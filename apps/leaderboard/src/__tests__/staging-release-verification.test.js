@@ -501,8 +501,22 @@ describe("F-012 staging release verification", () => {
       for (const line of workflow.split("\n")) {
         if (/echo/i.test(line)) expect(line).not.toMatch(/\$\{?STAGING_ADMIN_API_KEY/);
       }
+      // The request payload (which carries messageIds) is never logged.
+      expect(workflow).not.toContain('cat "$RUNNER_TEMP/replay.json"');
+      expect(workflow).not.toContain("Replay request:");
+      const printedLines = workflow
+        .split("\n")
+        .filter((line) => /^\s*(echo|printf|cat)\b/.test(line));
+      for (const line of printedLines) {
+        expect(line).not.toContain("INPUT_MESSAGE_ID");
+        expect(line).not.toContain("replay.json");
+        expect(line).not.toContain("messageIds");
+      }
       // Reporting is sanitized: counts only, no ids/bodies, and no SQL writes.
       expect(workflow).toContain(".replayed.count");
+      expect(workflow).not.toMatch(/jq\s+\./);
+      expect(workflow).not.toMatch(/cat\s+"?\$RUNNER_TEMP\/replay-response\.json"?/);
+      expect(workflow).not.toContain(".ids");
       // Replays only via the admin API — no direct SQL mutation of the table.
       expect(workflow).not.toMatch(/\bDELETE\s+FROM\b/i);
       expect(workflow).not.toMatch(/\bUPDATE\s+queue_dlq_events\b/i);
