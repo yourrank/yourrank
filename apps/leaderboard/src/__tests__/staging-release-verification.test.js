@@ -535,6 +535,24 @@ describe("F-012 staging release verification", () => {
           expect(line).toMatch(/type|keysOf|hasAll|shape/);
         }
       }
+      // Inspect never emits the free-form last_replay_error text: it is only
+      // classified into error_kind / Zod structural diagnostics.
+      expect(workflow).toContain("has_last_replay_error");
+      expect(workflow).toContain("error_kind");
+      expect(workflow).toContain("other_error_kinds");
+      expect(workflow).not.toContain("other_last_replay_errors");
+      const inspectHeredoc = (() => {
+        const match = workflow.match(/cat > "\$RUNNER_TEMP\/inspect\.jq" <<'JQ'\n([\s\S]*?)\n\s*JQ\n/);
+        if (!match) throw new Error("inspect.jq heredoc missing");
+        return match[1].split("\n").map((line) => line.replace(/^ {10}/, "")).join("\n");
+      })();
+      for (const line of inspectHeredoc.split("\n")) {
+        if (line.includes("last_replay_error") && !/^\s*#/.test(line)) {
+          expect(line).toMatch(/zodIssues|errorKind|!= ""/);
+        }
+      }
+      expect(inspectHeredoc).not.toMatch(/^\s*replay_state, replay_attempts, last_replay_error/m);
+      expect(inspectHeredoc).not.toMatch(/\.message\b|\.expected\b|\.received\b/);
       // Replays only via the admin API — no direct SQL mutation of the table.
       expect(workflow).not.toMatch(/\bDELETE\s+FROM\b/i);
       expect(workflow).not.toMatch(/\bUPDATE\s+queue_dlq_events\b/i);
@@ -542,6 +560,60 @@ describe("F-012 staging release verification", () => {
       // The health verdict is untouched.
       const verdict = await rootFile("scripts/staging-monitor-verdict.mjs");
       expect(verdict).toContain("dlq.degraded_reasons is not empty");
+    });
+
+    it("inspect jq classifies errors structurally without emitting raw error text", async () => {
+      const { spawnSync } = await import("node:child_process");
+      if (spawnSync("jq", ["--version"], { encoding: "utf8" }).status !== 0) {
+        console.log("NOT RUN: jq is not on PATH");
+        return;
+      }
+      const workflow = await dlqReplayWorkflowPromise;
+      const match = workflow.match(/cat > "\$RUNNER_TEMP\/inspect\.jq" <<'JQ'\n([\s\S]*?)\n\s*JQ\n/);
+      if (!match) throw new Error("inspect.jq heredoc missing");
+      const program = match[1].split("\n").map((line) => line.replace(/^ {10}/, "")).join("\n");
+      const { mkdtempSync, writeFileSync } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = mkdtempSync(join(tmpdir(), "dlq-inspect-"));
+      const jqPath = join(dir, "inspect.jq");
+      const fxPath = join(dir, "fx.json");
+      writeFileSync(jqPath, program);
+      const fixture = JSON.stringify({
+        summary: [],
+        rows: [
+          {
+            message_id: "t", replay_state: "invalid", replay_attempts: 1,
+            last_replay_error: '[{"code":"unrecognized_keys","keys":["score","rankBy"],"path":["payload","changes",0],"message":"SECRET_MSG"}]',
+            event_type: "notify", queue_name: "q", received_at: "x",
+            body: { v: 1, eventId: "e", eventType: "notify", createdAt: "c", payload: { type: "notify", kind: "top3", siteId: "s", siteName: "n", changes: [] } },
+          },
+          { message_id: "a", replay_state: null, replay_attempts: 0, last_replay_error: null, event_type: "notify", queue_name: "q", received_at: "x", body: { v: 1 } },
+          { message_id: "b", replay_state: "failed", replay_attempts: 3, last_replay_error: "fetch https://hook.example/TOKEN123 500 body", event_type: "notify", queue_name: "q", received_at: "x", body: { v: 1 } },
+          { message_id: "c", replay_state: "failed", replay_attempts: 3, last_replay_error: "replay lease expired after max attempts", event_type: "notify", queue_name: "q", received_at: "x", body: "str" },
+          { message_id: "d", replay_state: "invalid", replay_attempts: 1, last_replay_error: "weird https://x/y", event_type: "notify", queue_name: "q", received_at: "x", body: { v: 1 } },
+        ],
+      });
+      writeFileSync(fxPath, fixture);
+      const proc = spawnSync("jq", ["--arg", "target", "t", "-f", jqPath, fxPath], { encoding: "utf8" });
+      expect(proc.status).toBe(0);
+      const out = proc.stdout;
+      for (const sentinel of ["SECRET_MSG", "TOKEN123", "hook.example", "weird https://x/y"]) {
+        expect(out).not.toContain(sentinel);
+      }
+      const parsed = JSON.parse(out);
+      expect(parsed.target.error_kind).toBe("zod_validation");
+      expect(parsed.target.has_last_replay_error).toBe(true);
+      expect(parsed.target.zod_issues[0]).toEqual({
+        code: "unrecognized_keys",
+        path: "payload.changes.0",
+        unrecognized_keys: ["score", "rankBy"],
+      });
+      expect("last_replay_error" in parsed.target).toBe(false);
+      expect(Object.fromEntries(parsed.other_error_kinds.map((k) => [k.error_kind, k.count]))).toEqual({
+        lease_failure: 1, none: 1, other: 1, send_failure: 1,
+      });
+      expect(JSON.stringify(parsed)).not.toContain('"last_replay_error"');
     });
   });
 

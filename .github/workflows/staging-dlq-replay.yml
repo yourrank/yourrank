@@ -155,8 +155,28 @@ jobs:
           def envelopeKeys: ["v","eventId","eventType","createdAt","payload"];
           def legacyKeys: ["type","kind","siteId"];
           def hasAll($ks): . as $o | ($o|type)=="object" and ([$ks[] | in($o)] | all);
+          # last_replay_error is free-form runtime text and is never emitted. It is
+          # reduced to a kind, plus structural Zod diagnostics (codes / schema
+          # paths / unrecognized key names only) when it parses as a Zod issue list.
+          def zodIssues: (try (fromjson) catch null)
+            | if type=="array" and length>0 and all(.[]; type=="object" and has("code") and has("path")) then . else null end;
+          def errorKind: (.last_replay_error // "") as $e
+            | if $e == "" then "none"
+              elif ($e|zodIssues) != null then "zod_validation"
+              elif $e == "replay lease expired after max attempts" then "lease_failure"
+              elif .replay_state == "invalid" then "other"
+              else "send_failure" end;
+          def zodDiag: (.last_replay_error // "" | zodIssues)
+            | if . == null then null else map({
+                code: (.code|tostring),
+                path: (.path|map(tostring)|join(".")),
+                unrecognized_keys: (if .code=="unrecognized_keys" then ((.keys // [])|map(tostring)) else [] end)
+              }) end;
           def diag: {
-            replay_state, replay_attempts, last_replay_error, event_type, queue_name, received_at,
+            replay_state, replay_attempts, event_type, queue_name, received_at,
+            has_last_replay_error: ((.last_replay_error // "") != ""),
+            error_kind: errorKind,
+            zod_issues: zodDiag,
             body_json_type: (.body|type),
             top_level_keys: (.body|keysOf),
             has_envelope_keys: (.body|hasAll(envelopeKeys)),
@@ -171,7 +191,7 @@ jobs:
             by_replay_state: (.rows | group_by(.replay_state // "pending") | map({state: (.[0].replay_state // "pending"), count: length})),
             target: (if $target != "" then ([.rows[] | select(.message_id==$target)] | if length>0 then (.[0]|diag) else "not found among unresolved rows" end) else null end),
             other_shapes: ([.rows[] | select(.message_id != $target)] | group_by(.body|shape) | map({shape: (.[0].body|shape), replay_states: (map(.replay_state // "pending")|unique), event_types: (map(.event_type)|unique), count: length})),
-            other_last_replay_errors: ([.rows[] | select(.message_id != $target) | .last_replay_error] | group_by(.) | map({error: .[0], count: length}))
+            other_error_kinds: ([.rows[] | select(.message_id != $target)] | group_by(errorKind) | map({error_kind: (.[0]|errorKind), count: length}))
           }
           JQ
           OUT=$(curl -sS --fail --max-time 60 \
