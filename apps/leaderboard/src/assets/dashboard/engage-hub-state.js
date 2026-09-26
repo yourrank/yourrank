@@ -94,7 +94,10 @@ export function engageCardState(feature, payload = {}) {
     const tournaments = Array.isArray(payload?.tournaments) ? payload.tournaments : [];
     const latest = tournaments.find((t) => t.status !== "cancelled");
     if (!latest) return none;
-    const participants = Number(latest.participant_count) || 0;
+    // Once a bracket exists the selected field is the participant set; before
+    // selection the pending/confirmed/selected pool is the honest count.
+    const bracketed = latest.status === "completed" || latest.status === "active";
+    const participants = Number(bracketed ? latest.selected_count : latest.participant_count) || 0;
     const slots = Number(latest.bracket_size) || 0;
     const counts = `${plural(participants, "participant")} · ${plural(slots, "slot")}`;
     if (latest.status === "completed") {

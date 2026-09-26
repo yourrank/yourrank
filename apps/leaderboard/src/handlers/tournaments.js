@@ -211,7 +211,9 @@ export async function handleGetTournaments(request, env, deps = {}) {
             signup_state, entry_cap, format, anti_alt_enabled, require_login,
             min_credits, entry_fee, entry_keyword, chat_channel,
             (SELECT count(*) FROM tournament_entries
-              WHERE tournament_id=tournaments.id AND status IN ('pending','confirmed','selected'))::integer AS participant_count
+              WHERE tournament_id=tournaments.id AND status IN ('pending','confirmed','selected'))::integer AS participant_count,
+            (SELECT count(*) FROM tournament_entries
+              WHERE tournament_id=tournaments.id AND status='selected')::integer AS selected_count
        FROM tournaments
       WHERE site_id=$1
       ORDER BY created_at DESC LIMIT 20`,

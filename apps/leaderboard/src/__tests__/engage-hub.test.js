@@ -145,27 +145,29 @@ describe("engageCardState", () => {
     expect(engageCardState("tournaments", { tournaments: [] }).tone).toBe("none");
     expect(engageCardState("tournaments", { tournaments: [{ status: "cancelled", title: "Old" }] }).tone).toBe("none");
     const done = engageCardState("tournaments", {
-      tournaments: [{ title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 2 }],
+      tournaments: [{ title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 5, selected_count: 2 }],
     });
     expect(done.tone).toBe("done");
     expect(done.label).toBe("Completed");
     expect(done.meta).toEqual(["Community tournament", "2 participants · 8 slots"]);
     expect(done.action).toEqual({ label: "Open tournament", variant: "ghost" });
     const signups = engageCardState("tournaments", {
-      tournaments: [{ title: "Cup", status: "draft", signup_state: "open", bracket_size: 8, participant_count: 3 }],
+      tournaments: [{ title: "Cup", status: "draft", signup_state: "open", bracket_size: 8, participant_count: 5, selected_count: 0 }],
     });
     expect(signups.tone).toBe("live");
     expect(signups.label).toBe("Signups open");
+    expect(signups.meta).toEqual(["Cup", "5 participants · 8 slots"]);
     const locked = engageCardState("tournaments", {
       tournaments: [{ title: "Cup", status: "draft", signup_state: "locked", bracket_size: 8, participant_count: 8 }],
     });
     expect(locked.tone).toBe("warn");
     expect(locked.label).toBe("Signups locked");
     const bracket = engageCardState("tournaments", {
-      tournaments: [{ title: "Cup", status: "active", signup_state: "closed", bracket_size: 8, participant_count: 8 }],
+      tournaments: [{ title: "Cup", status: "active", signup_state: "closed", bracket_size: 8, participant_count: 9, selected_count: 8 }],
     });
     expect(bracket.tone).toBe("live");
     expect(bracket.label).toBe("Bracket in progress");
+    expect(bracket.meta).toEqual(["Cup", "8 participants · 8 slots"]);
   });
 });
 
@@ -176,7 +178,7 @@ describe("Engage hub boot", () => {
     server.raffles = { raffles: [] };
     server.predictions = { predictions: [] };
     server.tournaments = {
-      tournaments: [{ id: "t-1", title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 2 }],
+      tournaments: [{ id: "t-1", title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 5, selected_count: 2 }],
       chatRegistration: {},
     };
     const mod = await import("../assets/giveaways.js");
