@@ -726,3 +726,34 @@ describe("tournament lifecycle UI", () => {
     expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
   });
 });
+
+  it("keeps a dirty settings form intact through an entries refresh", async () => {
+    reset({
+      tournaments: [{ ...base, status: "draft", signup_state: "open" }],
+      entries: [{ id: "e1", display_name: "one", source: "chat", status: "pending" }],
+    });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    // Dirty the form while the settings tab is visible.
+    $id("tournament-title").value = "Typed but unsaved";
+    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect($id("tournament-settings-bar").hidden).toBe(false);
+    // An entry action is one loadEntries() path — the same refresh the 15s
+    // poll and chat webhook take. The form must keep its edit and the bar.
+    const formNode = $id("tournament-settings-form");
+    server.entries = [
+      { id: "e1", display_name: "one", source: "chat", status: "pending" },
+      { id: "e2", display_name: "two", source: "chat", status: "pending" },
+    ];
+    const removeBtn = $id("tournament-entry-list").querySelector("[data-entry-action='remove']");
+    removeBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect($id("tournament-settings-form")).toBe(formNode);
+    expect($id("tournament-title").value).toBe("Typed but unsaved");
+    expect($id("tournament-settings-bar").hidden).toBe(false);
+    // The data updates still landed.
+    expect(text("tournament-count")).toBe("2");
+    expect(text("tournament-tab-entries")).toBe("Entries (2)");
+    expect($id("tournament-entry-list").textContent).toContain("two");
+  });

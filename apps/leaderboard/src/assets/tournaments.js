@@ -10,6 +10,7 @@ import {
   selectDialogHtml,
   selectListHtml,
   fullBracketDialogHtml,
+  entryRowsHtml,
 } from "./tournament-view.js";
 
 const $ = (id) => document.getElementById(id);
@@ -157,6 +158,22 @@ async function loadEntries() {
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
   if (bracketData.tournament?.created_at) tournament.created_at = bracketData.tournament.created_at;
+  // Entries refresh (poll/chat/action): a visible settings form that is
+  // focused or dirty must survive the refresh — rebuilding it would steal
+  // focus and wipe edits. Update the data parts and leave the form alone.
+  const form = $("tournament-settings-form");
+  const settingsBusy = form && !form.closest("[hidden]")
+    && (form.contains(document.activeElement) || settingsSnapshot() !== settingsBaseline);
+  if (settingsBusy) {
+    const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
+    const list = $("tournament-entry-list");
+    if (list) list.innerHTML = entryRowsHtml(vm);
+    const count = $("tournament-count");
+    if (count) count.textContent = vm.stats[0].value;
+    const entriesTab = $("tournament-tab-entries");
+    if (entriesTab) entriesTab.textContent = `Entries (${vm.activeCount})`;
+    return;
+  }
   render();
 }
 
