@@ -177,6 +177,7 @@ const ROUTE_DEFS = [
   { id: "rewards.rules", canonicalPath: "/dashboard/rewards/rules", section: "rewards", tab: "rules", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.redemptions", canonicalPath: "/dashboard/rewards/redemptions", section: "rewards", tab: "redemptions", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.hub", canonicalPath: "/dashboard/giveaways", section: "giveaways", tab: "hub", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
@@ -255,7 +256,6 @@ export const DASHBOARD_ROUTE_ALIASES: readonly DashboardRouteAlias[] = [
   { path: "/dashboard/rewards/channel", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },
   { path: "/dashboard/settings/integrations", routeId: "siteConnections.channel", kind: "redirect", status: 301, search: "preserve" },
   // giveaways
-  { path: "/dashboard/giveaways", routeId: "giveaways.chat", kind: "redirect", status: 302, search: "preserve" },
   { path: "/dashboard/giveaways/preds", routeId: "giveaways.preds", kind: "redirect", status: 301, search: "preserve" },
   // Code Drops are owned by Activities; the retired Giveaways → Drops tab
   // keeps its address as a redirect so bookmarks land on the canonical owner.

@@ -97,6 +97,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "rewards.rules": "Ways to earn",
   "rewards.redemptions": "Claims",
   "siteConnections.channel": "Kick connection",
+  "giveaways.hub": "Engage",
   "giveaways.chat": "Giveaways",
   "giveaways.raffles": "Raffles",
   "giveaways.preds": "Predictions",
@@ -189,6 +190,10 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
       break;
     case "activities":
       return [{ label: sectionTitle }];
+    case "giveaways":
+      // The hub is the section root: a single unlinked entry renders no crumb.
+      if (route.id === "giveaways.hub") return [{ label: sectionTitle }];
+      break;
     default:
       break;
   }
