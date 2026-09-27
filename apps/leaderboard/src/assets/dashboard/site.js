@@ -3121,7 +3121,7 @@ export async function loadStats() {
 }
 
 function renderStatsError() {
-  ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfKpiCtr", "perfTotalViews"].forEach((id) => setMetricUnknown($(id), "error"));
+  ["perfKpiViews", "perfKpiClicks", "perfKpiCopies", "perfKpiCtr", "perfTotalViews", "insightsSiteVisits"].forEach((id) => setMetricUnknown($(id), "error"));
   ["perfKpiViewsDelta", "perfKpiClicksDelta", "perfKpiCopiesDelta", "perfKpiCtrDelta"].forEach((id) => {
     const node = $(id);
     if (node) node.textContent = "";
@@ -3130,7 +3130,6 @@ function renderStatsError() {
   const rangeFilter = $("perfRangeFilter");
   if (rangeFilter) {
     rangeFilter.dataset.hasData = "0";
-    rangeFilter.hidden = true;
   }
   if ($("statBars")) $("statBars").innerHTML = "";
   if ($("perfActivityBody")) $("perfActivityBody").innerHTML = "";

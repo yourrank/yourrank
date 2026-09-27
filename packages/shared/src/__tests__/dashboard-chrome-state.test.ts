@@ -97,16 +97,14 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(root.documentTitle).toBe("Community · YourRank");
   });
 
-  it("pins the customer-facing Stats detail labels", () => {
+  it("keeps Insights as the single page heading while tabs name the detail", () => {
     const referrals = dashboardChromeState("performance.referrals");
     expect(referrals.tabLabel).toBe("Traffic sources");
     expect(referrals.documentTitle).toBe("Traffic sources · Insights · YourRank");
-    expect(referrals.crumbs).toEqual([
-      { label: "Insights", href: "/dashboard/analytics" },
-      { label: "Traffic sources" },
-    ]);
+    expect(referrals.crumbs).toEqual([{ label: "Insights" }]);
     expect(dashboardChromeState("performance.activity").tabLabel).toBe("Overview");
-    expect(dashboardChromeState("performance.events").tabLabel).toBe("Public site activity");
+    expect(dashboardChromeState("performance.activity").documentTitle).toBe("Insights · YourRank");
+    expect(dashboardChromeState("performance.events").tabLabel).toBe("Detailed analytics");
   });
 
   it("pins the fragment sections' chrome", () => {

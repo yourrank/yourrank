@@ -160,6 +160,22 @@ describe("site role handler authorization", () => {
       expect(heatmap.status).toBe(200);
     });
 
+    it(`${role} gets matching visitor timing and sources for a selected Insights window`, async () => {
+      const calls = [];
+      const response = await handleHeatmap(request("/api/site/stats/heatmap?days=7"), env, {
+        ...deps(role),
+        getHeatmapImpl: async (_env, _siteId, days) => { calls.push(["timing", days]); return []; },
+        getTopReferrersImpl: async (_env, _siteId, days) => { calls.push(["sources", days]); return []; },
+      });
+      expect(response.status).toBe(200);
+      expect(calls).toEqual([["timing", 7], ["sources", 7]]);
+      const unsupported = await handleHeatmap(request("/api/site/stats/heatmap?days=14"), env, {
+        ...deps(role),
+        getHeatmapImpl: async () => { throw new Error("should not query"); },
+      });
+      expect(unsupported.status).toBe(400);
+    });
+
     it(`${role} can create an archive`, async () => {
       const response = await handleArchive(
         request("/api/site/archive", { label: "snapshot", clear: "none" }),
