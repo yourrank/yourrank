@@ -72,10 +72,25 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
-    const tournament = { id: 'fixture-tournament', title: 'Community Cup', game_name: 'Rocket League', bracket_size: 8, status: 'draft', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: '', winner_name: null };
+    const BYE = '__YOURRANK_INTERNAL_BYE__';
+    const tournament = { id: 'tourn_8f3a2c', title: 'Community tournament', game_name: '', bracket_size: 8, status: 'completed', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: '36-ates', winner_name: '36_ates', created_at: '2026-09-20T14:32:00Z' };
+    const match = (id, round_number, match_index, player1_name, player2_name, p1, p2, winner_name) => ({ id, round_number, match_index, player1_name, player2_name, player1_score: p1, player2_score: p2, winner_name, status: 'completed' });
+    const matches = [
+      match('m1', 1, 0, '36_ates', 'forolo_GB', 1, 0, '36_ates'),
+      match('m2', 1, 1, BYE, BYE, null, null, BYE),
+      match('m3', 1, 2, BYE, BYE, null, null, BYE),
+      match('m4', 1, 3, BYE, BYE, null, null, BYE),
+      match('m5', 2, 0, '36_ates', BYE, null, null, '36_ates'),
+      match('m6', 2, 1, BYE, BYE, null, null, BYE),
+      match('m7', 3, 0, '36_ates', BYE, null, null, '36_ates'),
+    ];
+    const fixtureEntries = [
+      { id: 'e1', display_name: '36_ates', source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null },
+      { id: 'e2', display_name: 'forolo_GB', source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null },
+    ];
     if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
-    if (path === '/api/tournaments/fixture-tournament/entries') return json(res, { entries: [], counts: { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
-    if (path === '/api/tournaments/fixture-tournament/bracket') return json(res, { matches: [], tournament });
+    if (path === '/api/tournaments/tourn_8f3a2c/entries') return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: 2, eligible: 2, waitlist: 0, removed: 0, blocked: 0 } });
+    if (path === '/api/tournaments/tourn_8f3a2c/bracket') return json(res, { matches: empty ? [] : matches, tournament });
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);

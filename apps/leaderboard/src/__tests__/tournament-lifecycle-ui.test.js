@@ -206,8 +206,8 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-workspace")).toBe(true);
     expect(text("tournament-status")).toBe("Draft");
     expect(text("tournament-title-display")).toBe("Friday Cup");
-    expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket");
-    expect(text("tournament-fact-channel")).toBe("36_ates");
+    expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket · Single elimination");
+    expect($id("tournament-chat-channel").value).toBe("36_ates");
     expect(text("tournament-fact-keyword")).toBe("!cup");
     expect(text("tournament-fact-cap")).toBe("Unlimited");
     expect(text("tournament-count")).toBe("0");
@@ -342,7 +342,6 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [{ ...base, chat_channel: null }] });
     await mod.boot();
     // The site channel is only a suggestion: nothing is stored yet.
-    expect(text("tournament-fact-channel")).toBe("—");
     expect($id("tournament-chat-channel").value).toBe("");
     expect($id("tournament-chat-channel").placeholder).toBe("36-ates");
     expect($id("tournament-settings-bar").hidden).toBe(true);
@@ -350,7 +349,7 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-primary");
     const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
     expect(req.body).toEqual({ chatChannel: "36-ates" });
-    expect(text("tournament-fact-channel")).toBe("36-ates");
+    expect($id("tournament-chat-channel").value).toBe("36-ates");
     expect(text("tournament-primary")).toBe("Open signups");
   });
 
@@ -359,7 +358,6 @@ describe("tournament lifecycle UI", () => {
     clearSession();
     reset({ tournaments: [{ ...base, chat_channel: "saved-channel" }] });
     await mod.boot();
-    expect(text("tournament-fact-channel")).toBe("saved-channel");
     expect($id("tournament-chat-channel").value).toBe("saved-channel");
     expect(text("tournament-primary")).toBe("Open signups");
     expect(JSON.stringify(server.requests)).not.toContain("other-channel");
@@ -697,9 +695,10 @@ describe("tournament lifecycle UI", () => {
     expect(matches[0].textContent).not.toContain(BYE_SLOT);
     expect(matches[0].textContent).toContain("Alice advances automatically");
     expect(matches[0].textContent).not.toContain("0 - 0");
-    // BYE vs BYE: compact empty card.
-    expect(matches[1].classList.contains("is-empty")).toBe(true);
-    expect(matches[1].textContent).toContain("No match");
+    // BYE vs BYE: muted match with two BYE rows.
+    expect(matches[1].classList.contains("is-bye")).toBe(true);
+    expect(matches[1].querySelectorAll(".tournament-match-row.is-bye")).toHaveLength(2);
+    expect(matches[1].textContent).toContain("BYE");
     expect(matches[1].querySelectorAll("input")).toHaveLength(0);
     // TBD slot: still no inputs until both players are known.
     expect(matches[2].querySelectorAll("input")).toHaveLength(0);

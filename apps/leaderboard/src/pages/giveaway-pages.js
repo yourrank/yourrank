@@ -257,7 +257,9 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
     tournaments: "Open chat signups, review the entry list, and seed a tournament.",
   }[active] || "Engage viewers with live community events.";
   const html = `
-${engageTabsHtml("giveaways")}
+${active === "tournaments"
+    ? ""
+    : `${engageTabsHtml("giveaways")}
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
     ${ENGAGE_BACK}
@@ -267,7 +269,7 @@ ${engageTabsHtml("giveaways")}
   <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>
   </div>
-</div>
+</div>`}
 
 <!-- The one place an Engage action reports a refusal. It lives outside the tab
      panes so a refusal on any tab is actually painted: the previous target was
@@ -611,39 +613,37 @@ ${engageTabsHtml("giveaways")}
   <div id="tournament-app" class="tournament-app">
     <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
 
-    <!-- No tournament yet: one focused card. Nothing else renders until one exists. -->
+    <!-- No tournament yet: the empty card carries the page's h1. -->
     <section class="tournament-empty-card" id="tournament-empty" aria-labelledby="tournament-empty-heading" hidden>
-      <h2 id="tournament-empty-heading">Tournaments</h2>
+      <${active === "tournaments" ? "h1" : "h2"} id="tournament-empty-heading">Tournaments</${active === "tournaments" ? "h1" : "h2"}>
       <p>Run a tournament for your community. Collect entries from your audience, select participants, then manage the bracket here.</p>
       <button class="btn btn--accent" id="tournament-create" type="button">Create tournament</button>
     </section>
 
     <div id="tournament-workspace" hidden>
-      <section class="tournament-summary-card" aria-labelledby="tournament-title-display">
-        <div class="tournament-summary-head">
-          <div class="tournament-summary-ident">
-            <div class="tournament-summary-title-row">
-              <h2 class="tournament-title-display" id="tournament-title-display"></h2>
+      <header class="tourn-head">
+        <div class="tourn-head-row">
+          <div class="tourn-head-ident">
+            <div class="tourn-head-title">
+              <${active === "tournaments" ? "h1" : "h2"} id="tournament-title-display"></${active === "tournaments" ? "h1" : "h2"}>
               <span class="tournament-status-chip" id="tournament-status" data-lifecycle=""></span>
             </div>
-            <p class="tournament-game-display" id="tournament-meta"></p>
+            <p class="tourn-meta" id="tournament-meta"></p>
             <p class="tournament-step-label" id="tournament-step-label"></p>
           </div>
           <div class="tournament-primary-wrap">
             <button class="btn btn--accent" id="tournament-primary" type="button" hidden></button>
-            <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
-            <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>New tournament</button>
+            <button class="btn btn--ghost" id="tournament-reopen" type="button" hidden>Reopen signups</button>
+            <button class="btn btn--ghost" id="tournament-new" type="button" hidden>New tournament</button>
           </div>
         </div>
-        <dl class="tournament-facts">
-          <div><dt>Kick channel</dt><dd id="tournament-fact-channel">—</dd></div>
-          <div><dt>Join command</dt><dd id="tournament-fact-keyword">!join</dd></div>
-          <div><dt>Signup limit</dt><dd id="tournament-fact-cap">Unlimited</dd></div>
-          <div><dt>Bracket spots</dt><dd id="tournament-fact-spots">8</dd></div>
-          <div><dt>Entries</dt><dd id="tournament-count" aria-live="polite">0</dd></div>
-          <div><dt>Chat registration</dt><dd><span class="tournament-live-dot" id="tournament-chat-status">Chat registration off</span></dd></div>
+        <dl class="tourn-stats">
+          <div class="tourn-stat"><dt>Entries</dt><dd id="tournament-count" aria-live="polite">0</dd></div>
+          <div class="tourn-stat"><dt>Bracket spots</dt><dd id="tournament-fact-spots">8</dd></div>
+          <div class="tourn-stat"><dt>Join command</dt><dd id="tournament-fact-keyword">!join</dd></div>
+          <div class="tourn-stat"><dt>Signup limit</dt><dd id="tournament-fact-cap">Unlimited</dd></div>
         </dl>
-      </section>
+      </header>
 
       <div class="tournament-tabs" role="tablist" aria-label="Tournament sections">
         <button class="tournament-tab is-active" id="tournament-tab-entries" type="button" role="tab" aria-selected="true" aria-controls="tournament-panel-entries" data-tournament-tab="entries">Entries</button>
@@ -651,42 +651,50 @@ ${engageTabsHtml("giveaways")}
         <button class="tournament-tab" id="tournament-tab-settings" type="button" role="tab" aria-selected="false" aria-controls="tournament-panel-settings" data-tournament-tab="settings">Settings</button>
       </div>
 
-      <section class="tournament-list-card" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries">
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-list-heading">Entries</h2>
-            <p class="tournament-muted" id="tournament-list-sub">Review names before locking signups and picking participants.</p>
-          </div>
+      <section class="tourn-panel" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries">
+        <div class="tourn-panel-head">
+          <h2 id="tournament-list-heading">Entries</h2>
+          <p class="tournament-muted" id="tournament-list-sub">Review tournament entries and their status.</p>
         </div>
         <div class="tournament-entries" id="tournament-entries">
           <div class="tournament-panel-empty" id="tournament-entries-empty" hidden></div>
-          <ul class="tournament-entry-list" id="tournament-entry-list" aria-label="Tournament entries"></ul>
+          <div class="v3-table-scroll">
+            <table class="v3-table" id="tournament-entry-table">
+              <thead>
+                <tr><th>Player</th><th class="tourn-col-source">Source</th><th>Status</th><th class="tourn-col-actions">Actions</th></tr>
+              </thead>
+              <tbody id="tournament-entry-list" aria-label="Tournament entries"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
-      <section class="tournament-list-card" id="tournament-panel-bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket" hidden>
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-bracket-heading">Bracket</h2>
-            <p class="tournament-muted">Enter scores for each match to advance the winner.</p>
-          </div>
-        </div>
+      <section id="tournament-panel-bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket" hidden>
         <div class="tournament-panel-empty" id="tournament-bracket-empty" hidden>
           <b>Bracket not created yet.</b>
           <span>Lock signups and select participants to generate the bracket.</span>
         </div>
-        <div id="tournament-bracket" class="tournament-bracket"></div>
+        <div class="tourn-bracket-layout">
+          <div class="tourn-panel tourn-bracket-main">
+            <div class="tourn-panel-head tourn-panel-head--row">
+              <div>
+                <h2 id="tournament-bracket-heading">Tournament bracket</h2>
+                <p class="tournament-muted" id="tournament-bracket-sub">Single elimination</p>
+              </div>
+              <button class="btn btn--ghost btn--sm" id="tournament-bracket-expand" type="button">View full bracket</button>
+            </div>
+            <div id="tournament-bracket" class="tournament-bracket"></div>
+          </div>
+          <aside class="tourn-aside" id="tournament-summary"></aside>
+        </div>
         <p class="tournament-champion" id="tournament-champion" hidden></p>
       </section>
 
-      <section class="tournament-list-card" id="tournament-panel-settings" role="tabpanel" aria-labelledby="tournament-tab-settings" hidden>
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-settings-heading">Settings</h2>
-            <p class="tournament-muted">Basic details can change any time. Bracket size locks once the bracket has been created.</p>
-          </div>
-        </div>
-        <form id="tournament-settings-form" class="tournament-settings-form" novalidate>
+      <section id="tournament-panel-settings" role="tabpanel" aria-labelledby="tournament-tab-settings" hidden>
+        <div class="tourn-bracket-layout">
+          <div class="tourn-panel tourn-settings-main">
+            <div id="tournament-settings-view" hidden></div>
+            <form id="tournament-settings-form" class="tournament-settings-form" novalidate>
           <fieldset class="tournament-settings-group">
             <legend>Tournament details</legend>
             <div class="tournament-settings-fields">
@@ -709,6 +717,7 @@ ${engageTabsHtml("giveaways")}
                   <span class="gw-input-prefix">kick.com/</span>
                   <input id="tournament-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" class="tournament-control" />
                 </div>
+                <span class="hint">Chat registration: <span class="tournament-live-dot" id="tournament-chat-status">off</span></span>
               </div>
               <div class="field">
                 <label for="tournament-keyword">Chat command</label>
@@ -761,7 +770,20 @@ ${engageTabsHtml("giveaways")}
           </div>
           <p class="tournament-settings-saved" id="tournament-settings-saved" role="status" aria-live="polite" hidden>Settings saved.</p>
         </form>
+          </div>
+          <aside class="tourn-aside" id="tournament-settings-aside"></aside>
+        </div>
       </section>
+    </div>
+
+    <div class="modal tournament-create-modal tourn-bracket-modal" id="tournament-bracket-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-modal-heading" hidden>
+      <div class="modal-card tourn-bracket-modal-card">
+        <div class="tourn-modal-head">
+          <h3 id="tournament-bracket-modal-heading">Full bracket</h3>
+          <button class="btn btn--sm btn--ghost" id="tournament-bracket-close" type="button" aria-label="Close full bracket">✕</button>
+        </div>
+        <div id="tournament-bracket-full" class="tournament-bracket"></div>
+      </div>
     </div>
 
     <div class="modal tournament-create-modal" id="tournament-create-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-create-heading" hidden>
