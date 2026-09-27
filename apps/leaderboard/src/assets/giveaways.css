@@ -1618,6 +1618,9 @@
 
 .tourn-kv-row dd[data-kv="id"] {
   font: 600 12px var(--ws-mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (min-width: 1024px) {
@@ -1658,26 +1661,58 @@
   font-size: 13px;
 }
 
-/* Bracket: rounds flow left to right inside the panel's own scroller; later
-   rounds center their matches against the feeders below. */
-.tournament-bracket {
-  display: flex;
-  gap: 24px;
-  align-items: stretch;
+/* Bracket: a data-driven grid — each column is a flex column of slots whose
+   heights double per round (span = 2^(r-1)), so a later match lands centered
+   between its two feeders with no per-match coordinates. Connectors are an
+   SVG overlay measured from the rendered cards by layoutBracket(). */
+.tourn-bracket-host,
+.tourn-bracket { min-width: 0; }
+
+.tourn-bracket-scroll {
   overflow-x: auto;
-  padding: 4px 2px 8px;
+  padding: 4px 2px 10px;
 }
 
-.tournament-bracket[hidden] { display: none; }
+.tourn-bracket-grid {
+  position: relative;
+  display: flex;
+  gap: var(--tourn-round-gap, 44px);
+  min-width: max-content;
+  --tourn-slot: 76px; /* fallback until layoutBracket measures real cards */
+  --tourn-round-min: 220px;
+}
 
-.tournament-round {
+.tourn-bracket[data-mode="expanded"] .tourn-bracket-grid { --tourn-round-min: 260px; }
+
+.tourn-connectors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tourn-connectors path {
+  fill: none;
+  stroke: var(--ws-line, #e5e7eb);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.tourn-connectors path.is-bye {
+  stroke-dasharray: 3 4;
+  opacity: 0.45;
+}
+
+.tourn-round {
+  flex: 1 1 var(--tourn-round-min);
+  min-width: var(--tourn-round-min);
   display: flex;
   flex-direction: column;
-  flex: 0 0 230px;
-  min-width: 0;
 }
 
-.tournament-round-head {
+.tourn-round-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -1685,34 +1720,69 @@
   margin-bottom: 10px;
 }
 
-.tournament-round-head h3 {
+.tourn-round-head h3 {
   margin: 0;
   color: var(--ws-text, #111827);
   font-size: 13px;
   font-weight: 700;
 }
 
-.tournament-round-head span {
+.tourn-round-head span {
   color: var(--ws-text-mute, #6b7280);
   font-size: 11px;
 }
 
-.tournament-round-matches {
+.tourn-round-body {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  justify-content: space-around;
-  gap: 14px;
+  height: calc(var(--tourn-slot) * var(--slots));
 }
 
-.tournament-match {
+.tourn-slot {
+  height: calc(var(--tourn-slot) * var(--span));
+  display: flex;
+  align-items: center;
+}
+
+/* Match cards. One card, five states via data-state. */
+.tourn-match {
+  width: 100%;
   border: 1px solid var(--ws-line, #e5e7eb);
   border-radius: var(--ws-radius-sm, 6px);
   background: var(--ws-surface, #fff);
   overflow: hidden;
 }
 
-.tournament-match-row {
+.tourn-match--final {
+  border-color: var(--ws-text-soft, var(--ws-text-mute));
+  box-shadow: 0 6px 18px rgb(17 24 39 / 0.08);
+}
+
+.tourn-match[data-state="future"] {
+  border-style: dashed;
+  background: transparent;
+}
+
+.tourn-match[data-state="future"] .tourn-match-name { color: var(--ws-text-mute, #6b7280); }
+
+.tourn-match[data-state="bye"] { background: var(--ws-surface-soft, #f8fafc); }
+
+.tourn-match[data-state="void"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  opacity: 0.4;
+}
+
+.tourn-match-void {
+  color: var(--ws-text-mute, #6b7280);
+  font-size: 13px;
+}
+
+.tourn-match-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1721,19 +1791,27 @@
   border-bottom: 1px solid var(--ws-line, #e5e7eb);
 }
 
-.tournament-match-row:last-of-type { border-bottom: 0; }
+.tourn-match-row:last-of-type { border-bottom: 0; }
 
-.tournament-match-name {
+.tourn-match-name {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   color: var(--ws-text, #111827);
   font-size: 13px;
   font-weight: 500;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.tournament-match-score {
+.tourn-match-note .tourn-match-name {
+  color: var(--ws-text-mute, #6b7280);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.tourn-match-score {
   flex: none;
   min-width: 16px;
   color: var(--ws-text-soft, var(--ws-text-mute));
@@ -1741,31 +1819,22 @@
   text-align: right;
 }
 
-.tournament-match-row.is-winner {
+.tourn-match-row.is-winner {
   background: var(--ws-accent-soft, rgb(124 58 237 / 0.06));
 }
 
-.tournament-match-row.is-winner .tournament-match-name { font-weight: 700; }
+.tourn-match-row.is-winner .tourn-match-name { font-weight: 700; }
 
-.tournament-match-row.is-winner .tournament-match-score { color: var(--ws-accent, #7c3aed); }
+.tourn-match-row.is-winner .tourn-match-score { color: var(--ws-accent, #7c3aed); }
 
-.tournament-match-row.is-champion {
+.tourn-match-row.is-champion {
   background: #f59e0b14;
 }
 
-.tournament-match-row.is-champion .tournament-match-name,
-.tournament-match-row.is-champion .tournament-match-score { color: #b45309; }
+.tourn-match-row.is-champion .tourn-match-name,
+.tourn-match-row.is-champion .tourn-match-score { color: #b45309; }
 
-.tournament-match-row.is-bye .tournament-match-name {
-  color: var(--ws-text-mute, #6b7280);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-}
-
-.tournament-match.is-bye { opacity: 0.6; }
-
-.tournament-match-actions {
+.tourn-match-actions {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1773,13 +1842,7 @@
   border-top: 1px solid var(--ws-line, #e5e7eb);
 }
 
-.tournament-match-note,
-.tournament-match-tbd {
-  color: var(--ws-text-mute, #6b7280);
-  font-size: 12px;
-}
-
-.tournament-match-score-input {
+.tourn-match-score-input {
   width: 46px;
   padding: 5px 6px;
   border: 1px solid var(--ws-line, #e5e7eb);
@@ -1788,21 +1851,29 @@
   text-align: center;
 }
 
-.tournament-match-score-input:focus {
+.tourn-match-score-input:focus {
   border-color: var(--ws-accent, #7c3aed);
   outline: none;
 }
 
-.tournament-match-divider {
+.tourn-match-divider {
   color: var(--ws-text-mute, #6b7280);
 }
 
-/* Full-bracket modal: near-viewport width, same bracket markup. */
-.tourn-bracket-modal .modal-card,
-.tourn-bracket-modal-card {
-  width: min(96vw, 1200px);
+/* Full-bracket modal: near-viewport dialog, header + scrollable bracket.
+   The id selector outranks the global 480px modal-card cap. */
+#tournament-bracket-modal .modal-card {
+  display: flex;
+  flex-direction: column;
+  width: min(90vw, 1600px);
   max-width: 96vw;
-  max-height: 88vh;
+  height: min(90vh, 980px);
+  overflow: hidden;
+}
+
+.tourn-bracket-modal-body {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
 }
 
