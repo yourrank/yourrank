@@ -11,7 +11,7 @@ export const verifyEmailPage = `<!DOCTYPE html><html lang="en"><head>
 <link rel="stylesheet" href="/assets/app.css" /><link rel="stylesheet" href="/assets/ui.css" /><link rel="stylesheet" href="/assets/devin-system.css" /></head><body>${DEVIN_DESIGN_CONTRACT}
 <a href="#main-content" class="sr-only skip-link">Skip to content</a>
 <div class="auth-wrap"><aside class="auth-side"><div><div class="brand">Your<b>Rank</b></div></div>
-<div><h1>Confirm your email.</h1><p>Click the link we sent you to finish setting up your page.</p></div>
+<div><h1>Confirm your email.</h1><p>Use the confirmation link in your inbox, or request a new one below.</p></div>
 <div class="feat"></div></aside>
 <main class="auth-main" id="main-content"><div class="auth-card"><h2>Verify email</h2>
 <p class="sub" id="msg">{{VERIFY_MSG}}</p>
@@ -27,4 +27,17 @@ export function verifyEmailPageHtml({ message, error = "", showResend = false } 
     .replace("{{VERIFY_ERR}}", error)
     .replace("{{VERIFY_ERR_HIDDEN}}", error ? "" : " hidden")
     .replace("{{VERIFY_RESEND_HIDDEN}}", showResend ? "" : " hidden");
+}
+
+// Only a resolved, unverified account session can identify email verification
+// as the current blocker. The public `from` and `delivery` URL parameters are
+// hints, not evidence of a password check or a successful email send.
+export function verifyEmailPromptState({ deliveryFailed = false, loginNeedsVerification = false } = {}) {
+  const message = loginNeedsVerification
+    ? "You're signed in, but your email address isn't verified yet. Check your inbox for a confirmation link, or request a new one below."
+    : "Check your inbox for a verification link, or request a new one below.";
+  if (deliveryFailed) {
+    return { message, error: "The verification email may not have been delivered. Request a new link below.", showResend: true };
+  }
+  return { message, showResend: true };
 }

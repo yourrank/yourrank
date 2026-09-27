@@ -14,7 +14,7 @@ const USER = { id: "u-1", email: "owner@example.com", plan: "pro", status: "acti
 const marketing = { fetch: async () => new Response("marketing", { status: 200 }) };
 const apiApp = { fetch: async () => { throw new Error("api router must not see this path"); } };
 
-function run(path, { signedIn = false, method = "GET", destroyed = [] } = {}) {
+function run(path, { signedIn = false, user = USER, method = "GET", destroyed = [] } = {}) {
   return handleRequest(
     new Request(`https://yourrank.site${path}`, { method, headers: signedIn ? { cookie: "yr_session=tok" } : {} }),
     { MARKETING: marketing },
@@ -23,7 +23,7 @@ function run(path, { signedIn = false, method = "GET", destroyed = [] } = {}) {
     {
       resolveCustomDomain: async () => null,
       apiApp,
-      currentUser: async () => (signedIn ? USER : null),
+      currentUser: async () => (signedIn ? user : null),
       destroySession: async (_env, token) => { destroyed.push(token); },
     },
   );
@@ -52,6 +52,12 @@ describe("/login and /signup", () => {
     }
   });
 
+  it("loads cookie consent exactly once on the rendered login page", async () => {
+    const html = await (await run("/login")).text();
+    expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
+    expect(html.match(/<script src="\/assets\/cookie-consent\.js" defer><\/script>/g)).toHaveLength(1);
+  });
+
   it("authenticated /login goes to /dashboard, or to a validated safe next", async () => {
     const plain = await run("/login", { signedIn: true });
     expect(plain.status).toBe(302);
@@ -70,6 +76,27 @@ describe("/login and /signup", () => {
     const res = await run("/signup", { signedIn: true });
     expect(res.status).toBe(302);
     expect(new URL(res.headers.get("location")).pathname).toBe("/dashboard");
+  });
+});
+
+describe("/verify-email login context", () => {
+  it("only names an unverified signed-in account when the session confirms it", async () => {
+    const forged = await (await run("/verify-email?from=login")).text();
+    expect(forged).not.toContain("Your password was correct");
+    expect(forged).not.toContain("You're signed in");
+
+    const verified = await (await run("/verify-email?from=login", {
+      signedIn: true,
+      user: { ...USER, email_verified: true },
+    })).text();
+    expect(verified).not.toContain("You're signed in, but your email");
+
+    const unverified = await (await run("/verify-email?from=login", {
+      signedIn: true,
+      user: { ...USER, email_verified: false },
+    })).text();
+    expect(unverified).toContain("You're signed in, but your email");
+    expect(unverified).not.toContain("Your password was correct");
   });
 });
 
