@@ -97,16 +97,14 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     expect(root.documentTitle).toBe("Community · YourRank");
   });
 
-  it("pins the customer-facing Stats detail labels", () => {
+  it("keeps Insights as the single page heading while tabs name the detail", () => {
     const referrals = dashboardChromeState("performance.referrals");
     expect(referrals.tabLabel).toBe("Traffic sources");
     expect(referrals.documentTitle).toBe("Traffic sources · Insights · YourRank");
-    expect(referrals.crumbs).toEqual([
-      { label: "Insights", href: "/dashboard/analytics" },
-      { label: "Traffic sources" },
-    ]);
+    expect(referrals.crumbs).toEqual([{ label: "Insights" }]);
     expect(dashboardChromeState("performance.activity").tabLabel).toBe("Overview");
-    expect(dashboardChromeState("performance.events").tabLabel).toBe("Public site activity");
+    expect(dashboardChromeState("performance.activity").documentTitle).toBe("Insights · YourRank");
+    expect(dashboardChromeState("performance.events").tabLabel).toBe("Detailed analytics");
   });
 
   it("pins the fragment sections' chrome", () => {
@@ -164,11 +162,9 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
   it("pins the Telegram chrome", () => {
     const overview = dashboardChromeState("telegram");
     expect(overview.navKey).toBe("telegram");
-    expect(overview.h1).toBe("Overview");
-    expect(overview.crumbs).toEqual([
-      { label: "Telegram" },
-      { label: "Overview" },
-    ]);
+    expect(overview.h1).toBe("Telegram");
+    expect(overview.tabLabel).toBe("Overview");
+    expect(overview.crumbs).toEqual([{ label: "Telegram" }]);
     const bots = dashboardChromeState("telegram.bots");
     expect(bots.h1).toBe("Bots");
     expect(bots.canonicalPath).toBe("/dashboard/telegram/bots");

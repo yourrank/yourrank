@@ -30,7 +30,9 @@ Existing /dashboard/editor/* compatibility redirects remain intact.
 
 The rail is now Home, Community, Audience, Engage, Rewards, Insights, Telegram, Settings.
 Community, Audience, and Insights replace the former My board, Members, and Stats labels.
-Rewards owns its routes and tab strip through a separate `rewards` navKey.
+Engage is a single collapsible branch with Tournaments and Giveaways children; tournament
+tabs remain inside the tournament page. Rewards owns its routes and tab strip through a
+separate `rewards` navKey.
 Route paths and aliases remain unchanged.
 Standalone Activities, Audience, and Giveaways bundles now boot the command palette directly.
 Kick connection detail is now owned by Settings → Connections while retaining its existing path.

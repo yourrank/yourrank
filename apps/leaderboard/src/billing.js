@@ -122,9 +122,9 @@ export async function handleAccountUsage(request, env) {
         LIMIT 1`,
       [user.id],
     );
-    const [playerMax, creditsUsage, activeViewers, telegramUsage, telegramAssets, seatCount] = await Promise.all([
-      siteIds.length
-        ? one("SELECT COALESCE(max(c),0)::int AS count FROM (SELECT count(*) AS c FROM players WHERE site_id=ANY($1::uuid[]) GROUP BY site_id) t", [siteIds])
+    const [sitePlayers, creditsUsage, activeViewers, telegramUsage, telegramAssets, seatCount] = await Promise.all([
+      activeSite
+        ? one("SELECT count(*)::int AS count FROM players WHERE site_id=$1", [activeSite.id])
         : { count: 0 },
       activeSite ? getSiteCreditsUsage(activeSite.id) : null,
       reconcileAccountActiveViewerUsage(user.id),
@@ -151,7 +151,7 @@ export async function handleAccountUsage(request, env) {
     const limitEntry = (used, allowance, extra = {}) => ({ used: Number(used) || 0, allowance, ...extra });
     const limitBlocks = {
       sites: limitEntry(siteIds.length, getPlanLimit(plan, "sites")),
-      players_per_site: limitEntry(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
+      players_per_site: limitEntry(sitePlayers?.count || 0, getPlanLimit(plan, "players_per_site")),
       active_viewers_30d: limitEntry(activeViewers?.activeViewers || 0, getPlanLimit(plan, "active_viewers_30d"), { level: activeViewers?.level || "normal" }),
       reward_mappings: limitEntry(creditsUsage?.rewardMappings || 0, getPlanLimit(plan, "reward_mappings")),
       shop_items: limitEntry(creditsUsage?.shopItems || 0, getPlanLimit(plan, "shop_items")),
@@ -179,7 +179,7 @@ export async function handleAccountUsage(request, env) {
       overLimit,
       leaderboard: {
         sites: usageValue(siteIds.length, getPlanLimit(plan, "sites")),
-        players: usageValue(playerMax?.count || 0, getPlanLimit(plan, "players_per_site")),
+        players: usageValue(sitePlayers?.count || 0, getPlanLimit(plan, "players_per_site")),
       },
       credits: activeSite && creditsUsage ? {
         rewardMappings: usageValue(creditsUsage.rewardMappings, getPlanLimit(plan, "reward_mappings")),

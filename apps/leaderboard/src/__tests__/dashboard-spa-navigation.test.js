@@ -36,6 +36,7 @@ const ROUTES = [
   ["/dashboard/leaderboard/history", "board"],
   ["/dashboard/site", "site"],
   ["/dashboard/games", "games"],
+  ["/dashboard/analytics", "performance"],
   ["/dashboard/analytics/activity", "performance"],
   ["/dashboard/analytics/referrals", "performance"],
   ["/dashboard/analytics/events", "performance"],
@@ -43,10 +44,10 @@ const ROUTES = [
 ];
 
 describe("dashboard single-document navigation", () => {
-  it("never gives Insights the heading of the opening editor tab", () => {
+  it("keeps the Insights title independent of the opening route", () => {
     const html = dashboardHtml("/dashboard/leaderboard/players");
-    expect(html).toContain('<h1 id="perfTitle">Overview</h1>');
-    expect(dashboardHtml("/dashboard/analytics/referrals")).toContain('<h1 id="perfTitle">Traffic sources</h1>');
+    expect(html).toContain('<h1 id="perfTitle">Insights</h1>');
+    expect(dashboardHtml("/dashboard/analytics/referrals")).toContain('<h1 id="perfTitle">Insights</h1>');
   });
   it("ships every section on every dashboard route", () => {
     for (const [path] of ROUTES) {

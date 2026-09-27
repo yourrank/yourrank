@@ -61,35 +61,41 @@ describe("Audience members body", () => {
 });
 
 describe("Analytics bodies", () => {
-  it("answers the four Insights questions before secondary traffic detail", () => {
+  it("places the five decision metrics before compact activity and moves daily detail to its own tab", () => {
     const html = DashboardContent({
       user: { display_name: "Test operator", plan: "pro" },
       activePath: "/dashboard/analytics/activity",
     }).toString();
-    expect(html).toContain("Your community");
-    expect(html).toContain("Code-drop participation");
-    expect(html).toContain("Reward claims");
+    expect(html).toContain('<h1 id="perfTitle">Insights</h1>');
+    expect(html).toContain('class="insights-kpi-row"');
+    expect(html).toContain("Community activity");
+    expect(html).toContain("Participation");
     expect(html).toContain("Needs attention");
-    expect(html).toMatch(/class="v3-insight-band"[^>]*hidden/);
-    expect(html).not.toContain('class="v3-kpi-grid"');
-    expect(html).toContain("See whether members come back for another drop");
+    expect(html).toMatch(/data-perf-summary[^>]*hidden/);
+    expect(html).toMatch(/id="perf-events"[^>]*hidden=""[^>]*>[\s\S]*Daily activity/);
+    expect(html).toContain("No participation yet");
+    expect(html).toContain("Nothing needs attention");
     expect(html).toContain("Claims completed");
-    expect(html).not.toContain("Claims fulfilled");
     expect(html).toContain("Public site visits");
-    expect(html).toContain('<details class="v3-table-card v3-secondary-insight" id="perf-heatmap">');
+    expect(html).toContain('id="perf-heatmap"');
     expect(html).toContain("Actions people took");
+    expect(html).toContain("How Insights counts activity");
+    const insightsNav = html.match(/<nav class="v3-tabs" aria-label="Insights pages">([\s\S]*?)<\/nav>/)?.[1] || "";
+    expect(insightsNav).toContain("Detailed analytics");
+    expect(insightsNav).not.toContain(">More<");
     expect(html).toContain('data-range="7"');
     expect(html).toContain('data-range="30"');
     expect(html).not.toContain('data-range="14"');
   });
 
-  it("states the fixed Sources window without showing the selectable range", () => {
+  it("keeps the date range beside the title across Insights tabs", () => {
     const html = DashboardContent({
       user: { display_name: "Test operator", plan: "pro" },
       activePath: "/dashboard/analytics/referrals",
     }).toString();
-    expect(html).toMatch(/id="perfSourcesRange"[^>]*>Last 30 days/);
-    expect(html).toMatch(/id="perfRangeFilter"[^>]*hidden/);
+    expect(html).toContain('id="perfRangeFilter"');
+    expect(html).toContain('aria-label="Insights reporting period"');
+    expect(html).toContain('data-perf-tab="events"');
     expect(html).toContain("Direct visits are included in your visit total");
   });
 
@@ -120,7 +126,7 @@ describe("Analytics bodies", () => {
 
   it("keeps the Insights date controls available when public traffic is zero", () => {
     const performanceClient = readFileSync(path.join(SRC_ROOT, "assets/dashboard/performance.js"), "utf8");
-    expect(performanceClient).toContain('rangeFilter.hidden = active === "referrals"');
+    expect(performanceClient).toContain('rangeFilter.dataset.hasData = hasAnyData ? "1" : "0"');
     expect(performanceClient).not.toContain('rangeFilter.hidden = !hasAnyData');
   });
 });

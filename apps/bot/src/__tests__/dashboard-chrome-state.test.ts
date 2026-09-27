@@ -18,7 +18,7 @@ describe("telegram chrome state", () => {
     ]);
     for (const link of pageLinks) {
       const chrome = telegramChrome(link.key);
-      expect(link.label).toBe(chrome.h1 as string);
+      expect(link.label).toBe(chrome.tabLabel);
       expect(link.href).toBe(chrome.canonicalPath);
     }
   });

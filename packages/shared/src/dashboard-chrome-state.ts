@@ -90,7 +90,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "board.history": "History",
   "performance.activity": "Overview",
   "performance.referrals": "Traffic sources",
-  "performance.events": "Public site activity",
+  "performance.events": "Detailed analytics",
   "activities.overview": "Overview",
   "rewards.overview": "Overview",
   "rewards.shop": "Shop",
@@ -190,6 +190,11 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
       break;
     case "activities":
       return [{ label: sectionTitle }];
+    case "performance":
+      return [{ label: sectionTitle }];
+    case "telegram":
+      if (route.id === "telegram") return [{ label: sectionTitle }];
+      break;
     case "giveaways":
       // The hub is the section root: a single unlinked entry renders no crumb.
       if (route.id === "giveaways.hub") return [{ label: sectionTitle }];
@@ -209,6 +214,7 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
 
 function documentTitleFor(route: DashboardRouteDef): string {
   const sectionTitle = DASHBOARD_SECTION_TITLES[route.section as keyof typeof DASHBOARD_SECTION_TITLES];
+  if (route.id === "performance.activity") return `${sectionTitle} · YourRank`;
   if (SECTION_TITLED_SECTIONS.has(route.section)) {
     return `${sectionTitle} · YourRank`;
   }
@@ -237,7 +243,8 @@ export function dashboardChromeState(id: DashboardRouteId): DashboardChromeState
     }),
     tabLabel: TAB_LABELS[route.id] || "",
     documentTitle: documentTitleFor(route),
-    h1: route.section === "telegram" ? (TAB_LABELS[route.id] as string) : null,
+    h1: route.id === "telegram" ? DASHBOARD_SECTION_TITLES.telegram
+      : route.section === "telegram" ? (TAB_LABELS[route.id] as string) : null,
   };
 }
 

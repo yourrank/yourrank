@@ -8,10 +8,11 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
           <dl class="account-detail-list">
             <div><dt>Name</dt><dd id="accSummaryName">Account</dd></div>
             <div><dt>Email</dt><dd id="accSummaryEmail">—</dd></div>
+            <div><dt>Verification</dt><dd><span id="accVerification">Checking…</span> <button class="btn btn--sm btn--ghost" id="accResendVerification" type="button" hidden>Resend verification email</button><span class="hint" id="accVerificationStatus" role="status" aria-live="polite"></span></dd></div>
           </dl>
         </section>
         <details class="account-settings-disclosure" aria-labelledby="accountPasswordTitle">
-          <summary id="accountPasswordTitle">Change password</summary>
+          <summary id="accountPasswordTitle">Password &amp; security</summary>
           <div class="account-settings-disclosure-body">
           <p class="card-sub">Use a strong password you do not use elsewhere.</p>
           <div class="acc-form-wrap">
@@ -52,7 +53,7 @@ const profileWidget = `<div class="lb-widget lb-widget--full acc-card-security" 
           <div class="d-flex justify-between items-center mb-12 flex-wrap gap-8">
             <div>
               <h2 class="m-0" id="accountSessionsTitle">Signed-in devices</h2>
-              <p class="card-sub m-0 mt-2">Browsers and devices with access to this account.</p>
+              <p class="card-sub m-0 mt-2">Sign out other sessions keeps this device signed in. Browser details and last-active times are not recorded.</p>
             </div>
             <div class="d-flex gap-8 flex-wrap">
               <button class="btn btn--ghost btn--sm" id="accSignOut" type="button">Sign out</button>
@@ -81,14 +82,14 @@ const planWidget = `<div class="lb-widget lb-widget--full" id="plan">
         </section>
 
         <section class="account-settings-section" aria-labelledby="planUsageTitle">
-        <div class="billing-section-head"><div><h2 id="planUsageTitle">Usage</h2><p class="card-sub">See your capacity and what is included.</p></div><button class="btn btn--sm" id="refreshPlanUsage" type="button">Refresh usage</button></div>
+        <div class="billing-section-head"><div><h2 id="planUsageTitle">Usage</h2><p class="card-sub">Current usage loads automatically.</p></div></div>
         <div class="plan-usage" id="planUsage" aria-live="polite"><p class="hint">Loading usage…</p></div>
         </section>
 
 
         <section class="account-settings-section" id="historyCard" hidden aria-labelledby="paymentHistoryTitle">
           <h2 id="paymentHistoryTitle">Payment history</h2>
-          <p class="card-sub">Your payment records. Download invoices from Manage subscription.</p>
+          <p class="card-sub">Past payments and grants. These records do not change your current plan. Download invoices from Manage subscription.</p>
           <div class="admin-table-wrap"><table class="admin-table" id="historyTable"><thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead><tbody id="historyBody"></tbody></table></div>
           <div class="empty" id="historyEmpty" hidden>No payments yet. Completed payments and receipts will appear here after you upgrade.</div>
         </section>
@@ -168,19 +169,24 @@ const postbacksWidget = `<details class="lb-widget lb-widget--full account-setti
         </div>
       </details>`;
 
-const connectedWidget = `<div class="lb-widget lb-widget--full" id="connected">
-        <h2>Connections</h2>
-        <p class="card-sub">Accounts linked to you, plus delivery settings shared by your sites. Each site's own Kick channel lives under Site → Connections. Configured means the setup is saved; use each service's test action to verify delivery.</p>
-        <div id="connectedAccounts"><p class="hint">Loading…</p></div>
+const connectedWidget = `<div id="connected" class="account-connections-groups">
+        <section class="lb-widget lb-widget--full account-connections-group" aria-labelledby="accountConnectionsTitle">
+          <h2 id="accountConnectionsTitle">Account connections</h2>
+          <p class="card-sub">Accounts linked to you.</p>
+          <div id="connectedAccounts" aria-live="polite"><p class="hint">Loading…</p></div>
+        </section>
+        <section class="lb-widget lb-widget--full account-connections-group" aria-labelledby="siteConnectionsTitle">
+          <h2 id="siteConnectionsTitle">Site connections — <span id="siteConnectionName">selected site</span></h2>
+          <p class="card-sub">Settings for this site.</p>
+          <div id="siteConnectionsList" aria-live="polite"><p class="hint">Loading…</p></div>
+        </section>
       </div>`;
 
-// P3-4: Integration health — live delivery checks for the webhooks and bots
-// this account relies on, rendered from the connected-accounts payload.
-const integrationHealthWidget = `<div class="lb-widget lb-widget--full" id="integrationHealth" data-ui-advanced>
-        <h2>Integration health</h2>
-        <p class="card-sub">Live checks for the webhooks and bots this account relies on. Sending a test uses each site's saved delivery settings.</p>
-        <div id="integrationHealthBody"><p class="hint">Loading…</p></div>
-      </div>`;
+// Read-only status from the selected site's connection inventory.
+const integrationHealthWidget = `<section class="lb-widget lb-widget--full account-connections-group" id="integrationHealth" aria-labelledby="integrationHealthTitle">
+        <h2 id="integrationHealthTitle">Integration health</h2>
+        <div id="integrationHealthBody" aria-live="polite"><p class="hint">Loading…</p></div>
+      </section>`;
 
 const dataWidget = `<div class="lb-widget lb-widget--full" id="data">
           <section class="account-settings-section account-data-export" aria-labelledby="accountExportTitle">
@@ -221,10 +227,10 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
         <div class="team-head">
           <div class="team-head-main">
             <h2 class="m-0">Team</h2>
-            <p class="card-sub m-0 mt-2">People who can operate <strong id="teamSiteName">loading site…</strong> — invited, never sharing your login.</p>
+            <p class="card-sub m-0 mt-2">Members shown for the selected site. Changing the filter does not change access.</p>
           </div>
           <div class="team-head-actions">
-            <a class="btn btn--ghost" href="/dashboard/leaderboards">Change site</a>
+            <label for="teamSiteSelector">Selected site <select class="field-select" id="teamSiteSelector"><option value="">Loading sites…</option></select></label>
             <button class="btn btn--accent" id="btnOpenInviteModal" type="button" hidden>Invite member</button>
             <a class="btn btn--accent" id="teamUpgradeLink" href="/dashboard/settings/billing" hidden>Upgrade to Team</a>
           </div>
@@ -239,23 +245,25 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
           </div>
         </div>
         <p class="account-team-notice" id="teamPlanNotice" hidden></p>
+        <p class="account-team-notice" id="teamScheduledNotice" hidden></p>
         <p class="account-team-notice" id="teamReadOnlyNotice" hidden>You can see who operates this site. Only the owner can invite or remove operators.</p>
 
         <div class="acc-team-section">
+          <h3 class="m-0 mb-8">Members</h3>
           <div id="teamMembersList">
             <p class="hint">Loading team members…</p>
           </div>
         </div>
 
         <div class="acc-team-section" id="teamPendingSection" hidden>
-          <h3 class="m-0 mb-8">Pending invites</h3>
+          <h3 class="m-0 mb-8">Pending invitations</h3>
           <div id="teamInvitesList">
             <p class="hint">No pending invitations.</p>
           </div>
         </div>
 
         <details class="account-settings-disclosure acc-team-roles-guide">
-          <summary>Compare roles</summary>
+          <summary>Roles &amp; permissions · Compare roles</summary>
           <div class="account-settings-disclosure-body">
             <table class="team-role-compare">
               <thead><tr><th scope="col">Capability</th><th scope="col">Owner</th><th scope="col">Moderator</th></tr></thead>
@@ -284,6 +292,8 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
       <span class="field-label" id="inviteRoleLabel">Role</span>
       <p class="account-invite-role" aria-labelledby="inviteRoleLabel"><strong>Moderator</strong><span>Site-scoped community operations without Team, billing, security, settings, connection, or manual-credit control.</span></p>
     </div>
+    <div class="field"><span class="field-label">Site access</span><p id="inviteSiteAccess">Selected site</p></div>
+    <p class="hint">This pending invitation reserves one Team seat across your account until accepted, revoked, or expired.</p>
     <div class="d-flex gap-10 flex-wrap mt-14">
       <button class="btn btn--accent" id="btnSendInvite" type="button">Create invite</button>
       <button class="btn btn--ghost" id="btnCloseInviteModal" type="button">Cancel</button>

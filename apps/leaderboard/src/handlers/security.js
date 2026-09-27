@@ -1,6 +1,7 @@
 // Security center handlers: password change, active sessions, and GDPR/CCPA export.
 import { one, exec, query } from "@yourrank/shared/db";
 import { hashToken } from "@yourrank/shared/crypto";
+import { SESSION_ROTATE_GRACE_S } from "@yourrank/shared/session";
 import {
   currentUser, createSession, readToken, cookieSet, destroyAllUserSessions,
   json, bad, ok, readJson, rateLimit, rateLimitHeaders, clientIp, hashPassword, verifyPassword,
@@ -59,14 +60,16 @@ export async function handleChangePassword(request, env) {
   }
 }
 
-export async function handleListSessions(request, env) {
+export async function handleListSessions(request, env, {
+  currentUserImpl = currentUser, currentSessionHashImpl = currentSessionHash, queryImpl = query,
+} = {}) {
   try {
-    const user = await currentUser(request, env);
+    const user = await currentUserImpl(request, env);
     if (!user) return bad("unauthorized", 401);
 
-    const currentHash = await currentSessionHash(request);
-    const rows = await query(
-      `SELECT token, created_at, expires_at
+    const currentHash = await currentSessionHashImpl(request);
+    const rows = await queryImpl(
+      `SELECT token, previous_token, rotated_at, created_at, expires_at
          FROM sessions
         WHERE user_id=$1 AND expires_at > now()
         ORDER BY created_at DESC`,
@@ -79,7 +82,7 @@ export async function handleListSessions(request, env) {
         id: String(r.token).slice(0, 16),
         createdAt: date(r.created_at),
         expiresAt: date(r.expires_at),
-        current: r.token === currentHash,
+        current: r.token === currentHash || (r.previous_token === currentHash && r.rotated_at && Date.now() - new Date(r.rotated_at).getTime() <= SESSION_ROTATE_GRACE_S * 1000),
       };
     });
 
@@ -90,19 +93,23 @@ export async function handleListSessions(request, env) {
   }
 }
 
-export async function handleRevokeOtherSessions(request, env) {
+export async function handleRevokeOtherSessions(request, env, {
+  currentUserImpl = currentUser, currentSessionHashImpl = currentSessionHash,
+  oneImpl = one, execImpl = exec,
+} = {}) {
   try {
-    const user = await currentUser(request, env);
+    const user = await currentUserImpl(request, env);
     if (!user) return bad("unauthorized", 401);
 
-    const currentHash = await currentSessionHash(request);
-    if (!currentHash) {
-      // No current token means rotation just happened or guest — sign out all.
-      await destroyAllUserSessions(env, user.id);
-      return ok({ signedOutAll: true });
-    }
-
-    await exec("DELETE FROM sessions WHERE user_id=$1 AND token<>$2", [user.id, currentHash]);
+    const currentHash = await currentSessionHashImpl(request);
+    if (!currentHash) return bad("Could not identify this session. Reload and try again.", 409);
+    const current = await oneImpl(
+      `SELECT token FROM sessions WHERE user_id=$1 AND expires_at>now()
+         AND (token=$2 OR (previous_token=$2 AND rotated_at>now()-make_interval(secs=>$3)))`,
+      [user.id, currentHash, SESSION_ROTATE_GRACE_S],
+    );
+    if (!current) return bad("Could not identify this session. Reload and try again.", 409);
+    await execImpl("DELETE FROM sessions WHERE user_id=$1 AND token<>$2", [user.id, current.token]);
     return ok({ message: "Other sessions signed out." });
   } catch (e) {
     console.error("revoke sessions failed:", String(e?.message || e));

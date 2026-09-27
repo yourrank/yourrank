@@ -455,7 +455,7 @@ describe("release-gate journeys", () => {
     expect(page.status).toBe(200);
     expect(page.body).toContain("Insights");
     expect(page.body).toContain("Returning members");
-    expect(page.body).toContain("Code-drop participation");
+    expect(page.body).toContain('id="insightsParticipationTitle">Participation</h2>');
     expect(page.body).toContain("Claims completed");
 
     const primary = await client.get(`/api/insights?siteId=${encodeURIComponent(siteId)}&days=30`);

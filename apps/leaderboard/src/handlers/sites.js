@@ -150,6 +150,8 @@ export async function handleHeatmap(request, env, {
   const { user, res } = await requireUserImpl(request, env);
   if (res) return res;
   const url = new URL(request.url);
+  const days = Number(url.searchParams.get("days") || 30);
+  if (days !== 7 && days !== 30) return bad("Insights supports 7-day and 30-day windows.");
   const siteId = url.searchParams.get("siteId");
   const site = siteId ? await getBoardByIdImpl(env, user.id, siteId) : await getByUserImpl(env, user.id);
   if (!site) return bad("no site", 404);
@@ -157,8 +159,8 @@ export async function handleHeatmap(request, env, {
   if (authorization.res) return authorization.res;
   try {
     const [heatmap, referrers] = await Promise.all([
-      getHeatmapImpl(env, site.id),
-      getTopReferrersImpl(env, site.id),
+      getHeatmapImpl(env, site.id, days),
+      getTopReferrersImpl(env, site.id, days),
     ]);
     return json({ ok: true, heatmap, referrers });
   } catch (err) {

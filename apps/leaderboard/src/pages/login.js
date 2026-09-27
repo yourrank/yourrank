@@ -32,5 +32,4 @@ export const loginPage = `<!DOCTYPE html><html lang="en"><head>
 <p class="foot">No account? <a href="/signup">Create one</a> · <a href="/forgot">Forgot password?</a><span class="foot-sep" id="viewer-foot">Are you a viewer? <a href="/me">Sign in to your Viewer Account</a></span></p>
 </div></main></div>
 <script type="module" src="/assets/auth.js?v=4"></script>
-<script src="/assets/cookie-consent.js" defer></script>
 </body></html>`;

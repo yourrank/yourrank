@@ -43,27 +43,28 @@ describe("login page document", () => {
 });
 
 describe("verify-email prompt state", () => {
-  it("explains the blocker after a login attempt (from=login)", () => {
-    const state = verifyEmailPromptState({ from: "login" });
+  it("explains an unverified signed-in session without claiming a password check", () => {
+    const state = verifyEmailPromptState({ loginNeedsVerification: true });
     expect(state.message).toContain("isn't verified");
-    expect(state.message).toContain("password was correct");
+    expect(state.message).toContain("signed in");
+    expect(state.message).not.toContain("password was correct");
     expect(state.error || "").toBe("");
     expect(state.showResend).toBe(true);
   });
 
   it("reports delivery failure as an error with resend", () => {
-    const state = verifyEmailPromptState({ deliveryFailed: true, from: "login" });
-    expect(state.error).toContain("Email delivery");
+    const state = verifyEmailPromptState({ deliveryFailed: true, loginNeedsVerification: true });
+    expect(state.error).toContain("may not have been delivered");
     expect(state.showResend).toBe(true);
   });
 
-  it("keeps the original copy for signup and bare visits", () => {
-    expect(verifyEmailPromptState({}).message).toBe("Open the link we emailed you to confirm your address.");
-    expect(verifyEmailPromptState({ from: "signup" }).message).toBe("Open the link we emailed you to confirm your address.");
+  it("keeps generic copy for signup hints and bare visits", () => {
+    expect(verifyEmailPromptState({}).message).toBe("Check your inbox for a verification link, or request a new one below.");
+    expect(verifyEmailPromptState({ from: "login" }).message).toBe("Check your inbox for a verification link, or request a new one below.");
   });
 
   it("renders the login-context message into the page", () => {
-    const html = verifyEmailPageHtml(verifyEmailPromptState({ from: "login" }));
+    const html = verifyEmailPageHtml(verifyEmailPromptState({ loginNeedsVerification: true }));
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);
     expect(html).toContain("isn't verified");
     expect(html).toContain('id="resendWrap"');

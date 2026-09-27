@@ -101,7 +101,8 @@ describe("signed-in shell navigation", () => {
     const html = renderPage(AudienceMembersPage);
     for (const href of [
       "/dashboard/leaderboard",
-      "/dashboard/activities",
+      "/dashboard/giveaways/tournaments",
+      "/dashboard/giveaways/chat",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/audience/members",
@@ -244,12 +245,9 @@ describe("signed-in shell navigation", () => {
   it("uses plain-language navigation labels", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design", user }).toString();
     expect(html).toContain(">Appearance</a>");
-    expect(html).toContain(">Community</a>");
-    expect(html).toContain(">Audience</a>");
-    expect(html).toContain(">Engage</a>");
-    expect(html).toContain(">Telegram</a>");
-    expect(html).toContain(">Insights</a>");
-    expect(html).toContain(">Settings</a>");
+    for (const label of ["Community", "Audience", "Engage", "Tournaments", "Giveaways", "Telegram", "Insights", "Settings"]) {
+      expect(html).toContain(`<span class="lb-nav-label">${label}</span>`);
+    }
     expect(html).toContain("Help &amp; feedback</a>");
     expect(html).toContain('data-nav="settings"');
   });
@@ -259,7 +257,8 @@ describe("signed-in shell navigation", () => {
     for (const href of [
       "/dashboard",
       "/dashboard/leaderboard",
-      "/dashboard/activities",
+      "/dashboard/giveaways/tournaments",
+      "/dashboard/giveaways/chat",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
@@ -306,13 +305,20 @@ describe("signed-in shell navigation", () => {
       .not.toContain('class="v3-crumbs"');
   });
 
-  it("omits breadcrumbs on top-level dashboard pages and keeps them on tab pages", () => {
-    for (const path of ["/dashboard", "/dashboard/leaderboards", "/dashboard/site"]) {
+  it("omits redundant Insights breadcrumbs and keeps trails on nested editor pages", () => {
+    for (const path of [
+      "/dashboard",
+      "/dashboard/leaderboards",
+      "/dashboard/site",
+      "/dashboard/analytics",
+      "/dashboard/analytics/activity",
+      "/dashboard/analytics/events",
+      "/dashboard/analytics/referrals",
+    ]) {
       expect(PAGES.dashboard.Component({ activePath: path }).toString()).not.toContain('class="v3-crumbs"');
     }
-    for (const path of ["/dashboard/leaderboard/design", "/dashboard/analytics/activity"]) {
-      expect(PAGES.dashboard.Component({ activePath: path }).toString()).toContain('class="v3-crumbs"');
-    }
+    expect(PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design" }).toString())
+      .toContain('class="v3-crumbs"');
     for (const render of [RewardsChannelPage, AudienceReviewsPage, AudienceActivityPage]) {
       expect(render().toString()).toContain('class="v3-crumbs"');
     }

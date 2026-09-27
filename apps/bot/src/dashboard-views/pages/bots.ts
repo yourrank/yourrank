@@ -1,19 +1,14 @@
 // bots dashboard page panels
-import { connectionPanel } from "./connection.js";
-
 export function botsPanel(): string {
   return `
   <div class="lb-bento" data-page="bots">
-    ${connectionPanel()}
-
     <div class="lb-widget lb-widget--full">
-      <div class="d-flex justify-between items-center mb-md"><h2>Your bots</h2></div>
+      <div class="tg-section-head"><div><h2>Your bots</h2><p id="botPlanState" class="muted text-sm" aria-live="polite">Loading bot allowance…</p></div><button class="btn btn--accent" id="botConnectToggle" data-action="toggleBotConnect" type="button" aria-expanded="false" aria-controls="connectWizard">Connect bot</button></div>
       <div id="botList" class="muted">Loading…</div>
-      <div id="botPlanState" class="v3-note mt-md" aria-live="polite">Loading bot allowance…</div>
 
-      <div class="wizard mt-lg" id="connectWizard">
+      <div class="wizard mt-lg" id="connectWizard" hidden>
         <div class="wizard-step" data-step="1">
-          <h3>Connect Telegram</h3>
+          <h3>Connect a bot</h3>
           <p class="muted">Create a bot in Telegram with @BotFather, then paste the connect code it gives you. Keep that code private — only you and YourRank need it.</p>
           <div class="d-flex gap-8 mt-sm">
             <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="btn btn--accent">Open Telegram</a>
@@ -46,7 +41,6 @@ export function botsPanel(): string {
       </div>
     </div>
 
-    <!-- Test message (bots) -->
     <div class="lb-widget lb-widget--full" id="testMsgPanel" hidden>
       <div class="mb-md"><h2>Send a test message</h2></div>
       <p class="muted mb-md">Send one message from <b id="tmBotName">your bot</b> to your own Telegram chat to confirm it works. Send <code>/start</code> to <a href="https://t.me/userinfobot" target="_blank" rel="noopener">@userinfobot</a> to get your chat ID — the number Telegram uses for your chat.</p>
