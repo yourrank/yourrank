@@ -1,6 +1,7 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
 import { ensureDialog, showConfirmModal } from "./dashboard/utils.js";
 import { connectKickChat } from "./chat-entry.js";
+import { BYE, CROWN_ICON, renderBracket as bracketViewHtml, layoutBracket } from "./tournament-bracket-view.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -21,7 +22,6 @@ const SOURCE_LABELS = {
   leaderboard: "Leaderboard",
 };
 // Lucide crown, inline so the winner mark needs no emoji or external asset.
-const CROWN_ICON = '<svg class="tourn-crown" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M5 16 3 7l5.5 4L12 4l3.5 7L21 7l-2 9H5zm0 2h14v2H5z"/></svg>';
 const STATUS_LABELS = {
   pending: "Waiting",
   confirmed: "Ready",
@@ -38,10 +38,8 @@ const LIFECYCLE_LABELS = {
   completed: "Completed",
   cancelled: "Cancelled",
 };
-// Sentinel for BYE slots — must match BYE in lib/tournament-bracket.js.
-// BYE_LABEL is what the UI renders for it; a player named "BYE" stays normal.
-const BYE = "__YOURRANK_INTERNAL_BYE__";
-const BYE_LABEL = "BYE";
+// BYE comes from tournament-bracket-view.js (which re-exports the lib
+// sentinel) — a single definition shared by this module and the renderer.
 const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
@@ -314,7 +312,7 @@ function renderSettingsPanel(lifecycle) {
         <h3>Details</h3>
         <dl class="tourn-kv">
           ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
-          ${tournKvRow("Tournament ID", esc(tournament.id), "id")}
+          ${tournKvRow("Tournament ID", esc(tournament.id), "id", tournament.id)}
           ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
           ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
           ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
@@ -434,7 +432,7 @@ function chatRegistrationLabel(lifecycle) {
   return "Off";
 }
 
-const tournKvRow = (label, value, kv = "") => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd${kv ? ` data-kv="${kv}"` : ""}>${value}</dd></div>`;
+const tournKvRow = (label, value, kv = "", title = "") => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd${kv ? ` data-kv="${kv}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd></div>`;
 
 // The bracket aside: compact summary + metadata, shared shape with the
 // Settings "Details" card.
@@ -455,7 +453,7 @@ function renderTournamentSummary(lifecycle) {
         ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
         ${tournKvRow("Bracket type", "Single elimination")}
         ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
-        ${tournKvRow("Tournament ID", esc(tournament.id), "id")}
+        ${tournKvRow("Tournament ID", esc(tournament.id), "id", tournament.id)}
       </dl>
     </section>`;
 }
@@ -806,41 +804,11 @@ async function handleEntryAction(button) {
 
 // ---- Bracket -------------------------------------------------------------
 
-function groupBy(array, key) {
-  return array.reduce((acc, item) => {
-    const group = item[key] ?? "";
-    (acc[group] = acc[group] || []).push(item);
-    return acc;
-  }, {});
-}
-
-// Round labels read back from the final: last is Final, then Semifinals,
-// Quarterfinals, and everything before that is a numbered round.
-function roundLabel(index, total) {
-  if (index === total - 1) return "Final";
-  if (index === total - 2) return "Semifinals";
-  if (index === total - 3 && total >= 4) return "Quarterfinals";
-  return `Round ${index + 1}`;
-}
-
-// One source of bracket markup so the inline panel and the full-bracket
-// modal always agree.
-function bracketHtml(lifecycle) {
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  const byRound = groupBy(matches, "round_number");
-  const rounds = Object.keys(byRound).sort((a, b) => Number(a) - Number(b));
-  const lastRound = Number(rounds[rounds.length - 1]);
-  const championMatch = (match) =>
-    finished && tournament?.winner_name && match.winner_name === tournament.winner_name && Number(match.round_number) === lastRound;
-  return rounds.map((round, index) => {
-    const roundMatches = byRound[round].sort((a, b) => a.match_index - b.match_index);
-    const count = `${roundMatches.length} ${roundMatches.length === 1 ? "match" : "matches"}`;
-    return `<div class="tournament-round">
-      <div class="tournament-round-head"><h3>${esc(roundLabel(index, rounds.length))}</h3><span>${esc(count)}</span></div>
-      <div class="tournament-round-matches">${roundMatches.map((match) => renderMatch(match, finished, championMatch(match))).join("")}</div>
-    </div>`;
-  }).join("");
-}
+// The renderer lives in tournament-bracket-view.js; this module owns when to
+// paint it, and the layout's ResizeObserver/listeners are disposed before
+// every re-render and on leave() so they never accumulate.
+let disposeEmbeddedLayout = () => {};
+let disposeExpandedLayout = () => {};
 
 function renderBracket(lifecycle) {
   const bracket = $("tournament-bracket");
@@ -854,6 +822,8 @@ function renderBracket(lifecycle) {
     bracket.innerHTML = "";
     bracket.hidden = true;
     champion.hidden = true;
+    disposeEmbeddedLayout();
+    disposeEmbeddedLayout = () => {};
     return;
   }
   empty.hidden = true;
@@ -862,40 +832,9 @@ function renderBracket(lifecycle) {
   // the visible champion treatment lives in the header and final match.
   if (tournament.winner_name) champion.textContent = `Champion: ${tournament.winner_name}`;
   champion.hidden = true;
-  bracket.innerHTML = bracketHtml(lifecycle);
-}
-
-function renderMatch(match, finished, championMatch = false) {
-  const p1 = match.player1_name || "TBD";
-  const p2 = match.player2_name || "TBD";
-  const isComplete = match.status === "completed";
-  const bye1 = p1 === BYE;
-  const bye2 = p2 === BYE;
-  const row = (name, bye, winner, score) => {
-    const label = bye ? BYE_LABEL : (name === "TBD" ? "—" : name);
-      // Scores only mean something between two real players.
-    const scoreHtml = bye || name === "TBD" || bye1 || bye2 ? "" : `<span class="tournament-match-score">${isComplete ? (score ?? 0) : ""}</span>`;
-    return `<div class="tournament-match-row${bye ? " is-bye" : ""}${winner ? " is-winner" : ""}${winner && championMatch ? " is-champion" : ""}">
-      <span class="tournament-match-name">${winner ? CROWN_ICON : ""}${esc(label)}</span>${scoreHtml}
-    </div>`;
-  };
-  if (bye1 && bye2) {
-    return `<div class="tournament-match is-bye" data-match-id="${esc(match.id)}">${row(p1, true, false)}${row(p2, true, false)}</div>`;
-  }
-  const p1Winner = isComplete && match.winner_name === p1;
-  const p2Winner = isComplete && match.winner_name === p2;
-  const canScore = !finished && !isComplete && !bye1 && !bye2 && p1 !== "TBD" && p2 !== "TBD";
-  const actions = bye1 || bye2
-    ? `<div class="tournament-match-actions"><span class="tournament-match-note">${esc(bye1 ? p2 : p1)} advances automatically</span></div>`
-    : canScore
-      ? `<div class="tournament-match-actions">
-           <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
-           <span class="tournament-match-divider">–</span>
-           <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
-           <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>
-         </div>`
-      : "";
-  return `<div class="tournament-match" data-match-id="${esc(match.id)}">${row(p1, bye1, p1Winner, match.player1_score)}${row(p2, bye2, p2Winner, match.player2_score)}${actions}</div>`;
+  disposeEmbeddedLayout();
+  bracket.innerHTML = bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded" });
+  disposeEmbeddedLayout = layoutBracket(bracket);
 }
 
 // ---- Full-bracket modal --------------------------------------------------
@@ -906,7 +845,9 @@ async function openBracketModal() {
   const modal = $("tournament-bracket-modal");
   const full = $("tournament-bracket-full");
   if (!modal || !full || !tournament) return;
-  full.innerHTML = bracketHtml(lifecycleOf(tournament, matches.length));
+  disposeExpandedLayout();
+  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded" });
+  disposeExpandedLayout = layoutBracket(full);
   modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
@@ -924,10 +865,12 @@ function closeBracketModal() {
   document.documentElement.classList.remove("yr-modal-open");
   if (releaseBracketTrap) releaseBracketTrap();
   releaseBracketTrap = null;
+  disposeExpandedLayout();
+  disposeExpandedLayout = () => {};
 }
 
 async function submitScore(matchId, target) {
-  const matchEl = target.closest(".tournament-match");
+  const matchEl = target.closest(".tourn-match");
   if (!matchEl) return;
   const p1Input = matchEl.querySelector('[data-score-player="1"]');
   const p2Input = matchEl.querySelector('[data-score-player="2"]');
@@ -1068,6 +1011,10 @@ function resetTransientState() {
   closeCreateModal();
   closeSelectModal();
   closeBracketModal();
+  disposeEmbeddedLayout();
+  disposeExpandedLayout();
+  disposeEmbeddedLayout = () => {};
+  disposeExpandedLayout = () => {};
   document.querySelectorAll("details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
   // The modal markup may already be gone when a leave races a fragment swap;
   // release any lingering focus traps and unlock the page scroll regardless.
