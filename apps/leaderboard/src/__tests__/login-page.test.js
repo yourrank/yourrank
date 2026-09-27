@@ -35,7 +35,7 @@ describe("login page document", () => {
   });
 
   it("loads all scripts externally so script-src 'self' does not break sign-in", () => {
-    const scripts = [...loginHtml.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+    const scripts = [...loginHtml.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
     expect(scripts.length).toBeGreaterThan(0);
     for (const tag of scripts) expect(tag).toContain("src=");
     expect(loginHtml).toContain('type="module" src="/assets/auth.js');
