@@ -115,6 +115,25 @@ describe("renderBracket", () => {
     expect(html.match(/tn-crown/g).length).toBe(1);
   });
 
+  it("shows an Edit action only on completed correctable cards", () => {
+    const correctable = { id: "m-1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true };
+    const locked = { ...correctable, id: "m-2", match_index: 1, correctable: false };
+    const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: [correctable, locked], lifecycle: "bracket" });
+    expect(html).toContain('data-correctable="true"');
+    expect(html).toContain('data-score-edit="m-1"');
+    expect(html).not.toContain('data-score-edit="m-2"');
+  });
+
+  it("renders a correcting card prefilled with cancel and the downstream note", () => {
+    const match = { id: "m-1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true };
+    const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: [match], lifecycle: "bracket", correctingId: "m-1" });
+    expect(html).toContain('data-score-mode="correct"');
+    expect(html).toContain('data-score-player="1" value="2"');
+    expect(html).toContain('data-score-player="2" value="1"');
+    expect(html).toContain("data-score-cancel");
+    expect(html).toContain("Changing the winner updates later rounds.");
+  });
+
   it("renders placeholders for missing slots, not heavy cards", () => {
     const html = renderBracket({ tournament: tournament(), matches: [], lifecycle: "bracket" });
     // Empty model still lays out the expected 8-player grid as placeholders.

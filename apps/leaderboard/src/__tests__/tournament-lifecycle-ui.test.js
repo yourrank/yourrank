@@ -86,6 +86,7 @@ globalThis.fetch = async (input, init = {}) => {
     return json({ ok: true, entries: server.entries });
   }
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
+  if (path.endsWith("/score") && init.method === "PATCH") return json({ ok: true, message: "Score corrected." });
   if (path.endsWith("/signups/open")) { current.signup_state = "open"; return json({ ok: true, tournament: current }); }
   if (path.endsWith("/signups/lock")) { current.signup_state = "locked"; return json({ ok: true, tournament: current }); }
   if (path.endsWith("/settings")) {
@@ -490,6 +491,56 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(true);
     expect(text("tournament-bracket-size-hint")).toContain("locked");
+  });
+
+  it("sends a PATCH correction from a completed match's Edit action", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true },
+        { id: "m2", round_number: 1, match_index: 1, player1_name: "c", player2_name: "d", status: "pending" },
+        { id: "m3", round_number: 2, match_index: 0, player1_name: "a", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    card().querySelector("[data-score-edit]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(card().dataset.scoreMode).toBe("correct");
+    expect(card().querySelector('[data-score-player="1"]').value).toBe("2");
+    card().querySelector('[data-score-player="1"]').value = "5";
+    card().querySelector('[data-score-player="2"]').value = "3";
+    card().querySelector(".tn-match-save").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    const patches = requestsTo("/api/tournaments/t-1/score", "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 5, player2Score: 3 });
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
+    expect(text("tournament-message")).toBe("Score corrected.");
+    // Reloaded bracket is back to a plain completed card.
+    expect(card().dataset.scoreMode).not.toBe("correct");
+  });
+
+  it("restores the completed card when a score correction is cancelled", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true },
+        { id: "m2", round_number: 2, match_index: 0, player1_name: "a", player2_name: "TBD", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-tab-bracket");
+    const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
+    card().querySelector("[data-score-edit]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(card().dataset.scoreMode).toBe("correct");
+    card().querySelector("[data-score-cancel]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(card().dataset.scoreMode).not.toBe("correct");
+    expect(card().dataset.state).toBe("completed");
+    expect(requestsTo("/api/tournaments/t-1/score", "PATCH")).toHaveLength(0);
   });
 
   for (const [status, winner_name] of [["completed", "alpha"], ["cancelled", null]]) {

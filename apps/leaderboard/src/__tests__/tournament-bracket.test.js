@@ -1,9 +1,11 @@
 // Pure bracket engine: seeding order, BYE placement and auto-advancement.
 import { describe, expect, it } from "bun:test";
 import {
+  BYE,
   MIN_BRACKET_PARTICIPANTS,
   bracketSeedOrder,
   buildBracket,
+  canCorrectMatch,
   isBye,
 } from "../lib/tournament-bracket.js";
 
@@ -82,5 +84,85 @@ describe("tournament bracket engine", () => {
         }
       }
     }
+  });
+});
+
+describe("canCorrectMatch", () => {
+  const row = (over) => ({
+    id: over.id ?? `m-${over.round_number}-${over.match_index}`,
+    round_number: over.round_number ?? 1,
+    match_index: over.match_index ?? 0,
+    player1_name: "A",
+    player2_name: "B",
+    player1_score: 0,
+    player2_score: 0,
+    status: "pending",
+    winner_name: null,
+    ...over,
+  });
+  const played = (over) => row({ status: "completed", winner_name: "A", player1_score: 2, player2_score: 1, ...over });
+
+  it("allows correcting the final", () => {
+    const matches = [played({ round_number: 3, match_index: 0 })];
+    const decision = canCorrectMatch(matches, matches[0]);
+    expect(decision.ok).toBe(true);
+    expect(decision.path).toEqual([]);
+  });
+
+  it("allows correcting when the next match is still pending", () => {
+    const matches = [
+      played({ id: "m-1", round_number: 1, match_index: 0 }),
+      row({ id: "m-2", round_number: 2, match_index: 0, player1_name: "A", player2_name: "TBD" }),
+    ];
+    const decision = canCorrectMatch(matches, matches[0]);
+    expect(decision.ok).toBe(true);
+    expect(decision.path).toEqual([
+      { id: "m-2", round_number: 2, match_index: 0, slotColumn: "player1_name", byeResolved: false },
+    ]);
+  });
+
+  it("feeds even-index winners into player1 and odd-index into player2", () => {
+    const matches = [
+      played({ id: "m-1", round_number: 1, match_index: 1 }),
+      row({ id: "m-2", round_number: 2, match_index: 0, player1_name: "X", player2_name: "A" }),
+    ];
+    const decision = canCorrectMatch(matches, matches[0]);
+    expect(decision.ok).toBe(true);
+    expect(decision.path[0].slotColumn).toBe("player2_name");
+  });
+
+  it("walks a chain of BYE-resolved matches to the first pending one", () => {
+    // 16-player bracket: r1m0 -> r2m0 -> r3m0 -> r4m0(final, pending).
+    const matches = [
+      played({ id: "m-1", round_number: 1, match_index: 0 }),
+      played({ id: "m-2", round_number: 2, match_index: 0, player1_name: "A", player2_name: BYE }),
+      played({ id: "m-3", round_number: 3, match_index: 0, player1_name: "A", player2_name: BYE }),
+      row({ id: "m-4", round_number: 4, match_index: 0, player1_name: "A", player2_name: "C" }),
+    ];
+    const decision = canCorrectMatch(matches, matches[0]);
+    expect(decision.ok).toBe(true);
+    expect(decision.path).toEqual([
+      { id: "m-2", round_number: 2, match_index: 0, slotColumn: "player1_name", byeResolved: true },
+      { id: "m-3", round_number: 3, match_index: 0, slotColumn: "player1_name", byeResolved: true },
+      { id: "m-4", round_number: 4, match_index: 0, slotColumn: "player1_name", byeResolved: false },
+    ]);
+  });
+
+  it("refuses when a real downstream match was played", () => {
+    const matches = [
+      played({ id: "m-1", round_number: 1, match_index: 0 }),
+      played({ id: "m-2", round_number: 2, match_index: 0, player1_name: "A", player2_name: "C", winner_name: "C" }),
+    ];
+    const decision = canCorrectMatch(matches, matches[0]);
+    expect(decision.ok).toBe(false);
+  });
+
+  it("refuses matches that are not completed or not real", () => {
+    const pending = row({});
+    expect(canCorrectMatch([pending], pending).ok).toBe(false);
+    const byeMatch = played({ player2_name: BYE, winner_name: "A" });
+    expect(canCorrectMatch([byeMatch], byeMatch).ok).toBe(false);
+    const tbd = row({ player2_name: "TBD" });
+    expect(canCorrectMatch([tbd], tbd).ok).toBe(false);
   });
 });

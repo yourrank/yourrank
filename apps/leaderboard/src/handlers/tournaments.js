@@ -21,7 +21,7 @@ import {
   loadChatGiveawayConnection as defaultLoadChatGiveawayConnection,
 } from "@yourrank/shared/chat-giveaways";
 import { reconcileKickWebhookDelivery as defaultReconcileKickWebhookDelivery } from "./kick-auth.js";
-import { buildBracket, resolveByes, isBye, BYE, MIN_BRACKET_PARTICIPANTS } from "../lib/tournament-bracket.js";
+import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE, MIN_BRACKET_PARTICIPANTS } from "../lib/tournament-bracket.js";
 
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
@@ -1267,6 +1267,180 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
 }
 
 /**
+ * PATCH /api/tournaments/:id/score — Correct a completed match's score
+ *
+ * A typo'd score is permanent via POST (which 409s on completed matches).
+ * Corrections are allowed only while the winner's downstream path is
+ * unplayed: pending next matches get their slot rewritten, BYE-resolved
+ * matches are reset and re-resolved, and a genuinely played downstream
+ * match blocks the correction (correct it first, walking backwards).
+ */
+export async function handleCorrectMatchScore(request, env, deps = {}) {
+  const {
+    requireUser = defaultRequireUser,
+    withTransaction = defaultWithTransaction,
+    logAudit = defaultLogAudit,
+    requireSiteCapabilityImpl = requireSiteOwner,
+  } = deps;
+
+  const { user, res } = await requireUser(request, env);
+  if (res) return res;
+
+  const body = await readJson(request) || {};
+  const matchId = String(body?.matchId || "").trim();
+  if (!matchId) return bad("matchId is required.");
+
+  const rawP1 = Number(body?.player1Score);
+  const rawP2 = Number(body?.player2Score);
+  if (!Number.isInteger(rawP1) || !Number.isInteger(rawP2) || rawP1 < 0 || rawP2 < 0) {
+    return bad("Scores must be non-negative integers.");
+  }
+  if (rawP1 === rawP2) return bad("Scores cannot be tied. A winner must be decided.");
+
+  const tournamentId = tournamentIdFromRequest(request);
+  if (!tournamentId) return bad("tournamentId is required.");
+
+  let result;
+  try {
+    result = await withTransaction(async (tx) => {
+      const tourn = await tx.one(
+        `SELECT t.id, t.status, t.bracket_size, t.site_id, t.winner_name, s.user_id AS site_user_id
+           FROM tournaments t
+           JOIN sites s ON s.id = t.site_id
+          WHERE t.id=$1
+          FOR UPDATE OF t`,
+        [tournamentId]
+      );
+      if (!tourn) return { error: "Tournament not found.", status: 404 };
+
+      const authorization = await requireSiteCapabilityImpl(
+        user,
+        { id: tourn.site_id, user_id: tourn.site_user_id }
+      );
+      if (authorization.res) return { error: "Forbidden", status: authorization.res.status || 403 };
+      {
+        const gateRes = await requireSiteFeature({ user_id: tourn.site_user_id }, "tournaments", { request, oneImpl: tx.one });
+        if (gateRes) return { error: "Tournaments are not available on this site's plan.", status: 403 };
+      }
+
+      if (tourn.status === "cancelled") {
+        return { error: "Tournament is cancelled.", status: 409 };
+      }
+
+      const stored = await tx.query(
+        `SELECT id, round_number, match_index, player1_name, player2_name,
+                player1_score, player2_score, winner_name, status
+           FROM tournament_matches
+          WHERE tournament_id=$1
+          ORDER BY round_number ASC, match_index ASC
+          FOR UPDATE`,
+        [tournamentId]
+      );
+      const matches = stored || [];
+      const match = matches.find((m) => String(m.id) === matchId);
+      if (!match) return { error: "Match not found or unauthorized.", status: 404 };
+
+      const totalRounds = Math.log2(tourn.bracket_size || 0);
+      if (!Number.isFinite(totalRounds) || totalRounds < 1) {
+        return { error: "Invalid bracket size.", status: 400 };
+      }
+      const isFinals = match.round_number === totalRounds;
+      const correctable = canCorrectMatch(matches, match);
+      if (!correctable.ok) {
+        const blocked = match.status === "completed"
+          && match.player1_name && match.player2_name
+          && match.player1_name !== "TBD" && match.player2_name !== "TBD"
+          && !isBye(match.player1_name) && !isBye(match.player2_name);
+        return {
+          error: blocked
+            ? "A later match has already been played. Correct that match first."
+            : "Match is not correctable.",
+          status: 409,
+        };
+      }
+
+      const previous = { p1: match.player1_score, p2: match.player2_score, winner: match.winner_name };
+      const winnerName = rawP1 > rawP2 ? match.player1_name : match.player2_name;
+      const winnerChanged = winnerName !== match.winner_name;
+
+      const matchUpdate = await tx.unsafe(
+        `UPDATE tournament_matches
+            SET player1_score=$1, player2_score=$2, winner_name=$3
+          WHERE id=$4 AND status='completed'
+          RETURNING id`,
+        [rawP1, rawP2, winnerName, match.id]
+      );
+      if (!matchUpdate || matchUpdate.length === 0) {
+        return { error: "Match could not be corrected. It may no longer be completed.", status: 409 };
+      }
+
+      if (winnerChanged) {
+        // Rewrite the old winner's slot along the unplayed path, resetting
+        // BYE-resolved matches so the cascade re-derives them.
+        for (const step of correctable.path) {
+          const setClause = step.byeResolved
+            ? `${step.slotColumn}=$1, status='pending', winner_name=NULL, player1_score=0, player2_score=0`
+            : `${step.slotColumn}=$1`;
+          const stepUpdate = await tx.unsafe(
+            `UPDATE tournament_matches
+                SET ${setClause}
+              WHERE id=$2 AND ${step.slotColumn}=$3
+              RETURNING id`,
+            [winnerName, step.id, match.winner_name]
+          );
+          if (!stepUpdate || stepUpdate.length === 0) {
+            throw new TournamentConflictError("A downstream match changed while correcting. Try again.", 409);
+          }
+        }
+        await resolveByeMatchesTx(tx, tournamentId, tourn.bracket_size);
+      }
+
+      // Champion sync covers correcting the final itself and a correction
+      // whose cascade re-resolved a BYE-fed final.
+      const final = await tx.one(
+        `SELECT winner_name, status FROM tournament_matches
+          WHERE tournament_id=$1 AND round_number=$2
+          ORDER BY match_index ASC LIMIT 1`,
+        [tournamentId, totalRounds]
+      );
+      if (tourn.status === "completed" && final?.status === "completed"
+          && final.winner_name && !isBye(final.winner_name)
+          && final.winner_name !== tourn.winner_name) {
+        await tx.unsafe(
+          `UPDATE tournaments SET winner_name=$1, updated_at=now() WHERE id=$2`,
+          [final.winner_name, tournamentId]
+        );
+      }
+
+      return { matchId: match.id, winnerName, winnerChanged, isFinals, previous, next: { p1: rawP1, p2: rawP2, winner: winnerName } };
+    });
+  } catch (err) {
+    if (err instanceof TournamentConflictError) return bad(err.message, err.status);
+    throw err;
+  }
+  if (result.error) return bad(result.error, result.status);
+
+  await logAudit({
+    actorId: user.id,
+    action: "tournament_match_score_correction",
+    entityType: "tournament_match",
+    entityId: result.matchId,
+    request,
+    details: { previous: result.previous, next: result.next, isFinals: result.isFinals },
+  });
+
+  return ok({
+    matchId: result.matchId,
+    winnerName: result.winnerName,
+    winnerChanged: result.winnerChanged,
+    isFinals: result.isFinals,
+    message: result.isFinals
+      ? `\u{1F451} Champion corrected: ${result.winnerName}!`
+      : `\u{1F4DD} Score corrected: ${result.winnerName} wins the match.`,
+  });
+}
+
+/**
  * GET /api/tournaments/:id/bracket — Get bracket tree for viewer & streamer
  */
 export async function handleGetBracket(request, env, deps = {}) {
@@ -1294,8 +1468,9 @@ export async function handleGetBracket(request, env, deps = {}) {
     [tourn.id]
   );
 
+  const rows = matches || [];
   return ok({
     tournament: tourn,
-    matches: matches || [],
+    matches: rows.map((m) => ({ ...m, correctable: canCorrectMatch(rows, m).ok })),
   });
 }

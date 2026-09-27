@@ -8,7 +8,7 @@ import { PAGES } from '../apps/leaderboard/src/pages.jsx';
 import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/index.js';
 import { leaderboardPageHtml } from '../packages/shared/dist/page-shell.js';
 import { ASSETS } from '../apps/leaderboard/src/assets_bundled.js';
-import { buildBracket, BYE } from '../apps/leaderboard/src/lib/tournament-bracket.js';
+import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE } from '../apps/leaderboard/src/lib/tournament-bracket.js';
 import { appHtml } from '../apps/bot/src/dashboard-views/app.ts';
 import { clientScriptSource } from '../apps/bot/src/dashboard-views/client-script.ts';
 
@@ -67,6 +67,23 @@ function buildTournamentFixture(empty) {
         if (next[slot] === 'TBD' || !next[slot]) next[slot] = m.winner_name;
       }
     }
+    // One already-played round-2 match (brackets with a round 3+) so the
+    // "downstream played" correction block is exercised: its round-1 feeders
+    // stop being correctable while the rest stay open.
+    if (Math.log2(size) >= 3) {
+      const played = matches.find((m) => m.round_number === 2 && m.match_index === 0
+        && m.status === 'pending' && m.player1_name && m.player2_name
+        && m.player1_name !== 'TBD' && m.player2_name !== 'TBD'
+        && !isBye(m.player1_name) && !isBye(m.player2_name));
+      if (played) {
+        played.status = 'completed';
+        played.player1_score = 4;
+        played.player2_score = 2;
+        played.winner_name = played.player1_name;
+        const final = matches.find((n) => n.round_number === 3 && n.match_index === 0);
+        if (final && (final.player1_name === 'TBD' || !final.player1_name)) final.player1_name = played.winner_name;
+      }
+    }
   } else {
     // completed8: two real entrants; the only real match is scored, the rest
     // of the bracket resolves via BYEs.
@@ -82,9 +99,13 @@ function buildTournamentFixture(empty) {
     }
     tournament.winner_name = participants[0];
   }
+  // API rows carry ids; give the in-memory fixture stable ones for score ops.
+  for (const m of matches) m.id = m.id || `m-${m.round_number}-${m.match_index}`;
   const fixtureEntries = participants.map((name, i) => ({ id: `e${i + 1}`, display_name: name, source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null }));
   return { tournament, matches: empty ? [] : matches, fixtureEntries };
 }
+// Built once so PATCH /score mutations persist across requests.
+const tournamentState = buildTournamentFixture(false);
 
 const json = (res, body, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const html = (res, body) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(body); };
@@ -127,10 +148,40 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
-    const { tournament, matches, fixtureEntries } = buildTournamentFixture(empty);
+    const { tournament, fixtureEntries } = tournamentState;
+    const matches = tournamentState.matches;
     if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
     if (path === `/api/tournaments/${tournament.id}/entries`) return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: fixtureEntries.length, eligible: fixtureEntries.length, waitlist: 0, removed: 0, blocked: 0 } });
-    if (path === `/api/tournaments/${tournament.id}/bracket`) return json(res, { matches: empty ? [] : matches, tournament });
+    if (path === `/api/tournaments/${tournament.id}/bracket`) return json(res, { matches: empty ? [] : matches.map((m) => ({ ...m, correctable: canCorrectMatch(matches, m).ok })), tournament });
+    if (path === `/api/tournaments/${tournament.id}/score` && req.method === 'PATCH') {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw || '{}');
+      const match = matches.find((m) => String(m.id) === String(body.matchId));
+      if (!match) return json(res, { error: 'Match not found or unauthorized.' }, 404);
+      const decision = canCorrectMatch(matches, match);
+      if (!decision.ok) return json(res, { error: match.status === 'completed' ? 'A later match has already been played. Correct that match first.' : 'Match is not correctable.' }, 409);
+      const p1 = Number(body.player1Score), p2 = Number(body.player2Score);
+      if (!Number.isInteger(p1) || !Number.isInteger(p2) || p1 < 0 || p2 < 0 || p1 === p2) return json(res, { error: 'Scores must be non-negative integers and cannot be tied.' }, 400);
+      const winnerName = p1 > p2 ? match.player1_name : match.player2_name;
+      const winnerChanged = winnerName !== match.winner_name;
+      match.player1_score = p1; match.player2_score = p2; match.winner_name = winnerName;
+      if (winnerChanged) {
+        for (const step of decision.path) {
+          const next = matches.find((n) => n.id === step.id);
+          if (!next) continue;
+          next[step.slotColumn] = winnerName;
+          if (step.byeResolved) { next.status = 'pending'; next.winner_name = null; next.player1_score = 0; next.player2_score = 0; }
+        }
+        resolveByes(matches);
+      }
+      const totalRounds = Math.log2(tournament.bracket_size);
+      const final = matches.find((m) => m.round_number === totalRounds && m.match_index === 0);
+      const isFinals = match.round_number === totalRounds;
+      if (tournament.status === 'completed' && final?.status === 'completed' && final.winner_name && !isBye(final.winner_name) && final.winner_name !== tournament.winner_name) {
+        tournament.winner_name = final.winner_name;
+      }
+      return json(res, { ok: true, matchId: match.id, winnerName, winnerChanged, isFinals, message: `Score corrected: ${winnerName} wins the match.` });
+    }
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);

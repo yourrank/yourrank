@@ -189,6 +189,7 @@ This file is the preservation contract for UI/UX work: every listed item should 
 | GET | `/api/tournaments` | `handleGetTournaments` | GET /api/tournaments — List tournaments for site |
 | POST | `/api/tournaments` | `handleCreateTournament` | POST /api/tournaments — Streamer creates a single-elimination tournament bracket |
 | POST | `/api/tournaments/:id/score` | `handleUpdateMatchScore` | POST /api/tournaments/:id/score — Streamer updates match score & advances winner |
+| PATCH | `/api/tournaments/:id/score` | `handleCorrectMatchScore` | PATCH /api/tournaments/:id/score — Correct a completed match score while downstream is unplayed |
 | GET | `/api/tournaments/:id/bracket` | `handleGetBracket` | GET /api/tournaments/:id/bracket — Get bracket tree for viewer & streamer |
 | POST | `/api/tournaments/:id/signups/open` | `handleOpenTournamentSignups` | Tournament & Elimination Brackets Handlers. |
 | POST | `/api/tournaments/:id/signups/lock` | `handleLockTournamentSignups` | Tournament & Elimination Brackets Handlers. |
@@ -2583,6 +2584,7 @@ Overview: Tournament & Elimination Brackets Handlers.
 | `handleRestoreTournamentEntry` |  |
 | `handleRandomPickTournamentEntries` |  |
 | `handleUpdateMatchScore` | POST /api/tournaments/:id/score — Streamer updates match score & advances winner |
+| `handleCorrectMatchScore` | PATCH /api/tournaments/:id/score — Correct a completed match score while downstream is unplayed |
 | `handleGetBracket` | GET /api/tournaments/:id/bracket — Get bracket tree for viewer & streamer |
 
 
