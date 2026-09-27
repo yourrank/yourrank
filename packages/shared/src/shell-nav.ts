@@ -94,7 +94,7 @@ export interface ShellNavOpts {
   theme?: "light" | "dark";
 }
 
-export function profileMenuHtml(opts: ShellNavOpts & { mobileTabs?: string; standalone?: boolean; dynamicIdentity?: boolean } = {}): string {
+export function profileMenuHtml(opts: ShellNavOpts & { mobileTabs?: string; standalone?: boolean; dynamicIdentity?: boolean; triggerLabel?: string } = {}): string {
   const active = opts.active || activeKey(opts.activePath || "/") || "";
   const rawName = opts.user?.display_name?.trim()
     || opts.user?.email?.split("@")[0]
@@ -111,7 +111,7 @@ export function profileMenuHtml(opts: ShellNavOpts & { mobileTabs?: string; stan
   const identityAttr = opts.dynamicIdentity ? " data-profile-name" : "";
   const profileNav = opts.mobileTabs ? `<div class="gm-profile-nav">${opts.mobileTabs}</div>` : "";
   const profileHtml = `<details class="${profileClass}">
-        <summary class="gm-profile-trigger">
+        <summary class="gm-profile-trigger"${opts.triggerLabel ? ` aria-label="${esc(opts.triggerLabel)}" title="${esc(opts.triggerLabel)}"` : ""}>
           <span class="gm-who-avatar" aria-hidden="true">${esc(initial)}</span>
           <span class="gm-who-id"><span class="gm-who-name"${identityAttr}>${name}</span>${badge}</span>
           <span class="gm-profile-chevron" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></span>

@@ -17,7 +17,7 @@ const SETTINGS_DESCRIPTIONS = {
   account: "Your profile, password, and signed-in devices.",
   team: "People who can help manage the selected site.",
   plan: "Your current plan, usage, and payment history.",
-  connections: "Sign-in accounts and delivery settings for your account. The Kick channel that powers a site's rewards is managed per site.",
+  connections: "Manage your account and selected site's connections.",
   data: "Export your account data or permanently close your account.",
 };
 
@@ -46,7 +46,7 @@ export function UnifiedSettingsPage({ activePath, user, tab = "account", fragmen
           {settingsPanel("account", settingsWidgets.account, active)}
           {settingsPanel("team", settingsWidgets.team, active)}
           {settingsPanel("plan", settingsWidgets.plan, active)}
-          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.integrationHealth}${settingsWidgets.postbacks}<div class="account-related-setting"><div><strong>Kick rewards for the selected site</strong><p>The channel connection that powers rewards is managed separately for each site.</p></div><a class="btn btn--ghost" href="/dashboard/site/connections">Manage site connection</a></div>`, active)}
+          {settingsPanel("connections", `${settingsWidgets.connected}${settingsWidgets.integrationHealth}${settingsWidgets.postbacks}`, active)}
           {settingsPanel("data", `${settingsWidgets.data}<div class="account-related-setting"><div><strong>Looking for one site's data?</strong><p>Resetting, archiving, or deleting a site affects only the selected site.</p></div><a class="btn btn--ghost" href="/dashboard/site?tab=danger">Manage site data</a></div>`, active)}
         </div>
         <div class="account-settings-help">

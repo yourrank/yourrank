@@ -9,6 +9,7 @@ import { logError, showToast } from "./utils.js";
 import { loadOverviewLiveData, renderOverviewSummary } from "./overview.js";
 import { discardEditorChanges, fitDesignPreview, loadCreditsStatus, loadStats, refreshDesignPreview, saveEditorDraft } from "./site.js";
 import { SECTIONS, chromeStateFor, dashboardPath, dashboardTitle, defaultTab, navOwner, parseDashboardPath, resolveSection } from "./routes.js";
+import { sidebarActiveKey } from "@yourrank/shared/dashboard-nav";
 import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, isDynamicSection, parseDynamicPath } from "./routes.js";
 import { loadDynamicSection, leaveDynamicSection } from "./dynamic-section.js";
 
@@ -173,7 +174,7 @@ export function syncRouteChrome(page, tab = "") {
   closeDashboardDrawer();
   const resolvedTab = tab || (isDynamicSection(page) ? DYNAMIC_SECTIONS[page].tabs[0] : defaultHash(page));
   const chrome = chromeStateFor(page, resolvedTab, { exact: true });
-  setActiveSideNav(isDynamicSection(page) ? DYNAMIC_SECTIONS[page].navKey : page);
+  setActiveSideNav(page, resolvedTab);
   routeCrumbs(page, resolvedTab);
   const heading = document.querySelector("[data-chrome-h1]");
   if (heading && chrome?.tabLabel) heading.textContent = chrome.tabLabel;
@@ -259,11 +260,12 @@ function prefersReducedMotion() {
   return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function setActiveSideNav(page) {
+export function setActiveSideNav(page, tab = "") {
   // `page` may be a SPA section key, a dynamic section key (rewards, giveaways,
   // …), or a rail nav key (redemptions, engage, …). navOwner() normalises all
   // of them to the rail item that should be active.
   const navPage = navOwner(page);
+  const activeKey = sidebarActiveKey(chromeStateFor(page, tab)?.canonicalPath || "", navPage);
   const area = areaForPage(navPage);
   // Dynamic sections may belong to a different product area than the SPA
   // default; map their rail key to the right area for side-group visibility.
@@ -271,11 +273,15 @@ export function setActiveSideNav(page) {
   const resolvedArea = DYN_AREA[navPage] || area;
   document.querySelectorAll(".lb-side-group").forEach((g) => { g.hidden = (g.dataset.area !== resolvedArea && g.dataset.area !== "all"); });
   document.querySelectorAll(".lb-nav").forEach((n) => {
-    const active = n.dataset.nav === navPage;
+    const active = n.dataset.nav === activeKey;
     n.classList.toggle("is-on", active);
     if (active) n.setAttribute("aria-current", "page");
     else n.removeAttribute("aria-current");
   });
+  document.querySelectorAll("[data-nav-group]").forEach((group) => {
+    group.toggleAttribute("data-current-group", group.dataset.navGroup === navPage);
+  });
+  document.dispatchEvent(new CustomEvent("yr:sidebar-route"));
 }
 
 // The crumbs are server-rendered for the URL the document was opened at; when

@@ -181,7 +181,7 @@ export async function handleAccountConversions(request, env) {
 
 // GET /api/account/connected-accounts
 export async function handleAccountConnectedAccounts(request, env, injected = {}) {
-  const deps = { requireUser, rateLimit, query, one, loadCreatorConnection, ...injected };
+  const deps = { requireUser, rateLimit, query, loadCreatorConnection, ...injected };
   const { user, res } = await deps.requireUser(request, env);
   if (!user) return res;
   if (!(await deps.rateLimit(env, `account-connections:${user.id}`, 120, 60)).ok) {
@@ -203,16 +203,15 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
   );
   const requestedSiteId = String(new URL(request.url).searchParams.get("board") || "").trim();
   const selectedSiteId = (sites || []).some((site) => site.id === requestedSiteId) ? requestedSiteId : "";
+  const selectedSite = (sites || []).find((site) => site.id === selectedSiteId);
+  const selectedSiteName = selectedSite?.name || selectedSite?.slug || null;
   const orderedSites = selectedSiteId
     ? [...sites].sort((left, right) => Number(right.id === selectedSiteId) - Number(left.id === selectedSiteId))
     : sites;
 
-  // Creator connection state comes from creator_connections; loadUser() only
-  // carries telegram_user_id, so telegram_linked_at is read separately.
-  const [identity, kickConnection] = await Promise.all([
-    deps.one("SELECT telegram_linked_at FROM users WHERE id = $1", [user.id]),
-    deps.loadCreatorConnection((sql, params) => deps.query(sql, params), user.id, "kick"),
-  ]);
+  // Kick is a creator connection. Telegram identity is the user's linked ID;
+  // older Telegram sign-ins may have an ID without telegram_linked_at.
+  const kickConnection = await deps.loadCreatorConnection((sql, params) => deps.query(sql, params), user.id, "kick");
 
   const accountKickIdentity = Boolean(kickConnection?.externalUserId && kickConnection?.linkedAt);
   const kickHealthInputs = {
@@ -222,36 +221,37 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
     tokenExpiresAt: kickConnection?.tokenExpiresAt || null,
   };
   const accountKick = deriveKickConnectionHealth({ requireChannel: false, ...kickHealthInputs });
-  const accountTelegramLinked = Boolean(user.telegram_user_id && identity?.telegram_linked_at);
+  const accountTelegramLinked = Boolean(user.telegram_user_id);
+  let selectedKickHealth = { status: "not_tested", issueHref: null };
+  let selectedDiscordHealth = { status: "not_configured" };
+  let selectedTelegramHealth = { status: "not_configured" };
   const connections = [
     {
       id: "kick-account",
-      provider: "Kick",
+      provider: "Kick account",
       scope: "Creator account",
+      connected: accountKickIdentity,
       status: accountKickIdentity ? accountKick.status : "not_connected",
-      statusLabel: accountKickIdentity ? accountKick.label : "Not connected",
-      detail: !accountKickIdentity
-        ? "Connect your creator identity before linking site rewards."
-        : accountKick.status === "authorized"
-          ? kickConnection?.username ? `Signed in as @${kickConnection.username}.` : "Creator identity linked."
-          : accountKick.detail,
+      statusLabel: accountKickIdentity ? "Connected" : "Not connected",
+      detail: !accountKickIdentity ? "" : accountKick.needsAttention
+        ? "Authorization needs reconnecting."
+        : kickConnection?.username ? `@${kickConnection.username}` : "",
       action: {
-        label: accountKickIdentity && accountKick.status === "authorized" ? "Manage" : accountKickIdentity ? "Reconnect" : "Connect",
+        label: !accountKickIdentity ? "Connect" : accountKick.needsAttention ? "Reconnect" : "Manage",
         href: buildDashboardPath("siteConnections.channel", { siteId: selectedSiteId }),
       },
     },
     {
       id: "telegram-account",
-      provider: "Telegram",
+      provider: "Telegram account",
       scope: "Creator account",
+      connected: accountTelegramLinked,
       status: accountTelegramLinked ? "linked" : "not_connected",
-      statusLabel: accountTelegramLinked ? "Linked" : "Not connected",
-      detail: accountTelegramLinked
-        ? user.telegram_username ? `Signed in as @${user.telegram_username}.` : "Telegram identity linked."
-        : "Connect Telegram to use Telegram operations.",
+      statusLabel: accountTelegramLinked ? "Connected" : "Not connected",
+      detail: accountTelegramLinked && user.telegram_username ? `@${user.telegram_username}` : "",
       action: accountTelegramLinked
-        ? { label: "Disconnect", kind: "disconnect_telegram" }
-        : { label: "Connect", href: "/dashboard/telegram" },
+        ? { label: "Manage", kind: "manage_telegram" }
+        : { label: "Connect", href: selectedSiteId ? `/auth/telegram/connect?board=${encodeURIComponent(selectedSiteId)}` : "/auth/telegram/connect" },
     },
   ];
 
@@ -270,66 +270,76 @@ export async function handleAccountConnectedAccounts(request, env, injected = {}
         checkedAt: site.event_subscriptions_checked_at || null,
       },
     });
-    const kickHealthy = kick.status === "authorized" || kick.status === "ready";
+    const kickConnected = Boolean(site.kick_channel_external_id);
+    const discordConfigured = Boolean(site.discord_webhook_url_enc);
+    const telegramConfigured = Boolean(site.telegram_chat_id);
+    const telegramEnabled = telegramConfigured && site.telegram_notify !== false;
+    if (selectedSite) {
+      const rewardInUse = Boolean(site.credits_enabled) && Number(site.active_reward_mappings) > 0;
+      const rewardIssue = rewardInUse && (
+        !kickConnected || !env.KICK_WEBHOOK_PUBLIC_KEY ||
+        ["authorization_missing", "authorization_expired", "reward_events_missing"].includes(kick.reason)
+      );
+      selectedKickHealth = {
+        status: rewardIssue ? "failing" : "not_tested",
+        issueHref: rewardIssue ? buildDashboardPath("siteConnections.channel", { siteId: site.id }) : null,
+      };
+      selectedDiscordHealth = { status: discordConfigured ? "not_tested" : "not_configured" };
+      selectedTelegramHealth = { status: telegramConfigured ? "not_tested" : "not_configured" };
+    }
     connections.push({
       id: `kick-site:${site.id}`,
       provider: "Kick rewards",
       scope,
       selectedSite,
+      connected: kickConnected,
       status: kick.status,
-      statusLabel: kick.label,
-      detail: site.kick_channel_name && site.kick_channel_external_id
-        ? `${kick.detail} Channel: @${site.kick_channel_name}.`
-        : kick.detail,
-      action: kickHealthy
-        ? { label: "Disconnect", kind: "disconnect_kick", siteId: site.id }
-        : kick.status === "delivery_failed"
-          ? { label: "Repair delivery", href: buildDashboardPath("siteConnections.channel", { siteId: site.id }) }
-          : { label: kick.needsAttention ? "Reconnect" : "Connect", href: `/auth/kick?siteId=${encodeURIComponent(site.id)}` },
+      statusLabel: kickConnected ? "Connected" : "Not connected",
+      detail: kickConnected && site.kick_channel_name ? `@${site.kick_channel_name} on Kick` : "",
+      action: {
+        label: kickConnected ? "Manage" : "Connect",
+        href: buildDashboardPath("siteConnections.channel", { siteId: site.id }),
+      },
     });
     connections.push({
       id: `discord-site:${site.id}`,
       provider: "Discord delivery",
       scope,
       selectedSite,
-      status: site.discord_webhook_url_enc ? "configured" : "not_configured",
-      statusLabel: site.discord_webhook_url_enc ? "Configured" : "Not configured",
-      detail: site.discord_webhook_url_enc
-        ? "A webhook is saved. Use Send test in Site notifications to verify delivery."
-        : "Optional. Add a webhook when you want Discord notifications.",
-      action: { label: site.discord_webhook_url_enc ? "Manage" : "Set up", href: `${buildDashboardPath("site", { board: site.id })}&tab=notifications` },
+      configured: discordConfigured,
+      status: discordConfigured ? "configured" : "not_configured",
+      statusLabel: discordConfigured ? "Configured" : "Not configured",
+      detail: "",
+      action: { label: discordConfigured ? "Manage" : "Set up", href: `${buildDashboardPath("site", { board: site.id })}&tab=notifications` },
     });
-    const telegramConfigured = Boolean(site.telegram_chat_id);
-    const telegramEnabled = telegramConfigured && site.telegram_notify !== false;
     connections.push({
       id: `telegram-site:${site.id}`,
       provider: "Telegram delivery",
       scope,
       selectedSite,
+      configured: telegramConfigured,
       status: telegramEnabled ? "enabled" : telegramConfigured ? "paused" : "not_configured",
-      statusLabel: telegramEnabled ? "Enabled" : telegramConfigured ? "Paused" : "Not configured",
+      statusLabel: telegramConfigured ? "Configured" : "Not configured",
       detail: telegramEnabled
-        ? "Delivery is enabled. Use Send test in Site notifications to verify it."
-        : telegramConfigured ? "A chat is saved, but delivery is turned off." : "Optional. Add a chat when you want site notifications in Telegram.",
+        ? "Chat saved. A connected Telegram bot is required to deliver messages."
+        : telegramConfigured ? "Chat saved, but delivery is turned off. A Telegram bot is required."
+          : "Add a chat and connect a Telegram bot to deliver messages.",
       action: { label: telegramConfigured ? "Manage" : "Set up", href: `${buildDashboardPath("site", { board: site.id })}&tab=notifications` },
     });
   }
 
-  // DEF-14: The client gates privileged connection actions on this map.
-  // This endpoint only lists sites the user owns, so the owner-level
-  // capability set applies to every row rendered from it.
-  // P3-4: Integration-health facts the Account page card renders. The Kick
-  // ingest webhook is platform-level; delivery telemetry (last ping, 24h
-  // success rate) is not recorded yet, and the card says so instead of
-  // inventing numbers.
+  // This endpoint only lists sites the user owns. Delivery telemetry is not
+  // persisted, so a saved webhook or chat is never reported as healthy.
   return json({
     ok: true,
     connections,
     capabilities: { canRoleManageConnections: true },
     selectedSiteId: selectedSiteId || null,
+    selectedSiteName,
     integrationHealth: {
-      kickIngest: { configured: Boolean(env.KICK_WEBHOOK_PUBLIC_KEY) },
-      deliveryTelemetry: { available: false, reason: "Delivery telemetry is not recorded yet." },
+      kickIngest: selectedKickHealth,
+      discordDelivery: selectedDiscordHealth,
+      telegramDelivery: selectedTelegramHealth,
     },
   }, 200, { "cache-control": "no-store, no-cache, must-revalidate" });
 }

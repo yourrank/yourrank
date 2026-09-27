@@ -246,18 +246,19 @@ describe("dashboard overview quick actions", () => {
     expect(html).toContain('data-nav="board"');
     expect(html).toContain('data-nav="settings"');
     expect(html).toContain('lb-side-group');
-    // The rail is flat and task-worded — no grouping labels.
-    expect(html).not.toContain("lb-nav-group");
+    // Engage is the sole collapsible branch; the other roots stay flat.
+    expect((html.match(/data-nav-group=/g) || []).length).toBe(1);
+    expect(html).toContain('data-nav-group="engage"');
     expect(html).not.toContain(">Community</div>");
     expect(html).not.toContain(">Current site</div>");
     expect(html).not.toContain('aria-hidden="true">🔌</span>');
-    expect(html).toContain('>Home</a>');
+    expect(html).toContain('<span class="lb-nav-label">Home</span>');
     const sidebar = html.match(/<nav class="lb-side-group lb-side-nav"[\s\S]*?<\/nav>/)?.[0] || "";
     for (const label of [
-      "Community", "Audience", "Engage", "Rewards", "Insights", "Telegram", "Settings",
-    ]) expect(sidebar).toContain(`>${label}</a>`);
-    for (const label of ["Sites", "Site", "Leaderboard", "People", "Stats", "Members", "Engagement", "Games", "Giveaways", "Raffles", "Predictions", "Drops", "Tournaments"]) {
-      expect(sidebar).not.toContain(`>${label}</a>`);
+      "Community", "Audience", "Engage", "Tournaments", "Giveaways", "Rewards", "Insights", "Telegram", "Settings",
+    ]) expect(sidebar).toContain(`<span class="lb-nav-label">${label}</span>`);
+    for (const label of ["Sites", "Site", "Leaderboard", "People", "Stats", "Members", "Engagement", "Games", "Raffles", "Predictions", "Drops"]) {
+      expect(sidebar).not.toContain(`<span class="lb-nav-label">${label}</span>`);
     }
     expect(html).not.toContain(">Integrations</a>");
     expect(html).not.toContain(">All sites</a>");

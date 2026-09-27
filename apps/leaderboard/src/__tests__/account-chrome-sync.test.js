@@ -78,8 +78,10 @@ describe("account settings chrome synchronization", () => {
       expect(bento.crumb.innerHTML, tab).toContain(`>${chrome.crumbs.at(-1).label}</span>`);
       expect(document.title, tab).toBe(chrome.documentTitle);
       expect(rail[0].classList.values.has("is-on"), tab).toBe(true);
-      expect(events.at(-1).type).toBe("yr:dashboard-drawer-close");
-      expect(events.at(-1).detail.returnFocus).toBe(false);
+      const drawerClose = events.findLast(event => event.type === "yr:dashboard-drawer-close");
+      expect(drawerClose).toBeDefined();
+      expect(drawerClose.detail.returnFocus).toBe(false);
+      expect(events.at(-1).type).toBe("yr:sidebar-route");
     }
   });
 

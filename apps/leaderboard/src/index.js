@@ -16,6 +16,7 @@ import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
 import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
 import { verifyEmailPageHtml } from "./pages/verify-email.js";
+import { telegramAccountLinkHeaders, telegramAccountLinkPage } from "./pages/telegram-account-link.js";
 import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
 import { PAGES } from "./pages.jsx";
@@ -939,6 +940,19 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         return new Response(html, {
           headers: { ...SECURE_HTML, ...csrfHeader, ...rateLimitHeaders(inviteRl) },
         });
+      }
+      if (path === "/auth/telegram/connect" && method === "GET") {
+        const user = await currentUserImpl(request, env);
+        if (!user) return redirectToLogin(url);
+        const board = url.searchParams.get("board") || "";
+        const returnPath = `/dashboard/settings/connections${board ? `?board=${encodeURIComponent(board)}` : ""}`;
+        if (user.telegram_user_id) return redirectResponse(new URL(returnPath, url), 302);
+        return new Response(telegramAccountLinkPage({
+          botUsername: env.LOGIN_BOT_TOKEN ? env.LOGIN_BOT_USERNAME : "",
+          csrfToken,
+          nonce,
+          returnPath,
+        }), { headers: { ...telegramAccountLinkHeaders(nonce), ...csrfHeader } });
       }
       const manifestAlias = resolveAliasRedirect(path, url.search, "leaderboard");
       if (manifestAlias) return redirectFromManifest(url, manifestAlias, "path_alias");

@@ -10,6 +10,7 @@ import {
   NAV_OWNER_MAP,
   dashboardNavItems,
   navOwner,
+  sidebarActiveKey,
 } from "../dashboard-nav.js";
 import {
   DASHBOARD_ROUTES,
@@ -46,12 +47,26 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       home: routeById("home").canonicalPath,
       board: routeById("board").canonicalPath,
       audience: routeById("audience.viewers").canonicalPath,
-      engage: routeById("activities.overview").canonicalPath,
+      tournaments: routeById("giveaways.tournaments").canonicalPath,
+      giveaways: routeById("giveaways.chat").canonicalPath,
       rewards: routeById("rewards.overview").canonicalPath,
       performance: routeById("performance").canonicalPath,
       telegram: routeById("telegram").canonicalPath,
       settings: "/dashboard/settings",
     });
+  });
+
+  it("keeps the requested hierarchy and selects only the current destination", () => {
+    expect(dashboardNavItems().map(item => item.label)).toEqual([
+      "Home", "Community", "Audience", "Engage", "Rewards", "Insights", "Telegram", "Settings",
+    ]);
+    const engage = dashboardNavItems().find(item => item.key === "engage");
+    expect(engage && "children" in engage && engage.children.map(item => item.label)).toEqual(["Tournaments", "Giveaways"]);
+    for (const route of DASHBOARD_ROUTES) {
+      const selected = sidebarActiveKey(route.canonicalPath);
+      expect(selected).toBe(route.id === "giveaways.tournaments" ? "tournaments" : route.section === "giveaways" ? "giveaways" : route.navKey);
+    }
+    expect(sidebarActiveKey("/dashboard/giveaways/tournaments/tourn_123/settings?siteId=site-1")).toBe("tournaments");
   });
 
   it("derives rail ownership from manifest navKeys", () => {

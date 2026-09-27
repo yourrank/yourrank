@@ -9,6 +9,7 @@
 
 import { profileMenuHtml, type ShellUser } from "./shell-nav.js";
 import { brandMarkSvg } from "./brand-assets.js";
+import { sidebarActiveKey } from "./dashboard-nav.js";
 
 const DESIGN_CONTRACT = `<!--
 THESIS: The creator workspace organizes community work around one next action and readable activity.
@@ -37,6 +38,7 @@ export interface NavGroupItem {
   key: string;
   label: string;
   kind: "group";
+  icon?: string;
   children: NavLinkItem[];
 }
 
@@ -73,12 +75,13 @@ export function navListHtml(
     const product = item.productKey ? ` data-product-link="${esc(item.productKey)}"` : "";
     const cls = `lb-nav${nested ? " lb-nav-child" : ""}${isActive ? " is-on" : ""}`;
     return `<a class="${cls}" href="${esc(item.href)}" data-nav="${esc(item.key)}"` +
-      `${product}${isActive ? ' aria-current="page"' : ""} title="${esc(item.label)}">${navIconHtml(item.icon)}${esc(item.label)}</a>`;
+      `${product}${isActive ? ' aria-current="page"' : ""} title="${esc(item.label)}">${navIconHtml(item.icon)}<span class="lb-nav-label">${esc(item.label)}</span></a>`;
   };
   const links = items.map((item) => {
     if ("kind" in item && item.kind === "group") {
       const groupId = `lb-nav-group-${item.key}`;
-      return `<div class="lb-nav-group" role="group" aria-labelledby="${esc(groupId)}"><div class="lb-nav-group-label" id="${esc(groupId)}">${esc(item.label)}</div><div class="lb-nav-group-items">${item.children.map((child) => linkHtml(child, true)).join("")}</div></div>`;
+      const current = item.key === active || item.children.some((child) => child.key === active);
+      return `<div class="lb-nav-group" data-nav-group="${esc(item.key)}"${current ? ' data-current-group="true"' : ""} role="group" aria-labelledby="${esc(groupId)}"><button type="button" class="lb-nav lb-nav-group-toggle" id="${esc(groupId)}" data-toggle-nav-group aria-expanded="${current}" aria-controls="${esc(groupId)}-items" title="${esc(item.label)}">${navIconHtml(item.icon)}<span class="lb-nav-label">${esc(item.label)}</span><svg class="lb-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><div class="lb-nav-group-items" id="${esc(groupId)}-items"${current ? "" : " hidden"}>${item.children.map((child) => linkHtml(child, true)).join("")}</div></div>`;
     }
     return linkHtml(item as NavLinkItem);
   }).join("");
@@ -167,6 +170,7 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
     logoutAction: opts.logoutAction,
     standalone: true,
     dynamicIdentity: opts.dynamicIdentity,
+    triggerLabel: opts.railProfile ? "Account menu" : undefined,
   });
   const head = opts.railHeadHtml || (opts.headLabel || opts.headName
     ? `<div class="lb-side-head"><span class="label">${esc(opts.headLabel || "")}</span>` +
@@ -180,7 +184,8 @@ export function dashboardChromeHtml(opts: ChromeOpts): string {
       (opts.subtitle ? `<p class="v3-head-sub"${opts.subtitleId ? ` id="${esc(opts.subtitleId)}"` : ""}>${esc(opts.subtitle)}</p>` : "") +
       `</div>`
     : "";
-  const sideProfile = opts.railProfile ? `<div class="lb-side-profile">${profile}</div>` : "";
+  const theme = `<button class="lb-side-theme" type="button" aria-label="Switch to dark theme" aria-pressed="false" data-toggle-theme>${SUN_ICON}</button>`;
+  const sideProfile = opts.railProfile ? `<div class="lb-side-profile">${profile}${theme}</div>` : "";
   const topProfile = opts.railProfile ? "" : `<div class="gm-profile-host">${profile}</div>`;
   const contentId = opts.contentId || (opts.embeddedInMain ? "workspace-content" : "main-content");
   const contentOpen = opts.embeddedInMain
@@ -211,11 +216,11 @@ ${DESIGN_CONTRACT}
 <div class="lb-side-brandrow">
 <a class="lb-side-brand" href="/dashboard" aria-label="YourRank dashboard"><span class="lb-brand-mark">${brandMarkSvg()}</span><span class="lb-side-brandcopy"><b>YourRank</b><small>Creator workspace</small></span></a>
 ${collapse}
-<button class="lb-side-theme" type="button" aria-label="Switch to dark theme" aria-pressed="false" data-toggle-theme>${SUN_ICON}</button>
+${opts.railProfile ? "" : theme}
 <button class="lb-side-close" type="button" aria-label="Close navigation" data-close-side="true">${CLOSE_ICON}</button>
 </div>
 ${head}
-${navListHtml(opts.nav, opts.active, opts.navLabel || "Dashboard")}
+${navListHtml(opts.nav, sidebarActiveKey(opts.activePath || "", opts.active), opts.navLabel || "Dashboard")}
 ${opts.footHtml ? `<div class="lb-side-foot">${opts.footHtml}</div>` : ""}
 ${sideProfile}
 </aside>
