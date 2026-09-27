@@ -141,13 +141,18 @@ describe("tournament workspace — completed tournament", () => {
   it("renders the bracket with named rounds, BYE handling, winner rows and the summary aside", async () => {
     await click("tournament-tab-bracket");
     expect(visible("tournament-panel-bracket")).toBe(true);
-    const headings = [...$id("tournament-bracket").querySelectorAll(".tournament-round-head h3")].map((h) => h.textContent);
-    expect(headings).toEqual(["Round 1", "Semifinals", "Final"]);
+    const headings = [...$id("tournament-bracket").querySelectorAll(".tourn-round-head h3")].map((h) => h.textContent);
+    expect(headings).toEqual(["Quarterfinals", "Semifinals", "Final"]);
     expect(text("tournament-bracket-sub")).toBe("Single elimination · 8-player bracket");
     expect($id("tournament-bracket").querySelectorAll("input")).toHaveLength(0);
-    expect($id("tournament-bracket").querySelectorAll(".tournament-match-row.is-winner")).not.toHaveLength(0);
-    expect($id("tournament-bracket").querySelector(".tournament-match.is-bye")).toBeTruthy();
-    expect($id("tournament-bracket").querySelector(".tournament-match-row.is-champion")).toBeTruthy();
+    expect($id("tournament-bracket").querySelectorAll(".tourn-match-row.is-winner")).not.toHaveLength(0);
+    expect($id("tournament-bracket").querySelector('.tourn-match[data-state="bye"]')).toBeTruthy();
+    expect($id("tournament-bracket").querySelector('.tourn-match[data-state="void"]')).toBeTruthy();
+    expect($id("tournament-bracket").querySelector(".tourn-match-row.is-champion")).toBeTruthy();
+    // Connector stubs exist even without a layout engine (happy-dom has no
+    // ResizeObserver): one path per non-final match.
+    const paths = $id("tournament-bracket").querySelectorAll(".tourn-connectors path[data-from]");
+    expect(paths.length).toBe(completedMatches.length - 1);
     const aside = $id("tournament-summary").textContent;
     expect(aside).toContain("Matches played");
     expect(aside).toContain("Tournament ID");
@@ -164,8 +169,9 @@ describe("tournament workspace — completed tournament", () => {
     await click("tournament-bracket-expand");
     const modal = $id("tournament-bracket-modal");
     expect(modal.hidden).toBe(false);
-    const inlineCount = $id("tournament-bracket").querySelectorAll(".tournament-match").length;
-    expect($id("tournament-bracket-full").querySelectorAll(".tournament-match")).toHaveLength(inlineCount);
+    const inlineCount = $id("tournament-bracket").querySelectorAll(".tourn-match").length;
+    expect($id("tournament-bracket-full").querySelectorAll(".tourn-match")).toHaveLength(inlineCount);
+    expect($id("tournament-bracket-full").querySelector('.tourn-bracket[data-mode="expanded"]')).toBeTruthy();
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(true);
     await click("tournament-bracket-close");
     expect(modal.hidden).toBe(true);

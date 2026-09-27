@@ -8,6 +8,7 @@ import { PAGES } from '../apps/leaderboard/src/pages.jsx';
 import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/index.js';
 import { leaderboardPageHtml } from '../packages/shared/dist/page-shell.js';
 import { ASSETS } from '../apps/leaderboard/src/assets_bundled.js';
+import { buildBracket, BYE } from '../apps/leaderboard/src/lib/tournament-bracket.js';
 import { appHtml } from '../apps/bot/src/dashboard-views/app.ts';
 import { clientScriptSource } from '../apps/bot/src/dashboard-views/client-script.ts';
 
@@ -31,6 +32,60 @@ const competitions = new Map([[site.id, [
   { id: '22222222-2222-4222-8222-222222222222', name: 'September Challenge', published: false, players: [{ name: 'Draft player', score: 18 }], updated_at: now },
 ]], [secondarySite.id, []]]);
 let mode = 'populated';
+
+// Tournament fixture variants: real buildBracket() output, no hand-written
+// rows. FIXTURE_TOURNAMENT selects the shape; `empty` mode still wins.
+// completed8 — finished 8-player bracket with a champion.
+// live{4,8,16,32} — active bracket with size-1 participants (exactly one
+// round-1 BYE) and generated round-1 results.
+const tournamentVariant = process.env.FIXTURE_TOURNAMENT || 'completed8';
+function buildTournamentFixture(empty) {
+  const tournament = { id: `tourn_${tournamentVariant}`, title: 'Community tournament', game_name: '', bracket_size: 8, status: 'completed', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: 'community', winner_name: null, created_at: '2026-09-20T14:32:00Z' };
+  let matches = [];
+  let participants = [];
+  const live = /^live(\d+)$/.exec(tournamentVariant);
+  if (live) {
+    const size = Number(live[1]);
+    tournament.bracket_size = size;
+    tournament.status = 'active';
+    participants = Array.from({ length: size - 1 }, (_, i) => `seed_${i + 1}`);
+    matches = buildBracket(participants, size);
+    // Complete the round-1 matches that have no BYE, alternating winners so
+    // both scores and BYE propagation are exercised; scores are generated.
+    let scorer = 0;
+    for (const m of matches) {
+      if (m.round_number !== 1 || m.status === 'completed') continue;
+      if (m.player1_name === BYE || m.player2_name === BYE) continue;
+      scorer += 1;
+      m.status = 'completed';
+      m.player1_score = scorer + 1;
+      m.player2_score = scorer;
+      m.winner_name = scorer % 2 === 0 ? m.player2_name : m.player1_name;
+      const next = matches.find((n) => n.round_number === 2 && n.match_index === Math.floor(m.match_index / 2));
+      if (next) {
+        const slot = m.match_index % 2 === 0 ? 'player1_name' : 'player2_name';
+        if (next[slot] === 'TBD' || !next[slot]) next[slot] = m.winner_name;
+      }
+    }
+  } else {
+    // completed8: two real entrants; the only real match is scored, the rest
+    // of the bracket resolves via BYEs.
+    participants = ['seed_1', 'seed_2'];
+    matches = buildBracket(participants, 8);
+    for (const m of matches) {
+      if (m.status === 'completed') continue;
+      if (m.player1_name === BYE || m.player2_name === BYE) continue;
+      m.status = 'completed';
+      m.player1_score = 1;
+      m.player2_score = 0;
+      m.winner_name = m.player1_name;
+    }
+    tournament.winner_name = participants[0];
+  }
+  const fixtureEntries = participants.map((name, i) => ({ id: `e${i + 1}`, display_name: name, source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null }));
+  return { tournament, matches: empty ? [] : matches, fixtureEntries };
+}
+
 const json = (res, body, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const html = (res, body) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(body); };
 const server = createServer(async (req, res) => {
@@ -72,25 +127,10 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
-    const BYE = '__YOURRANK_INTERNAL_BYE__';
-    const tournament = { id: 'tourn_8f3a2c', title: 'Community tournament', game_name: '', bracket_size: 8, status: 'completed', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: '36-ates', winner_name: '36_ates', created_at: '2026-09-20T14:32:00Z' };
-    const match = (id, round_number, match_index, player1_name, player2_name, p1, p2, winner_name) => ({ id, round_number, match_index, player1_name, player2_name, player1_score: p1, player2_score: p2, winner_name, status: 'completed' });
-    const matches = [
-      match('m1', 1, 0, '36_ates', 'forolo_GB', 1, 0, '36_ates'),
-      match('m2', 1, 1, BYE, BYE, null, null, BYE),
-      match('m3', 1, 2, BYE, BYE, null, null, BYE),
-      match('m4', 1, 3, BYE, BYE, null, null, BYE),
-      match('m5', 2, 0, '36_ates', BYE, null, null, '36_ates'),
-      match('m6', 2, 1, BYE, BYE, null, null, BYE),
-      match('m7', 3, 0, '36_ates', BYE, null, null, '36_ates'),
-    ];
-    const fixtureEntries = [
-      { id: 'e1', display_name: '36_ates', source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null },
-      { id: 'e2', display_name: 'forolo_GB', source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null },
-    ];
+    const { tournament, matches, fixtureEntries } = buildTournamentFixture(empty);
     if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
-    if (path === '/api/tournaments/tourn_8f3a2c/entries') return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: 2, eligible: 2, waitlist: 0, removed: 0, blocked: 0 } });
-    if (path === '/api/tournaments/tourn_8f3a2c/bracket') return json(res, { matches: empty ? [] : matches, tournament });
+    if (path === `/api/tournaments/${tournament.id}/entries`) return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: fixtureEntries.length, eligible: fixtureEntries.length, waitlist: 0, removed: 0, blocked: 0 } });
+    if (path === `/api/tournaments/${tournament.id}/bracket`) return json(res, { matches: empty ? [] : matches, tournament });
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);
@@ -127,4 +167,5 @@ const server = createServer(async (req, res) => {
     res.writeHead(404).end('Not found');
   } catch (error) { console.error(error); res.writeHead(500).end('Fixture renderer failed'); }
 });
-server.listen(8915, '127.0.0.1', () => console.log('Dashboard audit fixture http://127.0.0.1:8915'));
+const port = Number(process.env.FIXTURE_PORT || 8915);
+server.listen(port, '127.0.0.1', () => console.log(`Dashboard audit fixture http://127.0.0.1:${port}`));
