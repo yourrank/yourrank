@@ -17,7 +17,7 @@ type PageKey = keyof typeof PAGE_ROUTES;
 
 // Page subtitles are Telegram presentation (H1 support copy), not chrome state.
 const PAGE_SUBS: Readonly<Record<PageKey, string>> = {
-  overview: "Your bot at a glance — last 14 days",
+  overview: "Your bot at a glance",
   bots: "Connect and manage your Telegram bots",
   commands: "Commands your bot sends when subscribers type a command",
   offers: "Your tracked offers — clicks are tracked automatically",
@@ -33,7 +33,7 @@ export function telegramChrome(page: string): DashboardChromeState {
 /** Telegram page subnavigation, addressed through the canonical route model. */
 export const pageLinks = (Object.keys(PAGE_ROUTES) as PageKey[]).map((key) => {
   const chrome = dashboardChromeState(PAGE_ROUTES[key]);
-  return { key, label: chrome.h1 ?? "", href: chrome.canonicalPath, sub: PAGE_SUBS[key] };
+  return { key, label: chrome.tabLabel || chrome.h1 || "", href: chrome.canonicalPath, sub: PAGE_SUBS[key] };
 });
 
 /** Shared dashboard navigation with Telegram's pages nested under its product entry. */

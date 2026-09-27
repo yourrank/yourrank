@@ -230,7 +230,7 @@ const requestedBotId = new URLSearchParams(location.search).get('bot');
 
 // Every panel ships a static "Loading…" placeholder; if the load fails they
 // have to say so instead of claiming to load forever.
-const LOADING_SLOTS = [['botList',0],['ovBots',0],['ovOffers',0],['postbackStatusOffers',0],['postbackStatusSettings',0],['offers',11],['cmdList',5],['subSources',2]];
+const LOADING_SLOTS = [['botList',0],['ovOffers',4],['postbackStatusOffers',0],['postbackStatusSettings',0],['offers',11],['cmdList',5],['subSources',0]];
 function loadErrorMarkup(msg, action){
   return '<div class="empty empty--error"><span class="empty__icon" aria-hidden="true">\u26a0</span>' +
     esc(msg) +
@@ -243,6 +243,13 @@ function showLoadError(msg){
     const el = $(slot[0]);
     if (!el) continue;
     el.innerHTML = slot[1] ? '<tr><td colspan="' + slot[1] + '">' + body + '</td></tr>' : body;
+  }
+  const chartVisual = $('chartVisual');
+  const chartEmpty = $('chartEmpty');
+  if (chartVisual) chartVisual.hidden = true;
+  if (chartEmpty) {
+    chartEmpty.hidden = false;
+    chartEmpty.textContent = "Couldn't load clicks. Reload to try again.";
   }
 }
 function showPostbackError(msg){
@@ -269,66 +276,61 @@ async function load() {
 
   // overview stats
   if (page === 'overview') {
-    setHtml('ovScope', 'Metrics for all connected bots over the last 14 days, shown in your local time.');
     const totClicks = (daily||[]).reduce((s,d)=>s+d.clicks,0);
     const totUnique = (daily||[]).reduce((s,d)=>s+d.unique_clicks,0);
     const activeOffers = (offers||[]).filter(o=>o.is_active).length;
     setText('totClicks', totClicks);
     setText('totUnique', totUnique);
     setText('totOffers', activeOffers);
-    setText('uniqueSub', totClicks > 0 ? Math.round(totUnique/totClicks*100) + '% of clicks' : '');
-    setText('offersSub', (offers||[]).length ? 'of ' + (offers||[]).length + ' total' : 'none yet');
-    renderOverviewSummary(bots, offers);
+    renderTopOffers(offers);
 
-    const max = Math.max(1, ...(daily||[]).map(d=>d.clicks));
-    const w = daily.length ? 100/daily.length : 10;
+    const hasClicks = totClicks > 0;
+    const chartVisual = $('chartVisual');
+    const chartEmpty = $('chartEmpty');
+    if (chartVisual) chartVisual.hidden = !hasClicks;
+    if (chartEmpty) {
+      chartEmpty.hidden = hasClicks;
+      chartEmpty.textContent = hasClicks ? '' : 'No clicks in the last 14 days';
+    }
     const chart = $('chart');
-    if (chart) {
+    if (chart && hasClicks) {
+      const max = Math.max(1, ...(daily||[]).map(d=>d.clicks));
+      const w = daily.length ? 100/daily.length : 10;
       chart.setAttribute('viewBox','0 0 100 40');
       chart.innerHTML = (daily||[]).map((d,i)=>{
         const h = d.clicks/max*36;
         return '<rect x="'+(i*w+0.5)+'" y="'+(40-h)+'" width="'+(w-1)+'" height="'+h+'" rx="0.6" fill="#f0b429"><title>'+esc(d.day)+': '+esc(String(d.clicks))+'</title></rect>';
       }).join('');
     }
-    setHtml('chartLabels', daily.length > 0
+    setHtml('chartLabels', hasClicks && daily.length > 0
       ? '<span>'+esc(daily[0].day.slice(5))+'</span><span>'+esc(daily[daily.length-1].day.slice(5))+'</span>'
       : '');
   }
 
   renderBots(bots);
 
-  if (page === 'overview') loadSubscribers(bots);
+  if (page === 'overview') loadSubscribers();
 
   __offers = offers || [];
   renderOffers();
   if (__planInfo) renderPlanState(__planInfo);
 }
 
-// Compact bot + offer summaries (overview only).
-function renderOverviewSummary(bots, offers){
-  const ov = $('ovBots');
-  if (ov) {
-    const list = (bots||[]).slice(0,4);
-    ov.innerHTML = list.length
-      ? '<ul class="tg-row-list">'+list.map(b=>{
-          const state = botConnectionState(b);
-          return '<li class="tg-row"><div class="tg-row-copy"><span class="tg-row-name">@'+esc(b.username)+'</span>'+
-            '<span class="tg-row-meta">'+esc(state.rowText)+'</span></div>'+
-            '<span class="tg-state" data-state="'+esc(state.key)+'"><i aria-hidden="true"></i>'+esc(state.label)+'</span></li>';
-        }).join('')+'</ul>'
-      : '<p class="muted text-sm">No bot connected yet. <a href="/dashboard/telegram/bots">Connect Telegram</a></p>';
-  }
+// The Overview owns only a compact read-only offer summary; editing stays in Offers.
+function renderTopOffers(offers){
   const oo = $('ovOffers');
   if (oo) {
     const top = (offers||[]).slice().sort((a,b)=>(b.clicks||0)-(a.clicks||0)).slice(0,4);
     oo.innerHTML = top.length
       ? top.map(o=>{
           const on = o.is_active;
-          return '<div class="lrow"><div class="l"><div class="nm">'+esc(o.casino)+'</div>'+
-            '<div class="ds">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</div></div>'+
-            '<span class="badge '+(on?'on':'off')+'">'+(on?'active':'off')+'</span></div>';
+          return '<tr><td><strong>'+esc(o.casino)+'</strong>'+
+            (o.label ? '<span class="tg-overview-offer-label">'+esc(o.label)+'</span>' : '')+'</td>'+
+            '<td class="num" data-label="Clicks">'+esc(String(o.clicks||0))+'</td>'+
+            '<td class="num" data-label="Conversions">'+esc(String(o.conversions||0))+'</td>'+
+            '<td data-label="Status"><span class="badge '+(on?'on':'off')+'">'+(on?'Active':'Inactive')+'</span></td></tr>';
         }).join('')
-      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one →</a></p>';
+      : '<tr><td colspan="4" class="muted">No offers yet.</td></tr>';
   }
 }
 
@@ -341,7 +343,7 @@ const __botAttention = {};
 function botConnectionState(bot){
   if (!bot) return { key: 'off', label: 'Not connected', rowText: 'Not connected' };
   if (__botAttention[bot.id]) return { key: 'attention', label: 'Needs attention', rowText: __botAttention[bot.id] };
-  if (bot.status === 'active') return { key: 'ok', label: 'Connected', rowText: 'Connected and replying to subscribers' };
+  if (bot.status === 'active') return { key: 'ok', label: 'Connected', rowText: 'Ready to send updates' };
   if (bot.status === 'revoked') return { key: 'attention', label: 'Needs attention', rowText: 'Disconnected — reconnect to keep sending updates' };
   return { key: 'setup', label: 'Setup incomplete', rowText: 'Waiting on Telegram to finish the connection' };
 }
@@ -372,7 +374,7 @@ function renderConnectionState(bots){
     if (state.key === 'ok') {
       primary.textContent = 'Send update';
       primary.href = '/dashboard/telegram/broadcasts';
-      secondary.textContent = 'Manage connection';
+      secondary.textContent = 'Manage bot';
       secondary.hidden = page === 'bots';
     } else if (state.key === 'attention') {
       primary.textContent = 'Manage connection';
@@ -410,18 +412,20 @@ function showConnectionError(){
 }
 
 // Subscriber totals + deep-link attribution (overview only).
-async function loadSubscribers(bots){
+async function loadSubscribers(){
   const s = await api('/stats/subscribers');
-  if (!s || s.error) return;
+  if (!s || s.error) {
+    setHtml('subSources', '<p class="tg-overview-empty">Subscriber sources unavailable. Reload to try again.</p>');
+    return;
+  }
   const t = s.totals || {};
   setText('totSubs', t.active ?? 0);
-  setText('subsNew', (t.new_7d ?? 0) > 0 ? '+' + (t.new_7d ?? 0) + ' new in the last 7 days' : 'No new subscribers in the last 7 days');
   const rows = (s.sources || []);
-  setHtml('subSources', rows.length
-    ? rows.map(r=>'<tr><td>'+esc(r.source)+'</td><td class="num">'+esc(String(r.count))+'</td></tr>').join('')
-    : '<tr><td colspan="2" class="muted">No subscribers yet. Share your bot link to get your first subscriber.</td></tr>');
-  const active = (bots || []).find(b=>b.status==='active' && b.username);
-  if (active) setText('deepLinkExample', 't.me/'+active.username+'?start=twitch');
+  const direct = rows.reduce((sum, row) => sum + (row.source === 'direct' ? Number(row.count) || 0 : 0), 0);
+  const tagged = rows.reduce((sum, row) => sum + (row.source !== 'direct' ? Number(row.count) || 0 : 0), 0);
+  setHtml('subSources', direct + tagged
+    ? '<dl class="tg-overview-breakdown"><div><dt>Direct</dt><dd>'+esc(String(direct))+'</dd></div><div><dt>Tagged links</dt><dd>'+esc(String(tagged))+'</dd></div></dl>'
+    : '<p class="tg-overview-empty">No subscribers yet.</p>');
 }
 
 // Render the offers table from client state. Mutation handlers update __offers
@@ -1498,7 +1502,7 @@ function restoreBtn(el) {
 }
 
 function boot(){
-  const overviewTargets = ['chart','totClicks','subSources','ovBots','ovOffers'];
+  const overviewTargets = ['chart','totClicks','subSources','ovOffers'];
   if (page === 'overview' && !overviewTargets.some((id) => $(id))) return;
   load().catch((err) => { console.error('[dashboard load]', err); showLoadError(); });
   loadExtras();

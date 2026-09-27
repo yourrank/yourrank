@@ -288,11 +288,11 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
       [uid]
     );
     const sources = await query<{ source: string; count: number }>(
-      `SELECT coalesce(nullif(bs.source, ''), 'direct') AS source, count(*)::int AS count
+      `SELECT CASE WHEN bs.source IS NULL OR bs.source = '' THEN 'direct' ELSE 'tagged' END AS source,
+              count(*)::int AS count
          FROM bot_subscribers bs JOIN bots b ON b.id = bs.bot_id
         WHERE b.owner_id = $1
-        GROUP BY coalesce(nullif(bs.source, ''), 'direct')
-        ORDER BY count DESC, source ASC LIMIT 10`,
+        GROUP BY 1 ORDER BY source ASC`,
       [uid]
     );
     return c.json({ totals: totals ?? { total: 0, active: 0, new_7d: 0, new_30d: 0 }, sources });

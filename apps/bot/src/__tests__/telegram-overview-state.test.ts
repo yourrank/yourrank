@@ -23,18 +23,22 @@ describe("Telegram overview states", () => {
   it("leads with connection state and one useful action once a bot is connected", () => {
     const page = html("overview", { botUsername: "creator_bot", botStatus: "active", siteName: "Main site" });
 
-    expect(page).toContain("@creator_bot");
+    expect(page).toContain("<h1>Telegram</h1>");
+    expect(page).not.toContain("@creator_bot");
     expect(page).toContain('id="tgConn"');
     expect(page).toContain('id="tgConnState"');
     expect(page).toContain('id="tgConnPrimary"');
-    expect(page).toContain("Send update");
-    expect(page).toContain("Edit commands");
-    expect(page).toContain('id="deepLinkExample"');
+    expect(page).toContain("Manage bot");
+    expect(page).not.toContain("What you can do");
+    expect(page).not.toContain("Your bots");
+    expect(page).not.toContain('id="ovBots"');
     expect(page).toContain('id="totClicks"');
     expect(page).toContain('id="chart"');
-    // The offer surface keeps the presentation it already had.
-    expect(page).toContain('<h2>Top offers</h2>');
-    expect(page).not.toContain('class="tg-action-name">Offers<');
+    expect(page).toContain('id="chartEmpty"');
+    expect(page).toContain('id="subSources"');
+    expect(page).toContain('id="ovOffers"');
+    expect(page).toContain('id="tgOffersTitle">Top offers</h2>');
+    expect(page).toContain("View all offers");
   });
 
   it("puts the same connection summary on the connection page and nowhere twice", () => {
@@ -76,17 +80,13 @@ describe("Telegram connection state runtime", () => {
     expect(src.slice(rowStart, detailsStart)).not.toContain("token_hint");
   });
 
-  it("no longer renders the retired bot-card mosaic for bot surfaces", () => {
+  it("renders one bot summary and structured offer rows", () => {
     expect(src).not.toContain('class="bot-card"');
-    // The only remaining legacy rows belong to the offer summary, which this
-    // change deliberately leaves as it is.
+    expect(src).not.toContain("$('ovBots')");
     const offerSummaryStart = src.indexOf("const oo = $('ovOffers');");
     expect(offerSummaryStart).toBeGreaterThan(-1);
-    for (const legacy of ['class="lrow"', 'class="nm"']) {
-      const hits = [...src.matchAll(new RegExp(legacy, "g"))].map(m => m.index ?? -1);
-      expect(hits.length).toBe(1);
-      expect(hits[0]).toBeGreaterThan(offerSummaryStart);
-    }
+    expect(src.slice(offerSummaryStart, src.indexOf("// ---- connection truth", offerSummaryStart)))
+      .toContain("<tr><td><strong>");
   });
 
   // Runs the real guard from the shipped script against stubbed responses, so

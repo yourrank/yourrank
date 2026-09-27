@@ -60,7 +60,7 @@ export function appHtml(
     crumbs: [...chromeState.crumbs],
     user,
     // This setup CTA is contextual bot state, not a second navigation tree.
-    topbarContextHtml: `<div class="lb-topbar-hud"><div class="lb-account-hud"><div class="lb-hud-details"><span class="lb-board-select-lbl">Account · Telegram</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="${telegramChrome("bots").canonicalPath}" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
+    topbarContextHtml: page === "overview" ? "" : `<div class="lb-topbar-hud"><div class="lb-account-hud"><div class="lb-hud-details"><span class="lb-board-select-lbl">Account · Telegram</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="${telegramChrome("bots").canonicalPath}" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
     topbarHtml: workspaceSearchHtml(),
     activePath: chromeState.canonicalPath,
     railProfile: true,

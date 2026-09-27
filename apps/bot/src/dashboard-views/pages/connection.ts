@@ -13,7 +13,7 @@ export function connectionPanel(): string {
       </div>
       <div class="tg-conn-actions" id="tgConnActions" hidden>
         <a class="btn btn--accent" id="tgConnPrimary" href="/dashboard/telegram/bots">Connect Telegram</a>
-        <a class="btn btn--ghost" id="tgConnSecondary" href="/dashboard/telegram/bots" hidden>Manage connection</a>
+        <a class="btn btn--ghost" id="tgConnSecondary" href="/dashboard/telegram/bots" hidden>Manage bot</a>
       </div>
       <p class="tg-conn-note" id="tgConnNote" hidden></p>
     </section>`;

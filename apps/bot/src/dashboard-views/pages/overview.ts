@@ -20,48 +20,33 @@ export function overviewPanel({ hasBot = true }: { hasBot?: boolean } = {}): str
   <div class="lb-bento" data-page="overview">
     ${connectionPanel()}
 
-    <div class="lb-widget lb-widget--full">
-      <div class="mb-md"><h2>What you can do</h2></div>
-      <ul class="tg-action-list">
-        <li class="tg-action-row"><div class="tg-action-copy"><span class="tg-action-name">Send update</span><span class="tg-action-purpose">Message everyone subscribed to your bot</span></div><a class="btn btn--ghost" href="/dashboard/telegram/broadcasts">Send update</a></li>
-        <li class="tg-action-row"><div class="tg-action-copy"><span class="tg-action-name">Commands</span><span class="tg-action-purpose">Choose what your bot replies to subscribers</span></div><a class="btn btn--ghost" href="/dashboard/telegram/commands">Edit commands</a></li>
-      </ul>
-    </div>
-
-    <div class="lb-widget lb-widget--full">
-      <div class="mb-md"><h2>Activity</h2></div>
-      <p class="muted text-xs mb-lg" id="ovScope">Last 14 days, in your local time.</p>
+    <section class="lb-widget lb-widget--full tg-overview-performance" aria-labelledby="tgPerformanceTitle">
+      <div class="tg-overview-section-head"><div><h2 id="tgPerformanceTitle">Performance</h2><p id="ovScope">Clicks in the last 14 days · current subscribers and offers · all bots</p></div></div>
       <div class="kpi-row">
-        <div class="kpi-card" title="Total clicks on tracked offer links"><div class="kpi-lbl">Offer clicks · 14d</div><div class="kpi-val" id="totClicks">–</div><div class="kpi-sub" id="clicksSub"></div></div>
-        <div class="kpi-card" title="People who clicked tracked offer links in the last 14 days"><div class="kpi-lbl">People who clicked</div><div class="kpi-val" id="totUnique">–</div><div class="kpi-sub" id="uniqueSub"></div></div>
-        <div class="kpi-card" title="Users who started a conversation with any of your bots"><div class="kpi-lbl">Subscribers</div><div class="kpi-val" id="totSubs">–</div><div class="kpi-sub" id="subsNew"></div></div>
-        <div class="kpi-card" title="Offers currently marked active"><div class="kpi-lbl">Active offers</div><div class="kpi-val" id="totOffers">–</div><div class="kpi-sub" id="offersSub"></div></div>
+        <div class="kpi-card"><div class="kpi-lbl">Offer clicks</div><div class="kpi-val" id="totClicks">–</div></div>
+        <div class="kpi-card" title="Unique clicks are counted per tracked link within a 24-hour window"><div class="kpi-lbl">Unique clicks</div><div class="kpi-val" id="totUnique">–</div></div>
+        <div class="kpi-card" title="Active subscribers across all your bots"><div class="kpi-lbl">Subscribers</div><div class="kpi-val" id="totSubs">–</div></div>
+        <div class="kpi-card"><div class="kpi-lbl">Active offers</div><div class="kpi-val" id="totOffers">–</div></div>
       </div>
-    </div>
+    </section>
 
-    <div class="lb-widget lb-widget--half">
-      <div class="d-flex justify-between items-center mb-md"><h2>Daily clicks</h2><span class="muted text-xs">14 days</span></div>
-      <svg id="chart" role="img" aria-label="Daily clicks chart" width="100%" height="120" preserveAspectRatio="none"></svg>
-      <div id="chartLabels" class="muted d-flex justify-between text-xs mt-sm"></div>
-    </div>
-
-    <div class="lb-widget lb-widget--half">
-      <div class="mb-md"><h2>Where subscribers came from</h2></div>
-      <div class="v3-table-scroll">
-        <table class="v3-table"><thead><tr><th>Source</th><th class="num">Subscribers</th></tr></thead>
-        <tbody id="subSources"><tr><td colspan="2" class="muted">Loading…</td></tr></tbody></table>
+    <section class="lb-widget lb-widget--half tg-overview-trend" aria-labelledby="tgTrendTitle">
+      <div class="tg-overview-section-head"><h2 id="tgTrendTitle">Daily clicks</h2><span>Last 14 days</span></div>
+      <div id="chartVisual" hidden>
+        <svg id="chart" role="img" aria-label="Daily clicks chart" width="100%" height="120" preserveAspectRatio="none"></svg>
+        <div id="chartLabels" class="muted d-flex justify-between text-xs mt-sm"></div>
       </div>
-      <p class="muted hint mt-sm">Share <code id="deepLinkExample">t.me/&lt;yourbot&gt;?start=twitch</code> to tag a source. <b>Came on their own</b> means no tagged link was used.</p>
-    </div>
+      <p id="chartEmpty" class="tg-overview-empty" role="status">Loading clicks…</p>
+    </section>
 
-    <div class="lb-widget lb-widget--half">
-      <div class="d-flex justify-between items-center mb-md"><h2>Your bots</h2><a href="/dashboard/telegram/bots" class="text-xs">Manage</a></div>
-      <div id="ovBots" class="muted">Loading…</div>
-    </div>
+    <section class="lb-widget lb-widget--half tg-overview-sources" aria-labelledby="tgSourcesTitle">
+      <div class="tg-overview-section-head"><h2 id="tgSourcesTitle">Subscriber sources</h2><span>All subscribers · all bots</span></div>
+      <div id="subSources" aria-live="polite"><p class="tg-overview-empty">Loading…</p></div>
+    </section>
 
-    <div class="lb-widget lb-widget--half">
-      <div class="d-flex justify-between items-center mb-md"><h2>Top offers</h2><a href="/dashboard/telegram/offers" class="text-xs">View offers</a></div>
-      <div id="ovOffers" class="muted">Loading…</div>
-    </div>
+    <section class="lb-widget lb-widget--full tg-overview-offers" aria-labelledby="tgOffersTitle">
+      <div class="tg-overview-section-head"><div><h2 id="tgOffersTitle">Top offers</h2><p>Ranked by tracked clicks</p></div><a href="/dashboard/telegram/offers">View all offers</a></div>
+      <div class="v3-table-scroll"><table class="v3-table"><thead><tr><th scope="col">Offer</th><th scope="col" class="num">Clicks</th><th scope="col" class="num">Conversions</th><th scope="col">Status</th></tr></thead><tbody id="ovOffers"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody></table></div>
+    </section>
   </div>`;
 }
