@@ -28,3 +28,17 @@ export function verifyEmailPageHtml({ message, error = "", showResend = false } 
     .replace("{{VERIFY_ERR_HIDDEN}}", error ? "" : " hidden")
     .replace("{{VERIFY_RESEND_HIDDEN}}", showResend ? "" : " hidden");
 }
+
+// Interstitial copy for visits that carry no verification token — typically a
+// redirect straight from signup or login. `from=login` must say plainly that
+// the credentials were fine and unverified email is the blocker; the generic
+// copy reads like a failed login and sends users retrying the form.
+export function verifyEmailPromptState({ deliveryFailed = false, from = "" } = {}) {
+  if (deliveryFailed) {
+    return { message: "We couldn't send your verification email.", error: "Email delivery is temporarily unavailable. Try sending it again later.", showResend: true };
+  }
+  if (from === "login") {
+    return { message: "Your password was correct, but this email address isn't verified yet. We've sent a fresh confirmation link — open it in this browser to finish signing in.", showResend: true };
+  }
+  return { message: "Open the link we emailed you to confirm your address.", showResend: true };
+}

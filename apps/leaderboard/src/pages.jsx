@@ -1,6 +1,6 @@
 // Aggregator: per-page modules re-exported as PAGES
 
-import { loginPage } from "./pages/login.jsx";
+import { loginPage } from "./pages/login.js";
 import { forgotPage } from "./pages/forgot.js";
 import { resetPage } from "./pages/reset.js";
 import { signupPage } from "./pages/signup.js";

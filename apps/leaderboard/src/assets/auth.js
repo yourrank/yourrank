@@ -248,15 +248,27 @@ form.addEventListener("submit", async (e) => {
   }
   try {
     const res = await fetch(endpoint, { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify(payload) });
-    const data = await res.json();
+    // A proxy/edge error page is HTML, not JSON: res.json() throwing used to
+    // land in the catch below as a misleading "Network error". Say what happened.
+    const data = await res.json().catch(() => null);
+    if (!data || typeof data !== "object") {
+      errEl.textContent = res.status >= 500
+        ? "Server error on our side. Try again in a moment."
+        : "Unexpected response from the server. Try again.";
+      setPending(false, orig); return;
+    }
     if (!res.ok || !data.ok) {
       // Field-scoped failures (e.g. a taken page URL) belong next to the input,
-      // not only in the form-level error line.
-      if (data.field) {
+      // not only in the form-level error line. If the server names a field this
+      // form does not have, fall back to the form-level error — never go silent.
+      const fieldBox = data.field ? fieldErrEl(data.field) : null;
+      if (fieldBox) {
         setFieldError(data.field, data.error || "Invalid value");
         document.getElementById(data.field)?.focus();
+        errEl.textContent = "";
+      } else {
+        errEl.textContent = data.error || "Something went wrong.";
       }
-      errEl.textContent = data.field ? "" : (data.error || "Something went wrong.");
       setPending(false, orig); return;
     }
     if (mode === "forgot") {
@@ -268,6 +280,10 @@ form.addEventListener("submit", async (e) => {
     }
     if (data.needsVerification) {
       const verifyParams = new URLSearchParams();
+      // "from" lets the interstitial explain *why* the user landed there —
+      // after a login attempt the blocker is unverified email, not a missing
+      // account, and the page must say so instead of reading like a failed login.
+      verifyParams.set("from", mode);
       if (nextPath) verifyParams.set("next", nextPath);
       if (data.verificationSent === false) verifyParams.set("delivery", "failed");
       location.href = `/verify-email${verifyParams.size ? `?${verifyParams}` : ""}`;

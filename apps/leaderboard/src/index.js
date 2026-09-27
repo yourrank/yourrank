@@ -15,7 +15,7 @@ import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
 import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
-import { verifyEmailPageHtml } from "./pages/verify-email.js";
+import { verifyEmailPageHtml, verifyEmailPromptState } from "./pages/verify-email.js";
 import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
 import { PAGES } from "./pages.jsx";
@@ -891,9 +891,10 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // Verification happens server-side: the emailed link must work even if
         // client JavaScript fails to load or run.
         const token = url.searchParams.get("token");
-        let verifyState = url.searchParams.get("delivery") === "failed"
-          ? { message: "We couldn't send your verification email.", error: "Email delivery is temporarily unavailable. Try sending it again later.", showResend: true }
-          : { message: "Open the link we emailed you to confirm your address.", showResend: true };
+        let verifyState = verifyEmailPromptState({
+          deliveryFailed: url.searchParams.get("delivery") === "failed",
+          from: url.searchParams.get("from") || "",
+        });
         let status = 200;
         if (token) {
           const result = await verifyEmailToken(token);
