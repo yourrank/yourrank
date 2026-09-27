@@ -38,6 +38,7 @@ export const giveawaysConfig = {
     "/assets/ui.css",
     "/assets/dashboard-v4.css",
     "/assets/giveaways.css",
+    "/assets/tournaments.css",
   ],
   scripts: [
     '<script src="/assets/giveaways.js?v=2" type="module"></script>',

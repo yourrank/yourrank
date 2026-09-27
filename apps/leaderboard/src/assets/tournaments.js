@@ -1,46 +1,23 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
 import { ensureDialog, showConfirmModal } from "./dashboard/utils.js";
 import { connectKickChat } from "./chat-entry.js";
-import { BYE, CROWN_ICON, renderBracket as bracketViewHtml, layoutBracket } from "./tournament-bracket-view.js";
+import { renderBracket as bracketViewHtml, layoutBracket } from "./tournament-bracket-view.js";
+import {
+  buildViewModel,
+  workspaceHtml,
+  emptyStateHtml,
+  createDialogHtml,
+  selectDialogHtml,
+  selectListHtml,
+  fullBracketDialogHtml,
+  entryRowsHtml,
+} from "./tournament-view.js";
 
 const $ = (id) => document.getElementById(id);
-const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-}[char]));
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 
 // Mirrors the server: tournaments.bracket_size CHECK and SUPPORTED_BRACKET_SIZES.
 export const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
-const SOURCE_LABELS = {
-  chat: "Chat",
-  page: "Signup page",
-  manual: "Manual",
-  leaderboard: "Leaderboard",
-};
-// Lucide crown, inline so the winner mark needs no emoji or external asset.
-const STATUS_LABELS = {
-  pending: "Waiting",
-  confirmed: "Ready",
-  selected: "Picked",
-  waitlist: "Waiting for a spot",
-  removed: "Removed",
-  blocked: "Blocked",
-};
-const LIFECYCLE_LABELS = {
-  draft: "Draft",
-  signups_open: "Signups open",
-  signups_locked: "Signups locked",
-  bracket: "Bracket live",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-// BYE comes from tournament-bracket-view.js (which re-exports the lib
-// sentinel) — a single definition shared by this module and the renderer.
-const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
 let board = {};
@@ -62,6 +39,12 @@ let entriesRefreshTimer = null;
 let entriesRefreshRunning = false;
 let entriesRefreshQueued = false;
 let releaseCreateTrap = null;
+let releaseSelectTrap = null;
+let releaseBracketTrap = null;
+// The bracket layouts own ResizeObservers; dispose before every re-render and
+// on leave() so they never accumulate.
+let disposeEmbeddedLayout = () => {};
+let disposeExpandedLayout = () => {};
 let settingsBaseline = "";
 let settingsSavedTimer = null;
 let settingsReadonly = false;
@@ -98,31 +81,17 @@ export function lifecycleOf(tourn, matchCount = 0) {
   return "draft";
 }
 
-function setChatStatus(text, live = false) {
-  const status = $("tournament-chat-status");
-  if (!status) return;
-  status.textContent = text;
-  status.classList.toggle("is-live", live);
-}
-
 function setMessage(text = "", error = false) {
   const message = $("tournament-message");
   if (!message) return;
   message.textContent = text;
   message.hidden = !text;
-  message.className = `tournament-message${error ? " is-error" : ""}`;
+  message.className = `tn-message${error ? " is-error" : ""}`;
 }
 
 function stopChat() {
   chatConnection?.close();
   chatConnection = null;
-}
-
-// Chat registration is server-side (the Kick webhook), so the status reflects
-// the stored channel/connection state — never the browser socket.
-function updateChatStatus(lifecycle) {
-  const label = chatRegistrationLabel(lifecycle);
-  setChatStatus(`Chat registration ${label.toLowerCase()}`, label === "Active");
 }
 
 // Entries are created by the webhook; poll so they appear without the socket.
@@ -137,6 +106,35 @@ function updateEntriesPolling(lifecycle) {
   }
 }
 
+// ---- Render --------------------------------------------------------------
+//
+// One render path: the view module turns state into markup for #tournament-root
+// and the controller wires behavior through the delegated listeners below.
+// #tournament-dialogs is a sibling host so an open dialog survives re-renders.
+
+function render() {
+  const root = $("tournament-root");
+  if (!root) return;
+  const lifecycle = lifecycleOf(tournament, matches.length);
+  updateEntriesPolling(lifecycle);
+  const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab });
+  disposeEmbeddedLayout();
+  disposeEmbeddedLayout = () => {};
+  if (!tournament) {
+    root.innerHTML = emptyStateHtml();
+    return;
+  }
+  root.innerHTML = workspaceHtml(
+    vm,
+    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded" }) : ""
+  );
+  const bracket = $("tournament-bracket");
+  disposeEmbeddedLayout = bracket && !bracket.hidden ? layoutBracket(bracket) : () => {};
+  settingsReadonly = vm.finished;
+  settingsBaseline = settingsSnapshot();
+  updateDirty();
+}
+
 function switchTab(name) {
   activeTab = name;
   for (const tab of document.querySelectorAll("[data-tournament-tab]")) {
@@ -148,317 +146,9 @@ function switchTab(name) {
   }
 }
 
-function panelEmptyHtml(title, body) {
-  return `<b>${esc(title)}</b><span>${esc(body)}</span>`;
-}
-
-function renderEntries(lifecycle) {
-  const empty = $("tournament-entries-empty");
-  const list = $("tournament-entry-list");
-  const table = $("tournament-entry-table");
-  if (!empty || !list) return;
-  if (!entries.length) {
-    list.hidden = true;
-    if (table) table.hidden = true;
-    empty.hidden = false;
-    if (lifecycle === "signups_open") {
-      empty.innerHTML = panelEmptyHtml("Waiting for viewers.", `Ask viewers to type ${tournament.entry_keyword || "!join"} in chat.`);
-    } else if (lifecycle === "signups_locked") {
-      empty.innerHTML = panelEmptyHtml("No entries.", "Reopen signups to collect entries from your audience.");
-    } else {
-      empty.innerHTML = panelEmptyHtml("No entries yet.", "Open signups when you're ready for viewers to join.");
-    }
-    return;
-  }
-
-  empty.hidden = true;
-  list.hidden = false;
-  if (table) table.hidden = false;
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  list.innerHTML = entries.map((entry) => {
-    const flagged = tournament?.anti_alt_enabled && entry.alt_flag;
-    const status = STATUS_LABELS[entry.status] || "Waiting";
-    const name = esc(entry.display_name);
-    const initial = esc(String(entry.display_name || "?").trim().charAt(0).toUpperCase() || "?");
-    const menu = finished
-      ? ""
-      : `<details class="tourn-menu"><summary class="tourn-menu-toggle" aria-label="Actions for ${name}">•••</summary>
-          <div class="tourn-menu-list" role="menu">
-            ${["removed", "blocked"].includes(entry.status)
-              ? `<button type="button" role="menuitem" data-entry-action="restore" data-entry-id="${esc(entry.id)}">Restore</button>`
-              : `<button type="button" role="menuitem" data-entry-action="remove" data-entry-id="${esc(entry.id)}">Remove</button>
-                 <button type="button" role="menuitem" data-entry-action="block" data-entry-id="${esc(entry.id)}">Block</button>`}
-          </div>
-        </details>`;
-    return `
-      <tr class="tournament-entry-row${flagged ? " is-flagged" : ""}" data-entry-id="${esc(entry.id)}">
-        <td data-label="Player">
-          <span class="tourn-avatar" aria-hidden="true">${initial}</span>
-          <span class="tourn-player">
-            <strong>${name}</strong>
-            ${flagged ? `<span class="tournament-entry-flag"><b>Review flag</b> — ${esc(entry.alt_reason || "Possible duplicate account.")}</span>` : ""}
-          </span>
-        </td>
-        <td data-label="Source" class="tourn-col-source">${esc(SOURCE_LABELS[entry.source] || entry.source)}</td>
-        <td data-label="Status"><span class="tourn-pill tourn-pill--${esc(entry.status)}">${esc(status)}</span></td>
-        <td class="tourn-col-actions">${menu}</td>
-      </tr>`;
-  }).join("");
-}
-
-function renderSummary(lifecycle, activeCount) {
-  $("tournament-title-display").textContent = tournament.title || "Community Tournament";
-  const chip = $("tournament-status");
-  chip.textContent = LIFECYCLE_LABELS[lifecycle] || lifecycle;
-  chip.dataset.lifecycle = lifecycle;
-  const bits = [
-    ...(String(tournament.game_name || "").trim() ? [tournament.game_name] : []),
-    `${tournament.bracket_size}-player bracket`,
-    "Single elimination",
-  ];
-  $("tournament-meta").textContent = bits.join(" · ");
-  $("tournament-fact-keyword").textContent = tournament.entry_keyword || "!join";
-  $("tournament-fact-cap").textContent = tournament.entry_cap ? String(tournament.entry_cap) : "Unlimited";
-  $("tournament-fact-spots").textContent = String(tournament.bracket_size);
-  $("tournament-count").textContent = tournament.entry_cap ? `${activeCount} of ${tournament.entry_cap}` : String(activeCount);
-  const entriesTab = $("tournament-tab-entries");
-  if (entriesTab) entriesTab.textContent = `Entries (${activeCount})`;
-}
-
-function renderSettingsForm(lifecycle) {
-  $("tournament-title").value = tournament.title || "";
-  $("tournament-game").value = tournament.game_name || "";
-  $("tournament-keyword").value = tournament.entry_keyword || "!join";
-  $("tournament-entry-cap-mode").value = tournament.entry_cap ? "custom" : "";
-  const cap = $("tournament-entry-cap");
-  cap.value = tournament.entry_cap || "";
-  cap.hidden = !tournament.entry_cap;
-  const channel = $("tournament-chat-channel");
-  channel.value = tournament.chat_channel || "";
-  channel.placeholder = tournament.chat_channel || !String(board.kickChannelName || "").trim()
-    ? "channelname"
-    : board.kickChannelName;
-  $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-
-  const size = $("tournament-bracket-size");
-  const sizeHint = $("tournament-bracket-size-hint");
-  size.value = String(tournament.bracket_size);
-  const sizeLocked = lifecycle === "bracket" || lifecycle === "completed" || lifecycle === "cancelled";
-  size.disabled = sizeLocked;
-  sizeHint.hidden = !sizeLocked;
-  sizeHint.textContent = sizeLocked ? "Bracket size is locked: the bracket has already been created." : "";
-
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  settingsReadonly = finished;
-  $("tournament-settings-form").dataset.readonly = finished ? "true" : "";
-  for (const el of $("tournament-settings-form").querySelectorAll("input, select, button")) {
-    if (el.id === "tournament-bracket-size") continue;
-    el.disabled = finished;
-  }
-
-  settingsBaseline = settingsSnapshot();
-  updateDirty();
-}
-
-// One sentence of guidance per lifecycle for the Settings aside card.
-const LIFECYCLE_STATUS_COPY = {
-  draft: "Signups haven't opened yet.",
-  signups_open: "Viewers can join by typing your join command in chat.",
-  signups_locked: "Signups are locked. Pick participants to create the bracket.",
-  bracket: "The bracket is live. Enter scores to advance winners.",
-  completed: "This tournament has finished. No new signups are being accepted.",
-  cancelled: "This tournament was cancelled.",
-};
-
-// Settings panel: finished tournaments get a read-only summary, editable
-// ones keep the real form. The aside always carries status + details.
-function renderSettingsPanel(lifecycle) {
-  const view = $("tournament-settings-view");
-  const form = $("tournament-settings-form");
-  const aside = $("tournament-settings-aside");
-  if (!view || !form) return;
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  form.hidden = finished;
-  view.hidden = !finished;
-  if (finished) {
-    view.innerHTML = `
-      <div class="tourn-panel-head">
-        <h2>Tournament settings</h2>
-        <p class="tournament-muted">This tournament has finished; its settings are read-only.</p>
-      </div>
-      <h3 class="tourn-kv-group">General</h3>
-      <dl class="tourn-kv">
-        ${tournKvRow("Tournament name", esc(tournament.title || "—"))}
-        ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
-        ${tournKvRow("Bracket type", "Single elimination")}
-        ${tournKvRow("Bracket size", `${esc(String(tournament.bracket_size))} players`)}
-      </dl>
-      <h3 class="tourn-kv-group">Registration</h3>
-      <dl class="tourn-kv">
-        ${tournKvRow("Kick channel", esc(tournament.chat_channel || "—"))}
-        ${tournKvRow("Join command", esc(tournament.entry_keyword || "!join"))}
-        ${tournKvRow("Signup limit", esc(tournament.entry_cap ? String(tournament.entry_cap) : "Unlimited"))}
-        ${tournKvRow("Chat registration", esc(chatRegistrationLabel(lifecycle)))}
-      </dl>`;
-  }
-  if (aside) {
-    aside.innerHTML = `
-      <section class="tourn-card">
-        <h3>Tournament status</h3>
-        <p class="tourn-aside-status"><span class="tourn-pill tourn-pill--${esc(lifecycle)}">${esc(LIFECYCLE_LABELS[lifecycle] || lifecycle)}</span></p>
-        <p class="tournament-muted">${esc(LIFECYCLE_STATUS_COPY[lifecycle] || "")}</p>
-      </section>
-      <section class="tourn-card">
-        <h3>Details</h3>
-        <dl class="tourn-kv">
-          ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
-          ${tournKvRow("Tournament ID", esc(tournament.id), "id", tournament.id)}
-          ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
-          ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
-          ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
-          ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
-          ${tournKvRow("Bracket type", "Single elimination")}
-        </dl>
-      </section>`;
-  }
-}
-
-function renderPrimary(lifecycle, eligibleCount) {
-  const primary = $("tournament-primary");
-  const reopen = $("tournament-reopen");
-  const fresh = $("tournament-new");
-  const step = $("tournament-step-label");
-  primary.hidden = true;
-  primary.disabled = false;
-  reopen.hidden = true;
-  fresh.hidden = true;
-  step.textContent = "";
-  delete primary.dataset.action;
-
-  if (lifecycle === "draft") {
-    primary.hidden = false;
-    if (!String(tournament.chat_channel || "").trim()) {
-      const siteChannel = String(board.kickChannelName || "").trim();
-      if (siteChannel) {
-        primary.textContent = `Use ${siteChannel}`;
-        primary.dataset.action = "use-site-channel";
-        step.innerHTML = "<b>Kick channel required.</b> Use your connected Kick channel to open signups.";
-      } else {
-        primary.textContent = "Add Kick channel";
-        primary.dataset.action = "add-channel";
-        step.innerHTML = "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
-      }
-    } else {
-      primary.textContent = "Open signups";
-      primary.dataset.action = "open";
-      step.textContent = "Open signups when you're ready for viewers to join.";
-    }
-  } else if (lifecycle === "signups_open") {
-    primary.hidden = false;
-    primary.textContent = "Lock signups";
-    primary.dataset.action = "lock";
-    step.textContent = `Viewers join by typing ${tournament.entry_keyword || "!join"} in chat.`;
-  } else if (lifecycle === "signups_locked") {
-    const cap = tournament.bracket_size;
-    reopen.hidden = false;
-    if (eligibleCount < 2) {
-      step.textContent = "Need at least 2 eligible players to start.";
-    } else if (eligibleCount <= cap) {
-      primary.hidden = false;
-      primary.textContent = `Create bracket with ${eligibleCount} players`;
-      primary.dataset.action = "create-bracket";
-      step.textContent = `${eligibleCount} eligible players for up to ${cap} bracket spots. Players will be randomly placed in the bracket.`;
-    } else {
-      primary.hidden = false;
-      primary.textContent = "Select participants";
-      primary.dataset.action = "select-participants";
-      step.textContent = `${eligibleCount} eligible players for ${cap} bracket spots. Select the participants who will compete.`;
-    }
-  } else if (lifecycle === "bracket") {
-    step.textContent = "Enter match results in the Bracket tab to advance winners.";
-  } else if (lifecycle === "completed") {
-    fresh.hidden = false;
-    step.innerHTML = `${CROWN_ICON}<span>Champion: ${esc(tournament.winner_name || "—")}</span>`;
-  } else if (lifecycle === "cancelled") {
-    fresh.hidden = false;
-    step.textContent = "Tournament cancelled.";
-  }
-}
-
-function renderTournament() {
-  const empty = $("tournament-empty");
-  const workspace = $("tournament-workspace");
-  if (!empty || !workspace) return;
-  if (!tournament) {
-    workspace.hidden = true;
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  workspace.hidden = false;
-  const lifecycle = lifecycleOf(tournament, matches.length);
-  updateChatStatus(lifecycle);
-  updateEntriesPolling(lifecycle);
-  const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
-  renderSummary(lifecycle, activeCount);
-  renderPrimary(lifecycle, entryCounts.eligible || 0);
-  renderEntries(lifecycle);
-  renderBracket(lifecycle);
-  renderTournamentSummary(lifecycle);
-  renderSettingsForm(lifecycle);
-  renderSettingsPanel(lifecycle);
-  switchTab(activeTab);
-}
-
-// Matches that actually happened: completed, and neither side a BYE.
-function playedMatchCount() {
-  return matches.filter((m) => m.status === "completed" && m.player1_name !== BYE && m.player2_name !== BYE).length;
-}
-
-function formatCreated(value) {
-  const date = new Date(value || "");
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-}
-
-// Single source for the chat-registration state; the header hint and the
-// read-only Settings view both render from this so they can never disagree.
-function chatRegistrationLabel(lifecycle) {
-  const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
-  const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
-  if (lifecycle === "signups_open"
-      && chatRegistration?.connected && chatRegistration.chatReady && channel && channel === siteChannel) return "Active";
-  if (lifecycle === "signups_open") return "Unavailable";
-  return "Off";
-}
-
-const tournKvRow = (label, value, kv = "", title = "") => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd${kv ? ` data-kv="${kv}"` : ""}${title ? ` title="${esc(title)}"` : ""}>${value}</dd></div>`;
-
-// The bracket aside: compact summary + metadata, shared shape with the
-// Settings "Details" card.
-function renderTournamentSummary(lifecycle) {
-  const aside = $("tournament-summary");
-  if (!aside || !tournament) return;
-  aside.innerHTML = `
-    <section class="tourn-card">
-      <h3>Tournament summary</h3>
-      <dl class="tourn-kv">
-        ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
-        ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
-        ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
-        ${tournKvRow("Status", `<span class="tourn-pill tourn-pill--${esc(lifecycle)}">${esc(LIFECYCLE_LABELS[lifecycle] || lifecycle)}</span>`)}
-      </dl>
-      ${tournament.winner_name ? `<div class="tourn-champ"><span class="tourn-kv-dim">Champion</span><strong>${CROWN_ICON}${esc(tournament.winner_name)}</strong></div>` : ""}
-      <dl class="tourn-kv">
-        ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
-        ${tournKvRow("Bracket type", "Single elimination")}
-        ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
-        ${tournKvRow("Tournament ID", esc(tournament.id), "id", tournament.id)}
-      </dl>
-    </section>`;
-}
-
-async function loadEntries() {
+// refreshOnly marks the poll/chat/entry-action path: full reloads (initial
+// load, settings saves, lifecycle ops) always re-render.
+async function loadEntries({ refreshOnly = true } = {}) {
   if (!tournament) return;
   const [entryData, bracketData] = await Promise.all([
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`),
@@ -470,7 +160,23 @@ async function loadEntries() {
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
   if (bracketData.tournament?.created_at) tournament.created_at = bracketData.tournament.created_at;
-  renderTournament();
+  // Entries refresh (poll/chat/action): a visible settings form that is
+  // focused or dirty must survive the refresh — rebuilding it would steal
+  // focus and wipe edits. Update the data parts and leave the form alone.
+  const form = $("tournament-settings-form");
+  const settingsBusy = refreshOnly && form && !form.closest("[hidden]")
+    && (form.contains(document.activeElement) || settingsSnapshot() !== settingsBaseline);
+  if (settingsBusy) {
+    const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
+    const list = $("tournament-entry-list");
+    if (list) list.innerHTML = entryRowsHtml(vm);
+    const count = $("tournament-count");
+    if (count) count.textContent = vm.stats[0].value;
+    const entriesTab = $("tournament-tab-entries");
+    if (entriesTab) entriesTab.textContent = `Entries (${vm.activeCount})`;
+    return;
+  }
+  render();
 }
 
 async function loadTournament() {
@@ -483,11 +189,32 @@ async function loadTournament() {
   tournament = current || tournaments[0] || null;
   entries = [];
   matches = [];
-  if (tournament) await loadEntries();
-  else renderTournament();
+  if (tournament) await loadEntries({ refreshOnly: false });
+  else render();
 }
 
-// ---- Create modal --------------------------------------------------------
+// ---- Dialogs -------------------------------------------------------------
+//
+// Dialog markup is rendered on demand into #tournament-dialogs (a persistent
+// host inside #tournament-app) and removed on close; each open gets a fresh
+// trap via ensureDialog(). close*() also unlocks the page scroll.
+
+function mountDialog(html) {
+  const host = $("tournament-dialogs");
+  if (!host) return null;
+  host.insertAdjacentHTML("beforeend", html);
+  return host.lastElementChild;
+}
+
+function unmountDialog(modal) {
+  if (!modal || !modal.isConnected) return;
+  modal.remove();
+  if (!document.querySelector("#tournament-dialogs .tn-dialog")) {
+    document.documentElement.classList.remove("yr-modal-open");
+  }
+}
+
+// ---- Create dialog --------------------------------------------------------
 
 function setCreateError(text = "") {
   const el = $("tournament-create-error");
@@ -497,26 +224,22 @@ function setCreateError(text = "") {
 }
 
 async function openCreateModal() {
-  const modal = $("tournament-create-modal");
-  const form = $("tournament-create-form");
-  if (!modal || !form) return;
-  form.reset();
-  $("tc-chat-channel").value = tournament?.chat_channel || board.kickChannelName || "";
-  $("tc-entry-cap-custom").hidden = true;
+  if ($("tournament-create-modal")) return;
+  const modal = mountDialog(createDialogHtml({ chatChannel: tournament?.chat_channel, siteChannel: board.kickChannelName }));
+  if (!modal) return;
   setCreateError("");
-  modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
+  if (!modal.isConnected) return;
   releaseCreateTrap = dialog ? dialog.trap(modal, closeCreateModal) : null;
-  $("tc-title").focus();
-  $("tc-title").select();
+  $("tc-title")?.focus();
+  $("tc-title")?.select();
 }
 
 function closeCreateModal() {
   const modal = $("tournament-create-modal");
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  document.documentElement.classList.remove("yr-modal-open");
+  if (!modal) return;
+  unmountDialog(modal);
   if (releaseCreateTrap) releaseCreateTrap();
   releaseCreateTrap = null;
 }
@@ -562,7 +285,7 @@ async function submitCreate(event) {
     activeTab = "entries";
     closeCreateModal();
     setMessage("");
-    renderTournament();
+    render();
     await loadEntries();
   } catch (error) {
     setCreateError(error.message || "Could not create the tournament.");
@@ -686,9 +409,8 @@ async function handlePrimary() {
   if (action === "select-participants") return openSelectModal();
 }
 
-// ---- Select participants modal -------------------------------------------
+// ---- Select participants dialog -------------------------------------------
 
-let releaseSelectTrap = null;
 // Manual picks survive search filtering, which re-renders the checkbox list.
 const manualSelection = new Set();
 
@@ -718,18 +440,7 @@ function updateSelectCounter() {
 }
 
 function renderSelectList() {
-  const filter = String($("ts-search").value || "").trim().toLowerCase();
-  const eligible = entries.filter((entry) => entry.eligible === true);
-  const visible = filter
-    ? eligible.filter((entry) => String(entry.display_name || "").toLowerCase().includes(filter))
-    : eligible;
-  $("ts-entry-list").innerHTML = visible.map((entry) => `
-    <li class="tournament-select-row">
-      <label>
-        <input type="checkbox" value="${esc(entry.id)}"${manualSelection.has(entry.id) ? " checked" : ""} />
-        <span>${esc(entry.display_name)}</span>
-      </label>
-    </li>`).join("");
+  $("ts-entry-list").innerHTML = selectListHtml(entries, manualSelection, $("ts-search").value);
 }
 
 function syncSelectMode() {
@@ -740,30 +451,24 @@ function syncSelectMode() {
 }
 
 async function openSelectModal() {
-  const modal = $("tournament-select-modal");
+  if (!tournament || $("tournament-select-modal")) return;
+  const modal = mountDialog(selectDialogHtml({ cap: tournament.bracket_size || 0, eligible: entryCounts.eligible || 0 }));
   if (!modal) return;
-  const eligible = entryCounts.eligible || 0;
-  const cap = tournament?.bracket_size || 0;
-  $("ts-random-text").textContent = `Randomly select ${cap} of ${eligible} eligible players.`;
-  $("ts-mode-random").checked = true;
-  $("ts-mode-manual").checked = false;
-  $("ts-search").value = "";
   manualSelection.clear();
   renderSelectList();
   syncSelectMode();
   setSelectError("");
-  modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
+  if (!modal.isConnected) return;
   releaseSelectTrap = dialog ? dialog.trap(modal, closeSelectModal) : null;
-  $("ts-mode-random").focus();
+  $("ts-mode-random")?.focus();
 }
 
 function closeSelectModal() {
   const modal = $("tournament-select-modal");
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  document.documentElement.classList.remove("yr-modal-open");
+  if (!modal) return;
+  unmountDialog(modal);
   if (releaseSelectTrap) releaseSelectTrap();
   releaseSelectTrap = null;
 }
@@ -802,67 +507,29 @@ async function handleEntryAction(button) {
   setMessage("");
 }
 
-// ---- Bracket -------------------------------------------------------------
-
-// The renderer lives in tournament-bracket-view.js; this module owns when to
-// paint it, and the layout's ResizeObserver/listeners are disposed before
-// every re-render and on leave() so they never accumulate.
-let disposeEmbeddedLayout = () => {};
-let disposeExpandedLayout = () => {};
-
-function renderBracket(lifecycle) {
-  const bracket = $("tournament-bracket");
-  const empty = $("tournament-bracket-empty");
-  const champion = $("tournament-champion");
-  if (!bracket || !empty || !champion) return;
-  const sub = $("tournament-bracket-sub");
-  if (sub) sub.textContent = `Single elimination · ${tournament.bracket_size}-player bracket`;
-  if (!matches.length && !tournament.winner_name) {
-    empty.hidden = false;
-    bracket.innerHTML = "";
-    bracket.hidden = true;
-    champion.hidden = true;
-    disposeEmbeddedLayout();
-    disposeEmbeddedLayout = () => {};
-    return;
-  }
-  empty.hidden = true;
-  bracket.hidden = false;
-  // Kept populated but hidden: tests read the champion from this element;
-  // the visible champion treatment lives in the header and final match.
-  if (tournament.winner_name) champion.textContent = `Champion: ${tournament.winner_name}`;
-  champion.hidden = true;
-  disposeEmbeddedLayout();
-  bracket.innerHTML = bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded" });
-  disposeEmbeddedLayout = layoutBracket(bracket);
-}
-
-// ---- Full-bracket modal --------------------------------------------------
-
-let releaseBracketTrap = null;
+// ---- Full-bracket dialog ---------------------------------------------------
 
 async function openBracketModal() {
-  const modal = $("tournament-bracket-modal");
+  if (!tournament || $("tournament-bracket-modal")) return;
+  const modal = mountDialog(fullBracketDialogHtml());
   const full = $("tournament-bracket-full");
-  if (!modal || !full || !tournament) return;
+  if (!modal || !full) return;
   disposeExpandedLayout();
   full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded" });
   disposeExpandedLayout = layoutBracket(full);
-  modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
   // The dialog script can resolve after leave() or a manual close: never
-  // install a trap on a modal that is already hidden or replaced.
-  if (modal.hidden || $("tournament-bracket-modal") !== modal) return;
+  // install a trap on a dialog that is already gone.
+  if (!modal.isConnected || $("tournament-bracket-modal") !== modal) return;
   releaseBracketTrap = dialog ? dialog.trap(modal, closeBracketModal) : null;
   $("tournament-bracket-close")?.focus();
 }
 
 function closeBracketModal() {
   const modal = $("tournament-bracket-modal");
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  document.documentElement.classList.remove("yr-modal-open");
+  if (!modal) return;
+  unmountDialog(modal);
   if (releaseBracketTrap) releaseBracketTrap();
   releaseBracketTrap = null;
   disposeExpandedLayout();
@@ -870,7 +537,7 @@ function closeBracketModal() {
 }
 
 async function submitScore(matchId, target) {
-  const matchEl = target.closest(".tourn-match");
+  const matchEl = target.closest(".tn-match");
   if (!matchEl) return;
   const p1Input = matchEl.querySelector('[data-score-player="1"]');
   const p2Input = matchEl.querySelector('[data-score-player="2"]');
@@ -909,15 +576,17 @@ function clearFieldErrors() {
 }
 
 function settingsSnapshot() {
+  const el = (id) => $(id);
+  if (!el("tournament-title")) return "";
   return JSON.stringify({
-    title: $("tournament-title").value,
-    game: $("tournament-game").value,
-    keyword: $("tournament-keyword").value,
-    capMode: $("tournament-entry-cap-mode").value,
-    cap: $("tournament-entry-cap").value,
-    channel: $("tournament-chat-channel").value,
-    antiAlt: $("tournament-anti-alt").checked,
-    bracketSize: $("tournament-bracket-size").value,
+    title: el("tournament-title").value,
+    game: el("tournament-game").value,
+    keyword: el("tournament-keyword").value,
+    capMode: el("tournament-entry-cap-mode").value,
+    cap: el("tournament-entry-cap").value,
+    channel: el("tournament-chat-channel").value,
+    antiAlt: el("tournament-anti-alt").checked,
+    bracketSize: el("tournament-bracket-size").value,
   });
 }
 
@@ -993,14 +662,13 @@ export async function boot(token = lifecycleToken) {
     await startChat();
   } catch (error) {
     if (token !== lifecycleToken) return;
+    render();
     setMessage(error.message || "Tournament unavailable. Try again in a moment.", true);
-    const empty = $("tournament-empty");
-    if (empty) empty.hidden = false;
   }
 }
 
-// Drop timers, sockets, modal state and cached data so leave() fully
-// detaches the workspace and a later enter() rebuilds it from scratch.
+// Drop timers, sockets, dialogs and cached data so leave() fully detaches the
+// workspace and a later enter() rebuilds it from scratch.
 function resetTransientState() {
   stopChat();
   if (entriesPollTimer) { clearInterval(entriesPollTimer); entriesPollTimer = null; }
@@ -1015,8 +683,10 @@ function resetTransientState() {
   disposeExpandedLayout();
   disposeEmbeddedLayout = () => {};
   disposeExpandedLayout = () => {};
-  document.querySelectorAll("details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
-  // The modal markup may already be gone when a leave races a fragment swap;
+  document.querySelectorAll("details.tn-menu[open]").forEach((menu) => { menu.open = false; });
+  const host = $("tournament-dialogs");
+  if (host) host.innerHTML = "";
+  // The dialog markup may already be gone when a leave races a fragment swap;
   // release any lingering focus traps and unlock the page scroll regardless.
   if (releaseCreateTrap || releaseSelectTrap || releaseBracketTrap) {
     releaseCreateTrap?.();
@@ -1025,8 +695,8 @@ function resetTransientState() {
     releaseCreateTrap = null;
     releaseSelectTrap = null;
     releaseBracketTrap = null;
-    document.documentElement.classList.remove("yr-modal-open");
   }
+  document.documentElement.classList.remove("yr-modal-open");
   tournament = null;
   entries = [];
   matches = [];
@@ -1096,8 +766,8 @@ function onInput(event) {
 }
 
 async function onClick(event) {
-  if ($("tournament-app") && !event.target.closest?.("details.tourn-menu")) {
-    (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
+  if ($("tournament-app") && !event.target.closest?.("details.tn-menu")) {
+    (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tn-menu[open]").forEach((menu) => { menu.open = false; });
   }
   const target = event.target.closest?.(
     "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], [data-score-match]"
@@ -1119,7 +789,7 @@ async function onClick(event) {
   try {
     if (target.matches("[data-tournament-tab]")) return switchTab(target.dataset.tournamentTab);
     if (target.matches("[data-entry-action]")) {
-      target.closest("details.tourn-menu")?.removeAttribute("open");
+      target.closest("details.tn-menu")?.removeAttribute("open");
       return await handleEntryAction(target);
     }
     if (target.matches("[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
@@ -1131,7 +801,7 @@ async function onClick(event) {
     if (target.id === "tournament-bracket-expand") return await openBracketModal();
     if (target.id === "tournament-bracket-close") return closeBracketModal();
     if (target.id === "tournament-settings-discard") {
-      renderSettingsForm(lifecycleOf(tournament, matches.length));
+      render();
       return clearFieldErrors();
     }
     if (target.id === "tournament-primary") return await handlePrimary();

@@ -48,14 +48,14 @@ const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM
 
 // In-page audit: everything measured against the live DOM.
 const auditJs = `(() => {
-  const grid = document.querySelector('#tournament-bracket .tourn-bracket-grid');
+  const grid = document.querySelector('#tournament-bracket .tn-bracket-grid');
   if (!grid) return { missing: true };
-  const rounds = [...grid.querySelectorAll('.tourn-round')];
-  const paths = [...grid.querySelectorAll('.tourn-connectors path[data-from]')];
+  const rounds = [...grid.querySelectorAll('.tn-round')];
+  const paths = [...grid.querySelectorAll('.tn-connectors path[data-from]')];
   const gridRect = grid.getBoundingClientRect();
-  const scroller = grid.closest('.tourn-bracket-scroll');
-  const card = (r, i) => grid.querySelector('.tourn-match[data-round="' + r + '"][data-index="' + i + '"]');
-  const cards = [...grid.querySelectorAll('.tourn-match')];
+  const scroller = grid.closest('.tn-bracket-scroll');
+  const card = (r, i) => grid.querySelector('.tn-match[data-round="' + r + '"][data-index="' + i + '"]');
+  const cards = [...grid.querySelectorAll('.tn-match')];
   // Connector endpoints vs the referenced cards' edge midpoints.
   const connectorMisalignments = paths.filter((p) => {
     const d = (p.getAttribute('d') || '').match(/[\\d.]+/g)?.map(Number) || [];
@@ -73,7 +73,7 @@ const auditJs = `(() => {
   // No two cards inside a column may overlap vertically.
   const overlaps = [];
   for (const round of rounds) {
-    const rects = [...round.querySelectorAll('.tourn-match')].map((el) => el.getBoundingClientRect());
+    const rects = [...round.querySelectorAll('.tn-match')].map((el) => el.getBoundingClientRect());
     for (let i = 0; i < rects.length; i++) {
       for (let j = i + 1; j < rects.length; j++) {
         const a = rects[i], b = rects[j];
@@ -87,22 +87,24 @@ const auditJs = `(() => {
     missing: false,
     rounds: rounds.length,
     labels: rounds.map((r) => r.querySelector('h3').textContent),
-    counts: rounds.map((r) => r.querySelectorAll('.tourn-match').length),
+    counts: rounds.map((r) => r.querySelectorAll('.tn-match').length),
     placeholders: grid.querySelectorAll('[data-placeholder]').length,
     paths: paths.length,
     connectorMisalignments,
     overlaps,
     gridWidth: gridRect.width,
-    containerWidth: document.querySelector('.tourn-bracket-main').getBoundingClientRect().width,
+    gridHeight: gridRect.height,
+    containerWidth: document.querySelector('.tn-bracket-main').getBoundingClientRect().width,
+    oldClassCount: document.querySelectorAll('[class*="tournament-"]:not([id^="tournament-"]), [class*="tourn-"]').length,
     scrollWidth: scroller.scrollWidth,
-    winnerRows: grid.querySelectorAll('.tourn-match-row.is-winner').length,
-    completedCards: grid.querySelectorAll('.tourn-match[data-state="completed"]').length,
+    winnerRows: grid.querySelectorAll('.tn-match-row.is-winner').length,
+    completedCards: grid.querySelectorAll('.tn-match[data-state="completed"]').length,
     docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
   };
 })()`;
 
 async function auditBracket(page, tag, { size, expectConnectorGeometry = true }) {
-  await page.waitForSelector('#tournament-bracket .tourn-bracket-grid', { timeout: 15000 });
+  await page.waitForSelector('#tournament-bracket .tn-bracket-grid', { timeout: 15000 });
   // layoutBracket measures via ResizeObserver once the panel is visible;
   // give it a couple of frames before asserting geometry.
   await page.waitForTimeout(250);
@@ -150,23 +152,44 @@ try {
       }
       // Expanded modal: same model, wider min column, own connector set.
       await page.click('#tournament-bracket-expand');
-      await page.waitForSelector('#tournament-bracket-modal:not([hidden])', { timeout: 15000 });
+      await page.waitForSelector('#tournament-bracket-modal', { timeout: 15000 });
       await page.waitForTimeout(250);
       const expanded = await page.evaluate(auditJs.replaceAll('#tournament-bracket', '#tournament-bracket-full'));
       check(`${variant.name}-expanded: round count`, () => assert.equal(expanded.rounds, Math.log2(variant.size)));
       check(`${variant.name}-expanded: same card count`, () => assert.equal(expanded.paths, embedded.paths));
-      check(`${variant.name}-expanded: wider or equal grid`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth));
+      if (variant.size >= 8) {
+        check(`${variant.name}-expanded: >=1.2x embedded width`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth * 1.2, `width ${expanded.gridWidth} vs ${embedded.gridWidth}`));
+      } else {
+        check(`${variant.name}-expanded: wider or equal grid`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth));
+      }
+      const dlg = await page.evaluate(() => {
+        const card = document.querySelector('#tournament-bracket-modal .tn-dialog-card');
+        const body = document.getElementById('tournament-bracket-full');
+        const grid = body.querySelector('.tn-bracket-grid');
+        return {
+          dlgW: card.getBoundingClientRect().width,
+          bodyW: body.getBoundingClientRect().width,
+          gridW: grid.getBoundingClientRect().width,
+          vScroll: body.scrollHeight - body.clientHeight,
+        };
+      });
+      check(`${variant.name}-expanded: dialog width >= 85vw`, () => assert.ok(dlg.dlgW >= 0.85 * 1440, `dialog ${dlg.dlgW}`));
+      check(`${variant.name}-expanded: grid >= 80% of dialog body`, () => assert.ok(dlg.gridW >= dlg.bodyW * 0.8, `grid ${dlg.gridW} vs body ${dlg.bodyW}`));
+      if (variant.name === 'completed8') {
+        check('completed8-expanded: no vertical scroll at 1440x900', () => assert.ok(dlg.vScroll <= 1, `vScroll ${dlg.vScroll}`));
+      }
       if (shots[variant.name]?.includes('expanded') || shots[variant.name]?.includes('expanded@1440')) {
         await page.screenshot({ path: `${output}/${variant.name}-expanded-1440.png`, fullPage: true });
       }
       // Open/close 3x: connectors must not multiply and observers must not leak.
       for (let i = 0; i < 3; i++) {
         await page.click('#tournament-bracket-close');
-        await page.waitForSelector('#tournament-bracket-modal[hidden]', { state: 'attached', timeout: 15000 });
+        await page.waitForSelector('#tournament-bracket-modal', { state: 'detached', timeout: 15000 });
         await page.click('#tournament-bracket-expand');
-        await page.waitForSelector('#tournament-bracket-modal:not([hidden])', { timeout: 15000 });
+        await page.waitForSelector('#tournament-bracket-modal', { timeout: 15000 });
       }
-      const connectorCount = await page.evaluate(() => document.querySelectorAll('.tourn-connectors').length);
+      check(`${variant.name}: no .tournament-/.tourn- elements in DOM`, () => assert.equal(expanded.oldClassCount + embedded.oldClassCount, 0));
+      const connectorCount = await page.evaluate(() => document.querySelectorAll('.tn-connectors').length);
       check(`${variant.name}: no connector/observer leak after 3 open-close cycles`, () => assert.equal(connectorCount, 2));
       await page.click('#tournament-bracket-close');
       // Responsive: realign connectors at 1024 and 390.

@@ -143,7 +143,7 @@ describe("tournament lifecycle UI", () => {
     // A previous test may leave the create modal open with its focus trap
     // installed; close it so focus assertions aren't redirected into the modal.
     const modal = $id("tournament-create-modal");
-    if (modal && !modal.hidden) await click("tournament-create-cancel");
+    if (modal) await click("tournament-create-cancel");
     await mod.boot();
     await flush();
   });
@@ -173,7 +173,7 @@ describe("tournament lifecycle UI", () => {
   it("opens a centered create modal with supported bracket sizes and a separate signup limit", async () => {
     await click("tournament-create");
     expect(visible("tournament-create-modal")).toBe(true);
-    expect($id("tournament-create-modal").classList.contains("modal")).toBe(true);
+    expect($id("tournament-create-modal").classList.contains("tn-dialog")).toBe(true);
     expect(visible("tournament-empty")).toBe(true);
     const sizes = [...$id("tc-bracket-size").options].map((o) => Number(o.value));
     expect(sizes).toEqual([4, 8, 16, 32]);
@@ -254,7 +254,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-panel-bracket")).toBe(true);
     expect(visible("tournament-bracket-empty")).toBe(true);
     expect($id("tournament-bracket-empty").textContent).toContain("Bracket not created yet.");
-    expect($id("tournament-bracket").querySelectorAll(".tourn-match")).toHaveLength(0);
+    expect($id("tournament-bracket").querySelectorAll(".tn-match")).toHaveLength(0);
     await click("tournament-tab-settings");
     expect(visible("tournament-panel-settings")).toBe(true);
     expect(visible("tournament-settings-form")).toBe(true);
@@ -423,14 +423,17 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-entry-cap").value).toBe("40");
   });
 
-  it("makes every settings control full-width via .tournament-control", () => {
+  it("gives every settings control the full-width tn-input treatment", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
     const controls = $id("tournament-settings-form").querySelectorAll("select, input");
     for (const el of controls) {
       if (el.type === "checkbox") continue;
-      expect(el.classList.contains("tournament-control")).toBe(true);
+      expect(el.classList.contains("tn-input")).toBe(true);
     }
-    const css = readFileSync(new URL("../assets/giveaways.css", import.meta.url), "utf8");
-    expect(css).toMatch(/\.tournament-app \.field select\.tournament-control[^{]*\{[^}]*width:\s*100%/);
+    const css = readFileSync(new URL("../assets/tournaments.css", import.meta.url), "utf8");
+    expect(css).toMatch(/\.tn-input[^{]*\{[^}]*width:\s*100%/);
   });
 
   it("shows a field error on a rejected save without touching the summary", async () => {
@@ -482,7 +485,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-new")).toBe(false);
     await click("tournament-tab-bracket");
     expect(visible("tournament-bracket-empty")).toBe(false);
-    expect($id("tournament-bracket").querySelectorAll(".tourn-match")).toHaveLength(3);
+    expect($id("tournament-bracket").querySelectorAll(".tn-match")).toHaveLength(3);
     expect($id("tournament-bracket").querySelectorAll("[data-score-match]").length).toBeGreaterThan(0);
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(true);
@@ -494,13 +497,15 @@ describe("tournament lifecycle UI", () => {
       reset({ tournaments: [{ ...base, status, winner_name, entry_cap: 40, chat_channel: "creator" }] });
       await mod.boot();
       await click("tournament-tab-settings");
-      for (const id of [
-        "tournament-title", "tournament-game", "tournament-chat-channel", "tournament-keyword",
-        "tournament-entry-cap-mode", "tournament-entry-cap", "tournament-bracket-size",
-        "tournament-anti-alt", "tournament-settings-save", "tournament-settings-discard",
-      ]) {
-        expect($id(id).disabled).toBe(true);
-      }
+      // Read-only is a definition-list view, not a frozen form: no inputs at
+      // all in the view, and the hidden form can't be dirtied or submitted.
+      expect(visible("tournament-settings-view")).toBe(true);
+      expect(visible("tournament-settings-form")).toBe(false);
+      expect($id("tournament-settings-view").querySelectorAll("input, select")).toHaveLength(0);
+      const view = $id("tournament-settings-view").textContent;
+      expect(view).toContain("creator");
+      expect(view).toContain("40");
+      expect(view).toContain("No rules added yet.");
       $id("tournament-title").value = "X";
       $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
       $id("tournament-entry-cap-mode").value = "";
@@ -526,7 +531,7 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-champion")).toBe("Champion: alpha");
     // The 4-player grid pads missing slots with TBD placeholders; the one
     // real match is the completed final.
-    expect($id("tournament-bracket").querySelectorAll('.tourn-match[data-state="completed"]')).toHaveLength(1);
+    expect($id("tournament-bracket").querySelectorAll('.tn-match[data-state="completed"]')).toHaveLength(1);
     await click("tournament-new");
     expect(visible("tournament-create-modal")).toBe(true);
   });
@@ -689,14 +694,14 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-tab-bracket");
-    const matches = [...$id("tournament-bracket").querySelectorAll(".tourn-match")];
+    const matches = [...$id("tournament-bracket").querySelectorAll(".tn-match")];
     expect(matches).toHaveLength(3);
     // Alice vs BYE: no inputs, no score, advance caption, sentinel never leaks.
     expect(matches[0].dataset.state).toBe("bye");
     expect(matches[0].querySelectorAll("input")).toHaveLength(0);
     expect(matches[0].textContent).not.toContain(BYE_SLOT);
     expect(matches[0].textContent).toContain("Alice");
-    expect(matches[0].textContent).toContain("Advances automatically");
+    expect(matches[0].textContent).toContain("advances");
     expect(matches[0].textContent).not.toContain("0 - 0");
     // BYE vs BYE: compact muted void placeholder.
     expect(matches[1].dataset.state).toBe("void");
@@ -717,7 +722,38 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-tab-bracket");
-    const match = $id("tournament-bracket").querySelector(".tourn-match");
+    const match = $id("tournament-bracket").querySelector(".tn-match");
     expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
   });
 });
+
+  it("keeps a dirty settings form intact through an entries refresh", async () => {
+    reset({
+      tournaments: [{ ...base, status: "draft", signup_state: "open" }],
+      entries: [{ id: "e1", display_name: "one", source: "chat", status: "pending" }],
+    });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    // Dirty the form while the settings tab is visible.
+    $id("tournament-title").value = "Typed but unsaved";
+    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect($id("tournament-settings-bar").hidden).toBe(false);
+    // An entry action is one loadEntries() path — the same refresh the 15s
+    // poll and chat webhook take. The form must keep its edit and the bar.
+    const formNode = $id("tournament-settings-form");
+    server.entries = [
+      { id: "e1", display_name: "one", source: "chat", status: "pending" },
+      { id: "e2", display_name: "two", source: "chat", status: "pending" },
+    ];
+    const removeBtn = $id("tournament-entry-list").querySelector("[data-entry-action='remove']");
+    removeBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect($id("tournament-settings-form")).toBe(formNode);
+    expect($id("tournament-title").value).toBe("Typed but unsaved");
+    expect($id("tournament-settings-bar").hidden).toBe(false);
+    // The data updates still landed.
+    expect(text("tournament-count")).toBe("2");
+    expect(text("tournament-tab-entries")).toBe("Entries (2)");
+    expect($id("tournament-entry-list").textContent).toContain("two");
+  });

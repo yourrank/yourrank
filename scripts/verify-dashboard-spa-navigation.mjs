@@ -144,9 +144,9 @@ try {
   }
   await expectState('bracket-content', (s) => assert.ok(s.tournamentWorkspace, 'workspace hidden'));
   const bracketInfo = await page.evaluate(() => ({
-    matches: document.querySelectorAll('#tournament-bracket .tourn-match').length,
-    rounds: [...document.querySelectorAll('#tournament-bracket .tourn-round-head h3')].map((h) => h.textContent),
-    connectors: document.querySelectorAll('#tournament-bracket .tourn-connectors path[data-from]').length,
+    matches: document.querySelectorAll('#tournament-bracket .tn-match').length,
+    rounds: [...document.querySelectorAll('#tournament-bracket .tn-round-head h3')].map((h) => h.textContent),
+    connectors: document.querySelectorAll('#tournament-bracket .tn-connectors path[data-from]').length,
     settingsView: !document.getElementById('tournament-settings-view')?.hidden,
     entriesTab: document.getElementById('tournament-tab-entries')?.textContent.trim(),
   }));

@@ -1,6 +1,6 @@
 // Data-driven single-elimination bracket renderer: builds a round model from
 // the matches API rows, emits one HTML structure for both the embedded panel
-// and the expanded modal, and lays it out on screen with slot-based geometry
+// and the expanded dialog, and lays it out on screen with slot-based geometry
 // + SVG connectors. Pure functions + one DOM layout routine; no fetching and
 // no lifecycle logic — the caller owns when to render and dispose.
 // BYE sentinel — must match BYE in lib/tournament-bracket.js (the lib lives
@@ -9,10 +9,14 @@
 export const BYE = "__YOURRANK_INTERNAL_BYE__";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
 }[char]));
 
-export const CROWN_ICON = '<svg class="tourn-crown" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M5 16 3 7l5.5 4L12 4l3.5 7L21 7l-2 9H5zm0 2h14v2H5z"/></svg>';
+export const CROWN_ICON = '<svg class="tn-crown" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M5 16 3 7l5.5 4L12 4l3.5 7L21 7l-2 9H5zm0 2h14v2H5z"/></svg>';
 
 const TBD = "TBD";
 const isBye = (name) => name === BYE;
@@ -82,50 +86,51 @@ function matchState(match, finished) {
   return "future";
 }
 
-function scoreCell(score) {
-  return `<span class="tourn-match-score">${esc(score ?? 0)}</span>`;
-}
-
-// Real-player row for a completed/scorable/future card. `champion` gets the
-// gold treatment + crown; ordinary winners only the accent highlight.
-function playerRow(name, { winner = false, champion = false, crown = false, score = null, showScore = false } = {}) {
-  const cls = `tourn-match-row${winner ? " is-winner" : ""}${champion ? " is-champion" : ""}`;
+// A real match: two `seed | name | score` rows. `champion` gets the gold
+// treatment; the crown marks the row that won the match.
+function rowHtml({ seed = null, name, score = "", winner = false, champion = false, muted = false }) {
+  const cls = `tn-match-row${winner ? " is-winner" : ""}${champion ? " is-champion" : ""}${muted ? " is-muted" : ""}`;
   return `<div class="${cls}">
-    <span class="tourn-match-name">${crown ? CROWN_ICON : ""}${esc(name)}</span>
-    ${showScore ? scoreCell(score) : ""}
+    ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
+    <span class="tn-match-name">${winner ? CROWN_ICON : ""}${esc(name)}</span>
+    <span class="tn-match-score">${esc(score)}</span>
   </div>`;
 }
 
 function matchCard(match, { finished, isFinal, championName }) {
   const state = matchState(match, finished);
-  const attrs = `class="tourn-match${isFinal ? " tourn-match--final" : ""}" data-state="${state}" data-match-id="${esc(match.id)}" data-round="${esc(match.round_number)}" data-index="${esc(match.match_index)}"`;
-  if (state === "void") {
-    return `<div ${attrs}><span class="tourn-match-void" aria-label="No match">—</span></div>`;
+  const seedBase = Number(match.round_number) === 1 ? match.match_index * 2 + 1 : null;
+  const attrs = `class="tn-match${isFinal ? " tn-match--final" : ""}" data-state="${state}" data-match-id="${esc(match.id)}" data-round="${esc(match.round_number)}" data-index="${esc(match.match_index)}"`;
+  if (state === "void" || state === "future") {
+    // BYE/BYE and TBD slots get a thin placeholder line, never a card.
+    const label = state === "void" ? "—" : TBD;
+    return `<div ${attrs}><div class="tn-match-line">${seedBase !== null ? `<span class="tn-match-seed">${seedBase}</span>` : ""}<span class="tn-match-name">${esc(label)}</span><span class="tn-match-name">${esc(label)}</span></div></div>`;
   }
   if (state === "bye") {
+    // One real player: a single compact line — it advances, it is not a match.
+    // A completed bye (or the champion's final) still earns the crown.
     const player = isBye(match.player1_name) ? match.player2_name : match.player1_name;
+    const seed = isBye(match.player1_name) ? seedBase + 1 : seedBase;
     const winner = match.status === "completed" && match.winner_name === player;
     const champion = isFinal && championName === player;
-    return `<div ${attrs}>
-      ${playerRow(player, { winner, champion })}
-      <div class="tourn-match-row tourn-match-note"><span class="tourn-match-name">Advances automatically</span></div>
-    </div>`;
+    return `<div ${attrs}><div class="tn-match-line">
+      ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
+      <span class="tn-match-name${winner || champion ? " is-winner" : ""}${champion ? " is-champion" : ""}">${champion ? CROWN_ICON : ""}${esc(player)}</span>
+      <span class="tn-match-adv">${champion ? "champion" : "advances"}</span>
+    </div></div>`;
   }
-  if (state === "future" || state === "scorable") {
-    const p1 = isTbd(match.player1_name) ? TBD : match.player1_name;
-    const p2 = isTbd(match.player2_name) ? TBD : match.player2_name;
-    const actions = state === "scorable"
-      ? `<div class="tourn-match-actions">
-          <input type="number" min="0" class="tourn-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
-          <span class="tourn-match-divider">–</span>
-          <input type="number" min="0" class="tourn-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
-          <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>
-        </div>`
-      : "";
+  if (state === "scorable") {
+    // Two rows like a played match: the score inputs sit where the score
+    // digits would, and a compact Save rides the second row's edge.
+    const row = (seed, name, player) => `<div class="tn-match-row">
+      ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
+      <span class="tn-match-name">${esc(name)}</span>
+      <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="${player}" value="0" aria-label="${esc(name)} score" />
+      ${player === 2 ? `<button class="tn-match-save" type="button" data-score-match="${esc(match.id)}">Save</button>` : ""}
+    </div>`;
     return `<div ${attrs}>
-      ${playerRow(p1)}
-      ${playerRow(p2)}
-      ${actions}
+      ${row(seedBase, match.player1_name, 1)}
+      ${row(seedBase !== null ? seedBase + 1 : null, match.player2_name, 2)}
     </div>`;
   }
   // completed
@@ -134,16 +139,16 @@ function matchCard(match, { finished, isFinal, championName }) {
   const p1Champion = isFinal && championName === match.player1_name;
   const p2Champion = isFinal && championName === match.player2_name;
   return `<div ${attrs}>
-    ${playerRow(match.player1_name, { winner: p1Winner, champion: p1Champion, crown: p1Winner, score: match.player1_score, showScore: true })}
-    ${playerRow(match.player2_name, { winner: p2Winner, champion: p2Champion, crown: p2Winner, score: match.player2_score, showScore: true })}
+    ${rowHtml({ seed: seedBase, name: match.player1_name, score: match.player1_score ?? 0, winner: p1Winner, champion: p1Champion, muted: p2Winner })}
+    ${rowHtml({ seed: seedBase !== null ? seedBase + 1 : null, name: match.player2_name, score: match.player2_score ?? 0, winner: p2Winner, champion: p2Champion, muted: p1Winner })}
   </div>`;
 }
 
-// A missing slot in the model: never rendered as a heavy card.
+// A missing slot in the model: a thin placeholder line, never a heavy card.
 function placeholderCard(round, index) {
-  return `<div class="tourn-match" data-state="future" data-placeholder data-round="${round}" data-index="${index}">
-    ${playerRow(TBD)}
-    ${playerRow(TBD)}
+  const seedBase = round === 1 ? index * 2 + 1 : null;
+  return `<div class="tn-match" data-state="future" data-placeholder data-round="${round}" data-index="${index}">
+    <div class="tn-match-line">${seedBase !== null ? `<span class="tn-match-seed">${seedBase}</span>` : ""}<span class="tn-match-name">${TBD}</span><span class="tn-match-name">${TBD}</span></div>
   </div>`;
 }
 
@@ -160,18 +165,18 @@ export function renderBracket({ tournament, matches, lifecycle, mode = "embedded
   const roundsHtml = model.rounds.map((round) => {
     const count = `${round.matches.length} ${round.matches.length === 1 ? "match" : "matches"}`;
     const body = round.matches.map(({ match, index }) =>
-      `<div class="tourn-slot">${match
+      `<div class="tn-slot">${match
         ? matchCard(match, { finished, isFinal: round.number === model.totalRounds, championName })
         : placeholderCard(round.number, index)}</div>`).join("");
-    return `<section class="tourn-round" style="--span:${2 ** (round.number - 1)}">
-      <div class="tourn-round-head"><h3>${esc(round.label)}</h3><span>${esc(count)}</span></div>
-      <div class="tourn-round-body">${body}</div>
+    return `<section class="tn-round" style="--span:${2 ** (round.number - 1)}">
+      <div class="tn-round-head"><h3>${esc(round.label)}</h3><span>${esc(count)}</span></div>
+      <div class="tn-round-body">${body}</div>
     </section>`;
   }).join("");
-  return `<div class="tourn-bracket" data-mode="${esc(mode)}">
-    <div class="tourn-bracket-scroll">
-      <div class="tourn-bracket-grid" style="--rounds:${model.totalRounds};--slots:${slots}">
-        <svg class="tourn-connectors" aria-hidden="true"></svg>
+  return `<div class="tn-bracket" data-mode="${esc(mode)}">
+    <div class="tn-bracket-scroll">
+      <div class="tn-bracket-grid" style="--rounds:${model.totalRounds};--slots:${slots}">
+        <svg class="tn-connectors" aria-hidden="true"></svg>
         ${roundsHtml}
       </div>
     </div>
@@ -180,15 +185,15 @@ export function renderBracket({ tournament, matches, lifecycle, mode = "embedded
 
 // ---- Layout --------------------------------------------------------------
 
-const GAP_PX = 16; // breathing room added to the tallest card when sizing a slot
+const GAP_PX = 12; // breathing room added to the tallest real card when sizing a slot
 
-// Measures the rendered cards, sizes `--tourn-slot`, and draws the SVG
-// connectors (feeder (r,i) -> (r+1, floor(i/2))). Returns a dispose() that
-// removes the ResizeObserver + window listener; re-render callers must
-// dispose the previous layout first so observers never accumulate.
+// Measures the rendered cards, sizes `--tn-slot`, and draws the SVG
+// connectors (feeder (r,i) -> (r+1, floor(i/2))). Only real matches drive the
+// slot height — placeholder lines are thin by design. Returns a dispose()
+// that removes the ResizeObserver + window listener.
 export function layoutBracket(root) {
-  const grid = root?.querySelector(".tourn-bracket-grid");
-  const svg = root?.querySelector(".tourn-connectors");
+  const grid = root?.querySelector(".tn-bracket-grid");
+  const svg = root?.querySelector(".tn-connectors");
   if (!grid || !svg) return () => {};
   const win = root.ownerDocument?.defaultView || (typeof window !== "undefined" ? window : null);
   const raf = win?.requestAnimationFrame ? (fn) => win.requestAnimationFrame(fn) : (fn) => setTimeout(fn, 0);
@@ -201,7 +206,7 @@ export function layoutBracket(root) {
     const gridRect = grid.getBoundingClientRect();
     svg.setAttribute("viewBox", `0 0 ${Math.max(0, gridRect.width)} ${Math.max(0, gridRect.height)}`);
     const cards = new Map();
-    for (const el of grid.querySelectorAll(".tourn-match[data-round]")) {
+    for (const el of grid.querySelectorAll(".tn-match[data-round]")) {
       cards.set(`${el.dataset.round}:${el.dataset.index}`, el);
     }
     let totalRounds = 0;
@@ -235,10 +240,17 @@ export function layoutBracket(root) {
     frame = 0;
     if (disposed) return;
     let tallest = 0;
-    for (const el of grid.querySelectorAll(".tourn-match")) {
+    // Only real matches (scores or scoring inputs) set the slot rhythm;
+    // bye/void/future lines are thin by design.
+    for (const el of grid.querySelectorAll('.tn-match[data-state="completed"], .tn-match[data-state="scorable"]')) {
       tallest = Math.max(tallest, el.getBoundingClientRect().height || 0);
     }
-    if (tallest) grid.style.setProperty("--tourn-slot", `${Math.ceil(tallest + GAP_PX)}px`);
+    if (!tallest) {
+      for (const el of grid.querySelectorAll(".tn-match")) {
+        tallest = Math.max(tallest, el.getBoundingClientRect().height || 0);
+      }
+    }
+    if (tallest) grid.style.setProperty("--tn-slot", `${Math.ceil(tallest + GAP_PX)}px`);
     draw();
   };
   const schedule = () => { if (!frame && !disposed) frame = raf(measure); };

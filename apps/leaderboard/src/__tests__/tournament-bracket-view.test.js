@@ -94,8 +94,9 @@ describe("renderBracket", () => {
     expect(html).toContain('data-state="void"');
     // Scorable keeps the submit contract; BYE shows the advance note; void stays compact.
     expect(html).toContain('data-score-match="m2"');
-    expect(html).toContain("Advances automatically");
-    expect(html).toContain('aria-label="No match"');
+    expect(html).toContain("advances");
+    // TBD slots and missing model slots are thin placeholder lines.
+    expect(html).toContain('data-state="future"');
   });
 
   it("marks winners with the crown and reserves gold for the final champion", () => {
@@ -111,7 +112,7 @@ describe("renderBracket", () => {
     final.winner_name = "a";
     const html = renderBracket({ tournament: tournament({ bracket_size: 4, winner_name: "a", status: "completed" }), matches, lifecycle: "completed" });
     expect(html).toContain("is-champion");
-    expect(html.match(/tourn-crown/g).length).toBe(1);
+    expect(html.match(/tn-crown/g).length).toBe(1);
   });
 
   it("renders placeholders for missing slots, not heavy cards", () => {
@@ -125,6 +126,6 @@ describe("renderBracket", () => {
     // renderer's data-round/data-index hooks exist for every slot.
     const html = renderBracket({ tournament: tournament(), matches: buildBracket(["a", "b", "c", "d"], 8), lifecycle: "bracket" });
     expect((html.match(/data-round="/g) || []).length).toBe(7);
-    expect(html).toContain("tourn-connectors");
+    expect(html).toContain("tn-connectors");
   });
 });
