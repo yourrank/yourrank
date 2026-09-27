@@ -230,6 +230,19 @@ components:
 
 # Design System: YourRank Community Workspace
 
+## Creator account entry
+
+Login and registration use a focused, Linear-inspired entry layout: a white
+canvas, compact YourRank mark and wordmark, one centered form (24rem maximum),
+Inter typography, quiet input boundaries, and the existing electric-violet
+primary action. The shared frame is `apps/leaderboard/src/pages/auth-shell.js`;
+its scoped styles live in `devin-system.css`. There is no marketing sidebar or
+configuration illustration. Password recovery sits beside the password label;
+viewer entry is separated beneath the creator form. Registration keeps all four
+required fields and the canonical password and community-handle rules. Mobile
+uses the same reading order, 48px inputs, and 16px input text. This direction is
+specific to `/login` and `/signup`; it does not replace dashboard or viewer styling.
+
 ## Overview
 
 **Creative North Star: "The Quiet Control Field"**

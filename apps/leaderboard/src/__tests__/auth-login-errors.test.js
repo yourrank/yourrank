@@ -24,6 +24,7 @@ const LOGIN_FORM_HTML = `
     <button type="submit" id="submit">Sign in</button>
   </form>
   <span class="foot-sep" id="viewer-foot"></span>
+  <a href="/signup" data-auth-switch>Create account</a>
   <aside class="auth-side"></aside>`;
 
 function setupLoginPage(fetchImpl, { url = "https://staging.yourrank.site/login?next=%2Fdashboard" } = {}) {
@@ -61,6 +62,23 @@ async function submitLogin(page, { email = "person@example.com", password = "Cor
 
 const jsonResponse = (status, body) => () =>
   Promise.resolve({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) });
+
+describe("account entry continuity", () => {
+  test("switching forms preserves a safe destination and selected plan", () => {
+    const page = setupLoginPage(jsonResponse(200, {}), { url: "https://staging.yourrank.site/login?next=%2Fdashboard%2Frewards%2Fshop%3FsiteId%3Dsite-1&plan=pro" });
+    const target = new URL(page.document.querySelector("[data-auth-switch]").href);
+    expect(target.pathname).toBe("/signup");
+    expect(target.searchParams.get("next")).toBe("/dashboard/rewards/shop?siteId=site-1");
+    expect(target.searchParams.get("plan")).toBe("pro");
+  });
+
+  test("switching forms drops external destinations and unknown plans", () => {
+    const page = setupLoginPage(jsonResponse(200, {}), { url: "https://staging.yourrank.site/login?next=https%3A%2F%2Fexample.org%2F&plan=unknown" });
+    const target = new URL(page.document.querySelector("[data-auth-switch]").href);
+    expect(target.pathname).toBe("/signup");
+    expect(target.search).toBe("");
+  });
+});
 
 describe("login form error rendering", () => {
   test("wrong credentials show the generic server message", async () => {

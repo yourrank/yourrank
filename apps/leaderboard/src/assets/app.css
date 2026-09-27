@@ -198,14 +198,6 @@ a{color:var(--ink);text-decoration:none}a:hover{color:var(--accent)}
 .auth-side p{color:var(--ink-soft);max-width:42ch}
 .auth-side .feat{border-top:1px solid var(--line);padding-top:18px;font-size:13px;color:var(--ink-soft)}
 .auth-side .feat div{padding:5px 0}
-/* H2: fill the auth left panel with a spec card so it isn't empty void */
-.auth-spec{margin-top:26px;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;max-width:340px}
-.auth-spec-h{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line);font-family:var(--mono,ui-monospace,monospace);font-size:12px;color:var(--ink-mute)}
-.auth-spec-h .dot{color:var(--accent)}
-.auth-spec-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line);font-size:13px}
-.auth-spec-row:last-child{border-bottom:none}
-.auth-spec-row span:first-child{color:var(--ink-soft)}
-.auth-spec-row span:last-child{font-family:var(--mono,ui-monospace,monospace);color:var(--ink);text-align:right}
 .auth-main{display:flex;align-items:center;justify-content:center;padding:32px}
 .auth-card{width:100%;max-width:360px}
 .auth-card h1,.auth-card h2{font-size:22px;font-weight:800;line-height:1.2;margin:0 0 4px;letter-spacing:-.03em}.auth-card .sub{color:var(--ink-mute);font-size:13px;margin-bottom:26px}
@@ -213,7 +205,7 @@ a{color:var(--ink);text-decoration:none}a:hover{color:var(--accent)}
 .auth-card .foot{margin-top:18px;font-size:13px;color:var(--ink-mute)}
 .auth-card .foot-sep{display:block;margin-top:10px}
 /* Pass 6 #6: align auth copy to the Next.js 14px base (was 13px micro-scale) */
-.auth-card .sub,.auth-card .foot,.auth-side .feat,.auth-spec-row,.plan-banner{font-size:14px}
+.auth-card .sub,.auth-card .foot,.auth-side .feat,.plan-banner{font-size:14px}
 .auth-card .field label{font-size:14px}
 .auth-card .field .hint,.auth-card .field-err{font-size:13px}
 .auth-card .err{font-size:14px}

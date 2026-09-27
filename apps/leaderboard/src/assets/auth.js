@@ -50,6 +50,15 @@ function safeNextPath(value) {
 }
 const nextPath = safeNextPath(urlParams.get("next") || "");
 
+// Switching between account-entry forms must keep the destination the user
+// came for. Reuse the same allowlist as the eventual sign-in redirect.
+document.querySelectorAll("[data-auth-switch]").forEach(link => {
+  const target = new URL(link.getAttribute("href"), location.origin);
+  if (nextPath) target.searchParams.set("next", nextPath);
+  if (["free", "pro", "team"].includes(planParam)) target.searchParams.set("plan", planParam);
+  link.href = target.pathname + target.search;
+});
+
 /* Viewer journeys arrive from a community page (next=/slug/...) and need the
    task they came for, not the creator sales panel. Everything outside /login
    keeps its existing behavior. */

@@ -11,7 +11,7 @@ describe("community handle field", () => {
   it("labels the field Community handle with a fixed domain prefix, the allowed characters and a live preview", () => {
     expect(signupPage).toContain('<label for="slug">Community handle</label>');
     expect(signupPage).toContain('<span class="auth-url-prefix">yourrank.site/</span>');
-    expect(signupPage).toContain(`<span class="hint" id="slug-tip">${COMMUNITY_HANDLE_RULES} You can also paste your yourrank.site link.</span>`);
+    expect(signupPage).toContain(`<span class="hint" id="slug-tip">${COMMUNITY_HANDLE_RULES}</span>`);
     expect(signupPage).toMatch(/<input id="slug"[^>]*aria-describedby="slug-err slug-tip slugPreview slugNote"/);
     expect(signupPage).toMatch(/<input id="slug"[^>]*autocapitalize="none"/);
     expect(signupPage).toContain('<span class="hint" id="slugNote" aria-live="polite"></span>');
