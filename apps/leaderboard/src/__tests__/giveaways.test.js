@@ -155,10 +155,13 @@ describe("Giveaway Chatroom Handler", () => {
   it("keeps giveaway history tables on the canonical table markup", () => {
     expect(giveawaysHtml).not.toContain('class="gw-table"');
     expect(giveawaysHtml).not.toContain('class="gw-table-wrap"');
-    expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(4);
+    expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(3);
     expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(3);
-    // The tournament entries table uses the same v3-table skin.
-    expect(giveawaysHtml).toContain('<table class="v3-table" id="tournament-entry-table">');
+    // The tournaments pane ships only its client mount points; the workspace
+    // (entries list included) is rendered by tournaments.js.
+    expect(giveawaysHtml).toContain('id="tournament-app"');
+    expect(giveawaysHtml).toContain('id="tournament-root"');
+    expect(giveawaysHtml).toContain('id="tournament-dialogs"');
   });
 
   it("keeps draw options behind the disclosure", () => {

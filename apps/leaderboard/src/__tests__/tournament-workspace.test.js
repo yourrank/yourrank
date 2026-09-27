@@ -118,40 +118,40 @@ describe("tournament workspace — completed tournament", () => {
     expect(text("tournament-status")).toBe("Completed");
     expect(text("tournament-meta")).toBe("8-player bracket · Single elimination");
     expect(text("tournament-step-label")).toBe("Champion: 36_ates");
-    expect($id("tournament-step-label").querySelector("svg.tourn-crown")).toBeTruthy();
+    expect($id("tournament-step-label").querySelector("svg.tn-crown")).toBeTruthy();
     expect(text("tournament-count")).toBe("2");
     expect(text("tournament-fact-spots")).toBe("8");
     expect(text("tournament-fact-keyword")).toBe("!join");
     expect(text("tournament-fact-cap")).toBe("Unlimited");
-    expect($id("tournament-workspace").querySelector(".tourn-head").textContent).not.toContain("Kick channel");
+    expect($id("tournament-workspace").querySelector(".tn-head").textContent).not.toContain("Kick channel");
   });
 
   it("renders the entries table with pills and no action menus when finished", async () => {
     expect(text("tournament-tab-entries")).toBe("Entries (2)");
-    const rows = $id("tournament-entry-list").querySelectorAll("tr.tournament-entry-row");
+    const rows = $id("tournament-entry-list").querySelectorAll(".tn-entry:not(.tn-entry--head)");
     expect(rows).toHaveLength(2);
     expect($id("tournament-entry-list").textContent).toContain("36_ates");
     expect($id("tournament-entry-list").textContent).toContain("forolo_GB");
-    expect($id("tournament-entry-list").querySelectorAll(".tourn-pill--selected")).toHaveLength(2);
+    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--selected")).toHaveLength(2);
     expect($id("tournament-entry-list").textContent).toContain("Chat");
-    expect($id("tournament-entry-list").querySelectorAll("details.tourn-menu")).toHaveLength(0);
+    expect($id("tournament-entry-list").querySelectorAll("details.tn-menu")).toHaveLength(0);
     expect($id("tournament-entry-table")).toBeTruthy();
   });
 
   it("renders the bracket with named rounds, BYE handling, winner rows and the summary aside", async () => {
     await click("tournament-tab-bracket");
     expect(visible("tournament-panel-bracket")).toBe(true);
-    const headings = [...$id("tournament-bracket").querySelectorAll(".tourn-round-head h3")].map((h) => h.textContent);
+    const headings = [...$id("tournament-bracket").querySelectorAll(".tn-round-head h3")].map((h) => h.textContent);
     expect(headings).toEqual(["Quarterfinals", "Semifinals", "Final"]);
     expect(text("tournament-bracket-sub")).toBe("Single elimination · 8-player bracket");
     expect($id("tournament-bracket").querySelectorAll("input")).toHaveLength(0);
-    expect($id("tournament-bracket").querySelectorAll(".tourn-match-row.is-winner")).not.toHaveLength(0);
-    expect($id("tournament-bracket").querySelector('.tourn-match[data-state="bye"]')).toBeTruthy();
-    expect($id("tournament-bracket").querySelector('.tourn-match[data-state="void"]')).toBeTruthy();
-    expect($id("tournament-bracket").querySelector(".tourn-match-row.is-champion")).toBeTruthy();
+    expect($id("tournament-bracket").querySelectorAll(".tn-match-row.is-winner")).not.toHaveLength(0);
+    expect($id("tournament-bracket").querySelector('.tn-match[data-state="bye"]')).toBeTruthy();
+    expect($id("tournament-bracket").querySelector('.tn-match[data-state="void"]')).toBeTruthy();
+    expect($id("tournament-bracket").querySelector(".is-champion")).toBeTruthy();
     // Connector stubs exist even without a layout engine (happy-dom has no
     // ResizeObserver): one path per non-final match.
-    const paths = $id("tournament-bracket").querySelectorAll(".tourn-connectors path[data-from]");
+    const paths = $id("tournament-bracket").querySelectorAll(".tn-connectors path[data-from]");
     expect(paths.length).toBe(completedMatches.length - 1);
     const aside = $id("tournament-summary").textContent;
     expect(aside).toContain("Matches played");
@@ -168,19 +168,19 @@ describe("tournament workspace — completed tournament", () => {
     await click("tournament-tab-bracket");
     await click("tournament-bracket-expand");
     const modal = $id("tournament-bracket-modal");
-    expect(modal.hidden).toBe(false);
-    const inlineCount = $id("tournament-bracket").querySelectorAll(".tourn-match").length;
-    expect($id("tournament-bracket-full").querySelectorAll(".tourn-match")).toHaveLength(inlineCount);
-    expect($id("tournament-bracket-full").querySelector('.tourn-bracket[data-mode="expanded"]')).toBeTruthy();
+    expect(modal).toBeTruthy();
+    const inlineCount = $id("tournament-bracket").querySelectorAll(".tn-match").length;
+    expect($id("tournament-bracket-full").querySelectorAll(".tn-match")).toHaveLength(inlineCount);
+    expect($id("tournament-bracket-full").querySelector('.tn-bracket[data-mode="expanded"]')).toBeTruthy();
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(true);
     await click("tournament-bracket-close");
-    expect(modal.hidden).toBe(true);
+    expect($id("tournament-bracket-modal")).toBeNull();
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
     // Backdrop click also closes.
     await click("tournament-bracket-expand");
-    modal.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    $id("tournament-bracket-modal").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(modal.hidden).toBe(true);
+    expect($id("tournament-bracket-modal")).toBeNull();
   });
 
   it("shows the read-only settings view instead of the form when finished", async () => {
@@ -217,7 +217,7 @@ describe("tournament workspace — editable lifecycles", () => {
       { id: "e1", display_name: "viewer1", source: "chat", status: "pending", eligible: true, alt_flag: false },
       { id: "e2", display_name: "viewer2", source: "chat", status: "pending", eligible: true, alt_flag: false },
     ]);
-    const menus = $id("tournament-entry-list").querySelectorAll("details.tourn-menu");
+    const menus = $id("tournament-entry-list").querySelectorAll("details.tn-menu");
     expect(menus).toHaveLength(2);
     const actions = [...menus[0].querySelectorAll("[data-entry-action]")].map((b) => b.dataset.entryAction);
     expect(actions).toEqual(["remove", "block"]);
@@ -241,11 +241,11 @@ describe("tournament workspace — bracket modal teardown race", () => {
       mod.leave();
       await opened;
       await new Promise((resolve) => setTimeout(resolve, 0));
-      expect($id("tournament-bracket-modal").hidden).toBe(true);
+      expect($id("tournament-bracket-modal")).toBeNull();
       expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
       // Escape on the closed modal must do nothing and not throw.
       document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      expect($id("tournament-bracket-modal").hidden).toBe(true);
+      expect($id("tournament-bracket-modal")).toBeNull();
     } finally {
       window.YRDialog = realDialog;
     }
