@@ -59,7 +59,7 @@ for (const job of jobs) {
         await page.waitForSelector("#tournament-bracket-modal", { timeout: 15000 });
       }
       await page.waitForTimeout(400);
-      await page.screenshot({ path: `${OUT}/${shot.name}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${shot.name}.png`, ...(shot.expand ? {} : { fullPage: true }) });
       console.log("shot", shot.name);
       if (shot.expand) await page.click("#tournament-bracket-close");
     }
