@@ -80,10 +80,11 @@ try {
   const tournamentAssertions = (name) => expectState(name, (s) => {
     assert.equal(s.url.split('?')[0], '/dashboard/giveaways/tournaments');
     assert.ok(s.activeNav.includes('tournaments'), `activeNav ${s.activeNav}`);
-    assert.ok(s.h1.includes('Tournaments'), `h1 ${s.h1}`);
+    // The workspace header h1 is the tournament title itself.
+    assert.ok(s.h1.includes('Community tournament') || s.h1.includes('Tournaments'), `h1 ${s.h1}`);
     assert.equal(s.skeleton, false);
     assert.ok(s.tournamentWorkspace === true || s.tournamentEmpty === true, 'tournament pane hidden');
-    assert.equal(s.tournamentTitle, 'Community Cup');
+    assert.equal(s.tournamentTitle, 'Community tournament');
     assert.equal(s.modalLock, false);
   });
   const activityAssertions = (name) => expectState(name, (s) => {
@@ -109,9 +110,13 @@ try {
   await tournamentAssertions('tournaments-first');
   await page.screenshot({ path: `${output}/tournaments.png`, fullPage: true });
 
-  // 4. Tournaments → Activities through the fragment's own engage tabs.
+  // 4. Tournaments → Activities. Activities lives on the Engage tab strip,
+  // which the tournaments pane intentionally drops — the trip goes through
+  // the Giveaways chat page first (which still renders engage-tabs).
   errors = [];
-  await page.click('#lbDynamic a[href^="/dashboard/activities"]');
+  await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
+  await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
+  await page.click('.engage-tabs a[href^="/dashboard/activities"]');
   await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('activities-after-tournaments');
   await page.screenshot({ path: `${output}/activities.png`, fullPage: true });
@@ -124,9 +129,53 @@ try {
   await tournamentAssertions('tournaments-reenter');
   expectNoErrors('tournaments-reenter');
 
+  // 5b. Workspace tabs: Entries / Bracket / Settings panels swap in place,
+  // the bracket renders real matches, and the read-only settings view shows.
+  errors = [];
+  for (const [tab, panel] of [['entries', 'tournament-panel-entries'], ['bracket', 'tournament-panel-bracket'], ['settings', 'tournament-panel-settings']]) {
+    await page.click(`[data-tournament-tab="${tab}"]`);
+    await page.waitForSelector(`#${panel}:not([hidden])`, { timeout: 15000 });
+    await expectState(`tab-${tab}`, (s) => {
+      assert.equal(s.skeleton, false);
+      assert.equal(s.modalLock, false);
+    });
+    const active = await page.evaluate((t) => document.querySelector(`[data-tournament-tab="${t}"]`)?.classList.contains('is-active'), tab);
+    check(`tab-${tab}: active class`, () => assert.equal(active, true));
+  }
+  await expectState('bracket-content', (s) => assert.ok(s.tournamentWorkspace, 'workspace hidden'));
+  const bracketInfo = await page.evaluate(() => ({
+    matches: document.querySelectorAll('#tournament-bracket .tournament-match').length,
+    rounds: [...document.querySelectorAll('#tournament-bracket .tournament-round-head h3')].map((h) => h.textContent),
+    settingsView: !document.getElementById('tournament-settings-view')?.hidden,
+    entriesTab: document.getElementById('tournament-tab-entries')?.textContent.trim(),
+  }));
+  check('bracket: rounds + matches + entries count', () => {
+    assert.ok(bracketInfo.matches >= 1, `matches ${bracketInfo.matches}`);
+    assert.deepEqual(bracketInfo.rounds, ['Round 1', 'Semifinals', 'Final']);
+    assert.equal(bracketInfo.entriesTab, 'Entries (2)');
+  });
+  await page.click('[data-tournament-tab="settings"]');
+  await page.waitForSelector('#tournament-panel-settings:not([hidden])', { timeout: 15000 });
+  check('settings: read-only view for finished tournament', async () => assert.equal(
+    await page.evaluate(() => !document.getElementById('tournament-settings-view').hidden && document.getElementById('tournament-settings-form').hidden), true));
+
+  // 5c. No page-level horizontal overflow on the bracket tab at 1280 and 390.
+  await page.click('[data-tournament-tab="bracket"]');
+  await page.waitForSelector('#tournament-panel-bracket:not([hidden])', { timeout: 15000 });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(300);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    check(`bracket: no page-level h-overflow at ${width}px`, () => assert.ok(overflow <= 0, `overflow ${overflow}px at ${width}`));
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expectNoErrors('workspace-tabs');
+
   // 6. Route sweep without a document reload.
   const sweeps = [
-    ['giveaways-hub', '#lbDynamic a[href="/dashboard/giveaways"], .lb-nav[href="/dashboard/giveaways"]', '#engage-hub', (s) => {
+    // The tournaments pane has no link back to the hub: go via the Giveaways
+    // chat page, then the Engage strip's Giveaways tab.
+    ['giveaways-hub', 'HUB', '#engage-hub', (s) => {
       assert.equal(s.url.split('?')[0], '/dashboard/giveaways');
       assert.ok(s.h1.length, 'no h1');
       assert.equal(s.skeleton, false);
@@ -140,7 +189,13 @@ try {
   ];
   for (const [name, sel, waitSel, assertFn] of sweeps) {
     errors = [];
-    await page.click(sel);
+    if (sel === 'HUB') {
+      await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
+      await page.waitForSelector('.engage-tabs a[href="/dashboard/giveaways"]', { timeout: 15000 });
+      await page.click('.engage-tabs a[href="/dashboard/giveaways"]');
+    } else {
+      await page.click(sel);
+    }
     await page.waitForSelector(waitSel, { timeout: 15000 });
     await page.waitForTimeout(300);
     await expectState(name, assertFn);
@@ -152,7 +207,9 @@ try {
   await tournamentAssertions('sweep-tournaments');
 
   errors = [];
-  await page.click('#lbDynamic a[href^="/dashboard/activities"], .lb-nav[href^="/dashboard/activities"]');
+  await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
+  await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
+  await page.click('.engage-tabs a[href^="/dashboard/activities"]');
   await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('sweep-activities');
 
@@ -242,7 +299,9 @@ try {
     await page.click('.lb-nav[href="/dashboard/giveaways/tournaments"]');
     await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
     await tournamentAssertions(`cycle-${i}-tournaments`);
-    await page.click('.engage-tabs a[href^="/dashboard/activities"], #lbDynamic a[href^="/dashboard/activities"]');
+    await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
+    await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
+    await page.click('.engage-tabs a[href^="/dashboard/activities"]');
     await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
     await activityAssertions(`cycle-${i}-activities`);
     expectNoErrors(`cycle-${i}`);

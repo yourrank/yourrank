@@ -87,7 +87,7 @@ describe("Engage hub markup", () => {
   });
 
   it("renders feature pages with the Engage back-link and no feature tab strip", () => {
-    for (const tab of ["chat", "raffles", "preds", "tournaments"]) {
+    for (const tab of ["chat", "raffles", "preds"]) {
       const html = renderGiveawaysHtml(tab);
       expect(html, tab).toContain('class="engage-back" href="/dashboard/giveaways"');
       expect(html, tab).not.toContain("gw-nav-tabs");
@@ -95,6 +95,10 @@ describe("Engage hub markup", () => {
       expect(html, tab).not.toContain("data-tabs-more");
       expect(html, tab).toContain('class="v3-tabs engage-tabs"');
     }
+    // Tournaments owns its own page chrome: no engage tabs, no back-link.
+    const tournaments = renderGiveawaysHtml("tournaments");
+    expect(tournaments).not.toContain("engage-back");
+    expect(tournaments).not.toContain("engage-tabs");
   });
 
   it("renders the hub through renderGiveawaysHtml without drawers", () => {

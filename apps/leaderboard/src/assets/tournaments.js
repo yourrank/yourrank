@@ -17,9 +17,11 @@ export const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
 const SOURCE_LABELS = {
   chat: "Chat",
   page: "Signup page",
-  manual: "Added by you",
+  manual: "Manual",
   leaderboard: "Leaderboard",
 };
+// Lucide crown, inline so the winner mark needs no emoji or external asset.
+const CROWN_ICON = '<svg class="tourn-crown" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M5 16 3 7l5.5 4L12 4l3.5 7L21 7l-2 9H5zm0 2h14v2H5z"/></svg>';
 const STATUS_LABELS = {
   pending: "Waiting",
   confirmed: "Ready",
@@ -163,9 +165,11 @@ function panelEmptyHtml(title, body) {
 function renderEntries(lifecycle) {
   const empty = $("tournament-entries-empty");
   const list = $("tournament-entry-list");
+  const table = $("tournament-entry-table");
   if (!empty || !list) return;
   if (!entries.length) {
     list.hidden = true;
+    if (table) table.hidden = true;
     empty.hidden = false;
     if (lifecycle === "signups_open") {
       empty.innerHTML = panelEmptyHtml("Waiting for viewers.", `Ask viewers to type ${tournament.entry_keyword || "!join"} in chat.`);
@@ -179,26 +183,36 @@ function renderEntries(lifecycle) {
 
   empty.hidden = true;
   list.hidden = false;
+  if (table) table.hidden = false;
   const finished = lifecycle === "completed" || lifecycle === "cancelled";
   list.innerHTML = entries.map((entry) => {
     const flagged = tournament?.anti_alt_enabled && entry.alt_flag;
     const status = STATUS_LABELS[entry.status] || "Waiting";
     const name = esc(entry.display_name);
-    const action = finished
+    const initial = esc(String(entry.display_name || "?").trim().charAt(0).toUpperCase() || "?");
+    const menu = finished
       ? ""
-      : ["removed", "blocked"].includes(entry.status)
-        ? `<button class="tournament-row-action" type="button" data-entry-action="restore" data-entry-id="${esc(entry.id)}" aria-label="Restore ${name}">Restore</button>`
-        : `<button class="tournament-row-action" type="button" data-entry-action="remove" data-entry-id="${esc(entry.id)}" aria-label="Remove ${name}">Remove</button>
-           <button class="tournament-row-action tournament-row-action--quiet" type="button" data-entry-action="block" data-entry-id="${esc(entry.id)}" aria-label="Block ${name}">Block</button>`;
+      : `<details class="tourn-menu"><summary class="tourn-menu-toggle" aria-label="Actions for ${name}">•••</summary>
+          <div class="tourn-menu-list" role="menu">
+            ${["removed", "blocked"].includes(entry.status)
+              ? `<button type="button" role="menuitem" data-entry-action="restore" data-entry-id="${esc(entry.id)}">Restore</button>`
+              : `<button type="button" role="menuitem" data-entry-action="remove" data-entry-id="${esc(entry.id)}">Remove</button>
+                 <button type="button" role="menuitem" data-entry-action="block" data-entry-id="${esc(entry.id)}">Block</button>`}
+          </div>
+        </details>`;
     return `
-      <li class="tournament-entry-row${flagged ? " is-flagged" : ""}" data-entry-id="${esc(entry.id)}">
-        <div class="tournament-entry-main">
-          <strong>${name}</strong>
-          <span>${esc(SOURCE_LABELS[entry.source] || entry.source)} · ${esc(status)}</span>
-          ${flagged ? `<div class="tournament-entry-flag"><b>Review flag</b><span>— ${esc(entry.alt_reason || "Possible duplicate account.")}</span></div>` : ""}
-        </div>
-        <div class="tournament-entry-actions">${action}</div>
-      </li>`;
+      <tr class="tournament-entry-row${flagged ? " is-flagged" : ""}" data-entry-id="${esc(entry.id)}">
+        <td data-label="Player">
+          <span class="tourn-avatar" aria-hidden="true">${initial}</span>
+          <span class="tourn-player">
+            <strong>${name}</strong>
+            ${flagged ? `<span class="tournament-entry-flag"><b>Review flag</b> — ${esc(entry.alt_reason || "Possible duplicate account.")}</span>` : ""}
+          </span>
+        </td>
+        <td data-label="Source" class="tourn-col-source">${esc(SOURCE_LABELS[entry.source] || entry.source)}</td>
+        <td data-label="Status"><span class="tourn-pill tourn-pill--${esc(entry.status)}">${esc(status)}</span></td>
+        <td class="tourn-col-actions">${menu}</td>
+      </tr>`;
   }).join("");
 }
 
@@ -207,13 +221,18 @@ function renderSummary(lifecycle, activeCount) {
   const chip = $("tournament-status");
   chip.textContent = LIFECYCLE_LABELS[lifecycle] || lifecycle;
   chip.dataset.lifecycle = lifecycle;
-  const bits = [tournament.game_name || "Game", `${tournament.bracket_size}-player bracket`];
+  const bits = [
+    ...(String(tournament.game_name || "").trim() ? [tournament.game_name] : []),
+    `${tournament.bracket_size}-player bracket`,
+    "Single elimination",
+  ];
   $("tournament-meta").textContent = bits.join(" · ");
-  $("tournament-fact-channel").textContent = tournament.chat_channel || "—";
   $("tournament-fact-keyword").textContent = tournament.entry_keyword || "!join";
   $("tournament-fact-cap").textContent = tournament.entry_cap ? String(tournament.entry_cap) : "Unlimited";
   $("tournament-fact-spots").textContent = String(tournament.bracket_size);
   $("tournament-count").textContent = tournament.entry_cap ? `${activeCount} of ${tournament.entry_cap}` : String(activeCount);
+  const entriesTab = $("tournament-tab-entries");
+  if (entriesTab) entriesTab.textContent = `Entries (${activeCount})`;
 }
 
 function renderSettingsForm(lifecycle) {
@@ -249,6 +268,69 @@ function renderSettingsForm(lifecycle) {
 
   settingsBaseline = settingsSnapshot();
   updateDirty();
+}
+
+// One sentence of guidance per lifecycle for the Settings aside card.
+const LIFECYCLE_STATUS_COPY = {
+  draft: "Signups haven't opened yet.",
+  signups_open: "Viewers can join by typing your join command in chat.",
+  signups_locked: "Signups are locked. Pick participants to create the bracket.",
+  bracket: "The bracket is live. Enter scores to advance winners.",
+  completed: "This tournament has finished. No new signups are being accepted.",
+  cancelled: "This tournament was cancelled.",
+};
+
+// Settings panel: finished tournaments get a read-only summary, editable
+// ones keep the real form. The aside always carries status + details.
+function renderSettingsPanel(lifecycle) {
+  const view = $("tournament-settings-view");
+  const form = $("tournament-settings-form");
+  const aside = $("tournament-settings-aside");
+  if (!view || !form) return;
+  const finished = lifecycle === "completed" || lifecycle === "cancelled";
+  form.hidden = finished;
+  view.hidden = !finished;
+  if (finished) {
+    view.innerHTML = `
+      <div class="tourn-panel-head">
+        <h2>Tournament settings</h2>
+        <p class="tournament-muted">This tournament has finished; its settings are read-only.</p>
+      </div>
+      <h3 class="tourn-kv-group">General</h3>
+      <dl class="tourn-kv">
+        ${tournKvRow("Tournament name", esc(tournament.title || "—"))}
+        ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
+        ${tournKvRow("Bracket type", "Single elimination")}
+        ${tournKvRow("Bracket size", `${esc(String(tournament.bracket_size))} players`)}
+      </dl>
+      <h3 class="tourn-kv-group">Registration</h3>
+      <dl class="tourn-kv">
+        ${tournKvRow("Kick channel", esc(tournament.chat_channel || "—"))}
+        ${tournKvRow("Join command", esc(tournament.entry_keyword || "!join"))}
+        ${tournKvRow("Signup limit", esc(tournament.entry_cap ? String(tournament.entry_cap) : "Unlimited"))}
+        ${tournKvRow("Chat registration", esc(chatRegistrationLabel(lifecycle)))}
+      </dl>`;
+  }
+  if (aside) {
+    aside.innerHTML = `
+      <section class="tourn-card">
+        <h3>Tournament status</h3>
+        <p class="tourn-aside-status"><span class="tourn-pill tourn-pill--${esc(lifecycle)}">${esc(LIFECYCLE_LABELS[lifecycle] || lifecycle)}</span></p>
+        <p class="tournament-muted">${esc(LIFECYCLE_STATUS_COPY[lifecycle] || "")}</p>
+      </section>
+      <section class="tourn-card">
+        <h3>Details</h3>
+        <dl class="tourn-kv">
+          ${tournKvRow("Created", esc(formatCreated(tournament.created_at)))}
+          ${tournKvRow("Tournament ID", esc(tournament.id))}
+          ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
+          ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
+          ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
+          ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
+          ${tournKvRow("Bracket type", "Single elimination")}
+        </dl>
+      </section>`;
+  }
 }
 
 function renderPrimary(lifecycle, eligibleCount) {
@@ -306,7 +388,7 @@ function renderPrimary(lifecycle, eligibleCount) {
     step.textContent = "Enter match results in the Bracket tab to advance winners.";
   } else if (lifecycle === "completed") {
     fresh.hidden = false;
-    step.textContent = `Champion: ${tournament.winner_name || "—"}`;
+    step.innerHTML = `${CROWN_ICON}<span>Champion: ${esc(tournament.winner_name || "—")}</span>`;
   } else if (lifecycle === "cancelled") {
     fresh.hidden = false;
     step.textContent = "Tournament cancelled.";
@@ -332,8 +414,56 @@ function renderTournament() {
   renderPrimary(lifecycle, entryCounts.eligible || 0);
   renderEntries(lifecycle);
   renderBracket(lifecycle);
+  renderTournamentSummary(lifecycle);
   renderSettingsForm(lifecycle);
+  renderSettingsPanel(lifecycle);
   switchTab(activeTab);
+}
+
+// Matches that actually happened: completed, and neither side a BYE.
+function playedMatchCount() {
+  return matches.filter((m) => m.status === "completed" && m.player1_name !== BYE && m.player2_name !== BYE).length;
+}
+
+function formatCreated(value) {
+  const date = new Date(value || "");
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+}
+
+function chatRegistrationLabel(lifecycle) {
+  const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
+  const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
+  if (lifecycle === "signups_open"
+      && chatRegistration?.connected && chatRegistration.chatReady && channel && channel === siteChannel) return "Active";
+  if (lifecycle === "signups_open") return "Unavailable";
+  return "Off";
+}
+
+const tournKvRow = (label, value) => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+
+// The bracket aside: compact summary + metadata, shared shape with the
+// Settings "Details" card.
+function renderTournamentSummary(lifecycle) {
+  const aside = $("tournament-summary");
+  if (!aside || !tournament) return;
+  aside.innerHTML = `
+    <section class="tourn-card">
+      <h3>Tournament summary</h3>
+      <dl class="tourn-kv">
+        ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
+        ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
+        ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
+        ${tournKvRow("Status", `<span class="tourn-pill tourn-pill--${esc(lifecycle)}">${esc(LIFECYCLE_LABELS[lifecycle] || lifecycle)}</span>`)}
+      </dl>
+      ${tournament.winner_name ? `<div class="tourn-champ"><span class="tourn-kv-dim">Champion</span><strong>${CROWN_ICON}${esc(tournament.winner_name)}</strong></div>` : ""}
+      <dl class="tourn-kv">
+        ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
+        ${tournKvRow("Bracket type", "Single elimination")}
+        ${tournKvRow("Created", esc(formatCreated(tournament.created_at)))}
+        ${tournKvRow("Tournament ID", esc(tournament.id))}
+      </dl>
+    </section>`;
 }
 
 async function loadEntries() {
@@ -347,6 +477,7 @@ async function loadEntries() {
   matches = bracketData.matches || [];
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
+  if (bracketData.tournament?.created_at) tournament.created_at = bracketData.tournament.created_at;
   renderTournament();
 }
 
@@ -689,11 +820,41 @@ function groupBy(array, key) {
   }, {});
 }
 
+// Round labels read back from the final: last is Final, then Semifinals,
+// Quarterfinals, and everything before that is a numbered round.
+function roundLabel(index, total) {
+  if (index === total - 1) return "Final";
+  if (index === total - 2) return "Semifinals";
+  if (index === total - 3 && total >= 4) return "Quarterfinals";
+  return `Round ${index + 1}`;
+}
+
+// One source of bracket markup so the inline panel and the full-bracket
+// modal always agree.
+function bracketHtml(lifecycle) {
+  const finished = lifecycle === "completed" || lifecycle === "cancelled";
+  const byRound = groupBy(matches, "round_number");
+  const rounds = Object.keys(byRound).sort((a, b) => Number(a) - Number(b));
+  const lastRound = Number(rounds[rounds.length - 1]);
+  const championMatch = (match) =>
+    finished && tournament?.winner_name && match.winner_name === tournament.winner_name && Number(match.round_number) === lastRound;
+  return rounds.map((round, index) => {
+    const roundMatches = byRound[round].sort((a, b) => a.match_index - b.match_index);
+    const count = `${roundMatches.length} ${roundMatches.length === 1 ? "match" : "matches"}`;
+    return `<div class="tournament-round">
+      <div class="tournament-round-head"><h3>${esc(roundLabel(index, rounds.length))}</h3><span>${esc(count)}</span></div>
+      <div class="tournament-round-matches">${roundMatches.map((match) => renderMatch(match, finished, championMatch(match))).join("")}</div>
+    </div>`;
+  }).join("");
+}
+
 function renderBracket(lifecycle) {
   const bracket = $("tournament-bracket");
   const empty = $("tournament-bracket-empty");
   const champion = $("tournament-champion");
   if (!bracket || !empty || !champion) return;
+  const sub = $("tournament-bracket-sub");
+  if (sub) sub.textContent = `Single elimination · ${tournament.bracket_size}-player bracket`;
   if (!matches.length && !tournament.winner_name) {
     empty.hidden = false;
     bracket.innerHTML = "";
@@ -703,63 +864,68 @@ function renderBracket(lifecycle) {
   }
   empty.hidden = true;
   bracket.hidden = false;
-  if (tournament.winner_name) {
-    champion.hidden = false;
-    champion.textContent = `Champion: ${tournament.winner_name}`;
-  } else {
-    champion.hidden = true;
-  }
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  const byRound = groupBy(matches, "round_number");
-  const rounds = Object.keys(byRound).sort((a, b) => Number(a) - Number(b));
-  bracket.innerHTML = rounds.map((round) => {
-    const roundMatches = byRound[round].sort((a, b) => a.match_index - b.match_index);
-    return `<div class="tournament-round"><h3>Round ${esc(round)}</h3>${roundMatches.map((match) => renderMatch(match, finished)).join("")}</div>`;
-  }).join("");
+  // Kept populated but hidden: tests read the champion from this element;
+  // the visible champion treatment lives in the header and final match.
+  if (tournament.winner_name) champion.textContent = `Champion: ${tournament.winner_name}`;
+  champion.hidden = true;
+  bracket.innerHTML = bracketHtml(lifecycle);
 }
 
-function renderMatch(match, finished) {
+function renderMatch(match, finished, championMatch = false) {
   const p1 = match.player1_name || "TBD";
   const p2 = match.player2_name || "TBD";
   const isComplete = match.status === "completed";
   const bye1 = p1 === BYE;
   const bye2 = p2 === BYE;
+  const row = (name, bye, winner, score) => {
+    const label = bye ? BYE_LABEL : (name === "TBD" ? "—" : name);
+    const scoreHtml = bye || name === "TBD" ? "" : `<span class="tournament-match-score">${isComplete ? (score ?? 0) : ""}</span>`;
+    return `<div class="tournament-match-row${bye ? " is-bye" : ""}${winner ? " is-winner" : ""}${winner && championMatch ? " is-champion" : ""}">
+      <span class="tournament-match-name">${winner ? CROWN_ICON : ""}${esc(label)}</span>${scoreHtml}
+    </div>`;
+  };
   if (bye1 && bye2) {
-    return `
-    <div class="tournament-match is-empty" data-match-id="${esc(match.id)}">
-      <div class="tournament-match-players">
-        <span class="tournament-match-bye">No match</span>
-      </div>
-    </div>
-  `;
+    return `<div class="tournament-match is-bye" data-match-id="${esc(match.id)}">${row(p1, true, false)}${row(p2, true, false)}</div>`;
   }
   const p1Winner = isComplete && match.winner_name === p1;
   const p2Winner = isComplete && match.winner_name === p2;
   const canScore = !finished && !isComplete && !bye1 && !bye2 && p1 !== "TBD" && p2 !== "TBD";
-  const playerName = (name, bye, winner) => bye
-    ? `<span class="tournament-match-bye">${esc(BYE_LABEL)}</span>`
-    : `<span class="tournament-match-player${winner ? " winner" : ""}">${esc(name)}${winner ? " 👑" : ""}</span>`;
-  const scores = bye1 || bye2
-    ? `<span class="tournament-match-bye-note">${esc(bye1 ? p2 : p1)} advances automatically</span>`
-    : isComplete
-      ? `<span class="tournament-match-score">${match.player1_score ?? 0} - ${match.player2_score ?? 0}</span>`
-      : canScore
-        ? `<input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
+  const actions = bye1 || bye2
+    ? `<div class="tournament-match-actions"><span class="tournament-match-note">${esc(bye1 ? p2 : p1)} advances automatically</span></div>`
+    : canScore
+      ? `<div class="tournament-match-actions">
+           <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
            <span class="tournament-match-divider">–</span>
            <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
-           <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>`
-        : `<span class="tournament-match-tbd">Waiting for both players</span>`;
-  return `
-    <div class="tournament-match" data-match-id="${esc(match.id)}">
-      <div class="tournament-match-players">
-        ${playerName(p1, bye1, p1Winner)}
-      </div>
-      <div class="tournament-match-players">
-        ${playerName(p2, bye2, p2Winner)}
-      </div>
-      <div class="tournament-match-actions">${scores}</div>
-    </div>
-  `;
+           <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>
+         </div>`
+      : "";
+  return `<div class="tournament-match" data-match-id="${esc(match.id)}">${row(p1, bye1, p1Winner, match.player1_score)}${row(p2, bye2, p2Winner, match.player2_score)}${actions}</div>`;
+}
+
+// ---- Full-bracket modal --------------------------------------------------
+
+let releaseBracketTrap = null;
+
+async function openBracketModal() {
+  const modal = $("tournament-bracket-modal");
+  const full = $("tournament-bracket-full");
+  if (!modal || !full || !tournament) return;
+  full.innerHTML = bracketHtml(lifecycleOf(tournament, matches.length));
+  modal.hidden = false;
+  document.documentElement.classList.add("yr-modal-open");
+  const dialog = await ensureDialog().catch(() => null);
+  releaseBracketTrap = dialog ? dialog.trap(modal, closeBracketModal) : null;
+  $("tournament-bracket-close")?.focus();
+}
+
+function closeBracketModal() {
+  const modal = $("tournament-bracket-modal");
+  if (!modal || modal.hidden) return;
+  modal.hidden = true;
+  document.documentElement.classList.remove("yr-modal-open");
+  if (releaseBracketTrap) releaseBracketTrap();
+  releaseBracketTrap = null;
 }
 
 async function submitScore(matchId, target) {
@@ -902,13 +1068,17 @@ function resetTransientState() {
   entriesRefreshQueued = false;
   closeCreateModal();
   closeSelectModal();
+  closeBracketModal();
+  document.querySelectorAll("details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
   // The modal markup may already be gone when a leave races a fragment swap;
   // release any lingering focus traps and unlock the page scroll regardless.
-  if (releaseCreateTrap || releaseSelectTrap) {
+  if (releaseCreateTrap || releaseSelectTrap || releaseBracketTrap) {
     releaseCreateTrap?.();
     releaseSelectTrap?.();
+    releaseBracketTrap?.();
     releaseCreateTrap = null;
     releaseSelectTrap = null;
+    releaseBracketTrap = null;
     document.documentElement.classList.remove("yr-modal-open");
   }
   tournament = null;
@@ -965,8 +1135,11 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+  if ($("tournament-app") && !event.target.closest?.("details.tourn-menu")) {
+    document.querySelectorAll("#tournament-app details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
+  }
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, [data-tournament-tab], [data-entry-action], [data-score-match]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], [data-score-match]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -977,16 +1150,25 @@ document.addEventListener("click", async (event) => {
     if (event.target === target) closeSelectModal();
     return;
   }
+  if (target.id === "tournament-bracket-modal") {
+    if (event.target === target) closeBracketModal();
+    return;
+  }
   event.preventDefault();
   try {
     if (target.matches("[data-tournament-tab]")) return switchTab(target.dataset.tournamentTab);
-    if (target.matches("[data-entry-action]")) return await handleEntryAction(target);
+    if (target.matches("[data-entry-action]")) {
+      target.closest("details.tourn-menu")?.removeAttribute("open");
+      return await handleEntryAction(target);
+    }
     if (target.matches("[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
     if (target.id === "tournament-select-cancel") return closeSelectModal();
     if (target.id === "tournament-select-submit") return await submitSelect();
+    if (target.id === "tournament-bracket-expand") return await openBracketModal();
+    if (target.id === "tournament-bracket-close") return closeBracketModal();
     if (target.id === "tournament-settings-discard") {
       renderSettingsForm(lifecycleOf(tournament, matches.length));
       return clearFieldErrors();

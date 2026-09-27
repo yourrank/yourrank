@@ -182,7 +182,7 @@ function deriveRenderableRoutes() {
   }
   routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: true, hasBreadcrumbs: false });
   for (const [tab] of GIVEAWAY_TABS) {
-    routes.push({ path: `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`, render: "giveaways", tab, hasSubnav: true, hasBreadcrumbs: true });
+    routes.push({ path: `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`, render: "giveaways", tab, hasSubnav: tab !== "tournaments", hasBreadcrumbs: true });
   }
   for (const tab of REWARDS_TABS) {
     routes.push({
