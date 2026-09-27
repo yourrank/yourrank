@@ -10107,6 +10107,68 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   }
 }
 
+/* Insights overview: one summary band, then progressively quieter detail. */
+.v3-dash[data-auth-workspace] .insights-head { align-items: flex-end; gap: var(--ws-space-5); }
+.v3-dash[data-auth-workspace] .insights-head .v3-head-sub b { color: var(--ws-text); font-weight: 600; }
+.v3-dash[data-auth-workspace] .insights-range { display: grid; justify-items: end; gap: var(--ws-space-2); flex: none; color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .insights-range .v3-range-btn { min-width: 76px; font-family: var(--ws-sans); font-size: var(--ws-type-meta-size); white-space: nowrap; }
+.v3-dash[data-auth-workspace] .insights-range .v3-range-btn:hover:not(.is-active) { background: var(--ws-surface-strong); color: var(--ws-text); }
+.v3-dash[data-auth-workspace] .insights-range .v3-range-btn:focus-visible { outline: 2px solid var(--ws-focus); outline-offset: -3px; }
+.v3-dash[data-auth-workspace] .v3-insight-band[hidden],
+.v3-dash[data-auth-workspace] #insightsParticipationMetrics[hidden],
+.v3-dash[data-auth-workspace] #insightsOperationsMetrics[hidden],
+.v3-dash[data-auth-workspace] #insightsReviewAction[hidden],
+.v3-dash[data-auth-workspace] #insightsClaimAction[hidden],
+.v3-dash[data-auth-workspace] .insights-compact-empty[hidden] { display: none; }
+.v3-dash[data-auth-workspace] #insightsQuestions { display: grid; gap: var(--ws-space-5); }
+.v3-dash[data-auth-workspace] .insights-kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
+.v3-dash[data-auth-workspace] .insights-kpi-row > div { min-width: 0; padding: var(--ws-space-5); border-right: 1px solid var(--ws-line); }
+.v3-dash[data-auth-workspace] .insights-kpi-row > div:last-child { border-right: 0; }
+.v3-dash[data-auth-workspace] .insights-kpi-row dt { color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); font-weight: 600; }
+.v3-dash[data-auth-workspace] .insights-kpi-row dd { margin: var(--ws-space-2) 0 0; color: var(--ws-text); font: 700 var(--ws-type-page-size)/1.1 var(--ws-sans); font-variant-numeric: tabular-nums; }
+.v3-dash[data-auth-workspace] :is(.insights-community, .insights-participation, .insights-operations) { padding: var(--ws-space-5); border: 1px solid var(--ws-line); border-radius: var(--ws-radius); background: var(--ws-surface); }
+.v3-dash[data-auth-workspace] :is(.insights-community, .insights-participation, .insights-operations) .v3-card-head { margin-bottom: var(--ws-space-4); padding: 0; }
+.v3-dash[data-auth-workspace] .insights-community-chart { display: grid; gap: var(--ws-space-3); color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .insights-community-chart p { margin: 0; }
+.v3-dash[data-auth-workspace] .insights-community-track { display: flex; height: 12px; overflow: hidden; border-radius: 6px; background: var(--ws-surface-soft); }
+.v3-dash[data-auth-workspace] .insights-community-track span:first-child { background: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .insights-community-track span:last-child { background: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] .insights-community-legend { display: flex; flex-wrap: wrap; gap: var(--ws-space-5); }
+.v3-dash[data-auth-workspace] .insights-community-legend span { display: inline-flex; align-items: center; gap: var(--ws-space-2); }
+.v3-dash[data-auth-workspace] .insights-community-legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .insights-community-legend span:last-child i { background: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] #insightsParticipationMetrics,
+.v3-dash[data-auth-workspace] #insightsOperationsMetrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ws-space-4); margin: 0; }
+.v3-dash[data-auth-workspace] #insightsOperationsMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.v3-dash[data-auth-workspace] :is(#insightsParticipationMetrics, #insightsOperationsMetrics) dt { color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] :is(#insightsParticipationMetrics, #insightsOperationsMetrics) dd { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--ws-space-3); margin: var(--ws-space-2) 0 0; }
+.v3-dash[data-auth-workspace] #insightsParticipationMetrics dd { color: var(--ws-text); font: 700 var(--ws-type-section-size) var(--ws-sans); }
+.v3-dash[data-auth-workspace] #insightsOperationsMetrics strong { color: var(--ws-text); font: 700 var(--ws-type-section-size) var(--ws-sans); }
+.v3-dash[data-auth-workspace] #insightsOperationsMetrics a { color: var(--ws-accent); font-size: var(--ws-type-meta-size); text-underline-offset: 3px; }
+.v3-dash[data-auth-workspace] .insights-operations:not(.has-pending) { padding-block: var(--ws-space-4); background: var(--ws-surface-soft); }
+.v3-dash[data-auth-workspace] .insights-operations:not(.has-pending) .v3-card-head { margin-bottom: var(--ws-space-2); }
+.v3-dash[data-auth-workspace] .insights-operations.has-pending { border-color: var(--ws-accent-line); }
+.v3-dash[data-auth-workspace] .insights-compact-empty { color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .v3-analytics-page .v3-line-chart svg { height: auto; max-height: 150px; }
+.v3-dash[data-auth-workspace] .insights-timing .heatmap > .v3-empty { min-height: 0; padding: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] #perf-events .metric-glossary { margin-top: 0; }
+@media (max-width: 900px) {
+  .v3-dash[data-auth-workspace] .insights-kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div { border-bottom: 1px solid var(--ws-line); }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:nth-child(3) { border-right: 0; }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:nth-child(n + 4) { border-bottom: 0; }
+}
+@media (max-width: 640px) {
+  .v3-dash[data-auth-workspace] .insights-head { align-items: flex-start; flex-direction: column; }
+  .v3-dash[data-auth-workspace] .insights-range { justify-items: start; }
+  .v3-dash[data-auth-workspace] .insights-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:nth-child(2n) { border-right: 0; }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:nth-child(3) { border-right: 1px solid var(--ws-line); }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:nth-child(4) { border-bottom: 1px solid var(--ws-line); }
+  .v3-dash[data-auth-workspace] .insights-kpi-row > div:last-child { grid-column: 1 / -1; border-bottom: 0; }
+  .v3-dash[data-auth-workspace] #insightsParticipationMetrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* == tour:start — P4-1 creator onboarding tour. A non-blocking spotlight:
    the ring dims the rest of the page with a huge box-shadow but never
    captures pointer events, so the dashboard stays explorable mid-tour. */

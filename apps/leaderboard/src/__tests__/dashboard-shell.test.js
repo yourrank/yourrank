@@ -305,13 +305,20 @@ describe("signed-in shell navigation", () => {
       .not.toContain('class="v3-crumbs"');
   });
 
-  it("omits breadcrumbs on top-level dashboard pages and keeps them on tab pages", () => {
-    for (const path of ["/dashboard", "/dashboard/leaderboards", "/dashboard/site"]) {
+  it("omits redundant Insights breadcrumbs and keeps trails on nested editor pages", () => {
+    for (const path of [
+      "/dashboard",
+      "/dashboard/leaderboards",
+      "/dashboard/site",
+      "/dashboard/analytics",
+      "/dashboard/analytics/activity",
+      "/dashboard/analytics/events",
+      "/dashboard/analytics/referrals",
+    ]) {
       expect(PAGES.dashboard.Component({ activePath: path }).toString()).not.toContain('class="v3-crumbs"');
     }
-    for (const path of ["/dashboard/leaderboard/design", "/dashboard/analytics/activity"]) {
-      expect(PAGES.dashboard.Component({ activePath: path }).toString()).toContain('class="v3-crumbs"');
-    }
+    expect(PAGES.dashboard.Component({ activePath: "/dashboard/leaderboard/design" }).toString())
+      .toContain('class="v3-crumbs"');
     for (const render of [RewardsChannelPage, AudienceReviewsPage, AudienceActivityPage]) {
       expect(render().toString()).toContain('class="v3-crumbs"');
     }

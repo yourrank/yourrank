@@ -81,10 +81,10 @@ export async function getStats(env, siteId) {
   };
 }
 
-// 7x24 heatmap grid of view counts for the last 30 days.
-export async function getHeatmap(env, siteId) {
+// 7x24 heatmap grid of view counts for the selected reporting window.
+export async function getHeatmap(env, siteId, days = 30) {
   try {
-    const since = new Date(Date.now() - 29 * 86400e3).toISOString().slice(0, 10);
+    const since = new Date(Date.now() - (days - 1) * 86400e3).toISOString().slice(0, 10);
     const rows = await analyticsQuery(
       "SELECT day_of_week, hour, SUM(views)::int AS views FROM site_stats_hourly WHERE site_id=$1 AND day>=$2 GROUP BY day_of_week, hour",
       [siteId, since]
@@ -104,10 +104,10 @@ export async function getHeatmap(env, siteId) {
   }
 }
 
-// Top 5 referrer domains for the last 30 days.
-export async function getTopReferrers(env, siteId) {
+// Top 5 referrer domains for the selected reporting window.
+export async function getTopReferrers(env, siteId, days = 30) {
   try {
-    const since = new Date(Date.now() - 29 * 86400e3).toISOString().slice(0, 10);
+    const since = new Date(Date.now() - (days - 1) * 86400e3).toISOString().slice(0, 10);
     const rows = await analyticsQuery(
       "SELECT domain, SUM(count)::int AS total FROM site_referrers WHERE site_id=$1 AND day>=$2 GROUP BY domain ORDER BY total DESC LIMIT 5",
       [siteId, since]
