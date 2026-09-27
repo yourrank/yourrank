@@ -131,7 +131,7 @@ export const DYNAMIC_SECTIONS = {
 const DYNAMIC_PATH_PREFIXES = [
   ["activities", routeById("activities.overview").canonicalPath],
   ["rewards", routeById("rewards.overview").canonicalPath],
-  ["giveaways", routeById("giveaways.hub").canonicalPath],
+  ["giveaways", dashboardAliasPath("/dashboard/giveaways", "giveaways.chat")],
   ["audience", dashboardAliasPath("/dashboard/audience", "audience.viewers")],
   ["settings", dashboardAliasPath("/dashboard/settings", "settings.account")],
   ["siteConnections", routeById("siteConnections.channel").canonicalPath],

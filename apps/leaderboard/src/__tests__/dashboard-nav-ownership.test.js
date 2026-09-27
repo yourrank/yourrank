@@ -48,14 +48,11 @@ describe("dashboard navigation ownership", () => {
     const groups = items.filter((item) => "kind" in item && item.kind === "group");
     const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
 
-    // The rail is flat and task-worded: one Community workspace (leaderboard
-    // editor + site pages + the all-sites list, all owned by the "board"
-    // navKey), Audience for members, Engage for activities/giveaways, Rewards
-    // for credits, and Insights for analytics. Site management is reached through the
-    // topbar site selector's "Manage all sites…" entry, not a rail item.
-    expect(groups.length).toBe(0);
+    // Engage discloses its two destinations; route scope remains unchanged.
+    expect(groups.map(item => item.key)).toEqual(["engage"]);
+    expect(groups[0].children.map(item => item.key)).toEqual(["tournaments", "giveaways"]);
     expect(topLevel.map((item) => item.key)).toEqual([
-      "home", "board", "audience", "engage", "rewards", "performance", "telegram", "settings",
+      "home", "board", "audience", "rewards", "performance", "telegram", "settings",
     ]);
 
     // Restricted legacy destinations remain routable for owners but are not
@@ -68,7 +65,7 @@ describe("dashboard navigation ownership", () => {
   it("keeps the route owner map consistent with the scope grouping", () => {
     // Route ownership is independent of visual grouping: every route still
     // resolves to exactly one rendered rail key.
-    const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
+    const keys = new Set([...dashboardNavItems(), ...flattenNav(dashboardNavItems())].map((item) => item.key));
     const containedLegacyOwners = new Set(["games"]);
     for (const route of Object.keys(NAV_OWNER_MAP)) {
       const owner = navOwner(route);
@@ -158,7 +155,7 @@ describe("dashboard navigation ownership", () => {
   });
 
   it("maps target routes to one visible key and keeps restricted legacy owners unrendered", () => {
-    const keys = new Set(flattenNav(dashboardNavItems()).map((item) => item.key));
+    const keys = new Set([...dashboardNavItems(), ...flattenNav(dashboardNavItems())].map((item) => item.key));
     for (const [route, owner] of [
       ["home", "home"],
       ["board", "board"],
@@ -197,9 +194,14 @@ describe("dashboard navigation ownership", () => {
       expect(mapActiveNav(route)).toBe(owner);
       expect(keys.has(owner)).toBe(false);
     }
-    for (const path of ["/dashboard", "/dashboard/activities", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
+    for (const path of ["/dashboard", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
     }
+    // Activities remains reachable from the page-owned tabs. It opens Engage
+    // without falsely selecting either of the sidebar's two child destinations.
+    const activities = dashboardHtml("/dashboard/activities");
+    expect(activities).toContain('data-nav-group="engage" data-current-group="true"');
+    expect(activities.match(/class="lb-nav[^"]* is-on/g) || []).toHaveLength(0);
     expect(dashboardHtml("/dashboard/leaderboards")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
     expect(dashboardHtml("/dashboard/site")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
   });

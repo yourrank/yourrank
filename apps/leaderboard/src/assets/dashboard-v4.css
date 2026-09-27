@@ -121,7 +121,7 @@ body:has(.v3-dash[data-auth-workspace]),
   --ws-radius-pill: 999px;
   --ws-shadow: none;
   --ws-shadow-overlay: 0 16px 48px rgba(18, 17, 17, 0.14);
-  --ws-sidebar-w: 232px;
+  --ws-sidebar-w: 228px;
   --ws-topbar-h: 64px;
   --ws-main-pad-inline: 40px;
   --ws-control-h: 40px;
@@ -312,9 +312,9 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   z-index: 110;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ws-space-3);
   width: var(--ws-sidebar-w);
-  padding: 16px 14px;
+  padding: var(--ws-space-3);
   overflow: hidden;
   border: 0;
   border-right: 1px solid var(--ws-chrome-line);
@@ -331,9 +331,9 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 48px;
-  padding: 0 2px 12px;
-  border-bottom: 1px solid var(--ws-chrome-line);
+  min-height: var(--ws-space-8);
+  flex-shrink: 0;
+  padding: 0;
 }
 
 .v3-dash[data-auth-workspace] .lb-side-brand {
@@ -578,55 +578,54 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ws-space-3);
   flex: 0 0 auto;
   min-width: 0;
-  height: 36px;
-  padding: 0 10px;
+  height: var(--ws-control-h);
+  padding: 0 var(--ws-space-3);
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: var(--ws-radius-sm);
   color: var(--ws-chrome-text-soft);
-  font-size: 13.5px;
-  font-weight: 500;
+  font-family: inherit;
+  font-size: var(--ws-type-body-size);
+  font-weight: 400;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease;
 }
 .v3-dash[data-auth-workspace] .lb-nav-group {
-  margin-top: var(--ws-space-2);
+  flex-shrink: 0;
 }
-.v3-dash[data-auth-workspace] .lb-nav-group-label {
-  padding: 8px 10px 4px;
-  color: var(--ws-chrome-text-soft);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+.v3-dash[data-auth-workspace] .lb-nav-group-toggle { width: 100%; }
+.v3-dash[data-auth-workspace] .lb-nav-group[data-current-group] > .lb-nav-group-toggle {
+  color: var(--ws-chrome-text);
 }
-/* The hairline is the whole "these apply to the selected site" statement: the
-   group reads as one branch of the rail instead of an explanatory panel. */
+.v3-dash[data-auth-workspace] .lb-nav-chevron { width: var(--ws-space-3); height: var(--ws-space-3); margin-left: auto; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.v3-dash[data-auth-workspace] .lb-nav-group-toggle[aria-expanded="true"] .lb-nav-chevron { transform: rotate(90deg); }
 .v3-dash[data-auth-workspace] .lb-nav-group-items {
   display: grid;
   gap: 2px;
-  margin-left: 19px;
-  padding-left: 8px;
-  border-left: 1px solid var(--ws-chrome-line);
+  margin-top: 2px;
+  margin-left: var(--ws-space-4);
 }
+.v3-dash[data-auth-workspace] .lb-nav-group-items[hidden] { display: none; }
 .v3-dash[data-auth-workspace] .lb-nav-child {
-  padding-left: 8px;
+  font-size: var(--ws-type-meta-size);
 }
 .v3-dash[data-auth-workspace] .lb-nav:hover {
   background: var(--ws-chrome-raised);
   color: var(--ws-chrome-text);
 }
-/* Selected destination: Raised Production Black plus a narrow violet inset cue,
-   never a filled accent row — the rail has to recede behind the work area. */
+/* Only a destination receives the accent; its disclosure parent stays quiet. */
 .v3-dash[data-auth-workspace] .lb-nav.is-on,
 .v3-dash[data-auth-workspace] .lb-nav[aria-current="page"] {
-  border-color: var(--ws-chrome-line);
-  background: var(--ws-chrome-raised);
+  border-color: transparent;
+  background: var(--ws-accent-soft);
   color: var(--ws-chrome-text);
   font-weight: 600;
   box-shadow: none;
@@ -658,8 +657,9 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   }
 }
 
-.v3-dash[data-auth-workspace] .lb-nav-ic { display: grid; place-items: center; width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 0; background: transparent; color: currentColor; }
-.v3-dash[data-auth-workspace] .lb-nav-ic svg { width: 17px; height: 17px; }
+.v3-dash[data-auth-workspace] .lb-nav-ic { display: grid; place-items: center; width: var(--ws-space-5); height: var(--ws-space-5); flex: 0 0 var(--ws-space-5); border: 0; background: transparent; color: var(--ws-text-mute); }
+.v3-dash[data-auth-workspace] .lb-nav-ic svg { width: 100%; height: 100%; stroke-width: 1.7; }
+.v3-dash[data-auth-workspace] .lb-nav:hover .lb-nav-ic { color: currentColor; }
 
 .v3-dash[data-auth-workspace] .lb-side-foot {
   display: grid;
@@ -673,12 +673,13 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-usage { color: var(--ws-chrome-text-soft); }
 .v3-dash[data-auth-workspace] .lb-usage-lbl { color: var(--ws-accent-on-chrome); }
 
-.v3-dash[data-auth-workspace] .lb-side-profile { min-width: 0; padding-top: 8px; border-top: 1px solid var(--ws-chrome-line); }
-.v3-dash[data-auth-workspace] .lb-side-profile .gm-profile { width: 100%; --gm-panel: var(--ws-surface); --gm-ink: var(--ws-text); --gm-ink-soft: var(--ws-text-mute); --gm-line: var(--ws-surface-soft); --gm-line-2: var(--ws-line); --gm-accent: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .lb-side-profile { display: flex; align-items: center; gap: var(--ws-space-1); flex-shrink: 0; min-width: 0; margin-top: auto; }
+.v3-dash[data-auth-workspace] .lb-side-profile .gm-profile { flex: 1; min-width: 0; --gm-panel: var(--ws-surface); --gm-ink: var(--ws-text); --gm-ink-soft: var(--ws-text-mute); --gm-line: var(--ws-surface-soft); --gm-line-2: var(--ws-line); --gm-accent: var(--ws-accent); }
 .v3-dash[data-auth-workspace] .lb-side-profile .gm-profile > summary { display: flex; width: 100%; min-height: 38px; padding: 4px 8px; border-color: transparent; background: rgba(255,255,255,0.04); color: var(--ws-chrome-text); }
 .v3-dash[data-auth-workspace] .lb-side-profile .gm-profile > summary:hover { border-color: var(--ws-chrome-line); background: rgba(255,255,255,0.08); }
-.v3-dash[data-auth-workspace] .lb-side-profile .gm-who-name { max-width: 132px; overflow: hidden; color: var(--ws-chrome-text); text-overflow: ellipsis; white-space: nowrap; }
-.v3-dash[data-auth-workspace] .lb-side-profile .gm-badge { color: var(--ws-accent-on-chrome); }
+.v3-dash[data-auth-workspace] .lb-side-profile .gm-who-id { display: grid; gap: 0; flex: 1; }
+.v3-dash[data-auth-workspace] .lb-side-profile .gm-who-name { min-width: 0; overflow: hidden; color: var(--ws-chrome-text); text-overflow: ellipsis; white-space: nowrap; font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .lb-side-profile .gm-who-id .gm-badge { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--ws-chrome-text-soft); font-size: var(--ws-type-label-size); }
 .v3-dash[data-auth-workspace] .lb-side-profile .gm-profile-chevron { margin-left: auto; color: var(--ws-chrome-text-soft); }
 .v3-dash[data-auth-workspace] .lb-side-profile .gm-profile-menu {
   position: fixed;
@@ -1168,104 +1169,28 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-crumbs a { flex: 0 1 auto; }
 .v3-dash[data-auth-workspace] .v3-crumbs > [aria-current="page"] { flex: 0 0 auto; max-width: 60%; }
 
-/* Collapsed desktop rail: every route remains present and icon-addressable.
-   Collapsed nav items get a CSS tooltip via the title attribute so icon-only
-   rail never forces pure recall. */
+/* A single width token moves the rail and content together, without animation. */
 @media (min-width: 981px) {
-  /* One token drives the rail width, so top bar and main follow it. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] {
-    --ws-sidebar-w: 44px;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side {
-    padding-inline: 0;
-    align-items: center;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-nav,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-head,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-foot {
-    width: 44px;
-    align-items: center;
-    padding-inline: 0;
-    margin-inline: auto;
-  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] { --ws-sidebar-w: 68px; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side { padding-inline: var(--ws-space-2); }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-nav { margin-inline: 0; padding-inline: 0; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-brandrow { flex-direction: column; gap: var(--ws-space-1); }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-brand { margin: 0; }
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-brandcopy,
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .gm-who-id,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .gm-profile-chevron {
-    display: none !important;
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .gm-profile-chevron,
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-chevron { display: none; }
+  /* Keep link text in the accessibility tree in the icon rail. */
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
   }
-  /* The group label still names its nav group for assistive tech, so it is
-     taken out of view rather than removed. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-group-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-    border: 0;
-  }
-  /* Icon-only rows inside the rail. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-brand,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-brandrow,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-collapse,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav {
-    justify-content: center !important;
-    /* Their borders have to sit inside the rail, or the rail scrolls sideways. */
-    box-sizing: border-box !important;
-    width: 44px !important;
-    min-height: 40px !important;
-    height: 40px !important;
-    flex-basis: 40px !important;
-    margin-inline: auto !important;
-    padding: 0 !important;
-    font-size: 0 !important;
-    position: relative !important;
-    overflow: hidden !important;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav .lb-nav-ic {
-    margin: 0 !important;
-  }
-  /* Icon-only rows align on one axis, so the group hairline and indent go away
-     and the selected cue keeps its edge position. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-group-items {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: 0;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav.is-on::before,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav[aria-current="page"]::before {
-    height: 22px;
-  }
-  /* The control points at the edge it moves the rail toward. */
-  .v3-dash[data-auth-workspace] .lb-side-collapse svg {
-    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-collapse svg {
-    transform: scaleX(-1);
-  }
-  /* The plan badge has no room next to a 28px avatar. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-badge {
-    display: none;
-  }
-  /* The account trigger is wider than the icon rail, so it is squared to it and
-     its menu opens beside the rail instead of being clipped by it. */
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-profile {
-    padding-inline: 0;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile,
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-trigger {
-    box-sizing: border-box;
-    width: 44px;
-    min-width: 0;
-    justify-content: center;
-    padding: 0;
-  }
-  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-menu {
-    right: auto;
-    left: calc(100% + 8px);
-  }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav { justify-content: center; padding-inline: 0; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-nav-group-items { margin-left: 0; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-collapse svg { transform: scaleX(-1); }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side-profile { flex-direction: column-reverse; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile { width: 100%; }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-trigger { justify-content: center; padding: var(--ws-space-1); }
+  .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-side .gm-profile-menu { left: calc(var(--ws-sidebar-w) + var(--ws-space-2)); }
 
   .v3-dash[data-auth-workspace][data-side-collapsed="true"] .lb-ws-switcher {
     display: flex;
@@ -4549,7 +4474,6 @@ body:has(.v3-dash[data-auth-workspace]) > .lb-backdrop.is-open { opacity: 1; poi
 
 /* Tablet and mobile */
 @media (max-width: 1180px) and (min-width: 981px) {
-  .v3-dash[data-auth-workspace] { --ws-sidebar-w: 248px; }
   .v3-dash[data-auth-workspace] { --ws-main-pad-inline: 24px; }
   .v3-dash[data-auth-workspace] .lb-site-path { display: none; }
   .v3-dash[data-auth-workspace] section[data-page="board"] .design-grid { grid-template-columns: 1fr; }
@@ -7737,8 +7661,6 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 .v3-dash[data-auth-workspace] .v3-inline-save[data-state="saved"] { color: var(--ws-success);
 }
 
-.v3-dash[data-auth-workspace] .lb-side-nav .lb-nav { height: 34px; padding: 0 10px; gap: 9px; font-size: 13px;
-}
 @keyframes v3-btn-spin { to { transform: rotate(360deg); } }
 
 .v3-dash[data-auth-workspace] .lb-board-select-wrap {
@@ -10076,155 +9998,3 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 .od-canvas {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--ws-line-strong);
-  border-radius: var(--ws-radius-sm);
-  overflow: hidden;
-  background:
-    repeating-conic-gradient(var(--ws-surface-soft) 0% 25%, var(--ws-surface) 0% 50%) 50% / 24px 24px;
-}
-
-.od-canvas iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-.od-handle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--ws-accent);
-  border-radius: var(--ws-radius-pill);
-  background: var(--ws-chrome-raised);
-  color: var(--ws-chrome-text);
-  font: inherit;
-  font-size: var(--ws-type-label-size);
-  font-weight: 600;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.od-handle:active { cursor: grabbing; }
-
-.od-handle:focus-visible {
-  outline: var(--ws-focus-width, 2px) solid var(--ws-focus);
-  outline-offset: var(--ws-focus-offset, 2px);
-}
-
-.od-handle.is-ticker {
-  /* The ticker bar spans the canvas width: the handle rides the full row. */
-  left: 50%;
-  width: calc(100% - 24px);
-  justify-content: center;
-  border-style: dashed;
-}
-
-.od-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ws-space-3);
-}
-
-.od-controls .field {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-}
-
-.od-controls .od-num input { max-width: 84px; }
-
-.od-controls .od-switch-row {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ws-space-2);
-  min-height: 36px;
-}
-.od-controls .od-switch-row .hint { margin: 0; }
-
-.od-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--ws-space-2);
-  margin-left: auto;
-}
-/* == overlay-designer:end */
-
-/* == role-preview:start */
-/* P4-4: view-as-moderator preview banner. Appended to <body> by
-   role-preview.js, so it sits outside the shell grid and is fixed instead. */
-.yr-role-preview-banner {
-  position: fixed;
-  top: calc(var(--ws-topbar-h) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: min(92vw, 560px);
-  padding: 10px 14px;
-  border: 1px solid var(--ws-accent-line);
-  border-radius: var(--ws-radius-sm);
-  background: var(--ws-surface);
-  color: var(--ws-text);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
-}
-/* == role-preview:end */
-
-/* Setup → Leaderboards: fixed Main/Loyalty rows sharing the block-toggle row style. */
-.v3-dash[data-auth-workspace] .lb-type-row { padding: var(--ws-space-3) 0; }
-.v3-dash[data-auth-workspace] .lb-type-copy { display: grid; gap: var(--ws-space-1); min-width: 0; }
-.v3-dash[data-auth-workspace] .lb-type-copy .hint { margin: 0; }
-.v3-dash[data-auth-workspace] .lb-type-control { display: inline-flex; align-items: center; gap: var(--ws-space-2); }
-.v3-dash[data-auth-workspace] .lb-type-control .hint { margin: 0; min-width: 2ch; }
-
-/* Community competition list and Standings subnavigation use workspace tokens. */
-.v3-dash[data-auth-workspace] .standings-tabs { display: flex; gap: var(--ws-space-2); margin-block: var(--ws-space-4); }
-.v3-dash[data-auth-workspace] .standings-tabs [aria-current="page"] { color: var(--ws-accent); background: var(--ws-accent-soft); }
-.v3-dash[data-auth-workspace] .competition-list { display: grid; margin-block: var(--ws-space-5); }
-.v3-dash[data-auth-workspace] .competition-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-4); padding-block: var(--ws-space-5); border-bottom: 1px solid var(--ws-line); }
-.v3-dash[data-auth-workspace] .competition-row h2 { margin: 0 0 var(--ws-space-2); overflow-wrap: anywhere; }
-.v3-dash[data-auth-workspace] .competition-meta { display: flex; flex-wrap: wrap; gap: var(--ws-space-3); color: var(--ws-text-soft); }
-.v3-dash[data-auth-workspace] .event-boards fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: var(--ws-space-5); }
-.v3-dash[data-auth-workspace] .event-boards .btn { min-height: var(--ws-control-h-touch); }
-
-.v3-dash[data-auth-workspace] .event-boards { padding-top: var(--ws-space-5); }
-/* Competition management stays inside the existing Community workspace. */
-.v3-dash[data-auth-workspace] .competition-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ws-space-4); margin-block: var(--ws-space-5); }
-.v3-dash[data-auth-workspace] .competition-heading h1 { margin: 0 0 var(--ws-space-2); overflow-wrap: anywhere; }
-.v3-dash[data-auth-workspace] #eventBoardForm { max-width: 640px; }
-.v3-dash[data-auth-workspace] #eventBoardSave { justify-self: start; }
-.v3-dash[data-auth-workspace] .competition-facts { display: flex; flex-wrap: wrap; gap: var(--ws-space-6); margin: 0; }
-.v3-dash[data-auth-workspace] .competition-facts dt { color: var(--ws-text-soft); }
-.v3-dash[data-auth-workspace] .competition-facts dd { margin: var(--ws-space-2) 0 0; font-variant-numeric: tabular-nums; }
-.v3-dash[data-auth-workspace] .competition-danger { border-top: 1px solid var(--ws-line); margin-top: var(--ws-space-6); padding-top: var(--ws-space-5); }
-.v3-dash[data-auth-workspace] .competition-danger h2 { font-size: 16px; }
-.v3-dash[data-auth-workspace] .competition-toolbar { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--ws-space-4); }
-.v3-dash[data-auth-workspace] .competition-toolbar .field { flex: 1 1 240px; max-width: 400px; }
-.v3-dash[data-auth-workspace] .competition-entry { margin-block: var(--ws-space-5); padding: var(--ws-space-5); border: 1px solid var(--ws-line); border-radius: var(--ws-radius); max-width: 700px; }
-.v3-dash[data-auth-workspace] .competition-entry h3 { margin: 0 0 var(--ws-space-4); }
-.v3-dash[data-auth-workspace] .competition-entry [role="alert"] { color: var(--ws-danger); }
-.v3-dash[data-auth-workspace] .competition-player, .v3-dash[data-auth-workspace] .competition-player-head { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(120px, .4fr) 190px; align-items: center; gap: var(--ws-space-4); padding-block: var(--ws-space-4); border-bottom: 1px solid var(--ws-line); }
-.v3-dash[data-auth-workspace] .competition-player-head { color: var(--ws-text-soft); font-size: 13px; }
-.v3-dash[data-auth-workspace] .competition-player strong { overflow-wrap: anywhere; }
-.v3-dash[data-auth-workspace] .competition-rank, .v3-dash[data-auth-workspace] .competition-points { font-variant-numeric: tabular-nums; }
-.v3-dash[data-auth-workspace] .competition-points-label { display: none; }
-.v3-dash[data-auth-workspace] .competition-empty { padding-block: var(--ws-space-6); }
-.v3-dash[data-auth-workspace] #eventStandingsSave { margin-block: var(--ws-space-5); }
-@media (max-width: 700px) {
-  .v3-dash[data-auth-workspace] .competition-player-head { display: none; }
-  .v3-dash[data-auth-workspace] .competition-player { grid-template-columns: 42px minmax(0, 1fr); gap: var(--ws-space-2) var(--ws-space-3); }
-  .v3-dash[data-auth-workspace] .competition-points, .v3-dash[data-auth-workspace] .competition-player .event-board-actions { grid-column: 2; }
-  .v3-dash[data-auth-workspace] .competition-points-label { display: inline; }
-  .v3-dash[data-auth-workspace] .competition-entry { padding: var(--ws-space-4); }
-}

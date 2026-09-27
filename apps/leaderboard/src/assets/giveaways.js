@@ -2,7 +2,6 @@ import "./dashboard/command-palette.js";
 import { loadBoardShell, sitePath } from "./dashboard/board-shell.js";
 import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js";
 import { clearSession } from "./dashboard/session.js";
-import { engageCardState } from "./dashboard/engage-hub-state.js";
 import { inlineStateHtml, renderInlineState } from "./dashboard/states.js";
 import { showConfirmModal, paginate, wirePager } from "./dashboard/utils.js";
 
@@ -16,7 +15,7 @@ const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 // the module can export them for the persistent-shell dynamic-section loader.
 let _giveawaysEnter = null;
 let _giveawaysLeave = null;
-export function enter(context) { return _giveawaysEnter?.(context); }
+export function enter() { _giveawaysEnter?.(); }
 export function leave() { _giveawaysLeave?.(); }
 
 // Cross-tab sign-out: when another tab logs out, this standalone page must
@@ -1260,9 +1259,15 @@ if (!window.__yrSpaShell) {
   // =========================================================================
 
   function initEventsHub() {
-    // The server renders the active pane. Feature links own navigation
+    // The server renders the active tab and its pane. Tab links own navigation
     // so deep links and browser history remain the source of truth.
-    const activeTab = document.querySelector(".gw-tab-pane.is-active")?.id?.replace(/^pane-/, "") || "chat";
+    const activeTab = document.querySelector(".gw-tab-btn.is-active")?.dataset.tab || "chat";
+    const tabs = document.querySelector(".gw-nav-tabs");
+    const activeTabLink = tabs?.querySelector(".gw-tab-btn.is-active");
+    if (tabs && activeTabLink) {
+      const targetLeft = activeTabLink.offsetLeft - (tabs.clientWidth - activeTabLink.offsetWidth) / 2;
+      tabs.scrollTo({ left: Math.max(0, targetLeft), behavior: "auto" });
+    }
     if (activeTab === "raffles") loadRaffles();
     if (activeTab === "preds") loadPredictions();
 
@@ -1771,77 +1776,14 @@ if (!window.__yrSpaShell) {
   // injected fragment DOM. leave() stops the poll and timers and removes the
   // document-level keydown listener so nothing leaks. Entry collection itself
   // happens server-side, so leaving the page never affects the giveaway.
-  // ---- Engage feature hub ----
-  // The hub renders its "none" state server-side; once site context is known
-  // the four feature APIs fill in live status. A failed call keeps the SSR
-  // copy and only swaps the meta line for an honest load error.
-  function applyEngageCard(feature, state) {
-    const card = document.querySelector(`#engage-hub .engage-card[data-feature="${feature}"]`);
-    if (!card || !state) return;
-    card.classList.toggle("is-live", state.tone === "live");
-    card.classList.toggle("is-done", state.tone === "done");
-    card.classList.toggle("is-warn", state.tone === "warn");
-    const label = card.querySelector("[data-status-label]");
-    if (label && state.label) label.textContent = state.label;
-    const meta = card.querySelector("[data-status-meta]");
-    if (meta && Array.isArray(state.meta)) {
-      meta.textContent = "";
-      for (const line of state.meta) {
-        const span = document.createElement("span");
-        span.textContent = line;
-        meta.appendChild(span);
-      }
-    }
-    const action = card.querySelector("[data-action]");
-    if (action && state.action) {
-      action.textContent = state.action.label;
-      action.classList.toggle("btn--accent", state.action.variant !== "ghost");
-      action.classList.toggle("btn--ghost", state.action.variant === "ghost");
-    }
-  }
-
-  async function bootEngageHub() {
-    if (!document.getElementById("engage-hub")) return;
-    try {
-      const shell = await loadBoardShell();
-      siteId = shell.activeSiteId || "";
-    } catch (error) {
-      window.__yrBoot?.fail(error?.message || "The dashboard shell could not be loaded.");
-      return;
-    }
-    const fetchers = {
-      chat: () => chatApi(""),
-      raffles: () => dashboardFetch(sitePath("/api/events/raffles")),
-      preds: () => dashboardFetch(sitePath("/api/predictions")),
-      tournaments: () => dashboardFetch(sitePath("/api/tournaments")),
-    };
-    const features = Object.keys(fetchers);
-    const results = await Promise.allSettled(features.map((feature) => fetchers[feature]()));
-    await Promise.all(results.map(async (result, index) => {
-      const feature = features[index];
-      if (result.status !== "fulfilled" || !result.value?.ok) {
-        applyEngageCard(feature, { tone: "none", meta: ["Couldn't load status."] });
-        return;
-      }
-      const payload = await responseData(result.value).catch(() => ({}));
-      applyEngageCard(feature, engageCardState(feature, payload));
-    }));
-    window.__yrBoot?.signal();
-  }
-
-  function bootGiveaways(context = {}) {
-    if (context?.tab === "hub" || document.getElementById("engage-hub")) return bootEngageHub();
-    init();
-    initEventsHub();
-  }
-
-  function giveawaysEnter(context = {}) {
+  function giveawaysEnter() {
     clearInterval(pollTimer); pollTimer = null;
     clearInterval(timerInterval); timerInterval = null;
     clearInterval(claimTimerInterval); claimTimerInterval = null;
     session = null; entrants = []; currentWinner = null; isRolling = false; winnerClaimed = false;
     claimExpired = false; settingsSessionId = null; autoRerollInFlight = false;
-    return bootGiveaways(context);
+    init();
+    initEventsHub();
   }
 
   function giveawaysLeave() {
@@ -1863,10 +1805,12 @@ if (!window.__yrSpaShell) {
   if (!window.__yrSpaShell) {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
-        bootGiveaways();
+        init();
+        initEventsHub();
       });
     } else {
-      bootGiveaways();
+      init();
+      initEventsHub();
     }
   }
 })();

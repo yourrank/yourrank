@@ -108,7 +108,8 @@ describe("help pages", () => {
     expect(signedOut).toContain('aria-current="page"');
     for (const href of [
       "/dashboard/leaderboard",
-      "/dashboard/activities",
+      "/dashboard/giveaways/tournaments",
+      "/dashboard/giveaways/chat",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
@@ -201,7 +202,9 @@ describe("help pages", () => {
     expect(html).toContain('href="/help/support?area=help');
     expect(html).not.toContain('data-nav="help"');
     expect(html).toContain('data-nav="settings"');
-    expect(html).toContain('data-nav="engage"');
+    expect(html).toContain('data-nav-group="engage"');
+    expect(html).toContain('data-nav="tournaments"');
+    expect(html).toContain('data-nav="giveaways"');
   });
 
   // YR-018: viewer help shares the account page's compact chrome — one drawer
