@@ -146,7 +146,9 @@ function switchTab(name) {
   }
 }
 
-async function loadEntries() {
+// refreshOnly marks the poll/chat/entry-action path: full reloads (initial
+// load, settings saves, lifecycle ops) always re-render.
+async function loadEntries({ refreshOnly = true } = {}) {
   if (!tournament) return;
   const [entryData, bracketData] = await Promise.all([
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`),
@@ -162,7 +164,7 @@ async function loadEntries() {
   // focused or dirty must survive the refresh — rebuilding it would steal
   // focus and wipe edits. Update the data parts and leave the form alone.
   const form = $("tournament-settings-form");
-  const settingsBusy = form && !form.closest("[hidden]")
+  const settingsBusy = refreshOnly && form && !form.closest("[hidden]")
     && (form.contains(document.activeElement) || settingsSnapshot() !== settingsBaseline);
   if (settingsBusy) {
     const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
@@ -187,7 +189,7 @@ async function loadTournament() {
   tournament = current || tournaments[0] || null;
   entries = [];
   matches = [];
-  if (tournament) await loadEntries();
+  if (tournament) await loadEntries({ refreshOnly: false });
   else render();
 }
 

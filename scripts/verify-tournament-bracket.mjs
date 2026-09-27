@@ -158,12 +158,25 @@ try {
       check(`${variant.name}-expanded: round count`, () => assert.equal(expanded.rounds, Math.log2(variant.size)));
       check(`${variant.name}-expanded: same card count`, () => assert.equal(expanded.paths, embedded.paths));
       if (variant.size >= 8) {
-        check(`${variant.name}-expanded: >=1.2x embedded grid`, () => {
-          assert.ok(expanded.gridWidth >= embedded.gridWidth * 1.2, `width ${expanded.gridWidth} vs ${embedded.gridWidth}`);
-          assert.ok(expanded.gridHeight >= embedded.gridHeight * 1.2, `height ${expanded.gridHeight} vs ${embedded.gridHeight}`);
-        });
+        check(`${variant.name}-expanded: >=1.2x embedded width`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth * 1.2, `width ${expanded.gridWidth} vs ${embedded.gridWidth}`));
       } else {
         check(`${variant.name}-expanded: wider or equal grid`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth));
+      }
+      const dlg = await page.evaluate(() => {
+        const card = document.querySelector('#tournament-bracket-modal .tn-dialog-card');
+        const body = document.getElementById('tournament-bracket-full');
+        const grid = body.querySelector('.tn-bracket-grid');
+        return {
+          dlgW: card.getBoundingClientRect().width,
+          bodyW: body.getBoundingClientRect().width,
+          gridW: grid.getBoundingClientRect().width,
+          vScroll: body.scrollHeight - body.clientHeight,
+        };
+      });
+      check(`${variant.name}-expanded: dialog width >= 85vw`, () => assert.ok(dlg.dlgW >= 0.85 * 1440, `dialog ${dlg.dlgW}`));
+      check(`${variant.name}-expanded: grid >= 80% of dialog body`, () => assert.ok(dlg.gridW >= dlg.bodyW * 0.8, `grid ${dlg.gridW} vs body ${dlg.bodyW}`));
+      if (variant.name === 'completed8') {
+        check('completed8-expanded: no vertical scroll at 1440x900', () => assert.ok(dlg.vScroll <= 1, `vScroll ${dlg.vScroll}`));
       }
       if (shots[variant.name]?.includes('expanded') || shots[variant.name]?.includes('expanded@1440')) {
         await page.screenshot({ path: `${output}/${variant.name}-expanded-1440.png`, fullPage: true });

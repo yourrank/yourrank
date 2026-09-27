@@ -120,15 +120,17 @@ function matchCard(match, { finished, isFinal, championName }) {
     </div></div>`;
   }
   if (state === "scorable") {
+    // Two rows like a played match: the score inputs sit where the score
+    // digits would, and a compact Save rides the second row's edge.
+    const row = (seed, name, player) => `<div class="tn-match-row">
+      ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
+      <span class="tn-match-name">${esc(name)}</span>
+      <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="${player}" value="0" aria-label="${esc(name)} score" />
+      ${player === 2 ? `<button class="tn-match-save" type="button" data-score-match="${esc(match.id)}">Save</button>` : ""}
+    </div>`;
     return `<div ${attrs}>
-      ${rowHtml({ seed: seedBase, name: match.player1_name })}
-      ${rowHtml({ seed: seedBase !== null ? seedBase + 1 : null, name: match.player2_name })}
-      <div class="tn-match-actions">
-        <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(match.player1_name)} score" />
-        <span class="tn-match-divider">–</span>
-        <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(match.player2_name)} score" />
-        <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit</button>
-      </div>
+      ${row(seedBase, match.player1_name, 1)}
+      ${row(seedBase !== null ? seedBase + 1 : null, match.player2_name, 2)}
     </div>`;
   }
   // completed
@@ -183,7 +185,7 @@ export function renderBracket({ tournament, matches, lifecycle, mode = "embedded
 
 // ---- Layout --------------------------------------------------------------
 
-const GAP_PX = 18; // breathing room added to the tallest real card when sizing a slot
+const GAP_PX = 12; // breathing room added to the tallest real card when sizing a slot
 
 // Measures the rendered cards, sizes `--tn-slot`, and draws the SVG
 // connectors (feeder (r,i) -> (r+1, floor(i/2))). Only real matches drive the
