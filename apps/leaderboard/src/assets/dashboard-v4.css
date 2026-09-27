@@ -1249,6 +1249,21 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   min-width: 0;
   overflow-x: visible;
 }
+.v3-dash[data-auth-workspace] #connected {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--ws-space-4);
+  min-width: 0;
+}
+.v3-dash[data-auth-workspace] .account-connections-group h2 {
+  margin-bottom: var(--ws-space-1);
+}
+.v3-dash[data-auth-workspace] .account-connections-group .card-sub {
+  margin-bottom: var(--ws-space-4);
+}
+.v3-dash[data-auth-workspace] #siteConnectionName {
+  overflow-wrap: anywhere;
+}
 .v3-dash[data-auth-workspace] #accSessions .admin-table {
   min-width: 0;
 }
@@ -1490,6 +1505,25 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   font-weight: 600;
 }
 
+.v3-dash[data-auth-workspace] .account-settings[data-settings-active="account"] .account-settings-help,
+.v3-dash[data-auth-workspace] .account-settings[data-settings-active="team"] .account-settings-help,
+.v3-dash[data-auth-workspace] .account-settings[data-settings-active="plan"] .account-settings-help { display: none; }
+
+.v3-dash[data-auth-workspace] .plan-usage-group + .plan-usage-group {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ws-line);
+}
+.v3-dash[data-auth-workspace] .plan-usage-group h3 { margin: 0 0 10px; font-size: var(--ws-type-body-size); }
+.v3-dash[data-auth-workspace] .plan-usage-group .plan-usage-secondary { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.v3-dash[data-auth-workspace] .plan-usage-group .plan-usage-row {
+  border: 0;
+  border-top: 1px solid var(--ws-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 0;
+}
+
 .v3-dash[data-auth-workspace] .account-settings-section + .account-settings-section {
   margin-top: 24px;
   padding-top: 24px;
@@ -1638,9 +1672,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 }
 
 .v3-dash[data-auth-workspace] .team-badge--owner {
-  border-color: var(--ws-accent-line);
-  background: var(--ws-accent-soft);
-  color: var(--ws-accent);
+  border-color: var(--ws-line-strong);
+  background: var(--ws-surface-soft);
+  color: var(--ws-text);
 }
 
 .v3-dash[data-auth-workspace] .team-badge--mod {
@@ -1746,6 +1780,25 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   border-top: 1px solid var(--ws-line);
 }
 
+.v3-dash[data-auth-workspace] .account-team-table .account-team-columns,
+.v3-dash[data-auth-workspace] .account-team-table .account-team-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) minmax(85px, .7fr) minmax(110px, 1fr) minmax(95px, .8fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+.v3-dash[data-auth-workspace] .account-team-table .account-team-columns {
+  padding: 0 0 8px;
+  color: var(--ws-text-mute);
+  font-size: var(--ws-type-meta-size);
+}
+.v3-dash[data-auth-workspace] .account-team-table .account-team-row > * { min-width: 0; }
+.v3-dash[data-auth-workspace] .account-team-table .account-team-person { overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .v3-dash[data-auth-workspace] .account-team-table .account-team-columns { display: none; }
+  .v3-dash[data-auth-workspace] .account-team-table .account-team-row { display: flex; align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+
 .v3-dash[data-auth-workspace] .account-team-person,
 .v3-dash[data-auth-workspace] .account-connection-row > div,
 .v3-dash[data-auth-workspace] .account-role-list > div {
@@ -1783,7 +1836,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 
 .v3-dash[data-auth-workspace] .account-connection-status {
   flex: 0 0 auto;
-  color: var(--ws-success-text);
+  color: var(--ws-text-soft);
   font-size: var(--ws-type-meta-size);
   font-weight: 650;
 }
@@ -1792,9 +1845,26 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   color: var(--ws-warning-text);
 }
 
+.v3-dash[data-auth-workspace] .account-connection-status.is-healthy {
+  color: var(--ws-success-text);
+}
+
 .v3-dash[data-auth-workspace] .account-connection-status.is-muted,
 .v3-dash[data-auth-workspace] .account-connection-scope {
   color: var(--ws-text-soft);
+}
+.v3-dash[data-auth-workspace] .account-connection-manage {
+  flex: 0 0 auto;
+}
+.v3-dash[data-auth-workspace] .account-connection-manage summary {
+  cursor: pointer;
+  list-style: none;
+}
+.v3-dash[data-auth-workspace] .account-connection-manage summary::-webkit-details-marker {
+  display: none;
+}
+.v3-dash[data-auth-workspace] .account-connection-manage > button {
+  margin-top: var(--ws-space-2);
 }
 
 .v3-dash[data-auth-workspace] .account-connection-scope {

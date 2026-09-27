@@ -20,6 +20,7 @@ import {
   acceptSiteInvite,
 } from "@yourrank/shared/team";
 import { PLATFORM_HOST } from "../constants.js";
+import { sendEmail as defaultSendEmail } from "../email.js";
 
 function getDeps(overrides = {}) {
   const deps = {
@@ -38,6 +39,7 @@ function getDeps(overrides = {}) {
     rateLimit,
     rateLimitHeaders,
     clientIp,
+    sendEmail: defaultSendEmail,
     ...overrides,
   };
   if (!overrides.getTeamSiteByUser) {
@@ -121,6 +123,13 @@ export async function handleTeamList(request, env, overrides) {
     ...member,
     accessStatus: member.role === "owner" || seats?.plan === "team" ? "active" : "paused",
   }));
+  const scheduledChange = seats?.plan === "team" && role === "owner" ? await deps.one(
+    `SELECT sub.cancel_at_period_end, sub.pending_plan, sub.pending_applies_at, sub.current_period_end
+       FROM subscriptions sub JOIN sites s ON s.user_id=sub.user_id
+      WHERE s.id=$1 AND sub.provider='polar' AND sub.status='active'
+      ORDER BY sub.current_period_end DESC LIMIT 1`,
+    [site.id],
+  ) : null;
 
   return privateJson({
     ok: true,
@@ -131,6 +140,10 @@ export async function handleTeamList(request, env, overrides) {
     members: visibleMembers,
     invites,
     seats,
+    scheduledChange: scheduledChange?.cancel_at_period_end || scheduledChange?.pending_plan
+      ? { plan: scheduledChange.cancel_at_period_end ? "free" : scheduledChange.pending_plan,
+          appliesAt: scheduledChange.pending_applies_at || scheduledChange.current_period_end }
+      : null,
   });
 }
 
@@ -149,26 +162,36 @@ export async function handleTeamInvite(request, env, overrides) {
   const body = await readJson(request);
   if (!body) return privateBad("Invalid JSON payload", 400);
 
-  const { siteId, email, role = "moderator" } = body;
+  const { siteId, email, role = "moderator", sendEmail = false } = body;
   if (!siteId || typeof siteId !== "string") return privateBad("siteId is required.");
   if (!email || typeof email !== "string") return privateBad("A valid email address is required.", 400);
+  const recipient = email.trim().toLowerCase();
 
   const resolved = await resolveTeamSite(env, user, siteId, deps);
   if (!resolved) return privateBad("Site not found", 404);
   const { site, role: requesterRole } = resolved;
   if (!canRoleManageTeam(requesterRole)) return privateBad("Only the site owner can invite team members.", 403, "forbidden");
+  if (sendEmail && !env.RESEND_API_KEY) return privateBad("Invitation email is unavailable. Create a link to share instead.", 503, "email_unavailable");
 
-  const result = await deps.createSiteInvite(site.id, user.id, email, role);
+  const result = await deps.createSiteInvite(site.id, user.id, recipient, role);
   if (!result.ok) {
     if (result.denial) return denied(result.denial, { actorId: user.id, request });
     return privateBad(result.error || "Failed to create invitation.", result.code === "forbidden" ? 403 : 400, result.code);
   }
 
+  const inviteUrl = `https://${PLATFORM_HOST}/invite/${result.token}`;
+  const delivery = sendEmail ? await deps.sendEmail(env, {
+    to: recipient,
+    subject: "You're invited to YourRank",
+    text: `You have been invited to manage a YourRank site. Accept your invitation: ${inviteUrl}\n\nThis link expires in 7 days.`,
+    html: `<p>You have been invited to manage a YourRank site.</p><p><a href="${inviteUrl}">Accept invitation</a></p><p>This link expires in 7 days.</p>`,
+  }) : null;
   return privateJson({
     ok: true,
     inviteId: result.inviteId,
-    inviteUrl: `https://${PLATFORM_HOST}/invite/${result.token}`,
-    message: `Moderator invitation generated for ${email}.`,
+    inviteUrl,
+    emailSent: !!delivery?.sent,
+    message: delivery?.sent ? `Invitation emailed to ${recipient}.` : `Moderator invitation link generated for ${recipient}.`,
   });
 }
 

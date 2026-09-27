@@ -76,6 +76,7 @@ export interface SiteMemberInfo {
   displayName: string | null;
   slug: string;
   createdAt: string;
+  siteAccess?: string[];
   invitedBy?: string | null;
 }
 
@@ -265,10 +266,16 @@ export async function listSiteMembers(
     slug: string;
     created_at: string;
     invited_by: string | null;
+    site_access: string[];
   }>(
     `SELECT sm.id, sm.site_id, sm.user_id, sm.role, sm.created_at, sm.invited_by,
             u.email, u.display_name,
-            COALESCE(sa.slug, sf.slug, '') AS slug
+            COALESCE(sa.slug, sf.slug, '') AS slug,
+            ARRAY(SELECT COALESCE(access_site.name, access_site.slug)
+                    FROM site_members access_member
+                    JOIN sites access_site ON access_site.id=access_member.site_id
+                   WHERE access_member.user_id=sm.user_id AND access_site.user_id=$2
+                   ORDER BY access_site.board_order, access_site.name) AS site_access
        FROM site_members sm
        JOIN users u ON u.id = sm.user_id
        LEFT JOIN sites sa ON sa.id = u.active_site_id AND sa.user_id = u.id
@@ -280,7 +287,7 @@ export async function listSiteMembers(
        ) sf ON true
       WHERE sm.site_id = $1
       ORDER BY sm.created_at ASC`,
-    [siteId]
+    [siteId, site.user_id]
   );
 
   const result: SiteMemberInfo[] = [];
@@ -309,6 +316,7 @@ export async function listSiteMembers(
       displayName: m.display_name,
       slug: m.slug,
       createdAt: m.created_at,
+      siteAccess: m.site_access,
       invitedBy: m.invited_by,
     });
   }

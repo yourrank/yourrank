@@ -55,12 +55,11 @@ async function loadSessions() {
       return;
     }
     let html =
-      '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Device / Started</th><th>Expires</th><th class="ta-r">Status</th></tr></thead><tbody>';
+      '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Device</th><th>Started</th><th>Last active</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     for (const s of data.sessions) {
-      const label = s.current ? '<span class="pill pill--good">● Current device</span>' : '<span class="pill pill--muted">Other browser</span>';
-      const created = s.createdAt ? new Date(s.createdAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
-      const expires = s.expiresAt ? new Date(s.expiresAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
-      html += `<tr><td><div class="session-device-cell"><strong>💻 Web Session</strong><span class="hint">${created}</span></div></td><td><span class="hint">${expires}</span></td><td class="ta-r">${label}</td></tr>`;
+      const label = s.current ? '<span class="pill pill--good">Current device</span>' : '<span class="pill pill--muted">Active</span>';
+      const created = s.createdAt ? new Date(s.createdAt).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—";
+      html += `<tr><td>${s.current ? "This browser" : "Other browser"}</td><td>${created}</td><td>${s.current ? "Just now" : "Not recorded"}</td><td>${label}</td><td>${s.current ? "Use Sign out above" : "Use Sign out other sessions above"}</td></tr>`;
     }
     html += "</tbody></table></div>";
     list.innerHTML = html;

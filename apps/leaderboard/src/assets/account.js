@@ -10,7 +10,6 @@ import { wirePlanLock, trackFunnel } from "./dashboard/plan-lock.js";
 import { renderPlan, loadHistory, loadPlanUsage } from "./dashboard/site.js";
 import { getMe, handleAuthError } from "./dashboard/session.js";
 import { parseDynamicPath } from "./dashboard/routes.js";
-import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
 
 const statusEl = () => $("status");
 let _accountPopstate = null;
@@ -18,7 +17,9 @@ let _unregisterRenderer = null;
 let _inviteModalRelease = null;
 let teamSiteId = "";
 let teamSiteName = "";
+let teamSelectedSiteId = "";
 let teamLoadVersion = 0;
+const teamInviteLinks = new Map();
 function setStatus(message, isError) {
   const el = statusEl();
   if (!el) {
@@ -236,6 +237,7 @@ function wireUnifiedSettingsTabs() {
   const panels = [...root.querySelectorAll("[data-settings-panel]")];
   const select = (key) => {
     const active = tabs.some((tab) => tab.dataset.settingsTab === key) ? key : "account";
+    root.dataset.settingsActive = active;
     const activeTab = tabs.find((tab) => tab.dataset.settingsTab === active);
     const description = root.querySelector("[data-settings-page-description]");
     tabs.forEach((tab) => {
@@ -294,53 +296,69 @@ function setUserName() {
   if (sumName && state.ME) sumName.textContent = name;
   const sumEmail = $("accSummaryEmail");
   if (sumEmail && email) sumEmail.textContent = email;
+  const verification = $("accVerification");
+  if (verification) verification.textContent = state.ME?.emailVerified ? "Verified" : "Not verified";
+  const resend = $("accResendVerification");
+  if (resend) {
+    resend.hidden = !!state.ME?.emailVerified;
+    if (!resend._wired) {
+      resend._wired = true;
+      resend.addEventListener("click", async () => {
+        resend.disabled = true;
+        try {
+          const result = await jsonReq("POST", "/api/auth/resend-verification", {});
+          $("accVerificationStatus").textContent = result.ok ? "Verification email requested. Check your inbox." : result.data?.error || "Could not send verification email.";
+        } catch {
+          $("accVerificationStatus").textContent = "Could not send verification email. Try again.";
+        } finally {
+          resend.disabled = false;
+        }
+      });
+    }
+  }
   const sumAvatar = $("accSummaryAvatar");
   if (sumAvatar && name) sumAvatar.textContent = name[0].toUpperCase();
   const sumPlan = $("accSummaryPlan");
   if (sumPlan && state.ME?.plan) sumPlan.textContent = (state.ME.plan.name || "Active").toUpperCase();
 }
 
-function renderConnectedAccounts(data, siteId = "") {
-  const wrap = $("connectedAccounts");
-  if (!wrap) return;
+function renderConnectedAccounts(data) {
+  const accountWrap = $("connectedAccounts");
+  const siteWrap = $("siteConnectionsList");
+  const siteName = $("siteConnectionName");
+  if (!accountWrap || !siteWrap || !siteName) return;
   if (!data || data.error) {
-    wrap.innerHTML = `<p class="error">Could not load connected accounts.</p>`;
-    if (siteId) {
-      const manageLink = document.querySelector(".account-related-setting a[href^=\"/dashboard/site/connections\"]");
-      if (manageLink) manageLink.href = buildDashboardPath("siteConnections.channel", { siteId });
-    }
+    accountWrap.innerHTML = `<p class="error">Could not load account connections.</p>`;
+    siteWrap.innerHTML = `<p class="error">Could not load site connections.</p>`;
+    siteName.textContent = "selected site";
     return;
   }
 
   const connections = Array.isArray(data.connections) ? data.connections : [];
-  // DEF-14: capabilities are returned by the API alongside connections so we
-  // can gate privileged actions client-side without exposing the button to
-  // users who will receive a 403 when they click it. Deny by default: the
-  // capability must be explicitly true (absent key on a cached or partial
-  // response must not unlock privileged UI).
-  const canManageConnections = (data.capabilities || {}).canRoleManageConnections === true;
-
-  wrap.innerHTML = `<div class="account-connection-list">${connections.map((connection) => {
-    const warning = connection.status === "needs_attention" || connection.status === "delivery_failed";
-    const muted = ["not_connected", "not_configured", "paused"].includes(connection.status);
-    let action;
-    if (connection.action?.kind === "disconnect_telegram") {
-      action = `<button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">${esc(connection.action.label)}</button>`;
-    } else if (connection.action?.kind === "disconnect_kick") {
-      // DEF-14: Only render the Kick Disconnect button for users with the
-      // canRoleManageConnections capability. Moderators see a read-only label.
-      action = canManageConnections
-        ? `<button class="btn btn--sm btn--ghost" type="button" data-kick-disconnect="${esc(connection.action.siteId)}">${esc(connection.action.label)}</button>`
-        : `<span class="account-connection-readonly">Connected by site owner</span>`;
-    } else {
-      action = `<a class="btn btn--sm ${warning ? "btn--accent" : "btn--ghost"}" href="${esc(connection.action?.href || "#")}">${esc(connection.action?.label || "Manage")}</a>`;
-    }
+  const accountConnections = connections.filter((connection) => !connection.id?.includes("-site:"));
+  const siteConnections = connections.filter((connection) => connection.selectedSite);
+  const canManageConnections = data.capabilities?.canRoleManageConnections === true;
+  const renderRow = (connection, siteLevel = false) => {
+    const muted = connection.statusLabel === "Not connected" || connection.statusLabel === "Not configured";
+    const action = connection.action?.kind === "manage_telegram"
+      ? `<details class="account-connection-manage"><summary class="btn btn--sm btn--ghost">Manage</summary><button class="btn btn--sm btn--ghost" type="button" id="tgDisconnect">Disconnect account</button></details>`
+      : siteLevel && !canManageConnections
+        ? `<span class="account-connection-readonly">Managed by site owner</span>`
+        : connection.action?.href
+          ? `<a class="btn btn--sm btn--ghost" href="${esc(connection.action.href)}">${esc(connection.action.label)}</a>`
+          : "";
     return `<div class="account-connection-row">
-      <div><strong>${esc(connection.provider)}</strong><span class="account-connection-scope">${esc(connection.scope)}${connection.selectedSite ? " · Selected site" : ""}</span><p>${esc(connection.detail)}</p></div>
-      <span class="account-connection-status${warning ? " is-warning" : muted ? " is-muted" : ""}">${esc(connection.statusLabel)}</span>
+      <div><strong>${esc(connection.provider)}</strong>${connection.detail ? `<p>${esc(connection.detail)}</p>` : ""}</div>
+      <span class="account-connection-status${muted ? " is-muted" : ""}">${esc(connection.statusLabel)}</span>
       ${action}
     </div>`;
-  }).join("")}</div>`;
+  };
+
+  accountWrap.innerHTML = `<div class="account-connection-list">${accountConnections.map((connection) => renderRow(connection)).join("")}</div>`;
+  siteName.textContent = data.selectedSiteName || "no site selected";
+  siteWrap.innerHTML = siteConnections.length
+    ? `<div class="account-connection-list">${siteConnections.map((connection) => renderRow(connection, true)).join("")}</div>`
+    : `<p class="hint">Select a site to manage its connections.</p>`;
 
   $("tgDisconnect")?.addEventListener("click", async (e) => {
     if (!await showConfirmModal("Disconnect Telegram", "Telegram login and bot management for this account stop until you connect again.", "Disconnect", true)) return;
@@ -351,68 +369,33 @@ function renderConnectedAccounts(data, siteId = "") {
     btn.disabled = false;
     setStatus(r.data?.error || "Could not disconnect Telegram. Try again.", true);
   });
-  wrap.querySelectorAll("[data-kick-disconnect]").forEach((button) => button.addEventListener("click", async () => {
-    if (!await showConfirmModal("Disconnect Kick", "Kick rewards for this site stop working until you connect again.", "Disconnect", true)) return;
-    button.disabled = true;
-    const siteId = button.dataset.kickDisconnect;
-    const r = await jsonReq("POST", `/api/kick/disconnect?siteId=${encodeURIComponent(siteId)}`);
-    if (r.ok && r.data?.ok) { loadConnectedAccounts(); return; }
-    button.disabled = false;
-    setStatus(r.data?.error || "Could not disconnect Kick. Try again.", true);
-  }));
-  if (siteId) {
-    const manageLink = document.querySelector(".account-related-setting a[href^=\"/dashboard/site/connections\"]");
-    if (manageLink) manageLink.href = buildDashboardPath("siteConnections.channel", { siteId });
-  }
 }
 
-// P3-4: Integration Health card — statuses from the connections payload plus
-// real "Send test" triggers against the saved per-site delivery settings.
-// Delivery metrics are not recorded server-side yet, so the card reports that
-// honestly instead of showing empty charts.
+// Delivery telemetry is not persisted yet. Show only recorded failures and
+// configuration gaps; a saved webhook or chat is never proof of health.
 function renderIntegrationHealth(data) {
   const wrap = $("integrationHealthBody");
   if (!wrap) return;
   if (!data || data.error) { wrap.innerHTML = `<p class="error">Could not load integration health.</p>`; return; }
-
+  if (!data.selectedSiteId) {
+    wrap.innerHTML = `<p class="hint">Select a site to view integration health.</p>`;
+    return;
+  }
   const health = data.integrationHealth || {};
-  const connections = Array.isArray(data.connections) ? data.connections : [];
-  const siteRows = connections
-    .filter((c) => c.id?.startsWith("discord-site:") || c.id?.startsWith("telegram-site:"))
-    .map((c) => {
-      const siteId = c.id.split(":")[1];
-      const channel = c.id.startsWith("discord-site:") ? "discord" : "telegram";
-      const testable = c.status === "configured" || c.status === "enabled";
-      return `<div class="account-connection-row">
-        <div><strong>${esc(c.provider)}</strong><span class="account-connection-scope">${esc(c.scope)}</span><p>${esc(c.detail)}</p></div>
-        <span class="account-connection-status${c.status === "configured" || c.status === "enabled" ? "" : " is-muted"}">${esc(c.statusLabel)}</span>
-        ${testable ? `<button class="btn btn--sm btn--ghost" type="button" data-integration-test="${channel}" data-site-id="${esc(siteId)}">Send test</button><span class="hint" data-integration-status="${channel}-${esc(siteId)}" role="status" aria-live="polite"></span>` : ""}
-      </div>`;
-    }).join("");
-
-  const kickIngest = health.kickIngest?.configured ? "Configured" : "Not configured";
-  const kickIngestClass = health.kickIngest?.configured ? "" : " is-warning";
-  const telemetry = health.deliveryTelemetry;
-
-  wrap.innerHTML = `<div class="account-connection-list">
-      <div class="account-connection-row">
-        <div><strong>Kick reward ingest</strong><span class="account-connection-scope">Platform</span><p>The signed webhook endpoint that receives Kick channel reward events.</p></div>
-        <span class="account-connection-status${kickIngestClass}">${esc(kickIngest)}</span>
-      </div>
-      ${siteRows}
-    </div>
-    <p class="hint">${telemetry && !telemetry.available ? esc(telemetry.reason || "Delivery telemetry is not recorded yet.") : ""}</p>`;
-
-  wrap.querySelectorAll("[data-integration-test]").forEach((button) => button.addEventListener("click", async () => {
-    const channel = button.dataset.integrationTest;
-    const siteId = button.dataset.siteId;
-    const statusEl = wrap.querySelector(`[data-integration-status="${channel}-${siteId}"]`);
-    button.disabled = true;
-    if (statusEl) statusEl.textContent = "Sending…";
-    const r = await jsonReq("POST", "/api/site/notify/test", { channel, siteId });
-    if (statusEl) statusEl.textContent = r.ok && r.data?.ok ? (r.data.message || "Test sent.") : (r.data?.error || "Test failed.");
-    button.disabled = false;
-  }));
+  const rows = [
+    ["Kick reward ingest", health.kickIngest],
+    ["Discord delivery health", health.discordDelivery],
+    ["Telegram delivery health", health.telegramDelivery],
+  ];
+  const labels = { healthy: "Healthy", failing: "Failing", not_configured: "Not configured", not_tested: "Not tested" };
+  wrap.innerHTML = `<div class="account-connection-list">${rows.map(([name, result]) => {
+    const status = result?.status || "not_tested";
+    return `<div class="account-connection-row">
+      <div><strong>${name}</strong></div>
+      <span class="account-connection-status${status === "failing" ? " is-warning" : status === "healthy" ? " is-healthy" : " is-muted"}">${labels[status] || "Not tested"}</span>
+      ${status === "failing" && result?.issueHref ? `<a class="btn btn--sm btn--ghost" href="${esc(result.issueHref)}">View issue</a>` : ""}
+    </div>`;
+  }).join("")}</div>`;
 }
 
 async function loadConnectedAccounts() {
@@ -427,7 +410,7 @@ async function loadConnectedAccounts() {
   }
   const query = board ? `?board=${encodeURIComponent(board)}` : "";
   const r = await jsonReq("GET", `/api/account/connected-accounts${query}`);
-  renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" }, board);
+  renderConnectedAccounts(r.ok ? r.data : { error: r.data?.error || "failed" });
   renderIntegrationHealth(r.ok ? r.data : { error: r.data?.error || "failed" });
 }
 
@@ -439,11 +422,12 @@ function renderTeam(data) {
   if (!data || !data.ok) {
     teamSiteId = "";
     teamSiteName = "";
-    $("teamSiteName").textContent = "site unavailable";
+    if ($("teamSiteSelector")) $("teamSiteSelector").value = "";
     $("btnOpenInviteModal").hidden = true;
     $("teamPendingSection").hidden = true;
     $("teamUpgradeLink").hidden = true;
     $("teamPlanNotice").hidden = true;
+    $("teamScheduledNotice").hidden = true;
     $("teamReadOnlyNotice").hidden = true;
     $("teamSeatUsage").textContent = "Operator seats unavailable";
     $("teamSeatContext").textContent = "Reload to try again.";
@@ -454,7 +438,7 @@ function renderTeam(data) {
 
   teamSiteId = data.siteId;
   teamSiteName = data.siteName || data.siteId;
-  $("teamSiteName").textContent = teamSiteName;
+  if ($("teamSiteSelector")) $("teamSiteSelector").value = teamSiteId;
 
   const { members = [], invites = [], canManageTeam, currentRole, seats } = data;
   const openBtn = $("btnOpenInviteModal");
@@ -477,17 +461,26 @@ function renderTeam(data) {
   if (planChip) planChip.textContent = { free: "Free", pro: "Pro", team: "Team" }[plan] || plan;
   const seatBar = $("teamSeatBar");
   if (seatBar?.style) seatBar.style.width = `${Math.min(100, Math.round((used / limit) * 100))}%`;
-  if (seatUsage) seatUsage.textContent = `${used} of ${limit} team seats`;
+  if (seatUsage) seatUsage.textContent = `${used} used · ${Math.max(0, limit - used)} available`;
   if (seatContext) {
     seatContext.textContent = plan === "team"
       ? atLimit
-        ? "All seats in use — remove a member or revoke an invite to free one."
+        ? "All seats in use. Pending invitations reserve a seat across the owner's sites; remove a member or revoke an invite to free one."
         : "Pending invitations reserve a seat across the owner's sites."
       : "Free and Pro include the owner only; saved Moderator access is paused.";
   }
   if (planNotice) {
     planNotice.hidden = !(canManageTeam && plan !== "team");
     planNotice.textContent = plan === "team" ? "" : "Additional operators require Team. Existing Moderator records are preserved and regain access when Team returns.";
+  }
+  const scheduledNotice = $("teamScheduledNotice");
+  if (scheduledNotice) {
+    const scheduled = data.scheduledChange;
+    const date = scheduled?.appliesAt ? new Date(scheduled.appliesAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "the end of this billing period";
+    scheduledNotice.hidden = !scheduled || scheduled.plan === "team";
+    scheduledNotice.textContent = scheduled?.plan === "free" || scheduled?.plan === "pro"
+      ? `Scheduled change: ${scheduled.plan === "free" ? "Free" : "Pro"} starting ${date}. Team seats and member access stay active until then. After Team ends, moderator access pauses; members are not deleted.`
+      : "";
   }
   if (readOnlyNotice) readOnlyNotice.hidden = currentRole !== "moderator";
   if (pendingSection) pendingSection.hidden = !canManageTeam || invites.length === 0;
@@ -509,24 +502,27 @@ function renderTeam(data) {
     membersEl.innerHTML = `<div class="empty"><strong>No team members yet</strong><p>Invite someone when you are ready to share site management.</p></div>`;
   } else {
     membersEl.innerHTML = `
-      <div class="account-team-list">
+      <div class="account-team-list account-team-table" aria-label="Members for ${esc(teamSiteName)}">
+        <div class="account-team-columns" aria-hidden="true"><span>Member</span><span>Role</span><span>Site access</span><span>Status</span><span>Actions</span></div>
         ${members.map((member) => {
           const displayName = member.displayName || member.email.split("@")[0];
+          const joined = member.createdAt ? new Date(member.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "Unknown";
+          const access = member.role === "owner" ? "All sites" : (member.siteAccess?.length ? member.siteAccess.join(", ") : teamSiteName);
           return `
             <div class="account-team-row">
               <div class="account-team-person">
                 <strong>${esc(displayName)}</strong>
-                <span>${esc(member.email)} · Joined ${fmtDateTime(member.createdAt)}</span>
+                <a href="mailto:${esc(member.email)}">${esc(member.email)}</a>
+                <span>Joined ${esc(joined)}</span>
               </div>
-              <div class="account-team-badges">
-                ${roleBadge(member.role)}
-                ${member.role === "owner" ? stateBadge(false) : stateBadge(member.accessStatus === "paused")}
-              </div>
+              <div>${roleBadge(member.role)}</div>
+              <div class="hint">${esc(access)}</div>
+              <div>${member.role === "owner" ? stateBadge(false) : stateBadge(member.accessStatus === "paused")}</div>
               ${canManageTeam && member.role !== "owner" ? `
                 <div class="account-team-actions">
                   <button class="btn btn--sm btn--ghost team-remove-btn" data-user-id="${esc(member.userId)}" type="button">Remove</button>
                 </div>
-              ` : ""}
+              ` : '<span class="hint">—</span>'}
             </div>
           `;
         }).join("")}
@@ -536,21 +532,22 @@ function renderTeam(data) {
 
   if (invites.length > 0) {
     invitesEl.innerHTML = `
-      <div class="account-team-list">
+      <div class="account-team-list account-team-table" aria-label="Pending invitations">
+        <div class="account-team-columns" aria-hidden="true"><span>Email / invited</span><span>Role</span><span>Site access</span><span>Status / seat</span><span>Actions</span></div>
         ${invites.map((invite) => `
           <div class="account-team-row">
             <div class="account-team-person">
               <strong>${esc(invite.email)}</strong>
-              <span>Expires ${fmtDateTime(invite.expiresAt)}</span>
+              <span>Invited ${invite.createdAt ? esc(new Date(invite.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })) : "—"}</span>
             </div>
-            <div class="account-team-badges">
-              ${roleBadge("moderator")}
-              <span class="v3-chip v3-chip--pending">Pending</span>
-            </div>
+            <div>${roleBadge("moderator")}</div>
+            <div class="hint">${esc(teamSiteName)}</div>
+            <div><span class="v3-chip v3-chip--pending">Pending</span><div class="hint">Seat reserved</div></div>
             <div class="account-team-actions">
-              ${invite.inviteUrl
-                ? `<button class="btn btn--sm btn--ghost team-copy-invite-btn" data-url="${esc(invite.inviteUrl)}" type="button">Copy link</button>`
+              ${teamInviteLinks.get(invite.id) || invite.inviteUrl
+                ? `<button class="btn btn--sm btn--ghost team-copy-invite-btn" data-url="${esc(teamInviteLinks.get(invite.id) || invite.inviteUrl)}" type="button">Copy link</button>`
                 : '<span class="hint">Link shown when created</span>'}
+              ${canManageTeam ? `<button class="btn btn--sm btn--ghost team-resend-invite-btn" data-invite-id="${esc(invite.id)}" data-email="${esc(invite.email)}" type="button">Resend</button>` : ""}
               ${canManageTeam ? `<button class="btn btn--sm btn--ghost team-revoke-invite-btn" data-invite-id="${esc(invite.id)}" type="button">Revoke</button>` : ""}
             </div>
           </div>
@@ -588,12 +585,35 @@ function renderTeam(data) {
         btn.textContent = "Revoking…";
         const res = await jsonReq("POST", "/api/site/team/invite/revoke", { inviteId, siteId });
         if (res.ok) {
+          teamInviteLinks.delete(inviteId);
           setStatus("Invitation revoked");
           loadTeam();
         } else {
           setStatus(res.data?.error || "Failed to revoke invite", true);
           btn.disabled = false;
           btn.textContent = "Revoke";
+        }
+      });
+    });
+    document.querySelectorAll(".team-resend-invite-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const siteId = teamSiteId;
+        const email = btn.getAttribute("data-email");
+        if (!await showConfirmModal("Resend invitation", `Send a new invitation to ${email}? The old link will stop working.`, "Resend invitation")) return;
+        btn.disabled = true;
+        try {
+          const res = await jsonReq("POST", "/api/site/team/invite", { email, role: "moderator", siteId, sendEmail: true });
+          if (res.ok) {
+            if (res.data?.inviteUrl) teamInviteLinks.set(btn.getAttribute("data-invite-id"), res.data.inviteUrl);
+            setStatus(res.data?.emailSent ? "Invitation sent." : "Email could not be delivered. Copy and share the new link.", !res.data?.emailSent);
+            loadTeam();
+          } else {
+            setStatus(res.data?.error || "Could not resend invitation.", true);
+          }
+        } catch {
+          setStatus("Could not resend invitation. Try again.", true);
+        } finally {
+          btn.disabled = false;
         }
       });
     });
@@ -612,7 +632,8 @@ function renderTeam(data) {
 
 async function loadTeam() {
   const version = ++teamLoadVersion;
-  const selectedSiteId = new URLSearchParams(location.search).get("siteId")
+  const selectedSiteId = teamSelectedSiteId
+    || new URLSearchParams(location.search).get("siteId")
     || state.ACTIVE_SITE_ID
     || teamSiteId
     || "";
@@ -628,6 +649,13 @@ async function loadTeam() {
 }
 
 function wireTeam() {
+  const selector = $("teamSiteSelector");
+  if (selector && !selector._wired) {
+    selector._wired = true;
+    const boards = Array.isArray(state.ME?.boards) ? state.ME.boards : [];
+    selector.innerHTML = boards.map((board) => `<option value="${esc(board.id)}">${esc(board.name || board.slug || "Site")}</option>`).join("");
+    selector.addEventListener("change", () => { teamSelectedSiteId = selector.value; loadTeam(); });
+  }
   const openBtn = $("btnOpenInviteModal");
   const modal = $("inviteMemberModal");
   const closeBtn = $("btnCloseInviteModal");
@@ -652,6 +680,7 @@ function wireTeam() {
   openBtn.addEventListener("click", async () => {
     if (!teamSiteId) return;
     $("inviteModalDescription").textContent = `Invite this person as a Moderator for ${teamSiteName}.`;
+    $("inviteSiteAccess").textContent = teamSiteName;
     modal.hidden = false;
     modal.setAttribute("aria-hidden", "false");
     if (emailInput) emailInput.value = "";
@@ -756,6 +785,8 @@ export function leave() {
   teamLoadVersion++;
   teamSiteId = "";
   teamSiteName = "";
+  teamSelectedSiteId = "";
+  teamInviteLinks.clear();
   // Remove the document-level popstate listener that wireUnifiedSettingsTabs
   // installed, so repeated enter/leave cycles do not stack duplicate handlers.
   if (_accountPopstate) {

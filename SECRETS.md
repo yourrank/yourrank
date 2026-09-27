@@ -29,6 +29,8 @@ These live in the encrypted vault attached to the Worker, not in the repo.
 | `LEAD_WEBHOOK_URL` | ⚪ | Discord/Telegram webhook to ping on each new lead. |
 | `TOKEN_ENC_KEY` | 🟡 | 64-char hex (32-byte) AES-256-GCM key. Encrypts postback keys at rest (shared/postback.ts reads `TOKEN_ENC_KEY`). Same value as the Bot Worker's `TOKEN_ENC_KEY`. |
 | `DISCORD_MONITORING_WEBHOOK` | ⚪ | Discord webhook for monitoring/error alerts. |
+| `LOGIN_BOT_TOKEN` | 🟡 | Telegram Login Widget signature verification for the Connections account-link flow. Use the same bot token as the Bot Worker. |
+| `LOGIN_BOT_USERNAME` | 🟡 | Username of that login bot; required alongside `LOGIN_BOT_TOKEN` to show the Connect Telegram widget. Configure the bot's login domain as `yourrank.site`. |
 
 ### Bot Worker (`yourrank-bot`)
 

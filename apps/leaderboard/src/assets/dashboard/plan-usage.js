@@ -13,7 +13,7 @@ export function activeViewerUsageMarkup(usage) {
   const plan = usage.plan === "pro" || usage.plan === "team" ? usage.plan : "free";
   const planLabel = plan === "team" ? "Team" : plan === "pro" ? "Pro" : "Free";
   const nextTier = plan === "free" ? "Pro" : plan === "pro" ? "Team" : null;
-  const nextTierNote = nextTier && upgradeAllowance > 0 ? ` ${nextTier} supports ${upgradeAllowance.toLocaleString()} active viewers.` : "";
+  const nextTierNote = nextTier && upgradeAllowance > 0 ? ` ${nextTier} supports ${upgradeAllowance.toLocaleString("en-US")} active viewers.` : "";
   let message = "Unique signed-in viewers who took part across all your sites.";
   if (level === "informational") message = "Your community is growing. This is a quiet heads-up; nothing changes for viewers.";
   if (level === "notice") message = `You are nearing the ${planLabel} allowance.${nextTierNote}`;
@@ -33,5 +33,5 @@ export function activeViewerUsageMarkup(usage) {
     : plan === "team"
       ? '<a class="plan-usage-action" href="/help/support">Talk to us about more scale</a>'
       : `<a class="plan-usage-action" href="/pricing">Compare ${nextTier}</a>`;
-  return `<section class="plan-active-viewers plan-active-viewers--${esc(level)}" data-level="${esc(level)}" aria-labelledby="activeViewerUsageLabel"><div class="plan-active-viewers-head"><div><h3 id="activeViewerUsageLabel">Active viewers</h3><p>Last 30 days · across your account</p></div><strong>${used.toLocaleString()} / ${limit.toLocaleString()}</strong></div><div class="plan-active-viewers-bar" role="progressbar" aria-label="Active viewer usage" aria-valuemin="0" aria-valuemax="${limit}" aria-valuenow="${Math.min(used, limit)}"><i style="width:${barPercentage}%"></i></div><div class="plan-active-viewers-foot"><p>${esc(message)}</p>${compare}</div></section>`;
+  return `<section class="plan-active-viewers plan-active-viewers--${esc(level)}" data-level="${esc(level)}" aria-labelledby="activeViewerUsageLabel"><div class="plan-active-viewers-head"><div><h3 id="activeViewerUsageLabel">Active viewers</h3><p>Last 30 days · across your account</p></div><strong>${used.toLocaleString("en-US")} / ${limit.toLocaleString("en-US")}</strong></div><div class="plan-active-viewers-bar" role="progressbar" aria-label="Active viewer usage" aria-valuemin="0" aria-valuemax="${limit}" aria-valuenow="${Math.min(used, limit)}"><i style="width:${barPercentage}%"></i></div><div class="plan-active-viewers-foot"><p>${esc(message)}</p>${compare}</div></section>`;
 }
