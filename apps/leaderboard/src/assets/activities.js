@@ -33,7 +33,7 @@ let _activitiesLeave = null;
 // no longer exists.
 const activityPaging = { pages: new ServerPages(DEFAULT_PAGE_SIZE), page: 1, pageLoading: false };
 
-export function enter() { _activitiesEnter?.(); }
+export function enter() { return _activitiesEnter?.(); }
 export function leave() { _activitiesLeave?.(); }
 
 if (!window.__yrSpaShell) {

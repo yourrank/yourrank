@@ -79,7 +79,7 @@ describe("stale-navigation race protection", () => {
       dynamicJs.indexOf("showLocalLoading"),
     );
     expect(loadFn).toContain("currentController.abort()");
-    expect(loadFn).toContain("currentLeave()");
+    expect(loadFn).toContain("runCurrentLeaves()");
   });
 });
 

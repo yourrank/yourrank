@@ -72,6 +72,10 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
+    const tournament = { id: 'fixture-tournament', title: 'Community Cup', game_name: 'Rocket League', bracket_size: 8, status: 'draft', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: '', winner_name: null };
+    if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
+    if (path === '/api/tournaments/fixture-tournament/entries') return json(res, { entries: [], counts: { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
+    if (path === '/api/tournaments/fixture-tournament/bracket') return json(res, { matches: [], tournament });
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);
@@ -96,7 +100,7 @@ const server = createServer(async (req, res) => {
     if (path === '/api/people/reviews') return json(res, { reviews: empty ? [] : [{ id: 'review-1', status: 'pending', subject: { displayName: name }, reason: { label: 'Eligibility needs review' }, typeLabel: 'Signup review', source: { title: 'Community signup' }, createdAt: now }], counts: { pending: empty ? 0 : 1 } });
     if (path === '/api/credits/activity') return json(res, { events: empty ? [] : members.slice(0, 5).map((m, i) => ({ id: `entry-${i}`, kickUsername: m.displayName, amount: 250, type: 'earn', direction: 'credit', description: 'Community activity reward', createdAt: now })), nextCursor: null });
     if (path === '/api/site/team') return json(res, { ok: true, members: empty ? [] : [{ id: 'moderator-1', user_id: 'moderator-1', email: 'moderator-with-a-long-address@example.test', role: 'moderator', display_name: name }], invites: [], role: 'owner' });
-    if (path === '/api/insights') return json(res, { window: { effectiveDays: 30 }, community: { newMembers: empty ? 0 : 24 }, participation: { participants: empty ? 0 : 68 }, rewards: { claimsCompleted: empty ? 0 : 19 } });
+    if (path === '/api/insights') return json(res, { ok: true, window: { effectiveDays: 30 }, community: { newMembers: empty ? 0 : 24 }, participation: { participants: empty ? 0 : 68 }, rewards: { claimsCompleted: empty ? 0 : 19 } });
     if (path === '/api/home/activity') return json(res, { events: empty ? [] : members.slice(0, 8).map(m => ({ kind: 'membership', at: now, title: m.displayName + ' joined the community', detail: 'Community membership' })) });
     if (path === '/bot/dash/api/me') return json(res, user);
     if (path === '/bot/dash/api/offers' || path === '/bot/dash/api/stats/daily') return json(res, []);
