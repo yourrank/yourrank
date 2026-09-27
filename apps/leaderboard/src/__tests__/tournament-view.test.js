@@ -142,6 +142,19 @@ describe("workspaceHtml", () => {
     expect(viewOnly).not.toContain("<input");
   });
 
+  it("keeps every summary aside label to one row", () => {
+    const html = workspaceHtml(vm({ lifecycle: "completed", tournament: { status: "completed", winner_name: "alpha" } }), "<div class=\"tn-bracket\"></div>");
+    const aside = html.slice(html.indexOf('id="tournament-summary"'), html.indexOf('id="tournament-champion"'));
+    for (const label of ["Entries", "Bracket size", "Matches played", "Status", "Game", "Bracket type", "Created", "Tournament ID"]) {
+      expect(aside.split(label).length - 1).toBe(1);
+    }
+    // Settings Details covers its own set without repeating General's rows.
+    const details = html.slice(html.indexOf('id="tournament-settings-aside"'));
+    for (const label of ["Created", "Tournament ID", "Entries", "Matches played"]) {
+      expect(details).toContain(label);
+    }
+  });
+
   it("marks only the active tab/panel", () => {
     const html = workspaceHtml(vm({ activeTab: "bracket" }));
     expect(html).toContain('id="tournament-tab-bracket" type="button" role="tab" aria-selected="true"');

@@ -177,14 +177,19 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
       removed: ["removed", "blocked"].includes(entry.status),
     })),
     siteChannel,
-    detailRows: tournament ? [
+    // Bracket summary aside — metadata rows after the stats list + champion.
+    summaryRows: tournament ? [
+      { icon: ICONS.game, label: "Game", value: tournament.game_name || "Not specified" },
+      { icon: ICONS.bracket, label: "Bracket type", value: "Single elimination" },
+      { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
+      { icon: ICONS.id, label: "Tournament ID", value: tournament.id, mono: true, title: tournament.id },
+    ] : [],
+    // Settings "Details" card — General already covers Game/Bracket type/size.
+    settingsDetailRows: tournament ? [
       { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
       { icon: ICONS.id, label: "Tournament ID", value: tournament.id, mono: true, title: tournament.id },
       { icon: ICONS.entries, label: "Entries", value: String(entryCounts?.active || 0) },
-      { icon: ICONS.spots, label: "Bracket size", value: String(tournament.bracket_size) },
       { icon: ICONS.played, label: "Matches played", value: String(played) },
-      { icon: ICONS.game, label: "Game", value: tournament.game_name || "Not specified" },
-      { icon: ICONS.bracket, label: "Bracket type", value: "Single elimination" },
     ] : [],
   };
 }
@@ -240,8 +245,10 @@ function tabsHtml(vm) {
 
 // ---- Entries panel -------------------------------------------------------
 
-function entriesPanelHtml(vm) {
-  const rows = vm.entriesVm.map((entry) => {
+// Rows only — also used by the controller to refresh the list in place
+// while a dirty settings form must not be rebuilt.
+export function entryRowsHtml(vm) {
+  return vm.entriesVm.map((entry) => {
     const flag = entry.flagged
       ? `<span class="tn-entry-flag"><b>Review flag</b> — ${esc(entry.flagReason)}</span>`
       : "";
@@ -265,6 +272,10 @@ function entriesPanelHtml(vm) {
       <div class="tn-entry-actions">${menu}</div>
     </div>`;
   }).join("");
+}
+
+function entriesPanelHtml(vm) {
+  const rows = entryRowsHtml(vm);
 
   let empty = "";
   if (!vm.entriesVm.length) {
@@ -334,7 +345,7 @@ function summaryAsideHtml(vm) {
       <h3>Tournament summary</h3>
       <dl class="tn-kv-list">${rows.map((r) => kvWithIcon(r)).join("")}</dl>
       ${champ}
-      <dl class="tn-kv-list">${vm.detailRows.map((r) => kvWithIcon(r)).join("")}</dl>
+      <dl class="tn-kv-list">${vm.summaryRows.map((r) => kvWithIcon(r)).join("")}</dl>
     </section>
   </aside>`;
 }
@@ -356,7 +367,7 @@ function settingsPanelHtml(vm) {
     </section>
     <section class="tn-card">
       <h3>Details</h3>
-      <dl class="tn-kv-list">${vm.detailRows.map((r) => kvWithIcon(r)).join("")}</dl>
+      <dl class="tn-kv-list">${vm.settingsDetailRows.map((r) => kvWithIcon(r)).join("")}</dl>
     </section>
   </aside>`;
 
