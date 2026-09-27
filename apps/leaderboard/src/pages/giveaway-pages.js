@@ -683,7 +683,7 @@ ${active === "tournaments"
               </div>
               <button class="btn btn--ghost btn--sm" id="tournament-bracket-expand" type="button">View full bracket</button>
             </div>
-            <div id="tournament-bracket" class="tournament-bracket"></div>
+            <div id="tournament-bracket" class="tourn-bracket-host"></div>
           </div>
           <aside class="tourn-aside" id="tournament-summary"></aside>
         </div>
@@ -776,13 +776,13 @@ ${active === "tournaments"
       </section>
     </div>
 
-    <div class="modal tournament-create-modal tourn-bracket-modal" id="tournament-bracket-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-modal-heading" hidden>
+    <div class="modal tourn-bracket-modal" id="tournament-bracket-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-modal-heading" hidden>
       <div class="modal-card tourn-bracket-modal-card">
         <div class="tourn-modal-head">
           <h3 id="tournament-bracket-modal-heading">Full bracket</h3>
           <button class="btn btn--sm btn--ghost" id="tournament-bracket-close" type="button" aria-label="Close full bracket">✕</button>
         </div>
-        <div id="tournament-bracket-full" class="tournament-bracket"></div>
+        <div id="tournament-bracket-full" class="tourn-bracket-modal-body"></div>
       </div>
     </div>
 

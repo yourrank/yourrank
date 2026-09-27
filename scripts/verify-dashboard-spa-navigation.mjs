@@ -144,14 +144,16 @@ try {
   }
   await expectState('bracket-content', (s) => assert.ok(s.tournamentWorkspace, 'workspace hidden'));
   const bracketInfo = await page.evaluate(() => ({
-    matches: document.querySelectorAll('#tournament-bracket .tournament-match').length,
-    rounds: [...document.querySelectorAll('#tournament-bracket .tournament-round-head h3')].map((h) => h.textContent),
+    matches: document.querySelectorAll('#tournament-bracket .tourn-match').length,
+    rounds: [...document.querySelectorAll('#tournament-bracket .tourn-round-head h3')].map((h) => h.textContent),
+    connectors: document.querySelectorAll('#tournament-bracket .tourn-connectors path[data-from]').length,
     settingsView: !document.getElementById('tournament-settings-view')?.hidden,
     entriesTab: document.getElementById('tournament-tab-entries')?.textContent.trim(),
   }));
   check('bracket: rounds + matches + entries count', () => {
     assert.ok(bracketInfo.matches >= 1, `matches ${bracketInfo.matches}`);
-    assert.deepEqual(bracketInfo.rounds, ['Round 1', 'Semifinals', 'Final']);
+    assert.deepEqual(bracketInfo.rounds, ['Quarterfinals', 'Semifinals', 'Final']);
+    assert.ok(bracketInfo.connectors >= 1, `connectors ${bracketInfo.connectors}`);
     assert.equal(bracketInfo.entriesTab, 'Entries (2)');
   });
   await page.click('[data-tournament-tab="settings"]');

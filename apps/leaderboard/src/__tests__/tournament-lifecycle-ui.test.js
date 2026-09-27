@@ -254,7 +254,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-panel-bracket")).toBe(true);
     expect(visible("tournament-bracket-empty")).toBe(true);
     expect($id("tournament-bracket-empty").textContent).toContain("Bracket not created yet.");
-    expect($id("tournament-bracket").querySelectorAll(".tournament-match")).toHaveLength(0);
+    expect($id("tournament-bracket").querySelectorAll(".tourn-match")).toHaveLength(0);
     await click("tournament-tab-settings");
     expect(visible("tournament-panel-settings")).toBe(true);
     expect(visible("tournament-settings-form")).toBe(true);
@@ -482,7 +482,7 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-new")).toBe(false);
     await click("tournament-tab-bracket");
     expect(visible("tournament-bracket-empty")).toBe(false);
-    expect($id("tournament-bracket").querySelectorAll(".tournament-match")).toHaveLength(3);
+    expect($id("tournament-bracket").querySelectorAll(".tourn-match")).toHaveLength(3);
     expect($id("tournament-bracket").querySelectorAll("[data-score-match]").length).toBeGreaterThan(0);
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(true);
@@ -524,7 +524,9 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-new")).toBe(true);
     await click("tournament-tab-bracket");
     expect(text("tournament-champion")).toBe("Champion: alpha");
-    expect($id("tournament-bracket").querySelectorAll(".tournament-match")).toHaveLength(1);
+    // The 4-player grid pads missing slots with TBD placeholders; the one
+    // real match is the completed final.
+    expect($id("tournament-bracket").querySelectorAll('.tourn-match[data-state="completed"]')).toHaveLength(1);
     await click("tournament-new");
     expect(visible("tournament-create-modal")).toBe(true);
   });
@@ -687,20 +689,21 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-tab-bracket");
-    const matches = [...$id("tournament-bracket").querySelectorAll(".tournament-match")];
+    const matches = [...$id("tournament-bracket").querySelectorAll(".tourn-match")];
     expect(matches).toHaveLength(3);
-    // Alice vs BYE: no inputs, no score, advance caption, sentinel rendered as BYE.
+    // Alice vs BYE: no inputs, no score, advance caption, sentinel never leaks.
+    expect(matches[0].dataset.state).toBe("bye");
     expect(matches[0].querySelectorAll("input")).toHaveLength(0);
-    expect(matches[0].textContent).toContain("BYE");
     expect(matches[0].textContent).not.toContain(BYE_SLOT);
-    expect(matches[0].textContent).toContain("Alice advances automatically");
+    expect(matches[0].textContent).toContain("Alice");
+    expect(matches[0].textContent).toContain("Advances automatically");
     expect(matches[0].textContent).not.toContain("0 - 0");
-    // BYE vs BYE: muted match with two BYE rows.
-    expect(matches[1].classList.contains("is-bye")).toBe(true);
-    expect(matches[1].querySelectorAll(".tournament-match-row.is-bye")).toHaveLength(2);
-    expect(matches[1].textContent).toContain("BYE");
+    // BYE vs BYE: compact muted void placeholder.
+    expect(matches[1].dataset.state).toBe("void");
+    expect(matches[1].textContent).not.toContain(BYE_SLOT);
     expect(matches[1].querySelectorAll("input")).toHaveLength(0);
     // TBD slot: still no inputs until both players are known.
+    expect(matches[2].dataset.state).toBe("future");
     expect(matches[2].querySelectorAll("input")).toHaveLength(0);
   });
 
@@ -714,7 +717,7 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-tab-bracket");
-    const match = $id("tournament-bracket").querySelector(".tournament-match");
+    const match = $id("tournament-bracket").querySelector(".tourn-match");
     expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
   });
 });
