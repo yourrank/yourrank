@@ -23,25 +23,28 @@ describe("Telegram overview states", () => {
   it("leads with connection state and one useful action once a bot is connected", () => {
     const page = html("overview", { botUsername: "creator_bot", botStatus: "active", siteName: "Main site" });
 
-    expect(page).toContain("@creator_bot");
+    expect(page).toContain("<h1>Telegram</h1>");
+    expect(page).not.toContain("@creator_bot");
     expect(page).toContain('id="tgConn"');
     expect(page).toContain('id="tgConnState"');
     expect(page).toContain('id="tgConnPrimary"');
-    expect(page).toContain("Send update");
-    expect(page).toContain("Edit commands");
-    expect(page).toContain('id="deepLinkExample"');
+    expect(page).toContain("Manage bot");
+    expect(page).not.toContain("What you can do");
+    expect(page).not.toContain("Your bots");
+    expect(page).not.toContain('id="ovBots"');
     expect(page).toContain('id="totClicks"');
     expect(page).toContain('id="chart"');
-    // The offer surface keeps the presentation it already had.
-    expect(page).toContain('<h2>Top offers</h2>');
-    expect(page).not.toContain('class="tg-action-name">Offers<');
+    expect(page).toContain('id="chartEmpty"');
+    expect(page).toContain('id="subSources"');
+    expect(page).toContain('id="ovOffers"');
+    expect(page).toContain('id="tgOffersTitle">Top offers</h2>');
+    expect(page).toContain("View all offers");
   });
 
-  it("puts the same connection summary on the connection page and nowhere twice", () => {
-    for (const page of ["overview", "bots"]) {
-      const markup = html(page, { botUsername: "creator_bot", botStatus: "active" });
-      expect((markup.match(/id="tgConn"/g) || []).length).toBe(1);
-    }
+  it("keeps the summary on Overview and a compact context on other tabs", () => {
+    expect((html("overview", { botUsername: "creator_bot", botStatus: "active" }).match(/id="tgConn"/g) || []).length).toBe(1);
+    expect(html("bots")).toContain('id="tgPageContext"');
+    expect(html("bots")).not.toContain('id="tgConn"');
     expect(html("broadcasts")).not.toContain('id="tgConn"');
   });
 });
@@ -70,23 +73,19 @@ describe("Telegram connection state runtime", () => {
 
   it("keeps the masked connect code and raw provider detail out of the primary row", () => {
     const rowStart = src.indexOf('<li class="tg-row tg-bot-row">');
-    const detailsStart = src.indexOf("Connection details");
+    const detailsStart = src.indexOf("<summary>Manage</summary>");
     expect(rowStart).toBeGreaterThan(-1);
     expect(detailsStart).toBeGreaterThan(rowStart);
     expect(src.slice(rowStart, detailsStart)).not.toContain("token_hint");
   });
 
-  it("no longer renders the retired bot-card mosaic for bot surfaces", () => {
+  it("renders one bot summary and structured offer rows", () => {
     expect(src).not.toContain('class="bot-card"');
-    // The only remaining legacy rows belong to the offer summary, which this
-    // change deliberately leaves as it is.
+    expect(src).not.toContain("$('ovBots')");
     const offerSummaryStart = src.indexOf("const oo = $('ovOffers');");
     expect(offerSummaryStart).toBeGreaterThan(-1);
-    for (const legacy of ['class="lrow"', 'class="nm"']) {
-      const hits = [...src.matchAll(new RegExp(legacy, "g"))].map(m => m.index ?? -1);
-      expect(hits.length).toBe(1);
-      expect(hits[0]).toBeGreaterThan(offerSummaryStart);
-    }
+    expect(src.slice(offerSummaryStart, src.indexOf("// ---- connection truth", offerSummaryStart)))
+      .toContain("<tr><td><strong>");
   });
 
   // Runs the real guard from the shipped script against stubbed responses, so
@@ -105,7 +104,7 @@ describe("Telegram connection state runtime", () => {
       "toast",
       "showLoadError",
       "showConnectionError",
-      "renderConnectionState",
+      "renderBots",
       src.slice(start, end) + "\nreturn 'loaded';",
     );
     const outcome = guard(
@@ -115,7 +114,7 @@ describe("Telegram connection state runtime", () => {
       () => calls.push("toast"),
       () => calls.push("showLoadError"),
       () => calls.push("showConnectionError"),
-      () => calls.push("renderConnectionState"),
+      () => calls.push("renderBots"),
     );
     return { calls, outcome };
   }
@@ -123,32 +122,39 @@ describe("Telegram connection state runtime", () => {
   it("keeps an offers failure out of the connection summary", () => {
     const { calls } = runLoadGuard({ offers: { error: "offers down" }, daily: [], bots: [] });
     expect(calls).not.toContain("showConnectionError");
-    expect(calls).toContain("renderConnectionState");
+    expect(calls).toContain("renderBots");
     expect(calls).toContain("showLoadError");
   });
 
   it("keeps a daily-stats failure out of the connection summary", () => {
     const { calls } = runLoadGuard({ offers: [], daily: { error: "stats down" }, bots: [] });
     expect(calls).not.toContain("showConnectionError");
-    expect(calls).toContain("renderConnectionState");
+    expect(calls).toContain("renderBots");
     expect(calls).toContain("showLoadError");
   });
 
   it("marks the connection unavailable only when the bots request fails", () => {
     const { calls } = runLoadGuard({ offers: [], daily: [], bots: { error: "bots down" } });
     expect(calls).toContain("showConnectionError");
-    expect(calls).not.toContain("renderConnectionState");
+    expect(calls).not.toContain("renderBots");
   });
 
   it("renders connection state from bot data when every request succeeds", () => {
     const { calls, outcome } = runLoadGuard({ offers: [], daily: [], bots: [] });
-    expect(calls).toEqual(["renderConnectionState"]);
+    expect(calls).toEqual(["renderBots"]);
     expect(outcome).toBe("loaded");
   });
 
   it("says who a broadcast goes to and maps send status to plain words", () => {
     expect(src).toContain("'Goes to <b>'");
-    expect(src).toContain("function broadcastStatusLabel(status)");
+    expect(src).toContain("function broadcastStatusLabel(status, sentCount, failCount)");
     expect(src).toContain("scheduled: 'Scheduled'");
+    const start = src.indexOf("const BROADCAST_STATUS_WORDS");
+    const end = src.indexOf("function broadcastRow", start);
+    const status = new Function(`${src.slice(start, end)}; return broadcastStatusLabel;`)() as (state: string, sent: number, failed: number) => string;
+    expect(status("sent", 0, 3)).toBe("Failed");
+    expect(status("sent", 2, 1)).toBe("Partially failed");
+    expect(status("sent", 3, 0)).toBe("Sent");
+    expect(status("scheduled", 0, 0)).toBe("Scheduled");
   });
 });

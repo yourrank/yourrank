@@ -14,6 +14,8 @@ import { ACCOUNT_SECTION_PATHS, SECTIONS } from "../assets/dashboard/routes.js";
 const user = { display_name: "Test operator", email: "operator@example.com", plan: "pro" };
 const workerSource = readFileSync(new URL("../index.js", import.meta.url), "utf8");
 const PERMITTED_DEFAULT_TAB_ROOTS = new Map([
+  ["/dashboard/giveaways/tournaments", "The Engage child is the Tournaments destination; tournament tabs remain page-owned."],
+  ["/dashboard/giveaways/chat", "The Engage child is the Giveaways destination and its existing page tab."],
   ["/dashboard/telegram", "Telegram Overview is the section-root back-link owned by the sidebar."],
   ["/dashboard/rewards", "Rewards Overview is the section root and the default tab."],
   ["/dashboard/audience/members", "People Members is the section root and the default tab."],
@@ -210,7 +212,7 @@ function deriveRenderableRoutes() {
     routes.push({ path: `/dashboard/settings/${key === "plan" ? "billing" : key}`, render: "settings", tab: key, hasSubnav: true, hasBreadcrumbs: true });
   }
   for (const page of pageLinks) {
-    routes.push({ path: page.href, render: "telegram", tab: page.key, hasSubnav: true, hasBreadcrumbs: true });
+    routes.push({ path: page.href, render: "telegram", tab: page.key, hasSubnav: true, hasBreadcrumbs: page.key !== "overview" });
   }
   return routes;
 }

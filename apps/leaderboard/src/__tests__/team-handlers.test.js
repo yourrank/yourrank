@@ -205,6 +205,63 @@ describe("Team API Handlers", () => {
     }
   });
 
+  it("keeps Team member access active while a downgrade is scheduled", async () => {
+    const periodEnd = "2026-10-20T00:00:00.000Z";
+    const response = await handleTeamList(new Request("https://yourrank.site/api/site/team?siteId=site-1"), {}, {
+      requireUser: async () => ({ user: { id: "owner-1" }, res: null }),
+      getSiteById: async () => ({ id: "site-1", name: "Tolar" }),
+      getSiteRole: async () => "owner",
+      listSiteMembers: async () => [{ role: "moderator", userId: "member-1" }],
+      listSiteInvites: async () => [],
+      getOperatorSeatUsage: async () => ({ plan: "team", used: 2, limit: 5 }),
+      one: async () => ({ pending_plan: "pro", pending_applies_at: periodEnd, current_period_end: periodEnd }),
+    });
+    const body = await response.json();
+    expect(body.members[0].accessStatus).toBe("active");
+    expect(body.seats.limit).toBe(5);
+    expect(body.scheduledChange).toEqual({ plan: "pro", appliesAt: periodEnd });
+  });
+
+  it("emails a rotated invitation link without changing the invite identity", async () => {
+    const sent = [];
+    const response = await handleTeamInvite(new Request("https://yourrank.site/api/site/team/invite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ siteId: "site-1", email: "operator@example.com", role: "moderator", sendEmail: true }),
+    }), { RESEND_API_KEY: "configured" }, {
+      requireUser: async () => ({ user: { id: "owner-1" }, res: null }),
+      getSiteById: async () => ({ id: "site-1", user_id: "owner-1" }),
+      getSiteRole: async () => "owner",
+      rateLimit: allowRateLimit,
+      rateLimitHeaders: headers,
+      createSiteInvite: async () => ({ ok: true, inviteId: "existing-invite", token: "rotated-token" }),
+      sendEmail: async (_env, payload) => { sent.push(payload); return { sent: true }; },
+    });
+    const body = await response.json();
+    expect(body.inviteId).toBe("existing-invite");
+    expect(body.emailSent).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).toContain(body.inviteUrl);
+  });
+
+  it("does not rotate an invite when email delivery is unconfigured", async () => {
+    let rotated = false;
+    const response = await handleTeamInvite(new Request("https://yourrank.site/api/site/team/invite", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ siteId: "site-1", email: "operator@example.com", sendEmail: true }),
+    }), {}, {
+      requireUser: async () => ({ user: { id: "owner-1" }, res: null }),
+      getSiteById: async () => ({ id: "site-1", user_id: "owner-1" }),
+      getSiteRole: async () => "owner",
+      rateLimit: allowRateLimit,
+      rateLimitHeaders: headers,
+      createSiteInvite: async () => { rotated = true; return { ok: true }; },
+    });
+    expect(response.status).toBe(503);
+    expect(rotated).toBe(false);
+  });
+
   it("does not register a role-change endpoint in V1", async () => {
     const routes = readFileSync(new URL("../routes.js", import.meta.url), "utf8");
     expect(routes).not.toContain('path: "/api/site/team/role"');

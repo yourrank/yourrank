@@ -164,21 +164,22 @@ describe("dashboard views", () => {
     expect(offers).toContain('data-action="createOffer"');
     expect(offers).toContain("postbackStatus");
     expect(offers).toContain("Create an offer");
-    expect(offers).toContain("Offer results");
-    expect(offers.indexOf("Create an offer")).toBeLessThan(offers.indexOf("Offer results"));
-    expect(offers).toContain("How tracking works");
+    expect(offers).toContain('id="offerCreateForm" hidden');
+    expect(offers).toContain('id="offerDetails"');
+    expect(offers.indexOf('id="offerFormToggle"')).toBeLessThan(offers.indexOf('id="offers"'));
     expect(offers).toContain("Revenue");
-    expect(offers).toContain("Last activity");
-    expect(offers).toContain('colspan="11"');
+    expect(offers).toContain("Reported conversions");
+    expect(offers).toContain('colspan="6"');
     expect(offers).not.toContain("Click metrics cover the last 90 days");
     expect(offers).not.toContain("Reported revenue");
     expect(appHtml(user, "https://yourrank.site", "nonce123", "broadcasts")).toContain('data-action="sendBroadcast"');
   });
 
-  it("renders one offers metric glossary and bot setup guidance for empty broadcasts", () => {
+  it("keeps offer detail secondary and bot setup guidance for empty broadcasts", () => {
     const user = { display_name: "Test", email: "test@example.com", plan: "free" };
     const offers = appHtml(user, "https://yourrank.site", "nonce123", "offers");
-    expect((offers.match(/<summary[^>]*>How tracking works<\/summary>/g) || []).length).toBe(1);
+    expect(offers).not.toContain("How tracking works");
+    expect(offers).toContain('id="offerDetails"');
     const broadcasts = appHtml(user, "https://yourrank.site", "nonce123", "broadcasts");
     expect(broadcasts).toContain('id="bcList"');
     expect(broadcasts).toContain('id="bcSetupState"');
@@ -193,13 +194,13 @@ describe("dashboard views", () => {
     expect(js).toContain("this.controls.hidden = this.all.length === 0");
     expect(js).toContain("reported_revenue");
     expect(js).toContain("last_activity_at");
-    expect(js).toContain("Extra results not connected");
-    expect(js).toContain("emptyAllMarkup");
+    expect(js).toContain("Partner tracking not connected");
+    expect(js).toContain("emptyAllText");
     expect(js).not.toContain("This does not indicate that an individual offer is converting.");
     expect(js).toContain("this.pageInfo.textContent = total ? 'Page '+this.page+' of '+this.totalPages+' ('+total+')' : ''");
     // Broadcasts need an active bot, so availability keys off activeBots — a
     // disconnected or revoked bot must not unlock the composer.
-    expect(js).toContain("setBroadcastAvailability(activeBots.length > 0)");
+    expect(js).toContain("setBroadcastAvailability(Boolean(firstBroadcastBotId))");
     expect(js).toContain("page !== 'commands' || bots.length > 0");
     expect(js).toContain("const readRequest = !opts || !opts.method || opts.method.toUpperCase() === 'GET'");
     expect(js).toContain("const requestOpts = controller");
@@ -260,12 +261,13 @@ describe("dashboard views", () => {
       "nonce123",
       "commands"
     );
-    expect(html).toContain('id="botSelect"');
+    expect(html).toContain('id="tgContextSelect"');
+    expect(html).not.toContain('id="botSelect"');
     // The commands panel renders only on the commands route; its wrapper carries
     // the page key and the customize card inside it is what gets toggled.
     expect(html).toContain('data-page="commands"');
     expect(html).toContain('id="customizePanel"');
-    expect(clientScriptSource()).toContain('/dashboard/telegram/commands?bot=');
+    expect(clientScriptSource()).toContain("url.searchParams.set('bot', id)");
     expect(clientScriptSource()).toContain("requestedBotId");
   });
 
@@ -568,6 +570,19 @@ describe("buildDashboard", () => {
     const res = await app.fetch(req, testEnv);
     expect(res.status).toBe(200);
     expect(((await res.json()) as any).count).toBe(42);
+  });
+
+  it("GET /dash/api/broadcasts scopes history to the selected owned bot", async () => {
+    mockOne.mockImplementation((sql: string) =>
+      sql.includes("SELECT status FROM users") ? Promise.resolve({ status: "active" }) : Promise.resolve(null));
+    const res = await app.fetch(new Request("http://localhost:8787/dash/api/broadcasts?bot_id=bot-2", {
+      headers: { cookie: "yr_session=token123" },
+    }), testEnv);
+    expect(res.status).toBe(200);
+    const call = mockQuery.mock.calls.find(([sql]) => typeof sql === "string" && sql.includes("FROM broadcasts b JOIN bots"));
+    expect(call).toBeTruthy();
+    expect(call![0]).toContain("bo.owner_id = $1 AND ($2::text IS NULL OR b.bot_id::text = $2)");
+    expect(call![1][1]).toBe("bot-2");
   });
 
   it("GET /dash/api/broadcasts/audience requires bot_id", async () => {

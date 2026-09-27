@@ -60,11 +60,17 @@ describe("Account settings creator UX", () => {
     expect(html).not.toMatch(/data-settings-panel="connections"[^>]*hidden/);
   });
 
-  it("uses scoped connection rows without exposing provider IDs or expiry timestamps", () => {
+  it("separates account, selected-site, and health rows without repeating Kick setup", () => {
+    const html = UnifiedSettingsPage({ fragment: true, tab: "connections" }).toString();
+    expect(html).toContain('id="accountConnectionsTitle">Account connections');
+    expect(html).toContain('id="siteConnectionsTitle">Site connections — <span id="siteConnectionName"');
+    expect(html).toContain('id="integrationHealthTitle">Integration health');
+    expect(html).not.toContain("Kick rewards for the selected site");
     expect(accountJs).toContain('class="account-connection-row"');
     expect(accountJs).toContain("connection.statusLabel");
-    expect(accountJs).toContain("connection.scope");
-    expect(accountJs).toContain("data-kick-disconnect");
+    expect(accountJs).toContain("connection.selectedSite");
+    expect(accountJs).toContain('siteName.textContent = data.selectedSiteName');
+    expect(accountJs).not.toContain("data-integration-test");
     expect(accountJs).not.toContain("kick.userId");
     expect(accountJs).not.toContain("telegram.userId");
     expect(accountJs).not.toContain("telegramChat.chatId");
@@ -76,8 +82,7 @@ describe("Account settings creator UX", () => {
     expect(accountJs).toContain('new URLSearchParams(location.search).get("siteId")');
     expect(accountJs).toContain("state.ACTIVE_SITE_ID");
     expect(accountJs).toContain('`?board=${encodeURIComponent(board)}`');
-    expect(accountJs).toContain('document.querySelector(".account-related-setting a[href^=\\"/dashboard/site/connections\\"]")');
-    expect(accountJs).toContain('buildDashboardPath("siteConnections.channel", { siteId })');
+    expect(accountJs).toContain('siteConnections = connections.filter((connection) => connection.selectedSite)');
   });
 
   it("keeps account deletion singular and team removal confirmed", () => {
@@ -92,7 +97,7 @@ describe("Account settings creator UX", () => {
     const html = UnifiedSettingsPage({ fragment: true, tab: "team" }).toString();
     expect(html).toContain('id="teamSeatUsage"');
     expect(html).toContain('id="teamUpgradeLink"');
-    expect(html).toContain("<summary>Compare roles</summary>");
+    expect(html).toContain("<summary>Roles &amp; permissions · Compare roles</summary>");
     expect(html).toContain('class="team-role-compare"');
     expect(html).not.toContain('id="inviteRole"');
     expect(html).not.toContain(">Manager<");

@@ -7,6 +7,7 @@ import type { NavItem } from "./dashboard-chrome.js";
 import {
   dashboardAliasPath,
   resolveNavRedirect,
+  resolveDashboardLocation,
   routeById,
   type DashboardRouteId,
 } from "./dashboard-routes.js";
@@ -41,7 +42,10 @@ const DASHBOARD_NAV: NavItem[] = [
   { key: "home", label: "Home", href: href("home"), icon: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>', productKey: "sites" },
   { key: "board", label: "Community", href: href("board"), icon: NAV_ICONS.boards, productKey: "sites" },
   { key: "audience", label: "Audience", href: href("audience.viewers"), icon: NAV_ICONS.audience },
-  { key: "engage", label: "Engage", href: href("activities.overview"), icon: NAV_ICONS.activities, productKey: "credits" },
+  { key: "engage", label: "Engage", kind: "group", icon: NAV_ICONS.activities, children: [
+    { key: "tournaments", label: "Tournaments", href: href("giveaways.tournaments"), icon: '<path d="M8 3h8v5a4 4 0 0 1-8 0V3ZM8 5H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 12v6m-4 3h8m-7-3h6v3H9z"/>' },
+    { key: "giveaways", label: "Giveaways", href: href("giveaways.chat"), icon: '<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8H7.5A2.5 2.5 0 1 1 10 5.5L12 8Zm0 0h4.5A2.5 2.5 0 1 0 14 5.5L12 8Z"/>' },
+  ] },
   { key: "rewards", label: "Rewards", href: href("rewards.overview"), icon: NAV_ICONS.shop, productKey: "credits" },
   { key: "performance", label: "Insights", href: href("performance"), icon: NAV_ICONS.analytics },
   { key: "telegram", label: "Telegram", href: href("telegram"), icon: NAV_ICONS.share, productKey: "telegram" },
@@ -128,5 +132,18 @@ export function navOwner(nav: string | null | undefined): string {
 }
 
 export function dashboardNavItems(): NavItem[] {
-  return DASHBOARD_NAV.map((item) => ({ ...item }));
+  return DASHBOARD_NAV.map((item) => "children" in item
+    ? { ...item, children: item.children.map((child) => ({ ...child })) }
+    : { ...item });
+}
+
+/** Presentation selection only; section ownership and URL routing stay in the manifest. */
+export function sidebarActiveKey(path: string, fallback = "home"): string {
+  const pathname = path.split("?")[0].replace(/\/+$/, "");
+  const tournaments = href("giveaways.tournaments");
+  if (pathname === tournaments || pathname.startsWith(tournaments + "/")) return "tournaments";
+  const route = resolveDashboardLocation(pathname, path.includes("?") ? path.slice(path.indexOf("?")) : "")?.route;
+  if (route?.id === "giveaways.tournaments") return "tournaments";
+  if (route?.section === "giveaways") return "giveaways";
+  return route?.navKey || fallback;
 }

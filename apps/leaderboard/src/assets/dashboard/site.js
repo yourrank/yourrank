@@ -12,9 +12,8 @@ import { requestPublicationChange } from "./publication.js";
 import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from "./request.js";
 import { requestBillingRedirect } from "./shell.js";
 import { effectiveBoardRole } from "./role-preview.js";
-import { activeViewerUsageMarkup } from "./plan-usage.js";
 import { wirePlanLock, trackFunnel } from "./plan-lock.js";
-import { PLAN_META, PLAN_PRICING, PLAN_FEATURES, FEATURE_LABELS } from "@yourrank/shared/plans";
+import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 import { planChangeFor, formatPlanPrice } from "@yourrank/shared/plan-changes";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
 
@@ -450,7 +449,7 @@ function renderPlanCard(p, isCurrent, cta, { accent = false, disabled = false, a
   if (isCurrent) classes.push("plan-card--current", "is-current");
   if (p.highlight) classes.push("plan-card--popular");
   const note = tag ? `<span class="plan-card-note">${esc(tag)}</span>` : p.highlight ? '<span class="plan-card-note">Recommended</span>' : "";
-  const list = p.features.map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
+  const list = p.features.filter((_, index) => p.key === "pro" ? [0, 1, 3, 4].includes(index) : index < 4).map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
   const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" data-action="${esc(action)}" ${disabled ? "disabled" : ""}>${esc(cta)}</button>`;
   return `<article class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><p class="plan-card-sub">${esc(p.positioning)}</p><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div><p class="plan-card-sub">${esc(p.note)}</p></div>${ctaEl}<ul class="plan-card-features">${list}</ul></article>`;
 }
@@ -459,20 +458,17 @@ function renderPlanCard(p, isCurrent, cta, { accent = false, disabled = false, a
 function subscriberCard(p, current) {
   const target = { plan: p.key, interval: billingInterval };
   const change = planChangeFor(current, target);
-  const scheduledAway = current.cancelAtPeriodEnd || !!current.pending;
   if (change.kind === "current") {
-    return scheduledAway
-      ? { cta: "Keep current plan", action: "keep", isCurrent: true, accent: true, tag: current.cancelAtPeriodEnd ? "Cancels soon" : "Changing soon" }
-      : { cta: "Current plan", action: "none", isCurrent: true, disabled: true, tag: "Current" };
+    return { cta: "Current plan", action: "none", isCurrent: true, disabled: true };
   }
   if (change.kind === "pending") return { cta: `Scheduled for ${fmtDate(current.pending?.applies_at) || "next period"}`, action: "none", disabled: true, tag: "Scheduled" };
   if (change.kind === "cancel") {
     return current.cancelAtPeriodEnd
       ? { cta: "Cancellation scheduled", action: "none", disabled: true, tag: "Scheduled" }
-      : { cta: "Cancel subscription", action: "change", disabled: !billingInfo?.changeAvailable };
+      : { cta: "Downgrade to Free", action: "change", disabled: !billingInfo?.changeAvailable };
   }
   const available = billingInfo?.options?.[p.key]?.[billingInterval];
-  return { cta: change.label, action: "change", accent: change.kind === "upgrade", disabled: !available || !billingInfo?.changeAvailable || current.cancelAtPeriodEnd };
+  return { cta: change.kind === "upgrade" ? `Upgrade to ${p.name}` : change.kind === "downgrade" ? `Downgrade to ${p.name}` : change.label, action: "change", accent: change.kind === "upgrade", disabled: !available || !billingInfo?.changeAvailable || current.cancelAtPeriodEnd };
 }
 
 export function renderPlan() {
@@ -481,7 +477,8 @@ export function renderPlan() {
   const planNames = { free: "Free", pro: "Pro", team: "Team" };
   const currentName = planNames[plan] || plan;
   const expiry = state.ME.planExpiresAt;
-  const expiresMs = expiry && Number(expiry) > 0 ? Number(expiry) : null;
+  const parsedExpiry = expiry ? (Number(expiry) > 0 ? Number(expiry) : Date.parse(expiry)) : NaN;
+  const expiresMs = Number.isFinite(parsedExpiry) ? parsedExpiry : null;
   const expiryDate = expiresMs ? new Date(expiresMs).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : null;
   const subStatus = String(state.ME.subscriptionStatus || "").toLowerCase();
   const hasSubscription = Boolean(billingInfo?.hasSubscription);
@@ -500,15 +497,15 @@ export function renderPlan() {
     chipClass = "v3-chip--pending";
     dateLine = expiryDate ? `Trial ends ${expiryDate}.` : "";
   } else if (current?.cancelAtPeriodEnd || subStatus === "canceled" || subStatus === "cancelled") {
-    chipLabel = "Cancels";
+    chipLabel = "Scheduled change";
     chipClass = "v3-chip--pending";
     const ends = fmtDate(current?.periodEnd) || expiryDate;
-    dateLine = ends ? `Access continues until ${ends}, then Free.` : "";
+    dateLine = ends ? `Free starting ${ends}. Your current features and seats remain until then.` : "";
   } else if (current?.pending) {
-    chipLabel = "Change scheduled";
+    chipLabel = "Scheduled change";
     chipClass = "v3-chip--pending";
     const when = fmtDate(current.pending.applies_at) || fmtDate(current.periodEnd);
-    dateLine = `Moves to ${PLAN_META[current.pending.plan]?.name || current.pending.plan} · ${INTERVAL_LABEL[current.pending.interval] || current.pending.interval}${when ? ` on ${when}` : ""}.`;
+    dateLine = `${PLAN_META[current.pending.plan]?.name || current.pending.plan} starting ${when || "next period"}. Your current features and seats remain until then.`;
   } else if (current?.status === "past_due" || subStatus === "past_due") {
     chipLabel = "Past due";
     chipClass = "v3-chip--cancelled";
@@ -525,28 +522,28 @@ export function renderPlan() {
       : "";
   }
   const priceLine = current ? formatPlanPrice(current.plan, current.interval) : null;
-  const displayName = current ? `${PLAN_META[current.plan]?.name || currentName} · ${INTERVAL_LABEL[current.interval]}` : currentName;
 
   const summary = $("planSummary");
   if (summary) {
-    const unlocks = plan === "free"
-      ? `<ul class="plan-unlocks">${(PLAN_FEATURES.pro || []).slice(0, 6).map((f) => `<li>${esc(FEATURE_LABELS[f]?.name || f)}</li>`).join("")}</ul><p class="hint">What Pro unlocks</p>`
-      : "";
+    const scheduled = current?.cancelAtPeriodEnd || current?.pending;
     summary.innerHTML = `
       <div class="plan-status">
         <div class="plan-status-head">
-          <span class="plan-status-name">${esc(displayName)}</span>
+          <span class="plan-status-name">${esc(current ? PLAN_META[current.plan]?.name || currentName : currentName)}</span>
           ${chipLabel ? `<span class="v3-chip ${chipClass}">${esc(chipLabel)}</span>` : ""}
         </div>
-        ${priceLine ? `<p class="plan-status-price">${esc(priceLine)}</p>` : ""}
+        <p class="plan-status-price">${esc(current ? INTERVAL_LABEL[current.interval] : plan === "free" ? "No billing cycle" : "Access grant")}${priceLine ? ` · ${esc(priceLine)}` : ""}</p>
         ${dateLine ? `<p class="plan-status-meta">${esc(dateLine)}</p>` : ""}
-      </div>${unlocks}`;
+        ${scheduled ? '<button class="btn btn--sm btn--ghost" id="cancelScheduledPlanChange" type="button">Cancel scheduled change</button>' : ""}
+      </div>`;
+    const cancelScheduled = $("cancelScheduledPlanChange");
+    if (cancelScheduled) cancelScheduled.addEventListener("click", () => requestPlanChange({ action: "keep" }, current, null, { kind: "keep", timing: "none", label: "Cancel scheduled change" }, cancelScheduled));
   }
 
   const banner = $("planBanner");
   if (banner) {
-    if (plan !== "free" && !billingInfo?.hasSubscription && expiry && Number(expiry) > 0) {
-      const days = Math.floor((Number(expiry) - Date.now()) / 86_400_000);
+    if (plan !== "free" && !billingInfo?.hasSubscription && expiresMs) {
+      const days = Math.floor((expiresMs - Date.now()) / 86_400_000);
       if (days < 0) {
         banner.hidden = false;
         banner.textContent = "Your plan has expired. Renew to restore Pro features.";
@@ -577,9 +574,9 @@ export function renderPlan() {
       const available = billingInfo?.options?.[p.key]?.[billingInterval];
       let cta, accent = false;
       if (isCurrent) {
-        cta = isTrial ? "Current (trial)" : "Current plan";
+        cta = "Current plan";
       } else if (isLower) {
-        cta = "Included";
+        cta = `Downgrade to ${p.name}`;
       } else {
         cta = billingInfo?.hasSubscription ? "Manage in Polar" : available ? `Get ${p.name}` : "Checkout coming soon";
         accent = p.key === "pro";
@@ -615,9 +612,6 @@ export function renderPlan() {
     portal.hidden = !billingInfo?.portalAvailable;
     if (!portal._wired) { portal._wired = true; portal.addEventListener("click", () => openBilling("portal", portal)); }
   }
-  const refresh = $("refreshPlanUsage");
-  if (refresh && !refresh._wired) { refresh._wired = true; refresh.addEventListener("click", loadPlanUsage); }
-
   const trialEl = $("planTrial");
   if (trialEl) {
     if (plan === "free" && !state.ME.hasTrial) {
@@ -652,14 +646,15 @@ export async function loadHistory() {
     clearLoadError(empty, rows.length === 0);
     table.hidden = rows.length === 0;
     body.innerHTML = rows.map((p) => {
-      const plan = String(p.plan_tier || p.plan || "–").toUpperCase();
+      const rawPlan = String(p.plan_tier || p.plan || "").toLowerCase();
+      const plan = PLAN_META[rawPlan]?.name || "—";
       const amount = Number(p.amount) || 0;
-      const amountStr = `$${amount.toFixed(2)} ${p.currency || "USD"}`;
+      const amountStr = p.provider === "manual" ? "No charge" : `$${amount.toFixed(2)} ${p.currency || "USD"}`;
       const status = String(p.status || "").toLowerCase();
       const statusClass = ["confirmed", "finished", "active", "manual"].includes(status) ? "good" : ["failed", "expired", "refunded", "abandoned", "cancelled"].includes(status) ? "bad" : "muted";
-      const date = p.created_at ? new Date(p.created_at).toLocaleString() : "–";
+      const date = p.created_at ? new Date(p.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "–";
       const note = p.message ? `<div class="hint">${esc(p.message)}</div>` : "";
-      return `<tr><td>${esc(date)}</td><td>${esc(plan)}</td><td>${esc(amountStr)}</td><td><span class="pill pill--${esc(statusClass)}">${esc(status)}</span>${note}</td></tr>`;
+      return `<tr><td>${esc(date)}</td><td>${esc(plan)}${p.provider === "manual" ? '<div class="hint">Past account grant</div>' : ""}</td><td>${esc(amountStr)}</td><td><span class="pill pill--${esc(statusClass)}">${esc(status === "manual" ? "Granted" : status || "Recorded")}</span>${note}</td></tr>`;
     }).join("");
   } catch (err) {
     logError("loadHistory", err);
@@ -673,15 +668,13 @@ export async function loadPlanUsage() {
   const wrap = $("planUsage");
   if (!wrap) return;
   setState({ USAGE_STATUS: "loading" });
-  const refresh = $("refreshPlanUsage");
-  if (refresh) refresh.disabled = true;
   try {
     const { body: d } = await fetchDashboardJson("/api/account/usage", { credentials: "include" });
     setState({ USAGE_STATUS: "ready" });
     billingInfo = d.billing;
     setState({ ME: { ...state.ME, plan: d.plan, planExpiresAt: d.planExpiresAt } });
     const pendingReturn = new URLSearchParams(location.search).get("billing") === "return" && !d.billing?.hasSubscription;
-    if ($("billingStatus")) $("billingStatus").textContent = pendingReturn ? "Waiting for payment confirmation. Refresh usage in a moment to check your plan." : d.billing?.message || "";
+    if ($("billingStatus")) $("billingStatus").textContent = pendingReturn ? "Waiting for payment confirmation. Reload in a moment to check your plan." : d.billing?.hasSubscription ? "" : d.billing?.message || "";
     renderPlan();
     const L = d.limits || {};
     const rows = [];
@@ -689,27 +682,27 @@ export async function loadPlanUsage() {
       const b = L[key];
       if (b) rows.push({ key, label, product, used: b.used, limit: b.allowance });
     };
-    add("sites", "Sites", "Across your account");
-    add("players_per_site", "Players", d.site?.name || "Active site");
-    add("reward_mappings", "Ways to earn", "Credits");
-    add("shop_items", "Shop items", "Credits");
-    add("telegram_bots", "Telegram bots", "Telegram");
-    add("telegram_offers", "Telegram offers", "Telegram");
+    add("sites", "Sites", "Account");
+    add("active_viewers_30d", "Active viewers", "Account");
+    add("operator_seats", "Team seats", "Account");
+    add("players_per_site", "Players", "Site");
+    add("reward_mappings", "Ways to earn", "Site");
+    add("shop_items", "Shop items", "Site");
+    add("telegram_bots", "Bots", "Telegram");
+    add("telegram_offers", "Offers", "Telegram");
     add("telegram_interactions_per_month", "Bot interactions / month", "Telegram");
     add("broadcast_deliveries_per_month", "Broadcast deliveries / month", "Telegram");
-    add("operator_seats", "Team seats", "Across your account");
     const over = new Set(d.overLimit || []);
     const stateOf = (r) => r.used > r.limit ? "over" : r.used === r.limit && r.limit >= 0 ? "at" : "";
     const overNote = `<p class="hint">Over your plan — existing items are kept. <a href="/dashboard/settings/billing">Upgrade</a> to add more.</p>`;
     const atNote = `<p class="hint">At plan limit — <a href="/dashboard/settings/billing">Upgrade</a> to add more.</p>`;
-    wrap.innerHTML = `${activeViewerUsageMarkup(d.activeViewers)}<p class="usage-scope">Site limits below apply to <strong>${esc(d.site?.name || "your active site")}</strong>. Each site has its own allowance.</p><div class="plan-usage-secondary">${rows.map((r) => `<div class="plan-usage-row${stateOf(r) === "over" || (over.has(r.key) && r.used > r.limit) ? " plan-usage-row--over" : ""}"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span><span class="plan-usage-product">${esc(r.product === "Credits" ? d.site?.name || "Active site" : r.product)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} <small>/ ${Number(r.limit).toLocaleString()}</small></span><meter min="0" max="${Number(r.limit)}" value="${Math.min(Number(r.used), Number(r.limit))}" aria-label="${esc(r.label)} usage" aria-valuetext="${Number(r.used)} of ${Number(r.limit)} used"></meter>${stateOf(r) === "over" ? overNote : stateOf(r) === "at" ? atNote : ""}</div>`).join("")}</div>`;
+    const usageRow = (r) => `<div class="plan-usage-row${stateOf(r) === "over" || (over.has(r.key) && r.used > r.limit) ? " plan-usage-row--over" : ""}"><div class="plan-usage-meta"><span class="plan-usage-label">${esc(r.label)}</span></div><span class="plan-usage-value">${Number(r.used).toLocaleString()} <small>/ ${Number(r.limit).toLocaleString()}</small></span><meter min="0" max="${Math.max(1, Number(r.limit))}" value="${Math.min(Number(r.used), Math.max(1, Number(r.limit)))}" aria-label="${esc(r.label)} usage" aria-valuetext="${Number(r.used)} of ${Number(r.limit)} used"></meter>${stateOf(r) === "over" ? overNote : stateOf(r) === "at" ? atNote : ""}</div>`;
+    wrap.innerHTML = [["Account-wide", "Account"], [`Current site: ${d.site?.name || "No site selected"}`, "Site"], ["Telegram", "Telegram"]].map(([heading, scope]) => `<section class="plan-usage-group" aria-label="${esc(heading)}"><h3>${esc(heading)}</h3><div class="plan-usage-secondary">${rows.filter((r) => r.product === scope).map(usageRow).join("")}</div></section>`).join("");
   } catch (err) {
     setState({ USAGE_STATUS: "error" });
     logError("loadPlanUsage", err);
     if (wrap) wrap.innerHTML = `<p class="hint hint--error">Could not load usage.</p>`;
-    if ($("billingStatus")) $("billingStatus").textContent = "Could not load billing. Refresh usage to try again.";
-  } finally {
-    if (refresh) refresh.disabled = false;
+    if ($("billingStatus")) $("billingStatus").textContent = "Could not load billing. Reload to try again.";
   }
 }
 

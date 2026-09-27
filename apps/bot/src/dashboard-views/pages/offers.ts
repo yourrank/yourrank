@@ -3,11 +3,10 @@ export function offersPanel(publicBaseUrl: string): string {
   return `
   <div class="lb-bento" data-page="offers">
     <div class="lb-widget lb-widget--full">
-      <div class="mb-md"><h2>Create an offer</h2></div>
-      <p class="muted text-sm mb-md">Give your offer a name and paste the partner link. We’ll make a shareable link for your bot.</p>
-      <div id="offerPlanState" class="v3-note mb-md" aria-live="polite">Loading offer allowance…</div>
+      <div class="tg-section-head"><div><h2>Offers</h2><p class="muted text-sm">Account-wide · shared across your bots</p><p id="offerPlanState" class="muted text-sm" aria-live="polite">Loading offer allowance…</p></div><button class="btn btn--accent" data-action="toggleOfferForm" id="offerFormToggle" type="button" aria-expanded="false" aria-controls="offerCreateForm">Create offer</button></div>
 
-      <div class="d-flex flex-col gap-12 offer-create-form" id="offerCreateForm">
+      <div class="d-flex flex-col gap-12 offer-create-form tg-inline-form" id="offerCreateForm" hidden>
+        <h3>Create an offer</h3>
         <div class="d-flex gap-12 flex-wrap">
           <div class="flex-1 offer-form-field">
             <label class="text-sm font-600" for="oCasino">Brand or partner</label>
@@ -36,7 +35,8 @@ export function offersPanel(publicBaseUrl: string): string {
         </div>
 
         <div class="mt-sm">
-          <button class="btn btn--accent" data-action="createOffer" type="button">Create offer</button>
+          <button class="btn btn--accent" data-action="createOffer" type="button">Save offer</button>
+          <button class="btn btn--ghost" data-action="cancelOfferForm" type="button">Cancel</button>
         </div>
       </div>
 
@@ -49,37 +49,15 @@ export function offersPanel(publicBaseUrl: string): string {
           <a class="btn btn--ghost" href="/dashboard/telegram/commands">Share in your bot</a>
         </div>
       </div>
-    </div>
-
-    <div class="lb-widget lb-widget--full">
-      <div class="mb-md"><h2>Offer results</h2></div>
-      <p class="muted text-sm mb-sm">See how your shared offers are doing.</p>
-      <p class="muted text-sm font-600 mb-md" id="postbackStatusOffers" aria-live="polite">Checking extra results…</p>
+      <p class="muted text-sm mt-md mb-md" id="postbackStatusOffers" aria-live="polite">Checking tracking status…</p>
 
       <div class="v3-table-scroll">
         <table class="v3-table">
-          <thead><tr><th>Offer</th><th>Share link</th><th>Visits</th><th>People reached</th><th title="People reached divided by total visits">Visit rate</th><th title="People who signed up divided by people reached">Sign-up rate</th><th>Sign-ups</th><th>Revenue</th><th>Last activity</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody id="offers" aria-live="polite"><tr><td colspan="11" class="muted">Loading…</td></tr></tbody>
+          <thead><tr><th>Offer</th><th>Clicks</th><th>Reported conversions</th><th>Revenue</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody id="offers" aria-live="polite"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
         </table>
       </div>
-
-      <details class="metric-glossary mt-lg">
-        <summary class="muted font-600 cursor-pointer">How tracking works</summary>
-        <div class="mt-sm text-sm">
-          <h3 class="text-sm mb-xs">Advanced tracking</h3>
-          <p class="muted mb-sm">Visits and visit-derived rates use a rolling 90-day window. People reached counts each person once after they visit an offer link.</p>
-          <p class="muted mb-sm">Need to connect extra results? <a href="${publicBaseUrl}/dashboard/settings/connections">Manage connections</a> in settings.</p>
-          <dl class="d-flex flex-col gap-8">
-            <div><dt class="font-600 d-inline">Visits:</dt> <dd class="d-inline muted m-0">Total visits to this offer’s tracked short link.</dd></div>
-            <div><dt class="font-600 d-inline">People reached:</dt> <dd class="d-inline muted m-0">People who visited this offer at least once.</dd></div>
-            <div><dt class="font-600 d-inline">Visit rate:</dt> <dd class="d-inline muted m-0">People reached divided by total visits.</dd></div>
-            <div><dt class="font-600 d-inline">Sign-up rate:</dt> <dd class="d-inline muted m-0">People who signed up divided by people reached.</dd></div>
-            <div><dt class="font-600 d-inline">Sign-ups:</dt> <dd class="d-inline muted m-0">People reported as signing up after visiting this offer.</dd></div>
-            <div><dt class="font-600 d-inline">Revenue:</dt> <dd class="d-inline muted m-0">Amounts reported through partner conversion tracking, shown separately by currency. This is not verified receipt.</dd></div>
-            <div><dt class="font-600 d-inline">Last activity:</dt> <dd class="d-inline muted m-0">Most recent retained click or reported conversion.</dd></div>
-          </dl>
-        </div>
-      </details>
+      <section id="offerDetails" class="tg-inline-form mt-lg" aria-live="polite" hidden><div class="tg-section-head"><h3 id="offerDetailsTitle">Offer details</h3><button class="btn btn--ghost btn--sm" data-action="closeOfferDetails" type="button">Close</button></div><div id="offerDetailsBody"></div><p class="muted text-sm mt-sm">Clicks are retained for 90 days. Conversions and revenue are partner-reported; revenue is not verified receipt. <a href="${publicBaseUrl}/dashboard/settings/connections">Manage tracking</a>.</p></section>
     </div>
   </div>`;
 }

@@ -160,6 +160,39 @@
 
 
   document.querySelectorAll(".v3-dash").forEach(function (root) {
+    var desktop = window.matchMedia("(min-width: 981px)");
+    var groups = root.querySelectorAll("[data-nav-group]");
+    function syncGroups() {
+      groups.forEach(function (group) {
+        var pinned = false;
+        try { pinned = localStorage.getItem("yr-nav-open-" + group.dataset.navGroup) === "true"; } catch (error) {}
+        var compact = root.hasAttribute("data-side-collapsed") && desktop.matches;
+        var open = compact || group.hasAttribute("data-current-group") || pinned;
+        var toggle = group.querySelector("[data-toggle-nav-group]");
+        toggle.setAttribute("aria-expanded", String(open));
+        group.querySelector(".lb-nav-group-items").hidden = !open;
+      });
+    }
+    groups.forEach(function (group) {
+      var toggle = group.querySelector("[data-toggle-nav-group]");
+      toggle.addEventListener("click", function () {
+        // The compact rail exposes both destinations at all times; Engage
+        // expands the rail so the hierarchy can be read before disclosure.
+        if (root.hasAttribute("data-side-collapsed") && desktop.matches) {
+          root.querySelector("[data-collapse-side]")?.click();
+          try { localStorage.setItem("yr-nav-open-" + group.dataset.navGroup, "true"); } catch (error) {}
+          syncGroups();
+          return;
+        }
+        var open = toggle.getAttribute("aria-expanded") !== "true";
+        try { localStorage.setItem("yr-nav-open-" + group.dataset.navGroup, String(open)); } catch (error) {}
+        toggle.setAttribute("aria-expanded", String(open));
+        group.querySelector(".lb-nav-group-items").hidden = !open;
+      });
+    });
+    document.addEventListener("yr:sidebar-route", syncGroups);
+    desktop.addEventListener("change", syncGroups);
+    syncGroups();
     var buttons = root.querySelectorAll("[data-collapse-side]");
     if (!buttons.length) return;
     var collapsed = false;
@@ -174,6 +207,7 @@
         button.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
         button.title = collapsed ? "Expand navigation" : "Collapse navigation";
       });
+      syncGroups();
     }
 
     applyCollapse(collapsed);

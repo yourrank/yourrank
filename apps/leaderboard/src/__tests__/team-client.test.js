@@ -21,7 +21,8 @@ function setup({ request = async () => ({ ok: false, data: {} }), confirm = asyn
     },
   };
   const run = new Function("$", "document", "jsonReq", "showConfirmModal", "state", "location", "esc", "fmtDateTime", "setStatus", "copyToClipboard", "flashButton", `
-    let teamSiteId = "", teamSiteName = "", teamLoadVersion = 0;
+    let teamSiteId = "", teamSiteName = "", teamSelectedSiteId = "", teamLoadVersion = 0;
+    const teamInviteLinks = new Map();
     ${teamSource}
     return { renderTeam, loadTeam, leave: () => { teamLoadVersion++; } };
   `);
@@ -40,8 +41,8 @@ describe('Team client scope and recovery', () => {
   it('shows the authorized site name, pooled seats and Moderator read-only state', () => {
     const client = setup();
     client.renderTeam(team('alpha', 'Atlas Community', 'moderator'));
-    expect(client.$('teamSiteName').textContent).toBe('Atlas Community');
-    expect(client.$('teamSeatUsage').textContent).toBe('3 of 5 team seats');
+    expect(client.$('teamSiteSelector').value).toBe('alpha');
+    expect(client.$('teamSeatUsage').textContent).toBe('3 used · 2 available');
     expect(client.$('teamReadOnlyNotice').hidden).toBe(false);
     expect(client.$('btnOpenInviteModal').hidden).toBe(true);
     expect(client.$('teamPendingSection').hidden).toBe(true);
@@ -76,7 +77,7 @@ describe('Team client scope and recovery', () => {
     client.renderTeam(team('alpha', 'Atlas Community'));
     await client.loadTeam();
     expect(calls[0][1]).toBe('/api/site/team?siteId=beta');
-    expect(client.$('teamSiteName').textContent).toBe('site unavailable');
+    expect(client.$('teamSiteSelector').value).toBe('');
     expect(client.$('btnOpenInviteModal').hidden).toBe(true);
     expect(client.$('teamSeatUsage').textContent).toBe('Operator seats unavailable');
   });
@@ -88,6 +89,6 @@ describe('Team client scope and recovery', () => {
     client.leave();
     resolveRequest({ ok: true, data: team('alpha', 'Atlas Community') });
     await pending;
-    expect(client.$('teamSiteName').textContent).toBe('');
+    expect(client.$('teamSiteSelector').value).toBeUndefined();
   });
 });

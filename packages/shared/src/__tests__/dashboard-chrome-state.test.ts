@@ -162,11 +162,9 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
   it("pins the Telegram chrome", () => {
     const overview = dashboardChromeState("telegram");
     expect(overview.navKey).toBe("telegram");
-    expect(overview.h1).toBe("Overview");
-    expect(overview.crumbs).toEqual([
-      { label: "Telegram" },
-      { label: "Overview" },
-    ]);
+    expect(overview.h1).toBe("Telegram");
+    expect(overview.tabLabel).toBe("Overview");
+    expect(overview.crumbs).toEqual([{ label: "Telegram" }]);
     const bots = dashboardChromeState("telegram.bots");
     expect(bots.h1).toBe("Bots");
     expect(bots.canonicalPath).toBe("/dashboard/telegram/bots");

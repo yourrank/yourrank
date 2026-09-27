@@ -119,7 +119,7 @@ describe("authenticated dashboard v4 contract", () => {
 
     // The shell root carries the rail-width token; child rail controls own icon sizing.
     expect(sizingDeclarations).toEqual([]);
-    expect(ruleBlocks.some(({ declarations }) => /--ws-sidebar-w:\s*44px\s*;/.test(declarations))).toBe(true);
+    expect(ruleBlocks.some(({ declarations }) => /--ws-sidebar-w:\s*68px\s*;/.test(declarations))).toBe(true);
   });
 
   it("keeps mobile top-bar controls on one compact light-surface row", () => {

@@ -10,12 +10,6 @@ export function commandsPanel(): string {
     <div class="lb-widget lb-widget--full" id="customizePanel">
       <div class="d-flex justify-between items-center mb-md">
         <h2>Welcome message</h2>
-        <p class="muted text-sm m-0" id="selectedBotName">No bot selected</p>
-      </div>
-      
-      <div class="d-flex flex-col gap-8 mb-md command-bot-field">
-        <label for="botSelect" class="muted text-xs">Bot</label>
-        <select id="botSelect" class="v3-input"><option value="">Loading bots…</option></select>
       </div>
       
       <div id="custDisabledNote" class="v3-note hidden">This bot is disconnected. Reconnect it before editing replies.</div>
@@ -29,40 +23,49 @@ export function commandsPanel(): string {
         </div>
       </div>
 
-      <hr class="v3-divider my-lg" />
+    </div>
 
-      <div class="mb-md"><h2>Your commands</h2></div>
-      <p class="muted text-sm mb-md">A command is a shortcut your subscribers type to get a reply. Add one, give it a reply, and it works right away. Built-in shortcuts such as start, code and subscribe are reserved.</p>
-      
+    <div class="lb-widget lb-widget--full">
+      <div class="tg-section-head"><h2>Custom commands</h2><div class="d-flex flex-wrap gap-8"><button class="btn btn--ghost" data-action="syncCommands" id="cmdSyncBtn" type="button">Sync with Telegram</button><button class="btn btn--accent" data-action="toggleCommandForm" type="button" id="cmdFormToggle" aria-expanded="false" aria-controls="cmdCreateForm">Add command</button></div></div>
+      <div class="v3-table-scroll">
+        <table class="v3-table">
+          <thead><tr><th>Command</th><th>Reply</th><th>Buttons</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody id="cmdList"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div id="cmdCreateForm" class="tg-inline-form mt-lg" hidden>
+      <h3>Add command</h3>
+      <p class="muted text-sm mb-md">A command is a shortcut subscribers type to get a reply. Built-in shortcuts are reserved.</p>
       <div class="d-flex flex-wrap gap-12 command-form-row">
         <div class="d-flex flex-col gap-4 flex-1 command-form-field">
-          <label class="sr-only" for="cmdName">Command</label>
+          <label for="cmdName">Command</label>
           <input class="v3-input" id="cmdName" placeholder="Command (e.g. vip)">
         </div>
         <div class="d-flex flex-col gap-4 flex-1 command-form-field">
-          <label class="sr-only" for="cmdResp">Reply</label>
+          <label for="cmdResp">Reply</label>
           <input class="v3-input" id="cmdResp" placeholder="Reply text subscribers receive">
         </div>
       </div>
       <div class="d-flex flex-wrap gap-12 mt-sm command-form-row">
         <div class="d-flex flex-col gap-4 flex-1 command-form-field">
-          <label class="sr-only" for="cmdBtnLabel">Button label</label>
+          <label for="cmdBtnLabel">Button label <span class="muted">(optional)</span></label>
           <input class="v3-input" id="cmdBtnLabel" placeholder="Button label (optional)">
         </div>
         <div class="d-flex flex-col gap-4 flex-1 command-form-field">
-          <label class="sr-only" for="cmdBtnUrl">Button URL</label>
+          <label for="cmdBtnUrl">Button URL <span class="muted">(optional)</span></label>
           <div class="d-flex gap-8">
             <input class="v3-input command-button-url" id="cmdBtnUrl" type="url" placeholder="https://example.com (optional)">
-            <button class="btn btn--ghost btn--icon" data-action="addCommandButton" type="button" aria-label="Add button">+</button>
+            <button class="btn btn--ghost" data-action="addCommandButton" type="button">Add button</button>
           </div>
         </div>
       </div>
       
       <div id="cmdButtonList" class="cmd-button-list mt-sm"></div>
       <div class="mt-md">
-        <button class="btn btn--outline" data-action="addCommand" type="button">Add command</button>
+        <button class="btn btn--accent" data-action="addCommand" type="button">Save command</button>
+        <button class="btn btn--ghost" data-action="cancelCommandForm" type="button">Cancel</button>
       </div>
-      <p class="muted text-xs mt-sm">View a command to read its full reply, or send yourself a test copy.</p>
+      </div>
 
       <div id="cmdPreview" class="bg-panel border radius-md p-16 mt-md" hidden>
         <div class="mb-sm"><h3>What subscribers see</h3></div>
@@ -76,12 +79,6 @@ export function commandsPanel(): string {
         </div>
       </div>
 
-      <div class="v3-table-scroll mt-lg">
-        <table class="v3-table">
-          <thead><tr><th>Command</th><th>Reply</th><th>Buttons</th><th>State</th><th><span class="sr-only">Actions</span></th></tr></thead>
-          <tbody id="cmdList"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
-        </table>
-      </div>
     </div>
   </div>`;
 }

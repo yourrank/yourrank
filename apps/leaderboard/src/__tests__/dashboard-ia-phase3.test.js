@@ -25,7 +25,7 @@ function dashboardHtml(activePath = "/dashboard") {
 }
 
 describe("Phase 3 dashboard information architecture", () => {
-  it("keeps the rail flat and ordered by creator intent", () => {
+  it("keeps the rail ordered by creator intent with one Engage disclosure", () => {
     expect(dashboardNavItems().map(({ key, label }) => [key, label])).toEqual([
       ["home", "Home"],
       ["board", "Community"],
@@ -36,11 +36,11 @@ describe("Phase 3 dashboard information architecture", () => {
       ["telegram", "Telegram"],
       ["settings", "Settings"],
     ]);
-    expect(dashboardNavItems().every((item) => item.kind !== "group")).toBe(true);
+    expect(dashboardNavItems().filter((item) => item.kind === "group").map(item => item.key)).toEqual(["engage"]);
 
     const sidebar = dashboardHtml().match(/<nav class="lb-side-group lb-side-nav"[\s\S]*?<\/nav>/)?.[0] || "";
-    for (const label of ["My board", "Players", "Stats", "Members", "Drops", "Raffles", "Predictions", "Tournaments"]) {
-      expect(sidebar).not.toContain(`>${label}</a>`);
+    for (const label of ["My board", "Players", "Stats", "Members", "Drops", "Raffles", "Predictions"]) {
+      expect(sidebar).not.toContain(`>${label}</span>`);
     }
   });
 
