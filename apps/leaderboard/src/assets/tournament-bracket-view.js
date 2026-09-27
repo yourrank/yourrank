@@ -115,7 +115,7 @@ function matchCard(match, { finished, isFinal, championName }) {
     const champion = isFinal && championName === player;
     return `<div ${attrs}><div class="tn-match-line">
       ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
-      <span class="tn-match-name${winner || champion ? " is-winner" : ""}${champion ? " is-champion" : ""}">${winner || champion ? CROWN_ICON : ""}${esc(player)}</span>
+      <span class="tn-match-name${winner || champion ? " is-winner" : ""}${champion ? " is-champion" : ""}">${champion ? CROWN_ICON : ""}${esc(player)}</span>
       <span class="tn-match-adv">${champion ? "champion" : "advances"}</span>
     </div></div>`;
   }
