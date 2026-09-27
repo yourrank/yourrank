@@ -1547,7 +1547,7 @@
 /* Main + aside layout shared by the Bracket and Settings tabs. */
 .tourn-bracket-layout {
   display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 16px;
   align-items: start;
 }
@@ -1589,9 +1589,9 @@
 }
 
 .tourn-kv-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px 16px;
   padding: 7px 0;
   border-bottom: 1px solid var(--ws-line, #e5e7eb);
@@ -1602,6 +1602,7 @@
 .tourn-kv-row dt {
   color: var(--ws-text-soft, var(--ws-text-mute));
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .tourn-kv-row dd {
@@ -1611,6 +1612,14 @@
   font-weight: 600;
   text-align: right;
   overflow-wrap: anywhere;
+}
+
+.tourn-kv-row dd[data-kv="id"] {
+  font: 600 12px var(--ws-mono, monospace);
+}
+
+@media (min-width: 1024px) {
+  .tourn-kv-row dd[data-kv="created"] { white-space: nowrap; }
 }
 
 .tourn-kv-group {
@@ -1662,8 +1671,8 @@
 .tournament-round {
   display: flex;
   flex-direction: column;
-  min-width: 190px;
-  flex: none;
+  flex: 0 0 230px;
+  min-width: 0;
 }
 
 .tournament-round-head {
@@ -2029,9 +2038,11 @@
 @media (max-width: 720px) {
   .tourn-head { padding: 16px; }
 
-  .tourn-head-row { flex-direction: column; }
+  .tourn-head-row { flex-direction: column; align-items: stretch; }
 
-  .tournament-primary-wrap { width: 100%; }
+  .tourn-head-ident { flex: none; }
+
+  .tournament-primary-wrap { width: 100%; flex: none; }
 
   .tournament-primary-wrap .btn { flex: 1 1 auto; }
 

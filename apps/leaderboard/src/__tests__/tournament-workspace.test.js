@@ -219,3 +219,29 @@ describe("tournament workspace — editable lifecycles", () => {
     expect(menus[0].querySelector("summary").getAttribute("aria-label")).toContain("viewer1");
   });
 });
+
+// Last: this test leaves the dialog-script promise pending (happy-dom never
+// loads injected scripts), so it must not precede tests that open modals.
+describe("tournament workspace — bracket modal teardown race", () => {
+  it("leaves no trap or scroll-lock when leave() beats the dialog script", async () => {
+    await boot(completed, completedEntries, completedMatches);
+    await click("tournament-tab-bracket");
+    const realDialog = window.YRDialog;
+    window.YRDialog = undefined;
+    try {
+      const opened = click("tournament-bracket-expand");
+      // The modal paints immediately; the trap only installs once
+      // ensureDialog() resolves — simulate a navigation winning that race.
+      mod.leave();
+      await opened;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect($id("tournament-bracket-modal").hidden).toBe(true);
+      expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
+      // Escape on the closed modal must do nothing and not throw.
+      document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect($id("tournament-bracket-modal").hidden).toBe(true);
+    } finally {
+      window.YRDialog = realDialog;
+    }
+  });
+});

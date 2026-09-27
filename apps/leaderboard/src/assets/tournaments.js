@@ -123,16 +123,8 @@ function stopChat() {
 // Chat registration is server-side (the Kick webhook), so the status reflects
 // the stored channel/connection state — never the browser socket.
 function updateChatStatus(lifecycle) {
-  const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
-  const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
-  if (lifecycle === "signups_open"
-      && chatRegistration?.connected && chatRegistration.chatReady && channel && channel === siteChannel) {
-    setChatStatus("Chat registration active", true);
-  } else if (lifecycle === "signups_open") {
-    setChatStatus("Chat registration unavailable");
-  } else {
-    setChatStatus("Chat registration off");
-  }
+  const label = chatRegistrationLabel(lifecycle);
+  setChatStatus(`Chat registration ${label.toLowerCase()}`, label === "Active");
 }
 
 // Entries are created by the webhook; poll so they appear without the socket.
@@ -321,8 +313,8 @@ function renderSettingsPanel(lifecycle) {
       <section class="tourn-card">
         <h3>Details</h3>
         <dl class="tourn-kv">
-          ${tournKvRow("Created", esc(formatCreated(tournament.created_at)))}
-          ${tournKvRow("Tournament ID", esc(tournament.id))}
+          ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
+          ${tournKvRow("Tournament ID", esc(tournament.id), "id")}
           ${tournKvRow("Entries", esc(String(entryCounts.active || 0)))}
           ${tournKvRow("Bracket size", esc(String(tournament.bracket_size)))}
           ${tournKvRow("Matches played", esc(String(playedMatchCount())))}
@@ -428,9 +420,11 @@ function playedMatchCount() {
 function formatCreated(value) {
   const date = new Date(value || "");
   if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
 }
 
+// Single source for the chat-registration state; the header hint and the
+// read-only Settings view both render from this so they can never disagree.
 function chatRegistrationLabel(lifecycle) {
   const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
   const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
@@ -440,7 +434,7 @@ function chatRegistrationLabel(lifecycle) {
   return "Off";
 }
 
-const tournKvRow = (label, value) => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd>${value}</dd></div>`;
+const tournKvRow = (label, value, kv = "") => `<div class="tourn-kv-row"><dt>${esc(label)}</dt><dd${kv ? ` data-kv="${kv}"` : ""}>${value}</dd></div>`;
 
 // The bracket aside: compact summary + metadata, shared shape with the
 // Settings "Details" card.
@@ -460,8 +454,8 @@ function renderTournamentSummary(lifecycle) {
       <dl class="tourn-kv">
         ${tournKvRow("Game", esc(tournament.game_name || "Not specified"))}
         ${tournKvRow("Bracket type", "Single elimination")}
-        ${tournKvRow("Created", esc(formatCreated(tournament.created_at)))}
-        ${tournKvRow("Tournament ID", esc(tournament.id))}
+        ${tournKvRow("Created", esc(formatCreated(tournament.created_at)), "created")}
+        ${tournKvRow("Tournament ID", esc(tournament.id), "id")}
       </dl>
     </section>`;
 }
@@ -879,7 +873,8 @@ function renderMatch(match, finished, championMatch = false) {
   const bye2 = p2 === BYE;
   const row = (name, bye, winner, score) => {
     const label = bye ? BYE_LABEL : (name === "TBD" ? "—" : name);
-    const scoreHtml = bye || name === "TBD" ? "" : `<span class="tournament-match-score">${isComplete ? (score ?? 0) : ""}</span>`;
+      // Scores only mean something between two real players.
+    const scoreHtml = bye || name === "TBD" || bye1 || bye2 ? "" : `<span class="tournament-match-score">${isComplete ? (score ?? 0) : ""}</span>`;
     return `<div class="tournament-match-row${bye ? " is-bye" : ""}${winner ? " is-winner" : ""}${winner && championMatch ? " is-champion" : ""}">
       <span class="tournament-match-name">${winner ? CROWN_ICON : ""}${esc(label)}</span>${scoreHtml}
     </div>`;
@@ -915,6 +910,9 @@ async function openBracketModal() {
   modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
+  // The dialog script can resolve after leave() or a manual close: never
+  // install a trap on a modal that is already hidden or replaced.
+  if (modal.hidden || $("tournament-bracket-modal") !== modal) return;
   releaseBracketTrap = dialog ? dialog.trap(modal, closeBracketModal) : null;
   $("tournament-bracket-close")?.focus();
 }
