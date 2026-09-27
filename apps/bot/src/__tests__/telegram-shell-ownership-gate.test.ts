@@ -94,8 +94,9 @@ describe("Telegram shell: one canonical authenticated document", () => {
       expect(html).toContain('<script src="/assets/shell-nav.js" defer></script>');
       expect(html.match(/id="topbarCmdTrigger"/g)).toHaveLength(1);
       expect(html).toContain('<script src="/assets/dashboard/command-palette.js" type="module"></script>');
-      if (page === "overview") expect(html).not.toContain('Account · Telegram');
-      else expect(html).toContain('Account · Telegram');
+      if (page === "overview") expect(html).not.toContain('id="tgPageContext"');
+      else expect(html).toContain('id="tgPageContext"');
+      expect(html).not.toContain('Account · Telegram');
       expect(html).not.toContain('Active site');
     }
   });

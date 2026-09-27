@@ -14,12 +14,6 @@ type DashboardContext = {
   siteName?: string | null;
 };
 
-function esc(value: unknown): string {
-  return String(value ?? "").replace(/[&<>"']/g, (ch) => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>
-  )[ch]);
-}
-
 function panelHtml(page: string, publicBaseUrl: string, context: DashboardContext): string {
   switch (page) {
     case "bots": return botsPanel();
@@ -37,6 +31,14 @@ function telegramTabsHtml(page: string): string {
       `<a class="v3-tab${key === page ? " is-on" : ""}" href="${href}"${key === page ? ' aria-current="page"' : ""}>${label}</a>`
     ).join("")
   }</nav>`;
+}
+
+function telegramContextHtml(page: string): string {
+  if (page === "overview") return ""; // The current-bot card is Overview's context.
+  return `<div class="tg-page-context" id="tgPageContext" aria-live="polite">
+    <div class="tg-page-context-copy"><span class="tg-page-context-name" id="tgContextName">Checking bots…</span><span class="tg-page-context-status" id="tgContextStatus"></span></div>
+    <label class="tg-page-context-picker" id="tgContextPicker" hidden><span class="sr-only">Selected Telegram bot</span><select id="tgContextSelect" class="v3-input" aria-label="Selected Telegram bot"></select></label>
+  </div>`;
 }
 
 export function appHtml(
@@ -60,7 +62,7 @@ export function appHtml(
     crumbs: [...chromeState.crumbs],
     user,
     // This setup CTA is contextual bot state, not a second navigation tree.
-    topbarContextHtml: page === "overview" ? "" : `<div class="lb-topbar-hud"><div class="lb-account-hud"><div class="lb-hud-details"><span class="lb-board-select-lbl">Account · Telegram</span>${context.botUsername ? `<span class="lb-account-title">@${esc(context.botUsername)} <span class="lb-status">${esc(context.botStatus || "active")}</span></span>` : `<a class="lb-account-title" href="${telegramChrome("bots").canonicalPath}" data-chrome-contextual-action="true">No bot connected · Connect one</a>`}</div></div></div>`,
+    topbarContextHtml: "",
     topbarHtml: workspaceSearchHtml(),
     activePath: chromeState.canonicalPath,
     railProfile: true,
@@ -70,7 +72,7 @@ export function appHtml(
     // render only the active panel. This keeps one panel's slow or failed data
     // from bloating or breaking the others, and matches the SPA section model
     // the leaderboard dashboard already uses.
-    content: `${telegramTabsHtml(page)}${panelHtml(page, publicBaseUrl, context)}`,
+    content: `${telegramContextHtml(page)}${telegramTabsHtml(page)}${panelHtml(page, publicBaseUrl, context)}`,
   });
   return botPageHtml({
     user,

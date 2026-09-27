@@ -1,6 +1,6 @@
 // Telegram connection summary — the one place a creator learns whether Telegram
 // is connected, what it is connected to, and what to do next. Rendered on the
-// Overview and Bots pages; the client runtime fills it from /bots (no new API).
+// Overview page; the client runtime fills it from /bots (no new API).
 export function connectionPanel(): string {
   return `
     <section class="lb-widget lb-widget--full tg-conn" id="tgConn" aria-labelledby="tgConnName">
@@ -11,6 +11,7 @@ export function connectionPanel(): string {
         </div>
         <span class="tg-state" id="tgConnState" data-state="loading"><i aria-hidden="true"></i><span id="tgConnStateText">Checking…</span></span>
       </div>
+      <label class="tg-page-context-picker" id="tgConnPicker" hidden><span class="sr-only">Selected Telegram bot</span><select id="tgConnSelect" class="v3-input" aria-label="Selected Telegram bot"></select></label>
       <div class="tg-conn-actions" id="tgConnActions" hidden>
         <a class="btn btn--accent" id="tgConnPrimary" href="/dashboard/telegram/bots">Connect Telegram</a>
         <a class="btn btn--ghost" id="tgConnSecondary" href="/dashboard/telegram/bots" hidden>Manage bot</a>

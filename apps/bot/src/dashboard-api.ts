@@ -774,14 +774,15 @@ export function buildDashboardApi(): Hono<{ Bindings: DashApiBindings; Variables
 
   // ---- broadcasts ----
   api.get("/broadcasts", async (c) => {
+    const botId = c.req.query("bot_id")?.trim() || null;
     const rows = await query(
       `SELECT b.id, b.bot_id, b.body, b.media_url, b.buttons, b.status, b.scheduled_at, b.sent_at,
               b.created_at, b.segment, b.audience_filter_snapshot, b.total_count, b.sent_count, b.fail_count,
               bo.username AS bot_username
          FROM broadcasts b JOIN bots bo ON bo.id = b.bot_id
-        WHERE bo.owner_id = $1
+        WHERE bo.owner_id = $1 AND ($2::text IS NULL OR b.bot_id::text = $2)
         ORDER BY b.created_at DESC LIMIT 20`,
-      [c.get("uid")]
+      [c.get("uid"), botId]
     );
     return c.json(rows.map((r: any) => ({
       ...r,
