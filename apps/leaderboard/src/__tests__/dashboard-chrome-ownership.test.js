@@ -174,9 +174,9 @@ function deriveRenderableRoutes() {
         ? ANALYTICS_TABS
         : section.tabs || [];
     const hasSubnav = page === "board" || page === "performance" || page === "site";
-    const hasBreadcrumbs = ["board", "performance"].includes(page);
+    const hasBreadcrumbs = page === "board";
     routes.push({ path: section.path, render: "dashboard", hasSubnav, hasBreadcrumbs });
-    for (const tab of tabs) routes.push({ path: `${section.path}/${tab}`, render: "dashboard", hasSubnav: true, hasBreadcrumbs: true });
+    for (const tab of tabs) routes.push({ path: `${section.path}/${tab}`, render: "dashboard", hasSubnav: true, hasBreadcrumbs });
   }
   routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: true, hasBreadcrumbs: false });
   for (const [tab] of GIVEAWAY_TABS) {
@@ -385,6 +385,9 @@ describe("dashboard chrome ownership", () => {
       }
       if (route.hasBreadcrumbs) {
         expect(violations.markup.breadcrumbs, `${route.path} breadcrumbs`).not.toBe("");
+      }
+      if (route.path.startsWith("/dashboard/analytics")) {
+        expect(violations.markup.breadcrumbs, `${route.path} redundant breadcrumbs`).toBe("");
       }
       expect(violations.duplicates, route.path).toEqual([]);
       expect(violations.sidebarSubnav, route.path).toEqual([]);
