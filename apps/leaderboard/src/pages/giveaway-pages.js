@@ -615,7 +615,7 @@ ${active === "tournaments"
 
     <!-- No tournament yet: the empty card carries the page's h1. -->
     <section class="tournament-empty-card" id="tournament-empty" aria-labelledby="tournament-empty-heading" hidden>
-      <h1 id="tournament-empty-heading">Tournaments</h1>
+      <${active === "tournaments" ? "h1" : "h2"} id="tournament-empty-heading">Tournaments</${active === "tournaments" ? "h1" : "h2"}>
       <p>Run a tournament for your community. Collect entries from your audience, select participants, then manage the bracket here.</p>
       <button class="btn btn--accent" id="tournament-create" type="button">Create tournament</button>
     </section>
@@ -625,7 +625,7 @@ ${active === "tournaments"
         <div class="tourn-head-row">
           <div class="tourn-head-ident">
             <div class="tourn-head-title">
-              <h1 id="tournament-title-display"></h1>
+              <${active === "tournaments" ? "h1" : "h2"} id="tournament-title-display"></${active === "tournaments" ? "h1" : "h2"}>
               <span class="tournament-status-chip" id="tournament-status" data-lifecycle=""></span>
             </div>
             <p class="tourn-meta" id="tournament-meta"></p>

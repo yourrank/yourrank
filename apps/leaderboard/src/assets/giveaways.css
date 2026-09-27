@@ -1145,7 +1145,8 @@
   box-shadow: none;
 }
 
-.tournament-empty-card h1 {
+.tournament-empty-card h1,
+.tournament-empty-card h2 {
   margin: 0;
   color: var(--ws-text, #111827);
   font-size: 18px;
@@ -1190,7 +1191,8 @@
   gap: 8px 12px;
 }
 
-.tourn-head-title h1 {
+.tourn-head-title h1,
+.tourn-head-title h2 {
   margin: 0;
   color: var(--ws-text, #111827);
   font-size: 20px;
