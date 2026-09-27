@@ -1037,6 +1037,7 @@ async function saveSettings(event) {
 
 export async function boot(token = lifecycleToken) {
   if (!$("tournament-app")) return;
+  ensureDocListeners();
   // A re-enter starts clean: drop any timers/chat left by a previous visit.
   resetTransientState();
   try {
@@ -1101,7 +1102,22 @@ export function leave() {
   resetTransientState();
 }
 
-document.addEventListener("submit", (event) => {
+// Delegated listeners attach to the document that actually hosts
+// #tournament-app, not the module-eval-time global: a host (or test) may
+// evaluate this module while another document is current, and a listener
+// bound to the wrong document never fires. One binding per document.
+const listenerDocs = new WeakSet();
+function ensureDocListeners() {
+  const doc = $("tournament-app")?.ownerDocument;
+  if (!doc || listenerDocs.has(doc)) return;
+  listenerDocs.add(doc);
+  doc.addEventListener("submit", onSubmit);
+  doc.addEventListener("change", onChange);
+  doc.addEventListener("input", onInput);
+  doc.addEventListener("click", onClick);
+}
+
+function onSubmit(event) {
   if (!$("tournament-app")) return;
   if (event.target.id === "tournament-create-form") {
     submitCreate(event).catch((error) => setCreateError(error.message || "Could not create the tournament."));
@@ -1109,9 +1125,9 @@ document.addEventListener("submit", (event) => {
     event.preventDefault();
     saveSettings(event).catch((error) => setMessage(error.message || "Could not save settings.", true));
   }
-});
+}
 
-document.addEventListener("change", (event) => {
+function onChange(event) {
   if (event.target.name === "tournament-select-mode") return syncSelectMode();
   if (event.target.closest?.("#ts-entry-list")) return toggleManualSelection(event.target);
   if (event.target.id === "tc-entry-cap") {
@@ -1125,16 +1141,16 @@ document.addEventListener("change", (event) => {
     if (!cap.hidden) cap.focus();
   }
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
-});
+}
 
-document.addEventListener("input", (event) => {
+function onInput(event) {
   if (event.target.id === "ts-search") return renderSelectList();
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
-});
+}
 
-document.addEventListener("click", async (event) => {
+async function onClick(event) {
   if ($("tournament-app") && !event.target.closest?.("details.tourn-menu")) {
-    document.querySelectorAll("#tournament-app details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
+    (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tourn-menu[open]").forEach((menu) => { menu.open = false; });
   }
   const target = event.target.closest?.(
     "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], [data-score-match]"
@@ -1175,7 +1191,7 @@ document.addEventListener("click", async (event) => {
   } catch (error) {
     setMessage(error.message || "Action failed.", true);
   }
-});
+}
 
 if (!window.__yrSpaShell) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => enter(), { once: true });
