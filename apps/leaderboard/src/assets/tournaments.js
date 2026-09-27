@@ -44,6 +44,9 @@ const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
 let board = {};
+// Bumped on every enter/leave; async work compares against its own copy so a
+// stale boot can never mutate state or the DOM after a navigation.
+let lifecycleToken = 0;
 let tournament = null;
 let entries = [];
 // Server-computed entry counts from /entries — eligibility is authoritative
@@ -868,20 +871,66 @@ async function saveSettings(event) {
 
 // ---- Boot ----------------------------------------------------------------
 
-export async function boot() {
+export async function boot(token = lifecycleToken) {
   if (!$("tournament-app")) return;
-  activeTab = "entries";
-  stopChat();
+  // A re-enter starts clean: drop any timers/chat left by a previous visit.
+  resetTransientState();
   try {
     const shell = await loadBoardShell();
+    if (token !== lifecycleToken) return;
     siteId = shell.activeSiteId || "";
     board = shell.board || {};
     await loadTournament();
+    if (token !== lifecycleToken) return;
     await startChat();
   } catch (error) {
+    if (token !== lifecycleToken) return;
     setMessage(error.message || "Tournament unavailable. Try again in a moment.", true);
-    $("tournament-empty").hidden = false;
+    const empty = $("tournament-empty");
+    if (empty) empty.hidden = false;
   }
+}
+
+// Drop timers, sockets, modal state and cached data so leave() fully
+// detaches the workspace and a later enter() rebuilds it from scratch.
+function resetTransientState() {
+  stopChat();
+  if (entriesPollTimer) { clearInterval(entriesPollTimer); entriesPollTimer = null; }
+  if (entriesRefreshTimer) { clearTimeout(entriesRefreshTimer); entriesRefreshTimer = null; }
+  if (settingsSavedTimer) { clearTimeout(settingsSavedTimer); settingsSavedTimer = null; }
+  entriesRefreshRunning = false;
+  entriesRefreshQueued = false;
+  closeCreateModal();
+  closeSelectModal();
+  // The modal markup may already be gone when a leave races a fragment swap;
+  // release any lingering focus traps and unlock the page scroll regardless.
+  if (releaseCreateTrap || releaseSelectTrap) {
+    releaseCreateTrap?.();
+    releaseSelectTrap?.();
+    releaseCreateTrap = null;
+    releaseSelectTrap = null;
+    document.documentElement.classList.remove("yr-modal-open");
+  }
+  tournament = null;
+  entries = [];
+  matches = [];
+  entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
+  chatRegistration = null;
+  activeTab = "entries";
+  board = {};
+  siteId = "";
+  settingsBaseline = "";
+  settingsReadonly = false;
+}
+
+export function enter() {
+  const token = ++lifecycleToken;
+  return boot(token);
+}
+
+export function leave() {
+  lifecycleToken += 1;
+  resetTransientState();
 }
 
 document.addEventListener("submit", (event) => {
@@ -948,5 +997,7 @@ document.addEventListener("click", async (event) => {
   }
 });
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-else boot();
+if (!window.__yrSpaShell) {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => enter(), { once: true });
+  else enter();
+}

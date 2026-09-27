@@ -117,7 +117,7 @@ export const DYNAMIC_SECTIONS = {
   // credits client module — the fragment markup and behaviour are unchanged,
   // only the address and the rail owner moved.
   siteConnections: dynamicSection("siteConnections", { boot: "credits", boardContext: "selector", rootId: "cr-dash" }),
-  giveaways: dynamicSection("giveaways", { boot: "giveaways", boardContext: "selector", rootId: "gw-dash" }),
+  giveaways: dynamicSection("giveaways", { boot: "giveaways", tabBoots: { tournaments: ["tournaments"] }, boardContext: "selector", rootId: "gw-dash" }),
   audience: dynamicSection("audience", { boot: "people", boardContext: "selector", rootId: "cr-dash" }),
   settings: dynamicSection("settings", { boot: "account", boardContext: "none", rootId: "acc-app" }),
 };
@@ -140,6 +140,13 @@ const DYNAMIC_PATH_PREFIXES = [
 /** true if `page` is one of the dynamic (fragment-loaded) sections. */
 export function isDynamicSection(page) {
   return Boolean(DYNAMIC_SECTIONS[page]);
+}
+
+/** Client boot owners for a route, base section module first then tab-specific ones. */
+export function bootOwners(page, tab = "") {
+  const section = DYNAMIC_SECTIONS[page];
+  if (!section) return [];
+  return [section.boot, ...(section.tabBoots?.[tab] || [])];
 }
 
 /**
