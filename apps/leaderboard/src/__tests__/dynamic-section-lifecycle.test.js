@@ -134,7 +134,7 @@ describe("dynamic-section lifecycle", () => {
     expect($id("tournament-workspace").hidden).toBe(false);
   });
 
-  it("shows a generic error body for fragment failures and keeps the query on retry", async () => {
+  it("shows a generic error body with Retry for fragment failures", async () => {
     fragmentStatus = 500;
     expect(await ds.loadDynamicSection("giveaways", "chat")).toBe(false);
     const container = $id("lbDynamic");
@@ -157,6 +157,6 @@ describe("dynamic-section lifecycle", () => {
       return real(input, init);
     })(globalThis.fetch);
     expect(await ds.loadDynamicSection("giveaways", "chat")).toBe(false);
-    expect($id("lbDynamic").textContent).toContain("You don’t have permission to view this section.".replace("’", "'"));
+    expect($id("lbDynamic").textContent).toContain("You don't have permission to view this section.");
   });
 });

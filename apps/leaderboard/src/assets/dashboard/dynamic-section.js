@@ -204,11 +204,6 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
   // Toggle topbar controls to match this section's board context.
   setTopbarContext(section.boardContext);
 
-  // Leave handlers registered by this navigation's enter() calls. They stay
-  // local until every owner entered successfully: a superseded navigation
-  // must never touch the newer navigation's currentLeaves.
-  const myLeaves = [];
-
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, FRAGMENT_TIMEOUT_MS);
 
@@ -274,36 +269,31 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     }
 
     for (const mod of mods) {
-      // Register leave before enter so a half-failed enter still gets torn
-      // down, and so a leave is never lost if enter resolves after a newer
-      // navigation started.
-      if (typeof mod.leave === "function") myLeaves.push(mod.leave);
+      // A newer navigation may have started while the previous owner was
+      // entering; it already ran every leave registered so far.
+      if (myToken !== navToken) return false;
+      // Register leave before enter, so the next navigation tears this owner
+      // down even when it starts while enter() is still in flight (the owner's
+      // own lifecycle token then turns the late enter into a no-op).
+      if (typeof mod.leave === "function") currentLeaves.push(mod.leave);
       if (mod.enter) {
         const enterResult = mod.enter({ tab, page, signal: controller.signal });
         if (enterResult && typeof enterResult.then === "function") {
           await enterResult;
         }
       }
-      if (myToken !== navToken) {
-        // A newer navigation owns currentLeaves now; our half-initialized
-        // owners are ours to tear down.
-        runLeaves(myLeaves);
-        return false;
-      }
     }
-    currentLeaves = myLeaves;
+    if (myToken !== navToken) return false;
     currentBootKeys = owners;
 
     // Move focus to the new section so keyboard and screen-reader users
     // arrive with the content, not stranded on the sidebar link they
     // activated. The heading is given a temporary tabindex so it can receive
     // focus without being added to the normal Tab order.
-    if (myToken === navToken) {
-      const heading = container.querySelector("h1, h2, [data-focus-target]");
-      if (heading) {
-        heading.setAttribute("tabindex", "-1");
-        heading.focus({ preventScroll: true });
-      }
+    const heading = container.querySelector("h1, h2, [data-focus-target]");
+    if (heading) {
+      heading.setAttribute("tabindex", "-1");
+      heading.focus({ preventScroll: true });
     }
 
     // Signal boot completion for the watchdog.
@@ -311,9 +301,6 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
 
     return true;
   } catch (err) {
-    // Whatever this navigation managed to enter is this navigation's to tear
-    // down — even when the failure was a superseding abort.
-    runLeaves(myLeaves);
     if (err?.name === "AbortError" || controller.signal.aborted) {
       if (!timedOut) {
         // Navigation was superseded — not an error.
@@ -322,6 +309,9 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     }
     const shown = timedOut ? new Error("Timed out loading section fragment") : err;
     if (myToken !== navToken) return false;
+    // Owners this navigation half-entered before the failure are torn down
+    // so the error state does not sit on top of live timers or sockets.
+    runCurrentLeaves();
     console.error("dynamic-section load failed", shown);
     showLocalError(container, shown);
     window.__yrBoot?.signal();

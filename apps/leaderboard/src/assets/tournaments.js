@@ -904,9 +904,13 @@ function resetTransientState() {
   closeSelectModal();
   // The modal markup may already be gone when a leave races a fragment swap;
   // release any lingering focus traps and unlock the page scroll regardless.
-  if (releaseCreateTrap) { releaseCreateTrap(); releaseCreateTrap = null; }
-  if (releaseSelectTrap) { releaseSelectTrap(); releaseSelectTrap = null; }
-  document.documentElement.classList.remove("yr-modal-open");
+  if (releaseCreateTrap || releaseSelectTrap) {
+    releaseCreateTrap?.();
+    releaseSelectTrap?.();
+    releaseCreateTrap = null;
+    releaseSelectTrap = null;
+    document.documentElement.classList.remove("yr-modal-open");
+  }
   tournament = null;
   entries = [];
   matches = [];
