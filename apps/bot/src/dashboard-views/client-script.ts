@@ -227,10 +227,34 @@ let firstBotId = null;
 let firstBroadcastBotId = null;
 let custBotId = null;
 const requestedBotId = new URLSearchParams(location.search).get('bot');
+const TG_SELECTED_BOT_KEY = 'yr_tg_selected_bot';
+function savedBotId(){ try { return sessionStorage.getItem(TG_SELECTED_BOT_KEY); } catch { return null; } }
+function saveSelectedBotId(id){ try { if (id) sessionStorage.setItem(TG_SELECTED_BOT_KEY, id); else sessionStorage.removeItem(TG_SELECTED_BOT_KEY); } catch {} }
+function selectedBot(){ return __lastBots.find(b => b.id === custBotId) || null; }
+function updateTelegramContext(){
+  const bot = selectedBot();
+  const multiple = __lastBots.length > 1;
+  const name = $('tgContextName'), status = $('tgContextStatus');
+  if (name) name.textContent = bot ? (multiple ? 'Selected bot' : '@'+bot.username) : 'No bot connected';
+  if (status) status.textContent = bot ? botConnectionState(bot).label : '';
+  for (const [pickerId, selectId] of [['tgContextPicker','tgContextSelect'],['tgConnPicker','tgConnSelect']]) {
+    const picker = $(pickerId), select = $(selectId);
+    if (picker) picker.hidden = __lastBots.length < 2;
+    if (select) {
+      select.innerHTML = __lastBots.map(b => '<option value="'+esc(b.id)+'">@'+esc(b.username)+'</option>').join('');
+      if (bot) select.value = bot.id;
+    }
+  }
+  document.querySelectorAll('.telegram-tabs a').forEach(link => {
+    const url = new URL(link.href, location.href);
+    if (bot) url.searchParams.set('bot', bot.id); else url.searchParams.delete('bot');
+    link.href = url.pathname + url.search;
+  });
+}
 
 // Every panel ships a static "Loading…" placeholder; if the load fails they
 // have to say so instead of claiming to load forever.
-const LOADING_SLOTS = [['botList',0],['ovBots',0],['ovOffers',0],['postbackStatusOffers',0],['postbackStatusSettings',0],['offers',11],['cmdList',5],['subSources',2]];
+const LOADING_SLOTS = [['botList',0],['ovOffers',4],['postbackStatusOffers',0],['postbackStatusSettings',0],['offers',6],['cmdList',5],['subSources',0]];
 function loadErrorMarkup(msg, action){
   return '<div class="empty empty--error"><span class="empty__icon" aria-hidden="true">\u26a0</span>' +
     esc(msg) +
@@ -244,6 +268,13 @@ function showLoadError(msg){
     if (!el) continue;
     el.innerHTML = slot[1] ? '<tr><td colspan="' + slot[1] + '">' + body + '</td></tr>' : body;
   }
+  const chartVisual = $('chartVisual');
+  const chartEmpty = $('chartEmpty');
+  if (chartVisual) chartVisual.hidden = true;
+  if (chartEmpty) {
+    chartEmpty.hidden = false;
+    chartEmpty.textContent = "Couldn't load clicks. Reload to try again.";
+  }
 }
 function showPostbackError(msg){
   ['postbackStatusOffers','postbackStatusSettings'].forEach(id => {
@@ -256,10 +287,14 @@ async function load() {
   const me = await api('/me');
   if (me.error) { toast(me.error); showLoadError(me.error); showConnectionError(); return; }
 
-  const [offers, daily, bots] = await Promise.all([api('/offers'), api('/stats/daily'), api('/bots')]);
+  const [offers, daily, bots] = await Promise.all([
+    page === 'overview' || page === 'offers' ? api('/offers') : Promise.resolve([]),
+    page === 'overview' ? api('/stats/daily') : Promise.resolve([]),
+    api('/bots')
+  ]);
   // Only /bots speaks for the connection: metrics or offers failing says
   // nothing about whether Telegram is connected.
-  if (bots.error) showConnectionError(); else renderConnectionState(bots);
+  if (bots.error) showConnectionError(); else renderBots(bots);
   if (daily.error || offers.error || bots.error) {
     const err = daily.error || offers.error || bots.error;
     toast(err); showLoadError(err); return;
@@ -269,66 +304,59 @@ async function load() {
 
   // overview stats
   if (page === 'overview') {
-    setHtml('ovScope', 'Metrics for all connected bots over the last 14 days, shown in your local time.');
     const totClicks = (daily||[]).reduce((s,d)=>s+d.clicks,0);
     const totUnique = (daily||[]).reduce((s,d)=>s+d.unique_clicks,0);
     const activeOffers = (offers||[]).filter(o=>o.is_active).length;
     setText('totClicks', totClicks);
     setText('totUnique', totUnique);
     setText('totOffers', activeOffers);
-    setText('uniqueSub', totClicks > 0 ? Math.round(totUnique/totClicks*100) + '% of clicks' : '');
-    setText('offersSub', (offers||[]).length ? 'of ' + (offers||[]).length + ' total' : 'none yet');
-    renderOverviewSummary(bots, offers);
+    renderTopOffers(offers);
 
-    const max = Math.max(1, ...(daily||[]).map(d=>d.clicks));
-    const w = daily.length ? 100/daily.length : 10;
+    const hasClicks = totClicks > 0;
+    const chartVisual = $('chartVisual');
+    const chartEmpty = $('chartEmpty');
+    if (chartVisual) chartVisual.hidden = !hasClicks;
+    if (chartEmpty) {
+      chartEmpty.hidden = hasClicks;
+      chartEmpty.textContent = hasClicks ? '' : 'No clicks in the last 14 days';
+    }
     const chart = $('chart');
-    if (chart) {
+    if (chart && hasClicks) {
+      const max = Math.max(1, ...(daily||[]).map(d=>d.clicks));
+      const w = daily.length ? 100/daily.length : 10;
       chart.setAttribute('viewBox','0 0 100 40');
       chart.innerHTML = (daily||[]).map((d,i)=>{
         const h = d.clicks/max*36;
         return '<rect x="'+(i*w+0.5)+'" y="'+(40-h)+'" width="'+(w-1)+'" height="'+h+'" rx="0.6" fill="#f0b429"><title>'+esc(d.day)+': '+esc(String(d.clicks))+'</title></rect>';
       }).join('');
     }
-    setHtml('chartLabels', daily.length > 0
+    setHtml('chartLabels', hasClicks && daily.length > 0
       ? '<span>'+esc(daily[0].day.slice(5))+'</span><span>'+esc(daily[daily.length-1].day.slice(5))+'</span>'
       : '');
   }
 
-  renderBots(bots);
-
-  if (page === 'overview') loadSubscribers(bots);
+  if (page === 'overview') loadSubscribers();
 
   __offers = offers || [];
   renderOffers();
   if (__planInfo) renderPlanState(__planInfo);
 }
 
-// Compact bot + offer summaries (overview only).
-function renderOverviewSummary(bots, offers){
-  const ov = $('ovBots');
-  if (ov) {
-    const list = (bots||[]).slice(0,4);
-    ov.innerHTML = list.length
-      ? '<ul class="tg-row-list">'+list.map(b=>{
-          const state = botConnectionState(b);
-          return '<li class="tg-row"><div class="tg-row-copy"><span class="tg-row-name">@'+esc(b.username)+'</span>'+
-            '<span class="tg-row-meta">'+esc(state.rowText)+'</span></div>'+
-            '<span class="tg-state" data-state="'+esc(state.key)+'"><i aria-hidden="true"></i>'+esc(state.label)+'</span></li>';
-        }).join('')+'</ul>'
-      : '<p class="muted text-sm">No bot connected yet. <a href="/dashboard/telegram/bots">Connect Telegram</a></p>';
-  }
+// The Overview owns only a compact read-only offer summary; editing stays in Offers.
+function renderTopOffers(offers){
   const oo = $('ovOffers');
   if (oo) {
     const top = (offers||[]).slice().sort((a,b)=>(b.clicks||0)-(a.clicks||0)).slice(0,4);
     oo.innerHTML = top.length
       ? top.map(o=>{
           const on = o.is_active;
-          return '<div class="lrow"><div class="l"><div class="nm">'+esc(o.casino)+'</div>'+
-            '<div class="ds">'+esc(o.label||'')+' · '+esc(String(o.clicks||0))+' clicks · '+esc(String(o.conversions||0))+' of '+esc(String(o.unique_clicks||0))+' signed up</div></div>'+
-            '<span class="badge '+(on?'on':'off')+'">'+(on?'active':'off')+'</span></div>';
+          return '<tr><td><strong>'+esc(o.casino)+'</strong>'+
+            (o.label ? '<span class="tg-overview-offer-label">'+esc(o.label)+'</span>' : '')+'</td>'+
+            '<td class="num" data-label="Clicks">'+esc(String(o.clicks||0))+'</td>'+
+            '<td class="num" data-label="Conversions">'+esc(String(o.conversions||0))+'</td>'+
+            '<td data-label="Status"><span class="badge '+(on?'on':'off')+'">'+(on?'Active':'Inactive')+'</span></td></tr>';
         }).join('')
-      : '<p class="muted text-sm">No offers yet. <a href="/dashboard/telegram/offers">Create one →</a></p>';
+      : '<tr><td colspan="4" class="muted">No offers yet.</td></tr>';
   }
 }
 
@@ -341,7 +369,7 @@ const __botAttention = {};
 function botConnectionState(bot){
   if (!bot) return { key: 'off', label: 'Not connected', rowText: 'Not connected' };
   if (__botAttention[bot.id]) return { key: 'attention', label: 'Needs attention', rowText: __botAttention[bot.id] };
-  if (bot.status === 'active') return { key: 'ok', label: 'Connected', rowText: 'Connected and replying to subscribers' };
+  if (bot.status === 'active') return { key: 'ok', label: 'Connected', rowText: 'Ready to send updates' };
   if (bot.status === 'revoked') return { key: 'attention', label: 'Needs attention', rowText: 'Disconnected — reconnect to keep sending updates' };
   return { key: 'setup', label: 'Setup incomplete', rowText: 'Waiting on Telegram to finish the connection' };
 }
@@ -349,8 +377,7 @@ function renderConnectionState(bots){
   const card = $('tgConn');
   if (!card) return;
   const list = bots || [];
-  const active = list.find(b => b.status === 'active');
-  const chosen = active || list[0] || null;
+  const chosen = list.find(b => b.id === custBotId) || list.find(b => b.status === 'active') || list[0] || null;
   const state = list.length ? botConnectionState(chosen) : { key: 'off', label: 'Not connected', rowText: '' };
   const name = $('tgConnName');
   const sub = $('tgConnSub');
@@ -362,7 +389,7 @@ function renderConnectionState(bots){
   const note = $('tgConnNote');
   if (badge) badge.dataset.state = state.key;
   if (badgeText) badgeText.textContent = state.label;
-  if (name) name.textContent = chosen ? '@'+chosen.username : 'Telegram';
+  if (name) name.textContent = chosen ? (list.length > 1 ? 'Current bot' : '@'+chosen.username) : 'Telegram';
   if (sub) {
     sub.textContent = !list.length
       ? 'No Telegram bot connected yet. Connect one to send updates to your subscribers.'
@@ -372,7 +399,7 @@ function renderConnectionState(bots){
     if (state.key === 'ok') {
       primary.textContent = 'Send update';
       primary.href = '/dashboard/telegram/broadcasts';
-      secondary.textContent = 'Manage connection';
+      secondary.textContent = 'Manage bot';
       secondary.hidden = page === 'bots';
     } else if (state.key === 'attention') {
       primary.textContent = 'Manage connection';
@@ -390,9 +417,8 @@ function renderConnectionState(bots){
   }
   if (actions) actions.hidden = false;
   if (note) {
-    const extra = list.length > 1 ? (list.length - 1) + ' other bot' + (list.length === 2 ? '' : 's') + ' in this workspace.' : '';
-    note.textContent = extra;
-    note.hidden = !extra;
+    note.textContent = '';
+    note.hidden = true;
   }
 }
 // The raw upstream error belongs in the toast and the panel it came from, not
@@ -402,34 +428,35 @@ function showConnectionError(){
   const badgeText = $('tgConnStateText');
   const sub = $('tgConnSub');
   const actions = $('tgConnActions');
-  if (!badge) return;
-  badge.dataset.state = 'unknown';
+  const contextName = $('tgContextName'); if (contextName) contextName.textContent = 'Telegram status unavailable';
+  const contextStatus = $('tgContextStatus'); if (contextStatus) contextStatus.textContent = 'Reload to try again';
+  if (badge) badge.dataset.state = 'unknown';
   if (badgeText) badgeText.textContent = 'Status unavailable';
   if (sub) sub.textContent = "Couldn't check your Telegram connection. Reload to try again.";
   if (actions) actions.hidden = true;
 }
 
 // Subscriber totals + deep-link attribution (overview only).
-async function loadSubscribers(bots){
+async function loadSubscribers(){
   const s = await api('/stats/subscribers');
-  if (!s || s.error) return;
+  if (!s || s.error) {
+    setHtml('subSources', '<p class="tg-overview-empty">Subscriber sources unavailable. Reload to try again.</p>');
+    return;
+  }
   const t = s.totals || {};
   setText('totSubs', t.active ?? 0);
-  setText('subsNew', (t.new_7d ?? 0) > 0 ? '+' + (t.new_7d ?? 0) + ' new in the last 7 days' : 'No new subscribers in the last 7 days');
   const rows = (s.sources || []);
-  setHtml('subSources', rows.length
-    ? rows.map(r=>'<tr><td>'+esc(r.source)+'</td><td class="num">'+esc(String(r.count))+'</td></tr>').join('')
-    : '<tr><td colspan="2" class="muted">No subscribers yet. Share your bot link to get your first subscriber.</td></tr>');
-  const active = (bots || []).find(b=>b.status==='active' && b.username);
-  if (active) setText('deepLinkExample', 't.me/'+active.username+'?start=twitch');
+  const direct = rows.reduce((sum, row) => sum + (row.source === 'direct' ? Number(row.count) || 0 : 0), 0);
+  const tagged = rows.reduce((sum, row) => sum + (row.source !== 'direct' ? Number(row.count) || 0 : 0), 0);
+  setHtml('subSources', direct + tagged
+    ? '<dl class="tg-overview-breakdown"><div><dt>Direct</dt><dd>'+esc(String(direct))+'</dd></div><div><dt>Tagged links</dt><dd>'+esc(String(tagged))+'</dd></div></dl>'
+    : '<p class="tg-overview-empty">No subscribers yet.</p>');
 }
 
 // Render the offers table from client state. Mutation handlers update __offers
 // from their authoritative result and re-render, so the table reflects changes
 // immediately without a re-fetch (which can read stale data after a write).
 function offerRow(o){
-  const ctr = o.ctr != null ? ((o.ctr)*100).toFixed(1) : '0.0';
-  const cr = o.cr != null ? ((o.cr)*100).toFixed(1) : '0.0';
   const revenue = Array.isArray(o.reported_revenue) && o.reported_revenue.length
     ? o.reported_revenue.map(function(r){
         const amount = Number(r.amount);
@@ -442,16 +469,31 @@ function offerRow(o){
         }
       }).join('<br>')
     : '—';
-  const lastActivity = o.last_activity_at ? fmtTime(o.last_activity_at) : '—';
   if (o.id === __editingOfferId) return offerEditRow(o);
   return '<td><b>'+esc(o.casino)+'</b><br><span class="muted">'+esc(o.label)+'</span></td>'+
-  '<td>'+(o.slug?'<span class="copy" data-action="copyLink" data-slug="'+esc(o.slug)+'" title="Copy share link">'+esc('/r/'+o.slug)+'</span> <button class="ghost btn--xs" data-action="copyLink" data-slug="'+esc(o.slug)+'" type="button" aria-label="Copy share link">Copy</button>':'–')+'</td>'+
-  '<td>'+esc(String(o.clicks))+'</td><td>'+esc(String(o.unique_clicks))+'</td>'+
-  '<td>'+esc(ctr)+'%</td><td>'+esc(cr)+'%</td><td>'+esc(String(o.conversions||0))+'</td>'+
-  '<td>'+revenue+'</td><td>'+esc(lastActivity)+'</td>'+
+  '<td>'+esc(String(o.clicks))+'</td><td>'+esc(String(o.conversions||0))+'</td>'+
+  '<td>'+revenue+'</td>'+
   '<td class="'+(o.is_active?'ok':'off')+'">'+(o.is_active?'active':'off')+'</td>'+
-  '<td><button class="ghost" data-action="editOffer" data-id="'+esc(o.id)+'" type="button">Edit</button> '+
-  '<button class="ghost" data-action="toggleOffer" data-id="'+esc(o.id)+'" data-active="'+(!o.is_active)+'">'+(o.is_active?'Disable':'Enable')+'</button></td>';
+  '<td><details class="tg-action-menu"><summary>Actions</summary><div><button class="ghost" data-action="viewOfferDetails" data-id="'+esc(o.id)+'" type="button">View details</button>'+
+  (o.slug?'<button class="ghost" data-action="copyLink" data-slug="'+esc(o.slug)+'" type="button">Copy link</button>':'')+
+  '<button class="ghost" data-action="editOffer" data-id="'+esc(o.id)+'" type="button">Edit</button>'+
+  '<button class="ghost" data-action="toggleOffer" data-id="'+esc(o.id)+'" data-active="'+(!o.is_active)+'" type="button">'+(o.is_active?'Disable':'Enable')+'</button></div></details></td>';
+}
+function viewOfferDetails(target){
+  const o = __offers.find(item => item.id === target.dataset.id);
+  const wrap = $('offerDetails'), title = $('offerDetailsTitle'), body = $('offerDetailsBody');
+  if (!o || !wrap || !body) return;
+  if (title) title.textContent = o.label || o.casino;
+  body.innerHTML = '<dl class="tg-detail-grid">'+
+    '<div><dt>Partner</dt><dd>'+esc(o.casino)+'</dd></div>'+
+    '<div><dt>Share link</dt><dd>'+esc(o.slug ? '/r/'+o.slug : '—')+'</dd></div>'+
+    '<div><dt>Clicks</dt><dd>'+esc(String(o.clicks || 0))+'</dd></div>'+
+    '<div><dt>People reached</dt><dd>'+esc(String(o.unique_clicks || 0))+'</dd></div>'+
+    '<div><dt>Visit rate</dt><dd>'+esc(((o.ctr || 0)*100).toFixed(1))+'%</dd></div>'+
+    '<div><dt>Conversion rate</dt><dd>'+esc(((o.cr || 0)*100).toFixed(1))+'%</dd></div>'+
+    '<div><dt>Last activity</dt><dd>'+esc(o.last_activity_at ? fmtTime(o.last_activity_at) : '—')+'</dd></div></dl>';
+  wrap.hidden = false;
+  wrap.scrollIntoView({block:'nearest'});
 }
 // In-row editor: one row at a time, same fields as the create form. The offer
 // id (and so its tracked link + stats) is untouched by the update.
@@ -462,7 +504,7 @@ function offerEditRow(o){
       '<label class="text-sm font-600" for="'+id+'">'+label+'</label>'+
       '<input class="v3-input w-full" id="'+id+'"'+(opts.type?' type="'+opts.type+'"':'')+' value="'+esc(value || '')+'"></div>';
   };
-  return '<td colspan="11"><div class="offer-edit">'+
+  return '<td colspan="6"><div class="offer-edit">'+
     '<div class="offer-edit-grid">'+
       fld('eCasino','Brand or partner',o.casino)+
       fld('eLabel','Offer name',o.label)+
@@ -483,12 +525,17 @@ function formatBroadcastDate(value){
 }
 // Backend broadcast status → plain creator words. Unknown values fall through
 // unchanged rather than being hidden behind a guess.
-const BROADCAST_STATUS_WORDS = { queued: 'Sending', sending: 'Sending', sent: 'Sent', scheduled: 'Scheduled', canceled: 'Cancelled', cancelled: 'Cancelled', failed: 'Failed' };
-function broadcastStatusLabel(status){
-  return BROADCAST_STATUS_WORDS[String(status || '').toLowerCase()] || String(status || 'Unknown');
+const BROADCAST_STATUS_WORDS = { queued: 'Sending', sending: 'Sending', scheduled: 'Scheduled', canceled: 'Cancelled', cancelled: 'Cancelled', failed: 'Failed', paused: 'Paused' };
+function broadcastStatusLabel(status, sentCount, failCount){
+  const key = String(status || '').toLowerCase();
+  if (key === 'sent') {
+    if (Number(failCount) > 0) return Number(sentCount) > 0 ? 'Partially failed' : 'Failed';
+    return 'Sent';
+  }
+  return BROADCAST_STATUS_WORDS[key] || String(status || 'Unknown');
 }
 function broadcastRow(b){
-  const audience = b.total_count != null ? String(b.total_count) : '—';
+  const audience = broadcastAudienceText(b);
   const status = String(b.status || 'unknown');
   const canCancel = status === 'scheduled';
   const isPaused = status === 'paused' && b.stop_reason === 'monthly_quota';
@@ -496,14 +543,13 @@ function broadcastRow(b){
     ? '<span class="badge paused">Paused</span><div class="muted">Monthly delivery allowance reached (' +
       esc(String(__usage.broadcast_deliveries?.used ?? '—')) + ' / ' + esc(String(__usage.broadcast_deliveries?.allowance ?? '—')) +
       '). Resumes next month or after upgrading.</div>'
-    : '<span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status))+'</span>';
+    : '<span class="badge '+esc(status)+'">'+esc(broadcastStatusLabel(status,b.sent_count,b.fail_count))+'</span>';
   return '<td>'+statusCell+'</td>'+
-    '<td><b>'+esc(audience)+'</b> <span class="muted">subscribers</span></td>'+
     '<td><button class="link-button" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">'+esc(String(b.body || '').slice(0,90))+(String(b.body || '').length>90?'…':'')+'</button></td>'+
-    '<td>'+esc(b.bot_username || '—')+'</td>'+
-    '<td>'+esc(formatBroadcastDate(b.scheduled_at))+'</td>'+
+    '<td>'+esc(audience)+'</td>'+
     '<td>'+esc(String(b.sent_count ?? 0))+'</td>'+
     '<td>'+esc(String(b.fail_count ?? 0))+'</td>'+
+    '<td>'+esc(formatBroadcastDate(b.sent_at || b.scheduled_at || b.created_at))+'</td>'+
     '<td><button class="ghost" data-action="viewBroadcast" data-id="'+esc(b.id)+'" type="button">View</button>'+
       (canCancel ? ' <button class="ghost" data-action="cancelBroadcast" data-id="'+esc(b.id)+'" type="button">Cancel</button>' : '')+
       (isPaused ? ' <button class="ghost" data-action="resumeBroadcast" data-id="'+esc(b.id)+'" type="button">Resume</button>' : '')+'</td>';
@@ -536,7 +582,7 @@ function openBroadcastDetail(id){
   body.innerHTML =
     '<dl class="bc-detail-grid">'+
       '<div class="bc-detail-item"><dt>Bot</dt><dd>'+esc(b.bot_username || '—')+'</dd></div>'+
-      '<div class="bc-detail-item"><dt>Status</dt><dd>'+esc(b.status ? broadcastStatusLabel(b.status) : '—')+'</dd></div>'+
+      '<div class="bc-detail-item"><dt>Status</dt><dd>'+esc(b.status ? broadcastStatusLabel(b.status,b.sent_count,b.fail_count) : '—')+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Subscribers</dt><dd>'+esc(filterText)+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Subscribers at send time</dt><dd>'+esc(b.total_count == null ? 'Not recorded' : String(b.total_count))+'</dd></div>'+
       '<div class="bc-detail-item"><dt>Scheduled</dt><dd>'+esc(formatBroadcastDate(b.scheduled_at))+'</dd></div>'+
@@ -570,14 +616,11 @@ function renderOffers(){
       tbody: 'offers', items: __offers || [], perPage: 10,
       searchFn: function(o){ return [o.casino, o.label, o.slug, o.code].filter(Boolean).join(' '); },
       sortOptions: [
-          { key: 'clicks', label: 'Visits', fn: function(a,b){ return (b.clicks||0) - (a.clicks||0); } },
-          { key: 'unique', label: 'People reached', fn: function(a,b){ return (b.unique_clicks||0) - (a.unique_clicks||0); } },
-          { key: 'ctr', label: 'Visit rate', fn: function(a,b){ return (b.ctr||0) - (a.ctr||0); } },
-          { key: 'cr', label: 'Sign-up rate', fn: function(a,b){ return (b.cr||0) - (a.cr||0); } },
-          { key: 'conversions', label: 'Sign-ups', fn: function(a,b){ return (b.conversions||0) - (a.conversions||0); } },
+          { key: 'clicks', label: 'Clicks', fn: function(a,b){ return (b.clicks||0) - (a.clicks||0); } },
+          { key: 'conversions', label: 'Reported conversions', fn: function(a,b){ return (b.conversions||0) - (a.conversions||0); } },
           { key: 'active', label: 'Active first', fn: function(a,b){ return Number(b.is_active) - Number(a.is_active); } }
         ],
-        emptyAllMarkup: '<div class="empty"><b>No offers yet</b><br><span>Create your first offer above to get a share link for your bot.</span><br><a class="btn btn--accent btn--sm mt-sm" href="#offerCreateForm">Create an offer</a></div>',
+        emptyAllText: 'No offers yet. Create one to get a tracked share link.',
         emptyText: 'No matching offers.',
         searchPlaceholder: 'Search offers…',
       renderItem: offerRow
@@ -590,10 +633,9 @@ function renderOffers(){
 function renderUsageState(){
   const el = $('bcUsageState');
   if (!el) return;
-  const i = __usage.telegram_interactions || {};
   const d = __usage.broadcast_deliveries || {};
   const fmt = (b) => (Number(b.used)||0).toLocaleString()+' / '+Number(b.allowance||0).toLocaleString();
-  el.innerHTML = '<span class="muted">This month — interactions: <b>'+fmt(i)+'</b> · broadcast deliveries: <b>'+fmt(d)+'</b></span>';
+  el.innerHTML = 'Broadcast deliveries this month: <b>'+fmt(d)+'</b>';
 }
 
 function renderPlanState(plan){
@@ -609,25 +651,29 @@ function renderPlanState(plan){
   const botAtLimit = activeBots.length >= __maxBots;
   const botState = $('botPlanState');
   if (botState) {
-    botState.innerHTML = '<b>'+label+' plan:</b> '+activeBots.length+' of '+__maxBots+' bot slots used. Disconnected bots do not count.'+
+    botState.innerHTML = '<b>'+activeBots.length+' of '+__maxBots+' bots used</b>'+
       (botAtLimit ? ' <a href="'+manageUrl+'">Upgrade or manage your plan to connect another bot.</a>' : '');
   }
   const connect = $('connectWizard');
-  if (connect) connect.classList.toggle('hidden', botAtLimit);
+  const connectToggle = $('botConnectToggle');
+  if (connectToggle) connectToggle.disabled = botAtLimit;
+  if (connectToggle) connectToggle.textContent = activeBots.length ? 'Connect another bot' : 'Connect bot';
+  if (connect && botAtLimit) connect.hidden = true;
 
   const offerAtLimit = __offers.length >= __maxOffers;
   const offerState = $('offerPlanState');
   if (offerState) {
-    offerState.innerHTML = '<b>'+label+' plan:</b> '+__offers.length+' of '+__maxOffers+' offer slots used.'+
+    offerState.innerHTML = '<b>'+__offers.length+' / '+__maxOffers+' used</b>'+
       (offerAtLimit ? ' <a href="'+manageUrl+'">Upgrade or manage your plan to add another offer.</a>' : '');
   }
+  const offerToggle = $('offerFormToggle'); if (offerToggle) offerToggle.disabled = offerAtLimit;
   const offerForm = $('offerCreateForm');
   if (offerForm) offerForm.querySelectorAll('input, button').forEach(el => { el.disabled = offerAtLimit; });
 
   const bcState = $('bcPlanState');
   if (bcState) {
-    bcState.innerHTML = __canBroadcast
-      ? '<b>'+label+' plan:</b> Broadcasts are included.'
+    bcState.hidden = __canBroadcast && !plan.warning;
+    bcState.innerHTML = __canBroadcast ? ''
       : '<b>'+label+' plan:</b> Broadcasts require a plan with broadcast access. <a href="'+manageUrl+'">Upgrade to compose a broadcast.</a>';
     if (plan.warning) bcState.innerHTML += ' '+esc(plan.warning);
   }
@@ -636,9 +682,15 @@ function renderPlanState(plan){
 
 async function loadExtras(){
   const bcListLoading = $('bcList');
-  if (bcListLoading) bcListLoading.innerHTML = '<tr><td colspan="8" class="muted">Loading updates…</td></tr>';
-  const [plan, bcs, pbStatus, usage] = await Promise.all([api('/plan'), api('/broadcasts'), api('/postback-status'), api('/usage')]);
-  const errors = [plan.error, bcs.error, pbStatus.error].filter(Boolean);
+  if (bcListLoading) bcListLoading.innerHTML = '<tr><td colspan="7" class="muted">Loading updates…</td></tr>';
+  const broadcastPath = page === 'broadcasts' && custBotId ? '/broadcasts?bot_id='+encodeURIComponent(custBotId) : '/broadcasts';
+  const [plan, bcs, pbStatus, usage] = await Promise.all([
+    api('/plan'),
+    page === 'broadcasts' ? api(broadcastPath) : Promise.resolve([]),
+    page === 'offers' ? api('/postback-status') : Promise.resolve(null),
+    page === 'broadcasts' ? api('/usage') : Promise.resolve(null)
+  ]);
+  const errors = [plan?.error, bcs?.error, pbStatus?.error].filter(Boolean);
 
   if (plan.error) {
     const state = $('bcPlanState');
@@ -677,8 +729,8 @@ async function loadExtras(){
     }
   }
 
-  if (pbStatus.error) showPostbackError("Couldn't load extra results status.");
-  else renderPostbackStatus(pbStatus);
+  if (pbStatus?.error) showPostbackError("Couldn't load extra results status.");
+  else if (page === 'offers') renderPostbackStatus(pbStatus);
   if (errors.length) toast(errors[0]);
 }
 
@@ -687,8 +739,8 @@ function renderPostbackStatus(pb){
   if (!els.length) return;
   if (!pb || pb.error) { els.forEach(el => { el.textContent = 'Could not load extra results status. Try again.'; }); return; }
   const html = pb.active
-    ? '<span class="badge ok">Extra results connected</span> Sign-ups and revenue updates can appear here.'
-    : '<span class="badge off">Extra results not connected</span> Connect your partner results in Settings → Connections to see sign-ups and revenue.';
+    ? '<span class="badge ok">Partner tracking connected</span> Reported conversions and revenue can appear here.'
+    : '<span class="badge off">Partner tracking not connected</span> <a href="/dashboard/settings/connections">Set up conversion tracking</a> to see partner-reported results.';
   els.forEach(el => { el.innerHTML = html; });
 }
 
@@ -782,6 +834,7 @@ async function createOffer(btn){
     if (copy) copy.dataset.link = trackedLink;
   }
   toast('Offer created — tracked link ready'); restoreBtn(btn); load();
+  toggleInlineForm('offerCreateForm','offerFormToggle',false);
 }
 async function copyCreatedOffer(target){
   const ok = await copyWithFallback(target.dataset.link || '');
@@ -909,7 +962,6 @@ function renderBots(bots, loadCmds = true){
       ? '<ul class="tg-row-list tg-bot-list">'+bots.map(b => {
           const state = botConnectionState(b);
           const isActive = b.status === 'active';
-          const syncLabel = b.last_command_sync_at ? 'Commands updated '+fmtTime(b.last_command_sync_at) : 'Commands not sent to Telegram yet';
           return '<li class="tg-row tg-bot-row">'+
             '<div class="tg-row-head">'+
               '<div class="tg-row-copy">'+
@@ -919,15 +971,12 @@ function renderBots(bots, loadCmds = true){
               '<span class="tg-state" data-state="'+esc(state.key)+'"><i aria-hidden="true"></i>'+esc(state.label)+'</span>'+
             '</div>'+
             '<div class="tg-row-actions">'+
-              (isActive ? '<a class="btn btn--ghost" href="/dashboard/telegram/commands?bot='+encodeURIComponent(b.id)+'">Edit commands</a>' : '')+
-              (isActive ? '<button class="btn btn--ghost" data-action="syncCommands" data-id="'+esc(b.id)+'" type="button">Update commands in Telegram</button>' : '')+
-              (isActive && page === 'bots' ? '<button class="btn btn--ghost" data-action="testMessage" data-id="'+esc(b.id)+'" type="button">Send test message</button>' : '')+
-              (isActive ? '' : '<button class="btn btn--accent" data-action="reconnectBot" data-id="'+esc(b.id)+'" type="button">Reconnect</button>')+
+              (isActive ? '<button class="btn btn--ghost" data-action="testMessage" data-id="'+esc(b.id)+'" type="button">Test</button>' : '<button class="btn btn--ghost" data-action="reconnectBot" data-id="'+esc(b.id)+'" type="button">Reconnect</button>')+
             '</div>'+
             '<details class="health-details tg-row-details" id="health-'+esc(b.id)+'">'+
-              '<summary>Connection details</summary>'+
+              '<summary>Manage</summary>'+
               '<div class="health-body" id="health-body-'+esc(b.id)+'">'+
-                '<p class="muted">'+esc(syncLabel)+' · last change '+esc(fmtTime(b.updated_at))+'. Connect code ending …'+esc(b.token_hint)+'.</p>'+
+                '<p class="muted">Last changed '+esc(fmtTime(b.updated_at))+'.</p>'+
                 '<div class="tg-row-details-actions">'+
                   (isActive ? '<button class="btn btn--ghost" data-action="checkHealth" data-id="'+esc(b.id)+'" type="button">Check connection</button>' : '')+
                   (isActive ? '<button class="btn btn--ghost" data-action="disconnectBot" data-id="'+esc(b.id)+'" type="button">Disconnect</button>' : '')+
@@ -939,28 +988,18 @@ function renderBots(bots, loadCmds = true){
         }).join('')+'</ul>'
       : '<p class="muted text-sm">No bot connected yet. Follow the steps below to connect Telegram.</p>';
   }
-  renderConnectionState(bots);
-
-  const botSelect = $('botSelect');
-  const bcBotSelect = $('bcBotSelect');
   const activeBots = bots.filter(b => b.status === 'active');
-  const botOptions = bots.map(b => '<option value="'+esc(b.id)+'">@'+esc(b.username)+' ('+esc(b.status)+')</option>').join('');
-  const broadcastBotOptions = activeBots.map(b => '<option value="'+esc(b.id)+'">@'+esc(b.username)+'</option>').join('');
-  if (botSelect) { botSelect.innerHTML = botOptions || '<option value="">No bots</option>'; }
-  if (bcBotSelect) { bcBotSelect.innerHTML = broadcastBotOptions || '<option value="">No active bots</option>'; }
 
   firstBotId = activeBots[0]?.id ?? bots[0]?.id ?? null;
-  firstBroadcastBotId = activeBots[0]?.id ?? null;
-  const requestedBot = requestedBotId && bots.find(b => b.id === requestedBotId);
-  if ((!custBotId || !bots.some(b => b.id === custBotId)) && (requestedBot?.id || firstBotId)) custBotId = requestedBot?.id || firstBotId;
+  const preferredId = requestedBotId || savedBotId();
+  if (!custBotId || !bots.some(b => b.id === custBotId)) custBotId = bots.find(b => b.id === preferredId)?.id || firstBotId;
   if (!bots.length) custBotId = null;
-  if (botSelect && custBotId) botSelect.value = custBotId;
+  firstBroadcastBotId = selectedBot()?.status === 'active' ? custBotId : null;
+  updateTelegramContext();
+  renderConnectionState(bots);
   loadBroadcastDraft();
-  if (bcBotSelect && !bcBotSelect.value && firstBroadcastBotId) bcBotSelect.value = firstBroadcastBotId;
-  if (bcBotSelect) firstBroadcastBotId = bcBotSelect.value || firstBroadcastBotId;
-  setBroadcastAvailability(activeBots.length > 0);
-  if (bcBotSelect && firstBroadcastBotId) updateAudience();
-  else updateAudience();
+  setBroadcastAvailability(Boolean(firstBroadcastBotId));
+  updateAudience();
   updateScheduleInputState();
   showTimezone();
   if (__planInfo) renderPlanState(__planInfo);
@@ -985,7 +1024,14 @@ function renderBots(bots, loadCmds = true){
 function setBroadcastAvailability(hasActiveBots){
   const setup = $('bcSetupState');
   const composer = $('bcComposer');
-  if (setup) setup.hidden = !__canBroadcast || hasActiveBots;
+  if (setup) {
+    setup.hidden = !__canBroadcast || hasActiveBots;
+    const existing = Boolean(selectedBot());
+    const heading = setup.querySelector('h3'), link = setup.querySelector('a'), copy = setup.querySelector('p');
+    if (heading) heading.textContent = existing ? 'Reconnect this bot to send updates' : 'Connect Telegram to send updates';
+    if (copy) copy.textContent = existing ? 'The selected bot is disconnected. Reconnect it on the Bots tab.' : 'Your subscribers appear here once a Telegram bot is connected.';
+    if (link) link.textContent = existing ? 'Manage bot' : 'Connect Telegram';
+  }
   if (composer) composer.hidden = !__canBroadcast || !hasActiveBots;
 }
 
@@ -996,19 +1042,24 @@ function applyCustomizeState(bot){
   const active = bot.status === 'active';
   const note = $('custDisabledNote'); if (note) note.classList.toggle('hidden', active);
   const welcome = $('welcomeMsg'); if (welcome) welcome.value = bot.welcome_message || '';
-  const nameEl = $('selectedBotName');
-  if (nameEl) nameEl.textContent = bot ? 'Selected bot: @' + bot.username : 'No bot selected';
-  ['welcomeMsg','cmdName','cmdResp'].forEach(id => { const el = $(id); if (el) el.disabled = !active; });
+  ['welcomeMsg','cmdName','cmdResp','cmdBtnLabel','cmdBtnUrl'].forEach(id => { const el = $(id); if (el) el.disabled = !active; });
   const panel = $('customizePanel');
-  if (panel) panel.querySelectorAll('[data-action="saveWelcome"],[data-action="addCommand"]').forEach(b => { b.disabled = !active; });
+  if (panel) panel.querySelectorAll('[data-action="saveWelcome"]').forEach(b => { b.disabled = !active; });
+  for (const id of ['cmdFormToggle']) { const el = $(id); if (el) el.disabled = !active; }
+  const sync = $('cmdSyncBtn'); if (sync) { sync.disabled = !active; sync.dataset.id = bot.id; }
+  const add = document.querySelector('[data-action="addCommand"]'); if (add) add.disabled = !active;
+  const addButton = document.querySelector('[data-action="addCommandButton"]'); if (addButton) addButton.disabled = !active;
 }
 
 function selectBotById(id){
   const bot = __lastBots.find(b => b.id === id);
-  if (bot) { custBotId = id; }
-  const botSelect = $('botSelect');
-  if (botSelect && id) botSelect.value = id;
-  if (bot && page === 'commands') {
+  if (bot) { custBotId = id; saveSelectedBotId(id); }
+  firstBroadcastBotId = bot?.status === 'active' ? id : null;
+  updateTelegramContext();
+  renderConnectionState(__lastBots);
+  setBroadcastAvailability(Boolean(firstBroadcastBotId));
+  if (page === 'broadcasts') { scheduleAudienceUpdate(); invalidateBroadcastPreview(); saveBroadcastDraft(); loadExtras(); }
+  if (bot) {
     const url = new URL(location.href);
     url.searchParams.set('bot', id);
     history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -1037,16 +1088,17 @@ function renderCmdButtons(){
   if (!el) return;
   el.innerHTML = (__cmdButtons||[]).map((b,i)=>'<span class="cmd-button-chip">'+esc(b.label)+' <button class="ghost" data-action="removeCommandButton" data-idx="'+i+'" type="button" title="Remove">×</button></span>').join('') || '';
 }
-function addCommandButton(btn){
+function addCommandButton(){
   clearFieldErr('cmdBtnLabel'); clearFieldErr('cmdBtnUrl');
   const label = $('cmdBtnLabel').value.trim(), url = $('cmdBtnUrl').value.trim();
-  if (!label) { setFieldErr('cmdBtnLabel','Enter a button label'); return; }
-  if (!url) { setFieldErr('cmdBtnUrl','Enter a button URL'); return; }
-  if (!url.startsWith('http://') && !url.startsWith('https://')) { setFieldErr('cmdBtnUrl','URL must start with http:// or https://'); return; }
-  if (__cmdButtons.length >= 10) { setFieldErr('cmdBtnUrl','Max 10 buttons per command'); return; }
+  if (!label) { setFieldErr('cmdBtnLabel','Enter a button label'); return false; }
+  if (!url) { setFieldErr('cmdBtnUrl','Enter a button URL'); return false; }
+  if (!url.startsWith('http://') && !url.startsWith('https://')) { setFieldErr('cmdBtnUrl','URL must start with http:// or https://'); return false; }
+  if (__cmdButtons.length >= 10) { setFieldErr('cmdBtnUrl','Max 10 buttons per command'); return false; }
   __cmdButtons.push({label, url});
   renderCmdButtons();
   $('cmdBtnLabel').value=''; $('cmdBtnUrl').value=''; $('cmdBtnLabel').focus();
+  return true;
 }
 function removeCommandButton(target){
   const idx = Number(target.dataset.idx);
@@ -1069,17 +1121,18 @@ function renderCommands(){
     '<td>/'+esc(c.command)+'</td>'+
     '<td class="muted">'+short+ellipsis+'</td>'+
     '<td class="muted">'+btnText+'</td>'+
-    '<td class="'+(c.is_enabled?'ok':'off')+'">'+(c.is_enabled?'On':'Off')+'</td>'+
-    '<td><button class="ghost" data-action="viewCommand" data-id="'+esc(c.id)+'">View</button> '
-        +'<button class="ghost" data-action="testCommand" data-id="'+esc(c.id)+'">Test</button> '
-        +'<button class="ghost" data-action="toggleCommand" data-id="'+esc(c.id)+'" data-active="'+(!c.is_enabled)+'">'+(c.is_enabled?'Disable':'Enable')+'</button> '
-        +'<button class="ghost" data-action="deleteCommand" data-id="'+esc(c.id)+'">Delete</button></td>'+
+    '<td class="'+(c.is_enabled?'ok':'off')+'">'+(c.is_enabled?'Enabled':'Disabled')+'</td>'+
+    '<td><details class="tg-action-menu"><summary>Actions</summary><div><button class="ghost" data-action="viewCommand" data-id="'+esc(c.id)+'" type="button">View / test</button>'
+        +'<button class="ghost" data-action="toggleCommand" data-id="'+esc(c.id)+'" data-active="'+(!c.is_enabled)+'" type="button">'+(c.is_enabled?'Disable':'Enable')+'</button>'
+        +'<button class="ghost danger" data-action="deleteCommand" data-id="'+esc(c.id)+'" type="button">Delete</button></div></details></td>'+
   '</tr>';
   }).join('') || '<tr><td colspan="5" class="muted">No custom commands yet.</td></tr>';
 }
 async function loadCommands(){
   if (!custBotId) return;
-  const cmds = await api('/bots/'+custBotId+'/commands');
+  const botId = custBotId;
+  const cmds = await api('/bots/'+botId+'/commands');
+  if (botId !== custBotId) return;
   if (cmds.error) return toast(cmds.error);
   __commands = cmds || [];
   renderCommands();
@@ -1101,6 +1154,9 @@ async function addCommand(btn){
   if (!/^[a-z0-9_]{1,32}$/.test(command)) { setFieldErr('cmdName','Command must be 1-32 chars: letters, numbers, or underscore'); return; }
   if (RESERVED_COMMANDS.has(command)) { setFieldErr('cmdName',"/"+command+" is a built-in command and can't be overridden"); return; }
   if (__commands.some(c => c.command === command)) { setFieldErr('cmdName','/'+command+' already exists for this bot'); return; }
+  if ($('cmdBtnLabel').value.trim() || $('cmdBtnUrl').value.trim()) {
+    if (!addCommandButton()) return;
+  }
   setLoading(btn, 'Adding…');
   const payload = {command, response};
   if (__cmdButtons.length) payload.buttons = __cmdButtons;
@@ -1113,6 +1169,7 @@ async function addCommand(btn){
   renderCmdButtons();
   renderCommands();
   $('cmdName').value=''; $('cmdResp').value=''; toast('Command saved'); restoreBtn(btn);
+  toggleInlineForm('cmdCreateForm','cmdFormToggle',false);
   if (r.warning) toast(r.warning);
 }
 async function toggleCommand(target){
@@ -1209,7 +1266,7 @@ function formatSegmentLabel(segment){
 function broadcastDraftSignature(){
   return JSON.stringify({
     body: ($('bcBody')?.value || '').trim(),
-    botId: ($('bcBotSelect')?.value || '').trim() || firstBroadcastBotId,
+    botId: firstBroadcastBotId,
     mediaUrl: ($('bcImage')?.value || '').trim() || null,
     segment: buildSegmentFromForm(),
     when: isScheduleSelected() ? 'schedule' : 'now',
@@ -1224,18 +1281,15 @@ function invalidateBroadcastPreview(){
   setFormStatus('bcFormStatus','The draft changed after preview. Review it again before sending.',true);
 }
 function getBotNameForBroadcast(){
-  const botId = $('bcBotSelect')?.value || firstBroadcastBotId;
-  const select = $('bcBotSelect');
-  if (!select || !botId) return '';
-  const opt = Array.from(select.options).find(o => o.value === botId);
-  return opt?.text || botId;
+  const bot = selectedBot();
+  return bot ? '@'+bot.username : '';
 }
 function saveBroadcastDraft(){
   try {
     const draft = {
       body: ($('bcBody')?.value || ''),
       image: ($('bcImage')?.value || ''),
-      botId: ($('bcBotSelect')?.value || firstBroadcastBotId || ''),
+      botId: firstBroadcastBotId || '',
       lang: ($('bcLang')?.value || ''),
       minLast: ($('bcMinLastSeen')?.value || ''),
       firstSeen: ($('bcFirstSeen')?.value || ''),
@@ -1253,7 +1307,6 @@ function loadBroadcastDraft(){
     if (!raw) return false;
     const d = JSON.parse(raw);
     if (!d || typeof d !== 'object') return false;
-    if (d.botId && $('bcBotSelect')) ($('bcBotSelect')).value = d.botId;
     if ($('bcBody')) ($('bcBody')).value = d.body || '';
     if ($('bcImage')) ($('bcImage')).value = d.image || '';
     if ($('bcLang')) ($('bcLang')).value = d.lang || '';
@@ -1292,6 +1345,7 @@ function updateScheduleInputState(){
   const selected = isScheduleSelected();
   const input = $('bcSchedule');
   if (input) input.disabled = !selected;
+  const field = $('bcScheduleField'); if (field) field.hidden = !selected;
   updateUtcHint();
 }
 function updateUtcHint(){
@@ -1318,7 +1372,7 @@ async function updateAudience(requestId){
   const el = $('bcAudience');
   if (!el) return;
   const currentRequest = requestId == null ? ++__bcAudienceRequest : requestId;
-  const botId = $('bcBotSelect')?.value || firstBroadcastBotId;
+  const botId = firstBroadcastBotId;
   if (!botId) {
     if (currentRequest === __bcAudienceRequest) {
       __bcAudience = null;
@@ -1331,7 +1385,7 @@ async function updateAudience(requestId){
   el.textContent = 'Updating subscriber count…';
   const qs = '/broadcasts/audience?bot_id='+encodeURIComponent(botId)+(segment ? '&segment='+encodeURIComponent(JSON.stringify(segment)) : '');
   const r = await api(qs);
-  const currentBotId = $('bcBotSelect')?.value || firstBroadcastBotId;
+  const currentBotId = firstBroadcastBotId;
   const currentSignature = currentBotId+'|'+JSON.stringify(buildSegmentFromForm());
   if (currentRequest !== __bcAudienceRequest || signature !== currentSignature) return;
   if (!r || r.error) {
@@ -1341,9 +1395,7 @@ async function updateAudience(requestId){
   }
   __bcAudience = r.count;
   const label = formatSegmentLabel(segment);
-  const botName = getBotNameForBroadcast();
   el.innerHTML = 'Goes to <b>'+esc(String(r.count))+'</b> subscriber'+(r.count===1?'':'s')+
-    (botName?' of '+esc(botName):'')+
     (label?' <span class="muted">('+esc(label)+')</span>':'')+'.';
 }
 function scheduleAudienceUpdate(){
@@ -1371,12 +1423,13 @@ function buildSummaryHtml(){
 }
 let bcPreviewFocusTrap = null;
 function openBroadcastPreview(){
-  clearFieldErr('bcBody'); clearFieldErr('bcBotSelect'); clearFormStatus('bcFormStatus');
+  clearFieldErr('bcBody'); clearFormStatus('bcFormStatus');
   if (!__canBroadcast) { setFormStatus('bcFormStatus','Upgrade your plan to compose broadcast messages.',true); return; }
   const body = ($('bcBody')?.value || '').trim();
   if (!body) { setFieldErr('bcBody','Write a message first'); setFormStatus('bcFormStatus','Write a message first',true); return; }
-  const botId = ($('bcBotSelect')?.value || '').trim() || firstBroadcastBotId;
-  if (!botId) { setFieldErr('bcBotSelect','Select an active bot first'); setFormStatus('bcFormStatus','Select a bot first',true); return; }
+  const botId = firstBroadcastBotId;
+  if (!botId) { setFormStatus('bcFormStatus','Select a connected bot first',true); return; }
+  if (isScheduleSelected() && (!getScheduledAt() || new Date(getScheduledAt()).getTime() <= Date.now())) { setFormStatus('bcFormStatus','Choose a future date and time before reviewing.',true); return; }
   const n = __bcAudience;
   if (typeof n !== 'number') { setFormStatus('bcFormStatus','Wait for the subscriber count to finish loading, then review again.',true); return; }
   if (typeof n === 'number' && n === 0) { setFormStatus('bcFormStatus','This segment has no subscribers yet — nobody would receive it.',true); return; }
@@ -1410,26 +1463,10 @@ function renderBroadcastPreviewAction(){
   const n = __bcAudience ?? '–';
   const whenEl = $('bcPreviewTiming');
   if (whenEl) whenEl.textContent = scheduled ? 'Sends at '+when+' local time. You can cancel until it starts sending.' : 'Sends immediately and cannot be undone.';
-  const label = $('bcPreviewScheduleLabel'); if (label) label.textContent = getScheduledAt() ? formatBroadcastDate(getScheduledAt()) : '(choose a time above)';
   const confirmBtn = $('bcConfirmBtn');
   if (confirmBtn) confirmBtn.textContent = scheduled
     ? 'Send at '+when+' to '+n+' subscribers'
     : 'Send now to '+n+' subscribers';
-  document.querySelectorAll('input[name="bcPreviewWhen"]').forEach(r => { r.checked = (r.value === (scheduled ? 'schedule' : 'now')); });
-}
-function selectBroadcastWhen(input){
-  const value = input.value;
-  const source = document.querySelector('input[name="bcWhen"][value="'+value+'"]');
-  if (source) source.checked = true;
-  updateScheduleInputState();
-  saveBroadcastDraft();
-  if (value === 'schedule' && !getScheduledAt()) {
-    closeBroadcastPreview();
-    setFormStatus('bcFormStatus','Choose a scheduled time, then review again.',true);
-    return;
-  }
-  __bcPreviewSnapshot = broadcastDraftSignature();
-  renderBroadcastPreviewAction();
 }
 async function confirmSendBroadcast(btn){
   if (!__bcPreviewSnapshot || __bcPreviewSnapshot !== broadcastDraftSignature()) {
@@ -1438,7 +1475,7 @@ async function confirmSendBroadcast(btn){
     return;
   }
   const body = ($('bcBody')?.value || '').trim();
-  const botId = ($('bcBotSelect')?.value || '').trim() || firstBroadcastBotId;
+  const botId = firstBroadcastBotId;
   if (!botId || !body) return;
   setLoading(btn, isScheduleSelected() ? 'Scheduling…' : 'Queueing…');
   clearFormStatus('bcFormStatus');
@@ -1448,16 +1485,16 @@ async function confirmSendBroadcast(btn){
   const r = await api('/broadcasts',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({bot_id:botId, body, media_url: mediaUrl, scheduled_at: scheduledAt, segment})});
   if (r.error) { restoreBtn(btn); setFormStatus('bcFormStatus', r.error + ' — review the draft and try again.', true); return; }
   const wasScheduled = isScheduleSelected();
-  clearBroadcastForm(); closeBroadcastPreview(); setFormStatus('bcFormStatus', wasScheduled ? 'Update scheduled — you can cancel it until it starts sending' : 'Update sent to your subscribers', false); restoreBtn(btn); loadExtras();
+  clearBroadcastForm(); closeBroadcastPreview(); setFormStatus('bcFormStatus', wasScheduled ? 'Update scheduled — you can cancel it until it starts sending' : 'Update queued for sending. Check Broadcast history for delivery results.', false); restoreBtn(btn); loadExtras();
 }
 async function sendBroadcast(btn){ openBroadcastPreview(); }
 // Send a single test copy of the broadcast to one chat ID before blasting.
 async function testBroadcast(btn){
-  clearFieldErr('bcBody'); clearFieldErr('bcBotSelect'); clearFieldErr('bcTestChat'); clearFormStatus('bcFormStatus');
+  clearFieldErr('bcBody'); clearFieldErr('bcTestChat'); clearFormStatus('bcFormStatus');
   const body = $('bcBody').value.trim();
   if (!body) { setFieldErr('bcBody','Write a message first'); setFormStatus('bcFormStatus','Write a message first',true); return; }
-  const botId = $('bcBotSelect')?.value || firstBroadcastBotId;
-  if (!botId) { setFieldErr('bcBotSelect','Select an active bot first'); setFormStatus('bcFormStatus','Select a bot first',true); return; }
+  const botId = firstBroadcastBotId;
+  if (!botId) { setFormStatus('bcFormStatus','Select a connected bot first',true); return; }
   const chatId = Number(($('bcTestChat')?.value || '').trim());
   if (!chatId || isNaN(chatId)) { setFieldErr('bcTestChat','Enter a valid numeric chat ID'); setFormStatus('bcFormStatus','Enter a valid chat ID',true); return; }
   setLoading(btn, 'Sending…');
@@ -1498,10 +1535,15 @@ function restoreBtn(el) {
 }
 
 function boot(){
-  const overviewTargets = ['chart','totClicks','subSources','ovBots','ovOffers'];
+  const tabs = document.querySelector('.telegram-tabs');
+  const activeTab = tabs?.querySelector('.is-on');
+  if (tabs && activeTab) {
+    const excess = activeTab.getBoundingClientRect().right - tabs.getBoundingClientRect().right;
+    if (excess > 0) tabs.scrollLeft += excess + 8;
+  }
+  const overviewTargets = ['chart','totClicks','subSources','ovOffers'];
   if (page === 'overview' && !overviewTargets.some((id) => $(id))) return;
-  load().catch((err) => { console.error('[dashboard load]', err); showLoadError(); });
-  loadExtras();
+  load().then(() => loadExtras()).catch((err) => { console.error('[dashboard load]', err); showLoadError(); });
 }
 boot();
 
@@ -1512,6 +1554,14 @@ function toggleToken(btn) {
   input.type = show ? 'text' : 'password';
   btn.textContent = show ? 'Hide' : 'Show';
   btn.setAttribute('aria-label', show ? 'Hide code' : 'Show code');
+}
+function toggleInlineForm(formId, triggerId, open){
+  const form = $(formId), trigger = $(triggerId);
+  if (!form) return;
+  form.hidden = Boolean(open) === false;
+  if (trigger) trigger.setAttribute('aria-expanded', String(Boolean(open)));
+  if (open) form.querySelector('input, textarea, button')?.focus();
+  else trigger?.focus();
 }
 
 async function handleAction(e) {
@@ -1528,10 +1578,12 @@ async function handleAction(e) {
   const NO_LOADING = action === 'copyLink' || action === 'copyCreatedOffer' || action === 'selectBot'
     || action === 'testMessage' || action === 'cancelTestMessage'
     || action === 'sendBroadcast' || action === 'openBroadcastPreview' || action === 'closeBroadcastPreview'
-    || action === 'selectBroadcastWhen' || action === 'viewBroadcast' || action === 'closeBroadcastDetail'
+    || action === 'viewBroadcast' || action === 'closeBroadcastDetail'
     || action === 'viewCommand' || action === 'closeCommandPreview'
     || action === 'editOffer' || action === 'cancelOfferEdit'
-    || action === 'wizardNext' || action === 'wizardPrev';
+    || action === 'wizardNext' || action === 'wizardPrev'
+    || action === 'toggleBotConnect' || action === 'toggleCommandForm' || action === 'cancelCommandForm'
+    || action === 'toggleOfferForm' || action === 'cancelOfferForm' || action === 'viewOfferDetails' || action === 'closeOfferDetails';
   if (!NO_LOADING) setLoading(target);
   try {
     if (action === 'connectBot') { e.preventDefault(); await connectBot(target); }
@@ -1546,6 +1598,13 @@ async function handleAction(e) {
     else if (action === 'selectBot') { e.preventDefault(); selectBotById(target.dataset.id); }
     else if (action === 'wizardNext') { e.preventDefault(); wizardNext(target); }
     else if (action === 'wizardPrev') { e.preventDefault(); wizardPrev(target); }
+    else if (action === 'toggleBotConnect') { e.preventDefault(); toggleInlineForm('connectWizard','botConnectToggle',$('connectWizard')?.hidden); }
+    else if (action === 'toggleCommandForm') { e.preventDefault(); toggleInlineForm('cmdCreateForm','cmdFormToggle',$('cmdCreateForm')?.hidden); }
+    else if (action === 'cancelCommandForm') { e.preventDefault(); toggleInlineForm('cmdCreateForm','cmdFormToggle',false); }
+    else if (action === 'toggleOfferForm') { e.preventDefault(); toggleInlineForm('offerCreateForm','offerFormToggle',$('offerCreateForm')?.hidden); }
+    else if (action === 'cancelOfferForm') { e.preventDefault(); toggleInlineForm('offerCreateForm','offerFormToggle',false); }
+    else if (action === 'viewOfferDetails') { e.preventDefault(); viewOfferDetails(target); }
+    else if (action === 'closeOfferDetails') { e.preventDefault(); const panel=$('offerDetails'); if(panel) panel.hidden=true; }
     else if (action === 'createOffer') { e.preventDefault(); await createOffer(target); }
     else if (action === 'addCommand') { e.preventDefault(); await addCommand(target); }
     else if (action === 'addCommandButton') { e.preventDefault(); addCommandButton(target); }
@@ -1555,7 +1614,6 @@ async function handleAction(e) {
     else if (action === 'openBroadcastPreview') { e.preventDefault(); openBroadcastPreview(); }
     else if (action === 'confirmBroadcast') { e.preventDefault(); await confirmSendBroadcast(target); }
     else if (action === 'closeBroadcastPreview') { e.preventDefault(); closeBroadcastPreview(); }
-    else if (action === 'selectBroadcastWhen') { e.preventDefault(); selectBroadcastWhen(target); }
     else if (action === 'testBroadcast') { e.preventDefault(); await testBroadcast(target); }
     else if (action === 'cancelBroadcast') { e.preventDefault(); await cancelBroadcast(target); }
     else if (action === 'resumeBroadcast') { e.preventDefault(); await resumeBroadcast(target); }
@@ -1583,10 +1641,10 @@ async function handleAction(e) {
 }
 
 document.addEventListener('click', handleAction);
-const botSelect = $('botSelect');
-if (botSelect) botSelect.addEventListener('change', (e) => { selectBotById(e.target.value); });
-const bcBotSelect = $('bcBotSelect');
-if (bcBotSelect) bcBotSelect.addEventListener('change', (e) => { firstBroadcastBotId = e.target.value; saveBroadcastDraft(); scheduleAudienceUpdate(); invalidateBroadcastPreview(); });
+for (const id of ['tgContextSelect','tgConnSelect']) {
+  const select = $(id);
+  if (select) select.addEventListener('change', (e) => { selectBotById(e.target.value); });
+}
 const bcTestChat = $('bcTestChat');
 if (bcTestChat) bcTestChat.addEventListener('input', saveBroadcastDraft);
 ['bcLang','bcMinLastSeen','bcFirstSeen','bcUsername'].forEach(id => {

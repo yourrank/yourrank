@@ -190,6 +190,9 @@ function crumbsFor(route: DashboardRouteDef): readonly DashboardCrumb[] {
       break;
     case "activities":
       return [{ label: sectionTitle }];
+    case "telegram":
+      if (route.id === "telegram") return [{ label: sectionTitle }];
+      break;
     case "giveaways":
       // The hub is the section root: a single unlinked entry renders no crumb.
       if (route.id === "giveaways.hub") return [{ label: sectionTitle }];
@@ -237,7 +240,8 @@ export function dashboardChromeState(id: DashboardRouteId): DashboardChromeState
     }),
     tabLabel: TAB_LABELS[route.id] || "",
     documentTitle: documentTitleFor(route),
-    h1: route.section === "telegram" ? (TAB_LABELS[route.id] as string) : null,
+    h1: route.id === "telegram" ? DASHBOARD_SECTION_TITLES.telegram
+      : route.section === "telegram" ? (TAB_LABELS[route.id] as string) : null,
   };
 }
 

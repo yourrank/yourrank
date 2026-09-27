@@ -88,13 +88,15 @@ describe("Telegram shell: one canonical authenticated document", () => {
       expect(html.match(/id="lbSide"/g)).toHaveLength(1);
       expect(html.match(/class="lb-topbar"/g)).toHaveLength(1);
       expect(html.match(/<main\b/g)).toHaveLength(1);
-      expect(html.match(/class="v3-crumbs"/g)).toHaveLength(1);
+      expect(html.match(/class="v3-crumbs"/g) || []).toHaveLength(page === "overview" ? 0 : 1);
       expect(html.match(/<h1\b/g)).toHaveLength(1);
       expect(html.match(/<details[^>]*class="[^"]*\bgm-profile\b[^"]*"/g)).toHaveLength(1);
       expect(html).toContain('<script src="/assets/shell-nav.js" defer></script>');
       expect(html.match(/id="topbarCmdTrigger"/g)).toHaveLength(1);
       expect(html).toContain('<script src="/assets/dashboard/command-palette.js" type="module"></script>');
-      expect(html).toContain('Account · Telegram');
+      if (page === "overview") expect(html).not.toContain('id="tgPageContext"');
+      else expect(html).toContain('id="tgPageContext"');
+      expect(html).not.toContain('Account · Telegram');
       expect(html).not.toContain('Active site');
     }
   });

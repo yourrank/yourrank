@@ -8047,15 +8047,14 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 /* Offers table (Telegram pages share this sheet): fixed layout + a min width so
-   the eleven columns never crush content into vertical text; .v3-table-scroll
+   the six columns never crush content into vertical text; .v3-table-scroll
    takes over with horizontal scrolling on narrow panes. */
 .v3-dash[data-auth-workspace] [data-page="offers"] .v3-table {
   table-layout: fixed;
-  min-width: 72rem;
+  min-width: 44rem;
 }
-.v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th:nth-child(1) { width: 19%; }
-.v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th:nth-child(2) { width: 12%; }
-.v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th:last-child { width: 10rem; }
+.v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th:nth-child(1) { width: 30%; }
+.v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th:last-child { width: 6rem; }
 /* nowrap is the sheet default; with fixed columns it would overlap neighbours. */
 .v3-dash[data-auth-workspace] [data-page="offers"] .v3-table th { white-space: normal; }
 .v3-dash[data-auth-workspace] [data-page="offers"] .v3-table td { vertical-align: top; }
@@ -9011,6 +9010,38 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 /* ---- Telegram product body (Wave 3 PR-9) --------------------------------- */
+.v3-dash[data-auth-workspace] .tg-page-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ws-space-2);
+  padding: 0 0 var(--ws-space-3);
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+.v3-dash[data-auth-workspace] .tg-page-context-copy { display: flex; align-items: center; gap: var(--ws-space-2); min-width: 0; }
+.v3-dash[data-auth-workspace] .tg-page-context-name { color: var(--ws-text); font-weight: 600; overflow-wrap: anywhere; }
+.v3-dash[data-auth-workspace] .tg-page-context-status::before { content: '·'; margin-right: var(--ws-space-2); }
+.v3-dash[data-auth-workspace] .tg-page-context-status:empty::before { content: none; }
+.v3-dash[data-auth-workspace] .tg-page-context-picker .v3-input { min-width: 10rem; max-width: 15rem; }
+.v3-dash[data-auth-workspace] .tg-section-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--ws-space-3); margin-bottom: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] .tg-section-head h2, .v3-dash[data-auth-workspace] .tg-section-head h3 { margin: 0; }
+.v3-dash[data-auth-workspace] .tg-section-head p { margin: var(--ws-space-1) 0 0; }
+.v3-dash[data-auth-workspace] .tg-inline-form { padding-top: var(--ws-space-4); border-top: 1px solid var(--ws-line); }
+.v3-dash[data-auth-workspace] .tg-inline-form[hidden],
+.v3-dash[data-auth-workspace] .tg-page-context-picker[hidden],
+.v3-dash[data-auth-workspace] #connectWizard[hidden],
+.v3-dash[data-auth-workspace] #bcScheduleField[hidden],
+.v3-dash[data-auth-workspace] #bcPlanState[hidden] { display: none !important; }
+.v3-dash[data-auth-workspace] .tg-action-menu > summary { cursor: pointer; color: var(--ws-text-soft); font-weight: 600; }
+.v3-dash[data-auth-workspace] .tg-action-menu > summary:hover,
+.v3-dash[data-auth-workspace] .tg-action-menu > summary:focus-visible { color: var(--ws-text); }
+.v3-dash[data-auth-workspace] .tg-action-menu > div { display: grid; justify-items: start; gap: var(--ws-space-1); padding: var(--ws-space-2) 0; }
+.v3-dash[data-auth-workspace] .tg-detail-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(11rem,1fr)); gap: var(--ws-space-3); margin: 0; }
+.v3-dash[data-auth-workspace] .tg-detail-grid dt { color: var(--ws-text-soft); font-size: var(--ws-type-meta-size); }
+.v3-dash[data-auth-workspace] .tg-detail-grid dd { margin: var(--ws-space-1) 0 0; overflow-wrap: anywhere; }
+.v3-dash[data-auth-workspace] [data-page="broadcasts"] .v3-table { min-width: 48rem; }
 .v3-dash[data-auth-workspace] .tg-conn {
   display: grid;
   gap: var(--ws-space-4);
@@ -9110,6 +9141,122 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   color: var(--ws-text-mute);
   font-size: var(--ws-type-meta-size);
   line-height: var(--ws-type-meta-leading);
+}
+
+/* Telegram Overview stays a summary; configuration remains in the other tabs. */
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] { gap: var(--ws-space-4); }
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-conn { gap: var(--ws-space-3); }
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ws-space-2);
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-section-head h2 { margin: 0; }
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-section-head p,
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-section-head span {
+  margin: var(--ws-space-1) 0 0;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  line-height: var(--ws-type-meta-leading);
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-section-head a {
+  color: var(--ws-accent);
+  font-size: var(--ws-type-meta-size);
+  font-weight: 600;
+  text-underline-offset: 3px;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-card {
+  min-height: 64px;
+  padding: 0 var(--ws-space-4);
+  border: 0;
+  border-left: 1px solid var(--ws-line);
+  border-radius: 0;
+  background: transparent;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-card:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-lbl {
+  font-family: var(--ws-sans);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-empty {
+  margin: 0;
+  padding: var(--ws-space-3) 0;
+  color: var(--ws-text-soft);
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-breakdown {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ws-space-3);
+  padding: var(--ws-space-2) 0;
+  border-top: 1px solid var(--ws-line);
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-breakdown dt { color: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-breakdown dd {
+  margin: 0;
+  color: var(--ws-text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offer-label {
+  display: block;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+}
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers .v3-table-scroll { overflow-x: auto; }
+.v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers .v3-table { width: 100%; }
+@media (max-width: 760px) {
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--ws-space-3); }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .kpi-card:nth-child(odd) { padding-left: 0; border-left: 0; }
+}
+@media (max-width: 520px) {
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers .v3-table-scroll { overflow: visible; }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers .v3-table { display: block; min-width: 0; }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers tbody { display: grid; }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--ws-space-2);
+    padding: var(--ws-space-3) 0;
+    border-top: 1px solid var(--ws-line);
+  }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers tbody td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers tbody td:first-child { grid-column: 1 / -1; }
+  .v3-dash[data-auth-workspace] .lb-bento[data-page="overview"] .tg-overview-offers tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: var(--ws-space-1);
+    color: var(--ws-text-soft);
+    font-size: var(--ws-type-label-size);
+  }
 }
 
 .v3-dash[data-auth-workspace] .tg-row-list,

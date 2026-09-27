@@ -212,7 +212,7 @@ function deriveRenderableRoutes() {
     routes.push({ path: `/dashboard/settings/${key === "plan" ? "billing" : key}`, render: "settings", tab: key, hasSubnav: true, hasBreadcrumbs: true });
   }
   for (const page of pageLinks) {
-    routes.push({ path: page.href, render: "telegram", tab: page.key, hasSubnav: true, hasBreadcrumbs: true });
+    routes.push({ path: page.href, render: "telegram", tab: page.key, hasSubnav: true, hasBreadcrumbs: page.key !== "overview" });
   }
   return routes;
 }
