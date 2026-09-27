@@ -633,6 +633,24 @@
   cursor: pointer;
 }
 .tn-match-save:hover { background: var(--ws-accent-hover, var(--tn-accent)); }
+.tn-match-edit {
+  flex: none;
+  margin-left: 6px;
+  padding: 4px 9px;
+  border: 1px solid var(--tn-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tn-text-mute);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tn-match-edit:hover { color: var(--tn-accent); border-color: var(--tn-accent); }
+.tn-match-note {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--tn-text-mute);
+}
 
 /* ---- Settings form -------------------------------------------------------- */
 

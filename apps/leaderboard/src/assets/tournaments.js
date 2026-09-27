@@ -48,6 +48,8 @@ let disposeExpandedLayout = () => {};
 let settingsBaseline = "";
 let settingsSavedTimer = null;
 let settingsReadonly = false;
+// Match id whose completed card is being re-scored via PATCH; null = off.
+let correctingMatchId = null;
 
 function apiPath(path) {
   return siteId ? `${path}${path.includes("?") ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : path;
@@ -126,7 +128,7 @@ function render() {
   }
   root.innerHTML = workspaceHtml(
     vm,
-    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded" }) : ""
+    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded", correctingId: correctingMatchId }) : ""
   );
   const bracket = $("tournament-bracket");
   disposeEmbeddedLayout = bracket && !bracket.hidden ? layoutBracket(bracket) : () => {};
@@ -514,9 +516,7 @@ async function openBracketModal() {
   const modal = mountDialog(fullBracketDialogHtml());
   const full = $("tournament-bracket-full");
   if (!modal || !full) return;
-  disposeExpandedLayout();
-  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded" });
-  disposeExpandedLayout = layoutBracket(full);
+  renderExpandedBracket(full);
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
   // The dialog script can resolve after leave() or a manual close: never
@@ -524,6 +524,25 @@ async function openBracketModal() {
   if (!modal.isConnected || $("tournament-bracket-modal") !== modal) return;
   releaseBracketTrap = dialog ? dialog.trap(modal, closeBracketModal) : null;
   $("tournament-bracket-close")?.focus();
+}
+
+function renderExpandedBracket(full = $("tournament-bracket-full")) {
+  if (!full || !$("tournament-bracket-modal")) return;
+  disposeExpandedLayout();
+  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded", correctingId: correctingMatchId });
+  disposeExpandedLayout = layoutBracket(full);
+}
+
+function startScoreCorrection(matchId) {
+  correctingMatchId = matchId;
+  render();
+  renderExpandedBracket();
+}
+
+function cancelScoreCorrection() {
+  correctingMatchId = null;
+  render();
+  renderExpandedBracket();
 }
 
 function closeBracketModal() {
@@ -547,12 +566,15 @@ async function submitScore(matchId, target) {
     setMessage("A match cannot end in a tie. Enter different scores.", true);
     return;
   }
-  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, {
-    method: "POST",
+  const correcting = matchEl.dataset.scoreMode === "correct";
+  const data = await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, {
+    method: correcting ? "PATCH" : "POST",
     body: JSON.stringify({ matchId, player1Score, player2Score }),
   });
-  setMessage("");
-  await loadTournament();
+  correctingMatchId = null;
+  if (correcting) await loadEntries();
+  else await loadTournament();
+  setMessage(data?.message || "");
 }
 
 // ---- Settings ------------------------------------------------------------
@@ -676,6 +698,7 @@ function resetTransientState() {
   if (settingsSavedTimer) { clearTimeout(settingsSavedTimer); settingsSavedTimer = null; }
   entriesRefreshRunning = false;
   entriesRefreshQueued = false;
+  correctingMatchId = null;
   closeCreateModal();
   closeSelectModal();
   closeBracketModal();
@@ -770,7 +793,7 @@ async function onClick(event) {
     (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tn-menu[open]").forEach((menu) => { menu.open = false; });
   }
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], [data-score-match]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], button[data-score-match], [data-score-edit], [data-score-cancel]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -792,7 +815,9 @@ async function onClick(event) {
       target.closest("details.tn-menu")?.removeAttribute("open");
       return await handleEntryAction(target);
     }
-    if (target.matches("[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
+    if (target.matches("[data-score-edit]")) return startScoreCorrection(target.dataset.scoreEdit);
+    if (target.matches("[data-score-cancel]")) return cancelScoreCorrection();
+    if (target.matches("button[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
