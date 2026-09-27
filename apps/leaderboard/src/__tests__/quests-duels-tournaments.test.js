@@ -14,6 +14,7 @@ import {
   handleGetTournaments,
   handleCreateTournament,
   handleUpdateMatchScore,
+  handleCorrectMatchScore,
   handleGetBracket,
 } from "../handlers/tournaments.js";
 import { requireSiteOwner } from "../site-authorization.js";
@@ -691,6 +692,158 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.matches.length).toBe(1);
+    });
+
+    const TOURN = { id: "tourn-1", status: "active", bracket_size: 8, site_id: "site-456", site_user_id: "owner-1", winner_name: null };
+    const patchScore = (scores) => new Request("http://localhost/api/tournaments/tourn-1/score", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ matchId: "m-1", ...scores }),
+    });
+    const completed = (over) => ({ status: "completed", player1_score: 2, player2_score: 1, winner_name: "Alice", ...over });
+
+    it("corrects a score without touching downstream when the winner is unchanged", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN }); // locked tournament
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        { id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending", winner_name: null },
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      mockOne.mockResolvedValueOnce({ winner_name: null, status: "pending" }); // final re-read
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 4, player2Score: 0 }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.winnerName).toBe("Alice");
+      expect(body.winnerChanged).toBe(false);
+      const writes = mockExec.mock.calls.map((c) => String(c[0]));
+      expect(writes.length).toBe(1);
+      expect(writes[0]).toContain("player1_score");
+      expect(writes[0]).not.toContain("player1_name");
+    });
+
+    it("rewrites the pending next-round slot when the winner changes", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        { id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending", winner_name: null },
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      // resolveByeMatchesTx pass: nothing left to resolve (TBD stays unknown).
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", winner_name: "Bob" }),
+        { id: "m-2", round_number: 2, match_index: 0, player1_name: "Bob", player2_name: "TBD", status: "pending", winner_name: null },
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "TBD", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      mockOne.mockResolvedValueOnce({ winner_name: null, status: "pending" }); // final re-read
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.winnerChanged).toBe(true);
+      const slotWrite = mockExec.mock.calls.find((c) => String(c[0]).includes("SET player1_name"));
+      expect(slotWrite).toBeTruthy();
+      expect(slotWrite[1]).toEqual(["Bob", "m-2", "Alice"]);
+    });
+
+    it("resets a BYE-resolved next match and re-runs BYE resolution", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        completed({ id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "__YOURRANK_INTERNAL_BYE__", player1_score: 0, player2_score: 0 }),
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "Alice", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      // resolveByeMatchesTx pass 1: m-2 reset to pending facing a BYE -> re-resolves to Bob.
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", winner_name: "Bob", player1_score: 1, player2_score: 3 }),
+        { id: "m-2", round_number: 2, match_index: 0, player1_name: "Bob", player2_name: "__YOURRANK_INTERNAL_BYE__", status: "pending", winner_name: null },
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "Bob", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      // pass 2: stable.
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", winner_name: "Bob", player1_score: 1, player2_score: 3 }),
+        completed({ id: "m-2", round_number: 2, match_index: 0, player1_name: "Bob", player2_name: "__YOURRANK_INTERNAL_BYE__", player1_score: 0, player2_score: 0, winner_name: "Bob" }),
+        { id: "m-3", round_number: 3, match_index: 0, player1_name: "Bob", player2_name: "TBD", status: "pending", winner_name: null },
+      ]);
+      mockOne.mockResolvedValueOnce({ winner_name: null, status: "pending" }); // final re-read
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      // Step 1: reset + slot rewrite in one guarded update.
+      const reset = mockExec.mock.calls.find((c) => String(c[0]).includes("status='pending'") && String(c[0]).includes("winner_name=NULL"));
+      expect(reset).toBeTruthy();
+      expect(reset[1]).toEqual(["Bob", "m-2", "Alice"]);
+      // Step 2: plain slot rewrite on the pending final.
+      const finalSlot = mockExec.mock.calls.find((c) => String(c[0]).includes("SET player1_name") && !String(c[0]).includes("status='pending'"));
+      expect(finalSlot).toBeTruthy();
+      expect(finalSlot[1]).toEqual(["Bob", "m-3", "Alice"]);
+      // resolveByeMatchesTx re-completed the reset match with the new winner.
+      const reresolve = mockExec.mock.calls.find((c) => String(c[0]).includes("SET status='completed'") && c[1]?.[0] === "Bob");
+      expect(reresolve).toBeTruthy();
+    });
+
+    it("returns 409 and writes nothing when a real downstream match was played", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+        completed({ id: "m-2", round_number: 2, match_index: 0, player1_name: "Alice", player2_name: "Carol", winner_name: "Carol" }),
+      ]);
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("A later match has already been played.");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 for a match that is not completed", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+      mockQuery.mockResolvedValueOnce([
+        { id: "m-1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", status: "pending", winner_name: null },
+      ]);
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("Match is not correctable.");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it("syncs the champion when the final itself is corrected", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN, status: "completed", winner_name: "Alice" });
+      mockQuery.mockResolvedValueOnce([
+        completed({ id: "m-3", round_number: 3, match_index: 0, player1_name: "Alice", player2_name: "Bob" }),
+      ]);
+      mockOne.mockResolvedValueOnce({ winner_name: "Bob", status: "completed" }); // final re-read
+
+      const res = await handleCorrectMatchScore(new Request("http://localhost/api/tournaments/tourn-1/score", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ matchId: "m-3", player1Score: 1, player2Score: 3 }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.isFinals).toBe(true);
+      expect(body.winnerChanged).toBe(true);
+      const champion = mockExec.mock.calls.find((c) => String(c[0]).includes("UPDATE tournaments"));
+      expect(champion).toBeTruthy();
+      expect(champion[1]).toEqual(["Bob", "tourn-1"]);
+    });
+
+    it("returns 409 for a cancelled tournament", async () => {
+      mockOne.mockResolvedValueOnce({ ...TOURN, status: "cancelled" });
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(409);
+      expect(await res.text()).toContain("Tournament is cancelled.");
+      expect(mockExec).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 for a non-owner", async () => {
+      deps.requireSiteCapabilityImpl = mock().mockResolvedValue({ res: new Response("Forbidden", { status: 403 }) });
+      mockOne.mockResolvedValueOnce({ ...TOURN });
+
+      const res = await handleCorrectMatchScore(patchScore({ player1Score: 1, player2Score: 3 }), mockEnv(), deps);
+      expect(res.status).toBe(403);
+      expect(mockExec).not.toHaveBeenCalled();
     });
   });
 });
