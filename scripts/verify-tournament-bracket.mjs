@@ -192,6 +192,45 @@ try {
       const connectorCount = await page.evaluate(() => document.querySelectorAll('.tn-connectors').length);
       check(`${variant.name}: no connector/observer leak after 3 open-close cycles`, () => assert.equal(connectorCount, 2));
       await page.click('#tournament-bracket-close');
+      // Score correction: the live8 fixture plays one round-2 match, so its
+      // round-1 feeder is blocked while the other feeders stay correctable.
+      if (variant.name === 'live8') {
+        const editFlags = await page.evaluate(() => ({
+          played: !!document.querySelector('.tn-match[data-round="1"][data-index="1"] [data-score-edit]'),
+          bye: !!document.querySelector('.tn-match[data-round="1"][data-index="0"] [data-score-edit]'),
+          open: !!document.querySelector('.tn-match[data-round="1"][data-index="2"] [data-score-edit]'),
+        }));
+        check('live8: no Edit on downstream-played or bye matches', () => {
+          assert.equal(editFlags.played, false);
+          assert.equal(editFlags.bye, false);
+        });
+        check('live8: correctable match exposes Edit', () => assert.ok(editFlags.open));
+        await page.click('.tn-match[data-round="1"][data-index="2"] [data-score-edit]');
+        await page.waitForSelector('.tn-match[data-round="1"][data-index="2"][data-score-mode="correct"]', { timeout: 5000 });
+        await page.fill('.tn-match[data-round="1"][data-index="2"] [data-score-player="1"]', '9');
+        await page.fill('.tn-match[data-round="1"][data-index="2"] [data-score-player="2"]', '4');
+        await page.click('.tn-match[data-round="1"][data-index="2"] .tn-match-save');
+        await page.waitForFunction(() => {
+          const c = document.querySelector('.tn-match[data-round="1"][data-index="2"]');
+          return c && c.dataset.state === 'completed' && !c.dataset.scoreMode;
+        }, { timeout: 10000 });
+        const corrected = await page.evaluate(() => {
+          const card = document.querySelector('.tn-match[data-round="1"][data-index="2"]');
+          const next = document.querySelector('.tn-match[data-round="2"][data-index="1"]');
+          return {
+            names: [...card.querySelectorAll('.tn-match-name')].map((n) => n.textContent.trim()),
+            scores: [...card.querySelectorAll('.tn-match-score')].map((n) => n.textContent.trim()),
+            nextNames: next ? [...next.querySelectorAll('.tn-match-name')].map((n) => n.textContent.trim()) : [],
+          };
+        });
+        check('live8: corrected card shows new scores and winner', () => {
+          assert.deepEqual(corrected.scores, ['9', '4']);
+          assert.equal(corrected.names[0], 'seed_2');
+        });
+        check('live8: corrected winner propagates into the next round slot', () => {
+          assert.ok(corrected.nextNames.some((n) => n.includes('seed_2')), JSON.stringify(corrected.nextNames));
+        });
+      }
       // Responsive: realign connectors at 1024 and 390.
       for (const width of [1024, 390]) {
         await page.setViewportSize({ width, height: 900 });
