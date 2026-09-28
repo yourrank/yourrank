@@ -1,6 +1,6 @@
 // Live Predictions & Voting Handlers.
 import { fromJsonb } from "@yourrank/shared/jsonb";
-import { effectivePlan } from "@yourrank/shared/plans";
+import { canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import { assertFeature } from "@yourrank/shared/entitlements";
 import { denied, requireUser as defaultRequireUser, ok, bad, readJson } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
@@ -57,6 +57,9 @@ export async function handleGetPredictions(request, env, deps = {}) {
   // array; the browser must not carry a second decoder.
   return ok({
     predictions: (predictions || []).map((p) => ({ ...p, options: fromJsonb(p.options) || [] })),
+    entitlement: {
+      enabled: canUseFeature(effectivePlan(user), "predictions"),
+    },
   });
 }
 

@@ -78,6 +78,17 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.predictions.length).toBe(1);
     });
 
+    it("reports prediction entitlement for free and pro owners", async () => {
+      mockQuery.mockResolvedValue([]);
+      deps.requireUser.mockResolvedValue({ user: { ...USER, plan: "free" }, res: null });
+      const freeRes = await handleGetPredictions(new Request("http://localhost/api/predictions"), mockEnv(), deps);
+      expect((await freeRes.json()).entitlement.enabled).toBe(false);
+
+      deps.requireUser.mockResolvedValue({ user: USER, res: null });
+      const proRes = await handleGetPredictions(new Request("http://localhost/api/predictions"), mockEnv(), deps);
+      expect((await proRes.json()).entitlement.enabled).toBe(true);
+    });
+
     it("locks an open prediction", async () => {
       mockOne.mockResolvedValueOnce({ id: "pred-1", status: "open" });
 

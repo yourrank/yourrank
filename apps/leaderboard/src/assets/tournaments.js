@@ -1,4 +1,5 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
+import { wirePlanLock } from "./dashboard/plan-lock.js";
 import { ensureDialog, showConfirmModal } from "./dashboard/utils.js";
 import { connectKickChat } from "./chat-entry.js";
 import { renderBracket as bracketViewHtml, layoutBracket } from "./tournament-bracket-view.js";
@@ -34,6 +35,7 @@ let matches = [];
 let activeTab = "entries";
 let chatConnection = null;
 let chatRegistration = null;
+let tournamentsEnabled = true;
 let entriesPollTimer = null;
 let entriesRefreshTimer = null;
 let entriesRefreshRunning = false;
@@ -119,11 +121,12 @@ function render() {
   if (!root) return;
   const lifecycle = lifecycleOf(tournament, matches.length);
   updateEntriesPolling(lifecycle);
-  const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab });
+  const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab, tournamentsEnabled });
   disposeEmbeddedLayout();
   disposeEmbeddedLayout = () => {};
   if (!tournament) {
-    root.innerHTML = emptyStateHtml();
+    root.innerHTML = emptyStateHtml({ locked: !tournamentsEnabled });
+    if (!tournamentsEnabled) wirePlanLock(root.querySelector("[data-plan-lock='tournaments']"), "tournaments");
     return;
   }
   root.innerHTML = workspaceHtml(
@@ -179,7 +182,7 @@ async function loadEntries({ refreshOnly = true } = {}) {
     else if (message?.textContent === bracketError) setMessage("");
   };
   if (settingsBusy) {
-    const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
+    const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab, tournamentsEnabled });
     const list = $("tournament-entry-list");
     if (list) list.innerHTML = entryRowsHtml(vm);
     const count = $("tournament-count");
@@ -196,6 +199,7 @@ async function loadEntries({ refreshOnly = true } = {}) {
 async function loadTournament() {
   const data = await api("/api/tournaments");
   chatRegistration = data.chatRegistration || null;
+  tournamentsEnabled = data.entitlement?.enabled !== false;
   const tournaments = data.tournaments || [];
   // Prefer an unfinished tournament, but keep a completed/cancelled one visible
   // so the bracket and champion survive reload/back navigation.
@@ -238,8 +242,16 @@ function setCreateError(text = "") {
 }
 
 async function openCreateModal() {
+  if (!tournamentsEnabled) {
+    setMessage("Tournaments is available on Pro and Team.", true);
+    return;
+  }
   if ($("tournament-create-modal")) return;
-  const modal = mountDialog(createDialogHtml({ chatChannel: tournament?.chat_channel, siteChannel: board.kickChannelName }));
+  const modal = mountDialog(createDialogHtml({
+    chatChannel: tournament?.chat_channel,
+    siteChannel: board.kickChannelName,
+    chatRegistration,
+  }));
   if (!modal) return;
   setCreateError("");
   document.documentElement.classList.add("yr-modal-open");
@@ -393,7 +405,7 @@ async function handlePrimary() {
   if (action === "use-site-channel") {
     await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
       method: "POST",
-      body: JSON.stringify({ chatChannel: board.kickChannelName }),
+      body: JSON.stringify({ chatChannel: chatRegistration?.channelName || board.kickChannelName }),
     });
     setMessage("");
     await loadTournament();
@@ -737,6 +749,7 @@ function resetTransientState() {
   matches = [];
   entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
   chatRegistration = null;
+  tournamentsEnabled = true;
   activeTab = "entries";
   board = {};
   siteId = "";

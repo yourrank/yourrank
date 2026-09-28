@@ -13,6 +13,7 @@ import {
 import {
   handleGetTournaments,
   handleCreateTournament,
+  handleUpdateTournamentSettings,
   handleUpdateMatchScore,
   handleCorrectMatchScore,
   handleGetBracket,
@@ -407,6 +408,161 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.tournaments.length).toBe(1);
+    });
+
+    it("reports tournament entitlement from the site owner plan", async () => {
+      mockQuery.mockResolvedValue([]);
+      const ownerPlan = { plan: "free", plan_expires_at: null, status: "active" };
+      deps.one = (sql, ...a) => String(sql).includes("FROM users") ? Promise.resolve(ownerPlan) : mockOne(sql, ...a);
+      const freeRes = await handleGetTournaments(new Request("http://localhost/api/tournaments"), mockEnv(), deps);
+      expect((await freeRes.json()).entitlement.enabled).toBe(false);
+
+      ownerPlan.plan = "pro";
+      const proRes = await handleGetTournaments(new Request("http://localhost/api/tournaments"), mockEnv(), deps);
+      expect((await proRes.json()).entitlement.enabled).toBe(true);
+      expect(mockLogAudit).not.toHaveBeenCalled();
+    });
+
+    it("rejects a connected-channel mismatch before inserting a tournament", async () => {
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "streamer",
+      });
+      const req = new Request("http://localhost/api/tournaments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "other" }),
+      });
+
+      const res = await handleCreateTournament(req, mockEnv(), deps);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        ok: false,
+        error: "Use your connected Kick channel (streamer). Signups are collected from that channel.",
+        field: "chatChannel",
+      });
+      expect(mockWithTransaction).not.toHaveBeenCalled();
+    });
+
+    it("accepts case-insensitive and Kick URL channel forms", async () => {
+      for (const chatChannel of ["STREAMER", "https://kick.com/Streamer"]) {
+        mockOne.mockResolvedValueOnce({
+          id: "tourn-1",
+          title: "Community Tournament",
+          game_name: "Game",
+          bracket_size: 8,
+          status: "draft",
+        });
+        deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+          connected: true, chatReady: true, channelName: "streamer",
+        });
+        const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatChannel }),
+        }), mockEnv(), deps);
+        expect(res.status).toBe(200);
+        const insert = mockOne.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO tournaments")).at(-1);
+        expect(insert[1][12]).toBe(chatChannel === "STREAMER" ? "STREAMER" : "Streamer");
+      }
+    });
+
+    it("stores the connected channel when creation input is empty", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "tourn-1", title: "Community Tournament", game_name: "Game",
+        bracket_size: 8, status: "draft",
+      });
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "Creator_Name",
+      });
+
+      const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "" }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const insert = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO tournaments"));
+      expect(insert[1][12]).toBe("Creator_Name");
+    });
+
+    it("keeps freeform channel input when Kick is not connected", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "tourn-1", title: "Community Tournament", game_name: "Game",
+        bracket_size: 8, status: "draft",
+      });
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: false, chatReady: false, channelName: null,
+      });
+
+      const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "community" }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const insert = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO tournaments"));
+      expect(insert[1][12]).toBe("community");
+    });
+
+    it("keeps the existing free-plan feature denial before channel validation", async () => {
+      deps.one = (sql, ...a) => String(sql).includes("FROM users")
+        ? Promise.resolve({ plan: "free", plan_expires_at: null, status: "active" })
+        : mockOne(sql, ...a);
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "streamer",
+      });
+
+      const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "other" }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(403);
+      expect((await res.json()).code).toBe("entitlement_required");
+      expect(deps.loadChatGiveawayConnection).not.toHaveBeenCalled();
+      expect(mockWithTransaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects a connected-channel mismatch in tournament settings", async () => {
+      const existing = {
+        id: "tourn-1", site_id: SITE.id, site_user_id: USER.id, title: "Community Tournament",
+        game_name: "Game", format: "bracket", bracket_size: 8, signup_state: "closed", status: "draft",
+      };
+      mockOne.mockResolvedValueOnce(existing);
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "streamer",
+      });
+      const res = await handleUpdateTournamentSettings(new Request("http://localhost/api/tournaments/tourn-1/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "other" }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        ok: false,
+        error: "Use your connected Kick channel (streamer). Signups are collected from that channel.",
+        field: "chatChannel",
+      });
+      expect(mockWithTransaction).not.toHaveBeenCalled();
+    });
+
+    it("allows clearing the tournament channel in settings", async () => {
+      const existing = {
+        id: "tourn-1", site_id: SITE.id, site_user_id: USER.id, title: "Community Tournament",
+        game_name: "Game", format: "bracket", bracket_size: 8, signup_state: "closed", status: "draft",
+      };
+      mockOne.mockResolvedValueOnce(existing).mockResolvedValueOnce({ ...existing, chat_channel: null });
+      deps.loadChatGiveawayConnection = mock().mockResolvedValue({
+        connected: true, chatReady: true, channelName: "streamer",
+      });
+      const res = await handleUpdateTournamentSettings(new Request("http://localhost/api/tournaments/tourn-1/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatChannel: "" }),
+      }), mockEnv(), deps);
+      expect(res.status).toBe(200);
+      expect(deps.loadChatGiveawayConnection).not.toHaveBeenCalled();
+      expect(mockOne.mock.calls.at(-1)[1]).toEqual([null, "tourn-1"]);
     });
 
     it("creates an 8-player single-elimination tournament bracket", async () => {

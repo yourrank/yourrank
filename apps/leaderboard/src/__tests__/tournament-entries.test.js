@@ -22,6 +22,12 @@ const TOURNAMENT = {
   entry_fee: 0,
   chat_channel: "streamerchannel",
 };
+const disconnectedKick = () => ({
+  connected: false,
+  chatReady: false,
+  channelName: null,
+  externalChannelId: null,
+});
 
 function request(path, body) {
   return new Request(`http://localhost${path}`, {
@@ -51,6 +57,7 @@ function deps({ oneValues = [], queryValues = [], txOneValues = [], txQueryValue
     logAudit: mock(async () => {}),
     rateLimit: mock(async () => ({ ok: true })),
     clientIp: mock(() => "127.0.0.1"),
+    loadChatGiveawayConnection: mock(async () => disconnectedKick()),
     _mocks: { one, query, txOne, txQuery },
   };
 }
@@ -548,6 +555,7 @@ describe("tournament entry lifecycle", () => {
       getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
       one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
       requireSiteCapabilityImpl: mock(async () => ({ res: null })),
+      loadChatGiveawayConnection: mock(async () => disconnectedKick()),
       withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
       logAudit: mock(async () => {}),
     };
@@ -579,6 +587,7 @@ describe("tournament entry lifecycle", () => {
       getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
       one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
       requireSiteCapabilityImpl: mock(async () => ({ res: null })),
+      loadChatGiveawayConnection: mock(async () => disconnectedKick()),
       withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
       logAudit: mock(async () => {}),
     };
@@ -840,6 +849,7 @@ describe("tournament lifecycle foundation", () => {
         getBoardById: mock(async () => ({ id: "site-1", user_id: USER.id })),
         one: mock(async () => ({ plan: "pro", plan_expires_at: null, status: "active" })),
         requireSiteCapabilityImpl: mock(async () => ({ res: null })),
+        loadChatGiveawayConnection: mock(async () => disconnectedKick()),
         withTransaction: mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe })),
         logAudit: mock(async () => {}),
       },
