@@ -8,6 +8,7 @@ import {
   KICK_CHAT_MESSAGE_EVENT,
   ingestChatGiveawayMessage,
   kickChatMessageToIngestInput,
+  markChannelEventObserved,
 } from "@yourrank/shared/chat-giveaways";
 import { createQueueProducer } from "@yourrank/shared/queue-producer";
 import { ingestTournamentChatMessageTx } from "./tournaments.js";
@@ -40,6 +41,7 @@ export async function handleKickWebhook(
     ingestChatMessage = ingestKickChatMessage,
     ingestTournamentMessage = (payload, env, tx) => ingestTournamentChatMessageTx(tx, payload),
     withTransaction: withTransactionImpl = withTransaction,
+    markEventObserved = markChannelEventObserved,
   } = {},
 ) {
   const rawBody = await request.text();
@@ -99,6 +101,9 @@ export async function handleKickWebhook(
           [messageId, eventType]
         );
         if (!claimed) return { duplicate: true };
+        // A received event is proof the subscription exists: stamp it so the
+        // dashboard's delivery state reflects traffic, not just reconciliations.
+        await markEventObserved(run, "kick", String(payload.broadcaster?.user_id ?? ""), "chatEvents");
         const chat = await ingestChatMessage(payload, env, run);
         const tournament = await ingestTournamentMessage(payload, env, tx);
         return { duplicate: false, chat, tournament };
@@ -108,6 +113,14 @@ export async function handleKickWebhook(
       console.error("[kick-webhook] chat ingest failed:", err?.message || err);
       return bad("Chat event processing failed", 500);
     }
+  }
+
+  // Receiving a reward event proves the subscription exists regardless of
+  // whether the status ends up queued; never let the stamp fail the webhook.
+  try {
+    await markEventObserved((sql, p) => query(sql, p), "kick", String(payload.broadcaster?.user_id ?? ""), "rewardEvents");
+  } catch (err) {
+    console.error("[kick-webhook] marking reward event observed failed:", err?.message || err);
   }
 
   // Queue creditable completions and reversible cancellations/refunds.

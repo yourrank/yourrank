@@ -172,6 +172,45 @@ describe("Kick connection health", () => {
       }));
     });
 
+    it("treats an observed subscription as subscribed even before any reconciliation", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: checkedAt, chatEventsSubscribedAt: null, checkedAt: null },
+      });
+      expect(health.delivery.events.rewardEvents).toBe("subscribed");
+      expect(health.delivery.events.chatEvents).toBe("unverified");
+      // refresh_required is a normal OAuth lifecycle state: subscribed traffic
+      // still verifies delivery instead of reading "Not verified yet".
+      const refreshing = deriveKickConnectionHealth({
+        ...authorized,
+        tokenExpiresAt: "2026-08-29T12:00:00.000Z",
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: checkedAt, chatEventsSubscribedAt: null, checkedAt: null },
+      });
+      expect(refreshing.status).toBe("refresh_required");
+      expect(refreshing.delivery.verified).toBe(true);
+    });
+
+    it("verifies delivery from any subscribed event when no feature requires one", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 0,
+        usesChatGiveaways: false,
+        delivery: { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: checkedAt, checkedAt: null },
+      });
+      expect(health.delivery.verified).toBe(true);
+    });
+
+    it("does not verify delivery while every event is unverified", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 0,
+        delivery: { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: null, checkedAt: null },
+      });
+      expect(health.delivery.verified).toBe(false);
+    });
+
     it("keeps revoked authorization as reconnect-required even when subscriptions were once confirmed", () => {
       expect(deriveKickConnectionHealth({
         ...authorized,

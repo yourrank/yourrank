@@ -12,8 +12,9 @@ const EVENT_LABELS = Object.freeze({
 });
 
 function eventState(subscribedAt, checkedAt) {
+  if (subscribedAt) return "subscribed";
   if (!checkedAt) return "unverified";
-  return subscribedAt ? "subscribed" : "missing";
+  return "missing";
 }
 
 /**
@@ -39,6 +40,9 @@ export function deriveKickDeliveryHealth({
   const missing = required.filter((event) => events[event] === "missing");
   return {
     verifiedAt: checkedAt || null,
+    // Webhook traffic itself marks subscriptions observed, so delivery can be
+    // verified even before the next reconciliation pass writes checkedAt.
+    verified: required.length ? required.every((e) => events[e] === "subscribed") : Object.values(events).some((s) => s === "subscribed"),
     events,
     required,
     missing,

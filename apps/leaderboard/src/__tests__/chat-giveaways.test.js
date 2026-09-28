@@ -120,6 +120,32 @@ describe("Kick webhook: chat.message.sent", () => {
     expect(ingested).toBe(false);
   });
 
+  it("marks chat events observed for the broadcaster inside the ingest transaction", async () => {
+    const observed = [];
+    const res = await handleKickWebhook(await signedRequest("chat.message.sent", chatPayload("!win")), { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem }, {
+      ingestChatMessage: async () => ({ routed: true, matched: false }),
+      ingestTournamentMessage: async () => ({}),
+      markEventObserved: async (run, provider, externalChannelId, event) => { observed.push([provider, externalChannelId, event]); },
+      withTransaction: async (fn) => fn({ one: async () => ({ message_id: "m-1" }), unsafe: async () => [] }),
+    });
+    expect(res.status).toBe(200);
+    expect(observed).toEqual([["kick", "111", "chatEvents"]]);
+  });
+
+  it("marks reward events observed and still returns ok when the stamp fails", async () => {
+    const observed = [];
+    const sent = [];
+    const payload = { id: "r1", broadcaster: { user_id: 111 }, redeemer: { user_id: 222 }, reward: { id: "rw" }, status: "fulfilled" };
+    const res = await handleKickWebhook(
+      await signedRequest("channel.reward.redemption.updated", payload),
+      { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem, EVENTS_QUEUE: { send: async (msg) => { sent.push(msg); } } },
+      { markEventObserved: async (_run, provider, externalChannelId, event) => { observed.push([provider, externalChannelId, event]); throw new Error("db down"); } },
+    );
+    expect(res.status).toBe(200);
+    expect(observed).toEqual([["kick", "111", "rewardEvents"]]);
+    expect(sent).toHaveLength(1);
+  });
+
   it("acknowledges unrelated event types without ingesting", async () => {
     let ingested = false;
     const res = await handleKickWebhook(
