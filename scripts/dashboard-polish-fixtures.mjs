@@ -200,7 +200,11 @@ const server = createServer(async (req, res) => {
       return json(res, { ok: true, id: event.id });
     }
     if (path === '/api/credits/status') return json(res, empty ? { ...credits, shopItems: [], mappings: [] } : credits);
-    if (path === '/api/activities') return json(res, { activities: empty ? [] : activities, total: empty ? 0 : activities.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+    if (path === '/api/activities') {
+      const state = url.searchParams.get('state') || 'all';
+      const rows = empty ? [] : activities.filter((a) => state === 'all' || (state === 'open' ? a.state === 'open' : a.state !== 'open'));
+      return json(res, { activities: rows, total: rows.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+    }
     if (path === '/api/people/members') return json(res, { members: empty ? [] : members, total: empty ? 0 : members.length, page: { hasMore: false, nextCursor: null } });
     if (path === '/api/claims') return json(res, { claims: empty ? [] : claims, total: empty ? 0 : claims.length, page: { hasMore: false, nextCursor: null } });
     if (path === '/api/people/reviews') return json(res, { reviews: empty ? [] : [{ id: 'review-1', status: 'pending', subject: { displayName: name }, reason: { label: 'Eligibility needs review' }, typeLabel: 'Signup review', source: { title: 'Community signup' }, createdAt: now }], counts: { pending: empty ? 0 : 1 } });

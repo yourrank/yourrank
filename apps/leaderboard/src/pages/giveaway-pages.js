@@ -3,7 +3,8 @@
 // Tournaments renders its own pane without the Giveaways subnav.
 
 import { routeById } from "@yourrank/shared/dashboard-routes";
-import { subnavHtml } from "@yourrank/shared/dashboard-ui";
+import { escapeHtml, listShellHtml, pageHeaderHtml, statusBadgeHtml, subnavHtml } from "@yourrank/shared/dashboard-ui";
+import { ENGAGE_IDLE } from "../assets/dashboard/engage-hub-state.js";
 
 export const GIVEAWAY_TABS = [
   ["chat", "Chat Giveaway"],
@@ -40,54 +41,58 @@ const ENGAGE_ICONS = {
 
 const engageIcon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ENGAGE_ICONS[name]}</svg>`;
 
-// Engage hub: the three Engage destinations as equal cards. Status copy is
-// the server-rendered default; giveaways.js rewrites it for the cards that
-// have a status source (chat giveaway, tournaments). Activities is static.
-const ENGAGE_FEATURES = [
+// Engage overview: one compact operational list, one row per Engage
+// destination. The status badge and meta line render as a pending state and
+// giveaways.js fills them from the feature APIs (Activities, Chat Giveaway +
+// Raffle + Prediction aggregate, Tournaments); each row fails independently.
+export const ENGAGE_FEATURES = [
   {
     feature: "activities", icon: "activities", title: "Activities", href: "/dashboard/activities",
-    desc: "Run code drops and community activities.",
-    state: "Activities", meta: "Share a free code with your community. Track claims here.", action: "Open activities",
+    desc: "Code drops that hand out free credits.",
+    idle: ENGAGE_IDLE.activities,
   },
   {
-    feature: "chat", icon: "message-square", title: "Giveaways", href: "/dashboard/giveaways/chat",
-    desc: "Run chat giveaways, raffles, and predictions.",
-    state: "No active giveaway", meta: "Create a giveaway to engage your viewers.", action: "Create giveaway",
+    feature: "giveaways", icon: "message-square", title: "Giveaways", href: "/dashboard/giveaways/chat",
+    desc: "Chat giveaways, raffles, and predictions.",
+    idle: ENGAGE_IDLE.giveaways,
   },
   {
     feature: "tournaments", icon: "network", title: "Tournaments", href: "/dashboard/giveaways/tournaments",
-    desc: "Run brackets and community competitions.",
-    state: "No active tournament", meta: "Set up a bracket for your community.", action: "Create tournament",
+    desc: "Brackets and community competitions.",
+    idle: ENGAGE_IDLE.tournaments,
   },
 ];
 
 export function renderEngageHubHtml() {
-  const cards = ENGAGE_FEATURES.map((f) => `
-  <article class="engage-card" data-feature="${f.feature}" data-href="${f.href}">
-    <a class="engage-card__link" href="${f.href}" aria-label="Open ${f.title}"></a>
-    <div class="engage-card__top">
-      <span class="engage-card__icon" aria-hidden="true">${engageIcon(f.icon)}</span>
-      <div class="engage-card__text"><h2 class="engage-card__title">${f.title}</h2><p class="engage-card__desc">${f.desc}</p></div>
-      <span class="engage-card__chevron" aria-hidden="true">${engageIcon("chevron-right")}</span>
-    </div>
-    <div class="engage-card__foot">
-      <div class="engage-card__status" data-status-root>
-        <span class="engage-card__dot" data-status-dot></span>
-        <div><p class="engage-card__state" data-status-label>${f.state}</p><p class="engage-card__meta" data-status-meta><span>${f.meta}</span></p></div>
-      </div>
-      <a class="btn btn--sm btn--accent engage-card__action" data-action href="${f.href}">${f.action}</a>
-    </div>
-  </article>`).join("");
+  const rows = ENGAGE_FEATURES.map((f) => `
+  <li class="engage-row" data-feature="${f.feature}" data-status="pending">
+    <a class="engage-row__link" href="${f.href}">
+      <span class="engage-row__icon" aria-hidden="true">${engageIcon(f.icon)}</span>
+      <span class="engage-row__copy">
+        <span class="engage-row__title">${f.title}</span>
+        <span class="engage-row__desc">${f.desc}</span>
+      </span>
+      <span class="engage-row__state">
+        ${statusBadgeHtml({ label: "Checking…", tone: "neutral", status: "pending", live: true })}
+        <span class="engage-row__meta" data-status-meta>${escapeHtml(f.idle.meta)}</span>
+      </span>
+      <span class="engage-row__chevron" aria-hidden="true">${engageIcon("chevron-right")}</span>
+    </a>
+  </li>`).join("");
   return `
-<div class="v3-head v3-head--row">
-  <div class="v3-head-col">
-    <h1>Engage</h1>
-    <p class="v3-head-sub">Interactive tools to grow your channel and engage your community.</p>
-  </div>
-</div>
+${pageHeaderHtml({
+    title: "Engage",
+    description: "What is running for this community right now, and where to run more.",
+    scope: { kind: "site", id: "engage-scope" },
+  })}
 <p class="gw-page-alert" id="gw-page-alert" role="alert" aria-live="assertive" hidden></p>
-<div class="engage-hub" id="engage-hub">${cards}
-</div>
+${listShellHtml({
+    label: "Engage destinations",
+    id: "engage-hub",
+    className: "engage-hub",
+    body: `<ul class="engage-list">${rows}
+</ul>`,
+  })}
 `;
 }
 

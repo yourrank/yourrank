@@ -49,7 +49,7 @@ describe("Wave K Home operational ownership", () => {
     const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
     expect(dashboardCss).toContain(".ov-attention-row .btn,");
     const activitiesCss = readFileSync(new URL("../assets/activities.css", import.meta.url), "utf8");
-    expect(activitiesCss).toContain(".act-schedule-action .act-state { grid-column: auto; grid-row: auto; justify-self: start; }");
-    expect(activitiesCss).toContain(".act-compact-row > div:first-child strong { overflow-wrap: anywhere; }");
+    expect(activitiesCss).toContain(".act-item.is-attention { background: var(--ws-warning-soft); }");
+    expect(activitiesCss).toContain(".act-item__copy strong { overflow-wrap: anywhere;");
   });
 });

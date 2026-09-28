@@ -172,6 +172,44 @@ describe("Wave E safe Activities foundation", () => {
     expect(invalid.calls.query).toHaveLength(0);
   });
 
+  it("filters completed drops as the exact complement of open, paged server-side newest first", async () => {
+    const openSql = "d.status='active' AND d.closed_at IS NULL\n        AND (d.expires_at IS NULL OR d.expires_at > now())";
+    const mock = deps();
+    const response = await handleGetActivities(
+      new Request("https://yourrank.test/api/activities?siteId=site-1&state=completed&limit=10"),
+      {},
+      mock.value,
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.state).toBe("completed");
+    // Exhausted, expired, creator-ended and any other non-active drop all fall
+    // out of the open predicate, so NOT(open) is the whole history set.
+    expect(mock.calls.query[0].sql).toContain(`WHERE d.site_id=$1 AND NOT (${openSql})`);
+    expect(mock.calls.query[0].sql.indexOf("NOT (")).toBeLessThan(mock.calls.query[0].sql.indexOf("LIMIT $3"));
+    expect(mock.calls.query[0].sql).toContain("ORDER BY d.created_at DESC, d.id DESC");
+    expect(mock.calls.query[0].params).toEqual(["site-1", null, 11]);
+    expect(mock.calls.one.find(({ sql }) => sql.includes("count(*)")).sql).toContain(`WHERE d.site_id=$1 AND NOT (${openSql})`);
+    // The first page still carries automation; a cursor page does not.
+    expect(body.automation).toBeDefined();
+    const paged = deps();
+    const pagedBody = await (await handleGetActivities(
+      new Request(`https://yourrank.test/api/activities?siteId=site-1&state=completed&cursor=${CURSOR}`),
+      {},
+      paged.value,
+    )).json();
+    expect(pagedBody.automation).toBeUndefined();
+    expect(paged.calls.query[0].params).toEqual(["site-1", CURSOR, 51]);
+    // Unchanged: `all` has no state predicate and `open` keeps the positive form.
+    const all = deps();
+    await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1&state=all"), {}, all.value);
+    expect(all.calls.query[0].sql).not.toContain("d.status='active'");
+    const open = deps();
+    await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1&state=open"), {}, open.value);
+    expect(open.calls.query[0].sql).toContain(`WHERE d.site_id=$1 AND ${openSql}`);
+    expect(open.calls.query[0].sql).not.toContain("NOT (");
+  });
+
   it("caps the page size and rejects malformed or stale cursors", async () => {
     const capped = deps();
     await handleGetActivities(new Request("https://yourrank.test/api/activities?siteId=site-1&limit=5000"), {}, capped.value);
@@ -275,9 +313,10 @@ describe("Wave E safe Activities foundation", () => {
     expect(activitiesConfig.canonical).toBe("https://yourrank.site/dashboard/activities");
     expect(activitiesConfig.styles).toContain("/assets/activities.css");
     expect(activitiesContentHtml).toContain("No purchase or stake is required.");
-    expect(activitiesContentHtml.indexOf('class="act-list-panel"')).toBeLessThan(activitiesContentHtml.indexOf('class="act-automation"'));
+    // Drops (live + history) render before the secondary Automation panel.
+    expect(activitiesContentHtml.indexOf('id="act-panel-drops"')).toBeLessThan(activitiesContentHtml.indexOf('id="act-panel-automation"'));
     expect(activitiesContentHtml).toContain("Templates and schedules");
-    expect(activitiesContentHtml).toContain('<details class="act-automation" id="act-automation"');
+    expect(activitiesContentHtml).toContain('id="act-automation" hidden');
     expect(activitiesContentHtml).not.toMatch(/Raffles|Predictions|Games|wagering|stakes/i);
     expect(ROUTES.some((route) => route.path === "/api/activities" && route.method === "GET")).toBe(true);
     expect(ROUTES.some((route) => route.path === "/api/activities/close" && route.method === "POST")).toBe(true);

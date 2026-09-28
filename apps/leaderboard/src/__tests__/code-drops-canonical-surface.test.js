@@ -111,7 +111,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
     expect(quick).toContain("drop: `/dashboard/activities");
   });
 
-  it("keeps the Giveaways panes reachable through the Engage hub cards", () => {
+  it("keeps the Giveaways panes reachable through the Engage hub rows", () => {
     const html = renderGiveawaysContentHtml("chat");
     expect(html).toContain('id="pane-chat"');
     expect(html).not.toContain("gw-tab-btn");
@@ -119,7 +119,7 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
     const hub = renderGiveawaysContentHtml("hub");
     for (const [feature, href] of [
       ["activities", "/dashboard/activities"],
-      ["chat", "/dashboard/giveaways/chat"],
+      ["giveaways", "/dashboard/giveaways/chat"],
       ["tournaments", "/dashboard/giveaways/tournaments"],
     ]) {
       expect(hub).toContain(`data-feature="${feature}"`);
