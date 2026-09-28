@@ -1,83 +1,98 @@
-// Markup for Giveaways (Chat Giveaways primary; Raffles, Predictions and
-// Tournaments secondary). Code Drops are owned by Activities.
+// Markup for Giveaways (Chat Giveaway primary; Raffle and Prediction
+// secondary) and the Engage hub. Code Drops are owned by Activities;
+// Tournaments renders its own pane without the Giveaways subnav.
 
-import { engageTabsHtml } from "./engage-tabs.jsx";
+import { routeById } from "@yourrank/shared/dashboard-routes";
+import { escapeHtml, listShellHtml, pageHeaderHtml, statusBadgeHtml, subnavHtml } from "@yourrank/shared/dashboard-ui";
+import { ENGAGE_IDLE } from "../assets/dashboard/engage-hub-state.js";
 
 export const GIVEAWAY_TABS = [
-  ["chat", "Chat giveaways"],
-  ["raffles", "Raffles"],
-  ["preds", "Predictions"],
-  ["tournaments", "Tournaments"],
+  ["chat", "Chat Giveaway"],
+  ["raffles", "Raffle"],
+  ["preds", "Prediction"],
 ];
+
+// Panes that can render — tournaments is a route but stays off the subnav.
+const GIVEAWAY_PANES = [...GIVEAWAY_TABS.map(([tab]) => tab), "tournaments"];
+
+const SUBNAV_ROUTES = { chat: "giveaways.chat", raffles: "giveaways.raffles", preds: "giveaways.preds" };
+
+// Giveaways secondary nav: Chat Giveaway | Raffle | Prediction. Always visible
+// on the three subtype pages; plain anchors ride the SPA router.
+function giveawaysSubnavHtml(active) {
+  return subnavHtml({
+    items: GIVEAWAY_TABS.map(([key, label]) => ({ key, label, href: routeById(SUBNAV_ROUTES[key]).canonicalPath })),
+    active,
+    label: "Giveaways",
+    className: "gw-subnav",
+  });
+}
 
 // Lucide 24x24 stroke icons (fill="none" stroke="currentColor" stroke-width="2"
 // stroke-linecap="round" stroke-linejoin="round"). One source for the hub cards.
 const ENGAGE_ICONS = {
+  activities: '<path d="M13 2 4 14h7l-1 8 10-14h-7z"/>',
   "message-square": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
   ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
   "bar-chart-3": '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
-  "chevron-left": '<path d="m15 18-6-6 6-6"/>',
 };
 
 const engageIcon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ENGAGE_ICONS[name]}</svg>`;
 
-const ENGAGE_BACK = `<a class="engage-back" href="/dashboard/giveaways">${engageIcon("chevron-left")}Engage</a>`;
-
-// Engage feature hub: the four Engage tools as equal cards. Status copy is the
-// server-rendered "none" default; giveaways.js rewrites it from the APIs.
-const ENGAGE_FEATURES = [
+// Engage overview: one compact operational list, one row per Engage
+// destination. The status badge and meta line render as a pending state and
+// giveaways.js fills them from the feature APIs (Activities, Chat Giveaway +
+// Raffle + Prediction aggregate, Tournaments); each row fails independently.
+export const ENGAGE_FEATURES = [
   {
-    feature: "chat", icon: "message-square", title: "Chat Giveaway", href: "/dashboard/giveaways/chat",
-    desc: "Run live giveaways from your chat.",
-    state: "No active giveaway", meta: "Create a giveaway to engage your viewers.", action: "Create giveaway",
+    feature: "activities", icon: "activities", title: "Activities", href: "/dashboard/activities",
+    desc: "Code drops that hand out free credits.",
+    idle: ENGAGE_IDLE.activities,
   },
   {
-    feature: "tournaments", icon: "network", title: "Tournament", href: "/dashboard/giveaways/tournaments",
-    desc: "Run brackets and community competitions.",
-    state: "No active tournament", meta: "Set up a bracket for your community.", action: "Create tournament",
+    feature: "giveaways", icon: "message-square", title: "Giveaways", href: "/dashboard/giveaways/chat",
+    desc: "Chat giveaways, raffles, and predictions.",
+    idle: ENGAGE_IDLE.giveaways,
   },
   {
-    feature: "raffles", icon: "ticket", title: "Raffle", href: "/dashboard/giveaways/raffles",
-    desc: "Run ticket-based drawings for your community.",
-    state: "No active raffle", meta: "Set up a raffle to reward your community.", action: "Create raffle",
-  },
-  {
-    feature: "preds", icon: "bar-chart-3", title: "Prediction", href: "/dashboard/giveaways/predictions",
-    desc: "Let your viewers predict outcomes.",
-    state: "No active prediction", meta: "Create a prediction to get your community involved.", action: "Create prediction",
+    feature: "tournaments", icon: "network", title: "Tournaments", href: "/dashboard/giveaways/tournaments",
+    desc: "Brackets and community competitions.",
+    idle: ENGAGE_IDLE.tournaments,
   },
 ];
 
 export function renderEngageHubHtml() {
-  const cards = ENGAGE_FEATURES.map((f) => `
-  <article class="engage-card" data-feature="${f.feature}" data-href="${f.href}">
-    <a class="engage-card__link" href="${f.href}" aria-label="Open ${f.title}"></a>
-    <div class="engage-card__top">
-      <span class="engage-card__icon" aria-hidden="true">${engageIcon(f.icon)}</span>
-      <div class="engage-card__text"><h2 class="engage-card__title">${f.title}</h2><p class="engage-card__desc">${f.desc}</p></div>
-      <span class="engage-card__chevron" aria-hidden="true">${engageIcon("chevron-right")}</span>
-    </div>
-    <div class="engage-card__foot">
-      <div class="engage-card__status" data-status-root>
-        <span class="engage-card__dot" data-status-dot></span>
-        <div><p class="engage-card__state" data-status-label>${f.state}</p><p class="engage-card__meta" data-status-meta><span>${f.meta}</span></p></div>
-      </div>
-      <a class="btn btn--sm btn--accent engage-card__action" data-action href="${f.href}">${f.action}</a>
-    </div>
-  </article>`).join("");
+  const rows = ENGAGE_FEATURES.map((f) => `
+  <li class="engage-row" data-feature="${f.feature}" data-status="pending">
+    <a class="engage-row__link" href="${f.href}">
+      <span class="engage-row__icon" aria-hidden="true">${engageIcon(f.icon)}</span>
+      <span class="engage-row__copy">
+        <span class="engage-row__title">${f.title}</span>
+        <span class="engage-row__desc">${f.desc}</span>
+      </span>
+      <span class="engage-row__state">
+        ${statusBadgeHtml({ label: "Checking…", tone: "neutral", status: "pending", live: true })}
+        <span class="engage-row__meta" data-status-meta>${escapeHtml(f.idle.meta)}</span>
+      </span>
+      <span class="engage-row__chevron" aria-hidden="true">${engageIcon("chevron-right")}</span>
+    </a>
+  </li>`).join("");
   return `
-${engageTabsHtml("giveaways")}
-<div class="v3-head v3-head--row">
-  <div class="v3-head-col">
-    <h1>Engage</h1>
-    <p class="v3-head-sub">Interactive tools to grow your channel and engage your community.</p>
-  </div>
-</div>
+${pageHeaderHtml({
+    title: "Engage",
+    description: "What is running for this community right now, and where to run more.",
+    scope: { kind: "site", id: "engage-scope" },
+  })}
 <p class="gw-page-alert" id="gw-page-alert" role="alert" aria-live="assertive" hidden></p>
-<div class="engage-hub" id="engage-hub">${cards}
-</div>
+${listShellHtml({
+    label: "Engage destinations",
+    id: "engage-hub",
+    className: "engage-hub",
+    body: `<ul class="engage-list">${rows}
+</ul>`,
+  })}
 `;
 }
 
@@ -248,8 +263,8 @@ export function renderGiveawayDrawersHtml() {
 
 export function renderGiveawaysContentHtml(activeTab = "chat") {
   if (activeTab === "hub") return renderEngageHubHtml();
-  const active = GIVEAWAY_TABS.some(([tab]) => tab === activeTab) ? activeTab : "chat";
-  const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Giveaways";
+  const active = GIVEAWAY_PANES.includes(activeTab) ? activeTab : "chat";
+  const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Tournaments";
   const activeDescription = {
     chat: "Collect chat entries, draw a winner, and confirm the result live.",
     raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
@@ -257,17 +272,18 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
     tournaments: "Open chat signups, review the entry list, and seed a tournament.",
   }[active] || "Engage viewers with live community events.";
   const html = `
-${engageTabsHtml("giveaways")}
-<div class="v3-head v3-head--row">
+${active === "tournaments"
+    ? ""
+    : `<div class="v3-head v3-head--row">
   <div class="v3-head-col">
-    ${ENGAGE_BACK}
-    <h1>${activeLabel}</h1>
-    <p class="v3-head-sub">${activeDescription}</p>
+    <h1>Giveaways</h1>
+    <p class="v3-head-sub">${activeLabel} · ${activeDescription}</p>
   </div>
   <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>
   </div>
 </div>
+${giveawaysSubnavHtml(active)}`}
 
 <!-- The one place an Engage action reports a refusal. It lives outside the tab
      panes so a refusal on any tab is actually painted: the previous target was
@@ -608,244 +624,19 @@ ${engageTabsHtml("giveaways")}
      TAB 4: TOURNAMENT ENTRIES
      ========================================================================= -->
 <div class="gw-tab-pane${active === "tournaments" ? " is-active" : ""}" id="pane-tournaments"${active === "tournaments" ? "" : " hidden"}>
-  <div id="tournament-app" class="tournament-app">
-    <p class="tournament-message" id="tournament-message" role="status" aria-live="polite" hidden></p>
-
-    <!-- No tournament yet: one focused card. Nothing else renders until one exists. -->
-    <section class="tournament-empty-card" id="tournament-empty" aria-labelledby="tournament-empty-heading" hidden>
-      <h2 id="tournament-empty-heading">Tournaments</h2>
-      <p>Run a tournament for your community. Collect entries from your audience, select participants, then manage the bracket here.</p>
-      <button class="btn btn--accent" id="tournament-create" type="button">Create tournament</button>
-    </section>
-
-    <div id="tournament-workspace" hidden>
-      <section class="tournament-summary-card" aria-labelledby="tournament-title-display">
-        <div class="tournament-summary-head">
-          <div class="tournament-summary-ident">
-            <div class="tournament-summary-title-row">
-              <h2 class="tournament-title-display" id="tournament-title-display"></h2>
-              <span class="tournament-status-chip" id="tournament-status" data-lifecycle=""></span>
-            </div>
-            <p class="tournament-game-display" id="tournament-meta"></p>
-            <p class="tournament-step-label" id="tournament-step-label"></p>
-          </div>
-          <div class="tournament-primary-wrap">
-            <button class="btn btn--accent" id="tournament-primary" type="button" hidden></button>
-            <button class="btn btn--ghost tournament-secondary-action" id="tournament-reopen" type="button" hidden>Reopen signups</button>
-            <button class="btn btn--ghost tournament-secondary-action" id="tournament-new" type="button" hidden>New tournament</button>
-          </div>
-        </div>
-        <dl class="tournament-facts">
-          <div><dt>Kick channel</dt><dd id="tournament-fact-channel">—</dd></div>
-          <div><dt>Join command</dt><dd id="tournament-fact-keyword">!join</dd></div>
-          <div><dt>Signup limit</dt><dd id="tournament-fact-cap">Unlimited</dd></div>
-          <div><dt>Bracket spots</dt><dd id="tournament-fact-spots">8</dd></div>
-          <div><dt>Entries</dt><dd id="tournament-count" aria-live="polite">0</dd></div>
-          <div><dt>Chat registration</dt><dd><span class="tournament-live-dot" id="tournament-chat-status">Chat registration off</span></dd></div>
-        </dl>
-      </section>
-
-      <div class="tournament-tabs" role="tablist" aria-label="Tournament sections">
-        <button class="tournament-tab is-active" id="tournament-tab-entries" type="button" role="tab" aria-selected="true" aria-controls="tournament-panel-entries" data-tournament-tab="entries">Entries</button>
-        <button class="tournament-tab" id="tournament-tab-bracket" type="button" role="tab" aria-selected="false" aria-controls="tournament-panel-bracket" data-tournament-tab="bracket">Bracket</button>
-        <button class="tournament-tab" id="tournament-tab-settings" type="button" role="tab" aria-selected="false" aria-controls="tournament-panel-settings" data-tournament-tab="settings">Settings</button>
-      </div>
-
-      <section class="tournament-list-card" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries">
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-list-heading">Entries</h2>
-            <p class="tournament-muted" id="tournament-list-sub">Review names before locking signups and picking participants.</p>
-          </div>
-        </div>
-        <div class="tournament-entries" id="tournament-entries">
-          <div class="tournament-panel-empty" id="tournament-entries-empty" hidden></div>
-          <ul class="tournament-entry-list" id="tournament-entry-list" aria-label="Tournament entries"></ul>
-        </div>
-      </section>
-
-      <section class="tournament-list-card" id="tournament-panel-bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket" hidden>
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-bracket-heading">Bracket</h2>
-            <p class="tournament-muted">Enter scores for each match to advance the winner.</p>
-          </div>
-        </div>
-        <div class="tournament-panel-empty" id="tournament-bracket-empty" hidden>
-          <b>Bracket not created yet.</b>
-          <span>Lock signups and select participants to generate the bracket.</span>
-        </div>
-        <div id="tournament-bracket" class="tournament-bracket"></div>
-        <p class="tournament-champion" id="tournament-champion" hidden></p>
-      </section>
-
-      <section class="tournament-list-card" id="tournament-panel-settings" role="tabpanel" aria-labelledby="tournament-tab-settings" hidden>
-        <div class="tournament-list-head">
-          <div>
-            <h2 id="tournament-settings-heading">Settings</h2>
-            <p class="tournament-muted">Basic details can change any time. Bracket size locks once the bracket has been created.</p>
-          </div>
-        </div>
-        <form id="tournament-settings-form" class="tournament-settings-form" novalidate>
-          <fieldset class="tournament-settings-group">
-            <legend>Tournament details</legend>
-            <div class="tournament-settings-fields">
-              <div class="field">
-                <label for="tournament-title">Tournament name</label>
-                <input id="tournament-title" name="title" type="text" placeholder="Community Tournament" maxlength="120" class="tournament-control" />
-              </div>
-              <div class="field">
-                <label for="tournament-game">Game</label>
-                <input id="tournament-game" name="gameName" type="text" placeholder="Game" maxlength="120" class="tournament-control" />
-              </div>
-            </div>
-          </fieldset>
-          <fieldset class="tournament-settings-group">
-            <legend>Registration</legend>
-            <div class="tournament-settings-fields">
-              <div class="field">
-                <label for="tournament-chat-channel">Kick channel</label>
-                <div class="gw-input-row">
-                  <span class="gw-input-prefix">kick.com/</span>
-                  <input id="tournament-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" class="tournament-control" />
-                </div>
-              </div>
-              <div class="field">
-                <label for="tournament-keyword">Chat command</label>
-                <input id="tournament-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tournament-control" />
-              </div>
-              <div class="field">
-                <label for="tournament-entry-cap-mode">Signup limit</label>
-                <select id="tournament-entry-cap-mode" name="entryCapMode" class="v3-select tournament-control">
-                  <option value="">Unlimited</option>
-                  <option value="custom">Custom…</option>
-                </select>
-                <input id="tournament-entry-cap" name="entryCap" type="number" min="1" inputmode="numeric" class="tournament-control" aria-label="Custom signup limit" placeholder="e.g. 40" hidden />
-                <span class="hint">How many viewers may register. Separate from bracket size.</span>
-                <span class="field-error" id="tournament-entry-cap-error" role="alert" hidden></span>
-              </div>
-            </div>
-          </fieldset>
-          <fieldset class="tournament-settings-group">
-            <legend>Competition</legend>
-            <div class="tournament-settings-fields">
-              <div class="field">
-                <label for="tournament-bracket-size">Bracket size</label>
-                <select id="tournament-bracket-size" name="bracketSize" class="v3-select tournament-control">
-                  <option value="4">4 players</option>
-                  <option value="8">8 players</option>
-                  <option value="16">16 players</option>
-                  <option value="32">32 players</option>
-                </select>
-                <span class="hint" id="tournament-bracket-size-hint" hidden></span>
-                <span class="field-error" id="tournament-bracket-size-error" role="alert" hidden></span>
-              </div>
-            </div>
-          </fieldset>
-          <details class="tournament-advanced" id="tournament-advanced">
-            <summary>Advanced settings</summary>
-            <div class="tournament-setting-row">
-              <div class="tournament-setting-row-text">
-                <label for="tournament-anti-alt">Flag likely duplicate accounts</label>
-                <span class="hint">Flags suspicious entries for review; never rejects automatically.</span>
-              </div>
-              <input id="tournament-anti-alt" name="antiAltEnabled" type="checkbox" class="v3-toggle" />
-            </div>
-          </details>
-          <div class="tournament-settings-bar" id="tournament-settings-bar" hidden>
-            <span>Unsaved changes</span>
-            <div class="tournament-settings-bar-actions">
-              <button class="btn btn--ghost" type="button" id="tournament-settings-discard">Discard</button>
-              <button class="btn btn--accent" type="submit" id="tournament-settings-save">Save changes</button>
-            </div>
-          </div>
-          <p class="tournament-settings-saved" id="tournament-settings-saved" role="status" aria-live="polite" hidden>Settings saved.</p>
-        </form>
-      </section>
-    </div>
-
-    <div class="modal tournament-create-modal" id="tournament-create-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-create-heading" hidden>
-      <form class="modal-card tournament-create-card" id="tournament-create-form" novalidate>
-        <h3 id="tournament-create-heading">Create tournament</h3>
-        <div class="tournament-create-grid">
-          <div class="field">
-            <label for="tc-title">Tournament name</label>
-            <input id="tc-title" name="title" type="text" value="Community Tournament" maxlength="120" required class="tournament-control" />
-          </div>
-          <div class="field">
-            <label for="tc-game">Game</label>
-            <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" class="tournament-control" />
-          </div>
-          <div class="field">
-            <label for="tc-bracket-size">Bracket size</label>
-            <select id="tc-bracket-size" name="bracketSize" class="v3-select tournament-control">
-              <option value="4">4 players</option>
-              <option value="8" selected>8 players</option>
-              <option value="16">16 players</option>
-              <option value="32">32 players</option>
-            </select>
-            <span class="hint">How many participants play in the bracket.</span>
-          </div>
-          <div class="field">
-            <label for="tc-entry-cap">Signup limit</label>
-            <select id="tc-entry-cap" name="entryCapMode" class="v3-select tournament-control">
-              <option value="" selected>Unlimited</option>
-              <option value="custom">Custom limit…</option>
-            </select>
-            <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" class="tournament-control" hidden />
-            <span class="hint">How many viewers may register. Participants are picked from the entries later.</span>
-          </div>
-          <div class="field">
-            <label for="tc-chat-channel">Kick channel</label>
-            <div class="gw-input-row">
-              <span class="gw-input-prefix">kick.com/</span>
-              <input id="tc-chat-channel" name="chatChannel" type="text" placeholder="channelname" autocomplete="off" class="tournament-control" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="tc-keyword">Chat command</label>
-            <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tournament-control" />
-          </div>
-        </div>
-        <p class="tournament-message is-error" id="tournament-create-error" role="alert" hidden></p>
-        <div class="modal-actions">
-          <button class="btn btn--sm btn--ghost ghost" type="button" id="tournament-create-cancel">Cancel</button>
-          <button class="btn btn--sm btn--accent" type="submit" id="tournament-create-submit">Create tournament</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="modal tournament-create-modal" id="tournament-select-modal" role="dialog" aria-modal="true" aria-labelledby="tournament-select-heading" hidden>
-      <div class="modal-card tournament-create-card" id="tournament-select-card">
-        <h3 id="tournament-select-heading">Select participants</h3>
-        <div class="tournament-select-modes" role="radiogroup" aria-label="Selection mode">
-          <label class="tournament-select-mode">
-            <input type="radio" name="tournament-select-mode" id="ts-mode-random" value="random" checked />
-            <span>Random</span>
-          </label>
-          <label class="tournament-select-mode">
-            <input type="radio" name="tournament-select-mode" id="ts-mode-manual" value="manual" />
-            <span>Manual</span>
-          </label>
-        </div>
-        <div id="ts-pane-random">
-          <p id="ts-random-text"></p>
-          <p class="hint">Players will be randomly placed in the bracket.</p>
-        </div>
-        <div id="ts-pane-manual" hidden>
-          <input id="ts-search" type="search" placeholder="Search entries" aria-label="Search entries" autocomplete="off" class="tournament-control" />
-          <ul id="ts-entry-list" class="tournament-select-list"></ul>
-          <p class="tournament-select-counter" id="ts-counter" aria-live="polite">Selected 0 / 8</p>
-          <p class="hint">Players will be randomly placed in the bracket.</p>
-        </div>
-        <p class="tournament-message is-error" id="tournament-select-error" role="alert" hidden></p>
-        <div class="modal-actions">
-          <button class="btn btn--sm btn--ghost ghost" type="button" id="tournament-select-cancel">Cancel</button>
-          <button class="btn btn--sm btn--accent" type="button" id="tournament-select-submit">Create bracket</button>
-        </div>
+  <!-- The tournament client renders everything into #tournament-root; the
+       skeleton keeps one page h1 and a loading cue until it boots. Dialogs
+       mount into #tournament-dialogs so re-renders can't destroy them. -->
+  <section id="tournament-app" class="tn" aria-label="Tournament workspace">
+    <div id="tournament-root">
+      <div class="tn-loading" role="status" aria-busy="true">
+        <${active === "tournaments" ? "h1" : "h2"} class="tn-loading-title">Tournaments</${active === "tournaments" ? "h1" : "h2"}>
+        <span class="tn-loading-bar"></span>
+        <span class="tn-loading-bar tn-loading-bar--short"></span>
       </div>
     </div>
-  </div>
+    <div id="tournament-dialogs"></div>
+  </section>
 </div>
 
 <!-- Winner Verification Modal -->

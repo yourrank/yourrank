@@ -8,6 +8,7 @@ import { PAGES } from '../apps/leaderboard/src/pages.jsx';
 import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/index.js';
 import { leaderboardPageHtml } from '../packages/shared/dist/page-shell.js';
 import { ASSETS } from '../apps/leaderboard/src/assets_bundled.js';
+import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE } from '../apps/leaderboard/src/lib/tournament-bracket.js';
 import { appHtml } from '../apps/bot/src/dashboard-views/app.ts';
 import { clientScriptSource } from '../apps/bot/src/dashboard-views/client-script.ts';
 
@@ -31,6 +32,81 @@ const competitions = new Map([[site.id, [
   { id: '22222222-2222-4222-8222-222222222222', name: 'September Challenge', published: false, players: [{ name: 'Draft player', score: 18 }], updated_at: now },
 ]], [secondarySite.id, []]]);
 let mode = 'populated';
+
+// Tournament fixture variants: real buildBracket() output, no hand-written
+// rows. FIXTURE_TOURNAMENT selects the shape; `empty` mode still wins.
+// completed8 — finished 8-player bracket with a champion.
+// live{4,8,16,32} — active bracket with size-1 participants (exactly one
+// round-1 BYE) and generated round-1 results.
+const tournamentVariant = process.env.FIXTURE_TOURNAMENT || 'completed8';
+function buildTournamentFixture(empty) {
+  const tournament = { id: `tourn_${tournamentVariant}`, title: 'Community tournament', game_name: '', bracket_size: 8, status: 'completed', signup_state: 'closed', entry_cap: null, format: 'bracket', anti_alt_enabled: false, entry_keyword: '!join', chat_channel: 'community', winner_name: null, created_at: '2026-09-20T14:32:00Z' };
+  let matches = [];
+  let participants = [];
+  const live = /^live(\d+)$/.exec(tournamentVariant);
+  if (live) {
+    const size = Number(live[1]);
+    tournament.bracket_size = size;
+    tournament.status = 'active';
+    participants = Array.from({ length: size - 1 }, (_, i) => `seed_${i + 1}`);
+    matches = buildBracket(participants, size);
+    // Complete the round-1 matches that have no BYE, alternating winners so
+    // both scores and BYE propagation are exercised; scores are generated.
+    let scorer = 0;
+    for (const m of matches) {
+      if (m.round_number !== 1 || m.status === 'completed') continue;
+      if (m.player1_name === BYE || m.player2_name === BYE) continue;
+      scorer += 1;
+      m.status = 'completed';
+      m.player1_score = scorer + 1;
+      m.player2_score = scorer;
+      m.winner_name = scorer % 2 === 0 ? m.player2_name : m.player1_name;
+      const next = matches.find((n) => n.round_number === 2 && n.match_index === Math.floor(m.match_index / 2));
+      if (next) {
+        const slot = m.match_index % 2 === 0 ? 'player1_name' : 'player2_name';
+        if (next[slot] === 'TBD' || !next[slot]) next[slot] = m.winner_name;
+      }
+    }
+    // One already-played round-2 match (brackets with a round 3+) so the
+    // "downstream played" correction block is exercised: its round-1 feeders
+    // stop being correctable while the rest stay open.
+    if (Math.log2(size) >= 3) {
+      const played = matches.find((m) => m.round_number === 2 && m.match_index === 0
+        && m.status === 'pending' && m.player1_name && m.player2_name
+        && m.player1_name !== 'TBD' && m.player2_name !== 'TBD'
+        && !isBye(m.player1_name) && !isBye(m.player2_name));
+      if (played) {
+        played.status = 'completed';
+        played.player1_score = 4;
+        played.player2_score = 2;
+        played.winner_name = played.player1_name;
+        const final = matches.find((n) => n.round_number === 3 && n.match_index === 0);
+        if (final && (final.player1_name === 'TBD' || !final.player1_name)) final.player1_name = played.winner_name;
+      }
+    }
+  } else {
+    // completed8: two real entrants; the only real match is scored, the rest
+    // of the bracket resolves via BYEs.
+    participants = ['seed_1', 'seed_2'];
+    matches = buildBracket(participants, 8);
+    for (const m of matches) {
+      if (m.status === 'completed') continue;
+      if (m.player1_name === BYE || m.player2_name === BYE) continue;
+      m.status = 'completed';
+      m.player1_score = 1;
+      m.player2_score = 0;
+      m.winner_name = m.player1_name;
+    }
+    tournament.winner_name = participants[0];
+  }
+  // API rows carry ids; give the in-memory fixture stable ones for score ops.
+  for (const m of matches) m.id = m.id || `m-${m.round_number}-${m.match_index}`;
+  const fixtureEntries = participants.map((name, i) => ({ id: `e${i + 1}`, display_name: name, source: 'chat', status: 'selected', eligible: true, alt_flag: false, alt_reason: null }));
+  return { tournament, matches: empty ? [] : matches, fixtureEntries };
+}
+// Built once so PATCH /score mutations persist across requests.
+const tournamentState = buildTournamentFixture(false);
+
 const json = (res, body, code = 200) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
 const html = (res, body) => { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(body); };
 const server = createServer(async (req, res) => {
@@ -72,6 +148,40 @@ const server = createServer(async (req, res) => {
     if (mode === 'loading') await new Promise(resolve => setTimeout(resolve, 6000));
     if (mode === 'error' && path.startsWith('/api/')) return json(res, { error: 'Could not load this information. Try again.' }, 503);
     const empty = mode === 'empty';
+    const { tournament, fixtureEntries } = tournamentState;
+    const matches = tournamentState.matches;
+    if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
+    if (path === `/api/tournaments/${tournament.id}/entries`) return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: fixtureEntries.length, eligible: fixtureEntries.length, waitlist: 0, removed: 0, blocked: 0 } });
+    if (path === `/api/tournaments/${tournament.id}/bracket`) return json(res, { matches: empty ? [] : matches.map((m) => ({ ...m, correctable: canCorrectMatch(matches, m).ok })), tournament });
+    if (path === `/api/tournaments/${tournament.id}/score` && req.method === 'PATCH') {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      const body = JSON.parse(raw || '{}');
+      const match = matches.find((m) => String(m.id) === String(body.matchId));
+      if (!match) return json(res, { error: 'Match not found or unauthorized.' }, 404);
+      const decision = canCorrectMatch(matches, match);
+      if (!decision.ok) return json(res, { error: match.status === 'completed' ? 'A later match has already been played. Correct that match first.' : 'Match is not correctable.' }, 409);
+      const p1 = Number(body.player1Score), p2 = Number(body.player2Score);
+      if (!Number.isInteger(p1) || !Number.isInteger(p2) || p1 < 0 || p2 < 0 || p1 === p2) return json(res, { error: 'Scores must be non-negative integers and cannot be tied.' }, 400);
+      const winnerName = p1 > p2 ? match.player1_name : match.player2_name;
+      const winnerChanged = winnerName !== match.winner_name;
+      match.player1_score = p1; match.player2_score = p2; match.winner_name = winnerName;
+      if (winnerChanged) {
+        for (const step of decision.path) {
+          const next = matches.find((n) => n.id === step.id);
+          if (!next) continue;
+          next[step.slotColumn] = winnerName;
+          if (step.byeResolved) { next.status = 'pending'; next.winner_name = null; next.player1_score = 0; next.player2_score = 0; }
+        }
+        resolveByes(matches);
+      }
+      const totalRounds = Math.log2(tournament.bracket_size);
+      const final = matches.find((m) => m.round_number === totalRounds && m.match_index === 0);
+      const isFinals = match.round_number === totalRounds;
+      if (tournament.status === 'completed' && final?.status === 'completed' && final.winner_name && !isBye(final.winner_name) && final.winner_name !== tournament.winner_name) {
+        tournament.winner_name = final.winner_name;
+      }
+      return json(res, { ok: true, matchId: match.id, winnerName, winnerChanged, isFinals, message: `Score corrected: ${winnerName} wins the match.` });
+    }
     if (path === '/api/site/events') {
       const events = competitions.get(url.searchParams.get('siteId'));
       if (!events) return json(res, { ok: false, error: 'Site not found' }, 404);
@@ -90,13 +200,17 @@ const server = createServer(async (req, res) => {
       return json(res, { ok: true, id: event.id });
     }
     if (path === '/api/credits/status') return json(res, empty ? { ...credits, shopItems: [], mappings: [] } : credits);
-    if (path === '/api/activities') return json(res, { activities: empty ? [] : activities, total: empty ? 0 : activities.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+    if (path === '/api/activities') {
+      const state = url.searchParams.get('state') || 'all';
+      const rows = empty ? [] : activities.filter((a) => state === 'all' || (state === 'open' ? a.state === 'open' : a.state !== 'open'));
+      return json(res, { activities: rows, total: rows.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+    }
     if (path === '/api/people/members') return json(res, { members: empty ? [] : members, total: empty ? 0 : members.length, page: { hasMore: false, nextCursor: null } });
     if (path === '/api/claims') return json(res, { claims: empty ? [] : claims, total: empty ? 0 : claims.length, page: { hasMore: false, nextCursor: null } });
     if (path === '/api/people/reviews') return json(res, { reviews: empty ? [] : [{ id: 'review-1', status: 'pending', subject: { displayName: name }, reason: { label: 'Eligibility needs review' }, typeLabel: 'Signup review', source: { title: 'Community signup' }, createdAt: now }], counts: { pending: empty ? 0 : 1 } });
     if (path === '/api/credits/activity') return json(res, { events: empty ? [] : members.slice(0, 5).map((m, i) => ({ id: `entry-${i}`, kickUsername: m.displayName, amount: 250, type: 'earn', direction: 'credit', description: 'Community activity reward', createdAt: now })), nextCursor: null });
     if (path === '/api/site/team') return json(res, { ok: true, members: empty ? [] : [{ id: 'moderator-1', user_id: 'moderator-1', email: 'moderator-with-a-long-address@example.test', role: 'moderator', display_name: name }], invites: [], role: 'owner' });
-    if (path === '/api/insights') return json(res, { window: { effectiveDays: 30 }, community: { newMembers: empty ? 0 : 24 }, participation: { participants: empty ? 0 : 68 }, rewards: { claimsCompleted: empty ? 0 : 19 } });
+    if (path === '/api/insights') return json(res, { ok: true, window: { effectiveDays: 30 }, community: { newMembers: empty ? 0 : 24 }, participation: { participants: empty ? 0 : 68 }, rewards: { claimsCompleted: empty ? 0 : 19 } });
     if (path === '/api/home/activity') return json(res, { events: empty ? [] : members.slice(0, 8).map(m => ({ kind: 'membership', at: now, title: m.displayName + ' joined the community', detail: 'Community membership' })) });
     if (path === '/bot/dash/api/me') return json(res, user);
     if (path === '/bot/dash/api/offers' || path === '/bot/dash/api/stats/daily') return json(res, []);
@@ -108,4 +222,5 @@ const server = createServer(async (req, res) => {
     res.writeHead(404).end('Not found');
   } catch (error) { console.error(error); res.writeHead(500).end('Fixture renderer failed'); }
 });
-server.listen(8915, '127.0.0.1', () => console.log('Dashboard audit fixture http://127.0.0.1:8915'));
+const port = Number(process.env.FIXTURE_PORT || 8915);
+server.listen(port, '127.0.0.1', () => console.log(`Dashboard audit fixture http://127.0.0.1:${port}`));

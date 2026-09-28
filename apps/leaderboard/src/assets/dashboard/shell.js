@@ -132,10 +132,6 @@ export async function requestBillingRedirect(url) {
 }
 
 
-const AREA_MAP = { home: "sites", sites: "sites", board: "sites", boards: "sites", games: "sites", site: "sites", performance: "sites" };
-
-export function areaForPage(page) { return AREA_MAP[page] || "sites"; }
-
 function defaultHash(page) { return defaultTab(page); }
 
 /** The section this document was opened at, from the path the Worker served. */
@@ -266,20 +262,18 @@ export function setActiveSideNav(page, tab = "") {
   // of them to the rail item that should be active.
   const navPage = navOwner(page);
   const activeKey = sidebarActiveKey(chromeStateFor(page, tab)?.canonicalPath || "", navPage);
-  const area = areaForPage(navPage);
-  // Dynamic sections may belong to a different product area than the SPA
-  // default; map their rail key to the right area for side-group visibility.
-  const DYN_AREA = { redemptions: "credits", engage: "sites", rewards: "sites", audience: "sites", settings: "sites" };
-  const resolvedArea = DYN_AREA[navPage] || area;
-  document.querySelectorAll(".lb-side-group").forEach((g) => { g.hidden = (g.dataset.area !== resolvedArea && g.dataset.area !== "all"); });
   document.querySelectorAll(".lb-nav").forEach((n) => {
     const active = n.dataset.nav === activeKey;
     n.classList.toggle("is-on", active);
     if (active) n.setAttribute("aria-current", "page");
     else n.removeAttribute("aria-current");
   });
+  // Same rule as the server-rendered rail: a group is current when it is the
+  // active item itself or owns the active child.
   document.querySelectorAll("[data-nav-group]").forEach((group) => {
-    group.toggleAttribute("data-current-group", group.dataset.navGroup === navPage);
+    const current = group.dataset.navGroup === activeKey || group.dataset.navGroup === navPage
+      || Boolean(group.querySelector(`.lb-nav[data-nav="${activeKey}"]`));
+    group.toggleAttribute("data-current-group", current);
   });
   document.dispatchEvent(new CustomEvent("yr:sidebar-route"));
 }

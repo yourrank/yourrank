@@ -51,6 +51,46 @@ export function resolveByes(matches) {
   return matches;
 }
 
+// Whether a completed match's score may still be corrected without rewriting
+// a real downstream result. Walks the winner's feeder path: a pending next
+// match is a plain slot rewrite; a next that was only completed by BYE
+// resolution was never really played, so it can be reset and re-resolved; a
+// genuinely played downstream match blocks the correction.
+// `path` lists the downstream matches the correction must rewrite, in order;
+// `slotColumn` is the column the feeder winner occupies and `byeResolved`
+// marks steps that must also be reset to pending before re-resolution.
+export function canCorrectMatch(matches, match) {
+  if (!match || match.status !== "completed") return { ok: false, path: [] };
+  if (!isKnown(match.player1_name) || !isKnown(match.player2_name)
+      || isBye(match.player1_name) || isBye(match.player2_name)) {
+    return { ok: false, path: [] };
+  }
+  const byKey = new Map((matches || []).map((m) => [`${m.round_number}:${m.match_index}`, m]));
+  const path = [];
+  let current = match;
+  for (;;) {
+    const next = byKey.get(`${current.round_number + 1}:${Math.floor(current.match_index / 2)}`);
+    if (!next) return { ok: true, path }; // final — nothing downstream
+    const slotColumn = current.match_index % 2 === 0 ? "player1_name" : "player2_name";
+    const step = {
+      id: next.id,
+      round_number: next.round_number,
+      match_index: next.match_index,
+      slotColumn,
+      byeResolved: false,
+    };
+    if (next.status !== "completed") {
+      path.push(step);
+      return { ok: true, path };
+    }
+    const otherSlot = slotColumn === "player1_name" ? "player2_name" : "player1_name";
+    if (!isBye(next[otherSlot])) return { ok: false, path };
+    step.byeResolved = true;
+    path.push(step);
+    current = next;
+  }
+}
+
 // Builds the full match list for `bracketSize` seats with `participants`
 // (already shuffled by the caller) as seeds 1..N and BYEs filling the rest.
 // Later rounds start as TBD/TBD; BYE resolution is already applied.

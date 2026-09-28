@@ -1771,66 +1771,81 @@ if (!window.__yrSpaShell) {
   // injected fragment DOM. leave() stops the poll and timers and removes the
   // document-level keydown listener so nothing leaks. Entry collection itself
   // happens server-side, so leaving the page never affects the giveaway.
-  // ---- Engage feature hub ----
-  // The hub renders its "none" state server-side; once site context is known
-  // the four feature APIs fill in live status. A failed call keeps the SSR
-  // copy and only swaps the meta line for an honest load error.
-  function applyEngageCard(feature, state) {
-    const card = document.querySelector(`#engage-hub .engage-card[data-feature="${feature}"]`);
-    if (!card || !state) return;
-    card.classList.toggle("is-live", state.tone === "live");
-    card.classList.toggle("is-done", state.tone === "done");
-    card.classList.toggle("is-warn", state.tone === "warn");
-    const label = card.querySelector("[data-status-label]");
-    if (label && state.label) label.textContent = state.label;
-    const meta = card.querySelector("[data-status-meta]");
-    if (meta && Array.isArray(state.meta)) {
-      meta.textContent = "";
-      for (const line of state.meta) {
-        const span = document.createElement("span");
-        span.textContent = line;
-        meta.appendChild(span);
-      }
+  // ---- Engage overview ----
+  // Rows render server-side in a pending state; once site context is known
+  // each destination's API fills its badge and meta line. One failed call
+  // marks only that row as unavailable and never blocks the others.
+  const HUB_UNAVAILABLE = Object.freeze({ tone: "neutral", status: "unavailable", label: "Status unavailable", meta: "Couldn't load status. Open the page to check." });
+
+  function applyEngageRow(feature, state) {
+    const row = document.querySelector(`#engage-hub .engage-row[data-feature="${feature}"]`);
+    if (!row) return;
+    const next = state || HUB_UNAVAILABLE;
+    row.dataset.status = next.status || "idle";
+    const badge = row.querySelector(".v3-badge");
+    if (badge) {
+      badge.dataset.tone = next.tone || "neutral";
+      badge.dataset.status = next.status || "idle";
+      const text = Array.from(badge.childNodes).find((node) => node.nodeType === Node.TEXT_NODE)
+        || badge.appendChild(document.createTextNode(""));
+      text.textContent = next.label || "";
     }
-    const action = card.querySelector("[data-action]");
-    if (action && state.action) {
-      action.textContent = state.action.label;
-      action.classList.toggle("btn--accent", state.action.variant !== "ghost");
-      action.classList.toggle("btn--ghost", state.action.variant === "ghost");
-    }
+    const meta = row.querySelector("[data-status-meta]");
+    if (meta) meta.textContent = next.meta || "";
   }
+
+  async function hubJson(response) {
+    if (!response?.ok) throw new Error(`HTTP ${response?.status || 0}`);
+    return responseData(response);
+  }
+
+  // Resolves to the parsed payload, or `undefined` when the call failed, so
+  // aggregate rows can report a partially-known state instead of guessing.
+  const settle = (promise) => promise.then(hubJson).then((data) => data, () => undefined);
 
   async function bootEngageHub() {
     if (!document.getElementById("engage-hub")) return;
+    let shell;
     try {
-      const shell = await loadBoardShell();
+      shell = await loadBoardShell();
       siteId = shell.activeSiteId || "";
     } catch (error) {
       window.__yrBoot?.fail(error?.message || "The dashboard shell could not be loaded.");
       return;
     }
-    const fetchers = {
-      chat: () => chatApi(""),
-      raffles: () => dashboardFetch(sitePath("/api/events/raffles")),
-      preds: () => dashboardFetch(sitePath("/api/predictions")),
-      tournaments: () => dashboardFetch(sitePath("/api/tournaments")),
+    const scope = document.querySelector("#engage-scope");
+    const siteName = shell.board?.name || shell.board?.slug || "";
+    if (scope && siteName && !scope.querySelector(".v3-scope-name")) {
+      const name = document.createElement("span");
+      name.className = "v3-scope-name";
+      name.textContent = siteName;
+      scope.appendChild(name);
+    }
+    const loaders = {
+      activities: async () => engageCardState("activities", await hubJson(await dashboardFetch(sitePath("/api/activities?state=open&limit=100", siteId)))),
+      giveaways: async () => {
+        const [chat, raffles, predictions] = await Promise.all([
+          settle(chatApi("")),
+          settle(dashboardFetch(sitePath("/api/events/raffles", siteId))),
+          settle(dashboardFetch(sitePath("/api/predictions", siteId))),
+        ]);
+        return engageCardState("giveaways", { chat, raffles, predictions });
+      },
+      tournaments: async () => engageCardState("tournaments", await hubJson(await dashboardFetch(sitePath("/api/tournaments", siteId)))),
     };
-    const features = Object.keys(fetchers);
-    const results = await Promise.allSettled(features.map((feature) => fetchers[feature]()));
-    await Promise.all(results.map(async (result, index) => {
-      const feature = features[index];
-      if (result.status !== "fulfilled" || !result.value?.ok) {
-        applyEngageCard(feature, { tone: "none", meta: ["Couldn't load status."] });
-        return;
-      }
-      const payload = await responseData(result.value).catch(() => ({}));
-      applyEngageCard(feature, engageCardState(feature, payload));
-    }));
+    const features = Object.keys(loaders);
+    const results = await Promise.allSettled(features.map((feature) => loaders[feature]()));
+    results.forEach((result, index) => {
+      applyEngageRow(features[index], result.status === "fulfilled" ? result.value : null);
+    });
     window.__yrBoot?.signal();
   }
 
   function bootGiveaways(context = {}) {
     if (context?.tab === "hub" || document.getElementById("engage-hub")) return bootEngageHub();
+    // Keep the active Giveaways subtype visible when the subnav overflows.
+    document.querySelector(".gw-subnav [aria-current='page']")
+      ?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
     init();
     initEventsHub();
   }

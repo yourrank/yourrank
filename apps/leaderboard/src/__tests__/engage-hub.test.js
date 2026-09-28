@@ -1,14 +1,15 @@
-// Behavioral coverage for the Engage feature hub at /dashboard/giveaways:
-// the server-rendered 4-card grid, the pure engageCardState payload mapping,
-// and the real giveaways.js boot pass filling card status from the four
-// feature APIs in a DOM.
+// Behavioral coverage for the Engage overview at /dashboard/giveaways: the
+// server-rendered destination list, the pure engageCardState payload mapping
+// (Activities count, Giveaways aggregate, Tournament lifecycle), and the real
+// giveaways.js boot pass filling each row from its APIs with per-row failure
+// isolation.
 //
 // Run: bun test src/__tests__/engage-hub.test.js
 
 import { afterAll, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
 import { renderEngageHubHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
-import { engageCardState } from "../assets/dashboard/engage-hub-state.js";
+import { ENGAGE_IDLE, engageCardState } from "../assets/dashboard/engage-hub-state.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways?siteId=site-1" });
 const { document } = window;
@@ -34,6 +35,7 @@ const server = {
   raffles: { raffles: [] },
   predictions: { predictions: [] },
   tournaments: { tournaments: [], chatRegistration: {} },
+  activities: { activities: [], total: 0, nextCursor: null },
 };
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -45,6 +47,7 @@ globalThis.fetch = async (input) => {
   if (path === "/api/events/raffles") return json(server.raffles);
   if (path === "/api/predictions") return json(server.predictions);
   if (path === "/api/tournaments") return json(server.tournaments);
+  if (path === "/api/activities") return json(server.activities);
   return json({ error: `unhandled ${path}` }, 404);
 };
 
@@ -52,49 +55,78 @@ afterAll(() => {
   for (const [key, value] of Object.entries(originalGlobals)) globalThis[key] = value;
 });
 
-const card = (feature) => document.querySelector(`.engage-card[data-feature="${feature}"]`);
-const cardText = (feature, sel) => card(feature)?.querySelector(sel)?.textContent;
+const row = (feature) => document.querySelector(`.engage-row[data-feature="${feature}"]`);
+const rowText = (feature, sel) => row(feature)?.querySelector(sel)?.textContent;
+const badge = (feature) => row(feature)?.querySelector(".v3-badge");
+const badgeLabel = (feature) => badge(feature)?.textContent.trim();
 
 describe("Engage hub markup", () => {
-  it("renders four feature cards in order with default status copy", () => {
+  it("renders three destination rows in order, pending until the client fills them", () => {
     const html = renderEngageHubHtml();
     document.body.innerHTML = html;
-    const features = [...document.querySelectorAll(".engage-card")].map((c) => c.dataset.feature);
-    expect(features).toEqual(["chat", "tournaments", "raffles", "preds"]);
+    const features = [...document.querySelectorAll(".engage-row")].map((c) => c.dataset.feature);
+    expect(features).toEqual(["activities", "giveaways", "tournaments"]);
     const expected = [
-      ["chat", "Chat Giveaway", "Run live giveaways from your chat.", "No active giveaway", "Create a giveaway to engage your viewers.", "Create giveaway", "/dashboard/giveaways/chat"],
-      ["tournaments", "Tournament", "Run brackets and community competitions.", "No active tournament", "Set up a bracket for your community.", "Create tournament", "/dashboard/giveaways/tournaments"],
-      ["raffles", "Raffle", "Run ticket-based drawings for your community.", "No active raffle", "Set up a raffle to reward your community.", "Create raffle", "/dashboard/giveaways/raffles"],
-      ["preds", "Prediction", "Let your viewers predict outcomes.", "No active prediction", "Create a prediction to get your community involved.", "Create prediction", "/dashboard/giveaways/predictions"],
+      ["activities", "Activities", "/dashboard/activities"],
+      ["giveaways", "Giveaways", "/dashboard/giveaways/chat"],
+      ["tournaments", "Tournaments", "/dashboard/giveaways/tournaments"],
     ];
-    for (const [feature, title, desc, state, meta, action, href] of expected) {
-      expect(cardText(feature, ".engage-card__title")).toBe(title);
-      expect(cardText(feature, ".engage-card__desc")).toBe(desc);
-      expect(cardText(feature, "[data-status-label]")).toBe(state);
-      expect(cardText(feature, "[data-status-meta]")).toBe(meta);
-      const link = card(feature).querySelector(".engage-card__link");
-      expect(link.getAttribute("href")).toBe(href);
-      const btn = card(feature).querySelector("[data-action]");
-      expect(btn.textContent).toBe(action);
-      expect(btn.getAttribute("href")).toBe(href);
-      expect(btn.className).toContain("btn--accent");
-      expect(card(feature).querySelectorAll(".engage-card__icon svg").length).toBe(1);
-      expect(card(feature).querySelectorAll(".engage-card__chevron svg").length).toBe(1);
+    for (const [feature, title, href] of expected) {
+      expect(rowText(feature, ".engage-row__title")).toBe(title);
+      expect(row(feature).querySelector(".engage-row__link").getAttribute("href")).toBe(href);
+      expect(row(feature).dataset.status).toBe("pending");
+      expect(badge(feature).dataset.status).toBe("pending");
+      expect(badgeLabel(feature)).toBe("Checking…");
+      expect(row(feature).querySelectorAll(".engage-row__icon svg").length).toBe(1);
+      // One link per row: no secondary action button duplicating the destination.
+      expect(row(feature).querySelectorAll("a").length).toBe(1);
     }
-    expect(html).toContain('class="v3-tabs engage-tabs"');
+    // Shared primitives: page header with site scope, neutral list shell.
+    expect(html).toContain("<h1>Engage</h1>");
+    expect(html).toContain('id="engage-scope"');
+    expect(html).toContain('data-scope="site"');
+    expect(html).toContain('class="v3-list-shell engage-hub" aria-label="Engage destinations" id="engage-hub"');
+    expect(html).not.toContain("v3-table-card");
+    expect(html).not.toContain("engage-card");
+    expect(html).not.toContain("engage-tabs");
+    expect(html).not.toContain("gw-subnav");
     expect(html).not.toContain("gw-nav-tabs");
     expect(html).not.toContain("gw-drawer-backdrop");
   });
 
-  it("renders feature pages with the Engage back-link and no feature tab strip", () => {
-    for (const tab of ["chat", "raffles", "preds", "tournaments"]) {
+  it("renders Giveaways pages with the subnav below the head and active subtype", () => {
+    const subnavPaths = {
+      chat: "/dashboard/giveaways/chat",
+      raffles: "/dashboard/giveaways/raffles",
+      preds: "/dashboard/giveaways/predictions",
+    };
+    for (const tab of ["chat", "raffles", "preds"]) {
       const html = renderGiveawaysHtml(tab);
-      expect(html, tab).toContain('class="engage-back" href="/dashboard/giveaways"');
+      expect(html, tab).not.toContain("engage-back");
+      expect(html, tab).toContain("<h1>Giveaways</h1>");
       expect(html, tab).not.toContain("gw-nav-tabs");
       expect(html, tab).not.toContain("gw-tab-btn");
       expect(html, tab).not.toContain("data-tabs-more");
-      expect(html, tab).toContain('class="v3-tabs engage-tabs"');
+      expect(html, tab).not.toContain("engage-tabs");
+      expect(html, tab).toContain('class="v3-tabs gw-subnav" aria-label="Giveaways"');
+      // The subtype subnav sits under the page head: h1 first, tabs second.
+      expect(html.indexOf("v3-head"), tab).toBeLessThan(html.indexOf("gw-subnav"));
+      expect(html, tab).toContain(`aria-current="page"`);
+      // The active subtype carries aria-current; the other two do not.
+      document.body.innerHTML = html;
+      const items = [...document.querySelectorAll(".gw-subnav a")].map((a) => ({
+        href: a.getAttribute("href"),
+        current: a.getAttribute("aria-current") === "page",
+        label: a.textContent,
+      }));
+      expect(items.map((i) => i.label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
+      expect(items.filter((i) => i.current).map((i) => i.href)).toEqual([subnavPaths[tab]]);
     }
+    // Tournaments owns its own page chrome: no subnav, no back-link.
+    const tournaments = renderGiveawaysHtml("tournaments");
+    expect(tournaments).not.toContain("engage-back");
+    expect(tournaments).not.toContain("gw-subnav");
+    expect(tournaments).not.toContain("engage-tabs");
   });
 
   it("renders the hub through renderGiveawaysHtml without drawers", () => {
@@ -102,94 +134,118 @@ describe("Engage hub markup", () => {
     expect(html).toContain('id="engage-hub"');
     expect(html).not.toContain("gw-drawer-backdrop");
     expect(html).not.toContain("gw-nav-tabs");
+    expect(html).not.toContain("gw-subnav");
   });
 });
 
 describe("engageCardState", () => {
-  it("maps chat giveaway sessions", () => {
-    expect(engageCardState("chat", { session: null, entries: [] })).toEqual({
-      tone: "none", label: "No active giveaway",
-      meta: ["Create a giveaway to engage your viewers."],
-      action: { label: "Create giveaway", variant: "accent" },
+  it("counts open drops from the Activities API", () => {
+    expect(engageCardState("activities", { activities: [], total: 0 })).toEqual({ tone: "neutral", status: "idle", ...ENGAGE_IDLE.activities });
+    const one = engageCardState("activities", {
+      activities: [{ id: "drop:1", progress: { claimed: 3, capacity: 10 } }], total: 1,
     });
-    const live = engageCardState("chat", { session: { status: "active", keyword: "!win" }, entries: [{}, {}, {}] });
-    expect(live.tone).toBe("live");
-    expect(live.label).toBe("Live giveaway");
-    expect(live.meta).toEqual(["Keyword !win · 3 entries"]);
-    expect(live.action).toEqual({ label: "Open giveaway", variant: "ghost" });
-    expect(engageCardState("chat", { session: { status: "completed", keyword: "!win" }, entries: [] }).tone).toBe("none");
+    expect(one.tone).toBe("success");
+    expect(one.label).toBe("1 active drop");
+    expect(one.meta).toBe("3 of 10 claims taken");
+    const two = engageCardState("activities", {
+      activities: [{ progress: { claimed: 3, capacity: 10 } }, { progress: { claimed: 0, capacity: 5 } }], total: 2,
+    });
+    expect(two.label).toBe("2 active drops");
+    expect(two.meta).toBe("3 of 15 claims taken");
+    // `total` is the server count; rows are only a fallback.
+    expect(engageCardState("activities", { activities: [{}, {}] }).label).toBe("2 active drops");
+    expect(engageCardState("activities", { activities: [{}], total: 7 }).label).toBe("7 active drops");
   });
 
-  it("maps raffles", () => {
-    expect(engageCardState("raffles", { raffles: [] }).tone).toBe("none");
-    const open = engageCardState("raffles", { raffles: [{ title: "Sub raffle", status: "active", total_tickets: 12 }] });
-    expect(open.tone).toBe("live");
-    expect(open.label).toBe("Raffle open");
-    expect(open.meta).toEqual(["Sub raffle · 12 tickets"]);
-    expect(open.action).toEqual({ label: "Open raffle", variant: "ghost" });
+  it("aggregates chat giveaway, raffles, and predictions", () => {
+    const idle = { chat: { session: null, entries: [] }, raffles: { raffles: [] }, predictions: { predictions: [] } };
+    expect(engageCardState("giveaways", idle)).toEqual({ tone: "neutral", status: "idle", ...ENGAGE_IDLE.giveaways });
+    // Ended chat session and closed raffle/prediction are not "running".
+    expect(engageCardState("giveaways", {
+      chat: { session: { status: "completed" }, entries: [{}] },
+      raffles: { raffles: [{ status: "drawn" }] },
+      predictions: { predictions: [{ status: "resolved" }, { status: "cancelled" }] },
+    })).toEqual({ tone: "neutral", status: "idle", ...ENGAGE_IDLE.giveaways });
+
+    const chat = engageCardState("giveaways", { ...idle, chat: { session: { status: "active", keyword: "!win" }, entries: [{}, {}, {}] } });
+    expect(chat.tone).toBe("success");
+    expect(chat.label).toBe("1 running");
+    expect(chat.meta).toBe("Chat giveaway live · 3 entries");
+
+    // A raffle alone must not read as "nothing running".
+    const raffle = engageCardState("giveaways", { ...idle, raffles: { raffles: [{ status: "active" }, { status: "drawn" }] } });
+    expect(raffle.label).toBe("1 running");
+    expect(raffle.meta).toBe("1 raffle open");
+
+    const preds = engageCardState("giveaways", { ...idle, predictions: { predictions: [{ status: "open" }, { status: "locked" }, { status: "resolved" }] } });
+    expect(preds.label).toBe("2 running");
+    expect(preds.meta).toBe("1 prediction open · 1 prediction locked");
+
+    const all = engageCardState("giveaways", {
+      chat: { session: { status: "active" }, entries: [] },
+      raffles: { raffles: [{ status: "active" }, { status: "active" }] },
+      predictions: { predictions: [{ status: "locked" }] },
+    });
+    expect(all.label).toBe("3 running");
+    expect(all.meta).toBe("Chat giveaway live · 0 entries · 2 raffles open · 1 prediction locked");
   });
 
-  it("maps predictions", () => {
-    expect(engageCardState("preds", { predictions: [] }).tone).toBe("none");
-    const open = engageCardState("preds", { predictions: [{ title: "Win the map?", status: "open" }] });
-    expect(open.tone).toBe("live");
-    expect(open.label).toBe("Prediction open");
-    expect(open.action).toEqual({ label: "Open prediction", variant: "ghost" });
-    const locked = engageCardState("preds", { predictions: [{ title: "Win the map?", status: "locked" }] });
-    expect(locked.tone).toBe("warn");
-    expect(locked.label).toBe("Awaiting result");
-    expect(locked.meta).toEqual(["Win the map?"]);
+  it("reports partially-known giveaway state instead of guessing", () => {
+    // One source failed, another is live: keep the live fact, flag the gap.
+    const partial = engageCardState("giveaways", {
+      chat: undefined, raffles: { raffles: [{ status: "active" }] }, predictions: { predictions: [] },
+    });
+    expect(partial.tone).toBe("success");
+    expect(partial.label).toBe("1 running");
+    expect(partial.meta).toBe("1 raffle open · Couldn't check chat giveaway.");
+    // Nothing live among the sources that loaded: say so, but not "idle".
+    const quiet = engageCardState("giveaways", { chat: { session: null }, raffles: undefined, predictions: undefined });
+    expect(quiet.status).toBe("partial");
+    expect(quiet.label).toBe("Nothing running");
+    expect(quiet.meta).toBe("Couldn't check raffles or predictions.");
+    // Every source failed: null so the caller shows the load-failure state.
+    expect(engageCardState("giveaways", {})).toBeNull();
+    expect(engageCardState("chat", {})).toBeNull();
+    expect(engageCardState("nope", {})).toBeNull();
   });
 
-  it("maps tournaments", () => {
-    expect(engageCardState("tournaments", { tournaments: [] }).tone).toBe("none");
-    expect(engageCardState("tournaments", { tournaments: [{ status: "cancelled", title: "Old" }] }).tone).toBe("none");
+  it("maps the real tournament lifecycle", () => {
+    expect(engageCardState("tournaments", { tournaments: [] })).toEqual({ tone: "neutral", status: "idle", ...ENGAGE_IDLE.tournaments });
+    expect(engageCardState("tournaments", { tournaments: [{ status: "cancelled", title: "Old" }] })).toEqual({ tone: "neutral", status: "idle", ...ENGAGE_IDLE.tournaments });
     const done = engageCardState("tournaments", {
       tournaments: [{ title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 5, selected_count: 2 }],
     });
-    expect(done.tone).toBe("done");
-    expect(done.label).toBe("Completed");
-    expect(done.meta).toEqual(["Community tournament", "2 participants · 8 slots"]);
-    expect(done.action).toEqual({ label: "Open tournament", variant: "ghost" });
+    expect(done).toEqual({ tone: "neutral", status: "completed", label: "Completed", meta: "Community tournament · 2 participants · 8 slots" });
     const signups = engageCardState("tournaments", {
       tournaments: [{ title: "Cup", status: "draft", signup_state: "open", bracket_size: 8, participant_count: 5, selected_count: 0 }],
     });
-    expect(signups.tone).toBe("live");
-    expect(signups.label).toBe("Signups open");
-    expect(signups.meta).toEqual(["Cup", "5 participants · 8 slots"]);
+    expect(signups).toEqual({ tone: "success", status: "signups_open", label: "Signups open", meta: "Cup · 5 participants · 8 slots" });
     const locked = engageCardState("tournaments", {
       tournaments: [{ title: "Cup", status: "draft", signup_state: "locked", bracket_size: 8, participant_count: 8 }],
     });
-    expect(locked.tone).toBe("warn");
-    expect(locked.label).toBe("Signups locked");
+    expect(locked.status).toBe("signups_locked");
+    expect(locked.tone).toBe("warning");
     // An active bracket keeps signup_state "locked"; bracket lifecycle must win.
     const bracket = engageCardState("tournaments", {
       tournaments: [{ title: "Community tournament", status: "active", signup_state: "locked", bracket_size: 8, participant_count: 8, selected_count: 8 }],
     });
-    expect(bracket.tone).toBe("live");
-    expect(bracket.label).toBe("Bracket in progress");
-    expect(bracket.meta).toEqual(["Community tournament", "8 participants · 8 slots"]);
-    expect(bracket.action.label).toBe("Open tournament");
-    const doneLocked = engageCardState("tournaments", {
-      tournaments: [{ title: "Cup", status: "completed", signup_state: "locked", bracket_size: 8, participant_count: 8, selected_count: 8 }],
-    });
-    expect(doneLocked.tone).toBe("done");
-    expect(doneLocked.label).toBe("Completed");
+    expect(bracket).toEqual({ tone: "success", status: "active", label: "Bracket in progress", meta: "Community tournament · 8 participants · 8 slots" });
     const draftClosed = engageCardState("tournaments", {
       tournaments: [{ title: "Cup", status: "draft", signup_state: "closed", bracket_size: 8, participant_count: 0, selected_count: 0 }],
     });
-    expect(draftClosed.tone).toBe("warn");
-    expect(draftClosed.label).toBe("Draft");
-    expect(draftClosed.meta).toEqual(["Cup"]);
+    expect(draftClosed).toEqual({ tone: "info", status: "draft", label: "Draft", meta: "Cup" });
   });
 });
 
 describe("Engage hub boot", () => {
-  it("fills card status from the four feature APIs", async () => {
+  const liveChat = { connection: { connected: true, chatReady: true, channelName: "creator" }, session: null, entries: [], winner: null };
+
+  it("fills every row from its API and stamps the site scope", async () => {
     document.body.innerHTML = renderEngageHubHtml();
-    server.chat = { connection: { connected: true, chatReady: true, channelName: "creator" }, session: null, entries: [], winner: null };
-    server.raffles = { raffles: [] };
-    server.predictions = { predictions: [] };
+    server.chat = liveChat;
+    server.activities = { activities: [{ id: "drop:1", progress: { claimed: 4, capacity: 10 } }, { id: "drop:2", progress: { claimed: 0, capacity: 0 } }], total: 2, nextCursor: null };
+    server.raffles = { raffles: [{ id: "r-1", status: "active" }] };
+    server.predictions = { predictions: [{ id: "p-1", status: "locked" }] };
     server.tournaments = {
       tournaments: [{ id: "t-1", title: "Community tournament", status: "completed", signup_state: "closed", bracket_size: 8, participant_count: 5, selected_count: 2 }],
       chatRegistration: {},
@@ -197,38 +253,84 @@ describe("Engage hub boot", () => {
     const mod = await import("../assets/giveaways.js");
     await mod.enter({ tab: "hub" });
 
-    const t = card("tournaments");
-    expect(t.classList.contains("is-done")).toBe(true);
-    expect(cardText("tournaments", "[data-status-label]")).toBe("Completed");
-    const metaLines = [...t.querySelectorAll("[data-status-meta] span")].map((s) => s.textContent);
-    expect(metaLines).toEqual(["Community tournament", "2 participants · 8 slots"]);
-    const action = t.querySelector("[data-action]");
-    expect(action.textContent).toBe("Open tournament");
-    expect(action.className).toContain("btn--ghost");
-    expect(action.getAttribute("href")).toBe("/dashboard/giveaways/tournaments");
+    expect(row("activities").dataset.status).toBe("live");
+    expect(badge("activities").dataset.tone).toBe("success");
+    expect(badgeLabel("activities")).toBe("2 active drops");
+    expect(rowText("activities", "[data-status-meta]")).toBe("4 of 10 claims taken");
 
-    expect(cardText("chat", "[data-status-label]")).toBe("No active giveaway");
-    const chatAction = card("chat").querySelector("[data-action]");
-    expect(chatAction.textContent).toBe("Create giveaway");
-    expect(chatAction.className).toContain("btn--accent");
+    expect(badgeLabel("giveaways")).toBe("2 running");
+    expect(rowText("giveaways", "[data-status-meta]")).toBe("1 raffle open · 1 prediction locked");
+
+    expect(row("tournaments").dataset.status).toBe("completed");
+    expect(badgeLabel("tournaments")).toBe("Completed");
+    expect(rowText("tournaments", "[data-status-meta]")).toBe("Community tournament · 2 participants · 8 slots");
+    // Destinations are unchanged by status.
+    expect(row("tournaments").querySelector("a").getAttribute("href")).toBe("/dashboard/giveaways/tournaments");
+    expect(document.querySelector("#engage-scope .v3-scope-name")?.textContent).toBe("Kick Cup");
     mod.leave();
   });
 
-  it("keeps the SSR copy and reports the meta line when a fetch fails", async () => {
+  it("shows idle rows when nothing is running", async () => {
     document.body.innerHTML = renderEngageHubHtml();
+    server.chat = liveChat;
+    server.activities = { activities: [], total: 0, nextCursor: null };
+    server.raffles = { raffles: [] };
+    server.predictions = { predictions: [] };
+    server.tournaments = { tournaments: [], chatRegistration: {} };
+    const mod = await import("../assets/giveaways.js");
+    await mod.enter({ tab: "hub" });
+    expect(badgeLabel("activities")).toBe("No active drops");
+    expect(badgeLabel("giveaways")).toBe("Nothing running");
+    expect(badgeLabel("tournaments")).toBe("No tournament");
+    for (const f of ["activities", "giveaways", "tournaments"]) expect(row(f).dataset.status).toBe("idle");
+    mod.leave();
+  });
+
+  it("isolates a failed feature API to its own row", async () => {
+    document.body.innerHTML = renderEngageHubHtml();
+    server.chat = liveChat;
+    server.activities = { activities: [{ id: "drop:1", progress: { claimed: 1, capacity: 5 } }], total: 1, nextCursor: null };
+    server.raffles = { raffles: [] };
+    server.predictions = { predictions: [{ status: "open" }] };
     const realFetch = globalThis.fetch;
     globalThis.fetch = async (input, init = {}) => {
       const path = String(input).split("?")[0];
       if (path === "/api/tournaments") return json({ error: "boom" }, 500);
+      if (path === "/api/giveaways/chat") throw new TypeError("network down");
       return realFetch(input, init);
     };
     try {
       const mod = await import("../assets/giveaways.js");
       await mod.enter({ tab: "hub" });
-      const t = card("tournaments");
-      expect(t.classList.contains("is-done")).toBe(false);
-      expect(cardText("tournaments", "[data-status-label]")).toBe("No active tournament");
-      expect(cardText("tournaments", "[data-status-meta]")).toBe("Couldn't load status.");
+      expect(row("tournaments").dataset.status).toBe("unavailable");
+      expect(badgeLabel("tournaments")).toBe("Status unavailable");
+      expect(rowText("tournaments", "[data-status-meta]")).toBe("Couldn't load status. Open the page to check.");
+      // The other rows still resolve from their own data.
+      expect(badgeLabel("activities")).toBe("1 active drop");
+      expect(badgeLabel("giveaways")).toBe("1 running");
+      expect(rowText("giveaways", "[data-status-meta]")).toBe("1 prediction open · Couldn't check chat giveaway.");
+      mod.leave();
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("marks Giveaways unavailable only when every source fails", async () => {
+    document.body.innerHTML = renderEngageHubHtml();
+    server.activities = { activities: [], total: 0, nextCursor: null };
+    server.tournaments = { tournaments: [], chatRegistration: {} };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init = {}) => {
+      const path = String(input).split("?")[0];
+      if (["/api/giveaways/chat", "/api/events/raffles", "/api/predictions"].includes(path)) return json({ error: "boom" }, 503);
+      return realFetch(input, init);
+    };
+    try {
+      const mod = await import("../assets/giveaways.js");
+      await mod.enter({ tab: "hub" });
+      expect(row("giveaways").dataset.status).toBe("unavailable");
+      expect(badgeLabel("activities")).toBe("No active drops");
+      expect(badgeLabel("tournaments")).toBe("No tournament");
       mod.leave();
     } finally {
       globalThis.fetch = realFetch;

@@ -1,49 +1,29 @@
 import { loadBoardShell } from "./dashboard/board-shell.js";
 import { ensureDialog, showConfirmModal } from "./dashboard/utils.js";
 import { connectKickChat } from "./chat-entry.js";
+import { renderBracket as bracketViewHtml, layoutBracket } from "./tournament-bracket-view.js";
+import {
+  buildViewModel,
+  workspaceHtml,
+  emptyStateHtml,
+  createDialogHtml,
+  selectDialogHtml,
+  selectListHtml,
+  fullBracketDialogHtml,
+  entryRowsHtml,
+} from "./tournament-view.js";
 
 const $ = (id) => document.getElementById(id);
-const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-}[char]));
 const csrf = () => document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
 
 // Mirrors the server: tournaments.bracket_size CHECK and SUPPORTED_BRACKET_SIZES.
 export const SUPPORTED_BRACKET_SIZES = [4, 8, 16, 32];
-const SOURCE_LABELS = {
-  chat: "Chat",
-  page: "Signup page",
-  manual: "Added by you",
-  leaderboard: "Leaderboard",
-};
-const STATUS_LABELS = {
-  pending: "Waiting",
-  confirmed: "Ready",
-  selected: "Picked",
-  waitlist: "Waiting for a spot",
-  removed: "Removed",
-  blocked: "Blocked",
-};
-const LIFECYCLE_LABELS = {
-  draft: "Draft",
-  signups_open: "Signups open",
-  signups_locked: "Signups locked",
-  bracket: "Bracket live",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-// Sentinel for BYE slots — must match BYE in lib/tournament-bracket.js.
-// BYE_LABEL is what the UI renders for it; a player named "BYE" stays normal.
-const BYE = "__YOURRANK_INTERNAL_BYE__";
-const BYE_LABEL = "BYE";
-const ACTIVE = ["pending", "confirmed", "selected"];
 
 let siteId = "";
 let board = {};
+// Bumped on every enter/leave; async work compares against its own copy so a
+// stale boot can never mutate state or the DOM after a navigation.
+let lifecycleToken = 0;
 let tournament = null;
 let entries = [];
 // Server-computed entry counts from /entries — eligibility is authoritative
@@ -59,9 +39,17 @@ let entriesRefreshTimer = null;
 let entriesRefreshRunning = false;
 let entriesRefreshQueued = false;
 let releaseCreateTrap = null;
+let releaseSelectTrap = null;
+let releaseBracketTrap = null;
+// The bracket layouts own ResizeObservers; dispose before every re-render and
+// on leave() so they never accumulate.
+let disposeEmbeddedLayout = () => {};
+let disposeExpandedLayout = () => {};
 let settingsBaseline = "";
 let settingsSavedTimer = null;
 let settingsReadonly = false;
+// Match id whose completed card is being re-scored via PATCH; null = off.
+let correctingMatchId = null;
 
 function apiPath(path) {
   return siteId ? `${path}${path.includes("?") ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : path;
@@ -95,39 +83,17 @@ export function lifecycleOf(tourn, matchCount = 0) {
   return "draft";
 }
 
-function setChatStatus(text, live = false) {
-  const status = $("tournament-chat-status");
-  if (!status) return;
-  status.textContent = text;
-  status.classList.toggle("is-live", live);
-}
-
 function setMessage(text = "", error = false) {
   const message = $("tournament-message");
   if (!message) return;
   message.textContent = text;
   message.hidden = !text;
-  message.className = `tournament-message${error ? " is-error" : ""}`;
+  message.className = `tn-message${error ? " is-error" : ""}`;
 }
 
 function stopChat() {
   chatConnection?.close();
   chatConnection = null;
-}
-
-// Chat registration is server-side (the Kick webhook), so the status reflects
-// the stored channel/connection state — never the browser socket.
-function updateChatStatus(lifecycle) {
-  const channel = String(tournament?.chat_channel || "").trim().toLowerCase();
-  const siteChannel = String(chatRegistration?.channelName || "").trim().toLowerCase();
-  if (lifecycle === "signups_open"
-      && chatRegistration?.connected && chatRegistration.chatReady && channel && channel === siteChannel) {
-    setChatStatus("Chat registration active", true);
-  } else if (lifecycle === "signups_open") {
-    setChatStatus("Chat registration unavailable");
-  } else {
-    setChatStatus("Chat registration off");
-  }
 }
 
 // Entries are created by the webhook; poll so they appear without the socket.
@@ -142,6 +108,35 @@ function updateEntriesPolling(lifecycle) {
   }
 }
 
+// ---- Render --------------------------------------------------------------
+//
+// One render path: the view module turns state into markup for #tournament-root
+// and the controller wires behavior through the delegated listeners below.
+// #tournament-dialogs is a sibling host so an open dialog survives re-renders.
+
+function render() {
+  const root = $("tournament-root");
+  if (!root) return;
+  const lifecycle = lifecycleOf(tournament, matches.length);
+  updateEntriesPolling(lifecycle);
+  const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab });
+  disposeEmbeddedLayout();
+  disposeEmbeddedLayout = () => {};
+  if (!tournament) {
+    root.innerHTML = emptyStateHtml();
+    return;
+  }
+  root.innerHTML = workspaceHtml(
+    vm,
+    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded", correctingId: correctingMatchId }) : ""
+  );
+  const bracket = $("tournament-bracket");
+  disposeEmbeddedLayout = bracket && !bracket.hidden ? layoutBracket(bracket) : () => {};
+  settingsReadonly = vm.finished;
+  settingsBaseline = settingsSnapshot();
+  updateDirty();
+}
+
 function switchTab(name) {
   activeTab = name;
   for (const tab of document.querySelectorAll("[data-tournament-tab]")) {
@@ -153,187 +148,9 @@ function switchTab(name) {
   }
 }
 
-function panelEmptyHtml(title, body) {
-  return `<b>${esc(title)}</b><span>${esc(body)}</span>`;
-}
-
-function renderEntries(lifecycle) {
-  const empty = $("tournament-entries-empty");
-  const list = $("tournament-entry-list");
-  if (!empty || !list) return;
-  if (!entries.length) {
-    list.hidden = true;
-    empty.hidden = false;
-    if (lifecycle === "signups_open") {
-      empty.innerHTML = panelEmptyHtml("Waiting for viewers.", `Ask viewers to type ${tournament.entry_keyword || "!join"} in chat.`);
-    } else if (lifecycle === "signups_locked") {
-      empty.innerHTML = panelEmptyHtml("No entries.", "Reopen signups to collect entries from your audience.");
-    } else {
-      empty.innerHTML = panelEmptyHtml("No entries yet.", "Open signups when you're ready for viewers to join.");
-    }
-    return;
-  }
-
-  empty.hidden = true;
-  list.hidden = false;
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  list.innerHTML = entries.map((entry) => {
-    const flagged = tournament?.anti_alt_enabled && entry.alt_flag;
-    const status = STATUS_LABELS[entry.status] || "Waiting";
-    const name = esc(entry.display_name);
-    const action = finished
-      ? ""
-      : ["removed", "blocked"].includes(entry.status)
-        ? `<button class="tournament-row-action" type="button" data-entry-action="restore" data-entry-id="${esc(entry.id)}" aria-label="Restore ${name}">Restore</button>`
-        : `<button class="tournament-row-action" type="button" data-entry-action="remove" data-entry-id="${esc(entry.id)}" aria-label="Remove ${name}">Remove</button>
-           <button class="tournament-row-action tournament-row-action--quiet" type="button" data-entry-action="block" data-entry-id="${esc(entry.id)}" aria-label="Block ${name}">Block</button>`;
-    return `
-      <li class="tournament-entry-row${flagged ? " is-flagged" : ""}" data-entry-id="${esc(entry.id)}">
-        <div class="tournament-entry-main">
-          <strong>${name}</strong>
-          <span>${esc(SOURCE_LABELS[entry.source] || entry.source)} · ${esc(status)}</span>
-          ${flagged ? `<div class="tournament-entry-flag"><b>Review flag</b><span>— ${esc(entry.alt_reason || "Possible duplicate account.")}</span></div>` : ""}
-        </div>
-        <div class="tournament-entry-actions">${action}</div>
-      </li>`;
-  }).join("");
-}
-
-function renderSummary(lifecycle, activeCount) {
-  $("tournament-title-display").textContent = tournament.title || "Community Tournament";
-  const chip = $("tournament-status");
-  chip.textContent = LIFECYCLE_LABELS[lifecycle] || lifecycle;
-  chip.dataset.lifecycle = lifecycle;
-  const bits = [tournament.game_name || "Game", `${tournament.bracket_size}-player bracket`];
-  $("tournament-meta").textContent = bits.join(" · ");
-  $("tournament-fact-channel").textContent = tournament.chat_channel || "—";
-  $("tournament-fact-keyword").textContent = tournament.entry_keyword || "!join";
-  $("tournament-fact-cap").textContent = tournament.entry_cap ? String(tournament.entry_cap) : "Unlimited";
-  $("tournament-fact-spots").textContent = String(tournament.bracket_size);
-  $("tournament-count").textContent = tournament.entry_cap ? `${activeCount} of ${tournament.entry_cap}` : String(activeCount);
-}
-
-function renderSettingsForm(lifecycle) {
-  $("tournament-title").value = tournament.title || "";
-  $("tournament-game").value = tournament.game_name || "";
-  $("tournament-keyword").value = tournament.entry_keyword || "!join";
-  $("tournament-entry-cap-mode").value = tournament.entry_cap ? "custom" : "";
-  const cap = $("tournament-entry-cap");
-  cap.value = tournament.entry_cap || "";
-  cap.hidden = !tournament.entry_cap;
-  const channel = $("tournament-chat-channel");
-  channel.value = tournament.chat_channel || "";
-  channel.placeholder = tournament.chat_channel || !String(board.kickChannelName || "").trim()
-    ? "channelname"
-    : board.kickChannelName;
-  $("tournament-anti-alt").checked = tournament.anti_alt_enabled === true;
-
-  const size = $("tournament-bracket-size");
-  const sizeHint = $("tournament-bracket-size-hint");
-  size.value = String(tournament.bracket_size);
-  const sizeLocked = lifecycle === "bracket" || lifecycle === "completed" || lifecycle === "cancelled";
-  size.disabled = sizeLocked;
-  sizeHint.hidden = !sizeLocked;
-  sizeHint.textContent = sizeLocked ? "Bracket size is locked: the bracket has already been created." : "";
-
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  settingsReadonly = finished;
-  $("tournament-settings-form").dataset.readonly = finished ? "true" : "";
-  for (const el of $("tournament-settings-form").querySelectorAll("input, select, button")) {
-    if (el.id === "tournament-bracket-size") continue;
-    el.disabled = finished;
-  }
-
-  settingsBaseline = settingsSnapshot();
-  updateDirty();
-}
-
-function renderPrimary(lifecycle, eligibleCount) {
-  const primary = $("tournament-primary");
-  const reopen = $("tournament-reopen");
-  const fresh = $("tournament-new");
-  const step = $("tournament-step-label");
-  primary.hidden = true;
-  primary.disabled = false;
-  reopen.hidden = true;
-  fresh.hidden = true;
-  step.textContent = "";
-  delete primary.dataset.action;
-
-  if (lifecycle === "draft") {
-    primary.hidden = false;
-    if (!String(tournament.chat_channel || "").trim()) {
-      const siteChannel = String(board.kickChannelName || "").trim();
-      if (siteChannel) {
-        primary.textContent = `Use ${siteChannel}`;
-        primary.dataset.action = "use-site-channel";
-        step.innerHTML = "<b>Kick channel required.</b> Use your connected Kick channel to open signups.";
-      } else {
-        primary.textContent = "Add Kick channel";
-        primary.dataset.action = "add-channel";
-        step.innerHTML = "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
-      }
-    } else {
-      primary.textContent = "Open signups";
-      primary.dataset.action = "open";
-      step.textContent = "Open signups when you're ready for viewers to join.";
-    }
-  } else if (lifecycle === "signups_open") {
-    primary.hidden = false;
-    primary.textContent = "Lock signups";
-    primary.dataset.action = "lock";
-    step.textContent = `Viewers join by typing ${tournament.entry_keyword || "!join"} in chat.`;
-  } else if (lifecycle === "signups_locked") {
-    const cap = tournament.bracket_size;
-    reopen.hidden = false;
-    if (eligibleCount < 2) {
-      step.textContent = "Need at least 2 eligible players to start.";
-    } else if (eligibleCount <= cap) {
-      primary.hidden = false;
-      primary.textContent = `Create bracket with ${eligibleCount} players`;
-      primary.dataset.action = "create-bracket";
-      step.textContent = `${eligibleCount} eligible players for up to ${cap} bracket spots. Players will be randomly placed in the bracket.`;
-    } else {
-      primary.hidden = false;
-      primary.textContent = "Select participants";
-      primary.dataset.action = "select-participants";
-      step.textContent = `${eligibleCount} eligible players for ${cap} bracket spots. Select the participants who will compete.`;
-    }
-  } else if (lifecycle === "bracket") {
-    step.textContent = "Enter match results in the Bracket tab to advance winners.";
-  } else if (lifecycle === "completed") {
-    fresh.hidden = false;
-    step.textContent = `Champion: ${tournament.winner_name || "—"}`;
-  } else if (lifecycle === "cancelled") {
-    fresh.hidden = false;
-    step.textContent = "Tournament cancelled.";
-  }
-}
-
-function renderTournament() {
-  const empty = $("tournament-empty");
-  const workspace = $("tournament-workspace");
-  if (!empty || !workspace) return;
-  if (!tournament) {
-    workspace.hidden = true;
-    empty.hidden = false;
-    return;
-  }
-  empty.hidden = true;
-  workspace.hidden = false;
-  const lifecycle = lifecycleOf(tournament, matches.length);
-  updateChatStatus(lifecycle);
-  updateEntriesPolling(lifecycle);
-  const activeCount = entries.filter((entry) => ACTIVE.includes(entry.status)).length;
-  renderSummary(lifecycle, activeCount);
-  renderPrimary(lifecycle, entryCounts.eligible || 0);
-  renderEntries(lifecycle);
-  renderBracket(lifecycle);
-  renderSettingsForm(lifecycle);
-  switchTab(activeTab);
-}
-
-async function loadEntries() {
+// refreshOnly marks the poll/chat/entry-action path: full reloads (initial
+// load, settings saves, lifecycle ops) always re-render.
+async function loadEntries({ refreshOnly = true } = {}) {
   if (!tournament) return;
   const [entryData, bracketData] = await Promise.all([
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`),
@@ -344,7 +161,24 @@ async function loadEntries() {
   matches = bracketData.matches || [];
   if (bracketData.tournament?.winner_name) tournament.winner_name = bracketData.tournament.winner_name;
   if (bracketData.tournament?.status) tournament.status = bracketData.tournament.status;
-  renderTournament();
+  if (bracketData.tournament?.created_at) tournament.created_at = bracketData.tournament.created_at;
+  // Entries refresh (poll/chat/action): a visible settings form that is
+  // focused or dirty must survive the refresh — rebuilding it would steal
+  // focus and wipe edits. Update the data parts and leave the form alone.
+  const form = $("tournament-settings-form");
+  const settingsBusy = refreshOnly && form && !form.closest("[hidden]")
+    && (form.contains(document.activeElement) || settingsSnapshot() !== settingsBaseline);
+  if (settingsBusy) {
+    const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
+    const list = $("tournament-entry-list");
+    if (list) list.innerHTML = entryRowsHtml(vm);
+    const count = $("tournament-count");
+    if (count) count.textContent = vm.stats[0].value;
+    const entriesTab = $("tournament-tab-entries");
+    if (entriesTab) entriesTab.textContent = `Entries (${vm.activeCount})`;
+    return;
+  }
+  render();
 }
 
 async function loadTournament() {
@@ -357,11 +191,32 @@ async function loadTournament() {
   tournament = current || tournaments[0] || null;
   entries = [];
   matches = [];
-  if (tournament) await loadEntries();
-  else renderTournament();
+  if (tournament) await loadEntries({ refreshOnly: false });
+  else render();
 }
 
-// ---- Create modal --------------------------------------------------------
+// ---- Dialogs -------------------------------------------------------------
+//
+// Dialog markup is rendered on demand into #tournament-dialogs (a persistent
+// host inside #tournament-app) and removed on close; each open gets a fresh
+// trap via ensureDialog(). close*() also unlocks the page scroll.
+
+function mountDialog(html) {
+  const host = $("tournament-dialogs");
+  if (!host) return null;
+  host.insertAdjacentHTML("beforeend", html);
+  return host.lastElementChild;
+}
+
+function unmountDialog(modal) {
+  if (!modal || !modal.isConnected) return;
+  modal.remove();
+  if (!document.querySelector("#tournament-dialogs .tn-dialog")) {
+    document.documentElement.classList.remove("yr-modal-open");
+  }
+}
+
+// ---- Create dialog --------------------------------------------------------
 
 function setCreateError(text = "") {
   const el = $("tournament-create-error");
@@ -371,26 +226,22 @@ function setCreateError(text = "") {
 }
 
 async function openCreateModal() {
-  const modal = $("tournament-create-modal");
-  const form = $("tournament-create-form");
-  if (!modal || !form) return;
-  form.reset();
-  $("tc-chat-channel").value = tournament?.chat_channel || board.kickChannelName || "";
-  $("tc-entry-cap-custom").hidden = true;
+  if ($("tournament-create-modal")) return;
+  const modal = mountDialog(createDialogHtml({ chatChannel: tournament?.chat_channel, siteChannel: board.kickChannelName }));
+  if (!modal) return;
   setCreateError("");
-  modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
+  if (!modal.isConnected) return;
   releaseCreateTrap = dialog ? dialog.trap(modal, closeCreateModal) : null;
-  $("tc-title").focus();
-  $("tc-title").select();
+  $("tc-title")?.focus();
+  $("tc-title")?.select();
 }
 
 function closeCreateModal() {
   const modal = $("tournament-create-modal");
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  document.documentElement.classList.remove("yr-modal-open");
+  if (!modal) return;
+  unmountDialog(modal);
   if (releaseCreateTrap) releaseCreateTrap();
   releaseCreateTrap = null;
 }
@@ -436,7 +287,7 @@ async function submitCreate(event) {
     activeTab = "entries";
     closeCreateModal();
     setMessage("");
-    renderTournament();
+    render();
     await loadEntries();
   } catch (error) {
     setCreateError(error.message || "Could not create the tournament.");
@@ -560,9 +411,8 @@ async function handlePrimary() {
   if (action === "select-participants") return openSelectModal();
 }
 
-// ---- Select participants modal -------------------------------------------
+// ---- Select participants dialog -------------------------------------------
 
-let releaseSelectTrap = null;
 // Manual picks survive search filtering, which re-renders the checkbox list.
 const manualSelection = new Set();
 
@@ -592,18 +442,7 @@ function updateSelectCounter() {
 }
 
 function renderSelectList() {
-  const filter = String($("ts-search").value || "").trim().toLowerCase();
-  const eligible = entries.filter((entry) => entry.eligible === true);
-  const visible = filter
-    ? eligible.filter((entry) => String(entry.display_name || "").toLowerCase().includes(filter))
-    : eligible;
-  $("ts-entry-list").innerHTML = visible.map((entry) => `
-    <li class="tournament-select-row">
-      <label>
-        <input type="checkbox" value="${esc(entry.id)}"${manualSelection.has(entry.id) ? " checked" : ""} />
-        <span>${esc(entry.display_name)}</span>
-      </label>
-    </li>`).join("");
+  $("ts-entry-list").innerHTML = selectListHtml(entries, manualSelection, $("ts-search").value);
 }
 
 function syncSelectMode() {
@@ -614,30 +453,24 @@ function syncSelectMode() {
 }
 
 async function openSelectModal() {
-  const modal = $("tournament-select-modal");
+  if (!tournament || $("tournament-select-modal")) return;
+  const modal = mountDialog(selectDialogHtml({ cap: tournament.bracket_size || 0, eligible: entryCounts.eligible || 0 }));
   if (!modal) return;
-  const eligible = entryCounts.eligible || 0;
-  const cap = tournament?.bracket_size || 0;
-  $("ts-random-text").textContent = `Randomly select ${cap} of ${eligible} eligible players.`;
-  $("ts-mode-random").checked = true;
-  $("ts-mode-manual").checked = false;
-  $("ts-search").value = "";
   manualSelection.clear();
   renderSelectList();
   syncSelectMode();
   setSelectError("");
-  modal.hidden = false;
   document.documentElement.classList.add("yr-modal-open");
   const dialog = await ensureDialog().catch(() => null);
+  if (!modal.isConnected) return;
   releaseSelectTrap = dialog ? dialog.trap(modal, closeSelectModal) : null;
-  $("ts-mode-random").focus();
+  $("ts-mode-random")?.focus();
 }
 
 function closeSelectModal() {
   const modal = $("tournament-select-modal");
-  if (!modal || modal.hidden) return;
-  modal.hidden = true;
-  document.documentElement.classList.remove("yr-modal-open");
+  if (!modal) return;
+  unmountDialog(modal);
   if (releaseSelectTrap) releaseSelectTrap();
   releaseSelectTrap = null;
 }
@@ -676,91 +509,54 @@ async function handleEntryAction(button) {
   setMessage("");
 }
 
-// ---- Bracket -------------------------------------------------------------
+// ---- Full-bracket dialog ---------------------------------------------------
 
-function groupBy(array, key) {
-  return array.reduce((acc, item) => {
-    const group = item[key] ?? "";
-    (acc[group] = acc[group] || []).push(item);
-    return acc;
-  }, {});
+async function openBracketModal() {
+  if (!tournament || $("tournament-bracket-modal")) return;
+  const modal = mountDialog(fullBracketDialogHtml());
+  const full = $("tournament-bracket-full");
+  if (!modal || !full) return;
+  renderExpandedBracket(full);
+  document.documentElement.classList.add("yr-modal-open");
+  const dialog = await ensureDialog().catch(() => null);
+  // The dialog script can resolve after leave() or a manual close: never
+  // install a trap on a dialog that is already gone.
+  if (!modal.isConnected || $("tournament-bracket-modal") !== modal) return;
+  releaseBracketTrap = dialog ? dialog.trap(modal, closeBracketModal) : null;
+  $("tournament-bracket-close")?.focus();
 }
 
-function renderBracket(lifecycle) {
-  const bracket = $("tournament-bracket");
-  const empty = $("tournament-bracket-empty");
-  const champion = $("tournament-champion");
-  if (!bracket || !empty || !champion) return;
-  if (!matches.length && !tournament.winner_name) {
-    empty.hidden = false;
-    bracket.innerHTML = "";
-    bracket.hidden = true;
-    champion.hidden = true;
-    return;
-  }
-  empty.hidden = true;
-  bracket.hidden = false;
-  if (tournament.winner_name) {
-    champion.hidden = false;
-    champion.textContent = `Champion: ${tournament.winner_name}`;
-  } else {
-    champion.hidden = true;
-  }
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
-  const byRound = groupBy(matches, "round_number");
-  const rounds = Object.keys(byRound).sort((a, b) => Number(a) - Number(b));
-  bracket.innerHTML = rounds.map((round) => {
-    const roundMatches = byRound[round].sort((a, b) => a.match_index - b.match_index);
-    return `<div class="tournament-round"><h3>Round ${esc(round)}</h3>${roundMatches.map((match) => renderMatch(match, finished)).join("")}</div>`;
-  }).join("");
+function renderExpandedBracket(full = $("tournament-bracket-full")) {
+  if (!full || !$("tournament-bracket-modal")) return;
+  disposeExpandedLayout();
+  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded", correctingId: correctingMatchId });
+  disposeExpandedLayout = layoutBracket(full);
 }
 
-function renderMatch(match, finished) {
-  const p1 = match.player1_name || "TBD";
-  const p2 = match.player2_name || "TBD";
-  const isComplete = match.status === "completed";
-  const bye1 = p1 === BYE;
-  const bye2 = p2 === BYE;
-  if (bye1 && bye2) {
-    return `
-    <div class="tournament-match is-empty" data-match-id="${esc(match.id)}">
-      <div class="tournament-match-players">
-        <span class="tournament-match-bye">No match</span>
-      </div>
-    </div>
-  `;
-  }
-  const p1Winner = isComplete && match.winner_name === p1;
-  const p2Winner = isComplete && match.winner_name === p2;
-  const canScore = !finished && !isComplete && !bye1 && !bye2 && p1 !== "TBD" && p2 !== "TBD";
-  const playerName = (name, bye, winner) => bye
-    ? `<span class="tournament-match-bye">${esc(BYE_LABEL)}</span>`
-    : `<span class="tournament-match-player${winner ? " winner" : ""}">${esc(name)}${winner ? " 👑" : ""}</span>`;
-  const scores = bye1 || bye2
-    ? `<span class="tournament-match-bye-note">${esc(bye1 ? p2 : p1)} advances automatically</span>`
-    : isComplete
-      ? `<span class="tournament-match-score">${match.player1_score ?? 0} - ${match.player2_score ?? 0}</span>`
-      : canScore
-        ? `<input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="1" value="0" aria-label="${esc(p1)} score" />
-           <span class="tournament-match-divider">–</span>
-           <input type="number" min="0" class="tournament-match-score-input" data-score-match="${esc(match.id)}" data-score-player="2" value="0" aria-label="${esc(p2)} score" />
-           <button class="btn btn--sm btn--accent" type="button" data-score-match="${esc(match.id)}">Submit score</button>`
-        : `<span class="tournament-match-tbd">Waiting for both players</span>`;
-  return `
-    <div class="tournament-match" data-match-id="${esc(match.id)}">
-      <div class="tournament-match-players">
-        ${playerName(p1, bye1, p1Winner)}
-      </div>
-      <div class="tournament-match-players">
-        ${playerName(p2, bye2, p2Winner)}
-      </div>
-      <div class="tournament-match-actions">${scores}</div>
-    </div>
-  `;
+function startScoreCorrection(matchId) {
+  correctingMatchId = matchId;
+  render();
+  renderExpandedBracket();
+}
+
+function cancelScoreCorrection() {
+  correctingMatchId = null;
+  render();
+  renderExpandedBracket();
+}
+
+function closeBracketModal() {
+  const modal = $("tournament-bracket-modal");
+  if (!modal) return;
+  unmountDialog(modal);
+  if (releaseBracketTrap) releaseBracketTrap();
+  releaseBracketTrap = null;
+  disposeExpandedLayout();
+  disposeExpandedLayout = () => {};
 }
 
 async function submitScore(matchId, target) {
-  const matchEl = target.closest(".tournament-match");
+  const matchEl = target.closest(".tn-match");
   if (!matchEl) return;
   const p1Input = matchEl.querySelector('[data-score-player="1"]');
   const p2Input = matchEl.querySelector('[data-score-player="2"]');
@@ -770,12 +566,15 @@ async function submitScore(matchId, target) {
     setMessage("A match cannot end in a tie. Enter different scores.", true);
     return;
   }
-  await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, {
-    method: "POST",
+  const correcting = matchEl.dataset.scoreMode === "correct";
+  const data = await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/score`, {
+    method: correcting ? "PATCH" : "POST",
     body: JSON.stringify({ matchId, player1Score, player2Score }),
   });
-  setMessage("");
-  await loadTournament();
+  correctingMatchId = null;
+  if (correcting) await loadEntries();
+  else await loadTournament();
+  setMessage(data?.message || "");
 }
 
 // ---- Settings ------------------------------------------------------------
@@ -799,15 +598,17 @@ function clearFieldErrors() {
 }
 
 function settingsSnapshot() {
+  const el = (id) => $(id);
+  if (!el("tournament-title")) return "";
   return JSON.stringify({
-    title: $("tournament-title").value,
-    game: $("tournament-game").value,
-    keyword: $("tournament-keyword").value,
-    capMode: $("tournament-entry-cap-mode").value,
-    cap: $("tournament-entry-cap").value,
-    channel: $("tournament-chat-channel").value,
-    antiAlt: $("tournament-anti-alt").checked,
-    bracketSize: $("tournament-bracket-size").value,
+    title: el("tournament-title").value,
+    game: el("tournament-game").value,
+    keyword: el("tournament-keyword").value,
+    capMode: el("tournament-entry-cap-mode").value,
+    cap: el("tournament-entry-cap").value,
+    channel: el("tournament-chat-channel").value,
+    antiAlt: el("tournament-anti-alt").checked,
+    bracketSize: el("tournament-bracket-size").value,
   });
 }
 
@@ -868,23 +669,95 @@ async function saveSettings(event) {
 
 // ---- Boot ----------------------------------------------------------------
 
-export async function boot() {
+export async function boot(token = lifecycleToken) {
   if (!$("tournament-app")) return;
-  activeTab = "entries";
-  stopChat();
+  ensureDocListeners();
+  // A re-enter starts clean: drop any timers/chat left by a previous visit.
+  resetTransientState();
   try {
     const shell = await loadBoardShell();
+    if (token !== lifecycleToken) return;
     siteId = shell.activeSiteId || "";
     board = shell.board || {};
     await loadTournament();
+    if (token !== lifecycleToken) return;
     await startChat();
   } catch (error) {
+    if (token !== lifecycleToken) return;
+    render();
     setMessage(error.message || "Tournament unavailable. Try again in a moment.", true);
-    $("tournament-empty").hidden = false;
   }
 }
 
-document.addEventListener("submit", (event) => {
+// Drop timers, sockets, dialogs and cached data so leave() fully detaches the
+// workspace and a later enter() rebuilds it from scratch.
+function resetTransientState() {
+  stopChat();
+  if (entriesPollTimer) { clearInterval(entriesPollTimer); entriesPollTimer = null; }
+  if (entriesRefreshTimer) { clearTimeout(entriesRefreshTimer); entriesRefreshTimer = null; }
+  if (settingsSavedTimer) { clearTimeout(settingsSavedTimer); settingsSavedTimer = null; }
+  entriesRefreshRunning = false;
+  entriesRefreshQueued = false;
+  correctingMatchId = null;
+  closeCreateModal();
+  closeSelectModal();
+  closeBracketModal();
+  disposeEmbeddedLayout();
+  disposeExpandedLayout();
+  disposeEmbeddedLayout = () => {};
+  disposeExpandedLayout = () => {};
+  document.querySelectorAll("details.tn-menu[open]").forEach((menu) => { menu.open = false; });
+  const host = $("tournament-dialogs");
+  if (host) host.innerHTML = "";
+  // The dialog markup may already be gone when a leave races a fragment swap;
+  // release any lingering focus traps and unlock the page scroll regardless.
+  if (releaseCreateTrap || releaseSelectTrap || releaseBracketTrap) {
+    releaseCreateTrap?.();
+    releaseSelectTrap?.();
+    releaseBracketTrap?.();
+    releaseCreateTrap = null;
+    releaseSelectTrap = null;
+    releaseBracketTrap = null;
+  }
+  document.documentElement.classList.remove("yr-modal-open");
+  tournament = null;
+  entries = [];
+  matches = [];
+  entryCounts = { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
+  chatRegistration = null;
+  activeTab = "entries";
+  board = {};
+  siteId = "";
+  settingsBaseline = "";
+  settingsReadonly = false;
+}
+
+export function enter() {
+  const token = ++lifecycleToken;
+  return boot(token);
+}
+
+export function leave() {
+  lifecycleToken += 1;
+  resetTransientState();
+}
+
+// Delegated listeners attach to the document that actually hosts
+// #tournament-app, not the module-eval-time global: a host (or test) may
+// evaluate this module while another document is current, and a listener
+// bound to the wrong document never fires. One binding per document.
+const listenerDocs = new WeakSet();
+function ensureDocListeners() {
+  const doc = $("tournament-app")?.ownerDocument;
+  if (!doc || listenerDocs.has(doc)) return;
+  listenerDocs.add(doc);
+  doc.addEventListener("submit", onSubmit);
+  doc.addEventListener("change", onChange);
+  doc.addEventListener("input", onInput);
+  doc.addEventListener("click", onClick);
+}
+
+function onSubmit(event) {
   if (!$("tournament-app")) return;
   if (event.target.id === "tournament-create-form") {
     submitCreate(event).catch((error) => setCreateError(error.message || "Could not create the tournament."));
@@ -892,9 +765,9 @@ document.addEventListener("submit", (event) => {
     event.preventDefault();
     saveSettings(event).catch((error) => setMessage(error.message || "Could not save settings.", true));
   }
-});
+}
 
-document.addEventListener("change", (event) => {
+function onChange(event) {
   if (event.target.name === "tournament-select-mode") return syncSelectMode();
   if (event.target.closest?.("#ts-entry-list")) return toggleManualSelection(event.target);
   if (event.target.id === "tc-entry-cap") {
@@ -908,16 +781,19 @@ document.addEventListener("change", (event) => {
     if (!cap.hidden) cap.focus();
   }
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
-});
+}
 
-document.addEventListener("input", (event) => {
+function onInput(event) {
   if (event.target.id === "ts-search") return renderSelectList();
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
-});
+}
 
-document.addEventListener("click", async (event) => {
+async function onClick(event) {
+  if ($("tournament-app") && !event.target.closest?.("details.tn-menu")) {
+    (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tn-menu[open]").forEach((menu) => { menu.open = false; });
+  }
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, [data-tournament-tab], [data-entry-action], [data-score-match]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], button[data-score-match], [data-score-edit], [data-score-cancel]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -928,25 +804,38 @@ document.addEventListener("click", async (event) => {
     if (event.target === target) closeSelectModal();
     return;
   }
+  if (target.id === "tournament-bracket-modal") {
+    if (event.target === target) closeBracketModal();
+    return;
+  }
   event.preventDefault();
   try {
     if (target.matches("[data-tournament-tab]")) return switchTab(target.dataset.tournamentTab);
-    if (target.matches("[data-entry-action]")) return await handleEntryAction(target);
-    if (target.matches("[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
+    if (target.matches("[data-entry-action]")) {
+      target.closest("details.tn-menu")?.removeAttribute("open");
+      return await handleEntryAction(target);
+    }
+    if (target.matches("[data-score-edit]")) return startScoreCorrection(target.dataset.scoreEdit);
+    if (target.matches("[data-score-cancel]")) return cancelScoreCorrection();
+    if (target.matches("button[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
     if (target.id === "tournament-select-cancel") return closeSelectModal();
     if (target.id === "tournament-select-submit") return await submitSelect();
+    if (target.id === "tournament-bracket-expand") return await openBracketModal();
+    if (target.id === "tournament-bracket-close") return closeBracketModal();
     if (target.id === "tournament-settings-discard") {
-      renderSettingsForm(lifecycleOf(tournament, matches.length));
+      render();
       return clearFieldErrors();
     }
     if (target.id === "tournament-primary") return await handlePrimary();
   } catch (error) {
     setMessage(error.message || "Action failed.", true);
   }
-});
+}
 
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-else boot();
+if (!window.__yrSpaShell) {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => enter(), { once: true });
+  else enter();
+}

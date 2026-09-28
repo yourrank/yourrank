@@ -242,6 +242,9 @@ viewer entry is separated beneath the creator form. Registration keeps all four
 required fields and the canonical password and community-handle rules. Mobile
 uses the same reading order, 48px inputs, and 16px input text. This direction is
 specific to `/login` and `/signup`; it does not replace dashboard or viewer styling.
+Login retains the email-code default introduced on main, with a Password method
+alongside it. Code request, verification, resend, and change-email controls use
+the same centered form and shared input/button primitives.
 
 ## Overview
 

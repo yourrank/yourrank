@@ -114,8 +114,10 @@ describe("Giveaway Chatroom Handler", () => {
 
   it("renders each giveaway tab as a deep-linkable active server view", () => {
     const html = renderGiveawaysHtml("raffles");
-    expect(html).toContain("<h1>Raffles</h1>");
-    expect(html).toContain('class="engage-back" href="/dashboard/giveaways"');
+    expect(html).toContain("<h1>Giveaways</h1>");
+    expect(html).not.toContain("engage-back");
+    expect(html).toContain('class="v3-tabs gw-subnav"');
+    expect(html.indexOf("<h1>Giveaways</h1>")).toBeLessThan(html.indexOf("gw-subnav"));
     expect(html).toContain('id="pane-raffles"');
     expect(html).toContain('class="gw-tab-pane is-active" id="pane-raffles"');
     expect(html).toContain('class="gw-tab-pane" id="pane-chat" hidden');
@@ -157,6 +159,11 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).not.toContain('class="gw-table-wrap"');
     expect(giveawaysHtml.match(/<table\b/g)).toHaveLength(3);
     expect(giveawaysHtml.match(/<div class="v3-table-scroll">\s*<table class="v3-table">/g)).toHaveLength(3);
+    // The tournaments pane ships only its client mount points; the workspace
+    // (entries list included) is rendered by tournaments.js.
+    expect(giveawaysHtml).toContain('id="tournament-app"');
+    expect(giveawaysHtml).toContain('id="tournament-root"');
+    expect(giveawaysHtml).toContain('id="tournament-dialogs"');
   });
 
   it("keeps draw options behind the disclosure", () => {

@@ -25,18 +25,32 @@ describe("creator login page", () => {
     expect(loginHtml).toContain('id="email"');
     expect(loginHtml).toContain('id="password"');
     expect(loginHtml).toContain(">Sign in</button>");
-    expect(loginHtml).toContain('No account? <a href="/signup">Create one</a>');
+    expect(loginHtml).toContain('New to YourRank? <a href="/signup" data-auth-switch>Create an account</a>');
     expect(loginHtml).toContain('<a href="/forgot">Forgot password?</a>');
+  });
+
+  test("offers the email-code method with a one-time-code input alongside password", () => {
+    expect(loginHtml).toContain('class="auth-methods"');
+    expect(loginHtml).toContain('data-method="code"');
+    expect(loginHtml).toContain('data-method="password"');
+    expect(loginHtml).toContain('id="codeForm"');
+    expect(loginHtml).toContain('action="/api/auth/code/request"');
+    expect(loginHtml).toContain('id="code"');
+    expect(loginHtml).toContain('inputmode="numeric"');
+    expect(loginHtml).toContain('autocomplete="one-time-code"');
+    expect(loginHtml).toContain('pattern="[0-9]{6}"');
+    expect(loginHtml).toContain('id="codeResend"');
+    expect(loginHtml).toContain('id="codeChangeEmail"');
   });
 
   test("points viewers at the /me gateway without naming providers", () => {
     expect(loginHtml).not.toContain("Kick or Discord");
-    expect(loginHtml).toContain("Are you a viewer?");
-    expect(loginHtml).toContain('<a href="/me">Sign in to your Viewer Account</a>');
+    expect(loginHtml).toContain("Here for a creator’s community?");
+    expect(loginHtml).toContain('<a href="/me">Continue as a viewer <span aria-hidden="true">→</span></a>');
     expect(loginHtml).not.toContain("/api/viewer/auth/kick");
     expect(loginHtml).not.toContain("/api/viewer/auth/discord");
     expect(signupHtml).not.toContain("Kick or Discord");
-    expect(signupHtml).toContain('Are you a viewer? <a href="/me">Sign in to your Viewer Account</a>');
+    expect(signupHtml).toContain('<a href="/me">Continue as a viewer <span aria-hidden="true">→</span></a>');
   });
 });
 

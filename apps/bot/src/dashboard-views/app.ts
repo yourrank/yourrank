@@ -1,5 +1,6 @@
 import { botPageHtml } from "@yourrank/shared/page-shell";
 import { dashboardChromeHtml, workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
+import { subnavHtml } from "@yourrank/shared/dashboard-ui";
 import { botNavItems, pageLinks, pageMeta, telegramChrome } from "./shell.js";
 import { overviewPanel } from "./pages/overview.js";
 import { botsPanel } from "./pages/bots.js";
@@ -26,11 +27,7 @@ function panelHtml(page: string, publicBaseUrl: string, context: DashboardContex
 }
 
 function telegramTabsHtml(page: string): string {
-  return `<nav class="v3-tabs telegram-tabs" aria-label="Telegram pages">${
-    pageLinks.map(({ key, label, href }) =>
-      `<a class="v3-tab${key === page ? " is-on" : ""}" href="${href}"${key === page ? ' aria-current="page"' : ""}>${label}</a>`
-    ).join("")
-  }</nav>`;
+  return subnavHtml({ items: pageLinks, active: page, label: "Telegram pages", className: "telegram-tabs" });
 }
 
 function telegramContextHtml(page: string): string {

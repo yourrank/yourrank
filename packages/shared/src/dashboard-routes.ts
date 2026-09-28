@@ -59,6 +59,9 @@ export interface DashboardRouteDef {
   readonly tab?: string;
   /** Rail owner key (matches NAV_OWNER_MAP owner values in dashboard-nav.ts). */
   readonly navKey: string;
+  /** Rail child that should read active for this route inside a nav group;
+   *  when absent the navKey group/link is selected instead. */
+  readonly railKey?: "overview" | "activities" | "giveaways" | "tournaments";
   /** Worker that serves the canonical path (parity-tested against wrangler.toml). */
   readonly owner: DashboardWorker;
   readonly delivery: DashboardDelivery;
@@ -171,17 +174,17 @@ const ROUTE_DEFS = [
   { id: "site", canonicalPath: "/dashboard/site", section: "site", navKey: "board", owner: "leaderboard", delivery: "spa-section", scope: "site", navParams: ["board"] },
 
   // ── Fragment-booted sections (leaderboard Worker) ──
-  { id: "activities.overview", canonicalPath: "/dashboard/activities", section: "activities", tab: "overview", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "activities.overview", canonicalPath: "/dashboard/activities", section: "activities", tab: "overview", navKey: "engage", railKey: "activities", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.overview", canonicalPath: "/dashboard/rewards", section: "rewards", tab: "overview", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.shop", canonicalPath: "/dashboard/rewards/shop", section: "rewards", tab: "shop", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.rules", canonicalPath: "/dashboard/rewards/rules", section: "rewards", tab: "rules", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "rewards.redemptions", canonicalPath: "/dashboard/rewards/redemptions", section: "rewards", tab: "redemptions", navKey: "rewards", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "siteConnections.channel", canonicalPath: "/dashboard/site/connections", section: "siteConnections", tab: "channel", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.hub", canonicalPath: "/dashboard/giveaways", section: "giveaways", tab: "hub", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
-  { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.hub", canonicalPath: "/dashboard/giveaways", section: "giveaways", tab: "hub", navKey: "engage", railKey: "overview", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.chat", canonicalPath: "/dashboard/giveaways/chat", section: "giveaways", tab: "chat", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.raffles", canonicalPath: "/dashboard/giveaways/raffles", section: "giveaways", tab: "raffles", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.preds", canonicalPath: "/dashboard/giveaways/predictions", section: "giveaways", tab: "preds", navKey: "engage", railKey: "giveaways", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "giveaways.tournaments", canonicalPath: "/dashboard/giveaways/tournaments", section: "giveaways", tab: "tournaments", navKey: "engage", railKey: "tournaments", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.activity", canonicalPath: "/dashboard/audience/activity", section: "audience", tab: "activity", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.reviews", canonicalPath: "/dashboard/audience/reviews", section: "audience", tab: "reviews", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
@@ -203,6 +206,7 @@ const ROUTE_DEFS = [
   section: string;
   tab?: string;
   navKey: string;
+  railKey?: "overview" | "activities" | "giveaways" | "tournaments";
   owner: DashboardWorker;
   delivery: DashboardDelivery;
   scope: DashboardScope;

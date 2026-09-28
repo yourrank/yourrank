@@ -1105,6 +1105,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] #acc-app > .v3-head + .v3-tabs,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-tabs,
 .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
+.v3-dash[data-auth-workspace] .act-workspace-content > .v3-tabs,
 .v3-dash[data-auth-workspace] #gw-app > .v3-tabs {
   position: sticky;
   top: calc(var(--ws-topbar-h) + var(--sticky-head-offset, 0px));
@@ -1123,6 +1124,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   top: var(--ws-topbar-h);
   z-index: 20;
 }
+.v3-dash[data-auth-workspace] .act-workspace-content > .v3-head { margin-bottom: 0; }
 .v3-dash[data-auth-workspace] .cr-workspace-content #cr-app > .v3-head {
   position: static;
 }
@@ -1955,6 +1957,15 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   font-size: 13px;
   margin: 0 0 18px; }
 .v3-dash[data-auth-workspace] .v3-head-sub { max-width: 72ch; margin: 2px 0 0; font-size: 14px; line-height: 1.5; }
+.v3-dash[data-auth-workspace] .v3-head-kicker {
+  margin: 0 0 4px;
+  font-family: var(--ws-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ws-text-soft);
+}
 .v3-dash[data-auth-workspace] .v3-head-sub--mono { font-family: var(--ws-sans); letter-spacing: 0;
   font: 500 12px var(--ws-mono);
   text-transform: uppercase;
@@ -3286,6 +3297,192 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
 }
 .v3-dash[data-auth-workspace] .empty--error,
 .v3-dash[data-auth-workspace] .error-state { border-color: var(--ws-danger-line-soft, #efb8b3); background: var(--ws-danger-soft); color: var(--ws-danger); }
+.v3-dash[data-auth-workspace] .v3-empty--error { border-style: solid; border-color: var(--ws-danger-line-soft, #efb8b3); background: var(--ws-danger-soft); }
+.v3-dash[data-auth-workspace] .v3-empty--error h2 { color: var(--ws-danger-text); }
+
+/* Shared dashboard primitives (packages/shared/src/dashboard-ui.ts). One
+   markup shape per primitive; feature CSS may position them, never restyle. */
+.v3-dash[data-auth-workspace] .v3-loading {
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+}
+.v3-dash[data-auth-workspace] .v3-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: var(--ws-radius-sm);
+  background: linear-gradient(90deg, var(--ws-surface-soft) 0%, var(--ws-surface-strong) 50%, var(--ws-surface-soft) 100%);
+  background-size: 200% 100%;
+  animation: v3-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.v3-dash[data-auth-workspace] .v3-skeleton-line:nth-child(2) { width: 82%; }
+.v3-dash[data-auth-workspace] .v3-skeleton-line:nth-child(3) { width: 64%; }
+@keyframes v3-skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .v3-dash[data-auth-workspace] .v3-skeleton-line { animation: none; }
+}
+
+.v3-dash[data-auth-workspace] .v3-actions,
+.v3-dash[data-auth-workspace] .v3-head-actions,
+.v3-dash[data-auth-workspace] .v3-list-shell-actions,
+.v3-dash[data-auth-workspace] .v3-drawer-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.v3-dash[data-auth-workspace] .v3-head-actions { flex: 0 0 auto; justify-content: flex-end; padding-top: 2px; }
+.v3-dash[data-auth-workspace] .v3-head-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 8px 0 0;
+}
+.v3-dash[data-auth-workspace] .v3-head-meta + .v3-head-sub { margin-top: 8px; }
+
+/* Status badge: tone is carried by a dot plus text, never by colour alone. */
+.v3-dash[data-auth-workspace] .v3-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-pill);
+  background: var(--ws-surface-soft);
+  color: var(--ws-text-soft);
+  font: 600 12px/1 var(--ws-sans);
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .v3-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+.v3-dash[data-auth-workspace] .v3-badge[data-tone="success"] { border-color: var(--ws-success-line); background: var(--ws-success-soft); color: var(--ws-success-text); }
+.v3-dash[data-auth-workspace] .v3-badge[data-tone="warning"] { border-color: var(--ws-warning-line); background: var(--ws-warning-soft); color: var(--ws-warning-text); }
+.v3-dash[data-auth-workspace] .v3-badge[data-tone="danger"] { border-color: var(--ws-danger-line-soft); background: var(--ws-danger-soft); color: var(--ws-danger-text); }
+.v3-dash[data-auth-workspace] .v3-badge[data-tone="info"] { border-color: var(--ws-info-soft); background: var(--ws-info-soft); color: var(--ws-info); }
+.v3-dash[data-auth-workspace] .v3-badge[data-tone="accent"] { border-color: var(--ws-accent-line); background: var(--ws-accent-soft); color: var(--ws-accent); }
+
+/* Scope indicator: names which context a page reads and writes. */
+.v3-dash[data-auth-workspace] .v3-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--ws-text-soft);
+  font: 500 12px/16px var(--ws-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.v3-dash[data-auth-workspace] .v3-scope-dot { width: 8px; height: 8px; border-radius: 2px; background: var(--ws-text-mute); }
+.v3-dash[data-auth-workspace] .v3-scope[data-scope="site"] .v3-scope-dot { background: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .v3-scope[data-scope="bot"] .v3-scope-dot { border-radius: 50%; background: var(--ws-info); }
+.v3-dash[data-auth-workspace] .v3-scope-name {
+  padding-left: 8px;
+  border-left: 1px solid var(--ws-line-strong);
+  color: var(--ws-text);
+  font: 600 13px/16px var(--ws-sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Table / list shell: a head (title, description, actions), a body the
+   feature fills, and an optional foot for totals or paging. Layout-neutral
+   by default; `.v3-list-shell--card` opts into bordered card containment. */
+.v3-dash[data-auth-workspace] .v3-list-shell { display: flex; flex-direction: column; min-width: 0; }
+.v3-dash[data-auth-workspace] .v3-list-shell--card { padding: 0; overflow: hidden; }
+.v3-dash[data-auth-workspace] .v3-list-shell-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 0 0 14px;
+}
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-head {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--ws-line);
+}
+.v3-dash[data-auth-workspace] .v3-list-shell-copy { min-width: 0; flex: 1 1 240px; }
+.v3-dash[data-auth-workspace] .v3-list-shell-copy h2 { margin: 0; font-size: var(--ws-type-card-size); line-height: var(--ws-type-card-leading); color: var(--ws-text); }
+.v3-dash[data-auth-workspace] .v3-list-shell-copy p { margin: 4px 0 0; font-size: 13px; color: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] .v3-list-shell-body { min-width: 0; overflow-x: auto; }
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-body > .v3-empty { margin: 16px; }
+.v3-dash[data-auth-workspace] .v3-list-shell-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0 0;
+  color: var(--ws-text-soft);
+  font-size: 13px;
+}
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--ws-line);
+  background: var(--ws-surface-soft);
+}
+
+/* Drawer / form shell: right-anchored panel with a fixed head and foot and a
+   scrolling body, so long forms keep their actions in reach. Desktop width is
+   a per-drawer token: default 560px, `--compact` / `--wide` opt in, mobile is
+   always full-width. */
+.v3-dash[data-auth-workspace] .v3-drawer { --drawer-width: 560px; position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
+.v3-dash[data-auth-workspace] .v3-drawer--compact { --drawer-width: 420px; }
+.v3-dash[data-auth-workspace] .v3-drawer--wide { --drawer-width: 760px; }
+.v3-dash[data-auth-workspace] .v3-drawer[hidden] { display: none; }
+.v3-dash[data-auth-workspace] .v3-drawer-backdrop { position: absolute; inset: 0; background: rgba(18, 17, 17, 0.5); backdrop-filter: blur(4px); }
+.v3-dash[data-auth-workspace] .v3-drawer-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--drawer-width);
+  height: min(100%, 100dvh);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  box-shadow: var(--ws-shadow-overlay);
+  overflow: hidden;
+}
+.v3-dash[data-auth-workspace] .v3-drawer-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.v3-dash[data-auth-workspace] .v3-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--ws-line);
+}
+.v3-dash[data-auth-workspace] .v3-drawer-copy h2 { margin: 0; font-size: var(--ws-type-section-size, 20px); line-height: var(--ws-type-section-leading, 28px); font-weight: 700; }
+.v3-dash[data-auth-workspace] .v3-drawer-copy p { margin: 4px 0 0; font-size: 13px; color: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] .v3-drawer-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ws-radius-sm);
+  background: transparent;
+  color: var(--ws-text-soft);
+  cursor: pointer;
+}
+.v3-dash[data-auth-workspace] .v3-drawer-close:hover { background: var(--ws-surface-soft); color: var(--ws-text); }
+.v3-dash[data-auth-workspace] .v3-drawer-close svg { width: 18px; height: 18px; }
+.v3-dash[data-auth-workspace] .v3-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 24px; display: grid; gap: 18px; align-content: start; }
+.v3-dash[data-auth-workspace] .v3-drawer-foot {
+  flex: 0 0 auto;
+  padding: 16px 24px;
+  border-top: 1px solid var(--ws-line);
+  background: var(--ws-surface);
+}
+.v3-dash[data-auth-workspace] .v3-drawer-actions { justify-content: flex-end; }
+@media (max-width: 560px) {
+  .v3-dash[data-auth-workspace] .v3-drawer-panel { max-width: none; }
+  .v3-dash[data-auth-workspace] .v3-drawer-head,
+  .v3-dash[data-auth-workspace] .v3-drawer-body,
+  .v3-dash[data-auth-workspace] .v3-drawer-foot { padding-left: 18px; padding-right: 18px; }
+}
 
 /* Theme Presets */
 .v3-dash[data-auth-workspace] .preset-list {

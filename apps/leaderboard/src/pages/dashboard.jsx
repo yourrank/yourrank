@@ -8,6 +8,8 @@ import { DashboardShell } from "./dashboard-shell.jsx";
 import { brandLoaderLogoSvg } from "@yourrank/shared/brand-assets";
 import { chromeStateFor, dashboardPath, dashboardTitleForPath, defaultTab, parseDashboardPath, SECTIONS as DASHBOARD_SECTIONS } from "../assets/dashboard/routes.js";
 import { DEFAULT_DASHBOARD_TITLE } from "@yourrank/shared/dashboard-chrome-state";
+import { emptyStateHtml, pageHeaderHtml, subnavHtml } from "@yourrank/shared/dashboard-ui";
+import { routeById } from "@yourrank/shared/dashboard-routes";
 
 
 export const dashboardConfig = {
@@ -371,16 +373,22 @@ function GamesSection({ active } = {}) {
   );
 }
 
+const INSIGHTS_TABS = [
+  { key: "activity", label: "Overview", href: "/dashboard/analytics/activity" },
+  { key: "events", label: "Detailed analytics", href: "/dashboard/analytics/events" },
+  { key: "referrals", label: "Traffic sources", href: "/dashboard/analytics/referrals" },
+];
+
 function AnalyticsSection({ active, activeHash = "activity" } = {}) {
   return (
 <section class={active ? "lb-page is-on" : "lb-page"} data-page="performance">
 <div class="v3-analytics-page">
   <header class="v3-head v3-head--row insights-head"><div><h1 id="perfTitle">Insights</h1><p class="v3-head-sub">Community growth, participation, and visits for <b id="perfBoardName">the selected site</b>.</p></div><div class="insights-range"><span>Reporting period</span><div id="perfRangeFilter" class="v3-range-filter" role="group" aria-label="Insights reporting period"><button class="v3-range-btn" type="button" data-range="7" aria-pressed="false">7 days</button><button class="v3-range-btn is-active" type="button" data-range="30" aria-pressed="true">30 days</button></div></div></header>
-  <nav class="v3-tabs" aria-label="Insights pages">
-    <a class={"v3-tab" + (activeHash === "activity" ? " is-on" : "")} href="/dashboard/analytics/activity" data-perf-tab="activity" aria-current={activeHash === "activity" ? "page" : undefined}>Overview</a>
-    <a class={"v3-tab" + (activeHash === "events" ? " is-on" : "")} href="/dashboard/analytics/events" data-perf-tab="events" aria-current={activeHash === "events" ? "page" : undefined}>Detailed analytics</a>
-    <a class={"v3-tab" + (activeHash === "referrals" ? " is-on" : "")} href="/dashboard/analytics/referrals" data-perf-tab="referrals" aria-current={activeHash === "referrals" ? "page" : undefined}>Traffic sources</a>
-  </nav>
+  {raw(subnavHtml({
+    items: INSIGHTS_TABS.map((item) => ({ ...item, attrs: { "data-perf-tab": item.key } })),
+    active: activeHash,
+    label: "Insights pages",
+  }))}
   <dl class="v3-insight-band" data-perf-summary aria-label="Public site activity summary" hidden={activeHash !== "events"}>
     <div><dt>Site visits</dt><dd><strong id="perfKpiViews"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></strong><span class="v3-insight-change" id="perfKpiViewsDelta"></span></dd></div>
     <div><dt>Link clicks</dt><dd><strong id="perfKpiClicks"><span class="skeleton v3-skel-kpi" aria-hidden="true"></span></strong><span class="v3-insight-change" id="perfKpiClicksDelta"></span></dd></div>
@@ -659,20 +667,16 @@ export function DashboardNotFoundContent({ user } = {}) {
   return (
     <DashboardShell activeNav="home" boardContext="none" footer="dashboard" rootId="dashboard-not-found" user={user}>
       <section class="lb-page is-on" data-page="not-found">
-        <header class="v3-head">
-          <p class="v3-head-kicker">404 · Dashboard</p>
-          <h1>This dashboard page doesn't exist</h1>
-          <p class="v3-head-sub">The address may be outdated, or the page may have moved.</p>
-        </header>
-        <div class="card">
-          <h2>Try one of these destinations</h2>
-          <nav class="v3-tabs" aria-label="Dashboard destinations">
-            <a class="v3-tab is-on" href="/dashboard">Home</a>
-            <a class="v3-tab" href="/dashboard/leaderboard/setup">Community</a>
-            <a class="v3-tab" href="/dashboard/leaderboards">All sites</a>
-            <a class="v3-tab" href="/dashboard/settings/account">Account</a>
-          </nav>
-        </div>
+        {raw(pageHeaderHtml({
+          kicker: "404 · Dashboard",
+          title: "This dashboard page doesn't exist",
+          description: "The address may be outdated, or the page may have moved.",
+        }))}
+        {raw(emptyStateHtml({
+          title: "Pick a destination from the sidebar",
+          body: "Every section of the workspace is one click away in the navigation.",
+          actions: [{ label: "Go to Home", href: routeById("home").canonicalPath, variant: "primary" }],
+        }))}
       </section>
     </DashboardShell>
   );

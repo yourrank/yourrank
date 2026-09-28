@@ -29,8 +29,16 @@ suites were NOT RUN. Full output: `.local-logs/auth-entry/full-test.log`.
 This does not establish the cause of the unrelated giveaway failures.
 
 Not verified: live authentication, email delivery, or deployed Worker rendering.
-The redesign is prepared on `codex/modern-auth-entry`, based on the existing
-unmerged login fixes in PR #853 (`fix-staging-login-ui`). No deployment.
+PR #858 targets main and includes the existing unmerged login fixes from #853.
+After main introduced email-code sign-in (#861), the login modify/delete conflict
+was resolved in the canonical string page: the clean shared frame now contains
+the email-code default and password alternative. Main's code-request/verification
+handlers and client behavior are preserved. Browser verification additionally
+passed code request, resend countdown, change-email, rejected-code recovery and
+success redirect at 1440/390px. Targeted auth tests passed after updating the
+viewer-entry copy assertions. The post-merge root test run again stopped in
+`giveaway-draw-flow.test.js` (20 passed, 14 failed, 6 between-test errors);
+see `.local-logs/auth-entry/merge-full-test.log`. No deployment.
 
 ## Competition management — 2026-09-21
 

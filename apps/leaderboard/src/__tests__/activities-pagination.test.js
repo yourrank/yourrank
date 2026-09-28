@@ -34,7 +34,7 @@ import {
 import { ServerPages } from "../assets/activity-pages.js";
 
 const client = readFileSync(new URL("../assets/activities.js", import.meta.url), "utf8");
-const page = readFileSync(new URL("../pages/activities.jsx", import.meta.url), "utf8");
+const { activitiesContentHtml: page } = await import("../pages/activities.jsx");
 const css = readFileSync(new URL("../assets/activities.css", import.meta.url), "utf8");
 
 const rows = (n) => Array.from({ length: n }, (_, index) => ({ id: `drop-${index + 1}` }));
@@ -180,10 +180,13 @@ describe("activities pagination wiring", () => {
   });
 
   it("requests bounded server pages with limit and cursor", () => {
-    expect(client).toMatch(/new URLSearchParams\(\{ limit: String\(activityPaging\.pages\.pageSize\) \}\)/);
+    expect(client).toMatch(/new URLSearchParams\(\{ state, limit: String\(limit\) \}\)/);
     expect(client).toMatch(/if \(cursor\) query\.set\("cursor", cursor\)/);
-    expect(client).toContain("const data = await api(activitiesQuery(null));");
-    expect(client).toContain("const data = await api(activitiesQuery(cursor));");
+    // Live drops and history are separate server datasets, never one filtered list.
+    expect(client).toContain('const data = await api(activitiesQuery("open", LIVE_LIMIT, null));');
+    expect(client).toContain('const data = await api(activitiesQuery("completed", activityPaging.pages.pageSize, null));');
+    expect(client).toContain('const data = await api(activitiesQuery("completed", pages.pageSize, cursor));');
+    expect(client).not.toMatch(/state=all|activitiesQuery\("all"/);
   });
 
   it("resets the cache and page whenever the dataset is reloaded", () => {
@@ -191,15 +194,15 @@ describe("activities pagination wiring", () => {
   });
 
   it("re-fetches from page 1 at the new size when the page size changes", () => {
-    expect(client).toMatch(/activityPaging\.pages\.reset\(normalizePageSize\(event\.target\?\.value\)\);\s*\n\s*activityPaging\.page = 1;\s*\n\s*loadActivities\(\);/);
+    expect(client).toMatch(/activityPaging\.pages\.reset\(normalizePageSize\(event\.target\?\.value\)\);\s*\n\s*activityPaging\.page = 1;\s*\n\s*loadHistory\(\);/);
   });
 
   it("fetches the next page on demand and reloads on a stale cursor", () => {
     expect(client).toContain("async function goToPage(target, token = lifecycleToken)");
     expect(client).toMatch(/const cursor = pages\.cursorFor\(next\);\s*\n\s*if \(cursor === undefined\) return false;/);
-    expect(client).toMatch(/if \(error\?\.status === 410\) \{ await loadActivities\(token\); return false; \}/);
+    expect(client).toMatch(/if \(error\?\.status === 410\) \{ await loadHistory\(token\); return false; \}/);
     // A response for a board the viewer already left is discarded.
-    expect(client).toMatch(/const data = await api\(activitiesQuery\(cursor\)\);\s*\n\s*if \(token !== lifecycleToken\) return false;/);
+    expect(client).toMatch(/const data = await api\(activitiesQuery\("completed", pages\.pageSize, cursor\)\);\s*\n\s*if \(token !== lifecycleToken\) return false;/);
   });
 
   it("disables Previous/Next at the ends of the reachable range and while loading", () => {
@@ -209,14 +212,14 @@ describe("activities pagination wiring", () => {
   });
 
   it("repaints only the rows and the pager on a page change", () => {
-    expect(client).toContain("function repaintActivities()");
-    expect(client).toMatch(/goToPage\([\s\S]{0,80}\)\.then\(\(moved\) => \{ if \(moved\) repaintActivities\(\); \}\)/);
-    expect(client).not.toMatch(/repaintActivities[\s\S]{0,200}renderAutomation\(/);
+    expect(client).toContain("function repaintHistory()");
+    expect(client).toMatch(/goToPage\([\s\S]{0,80}\)\.then\(\(moved\) => \{ if \(moved\) repaintHistory\(\); \}\)/);
+    expect(client).not.toMatch(/repaintHistory[\s\S]{0,200}renderAutomation\(/);
   });
 
-  it("hides the pager while loading, empty, or errored", () => {
-    expect(client).toMatch(/function showLoadError[\s\S]{0,400}\$\("act-pager"\)\?\.setAttribute\("hidden", ""\)/);
-    expect(client).toMatch(/const pager = \$\("act-pager"\);[\s\S]{0,500}pager\.hidden = total === 0/);
+  it("hides the pager while loading, empty, errored, or when only one page exists", () => {
+    expect(client).toMatch(/async function loadHistory[\s\S]{0,200}\$\("act-pager"\)\?\.setAttribute\("hidden", ""\)/);
+    expect(client).toMatch(/const pager = \$\("act-pager"\);[\s\S]{0,500}pager\.hidden = total === 0 \|\| \(totalPages <= 1 && total <= pages\.pageSize\)/);
   });
 
   it("replaces a cached row in place with the server's authoritative activity", () => {
@@ -231,15 +234,18 @@ describe("activities pagination wiring", () => {
   });
 
   it("offers End now only for open drops and ends them through the close endpoint", () => {
-    expect(client).toMatch(/activity\.actions\?\.canEnd \? `<div class="act-row-actions"><button[^`]*data-activity-end="\$\{esc\(activity\.id\)\}">End now<\/button><\/div>` : ""/);
+    // Only live rows carry End now; it is a quiet secondary row action, not an accent/danger button.
+    expect(client).toMatch(/activity\.actions\?\.canEnd \? action\(\{ label: "End now", size: "xs", attrs: `data-activity-end="\$\{esc\(activity\.id\)\}"[^`]*` \}\) : ""/);
+    expect(client).not.toMatch(/label: "End now"[^}]*variant/);
+    expect(client).not.toMatch(/function historyRowHtml[\s\S]{0,900}data-activity-end/);
     expect(client).toContain("if (button.dataset.activityEnd) return void endActivity(button.dataset.activityEnd);");
     expect(client).toContain("async function endActivity(id, token = lifecycleToken)");
     expect(client).toMatch(/window\.YRDialog\?\.confirm[\s\S]{0,300}confirmText: "End now",\s*\n\s*danger: true/);
     expect(client).toMatch(/api\(sitePath\("\/api\/activities\/close", activeSiteId\), \{\s*\n\s*method: "POST"[\s\S]{0,120}body: JSON\.stringify\(\{ siteId: activeSiteId, activityId: id \}\)/);
-    // The returned row replaces the cached one; a stale board response is dropped.
-    expect(client).toMatch(/if \(token !== lifecycleToken\) return false;\s*\n\s*activityPaging\.pages\.replace\(body\.activity\);\s*\n[\s\S]{0,160}renderActivityRows\(\);/);
-    // A drop that ended on its own (409) or vanished (404) refreshes the list instead of guessing.
-    expect(client).toMatch(/if \(error\?\.status === 409 \|\| error\?\.status === 404\) await loadActivities\(\);/);
+    // An ended drop moves from Live to History, so both lists reload from the server; a stale board response is dropped.
+    expect(client).toMatch(/if \(token !== lifecycleToken\) return false;\s*\n\s*feedback\(body\.changed[\s\S]{0,120}await loadAll\(token\);/);
+    // A drop that ended on its own (409) or vanished (404) refreshes the lists instead of guessing.
+    expect(client).toMatch(/if \(error\?\.status === 409 \|\| error\?\.status === 404\) await loadAll\(token\);/);
     expect(client).toMatch(/if \(button\) button\.disabled = false;/);
   });
 
@@ -257,6 +263,8 @@ describe("activities pagination wiring", () => {
     expect(page).toContain('data-pager-step="1"');
     expect(page).toMatch(/id="act-pager-prev"[^>]*disabled/);
     expect(page).toMatch(/id="act-pager-next"[^>]*disabled/);
+    // Never visible until the client proves a second page exists.
+    expect(page).toMatch(/id="act-pager"[^>]*hidden/);
   });
 
   it("styles the pager bar and its current page", () => {

@@ -180,10 +180,12 @@ function deriveRenderableRoutes() {
     routes.push({ path: section.path, render: "dashboard", hasSubnav, hasBreadcrumbs });
     for (const tab of tabs) routes.push({ path: `${section.path}/${tab}`, render: "dashboard", hasSubnav: true, hasBreadcrumbs });
   }
-  routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: true, hasBreadcrumbs: false });
+  routes.push({ path: "/dashboard/giveaways", render: "giveaways", tab: "hub", hasSubnav: false, hasBreadcrumbs: false });
   for (const [tab] of GIVEAWAY_TABS) {
     routes.push({ path: `/dashboard/giveaways/${tab === "preds" ? "predictions" : tab}`, render: "giveaways", tab, hasSubnav: true, hasBreadcrumbs: true });
   }
+  // Tournaments is an Engage rail child with no Giveaways subnav.
+  routes.push({ path: "/dashboard/giveaways/tournaments", render: "giveaways", tab: "tournaments", hasSubnav: false, hasBreadcrumbs: true });
   for (const tab of REWARDS_TABS) {
     routes.push({
       path: tab.href,
@@ -198,7 +200,7 @@ function deriveRenderableRoutes() {
       routes.push({ ...route, hasSubnav: true, hasBreadcrumbs: true });
     }
   }
-  routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: true, hasBreadcrumbs: false });
+  routes.push({ path: "/dashboard/activities", render: "activities", hasSubnav: false, hasBreadcrumbs: false });
   for (const tab of PEOPLE_TABS) {
     // Members is the Audience root page, while Activity and Reviews keep
     // the section trail.
@@ -450,14 +452,16 @@ describe("dashboard chrome ownership", () => {
     expect(violations.duplicateSubnavLabels).toEqual([]);
   });
 
-  it("gives Engage and Rewards their own tab strips", () => {
+  it("gives Giveaways and Rewards their own tab strips", () => {
     const strip = (html, className) => region(html, new RegExp(`<nav\\b[^>]*class="[^"]*${className}`), "nav");
     const marks = (html) =>
-      [...strip(html, "engage-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
+      [...strip(html, "gw-subnav").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
         .map((match) => ({ href: match[1], label: match[2], current: match[0].includes('aria-current="page"') }));
 
+    // Activities is a rail destination of its own: no page-level tab strip.
     const activities = PAGES.activities.Component({ user }).toString();
-    expect(marks(activities).find((t) => t.current)?.href).toBe("/dashboard/activities");
+    expect(strip(activities, "gw-subnav")).toBe("");
+    expect(strip(activities, "engage-tabs")).toBe("");
 
     const shop = PAGES.rewardsShop.Component({ user }).toString();
     const shopTabs = [...strip(shop, "rewards-tabs").matchAll(/<a\b[^>]*class="v3-tab[^"]*"[^>]*href="([^"]+)"[^>]*>([^<]+)</g)]
@@ -467,9 +471,11 @@ describe("dashboard chrome ownership", () => {
     ]);
     expect(shopTabs.find((t) => t.current)?.href).toBe("/dashboard/rewards/shop");
     expect(shop).not.toContain("engage-tabs");
+    expect(shop).not.toContain("gw-subnav");
 
     const giveaways = PAGES.giveaways.Component({ user }).toString();
-    expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways");
+    expect(marks(giveaways).map((t) => t.label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
+    expect(marks(giveaways).find((t) => t.current)?.href).toBe("/dashboard/giveaways/chat");
 
     // The Kick channel connection belongs to Settings → Connections, so the
     // Engage and Rewards strips must not appear there.

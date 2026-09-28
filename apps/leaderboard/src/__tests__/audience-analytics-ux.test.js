@@ -80,7 +80,7 @@ describe("Analytics bodies", () => {
     expect(html).toContain('id="perf-heatmap"');
     expect(html).toContain("Actions people took");
     expect(html).toContain("How Insights counts activity");
-    const insightsNav = html.match(/<nav class="v3-tabs" aria-label="Insights pages">([\s\S]*?)<\/nav>/)?.[1] || "";
+    const insightsNav = html.match(/<nav class="v3-tabs" aria-label="Insights pages"[^>]*>([\s\S]*?)<\/nav>/)?.[1] || "";
     expect(insightsNav).toContain("Detailed analytics");
     expect(insightsNav).not.toContain(">More<");
     expect(html).toContain('data-range="7"');

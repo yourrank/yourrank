@@ -101,6 +101,8 @@ describe("signed-in shell navigation", () => {
     const html = renderPage(AudienceMembersPage);
     for (const href of [
       "/dashboard/leaderboard",
+      "/dashboard/giveaways",
+      "/dashboard/activities",
       "/dashboard/giveaways/tournaments",
       "/dashboard/giveaways/chat",
       "/dashboard/telegram",
@@ -110,7 +112,6 @@ describe("signed-in shell navigation", () => {
     ]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).not.toContain('href="/dashboard/giveaways"');
     expect(html).not.toContain('href="/dashboard/games"');
     expect(html).not.toContain('class="lb-site-settings"');
     expect(html).toContain('href="/help/support?area=credits');
@@ -179,7 +180,9 @@ describe("signed-in shell navigation", () => {
     const html = PAGES.dashboardNotFound.Component({ user }).toString();
     expect(html).toContain('data-auth-workspace="true"');
     expect(html).toMatch(/This dashboard page doesn(?:&#39;|')t exist/);
-    expect(html).toContain('href="/dashboard/leaderboard/setup"');
+    expect(html).toContain('class="v3-empty"');
+    expect(html).toMatch(/<a class="v3-btn v3-btn--accent[^"]*" href="\/dashboard">Go to Home<\/a>/);
+    expect(html).not.toContain('aria-label="Dashboard destinations"');
     expect(html).not.toContain("No leaderboard here");
     expect(PAGES.dashboardNotFound.config.scripts.join("")).not.toContain("dashboard.js");
     expect(PAGES.dashboardNotFound.config.configFor).toBeUndefined();
@@ -257,13 +260,14 @@ describe("signed-in shell navigation", () => {
     for (const href of [
       "/dashboard",
       "/dashboard/leaderboard",
+      "/dashboard/giveaways",
+      "/dashboard/activities",
       "/dashboard/giveaways/tournaments",
       "/dashboard/giveaways/chat",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
     ]) expect(html).toContain(`href="${href}"`);
-    expect(html).not.toContain('href="/dashboard/giveaways"');
     expect(html).not.toContain('href="/dashboard/games"');
     expect(html).toContain('href="/help/support?area=account');
     expect(html).toContain("Help &amp; feedback");

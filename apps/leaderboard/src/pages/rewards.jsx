@@ -1,6 +1,7 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
+import { raw } from "hono/html";
 import {
   channelPage,
   overviewPage,
@@ -10,6 +11,7 @@ import {
 } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
+import { subnavHtml } from "@yourrank/shared/dashboard-ui";
 
 const PAGES = { channel: channelPage, overview: overviewPage, rules: rulesPage, shop: shopPage, redemptions: redemptionsPage };
 
@@ -21,19 +23,7 @@ export const REWARDS_TABS = [
 ];
 
 function RewardsTabs({ active }) {
-  return (
-    <nav class="v3-tabs rewards-tabs" aria-label="Rewards sections">
-      {REWARDS_TABS.map((t) => (
-        <a
-          class={"v3-tab" + (t.key === active ? " is-on" : "")}
-          href={t.href}
-          aria-current={t.key === active ? "page" : undefined}
-        >
-          {t.label}
-        </a>
-      ))}
-    </nav>
-  );
+  return raw(subnavHtml({ items: REWARDS_TABS, active, label: "Rewards sections", className: "rewards-tabs" }));
 }
 
 function RewardsContent({ tab, subnav = true }) {

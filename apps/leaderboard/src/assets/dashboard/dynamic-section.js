@@ -11,8 +11,8 @@
 //         → fetch /dashboard/_content?path=<route>
 //         → ensure the stylesheets that fragment declares are usable
 //         → inject HTML into the dynamic content region
-//         → dynamically import the boot module
-//         → call module.enter()
+//         → import every boot owner for the route (section + tab)
+//         → call each module's enter() in order
 //         → update title / nav / topbar
 //
 // On the next navigation away, leave() is called to tear down timers,
@@ -20,7 +20,7 @@
 
 import { $ } from "./utils.js";
 import { renderError } from "./states.js";
-import { DYNAMIC_SECTIONS, dynamicPath, dynamicTitle, parseDynamicPath } from "./routes.js";
+import { DYNAMIC_SECTIONS, bootOwners, dynamicPath, dynamicTitle, parseDynamicPath } from "./routes.js";
 import { clearSession } from "./session.js";
 import { loginRedirectPath } from "./request.js";
 
@@ -29,12 +29,23 @@ const BOOT_IMPORTERS = {
   activities: () => import("../activities.js"),
   credits: () => import("../credits.js"),
   giveaways: () => import("../giveaways.js"),
+  tournaments: () => import("../tournaments.js"),
   account: () => import("../account.js"),
   people: () => import("../people.js"),
 };
 
 // Cached boot modules so we don't re-import on every visit.
 const bootModuleCache = {};
+
+/** Import a boot owner once, reusing the module on later visits. */
+async function importBoot(key) {
+  let mod = bootModuleCache[key];
+  if (!mod) {
+    mod = await BOOT_IMPORTERS[key]();
+    bootModuleCache[key] = mod;
+  }
+  return mod;
+}
 
 // In-flight/settled stylesheet requests keyed by absolute URL, so repeated
 // navigation reuses the one link element the first visit inserted.
@@ -129,11 +140,28 @@ export function ensureStyles(hrefs) {
 }
 
 let currentController = null;
-let currentLeave = null;
-let currentBootKey = null;
+let currentLeaves = [];
+let currentBootKeys = [];
 // Token that increments on every navigation; a late-finishing boot checks
 // this before rendering to avoid stomping a newer section.
 let navToken = 0;
+
+// A fragment fetch that never resolves must not hang navigation forever.
+const FRAGMENT_TIMEOUT_MS = 15000;
+
+/** Call each stored leave in reverse order (tab owner first, base last). */
+function runLeaves(leaves) {
+  for (const leave of [...leaves].reverse()) {
+    try { leave(); } catch (e) { console.error("dynamic-section leave failed", e); }
+  }
+}
+
+/** Tear down the active section's leave handlers and forget its boot owners. */
+function runCurrentLeaves() {
+  runLeaves(currentLeaves);
+  currentLeaves = [];
+  currentBootKeys = [];
+}
 
 /**
  * Load a dynamic section into the persistent shell.
@@ -152,10 +180,7 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     currentController.abort();
     currentController = null;
   }
-  if (currentLeave) {
-    try { currentLeave(); } catch (e) { console.error("dynamic-section leave failed", e); }
-    currentLeave = null;
-  }
+  runCurrentLeaves();
 
   const myToken = ++navToken;
   const controller = new AbortController();
@@ -179,6 +204,9 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
   // Toggle topbar controls to match this section's board context.
   setTopbarContext(section.boardContext);
 
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, FRAGMENT_TIMEOUT_MS);
+
   try {
     const params = new URLSearchParams({ path: fullUrl });
     const res = await fetch(`/dashboard/_content?${params}`, {
@@ -197,11 +225,14 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
       }
       if (res.status === 403) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || "You don't have permission to view this section.");
+        const error = new Error(body?.error || "You don't have permission to view this section.");
+        error.userFacing = true;
+        throw error;
       }
       throw new Error(`Failed to load section (HTTP ${res.status})`);
     }
     const data = await res.json();
+    clearTimeout(timer);
 
     // Stale-response guard: if the user navigated again while we were fetching,
     // discard this result entirely.
@@ -226,38 +257,43 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     // Update the document title.
     document.title = data.title || dynamicTitle(page, tab);
 
-    // Boot the section's client module.
-    const bootKey = section.boot;
-    let mod = bootModuleCache[bootKey];
-    if (!mod) {
-      mod = await BOOT_IMPORTERS[bootKey]();
-      bootModuleCache[bootKey] = mod;
-    }
+    // Boot every client module that owns this route: the base section module
+    // first, then any tab-specific owners (e.g. tournaments.js owns the
+    // Tournaments tab inside the giveaways section).
+    const owners = bootOwners(page, tab);
+    const mods = await Promise.all(owners.map(importBoot));
     // Stale guard after the async import.
     if (myToken !== navToken) {
       // We navigated away during the import; don't enter.
       return false;
     }
 
-    if (mod.enter) {
-      const enterResult = mod.enter({ tab, page, signal: controller.signal });
-      if (enterResult && typeof enterResult.then === "function") {
-        await enterResult;
+    for (const mod of mods) {
+      // A newer navigation may have started while the previous owner was
+      // entering; it already ran every leave registered so far.
+      if (myToken !== navToken) return false;
+      // Register leave before enter, so the next navigation tears this owner
+      // down even when it starts while enter() is still in flight (the owner's
+      // own lifecycle token then turns the late enter into a no-op).
+      if (typeof mod.leave === "function") currentLeaves.push(mod.leave);
+      if (mod.enter) {
+        const enterResult = mod.enter({ tab, page, signal: controller.signal });
+        if (enterResult && typeof enterResult.then === "function") {
+          await enterResult;
+        }
       }
     }
-    currentLeave = mod.leave || null;
-    currentBootKey = bootKey;
+    if (myToken !== navToken) return false;
+    currentBootKeys = owners;
 
     // Move focus to the new section so keyboard and screen-reader users
     // arrive with the content, not stranded on the sidebar link they
     // activated. The heading is given a temporary tabindex so it can receive
     // focus without being added to the normal Tab order.
-    if (myToken === navToken) {
-      const heading = container.querySelector("h1, h2, [data-focus-target]");
-      if (heading) {
-        heading.setAttribute("tabindex", "-1");
-        heading.focus({ preventScroll: true });
-      }
+    const heading = container.querySelector("h1, h2, [data-focus-target]");
+    if (heading) {
+      heading.setAttribute("tabindex", "-1");
+      heading.focus({ preventScroll: true });
     }
 
     // Signal boot completion for the watchdog.
@@ -266,14 +302,22 @@ export async function loadDynamicSection(page, tab = "", { query = "" } = {}) {
     return true;
   } catch (err) {
     if (err?.name === "AbortError" || controller.signal.aborted) {
-      // Navigation was superseded — not an error.
-      return false;
+      if (!timedOut) {
+        // Navigation was superseded — not an error.
+        return false;
+      }
     }
+    const shown = timedOut ? new Error("Timed out loading section fragment") : err;
     if (myToken !== navToken) return false;
-    console.error("dynamic-section load failed", err);
-    showLocalError(container, err);
+    // Owners this navigation half-entered before the failure are torn down
+    // so the error state does not sit on top of live timers or sockets.
+    runCurrentLeaves();
+    console.error("dynamic-section load failed", shown);
+    showLocalError(container, shown);
     window.__yrBoot?.signal();
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -286,11 +330,7 @@ export function leaveDynamicSection() {
     currentController.abort();
     currentController = null;
   }
-  if (currentLeave) {
-    try { currentLeave(); } catch (e) { console.error("dynamic-section leave failed", e); }
-    currentLeave = null;
-  }
-  currentBootKey = null;
+  runCurrentLeaves();
   const container = $("lbDynamic");
   if (container) {
     container.hidden = true;
@@ -380,11 +420,14 @@ export function restoreTopbarContext() {
 
 /** Show a local error state with a retry button inside the content region. */
 function showLocalError(container, err) {
-  const message = err?.message || "The section could not be loaded.";
+  const body = err?.userFacing === true
+    ? err.message
+    : "Something went wrong while loading it. Try again.";
   renderError(container, {
     title: "Couldn't load this section.",
-    body: message,
-    retry: () => { const route = parseDynamicPath(location.pathname); if (route) loadDynamicSection(route.page, route.tab); },
+    body,
+    retryLabel: "Retry",
+    retry: () => { const route = parseDynamicPath(location.pathname); if (route) loadDynamicSection(route.page, route.tab, { query: location.search }); },
   });
 }
 
@@ -409,5 +452,5 @@ export function showSpaSection(page) {
 
 /** true if a dynamic section is currently active. */
 export function isDynamicActive() {
-  return currentLeave !== null || currentBootKey !== null;
+  return currentLeaves.length > 0 || currentBootKeys.length > 0;
 }

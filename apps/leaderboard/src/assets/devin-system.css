@@ -417,6 +417,12 @@ body:not(:has(.v3-dash[data-auth-workspace])) .yr-ui textarea:focus {
 .auth-entry #submit { width: 100%; min-height: var(--yr-form-action-height); margin-top: .25rem; font-weight: 500; font-size: var(--fs-sm); transition: background 150ms ease; }
 .auth-entry #submit:hover { background: var(--devin-primary-hover); transform: none; box-shadow: none; filter: none; }
 .auth-entry #submit:active { transform: none; }
+.auth-entry .auth-methods { background: var(--devin-surface); margin-bottom: var(--space-6); }
+.auth-entry .auth-method { min-height: var(--tap); font-family: inherit; }
+.auth-entry .auth-method.is-on { background: var(--devin-bg); box-shadow: none; }
+.auth-entry #codeSubmit, .auth-entry #codeVerify { width: 100%; min-height: var(--yr-form-action-height); }
+.auth-entry .code-actions { flex-wrap: wrap; }
+.auth-entry #codeStep2 > .sub { color: var(--devin-muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .auth-entry .auth-url-wrap { padding: 0 var(--space-3); background: var(--devin-surface); }
 .auth-entry .auth-url-prefix { color: var(--devin-muted); font-size: var(--fs-sm); }
 .auth-entry .field .auth-url-input { border: 0; border-radius: 0; padding: 0; background: transparent; }
