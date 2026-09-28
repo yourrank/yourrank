@@ -1,7 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import {
   fetchDashboardJson,
+  isTransientDashboardError,
   loginRedirectPath,
+  retryTransient,
 } from "../assets/dashboard/request.js";
 
 const response = (body, status = 200) => new Response(JSON.stringify(body), {
@@ -87,5 +89,75 @@ describe("dashboard startup requests", () => {
     const retry = await fetchDashboardJson("/api/auth/me", {}, { fetchFn });
     expect(retry.body.user.id).toBe("user-2");
     expect(attempts).toBe(2);
+  });
+
+  it("retries transient failures and resolves when an attempt succeeds", async () => {
+    let calls = 0;
+    const waits = [];
+    const result = await retryTransient(async () => {
+      calls++;
+      if (calls === 1) throw { code: "NETWORK" };
+      return "ready";
+    }, {
+      delays: [15],
+      sleep: async (ms) => waits.push(ms),
+    });
+
+    expect(result).toBe("ready");
+    expect(calls).toBe(2);
+    expect(waits).toEqual([15]);
+  });
+
+  it("rethrows the last error after three retries", async () => {
+    let calls = 0;
+    const waits = [];
+    const lastError = { code: "SERVER" };
+    await expect(retryTransient(async () => {
+      calls++;
+      throw calls === 4 ? lastError : { code: "SERVER" };
+    }, {
+      delays: [1, 2, 3],
+      sleep: async (ms) => waits.push(ms),
+    })).rejects.toBe(lastError);
+
+    expect(calls).toBe(4);
+    expect(waits).toEqual([1, 2, 3]);
+  });
+
+  it("does not retry forbidden or authentication errors", async () => {
+    for (const error of [{ code: "FORBIDDEN", status: 403 }, { code: "AUTH", status: 401 }]) {
+      let calls = 0;
+      await expect(retryTransient(async () => {
+        calls++;
+        throw error;
+      }, { sleep: async () => {} })).rejects.toBe(error);
+      expect(calls).toBe(1);
+    }
+  });
+
+  it("stops after the continuation guard turns false", async () => {
+    let calls = 0;
+    let checks = 0;
+    const error = { code: "NETWORK" };
+    await expect(retryTransient(async () => {
+      calls++;
+      throw error;
+    }, {
+      delays: [1, 2],
+      shouldContinue: () => ++checks === 1,
+      sleep: async () => {},
+    })).rejects.toBe(error);
+
+    expect(calls).toBe(1);
+    expect(checks).toBe(2);
+  });
+
+  it("classifies transient statuses but excludes auth and entitlement denials", () => {
+    expect(isTransientDashboardError({ code: "INVALID_RESPONSE" })).toBe(true);
+    expect(isTransientDashboardError({ status: 404 })).toBe(true);
+    expect(isTransientDashboardError({ status: 409 })).toBe(true);
+    expect(isTransientDashboardError({ status: 429 })).toBe(true);
+    expect(isTransientDashboardError({ code: "AUTH", status: 429 })).toBe(false);
+    expect(isTransientDashboardError({ code: "entitlement_required", status: 403 })).toBe(false);
   });
 });

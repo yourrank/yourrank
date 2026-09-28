@@ -84,6 +84,7 @@ export function setMetricValue(el, text) {
 const METRIC_UNAVAILABLE_COPY = Object.freeze({
   error: "Couldn't load this stat. Reload the page to try again.",
   setup: "Not connected yet, so there is nothing to measure.",
+  locked: "Available on the Pro plan.",
 });
 
 /** The panel loaded and the real number is zero: show the zero, say why it is zero. */
@@ -96,17 +97,16 @@ export function setMetricEmpty(el, { value = "0", note = "No activity in this pe
   el.textContent = String(value);
 }
 
-/**
- * The value is genuinely unknown. `reason` picks the copy: "error" (the request
- * failed) or "setup" (the feature is not connected). Never used for real zeros.
- */
+/** A metric without a numeric value. `reason` distinguishes error, setup, and plan access. */
 export function setMetricUnknown(el, reason = "error") {
   if (!el) return;
   el.removeAttribute("aria-busy");
   el.removeAttribute("data-metric-empty");
   el.setAttribute("data-metric-unavailable", reason);
   el.title = METRIC_UNAVAILABLE_COPY[reason] || METRIC_UNAVAILABLE_COPY.error;
-  el.innerHTML = `<span class="metric-unavailable" aria-label="${reason === "setup" ? "Not connected" : "Couldn't load"}">${UNKNOWN}</span>`;
+  el.innerHTML = reason === "locked"
+    ? '<span class="metric-unavailable metric-locked" aria-label="Available on Pro">Pro</span>'
+    : `<span class="metric-unavailable" aria-label="${reason === "setup" ? "Not connected" : "Couldn't load"}">${UNKNOWN}</span>`;
 }
 
 export function setRowsLoading(tbody, { cols = 1, rows = 3 } = {}) {

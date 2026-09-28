@@ -189,7 +189,8 @@ export function initOverlayDesigner() {
   });
   copyBtn?.addEventListener("click", async () => {
     try {
-      await copyToClipboard(location.origin + buildOverlayPath(slug(), design));
+      const copied = await copyToClipboard(location.origin + buildOverlayPath(slug(), design));
+      if (!copied) throw new Error("Could not copy the URL. Select it from the share box instead.");
       showToast("Composed OBS overlay URL copied to clipboard!", "info");
     } catch {
       showToast("Could not copy the URL. Select it from the share box instead.", "error");

@@ -63,6 +63,7 @@ describe("selected-site Insights", () => {
     expect(body.participation).toEqual({ participants: 5, repeatParticipants: 2, activeCodeDrops: 2 });
     expect(body.rewards).toEqual({ claimsSubmitted: 6, claimsCompleted: 4, topReward: { name: "VIP role", claims: 3 } });
     expect(body.operations).toEqual({ pendingReviews: 2, pendingClaims: 1 });
+    expect(body.gated).toEqual({ rewards: false, pendingReviews: false, pendingClaims: false });
     expect(body).not.toHaveProperty("viewers");
     expect(JSON.stringify(body)).not.toMatch(/provider|externalId|telegram_user|kick_user|email/i);
     expect(calls.capability).toEqual([{ siteId: "site-1", capability: "canRoleViewInsights" }]);
@@ -178,6 +179,18 @@ describe("selected-site Insights", () => {
     expect(body.rewards).toEqual({ claimsSubmitted: 3, claimsCompleted: 2, topReward: null });
     expect(body.operations).toEqual({ pendingReviews: 2, pendingClaims: 1 });
     expect(body.availability).toEqual({ community: true, participation: false, rewards: true, pendingReviews: true, pendingClaims: true });
+  });
+
+  it("marks advanced Insights metrics as gated on the Free plan", async () => {
+    const { deps } = dependencies({ user: { id: "owner-1", plan: "free", status: "active" } });
+
+    const response = await handleInsights(request("/api/insights?siteId=site-1&days=7"), {}, deps);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.gated).toEqual({ rewards: true, pendingReviews: true, pendingClaims: true });
+    expect(body.rewards).toBeNull();
+    expect(body.availability.rewards).toBe(false);
   });
 
   it("denies unauthenticated and viewer-only sessions with private responses", async () => {

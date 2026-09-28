@@ -152,9 +152,13 @@ function switchTab(name) {
 // load, settings saves, lifecycle ops) always re-render.
 async function loadEntries({ refreshOnly = true } = {}) {
   if (!tournament) return;
+  let bracketUnavailable = false;
   const [entryData, bracketData] = await Promise.all([
     api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`),
-    api(`/api/tournaments/${encodeURIComponent(tournament.id)}/bracket`).catch(() => ({ matches: [] })),
+    api(`/api/tournaments/${encodeURIComponent(tournament.id)}/bracket`).catch(() => {
+      bracketUnavailable = true;
+      return { matches: [] };
+    }),
   ]);
   entries = entryData.entries || [];
   entryCounts = entryData.counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 };
@@ -168,6 +172,12 @@ async function loadEntries({ refreshOnly = true } = {}) {
   const form = $("tournament-settings-form");
   const settingsBusy = refreshOnly && form && !form.closest("[hidden]")
     && (form.contains(document.activeElement) || settingsSnapshot() !== settingsBaseline);
+  const updateBracketStatus = () => {
+    const message = $("tournament-message");
+    const bracketError = "Could not load the tournament bracket. Try again.";
+    if (bracketUnavailable) setMessage(bracketError, true);
+    else if (message?.textContent === bracketError) setMessage("");
+  };
   if (settingsBusy) {
     const vm = buildViewModel({ tournament, entries, entryCounts, matches, lifecycle: lifecycleOf(tournament, matches.length), chatRegistration, board, activeTab });
     const list = $("tournament-entry-list");
@@ -176,9 +186,11 @@ async function loadEntries({ refreshOnly = true } = {}) {
     if (count) count.textContent = vm.stats[0].value;
     const entriesTab = $("tournament-tab-entries");
     if (entriesTab) entriesTab.textContent = `Entries (${vm.activeCount})`;
+    updateBracketStatus();
     return;
   }
   render();
+  updateBracketStatus();
 }
 
 async function loadTournament() {

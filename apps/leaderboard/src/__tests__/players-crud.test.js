@@ -167,6 +167,32 @@ describe("Players CRUD validation", () => {
     expect(result.invalid).toHaveLength(1);
   });
 
+  it("skips blank rows while collecting valid players", () => {
+    const rows = setupRows({});
+    const blankName = rows.children[0].querySelector(".p-name");
+    const blankWager = rows.children[0].querySelector(".p-wager");
+    players.setPlayerFieldError(blankName, "Old name error");
+    players.setPlayerFieldError(blankWager, "Old wager error");
+    rows.appendChild(row({ name: "Alice", wagered: "5" }));
+
+    const result = players.collectPlayers();
+
+    expect(result.invalid).toHaveLength(0);
+    expect(result.players).toHaveLength(1);
+    expect(result.players[0].name).toBe("Alice");
+    expect(blankName.getAttribute("aria-invalid")).toBeNull();
+    expect(blankWager.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("still rejects a number-only row without a player name", () => {
+    setupRows({ wagered: "5" });
+
+    const result = players.collectPlayers();
+
+    expect(result.invalid.map(({ label }) => label)).toEqual(["Player name"]);
+    expect(result.players).toHaveLength(0);
+  });
+
   it("does not report validation errors during preview collection", () => {
     const rows = setupRows({ name: "Alice", wagered: "abc" });
     const result = players.collectPlayers({ reportErrors: false });
@@ -214,6 +240,16 @@ describe("Players CRUD validation", () => {
     });
     players.clearPlayersDraft();
     expect(players.loadPlayersDraft()).toBeNull();
+  });
+
+  it("omits blank rows from persisted drafts", () => {
+    const rows = setupRows({});
+    rows.appendChild(row({ name: "Alice", wagered: "5" }));
+
+    players.persistPlayersDraft();
+
+    expect(players.loadPlayersDraft().players).toHaveLength(1);
+    expect(players.loadPlayersDraft().players[0].name).toBe("Alice");
   });
 
   // A staged draft identical to the saved rows used to be restored and marked
