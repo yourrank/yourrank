@@ -69,7 +69,7 @@ export interface LeaderboardPageOpts {
 }
 
 export const DASHBOARD_BOOT_WATCHDOG =
-  '<script src="/assets/dashboard-boot-watchdog.js?v=1"></script>';
+  '<script src="/assets/dashboard-boot-watchdog.js?v=2"></script>';
 
 /** Full HTML document for leaderboard dashboard pages. */
 export function leaderboardPageHtml(opts: LeaderboardPageOpts): string {
