@@ -1,18 +1,34 @@
-// Markup for Giveaways (Chat Giveaways primary; Raffles, Predictions and
-// Tournaments secondary). Code Drops are owned by Activities.
+// Markup for Giveaways (Chat Giveaway primary; Raffle and Prediction
+// secondary) and the Engage hub. Code Drops are owned by Activities;
+// Tournaments renders its own pane without the Giveaways subnav.
 
-import { engageTabsHtml } from "./engage-tabs.jsx";
+import { routeById } from "@yourrank/shared/dashboard-routes";
 
 export const GIVEAWAY_TABS = [
-  ["chat", "Chat giveaways"],
-  ["raffles", "Raffles"],
-  ["preds", "Predictions"],
-  ["tournaments", "Tournaments"],
+  ["chat", "Chat Giveaway"],
+  ["raffles", "Raffle"],
+  ["preds", "Prediction"],
 ];
+
+// Panes that can render — tournaments is a route but stays off the subnav.
+const GIVEAWAY_PANES = [...GIVEAWAY_TABS.map(([tab]) => tab), "tournaments"];
+
+const SUBNAV_ROUTES = { chat: "giveaways.chat", raffles: "giveaways.raffles", preds: "giveaways.preds" };
+
+// Giveaways secondary nav: Chat Giveaway | Raffle | Prediction. Always visible
+// on the three subtype pages; plain anchors ride the SPA router.
+function giveawaysSubnavHtml(active) {
+  const items = GIVEAWAY_TABS.map(([key, label]) => {
+    const href = routeById(SUBNAV_ROUTES[key]).canonicalPath;
+    return `<a class="v3-tab${key === active ? " is-on" : ""}" href="${href}"${key === active ? ' aria-current="page"' : ""}>${label}</a>`;
+  }).join("");
+  return `<nav class="v3-tabs gw-subnav" aria-label="Giveaways">${items}</nav>`;
+}
 
 // Lucide 24x24 stroke icons (fill="none" stroke="currentColor" stroke-width="2"
 // stroke-linecap="round" stroke-linejoin="round"). One source for the hub cards.
 const ENGAGE_ICONS = {
+  activities: '<path d="M13 2 4 14h7l-1 8 10-14h-7z"/>',
   "message-square": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   network: '<rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/>',
   ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
@@ -25,28 +41,24 @@ const engageIcon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="curre
 
 const ENGAGE_BACK = `<a class="engage-back" href="/dashboard/giveaways">${engageIcon("chevron-left")}Engage</a>`;
 
-// Engage feature hub: the four Engage tools as equal cards. Status copy is the
-// server-rendered "none" default; giveaways.js rewrites it from the APIs.
+// Engage hub: the three Engage destinations as equal cards. Status copy is
+// the server-rendered default; giveaways.js rewrites it for the cards that
+// have a status source (chat giveaway, tournaments). Activities is static.
 const ENGAGE_FEATURES = [
   {
-    feature: "chat", icon: "message-square", title: "Chat Giveaway", href: "/dashboard/giveaways/chat",
-    desc: "Run live giveaways from your chat.",
+    feature: "activities", icon: "activities", title: "Activities", href: "/dashboard/activities",
+    desc: "Run code drops and community activities.",
+    state: "Activities", meta: "Share a free code with your community. Track claims here.", action: "Open activities",
+  },
+  {
+    feature: "chat", icon: "message-square", title: "Giveaways", href: "/dashboard/giveaways/chat",
+    desc: "Run chat giveaways, raffles, and predictions.",
     state: "No active giveaway", meta: "Create a giveaway to engage your viewers.", action: "Create giveaway",
   },
   {
     feature: "tournaments", icon: "network", title: "Tournament", href: "/dashboard/giveaways/tournaments",
     desc: "Run brackets and community competitions.",
     state: "No active tournament", meta: "Set up a bracket for your community.", action: "Create tournament",
-  },
-  {
-    feature: "raffles", icon: "ticket", title: "Raffle", href: "/dashboard/giveaways/raffles",
-    desc: "Run ticket-based drawings for your community.",
-    state: "No active raffle", meta: "Set up a raffle to reward your community.", action: "Create raffle",
-  },
-  {
-    feature: "preds", icon: "bar-chart-3", title: "Prediction", href: "/dashboard/giveaways/predictions",
-    desc: "Let your viewers predict outcomes.",
-    state: "No active prediction", meta: "Create a prediction to get your community involved.", action: "Create prediction",
   },
 ];
 
@@ -68,7 +80,6 @@ export function renderEngageHubHtml() {
     </div>
   </article>`).join("");
   return `
-${engageTabsHtml("giveaways")}
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
     <h1>Engage</h1>
@@ -248,8 +259,8 @@ export function renderGiveawayDrawersHtml() {
 
 export function renderGiveawaysContentHtml(activeTab = "chat") {
   if (activeTab === "hub") return renderEngageHubHtml();
-  const active = GIVEAWAY_TABS.some(([tab]) => tab === activeTab) ? activeTab : "chat";
-  const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Giveaways";
+  const active = GIVEAWAY_PANES.includes(activeTab) ? activeTab : "chat";
+  const activeLabel = GIVEAWAY_TABS.find(([tab]) => tab === active)?.[1] || "Tournaments";
   const activeDescription = {
     chat: "Collect chat entries, draw a winner, and confirm the result live.",
     raffles: "Sell Credit tickets, draw a winner, and keep completed raffles together.",
@@ -259,12 +270,12 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   const html = `
 ${active === "tournaments"
     ? ""
-    : `${engageTabsHtml("giveaways")}
+    : `${giveawaysSubnavHtml(active)}
 <div class="v3-head v3-head--row">
   <div class="v3-head-col">
     ${ENGAGE_BACK}
-    <h1>${activeLabel}</h1>
-    <p class="v3-head-sub">${activeDescription}</p>
+    <h1>Giveaways</h1>
+    <p class="v3-head-sub">${activeLabel} · ${activeDescription}</p>
   </div>
   <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>

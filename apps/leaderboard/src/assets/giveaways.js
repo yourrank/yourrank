@@ -1771,10 +1771,11 @@ if (!window.__yrSpaShell) {
   // injected fragment DOM. leave() stops the poll and timers and removes the
   // document-level keydown listener so nothing leaks. Entry collection itself
   // happens server-side, so leaving the page never affects the giveaway.
-  // ---- Engage feature hub ----
-  // The hub renders its "none" state server-side; once site context is known
-  // the four feature APIs fill in live status. A failed call keeps the SSR
-  // copy and only swaps the meta line for an honest load error.
+  // ---- Engage hub ----
+  // The hub renders its default state server-side; once site context is known
+  // the feature APIs fill in live status for the cards that have one (chat
+  // giveaway, tournaments — Activities is static). A failed call keeps the
+  // SSR copy and only swaps the meta line for an honest load error.
   function applyEngageCard(feature, state) {
     const card = document.querySelector(`#engage-hub .engage-card[data-feature="${feature}"]`);
     if (!card || !state) return;
@@ -1811,8 +1812,6 @@ if (!window.__yrSpaShell) {
     }
     const fetchers = {
       chat: () => chatApi(""),
-      raffles: () => dashboardFetch(sitePath("/api/events/raffles")),
-      preds: () => dashboardFetch(sitePath("/api/predictions")),
       tournaments: () => dashboardFetch(sitePath("/api/tournaments")),
     };
     const features = Object.keys(fetchers);
@@ -1831,6 +1830,9 @@ if (!window.__yrSpaShell) {
 
   function bootGiveaways(context = {}) {
     if (context?.tab === "hub" || document.getElementById("engage-hub")) return bootEngageHub();
+    // Keep the active Giveaways subtype visible when the subnav overflows.
+    document.querySelector(".gw-subnav [aria-current='page']")
+      ?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
     init();
     initEventsHub();
   }
