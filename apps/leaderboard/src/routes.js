@@ -90,6 +90,11 @@ import {
   handleClaimCodeDrop,
 } from "./handlers/events.js";
 import {
+  handleGetEarningRules,
+  handleSaveEarningRules,
+  handleViewerCheckin,
+} from "./handlers/earning-rules.js";
+import {
   handleGetPredictions,
   handleCreatePrediction,
   handleLockPrediction,
@@ -366,6 +371,7 @@ export const ROUTES = [
   { path: "/api/events/drops", method: "GET", handler: withHandler(handleGetCodeDrops) },
   { path: "/api/events/drops", method: "POST", handler: withHandler(handleCreateCodeDrop) },
   { path: "/api/events/drops/claim", method: "POST", handler: withHandler(handleClaimCodeDrop) },
+  { path: "/api/viewer/checkin", method: "POST", handler: withHandler(handleViewerCheckin) },
 
   // Live Predictions & Betting
   { path: "/api/predictions", method: "GET", handler: withHandler(handleGetPredictions) },
@@ -424,6 +430,8 @@ export const ROUTES = [
 
   // Credits / shop dashboard API
   { path: "/api/credits/status", method: "GET", handler: withHandler(handleCreditsStatus) },
+  { path: "/api/credits/earning-rules", method: "GET", handler: withHandler(handleGetEarningRules) },
+  { path: "/api/credits/earning-rules", method: "PUT", handler: withHandler(handleSaveEarningRules) },
   { path: "/api/credits/connect", method: "POST", handler: withHandler(handleCreditsConnect) },
   { path: "/api/credits/rewards/create", method: "POST", handler: withHandler(handleCreditsCreateReward) },
   { path: "/api/credits/rewards", method: "POST", handler: withHandler(handleCreditsSaveReward) },

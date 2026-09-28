@@ -370,6 +370,62 @@ describe("a creator's My Community page", () => {
     expect(html).not.toContain("Member since");
   });
 
+  it("renders an available daily check-in before the non-member code drop", async () => {
+    const html = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: {
+        membershipStatus: "absent",
+        viewerOnSite: null,
+        shopItems: [],
+        ledger: [],
+        claims: [],
+        participation: [],
+        checkin: { amount: 15, claimedToday: false },
+      },
+      opts,
+    });
+
+    expect(html).toContain("Daily check-in");
+    expect(html).toContain("Check in once a day to earn 15 credits");
+    expect(html).toContain('data-checkin data-site-slug="demo-board"');
+    expect(html).toContain(">Check in</button>");
+    expect(html.indexOf("data-checkin")).toBeLessThan(html.indexOf("Have a community code?"));
+    expect(shellSource).toContain('fetch("/api/viewer/checkin"');
+    expect(shellSource).toContain("You already checked in today. Come back tomorrow.");
+    expect(shellSource).toContain("Network error. Your check-in was not confirmed; try again.");
+  });
+
+  it("renders claimed check-ins as disabled and omits them for blocked members", async () => {
+    const common = {
+      viewerOnSite: { balance: 10, blocked: false },
+      shopItems: [],
+      ledger: [],
+      claims: [],
+      participation: [],
+      checkin: { amount: 20, claimedToday: true },
+    };
+    const claimed = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: common,
+      opts,
+    });
+    expect(claimed).toContain("Checked in today");
+    expect(claimed).toContain('data-checkin data-site-slug="demo-board" disabled');
+
+    const blocked = await renderSite({
+      r: record,
+      section: "me",
+      viewer: { kick_username: "member" },
+      viewerData: { ...common, viewerOnSite: { balance: 10, blocked: true } },
+      opts,
+    });
+    expect(blocked).not.toContain("Daily check-in");
+  });
+
   it("shows and then clears controlled creator-scoped sign-in errors", async () => {
     const html = await renderSite({
       r: record,

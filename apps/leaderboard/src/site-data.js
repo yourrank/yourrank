@@ -102,7 +102,7 @@ export async function getLoyaltyBoard(siteId, { limit = LOYALTY_BOARD_LIMIT } = 
 export async function getViewerSiteData(
   siteId,
   viewerId,
-  { shop = false, claims = false, ledger = false, participation = false } = {},
+  { shop = false, claims = false, ledger = false, participation = false, checkin = false } = {},
   {
     oneImpl = one,
     queryImpl = query,
@@ -119,6 +119,7 @@ export async function getViewerSiteData(
     participation: [],
     participationLimit: VIEWER_PARTICIPATION_LIMIT,
     participationTruncated: false,
+    checkin: null,
   };
   if (!viewerId) {
     if (shop) return { membershipStatus: "absent", viewerOnSite: null, shopItems: await getShopItems(siteId, queryImpl), ...emptyHistory };
@@ -138,11 +139,35 @@ export async function getViewerSiteData(
   const viewerOnSite = membershipLookup.row;
 
   if (!membershipLookup.ok || !viewerOnSite) {
+    let checkinData = null;
+    if (checkin) {
+      try {
+        const row = await oneImpl(
+          `SELECT r.amount,
+                  EXISTS (
+                    SELECT 1
+                    FROM earning_rule_claims c
+                    WHERE c.rule_id=r.id
+                      AND c.site_viewer_id=$2
+                      AND c.period=(now() AT TIME ZONE 'UTC')::date
+                  ) AS claimed_today
+             FROM site_earning_rules r
+            WHERE r.site_id=$1
+              AND r.rule_type='daily_checkin'
+              AND r.active`,
+          [siteId, null],
+        );
+        checkinData = row ? { amount: row.amount, claimedToday: !!row.claimed_today } : null;
+      } catch (err) {
+        console.error("[site-data] daily check-in lookup failed:", err?.message || err);
+      }
+    }
     return {
       membershipStatus: membershipLookup.ok ? "absent" : "unavailable",
       viewerOnSite: null,
       shopItems: shop ? shopItems : [],
       ...emptyHistory,
+      checkin: checkinData,
     };
   }
 
@@ -163,7 +188,7 @@ export async function getViewerSiteData(
     }
   }
 
-  const [claimResult, ledgerRows, participationResult] = await Promise.all([
+  const [claimResult, ledgerRows, participationResult, checkinData] = await Promise.all([
     claims
       ? getViewerClaimsImpl(siteId, viewerId, viewerOnSite.id, { queryImpl })
       : Promise.resolve({ claims: [], limit: 50, truncated: false }),
@@ -176,6 +201,28 @@ export async function getViewerSiteData(
     participation
       ? getViewerParticipationImpl(siteId, viewerId, viewerOnSite.id, { queryImpl })
       : Promise.resolve({ participation: [], limit: VIEWER_PARTICIPATION_LIMIT, truncated: false }),
+    checkin
+      ? oneImpl(
+          `SELECT r.amount,
+                  EXISTS (
+                    SELECT 1
+                    FROM earning_rule_claims c
+                    WHERE c.rule_id=r.id
+                      AND c.site_viewer_id=$2
+                      AND c.period=(now() AT TIME ZONE 'UTC')::date
+                  ) AS claimed_today
+             FROM site_earning_rules r
+            WHERE r.site_id=$1
+              AND r.rule_type='daily_checkin'
+              AND r.active`,
+          [siteId, viewerOnSite.id],
+        )
+          .then((row) => row ? { amount: row.amount, claimedToday: !!row.claimed_today } : null)
+          .catch((err) => {
+            console.error("[site-data] daily check-in lookup failed:", err?.message || err);
+            return null;
+          })
+      : Promise.resolve(null),
   ]);
 
   // Per-item cooldown snapshot: how long this member must still wait before
@@ -224,5 +271,6 @@ export async function getViewerSiteData(
     participation: participationResult.participation || [],
     participationLimit: participationResult.limit,
     participationTruncated: !!participationResult.truncated,
+    checkin: checkinData,
   };
 }

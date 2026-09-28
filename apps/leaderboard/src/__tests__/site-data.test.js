@@ -42,6 +42,29 @@ function deps({ rows = [], oneError = null } = {}) {
 }
 
 describe("viewer board membership tracking", () => {
+  it("falls back to null when the daily check-in query is unavailable", async () => {
+    const injected = deps();
+    let calls = 0;
+    injected.oneImpl = async (sql, params) => {
+      injected.calls.one.push({ sql, params });
+      if (calls++ === 0) return membershipRow();
+      throw new Error("missing migration table");
+    };
+    const result = await getViewerSiteData("site-1", "viewer-1", { checkin: true }, injected);
+
+    expect(result.checkin).toBeNull();
+    expect(injected.calls.one[1].sql).toContain("earning_rule_claims");
+  });
+
+  it("queries check-in state with a null membership for signed-in non-members", async () => {
+    const injected = deps({ rows: [null, { amount: 15, claimed_today: false }] });
+    const result = await getViewerSiteData("site-1", "viewer-1", { checkin: true }, injected);
+
+    expect(result.membershipStatus).toBe("absent");
+    expect(result.checkin).toEqual({ amount: 15, claimedToday: false });
+    expect(injected.calls.one[1].params).toEqual(["site-1", null]);
+  });
+
   it("keeps a signed-in passive visit membership-free", async () => {
     const injected = deps({ rows: [null] });
     const result = await getViewerSiteData("site-1", "viewer-1", {}, injected);

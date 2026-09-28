@@ -182,7 +182,7 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
         ? { shop: true, claims: !!viewer, ledger: !!viewer }
         : section === "shop"
           ? { shop: true, claims: !!viewer }
-          : { shop: siteSections.shop !== false, claims: !!viewer, ledger: !!viewer, participation: !!viewer };
+          : { shop: siteSections.shop !== false, claims: !!viewer, ledger: !!viewer, participation: !!viewer, checkin: !!viewer };
       viewerData = await getViewerSiteData(r.id, viewer?.id || null, opts);
     } else if (viewer) {
       // The viewer overview reads membership Claims; Games keeps its balance-only contract.

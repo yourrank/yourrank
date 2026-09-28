@@ -109,6 +109,7 @@ export function isCustomViewerApiPath(method, path, customSlug = '') {
     || (method === "POST" && (
       path === "/api/viewer/membership/join"
       || path === "/api/events/drops/claim"
+      || path === "/api/viewer/checkin"
     ));
 }
 

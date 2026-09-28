@@ -112,6 +112,20 @@ function setStatus(id, msg, error = false) {
     statusClearTimers.set(id, timer);
   }
 }
+const CHECKIN_AMOUNT_ERROR = "Check-in credits must be a whole number from 1 to 1,000.";
+async function loadDailyCheckin() {
+  if (tab() !== "rules" || !$("cr-checkin")) return;
+  try {
+    const data = await api("GET", sitePath("/api/credits/earning-rules"));
+    const rule = data.dailyCheckin;
+    $("cr-checkin-active").checked = !!rule?.active;
+    $("cr-checkin-amount").value = rule?.amount ?? 50;
+  } catch (err) {
+    const message = err?.message || "Couldn't load daily check-in settings.";
+    setStatus("cr-checkin-status", message, true);
+    showToast(message, "error");
+  }
+}
 function authPath(path) {
   return activeSiteId ? `${path}?siteId=${encodeURIComponent(activeSiteId)}` : path;
 }
@@ -1346,6 +1360,7 @@ async function load() {
       : await api("GET", sitePath("/api/credits/status"));
     setState({ CREDITS_STATUS: "ready" });
     render();
+    await loadDailyCheckin();
     showOAuthMessage({ finalize: true });
     if (tab() === "history") {
       const viewer = new URLSearchParams(location.search).get("viewer");
@@ -1483,6 +1498,36 @@ function wireActions() {
         render();
       },
     });
+  });
+  $("cr-checkin-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("cr-checkin-save");
+    const amount = Number($("cr-checkin-amount")?.value);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 1000) {
+      setStatus("cr-checkin-status", CHECKIN_AMOUNT_ERROR, true);
+      showToast(CHECKIN_AMOUNT_ERROR, "error");
+      return;
+    }
+    setLoading(btn, true, "Saving…");
+    try {
+      const data = await api("PUT", sitePath("/api/credits/earning-rules"), {
+        dailyCheckin: {
+          active: $("cr-checkin-active").checked,
+          amount,
+        },
+      });
+      const saved = data.dailyCheckin;
+      $("cr-checkin-active").checked = !!saved?.active;
+      $("cr-checkin-amount").value = saved?.amount ?? amount;
+      setStatus("cr-checkin-status", "Daily check-in saved.");
+      showToast("Daily check-in saved.", "success");
+    } catch (err) {
+      const message = err?.message || "Couldn't save daily check-in.";
+      setStatus("cr-checkin-status", message, true);
+      showToast(message, "error");
+    } finally {
+      setLoading(btn, false);
+    }
   });
   $("cr-channel-repair")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget; setLoading(btn, true, "Repairing…");
