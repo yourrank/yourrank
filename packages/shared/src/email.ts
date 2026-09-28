@@ -250,6 +250,17 @@ export async function sendPendingOnboardingEmails(env: EmailEnv): Promise<{ sent
   return { sent, skipped };
 }
 
+export function loginCodeEmail(code: string) {
+  const text = `Your YourRank sign-in code:\n\n${code}\n\nThe code expires in 10 minutes. If you didn't request it, you can ignore this email.`;
+  const html = `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+<h2 style="margin:0 0 12px">Your sign-in code</h2>
+<p style="color:#555;line-height:1.5">Enter this code to sign in to YourRank:</p>
+<p style="margin:24px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;font-weight:700;letter-spacing:8px;text-align:center">${code}</p>
+<p style="color:#555;line-height:1.5">The code expires in 10 minutes.</p>
+<p style="color:#999;font-size:13px">If you didn't request it, you can ignore this email — nothing changes.</p></div>`;
+  return { subject: "Your YourRank sign-in code", html, text };
+}
+
 export function verifyEmailEmail(link: string) {
   const subject = "Confirm your YourRank email";
   const text = `Welcome to YourRank.
