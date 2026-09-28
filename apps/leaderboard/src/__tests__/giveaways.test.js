@@ -66,9 +66,26 @@ describe("Giveaway Chatroom Handler", () => {
   it("builds entrant markup without interpolating API values into HTML", () => {
     const source = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
     expect(source).not.toContain("tr.innerHTML");
-    expect(source).toContain("message.textContent = entrant.message");
-    expect(source).toContain("userLink.textContent = entrant.username");
+    expect(source).toContain('message.textContent = manual ? "—" : entrant.message || ""');
+    expect(source).toContain("userName.textContent = entrant.username");
     expect(source).toContain("safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR)");
+  });
+
+  it("keeps giveaway setup compact and exposes dashboard-managed entrants", () => {
+    const html = renderGiveawaysHtml("chat");
+    expect(html).toContain('id="gw-layout"');
+    expect(html).toContain('id="gw-manual-start-hint"');
+    expect(html).toContain('id="gw-add-entrant-form"');
+    expect(html).toContain('id="gw-add-entrant-name" name="username" type="text" maxlength="40"');
+    expect(html.indexOf('id="gw-keyword-field"')).toBeLessThan(html.indexOf('class="gw-actions"'));
+    expect(html.indexOf('class="gw-actions"')).toBeLessThan(html.indexOf('id="gw-rules-panel"'));
+    expect(html).toContain('<details class="gw-rules-panel" id="gw-rules-panel">');
+    expect(html).toContain('id="gw-rules-summary"');
+    expect(html.indexOf('id="gw-rules-panel"')).toBeLessThan(html.indexOf('id="gw-settings-note"'));
+    expect(html).toContain('id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.');
+    expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-main");
+    expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-sidebar");
+    expect(giveawaysCssSource).toContain("position: sticky;");
   });
 
   it("runs Chat Giveaways through the connected Kick channel and server API, not the legacy listener", () => {
@@ -82,7 +99,8 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).toContain('chatApi("/draw"');
     expect(source).toContain("const POLL_MS = 4000");
     expect(source).toContain('label.textContent = "Stop entries"');
-    expect(source).toContain('label.textContent = "Start giveaway"');
+    expect(source).toContain("Start manual giveaway");
+    expect(source).toContain("Start giveaway");
     // No editable channel: the connected channel is displayed, arbitrary entry is gone.
     expect(giveawaysHtml).not.toContain('id="gw-channel-input"');
     expect(giveawaysHtml).toContain('id="gw-channel-name"');

@@ -57,12 +57,13 @@ const completedEntries = [
   { id: "e2", display_name: "forolo_GB", source: "chat", status: "selected", eligible: true, alt_flag: false },
 ];
 
-const server = { tournament: completed, entries: [], matches: [], requests: [], entitlementEnabled: true };
+const server = { tournament: completed, entries: [], matches: [], requests: [], entitlementEnabled: true, entryError: null };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 globalThis.fetch = async (input, init = {}) => {
   const path = String(input).split("?")[0];
-  server.requests.push({ path, method: init.method || "GET" });
+  const method = init.method || "GET";
+  server.requests.push({ path, method, body: init.body });
   if (path === "/api/auth/me") return json({ ok: true, user });
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
   if (path === "/api/tournaments") return json({
@@ -71,6 +72,16 @@ globalThis.fetch = async (input, init = {}) => {
     chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
     entitlement: { enabled: server.entitlementEnabled },
   });
+  if (path.endsWith("/signups/lock") && method === "POST") {
+    server.tournament = { ...server.tournament, signup_state: "locked" };
+    return json({ ok: true });
+  }
+  if (path.endsWith("/entries") && method === "POST") {
+    if (server.entryError) return json({ error: server.entryError }, 409);
+    const { displayName } = JSON.parse(init.body || "{}");
+    server.entries.push({ id: `e${server.entries.length + 1}`, display_name: displayName, source: "manual", status: "pending", eligible: true });
+    return json({ ok: true, entry: server.entries.at(-1) });
+  }
   if (path.endsWith("/entries")) return json({ entries: server.entries, counts: { active: server.entries.length, eligible: server.entries.length, waitlist: 0, removed: 0, blocked: 0 } });
   if (path.endsWith("/bracket")) return json({ matches: server.matches, tournament: server.tournament });
   return json({ ok: true });
@@ -91,6 +102,7 @@ function boot(tournament, entries = [], matches = [], entitlementEnabled = true)
   server.entries = entries.map((e) => ({ ...e }));
   server.matches = matches.map((m) => ({ ...m }));
   server.entitlementEnabled = entitlementEnabled;
+  server.entryError = null;
   clearSession();
   return mod.enter();
 }
@@ -217,6 +229,43 @@ describe("tournament workspace — completed tournament", () => {
 });
 
 describe("tournament workspace — editable lifecycles", () => {
+  it("closes draft entries without requiring a Kick channel", async () => {
+    await boot(draft, [
+      { id: "e1", display_name: "alpha", source: "manual", status: "pending", eligible: true },
+      { id: "e2", display_name: "beta", source: "manual", status: "confirmed", eligible: true },
+    ]);
+    expect(text("tournament-primary")).toBe("Close entries");
+    expect($id("tournament-primary").dataset.action).toBe("lock");
+    const requestStart = server.requests.length;
+    await click("tournament-primary");
+    expect(server.tournament.signup_state).toBe("locked");
+    expect(server.requests.slice(requestStart).some(({ path, method }) =>
+      path.endsWith("/signups/lock") && method === "POST"
+    )).toBe(true);
+  });
+
+  it("adds a manual player and shows duplicate errors without losing the input", async () => {
+    await boot(draft);
+    const form = $id("tournament-add-entry-form");
+    expect(form).toBeTruthy();
+    const input = $id("tournament-add-entry-name");
+    input.value = "ManualPlayer";
+    const requestStart = server.requests.length;
+    form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(server.requests.slice(requestStart).some(({ path, method, body }) =>
+      path.endsWith("/entries") && method === "POST" && JSON.parse(body).displayName === "ManualPlayer"
+    )).toBe(true);
+    expect($id("tournament-entry-list").textContent).toContain("ManualPlayer");
+
+    server.entryError = "ManualPlayer is already entered.";
+    $id("tournament-add-entry-name").value = "ManualPlayer";
+    $id("tournament-add-entry-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(text("tournament-message")).toBe("ManualPlayer is already entered.");
+    expect($id("tournament-add-entry-name").value).toBe("ManualPlayer");
+  });
+
   it("shows the settings form for a draft tournament with a dirty bar on edit", async () => {
     await boot(draft);
     await click("tournament-tab-settings");

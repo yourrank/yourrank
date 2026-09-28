@@ -121,8 +121,9 @@ async function routedSessionsForChannel(
     `SELECT gs.id, gs.site_id, gs.keyword, gs.rules, gs.status, gs.winner_entry_id, gs.winner_confirmed_at,
             we.provider_user_id AS winner_provider_user_id
        FROM chat_giveaway_sessions gs
-       LEFT JOIN chat_giveaway_entries we ON we.id = gs.winner_entry_id
+      LEFT JOIN chat_giveaway_entries we ON we.id = gs.winner_entry_id
       WHERE gs.site_id IN (SELECT s.id${ROUTABLE_CHANNEL_SQL})
+        AND gs.provider = $1
         AND (
           gs.status = 'active'
           OR (gs.status = 'completed' AND gs.winner_entry_id IS NOT NULL

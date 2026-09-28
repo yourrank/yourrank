@@ -6,6 +6,7 @@ import {
   handleChatGiveawayFinalize,
   handleChatGiveawayStart,
   handleChatGiveawayState,
+  handleChatGiveawayAddEntry,
   handleChatGiveawayStop,
 } from "../handlers/chat-giveaways.js";
 import { ROUTES as routes } from "../routes.js";
@@ -172,9 +173,43 @@ function deps(overrides = {}) {
 describe("Chat Giveaway API", () => {
   it("registers the server-backed routes alongside the legacy chatroom lookup", () => {
     const paths = routes.map((r) => `${r.method} ${r.path}`);
-    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/remove"]) {
+    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/add", "POST /api/giveaways/chat/entries/remove"]) {
       expect(paths).toContain(p);
     }
+  });
+
+  it("starts a manual giveaway without loading Kick connection state", async () => {
+    let inserted;
+    let checkedConnection = false;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", {
+      mode: "manual",
+      rules: { winnerRepeat: "again", excludePreviousWinners: true },
+    }), {}, deps({
+      loadChatGiveawayConnection: async () => { checkedConnection = true; throw new Error("should not load Kick"); },
+      one: async (sql, params) => {
+        inserted = { sql, params };
+        return { id: "gs-manual", site_id: siteA.id, provider: "manual", keyword: "manual", status: "active" };
+      },
+    }));
+    expect(res.status).toBe(200);
+    expect(checkedConnection).toBe(false);
+    expect(inserted.sql).toContain("VALUES ($1, 'manual', 'manual', 'active'");
+    expect(inserted.params).toEqual([siteA.id, owner.id, giveawayRules({ winnerRepeat: "again", excludePreviousWinners: true })]);
+    expect((await res.json()).session).toMatchObject({ provider: "manual", keyword: "manual", status: "active" });
+  });
+
+  it("rejects Kick-only rules for manual giveaways with the compatibility message", async () => {
+    let inserted = false;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", {
+      mode: "manual",
+      rules: { subscriberOnly: true },
+    }), {}, deps({
+      loadChatGiveawayConnection: async () => { throw new Error("should not load Kick"); },
+      one: async () => { inserted = true; return null; },
+    }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).");
+    expect(inserted).toBe(false);
   });
 
   it("refuses to start without a connected Kick channel", async () => {
@@ -186,6 +221,118 @@ describe("Chat Giveaway API", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error).toContain("connected Kick channel");
     expect(inserted).toBe(false);
+  });
+
+  function addEntryDeps({
+    session = {
+      id: "gs-manual", site_id: siteA.id, provider: "manual", status: "active",
+      rules: {}, winner_entry_id: null,
+    },
+    duplicate = null,
+    previousWinner = false,
+  } = {}) {
+    const inserts = [];
+    const storedEntries = [];
+    const d = deps({
+      one: async (sql, params) => {
+        const text = String(sql);
+        if (text.includes("FROM chat_giveaway_sessions") && text.includes("status = 'active'")) return session;
+        if (text.includes("SELECT id FROM chat_giveaway_entries")) return duplicate;
+        if (text.startsWith("INSERT INTO chat_giveaway_entries")) {
+          inserts.push({ sql: text, params });
+          const entry = {
+            id: "entry-manual", giveaway_session_id: params[0], provider: "manual",
+            provider_user_id: params[1], username: params[2], message: "", badges: [],
+            eligibility_status: params[3], eligibility_reason: params[4],
+          };
+          storedEntries.push(entry);
+          return entry;
+        }
+        if (text.includes("FROM chat_giveaway_sessions")) return session;
+        return null;
+      },
+      query: async (sql) => {
+        if (String(sql).includes("previous_winner")) return [{ viewer_id: null, previous_winner: previousWinner }];
+        if (String(sql).includes("FROM chat_giveaway_entries")) return storedEntries;
+        return [];
+      },
+    });
+    return { d, inserts, storedEntries };
+  }
+
+  it("adds an entrant to an active manual session using a stable manual identity", async () => {
+    const { d, inserts } = addEntryDeps();
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-manual", username: "  @Alice  ",
+    }), {}, d);
+    expect(res.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].sql).toContain("ON CONFLICT DO NOTHING");
+    expect(inserts[0].params).toEqual(["gs-manual", "manual:alice", "Alice", "eligible", null]);
+    expect((await res.json()).entries[0]).toMatchObject({
+      provider: "manual", provider_user_id: "manual:alice", username: "Alice",
+      message: "", eligibility_status: "eligible",
+    });
+  });
+
+  it("rejects a case-insensitive duplicate username", async () => {
+    const { d, inserts } = addEntryDeps({ duplicate: { id: "entry-existing" } });
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-manual", username: "ALICE",
+    }), {}, d);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("ALICE is already entered.");
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("requires an active giveaway session before adding entrants", async () => {
+    const { d, inserts } = addEntryDeps({ session: null });
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-manual", username: "Alice",
+    }), {}, d);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Start a giveaway before adding entrants.");
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects manual additions to Kick sessions with incompatible rules", async () => {
+    const { d, inserts } = addEntryDeps({
+      session: {
+        id: "gs-kick", site_id: siteA.id, provider: "kick", status: "active",
+        rules: { subscriberOnly: true },
+      },
+    });
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-kick", username: "Alice",
+    }), {}, d);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).");
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("rejects empty and overlong entrant names", async () => {
+    for (const username of ["", "x".repeat(41)]) {
+      const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+        sessionId: "gs-manual", username,
+      }), {}, addEntryDeps().d);
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("Enter a viewer name (up to 40 characters).");
+    }
+  });
+
+  it("marks a previous winner as rejected by the saved manual rules", async () => {
+    const { d, storedEntries } = addEntryDeps({
+      session: {
+        id: "gs-manual", site_id: siteA.id, provider: "manual", status: "active",
+        rules: { excludePreviousWinners: true },
+      },
+      previousWinner: true,
+    });
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-manual", username: "Alice",
+    }), {}, d);
+    expect(res.status).toBe(200);
+    expect(storedEntries[0].eligibility_status).toBe("rejected");
   });
 
   it("rejects unsupported eligibility and anti-abuse rules before writing a session", async () => {

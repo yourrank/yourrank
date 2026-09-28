@@ -22,12 +22,30 @@
   .gw-layout {
     grid-template-columns: 1fr;
   }
+
+  .gw-layout.is-live .gw-main {
+    order: 0;
+  }
+
+  .gw-layout.is-live .gw-sidebar {
+    order: 1;
+  }
 }
 
 .gw-sidebar {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+@media (min-width: 961px) {
+  .gw-sidebar {
+    position: sticky;
+    top: calc(var(--ws-topbar-h) + var(--ws-space-3));
+    max-height: calc(100vh - var(--ws-topbar-h) - var(--ws-space-3));
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
 }
 
 .gw-main {
@@ -361,6 +379,116 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
+}
+
+.gw-rules-panel {
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-soft);
+}
+
+.gw-rules-panel > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ws-space-3);
+  padding: var(--ws-space-3);
+  color: var(--ws-text);
+  font-size: var(--ws-type-body-size);
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.gw-rules-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.gw-rules-panel > summary::after {
+  content: "⌄";
+  flex: 0 0 auto;
+  color: var(--ws-text-soft);
+}
+
+.gw-rules-panel[open] > summary {
+  border-bottom: 1px solid var(--ws-line);
+}
+
+.gw-rules-panel[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.gw-rules-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta-size);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gw-rules-panel-body {
+  padding: var(--ws-space-3);
+}
+
+.gw-rules-panel .gw-settings {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.gw-add-entrant-form {
+  display: grid;
+  gap: var(--ws-space-2);
+  margin: 0 0 var(--ws-space-4);
+  padding: var(--ws-space-3);
+  border: 1px solid var(--ws-line);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-soft);
+}
+
+.gw-add-entrant-form > label {
+  color: var(--ws-text);
+  font-size: var(--ws-type-meta-size);
+  font-weight: 650;
+}
+
+.gw-add-entrant-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--ws-space-2);
+}
+
+.gw-add-entrant-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--ws-space-8);
+  padding: 0 var(--ws-space-3);
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+.gw-add-entrant-row input:focus-visible {
+  outline: 2px solid var(--ws-accent);
+  outline-offset: 2px;
+}
+
+.gw-add-entrant-row .btn {
+  min-height: var(--ws-space-8);
+}
+
+.gw-add-entrant-error {
+  margin: 0;
+  color: var(--yr-color-danger-text);
+  font-size: var(--ws-type-meta-size);
+  font-weight: 600;
 }
 
 /* Card heads inside Engage cards already sit in the card's padding box, and any

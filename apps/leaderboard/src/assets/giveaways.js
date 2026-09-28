@@ -133,6 +133,13 @@ if (!window.__yrSpaShell) {
     alert.hidden = true;
   }
 
+  function setAddEntrantError(message) {
+    const status = $("gw-add-entrant-error");
+    if (!status) return;
+    status.textContent = message || "";
+    status.hidden = !message;
+  }
+
   const draftSiteKey = () => {
     const siteId = new URLSearchParams(location.search).get("siteId") || "default";
     return `yr-engage-draft:${siteId}`;
@@ -222,22 +229,64 @@ if (!window.__yrSpaShell) {
   }
 
 
+  function isManualSetup() {
+    return !connection.connected && !isActive();
+  }
+
+  function isManualUi() {
+    return isManualSetup() || session?.provider === "manual";
+  }
+
   function readRules() {
+    const manual = isManualSetup();
     return {
-      entryMode: document.querySelector('input[name="gw-entry-mode"]:checked')?.value || "chat",
-      subscriberOnly: !!$("gw-opt-subscriber")?.checked,
-      vipOnly: !!$("gw-opt-vip")?.checked,
+      entryMode: manual ? "chat" : document.querySelector('input[name="gw-entry-mode"]:checked')?.value || "chat",
+      subscriberOnly: manual ? false : !!$("gw-opt-subscriber")?.checked,
+      vipOnly: manual ? false : !!$("gw-opt-vip")?.checked,
       excludePreviousWinners: !!$("gw-opt-skip-past")?.checked,
       winnerRepeat: document.querySelector('input[name="gw-winner-repeat"]:checked')?.value || "once",
-      onePerIp: !!$("gw-opt-ip")?.checked,
-      winnerMustRespond: !!$("gw-opt-claim-req")?.checked,
-      responseTimeout: Number($("gw-opt-claim-duration")?.value || 60),
-      autoReroll: !!$("gw-opt-auto-reroll")?.checked,
+      onePerIp: manual ? false : !!$("gw-opt-ip")?.checked,
+      winnerMustRespond: manual ? false : !!$("gw-opt-claim-req")?.checked,
+      responseTimeout: manual ? 60 : Number($("gw-opt-claim-duration")?.value || 60),
+      autoReroll: manual ? false : !!$("gw-opt-auto-reroll")?.checked,
     };
   }
 
+  function renderRuleSummary(rules = readRules()) {
+    const summary = $("gw-rules-summary");
+    if (!summary) return;
+    const parts = [
+      rules.entryMode === "members" ? "Members only" : rules.entryMode === "verified" ? "Verified entry" : "Anyone in chat",
+      rules.winnerRepeat === "again" ? "Can win again" : "Win once",
+    ];
+    if (rules.subscriberOnly || rules.vipOnly) {
+      parts.push([rules.subscriberOnly && "Subscribers", rules.vipOnly && "VIPs"].filter(Boolean).join(" and ") + " only");
+    }
+    if (rules.excludePreviousWinners) parts.push("Exclude past winners");
+    if (rules.onePerIp) parts.push("One entry per IP");
+    parts.push(rules.winnerMustRespond ? "Winner response required" : "No chat response");
+    summary.textContent = parts.join(" · ");
+  }
+
   function renderRuleAvailability() {
-    const verified = readRules().entryMode === "verified";
+    const rules = readRules();
+    const manualUi = isManualUi();
+    for (const id of [
+      "gw-entry-mode-legend",
+      "gw-entry-modes",
+      "gw-kick-eligibility-section",
+      "gw-winner-verification-section",
+      "gw-subscriber-rule",
+      "gw-vip-rule",
+      "gw-subscriber-hint",
+      "gw-kick-history-hint",
+      "gw-anti-abuse-section",
+      "gw-winner-instruction-section",
+    ]) {
+      if ($(id)) $(id).hidden = manualUi;
+    }
+    if ($("gw-manual-rules-note")) $("gw-manual-rules-note").hidden = !manualUi;
+    const verified = rules.entryMode === "verified";
     if ($("gw-opt-ip")) {
       $("gw-opt-ip").disabled = !verified;
       if (!verified) $("gw-opt-ip").checked = false;
@@ -246,7 +295,7 @@ if (!window.__yrSpaShell) {
     if ($("gw-vpn-requirement")) $("gw-vpn-requirement").textContent = verified ? "Unavailable — Detection provider required" : "Locked — Requires Verified Entry and a detection provider";
     if ($("gw-device-requirement")) $("gw-device-requirement").textContent = verified ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check";
     if ($("gw-enable-verified")) $("gw-enable-verified").hidden = verified;
-    const mustRespond = readRules().winnerMustRespond;
+    const mustRespond = rules.winnerMustRespond;
     if ($("gw-claim-duration-wrap")) $("gw-claim-duration-wrap").hidden = !mustRespond;
     if ($("gw-auto-reroll-wrap")) $("gw-auto-reroll-wrap").hidden = !mustRespond;
     if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").disabled = !mustRespond;
@@ -254,6 +303,7 @@ if (!window.__yrSpaShell) {
       $("gw-opt-auto-reroll").disabled = !mustRespond;
       if (!mustRespond) $("gw-opt-auto-reroll").checked = false;
     }
+    renderRuleSummary(rules);
   }
 
   function renderRules() {
@@ -312,6 +362,7 @@ if (!window.__yrSpaShell) {
       e.preventDefault();
       toggleGiveaway();
     });
+    $("gw-add-entrant-form")?.addEventListener("submit", addManualEntrant);
 
     $("gw-btn-roll")?.addEventListener("click", () => rollWinner());
     $("gw-btn-reroll")?.addEventListener("click", () => rollWinner({ excludeIds: currentWinner ? [currentWinner.id] : [] }));
@@ -408,6 +459,7 @@ if (!window.__yrSpaShell) {
     if (nameEl) nameEl.textContent = connection.channelName ? connection.channelName : "";
     if (connectedBlock) connectedBlock.hidden = !connection.connected;
     if (disconnectedBlock) disconnectedBlock.hidden = connection.connected;
+    if ($("gw-manual-start-hint")) $("gw-manual-start-hint").hidden = !isManualSetup();
     if (notice) notice.hidden = !(connection.connected && !connection.chatReady);
     const connectLink = $("gw-btn-connect-kick");
     if (connectLink) connectLink.href = sitePath("/dashboard/settings/connections");
@@ -417,8 +469,11 @@ if (!window.__yrSpaShell) {
     const startBtn = $("gw-btn-listen");
     const label = $("gw-listen-btn-label");
     const keywordInput = $("gw-keyword-input");
+    const keywordField = $("gw-keyword-field");
     const keywordStat = $("gw-stat-keyword");
     const active = isActive();
+    const manualSetup = isManualSetup();
+    const manualSession = session?.provider === "manual";
 
     if (active) {
       setStatus("live", "LIVE");
@@ -430,15 +485,18 @@ if (!window.__yrSpaShell) {
         : !connection.chatReady ? "Chat events unavailable"
         : session?.status === "stopped" ? "Entries closed"
         : session?.status === "completed" ? "Winner drawn" : "Ready");
-      if (label) label.textContent = "Start giveaway";
+      if (label) label.textContent = manualSetup ? "Start manual giveaway" : "Start giveaway";
       if (keywordInput) keywordInput.readOnly = false;
     }
+    if (keywordField) keywordField.hidden = manualSetup || manualSession;
     if (startBtn) {
       startBtn.classList.toggle("btn--accent", !active);
       startBtn.classList.toggle("btn--danger", active);
-      startBtn.disabled = !active && !(connection.connected && connection.chatReady);
+      startBtn.disabled = !active && !(connection.connected && connection.chatReady) && !manualSetup;
     }
-    if (keywordStat) keywordStat.textContent = session ? session.keyword : "—";
+    if (keywordStat) keywordStat.textContent = session ? manualSession ? "Manual" : session.keyword : "—";
+    $("gw-add-entrant-form") && ($("gw-add-entrant-form").hidden = !active);
+    $("gw-layout")?.classList.toggle("is-live", active || entrants.length > 0 || Boolean(currentWinner));
 
     clearInterval(timerInterval);
     timerInterval = null;
@@ -460,19 +518,23 @@ if (!window.__yrSpaShell) {
   }
 
   async function startGiveaway() {
+    const manualMode = isManualSetup();
     const keyword = $("gw-keyword-input")?.value.trim() || "";
-    if (!keyword) {
+    if (!manualMode && !keyword) {
       showEngageError("Enter the keyword viewers should type.");
       return;
     }
-    if (!connection.connected) {
+    if (!manualMode && !connection.connected) {
       showEngageError("Chat giveaways require a connected Kick channel.");
       return;
     }
     const button = $("gw-btn-listen");
     if (button) button.disabled = true;
     try {
-      const res = await chatApi("/start", { keyword, rules: readRules(), siteId: siteId || undefined });
+      const body = manualMode
+        ? { mode: "manual", rules: readRules(), siteId: siteId || undefined }
+        : { keyword, rules: readRules(), siteId: siteId || undefined };
+      const res = await chatApi("/start", body);
       const data = await responseData(res);
       if (!res.ok) {
         showEngageError(data.error || "Could not start the giveaway.");
@@ -506,6 +568,46 @@ if (!window.__yrSpaShell) {
     }
   }
 
+  async function addManualEntrant(event) {
+    event.preventDefault();
+    clearEngageError();
+    setAddEntrantError("");
+    if (!isActive()) {
+      const message = "Start a giveaway before adding entrants.";
+      showEngageError(message);
+      setAddEntrantError(message);
+      return;
+    }
+    const input = $("gw-add-entrant-name");
+    const button = $("gw-add-entrant-form")?.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+    try {
+      const res = await chatApi("/entries/add", {
+        sessionId: session.id,
+        username: input?.value || "",
+        siteId: siteId || undefined,
+      });
+      const data = await responseData(res);
+      if (!res.ok) {
+        const message = data.error || "Could not add entrant.";
+        showEngageError(message);
+        setAddEntrantError(message);
+        return;
+      }
+      applyState({ connection, ...data });
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    } catch {
+      const message = "Network error adding entrant.";
+      showEngageError(message);
+      setAddEntrantError(message);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   function entrantBadges(entrant) {
     const badges = Array.isArray(entrant.badges) ? entrant.badges : [];
     const isSub = badges.some((b) => b?.type === "subscriber");
@@ -531,6 +633,7 @@ if (!window.__yrSpaShell) {
     const tr = document.createElement("tr");
     tr.id = `entrant-${entrant.id}`;
     tr.dataset.username = String(entrant.username || "").toLowerCase();
+    const manual = entrant.provider === "manual";
 
     const numberCell = document.createElement("td");
     numberCell.className = "ta-c gw-number-cell";
@@ -543,25 +646,30 @@ if (!window.__yrSpaShell) {
     userWrap.className = "gw-entrant-user";
     const avatar = document.createElement("img");
     avatar.className = "gw-entrant-avatar";
-    avatar.src = safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR);
+    avatar.src = manual ? DEFAULT_AVATAR : safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR);
     avatar.alt = "";
     avatar.addEventListener("error", () => {
       avatar.src = DEFAULT_AVATAR;
     }, { once: true });
-    const userLink = document.createElement("a");
-    userLink.className = "gw-entrant-name";
-    userLink.href = safeKickProfileUrl(entrant.username);
-    userLink.target = "_blank";
-    userLink.rel = "noopener";
-    userLink.textContent = entrant.username;
-    userWrap.append(avatar, userLink);
+    const userName = document.createElement(manual ? "span" : "a");
+    userName.className = "gw-entrant-name";
+    if (!manual) {
+      userName.href = safeKickProfileUrl(entrant.username);
+      userName.target = "_blank";
+      userName.rel = "noopener";
+    }
+    userName.textContent = entrant.username;
+    userWrap.append(avatar, userName);
     userCell.append(userWrap);
 
     const { isSub, isVip } = entrantBadges(entrant);
     const statusCell = document.createElement("td");
     statusCell.dataset.label = "Status";
     const statusBadge = document.createElement("span");
-    if (isSub) {
+    if (manual) {
+      statusBadge.className = "gw-trust-badge gw-trust-badge--high";
+      statusBadge.textContent = "Added manually";
+    } else if (isSub) {
       statusBadge.className = "gw-sub-badge";
       statusBadge.textContent = "Subscriber";
     } else if (isVip) {
@@ -579,7 +687,7 @@ if (!window.__yrSpaShell) {
     messageCell.dataset.label = "Chat message";
     const message = document.createElement("span");
     message.className = "gw-entrant-msg";
-    message.textContent = entrant.message;
+    message.textContent = manual ? "—" : entrant.message || "";
     messageCell.append(message);
 
     const timeCell = document.createElement("td");

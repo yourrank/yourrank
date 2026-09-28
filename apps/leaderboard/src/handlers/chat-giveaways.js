@@ -8,8 +8,17 @@ import {
   loadChatGiveawayConnection as defaultLoadChatGiveawayConnection,
   normalizeGiveawayKeyword,
 } from "@yourrank/shared/chat-giveaways";
+import {
+  giveawayRules,
+  giveawayRulesSchema,
+  evaluateGiveawayEligibility,
+  giveawayParticipantFacts,
+  GIVEAWAY_CAPABILITIES,
+} from "@yourrank/shared/giveaway-eligibility";
+import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
 
 const CAPABILITY = "canRoleManageRewards";
+const MANUAL_RULES_ERROR = "Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).";
 
 // Rules that stay free; everything else is an advanced_giveaways feature.
 function usesAdvancedGiveawayRules(rules) {
@@ -22,8 +31,20 @@ function usesAdvancedGiveawayRules(rules) {
     rules.autoReroll === true
   );
 }
-import { giveawayRulesSchema, GIVEAWAY_CAPABILITIES } from "@yourrank/shared/giveaway-eligibility";
-import { SESSION_COLUMNS, ENTRY_COLUMNS, giveawayTransaction, drawGiveaway } from "../chat-giveaway-service.js";
+
+export function manualEntryRulesError(rules) {
+  if (
+    rules?.entryMode !== "chat" ||
+    rules.subscriberOnly ||
+    rules.vipOnly ||
+    rules.winnerMustRespond ||
+    rules.onePerIp ||
+    rules.autoReroll
+  ) {
+    return MANUAL_RULES_ERROR;
+  }
+  return null;
+}
 
 async function resolveSite(request, env, deps) {
   const { requireUser, getByUser, getBoardById, requireSiteCapability, siteIdOverride } = deps;
@@ -89,8 +110,13 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
   if (res) return res;
 
+  const manual = body.mode === "manual";
   const parsedRules = giveawayRulesSchema.safeParse(body.rules ?? {});
   if (!parsedRules.success) return bad(parsedRules.error.issues[0]?.message || "Invalid giveaway rules.", 400);
+  if (manual) {
+    const rulesError = manualEntryRulesError(parsedRules.data);
+    if (rulesError) return bad(rulesError, 400);
+  }
   // Basic giveaways are free: keyword, entryMode chat|members, subscriberOnly,
   // winnerRepeat, excludePreviousWinners. Advanced fields require the
   // advanced_giveaways feature (site owner's plan decides).
@@ -98,28 +124,88 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
     const gateRes = await requireSiteFeature(site, "advanced_giveaways", { actorId: user.id, request, oneImpl: d.one });
     if (gateRes) return gateRes;
   }
-  const keyword = normalizeGiveawayKeyword(body.keyword);
-  if (!keyword) return bad("Enter the keyword viewers should type.", 400);
-  if (/\s/.test(keyword)) return bad("Use a single word or command (no spaces) as the keyword.", 400);
+  const keyword = manual ? "manual" : normalizeGiveawayKeyword(body.keyword);
+  if (!manual && !keyword) return bad("Enter the keyword viewers should type.", 400);
+  if (!manual && /\s/.test(keyword)) return bad("Use a single word or command (no spaces) as the keyword.", 400);
 
-  const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
-  if (!connection.connected) return bad("Chat giveaways require a connected Kick channel.", 409);
-  if (!connection.chatReady) {
-    return bad("Kick chat events are not subscribed for this channel yet. Reconnect Kick in Settings → Connections.", 409);
+  let connection;
+  if (!manual) {
+    connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
+    if (!connection.connected) return bad("Chat giveaways require a connected Kick channel.", 409);
+    if (!connection.chatReady) {
+      return bad("Kick chat events are not subscribed for this channel yet. Reconnect Kick in Settings → Connections.", 409);
+    }
   }
 
   try {
-    const session = await d.one(
-      `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by, rules)
-       VALUES ($1, 'kick', $2, 'active', $3, $4::jsonb)
-       RETURNING ${SESSION_COLUMNS}`,
-      [site.id, keyword, user.id, parsedRules.data],
-    );
-    return ok({ connection, session, entries: [], winner: null });
+    const session = manual
+      ? await d.one(
+        `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by, rules)
+         VALUES ($1, 'manual', 'manual', 'active', $2, $3::jsonb)
+         RETURNING ${SESSION_COLUMNS}`,
+        [site.id, user.id, parsedRules.data],
+      )
+      : await d.one(
+        `INSERT INTO chat_giveaway_sessions (site_id, provider, keyword, status, created_by, rules)
+         VALUES ($1, 'kick', $2, 'active', $3, $4::jsonb)
+         RETURNING ${SESSION_COLUMNS}`,
+        [site.id, keyword, user.id, parsedRules.data],
+      );
+    return ok({ ...(connection ? { connection } : {}), session, entries: [], winner: null });
   } catch (err) {
     if (err?.code === "23505" || err?.code === "23P01") return bad("A giveaway is already collecting entries. Stop it before starting another.", 409);
     throw err;
   }
+}
+
+/** POST /api/giveaways/chat/entries/add — add one streamer-entered viewer. */
+export async function handleChatGiveawayAddEntry(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+
+  let username = String(body.username ?? "").trim();
+  if (username.startsWith("@")) username = username.slice(1).trim();
+  if (!username || username.length > 40) return bad("Enter a viewer name (up to 40 characters).", 400);
+
+  const session = body.sessionId
+    ? await d.one(
+      `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions
+        WHERE id = $1 AND site_id = $2 AND status = 'active'`,
+      [body.sessionId, site.id],
+    )
+    : null;
+  if (!session) return bad("Start a giveaway before adding entrants.", 409);
+
+  const rules = giveawayRules(session.rules);
+  if (session.provider === "kick") {
+    const rulesError = manualEntryRulesError(rules);
+    if (rulesError) return bad(rulesError, 409);
+  }
+
+  const duplicate = await d.one(
+    `SELECT id FROM chat_giveaway_entries
+      WHERE giveaway_session_id = $1 AND lower(username) = lower($2)
+      LIMIT 1`,
+    [session.id, username],
+  );
+  if (duplicate) return bad(`${username} is already entered.`, 409);
+
+  const providerUserId = `manual:${username.toLowerCase()}`;
+  const facts = await giveawayParticipantFacts(d.query, site.id, providerUserId);
+  const eligibility = evaluateGiveawayEligibility({ badges: [], previousWinner: facts.previousWinner }, rules);
+  const entry = await d.one(
+    `INSERT INTO chat_giveaway_entries
+       (giveaway_session_id, provider, provider_user_id, username, message, badges, eligibility_status, eligibility_reason)
+     VALUES ($1, 'manual', $2, $3, '', '[]'::jsonb, $4, $5)
+     ON CONFLICT DO NOTHING
+     RETURNING ${ENTRY_COLUMNS}`,
+    [session.id, providerUserId, username, eligibility.status, eligibility.reason],
+  );
+  if (!entry) return bad(`${username} is already entered.`, 409);
+
+  return ok(await loadSessionView(d, site.id, session.id));
 }
 
 /** POST /api/giveaways/chat/stop — stop collecting; entrants are kept. */

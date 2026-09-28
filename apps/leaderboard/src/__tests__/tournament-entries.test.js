@@ -10,6 +10,7 @@ import {
   handleRemoveTournamentEntry,
   handleRestoreTournamentEntry,
   handleUpdateTournamentSettings,
+  addTournamentEntryTx,
 } from "../handlers/tournaments.js";
 
 const USER = { id: "owner-1", email: "owner@example.com" };
@@ -37,14 +38,25 @@ function request(path, body) {
   });
 }
 
-function deps({ oneValues = [], queryValues = [], txOneValues = [], txQueryValues = [], authorized = true } = {}) {
+function deps({ oneValues = [], queryValues = [], txOneValues = [], txQueryValues = [], authorized = true, matchCount = 0 } = {}) {
   const one = mock(async (sql) => String(sql).includes("FROM users")
     ? { plan: "pro", plan_expires_at: null, status: "active" }
     : oneValues.shift());
   const query = mock(async () => queryValues.shift() || []);
-  const txOne = mock(async (sql) => String(sql).includes("FROM users")
-    ? { plan: "pro", plan_expires_at: null, status: "active" }
-    : txOneValues.shift());
+  let checkingEntryBracket = false;
+  const txOne = mock(async (sql) => {
+    const text = String(sql);
+    if (text.includes("FROM users")) return { plan: "pro", plan_expires_at: null, status: "active" };
+    if (text.includes("SELECT id, signup_state, entry_cap, status") && text.includes("FOR UPDATE")) {
+      checkingEntryBracket = true;
+      return txOneValues.shift();
+    }
+    if (checkingEntryBracket && text.includes("SELECT count(*)::integer AS count FROM tournament_matches WHERE tournament_id=$1")) {
+      checkingEntryBracket = false;
+      return { count: matchCount };
+    }
+    return txOneValues.shift();
+  });
   const txQuery = mock(async () => txQueryValues.shift() || []);
   return {
     one,
@@ -163,9 +175,9 @@ describe("tournament entry lifecycle", () => {
     expect(self.calls.some((sql) => sql.includes("SET signup_state"))).toBe(true);
   });
 
-  it("releases the open-signups row when signups are locked", async () => {
+  it("allows locking a draft and releases any open-signups row", async () => {
     const { tx, calls } = signupTx();
-    const d = deps({ oneValues: [TOURNAMENT] });
+    const d = deps({ oneValues: [{ ...TOURNAMENT, signup_state: "closed", status: "draft" }] });
     d.withTransaction = mock(async (fn) => fn(tx));
     const response = await handleLockTournamentSignups(request("/api/tournaments/tournament-1/signups/lock"), {}, d);
     expect(response.status).toBe(200);
@@ -356,23 +368,108 @@ describe("tournament entry lifecycle", () => {
     expect((await response.json()).error).toContain("blocked");
   });
 
-  it("refuses to add entries while signups are closed or locked", async () => {
-    // Entries (manual ones included) are only accepted while signups are open;
-    // the guard lives inside the transaction so the chat webhook shares it.
+  it("accepts dashboard entries while signups are closed or locked without a bracket", async () => {
     for (const signupState of ["closed", "locked"]) {
       const d = deps({
         oneValues: [TOURNAMENT],
-        txOneValues: [{ id: TOURNAMENT.id, signup_state: signupState, entry_cap: null }],
+        txOneValues: [
+          { id: TOURNAMENT.id, signup_state: signupState, entry_cap: null, status: "draft" },
+          undefined,
+          { count: 0 },
+          { id: "entry-1", tournament_id: TOURNAMENT.id, display_name: "ManualName", status: "pending" },
+        ],
       });
       const response = await handleAddTournamentEntry(
         request("/api/tournaments/tournament-1/entries", { displayName: "ManualName", source: "manual" }),
         {},
         d
       );
-      expect(response.status).toBe(409);
-      expect((await response.json()).error).toContain("signups are not open");
-      expect(d._mocks.txOne).toHaveBeenCalledTimes(1);
+      expect(response.status).toBe(200);
+      expect((await response.json()).entry.display_name).toBe("ManualName");
+      expect(d._mocks.txOne.mock.calls[0][0]).toContain("status");
+      expect(d._mocks.txOne.mock.calls[0][0]).toContain("FOR UPDATE");
     }
+  });
+
+  it("rejects dashboard entries when a bracket exists or the tournament is finished", async () => {
+    const bracket = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [{ id: TOURNAMENT.id, signup_state: "locked", entry_cap: null, status: "draft" }],
+      matchCount: 1,
+    });
+    const bracketResponse = await handleAddTournamentEntry(
+      request("/api/tournaments/tournament-1/entries", { displayName: "Alice" }),
+      {},
+      bracket
+    );
+    expect(bracketResponse.status).toBe(409);
+    expect((await bracketResponse.json()).error).toBe("The bracket already exists.");
+    expect(bracket._mocks.txOne).toHaveBeenCalledTimes(2);
+
+    for (const status of ["completed", "cancelled"]) {
+      const finished = deps({
+        oneValues: [TOURNAMENT],
+        txOneValues: [{ id: TOURNAMENT.id, signup_state: "locked", entry_cap: null, status }],
+      });
+      const response = await handleAddTournamentEntry(
+        request("/api/tournaments/tournament-1/entries", { displayName: "Alice" }),
+        {},
+        finished
+      );
+      expect(response.status).toBe(409);
+      expect((await response.json()).error).toBe("Tournament is already finished.");
+      expect(finished._mocks.txOne).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("keeps the closed-state cap enforced without locking closed signups", async () => {
+    const d = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, signup_state: "closed", entry_cap: 1, status: "draft" },
+        undefined,
+        { count: 1 },
+      ],
+    });
+    const response = await handleAddTournamentEntry(
+      request("/api/tournaments/tournament-1/entries", { displayName: "Bob" }),
+      {},
+      d
+    );
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toBe("Tournament signups are full.");
+    const sql = d._mocks.txOne.mock.calls.map(([statement]) => String(statement));
+    expect(sql.some((statement) => statement.includes("signup_state='locked'"))).toBe(false);
+    expect(sql.some((statement) => statement.includes("DELETE FROM tournament_open_signups"))).toBe(false);
+  });
+
+  it("returns a named duplicate error for dashboard entries and keeps the chat helper open-only", async () => {
+    const duplicate = deps({
+      oneValues: [TOURNAMENT],
+      txOneValues: [
+        { id: TOURNAMENT.id, signup_state: "closed", entry_cap: null, status: "draft" },
+        { id: "entry-1", display_name: "Alice", status: "pending" },
+      ],
+    });
+    const duplicateResponse = await handleAddTournamentEntry(
+      request("/api/tournaments/tournament-1/entries", { displayName: "Alice" }),
+      {},
+      duplicate
+    );
+    expect(duplicateResponse.status).toBe(409);
+    expect((await duplicateResponse.json()).error).toBe("Alice is already entered.");
+
+    const txOne = mock(async () => ({ id: TOURNAMENT.id, signup_state: "closed", entry_cap: null, status: "draft" }));
+    const chatResult = await addTournamentEntryTx({ one: txOne }, TOURNAMENT.id, {
+      displayName: "ChatViewer",
+      viewerId: null,
+      source: "chat",
+      trustScore: null,
+      altFlag: false,
+      altReason: null,
+    });
+    expect(chatResult.error).toBe("Tournament signups are not open.");
+    expect(txOne).toHaveBeenCalledTimes(1);
   });
 
   it("supports non-destructive remove, block, and restore transitions", async () => {
