@@ -127,13 +127,16 @@
   }
   function markAllRead() {
     return api("POST", "/api/viewer/notifications/read-all").then(function (r) {
-      if (r.ok && r.data && r.data.ok) {
-        var now = new Date().toISOString();
-        state.items.forEach(function (it) { if (!it.readAt) it.readAt = now; });
-        state.unread = 0;
-        render();
-      }
-    }).catch(function () { /* The next refresh reconciles. */ });
+      if (!r.ok || !r.data || !r.data.ok) throw new Error("Notifications could not be marked as read.");
+      var now = new Date().toISOString();
+      state.items.forEach(function (it) { if (!it.readAt) it.readAt = now; });
+      state.unread = 0;
+      state.error = "";
+      render();
+    }).catch(function () {
+      state.error = "Could not mark notifications as read. Try again.";
+      render();
+    });
   }
 
   function setOpen(open) {

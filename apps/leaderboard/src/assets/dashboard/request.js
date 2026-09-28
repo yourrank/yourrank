@@ -1,6 +1,36 @@
 export const DASHBOARD_REQUEST_TIMEOUT_MS = 10_000;
 
 const DASHBOARD_AUTH_ERROR_VALUES = new Set(["unauthorized"]);
+const TRANSIENT_DASHBOARD_ERROR_CODES = new Set(["timeout", "network", "server", "invalid_response"]);
+const ENTITLEMENT_DASHBOARD_ERROR_CODES = new Set(["entitlement_required", "plan_limit_reached"]);
+
+export const TRANSIENT_RETRY_DELAYS_MS = [1500, 3000, 6000];
+
+export function isTransientDashboardError(err) {
+  const code = String(err?.code || "").trim().toLowerCase();
+  const status = Number(err?.status);
+  if (code === "auth" || ENTITLEMENT_DASHBOARD_ERROR_CODES.has(code) || [401, 403].includes(status)) return false;
+  return TRANSIENT_DASHBOARD_ERROR_CODES.has(code) || [404, 409, 429].includes(status);
+}
+
+export async function retryTransient(operation, {
+  delays = TRANSIENT_RETRY_DELAYS_MS,
+  isTransient = isTransientDashboardError,
+  shouldContinue = () => true,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  onRetry,
+} = {}) {
+  for (let attemptIndex = 0; attemptIndex <= delays.length; attemptIndex += 1) {
+    try {
+      return await operation();
+    } catch (err) {
+      if (!isTransient(err) || attemptIndex >= delays.length || !shouldContinue()) throw err;
+      onRetry?.(err, attemptIndex);
+      await sleep(delays[attemptIndex]);
+      if (!shouldContinue()) throw err;
+    }
+  }
+}
 
 export class DashboardRequestError extends Error {
   constructor(message, { code = "REQUEST_FAILED", status = 0, cause, denial = null } = {}) {

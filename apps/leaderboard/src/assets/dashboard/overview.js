@@ -22,7 +22,7 @@ import {
 } from "./overview-state.js";
 import { effectiveBoardRole } from "./role-preview.js";
 import { buildDashboardPath } from "@yourrank/shared/dashboard-routes";
-import { fetchDashboardJson } from "./request.js";
+import { fetchDashboardJson, retryTransient } from "./request.js";
 
 // Each dynamic Home section loads on its own: one failing request shows a
 // compact retry in that section and leaves the rest of Home usable.
@@ -193,7 +193,13 @@ async function loadHomeSection(key, siteId, token) {
   renderOverviewSummary();
   const params = new URLSearchParams({ siteId }).toString();
   try {
-    const { body } = await fetchDashboardJson(spec.request(params), { credentials: "same-origin" });
+    const { body } = await retryTransient(
+      () => fetchDashboardJson(spec.request(params), { credentials: "same-origin" }),
+      {
+        shouldContinue: () => !unloading && token === loadToken && home.siteId === siteId,
+        onRetry: (err, attempt) => logError(`overview/${key}`, err, { attempt, willRetry: true }),
+      },
+    );
     if (token !== loadToken || home.siteId !== siteId) return;
     home.sections[key] = { status: "ready", data: spec.project(body), error: null };
   } catch (err) {

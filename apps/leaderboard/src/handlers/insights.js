@@ -196,5 +196,6 @@ export async function handleInsights(request, env, injected = {}) {
       pendingClaims: rewards ? Number(rewards?.pending_claims) || 0 : null,
     },
     availability,
+    gated: { rewards: !advanced, pendingReviews: !advanced, pendingClaims: !advanced },
   });
 }

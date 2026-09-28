@@ -175,7 +175,7 @@ function EditorSection({ active, activeHash = defaultTab("board"), showTabs = ac
 <div class="v3-players" data-egroup="players">
 <div class="v3-head">
 <h1>Standings</h1>
-<p class="v3-head-sub v3-head-sub--mono"><span id="pCount">0</span> / <span id="pLimit">0</span> players on your leaderboard <span id="limitHint" class="v3-players-limit"></span> <a class="v3-players-upgrade" id="playerLimitUpgrade" href="/dashboard/settings" hidden>Upgrade</a></p>
+<p class="v3-head-sub v3-head-sub--mono"><span id="pCount">0</span> of <span id="pLimit">0</span> players <span id="limitHint" class="v3-players-limit"></span> <a class="v3-players-upgrade" id="playerLimitUpgrade" href="/dashboard/settings" hidden>Upgrade</a></p>
 </div>
 <div class="v3-alert v3-alert--warning players-sample-notice" id="playersSampleNotice" hidden role="status"><strong>Sample players are shown.</strong><span>Replace or clear them before publishing your real roster.</span><a class="btn btn--sm btn--ghost" href="#quickAdd">Manage players</a></div>
 <div class="v3-alert v3-alert--info players-draft-notice" id="playersDraftNotice" hidden role="status"><strong>Restored unsaved changes.</strong><span>Your staged player edits are back. Review them and save or discard.</span><button class="btn btn--sm btn--ghost" id="playersDraftNoticeDismiss" type="button">Dismiss</button></div>
