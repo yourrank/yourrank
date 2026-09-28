@@ -146,6 +146,9 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(body.ok).toBe(true);
       expect(body.rewardXp).toBe(50);
       expect(body.newBalance).toBe(120);
+      const rewardLedger = mockExec.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(rewardLedger[0]).toContain("'earn'");
+      expect(rewardLedger[1]).toEqual(["sv-1", 20, "Daily Quest Claim: Watch stream"]);
     });
 
     it("tracks quest progress and marks completed when target reached", async () => {
@@ -227,7 +230,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
     it("creates a duel challenge and locks challenger wager", async () => {
       mockOne.mockResolvedValueOnce(SITE); // site
       mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 }); // challenger sv
-      mockOne.mockResolvedValueOnce({ id: "v-2", username: "rival" }); // target viewer
+      mockOne.mockResolvedValueOnce({ id: "v-2", kick_username: "rival" }); // target viewer
       mockOne.mockResolvedValueOnce({ id: "sv-2", balance: 100 }); // target sv
       mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 50 }); // guarded debit update
       mockOne.mockResolvedValueOnce({ id: "duel-1", wager_amount: 50, status: "pending" }); // insert duel in tx
@@ -248,6 +251,15 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.duel.wager_amount).toBe(50);
+      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrites).toHaveLength(1);
+      expect(ledgerWrites[0][0]).toContain("'spend'");
+      expect(ledgerWrites[0][1]).toEqual([
+        "sv-1",
+        50,
+        "Duel Challenge against @rival (50 pts)",
+      ]);
+      expect(mockOne.mock.calls[4][0]).toContain("total_spent = total_spent + $1");
     });
 
     it("accepts a duel, executes provably fair roll and awards 2x pot to winner", async () => {
@@ -286,6 +298,14 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(acceptSql).toContain("vt.kick_username AS target_name");
       expect(acceptSql).not.toContain("vc.username");
       expect(acceptSql).not.toContain("vt.username");
+      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrites).toHaveLength(2);
+      expect(ledgerWrites[0][0]).toContain("'spend'");
+      expect(ledgerWrites[0][1]).toEqual(["sv-2", 50, "Accepted Duel vs @alice (50 pts)"]);
+      expect(ledgerWrites[1][0]).toContain("'earn'");
+      expect(ledgerWrites[1][1][1]).toBe(100);
+      expect(ledgerWrites[1][1][2]).toContain("Won Duel Pot vs ");
+      expect(mockOne.mock.calls[2][0]).toContain("total_spent = total_spent + $1");
     });
 
     it("declines a duel and refunds challenger wager", async () => {
@@ -310,6 +330,11 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.status).toBe("declined");
+      const ledgerWrite = mockExec.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrite[0]).toContain("'revoke'");
+      expect(ledgerWrite[1]).toEqual(["sv-1", 50]);
+      const refundUpdate = mockExec.mock.calls.find(([sql]) => String(sql).includes("UPDATE site_viewers"));
+      expect(refundUpdate[0]).toContain("total_spent = GREATEST(total_spent - $1, 0)");
     });
 
     it("rejects duel actions without a viewer session", async () => {

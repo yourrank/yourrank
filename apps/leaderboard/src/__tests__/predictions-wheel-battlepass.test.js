@@ -156,6 +156,67 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.ok).toBe(true);
       expect(body.totalWinners).toBe(2);
       expect(body.totalPayout).toBe(1000); // 100/400*1000 = 250, 300/400*1000 = 750
+      const payoutLedger = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(payoutLedger.map(([sql, params]) => [String(sql).includes("'earn'"), params[1]])).toEqual([
+        [true, 250],
+        [true, 750],
+      ]);
+    });
+
+    it("refunds prediction bets as revokes when there are no winning bets", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "pred-1",
+        site_id: "site-456",
+        title: "Match result",
+        options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
+        status: "open",
+        total_pool: 300,
+      });
+      mockOne.mockResolvedValueOnce({ id: "pred-1" });
+      mockExec.mockResolvedValueOnce([
+        { id: "bet-1", site_viewer_id: "sv-1", option_id: "no", amount: 100 },
+        { id: "bet-2", site_viewer_id: "sv-2", option_id: "no", amount: 200 },
+      ]);
+
+      const res = await handleSettlePrediction(new Request("http://localhost/api/predictions/pred-1/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ predictionId: "pred-1", winningOptionId: "yes" }),
+      }), mockEnv(), deps);
+
+      expect(res.status).toBe(200);
+      const refundLedger = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(refundLedger.map(([sql, params]) => [String(sql).includes("'revoke'"), params[1]])).toEqual([
+        [true, 100],
+        [true, 200],
+      ]);
+      const refundUpdates = mockExec.mock.calls.filter(([sql]) => String(sql).includes("UPDATE site_viewers"));
+      expect(refundUpdates.every(([sql]) => String(sql).includes("total_spent = GREATEST(total_spent - $1, 0)"))).toBe(true);
+    });
+
+    it("skips prediction payout ledger rows when the rounded payout is zero", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "pred-1",
+        site_id: "site-456",
+        title: "Match result",
+        options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
+        status: "open",
+        total_pool: 1,
+      });
+      mockOne.mockResolvedValueOnce({ id: "pred-1" });
+      mockExec.mockResolvedValueOnce([
+        { id: "bet-1", site_viewer_id: "sv-1", option_id: "yes", amount: 1 },
+        { id: "bet-2", site_viewer_id: "sv-2", option_id: "yes", amount: 1 },
+      ]);
+
+      const res = await handleSettlePrediction(new Request("http://localhost/api/predictions/pred-1/settle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ predictionId: "pred-1", winningOptionId: "yes" }),
+      }), mockEnv(), deps);
+
+      expect(res.status).toBe(200);
+      expect(mockExec.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO credit_ledger"))).toBe(false);
     });
 
     it("rejects duplicate option labels on create", async () => {
@@ -272,6 +333,13 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       const body = await res.json();
       expect(body.ok).toBe(true);
       expect(body.status).toBe("cancelled");
+      const refundLedger = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(refundLedger.map(([sql, params]) => [String(sql).includes("'revoke'"), params[1]])).toEqual([
+        [true, 100],
+        [true, 200],
+      ]);
+      const refundUpdates = mockExec.mock.calls.filter(([sql]) => String(sql).includes("UPDATE site_viewers"));
+      expect(refundUpdates.every(([sql]) => String(sql).includes("total_spent = GREATEST(total_spent - $1, 0)"))).toBe(true);
     });
   });
 
@@ -318,6 +386,62 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.winningIndex).toBe(0);
       expect(body.segment.label).toBe("+100 Pts");
       expect(body.newBalance).toBe(170); // 100 - 30 + 100 = 170
+      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrites).toHaveLength(2);
+      expect(ledgerWrites[0][0]).toContain("'spend'");
+      expect(ledgerWrites[0][1]).toEqual(["sv-1", 30, "Lucky Wheel spin"]);
+      expect(ledgerWrites[1][0]).toContain("'earn'");
+      expect(ledgerWrites[1][1]).toEqual(["sv-1", 100, "Lucky Wheel Spin (+100 Pts)"]);
+      expect(mockOne.mock.calls[3][0]).toContain("total_spent = total_spent + $4");
+      expect(mockOne.mock.calls[3][1]).toEqual([70, 100, "sv-1", 30]);
+    });
+
+    it("does not write a spend ledger row for a zero-cost spin", async () => {
+      mockOne.mockResolvedValueOnce(SITE);
+      mockOne.mockResolvedValueOnce({
+        spin_cost: 0,
+        enabled: true,
+        segments_json: [{ id: "s1", label: "+25 Pts", type: "points", value: 25, weight: 100 }],
+      });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 125 });
+
+      const res = await handleSpinWheel(new Request("http://localhost/api/games/wheel/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: "streamer", viewerId: "viewer-123" }),
+      }), mockEnv(), deps);
+
+      expect(res.status).toBe(200);
+      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrites).toHaveLength(1);
+      expect(ledgerWrites[0][0]).toContain("'earn'");
+      expect(ledgerWrites[0][1]).toEqual(["sv-1", 25, "Lucky Wheel Spin (+25 Pts)"]);
+      expect(ledgerWrites.some(([sql]) => String(sql).includes("'spend'"))).toBe(false);
+    });
+
+    it("does not write an earn ledger row for a Try Again spin", async () => {
+      mockOne.mockResolvedValueOnce(SITE);
+      mockOne.mockResolvedValueOnce({
+        spin_cost: 30,
+        enabled: true,
+        segments_json: [{ id: "s8", label: "Try Again", type: "none", value: 0, weight: 100 }],
+      });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 70 });
+
+      const res = await handleSpinWheel(new Request("http://localhost/api/games/wheel/spin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ site: "streamer", viewerId: "viewer-123" }),
+      }), mockEnv(), deps);
+
+      expect(res.status).toBe(200);
+      const ledgerWrites = mockExec.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(ledgerWrites).toHaveLength(1);
+      expect(ledgerWrites[0][0]).toContain("'spend'");
+      expect(ledgerWrites[0][1]).toEqual(["sv-1", 30, "Lucky Wheel spin"]);
+      expect(ledgerWrites.some(([sql]) => String(sql).includes("'earn'"))).toBe(false);
     });
 
     it("rejects wheel spins without a viewer session", async () => {
@@ -473,6 +597,13 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.ok).toBe(true);
       expect(body.tierLevel).toBe(5);
       expect(body.newBalance).toBe(750); // 500 + 250 = 750
+      const rewardLedger = mockExec.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO credit_ledger"));
+      expect(rewardLedger[0]).toContain("'earn'");
+      expect(rewardLedger[1]).toEqual([
+        "sv-1",
+        250,
+        "Battle Pass Level 5 Reward: Bronze Badge",
+      ]);
     });
 
     it("awards XP and triggers level up when passing threshold", async () => {

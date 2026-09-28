@@ -263,12 +263,12 @@ export async function handleSettlePrediction(request, env, deps = {}) {
     if (winningTotal === 0 || winningBets.length === 0) {
       for (const bet of bets) {
         await tx.unsafe(
-          "UPDATE site_viewers SET balance = balance + $1, updated_at=now() WHERE id=$2",
+          "UPDATE site_viewers SET balance = balance + $1, total_spent = GREATEST(total_spent - $1, 0), updated_at=now() WHERE id=$2",
           [bet.amount, bet.site_viewer_id]
         );
         await tx.unsafe(
           `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-           VALUES ($1, 'refund', $2, $3)`,
+           VALUES ($1, 'revoke', $2, $3)`,
           [bet.site_viewer_id, bet.amount, `Prediction Refund (No Winners): ${pred.title}`]
         );
       }
@@ -296,11 +296,13 @@ export async function handleSettlePrediction(request, env, deps = {}) {
         [payout, winBet.site_viewer_id]
       );
 
-      await tx.unsafe(
-        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-         VALUES ($1, 'win', $2, $3)`,
-        [winBet.site_viewer_id, payout, `Prediction Payout (${winningOptionId.toUpperCase()}): ${pred.title}`]
-      );
+      if (payout > 0) {
+        await tx.unsafe(
+          `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
+           VALUES ($1, 'earn', $2, $3)`,
+          [winBet.site_viewer_id, payout, `Prediction Payout (${winningOptionId.toUpperCase()}): ${pred.title}`]
+        );
+      }
     }
 
     await tx.unsafe(
@@ -376,12 +378,12 @@ export async function handleCancelPrediction(request, env, deps = {}) {
   await withTransaction(async (tx) => {
     for (const bet of bets) {
       await tx.unsafe(
-        "UPDATE site_viewers SET balance = balance + $1, updated_at=now() WHERE id=$2",
+        "UPDATE site_viewers SET balance = balance + $1, total_spent = GREATEST(total_spent - $1, 0), updated_at=now() WHERE id=$2",
         [bet.amount, bet.site_viewer_id]
       );
       await tx.unsafe(
         `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-         VALUES ($1, 'refund', $2, $3)`,
+         VALUES ($1, 'revoke', $2, $3)`,
         [bet.site_viewer_id, bet.amount, `Cancelled Prediction Refund: ${pred.title}`]
       );
     }
@@ -399,5 +401,4 @@ export async function handleCancelPrediction(request, env, deps = {}) {
 
   return ok({ predictionId, status: "cancelled", message: `Prediction cancelled and ${bets.length} bets refunded.` });
 }
-
 

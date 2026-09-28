@@ -198,7 +198,7 @@ export async function handleSpinWheel(request, env, deps = {}) {
   const outcome = await withTransaction(async (tx) => {
     // Deduct cost and add winning points
     const updatedViewer = await tx.one(
-      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $2, updated_at=now() WHERE id=$3 AND balance >= $4 RETURNING id, balance",
+      "UPDATE site_viewers SET balance = balance + $1, total_earned = total_earned + $2, total_spent = total_spent + $4, updated_at=now() WHERE id=$3 AND balance >= $4 RETURNING id, balance",
       [pointsDelta, won.type === "points" ? won.value : 0, siteViewer.id, spinCost]
     );
     if (!updatedViewer) return { error: `Insufficient credits. You need ${spinCost} pts to spin (you have ${siteViewer.balance || 0} pts).`, status: 400 };
@@ -210,12 +210,21 @@ export async function handleSpinWheel(request, env, deps = {}) {
       [site.id, siteViewer.id, viewerId, won.id, spinCost, won.label, won.type, won.value]
     );
 
-    // Record in credit ledger
-    await tx.unsafe(
-      `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'game', $2, $3)`,
-      [siteViewer.id, pointsDelta, `Lucky Wheel Spin (${won.label})`]
-    );
+    if (spinCost > 0) {
+      await tx.unsafe(
+        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
+         VALUES ($1, 'spend', $2, $3)`,
+        [siteViewer.id, spinCost, "Lucky Wheel spin"]
+      );
+    }
+
+    if (won.type === "points" && won.value > 0) {
+      await tx.unsafe(
+        `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
+         VALUES ($1, 'earn', $2, $3)`,
+        [siteViewer.id, won.value, `Lucky Wheel Spin (${won.label})`]
+      );
+    }
 
     return {
       newBalance: updatedViewer.balance,
