@@ -1,12 +1,12 @@
 import { withTransaction as defaultWithTransaction, one as defaultOne, exec as defaultExec } from "@yourrank/shared/db";
 // Authentication handlers for signup, login, logout, password reset
-import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp } from "../auth.js";
+import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, safeEqual } from "../auth.js";
 import { hashToken } from "@yourrank/shared/crypto";
 import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { routeContext } from "../middleware/handler.js";
 import { trackActivation } from "@yourrank/shared/activation-funnel";
 import { createBoard, getUserBoardsList } from "../site.js";
-import { sendEmail, resetEmail, sendOnboardingEmail, sendVerificationEmail } from "../email.js";
+import { sendEmail, resetEmail, sendOnboardingEmail, sendVerificationEmail, loginCodeEmail } from "../email.js";
 import { validatePassword } from "../password-rules.js";
 import { effectivePlan, getPlanLimit, priceUsd } from "@yourrank/shared/plans";
 import { getEnabledFeatureKeys } from "@yourrank/shared/features";
@@ -27,6 +27,18 @@ const one = defaultOne;
 const exec = defaultExec;
 
 const VERIFICATION_TTL_HOURS = 24;
+const LOGIN_CODE_TTL_MINUTES = 10;
+const LOGIN_CODE_MAX_ATTEMPTS = 5;
+
+// Uniform 6-digit code derived from crypto.getRandomValues — the raw code is
+// never stored, only hashToken(`${email}:${code}`) lands in login_codes.
+function newLoginCode() {
+  const limit = 2 ** 32 - ((2 ** 32) % 1000000);
+  for (;;) {
+    const [value] = crypto.getRandomValues(new Uint32Array(1));
+    if (value < limit) return String(value % 1000000).padStart(6, "0");
+  }
+}
 
 export function emailVerificationDeliveryState(env = {}) {
   const environment = String(env.ENVIRONMENT || "").trim().toLowerCase();
@@ -419,5 +431,115 @@ export async function handleResendVerification(request, env, deps = {}) {
   } catch (e) {
     console.error("[resend verification] failed:", String(e?.message || e));
     return bad("Could not resend verification email. Please try again.", 500);
+  }
+}
+
+// POST /api/auth/code/request — { email }
+// Passwordless sign-in: sends a 6-digit code when the email belongs to an
+// eligible account. Always answers ok so the response never reveals whether
+// the account exists (same contract as handleForgot).
+export async function handleRequestLoginCode(request, env, deps = {}) {
+  const io = { rateLimit, one, exec, sendEmail, ...deps };
+  try {
+    const delivery = emailVerificationDeliveryState(env);
+    if (delivery.required && !delivery.configured) {
+      return bad("Sign-in codes are temporarily unavailable because email delivery is not configured.", 503);
+    }
+    if (!(await io.rateLimit(env, `login-code:ip:${clientIp(request)}`, 10, 3600)).ok) {
+      return bad("Too many attempts. Try again later.", 429);
+    }
+    const body = await readJson(request);
+    const email = String(body?.email || "").trim().toLowerCase();
+    if (!isEmail(email)) return bad("Enter a valid email");
+    if (!(await io.rateLimit(env, `login-code:email:${email}`, 5, 3600)).ok) {
+      return bad("Too many attempts. Try again later.", 429);
+    }
+    if (!(await io.rateLimit(env, `login-code:cooldown:${email}`, 1, 60)).ok) {
+      return bad("Wait a moment before requesting another code.", 429);
+    }
+    // Mirrors handleLogin's eligibility checks: suspended and locked accounts
+    // get no code, but the response stays generic either way.
+    const user = await io.one("SELECT id, status, locked_until FROM users WHERE email=$1", [email]);
+    const locked = user?.locked_until && new Date(user.locked_until) > new Date();
+    if (user && user.status === "active" && !locked) {
+      await io.exec("DELETE FROM login_codes WHERE email=$1 AND expires_at > now()", [email]);
+      const code = newLoginCode();
+      const codeHash = await hashToken(`${email}:${code}`);
+      await io.exec(
+        "INSERT INTO login_codes (email, code_hash, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))",
+        [email, codeHash, LOGIN_CODE_TTL_MINUTES]
+      );
+      const mail = loginCodeEmail(code);
+      const result = await io.sendEmail(env, { to: email, ...mail });
+      if (!result.sent) {
+        // An undeliverable code can never be used; revoke it like handleForgot.
+        await io.exec("DELETE FROM login_codes WHERE code_hash=$1", [codeHash]);
+        console.error("[login-code] email send failed:", result.reason || "unknown");
+      }
+    }
+    return ok({ message: "If that account exists, a sign-in code is on its way." });
+  } catch (e) {
+    console.error("[login-code] request failed:", String(e?.message || e).replace(/[a-f0-9]{32,}/gi, "[REDACTED]"));
+    return bad("Couldn't process your request. Please try again.", 500);
+  }
+}
+
+// POST /api/auth/code/verify — { email, code }
+// On a correct code the user gets the same session + response shape as
+// handleLogin, and the inbox ownership is recorded as email_verified.
+export async function handleVerifyLoginCode(request, env, deps = {}) {
+  const io = { rateLimit, one, exec, withTransaction, createSession, cookieSet, getEnabledFeatureKeys, ...deps };
+  try {
+    if (!(await io.rateLimit(env, `login-code-verify:ip:${clientIp(request)}`, 30, 600)).ok) {
+      return bad("Too many attempts. Try again later.", 429);
+    }
+    const body = await readJson(request);
+    const email = String(body?.email || "").trim().toLowerCase();
+    const code = String(body?.code || "").trim();
+    if (!isEmail(email) || !/^\d{6}$/.test(code)) {
+      return bad("Enter your email and the 6-digit code.");
+    }
+    const row = await io.one(
+      "SELECT id, code_hash, attempts FROM login_codes WHERE email=$1 AND expires_at > now() ORDER BY created_at DESC LIMIT 1",
+      [email]
+    );
+    if (!row) return bad("Invalid or expired code.", 401);
+    // Bound guessing on the row itself: after 5 failures the code is dead.
+    if (Number(row.attempts) >= LOGIN_CODE_MAX_ATTEMPTS) {
+      await io.exec("DELETE FROM login_codes WHERE id=$1", [row.id]);
+      return bad("Invalid or expired code.", 401);
+    }
+    const attemptHash = await hashToken(`${email}:${code}`);
+    if (!safeEqual(attemptHash, row.code_hash)) {
+      await io.exec("UPDATE login_codes SET attempts = attempts + 1 WHERE id=$1", [row.id]);
+      return bad("Invalid or expired code.", 401);
+    }
+    const user = await io.one(
+      "SELECT id, email, status, locked_until FROM users WHERE email=$1",
+      [email]
+    );
+    const locked = user?.locked_until && new Date(user.locked_until) > new Date();
+    if (!user || user.status !== "active" || locked) {
+      await io.exec("DELETE FROM login_codes WHERE id=$1", [row.id]);
+      return bad("Invalid or expired code.", 401);
+    }
+    await io.withTransaction(async (tx) => {
+      await tx.unsafe("DELETE FROM login_codes WHERE id=$1", [row.id]);
+      // Proving inbox ownership satisfies the same invariant the verify-email
+      // link sets, and clears any earlier failed-password lockout.
+      await tx.unsafe(
+        "UPDATE users SET email_verified=true, email_verification_token_hash=NULL, email_verification_sent_at=NULL, failed_login_count=0, locked_until=NULL WHERE id=$1",
+        [user.id]
+      );
+    });
+    const [site, token, features] = await Promise.all([
+      io.one("SELECT slug FROM sites WHERE user_id=$1", [user.id]),
+      io.createSession(env, user.id),
+      io.getEnabledFeatureKeys(user.id),
+    ]);
+    return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: true } }, 200, { "set-cookie": io.cookieSet(token, env) });
+  } catch (e) {
+    console.error("[login-code] verify failed:", String(e?.message || e).replace(/[a-f0-9]{32,}/gi, "[REDACTED]"));
+    return bad("Sign-in failed. Please try again.", 500);
   }
 }

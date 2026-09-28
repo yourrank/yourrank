@@ -217,6 +217,10 @@ a{color:var(--ink);text-decoration:none}a:hover{color:var(--accent)}
 .auth-card .field label{font-size:14px}
 .auth-card .field .hint,.auth-card .field-err{font-size:13px}
 .auth-card .err{font-size:14px}
+.auth-methods{display:flex;gap:4px;border:1px solid var(--line);border-radius:8px;padding:3px;margin-bottom:16px;background:var(--panel-2)}
+.auth-method{flex:1;padding:8px 10px;border-radius:6px;background:transparent;border:0;color:var(--ink-mute);font-size:14px;font-weight:500;cursor:pointer}
+.auth-method.is-on{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.code-actions{display:flex;justify-content:space-between;gap:8px;margin-top:12px}
 .auth-url-wrap{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel-2)}
 .auth-url-prefix{color:var(--ink);font-size:14px;white-space:nowrap}
 .auth-url-input{flex:1;border:none;background:transparent;padding:0;color:var(--ink);font-size:14px;min-width:0}

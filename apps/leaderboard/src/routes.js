@@ -11,7 +11,8 @@ import { handleEventLeaderboards } from "./handlers/event-leaderboards.js";
 
 import {
   handleSignup, handleLogin, handleLogout, handleMe, handleForgot, handleReset,
-  handleVerifyEmail, handleResendVerification, handleDemoLogin
+  handleVerifyEmail, handleResendVerification, handleDemoLogin,
+  handleRequestLoginCode, handleVerifyLoginCode
 } from "./handlers/auth.js";
 import {
   handleChangePassword, handleListSessions, handleRevokeOtherSessions,
@@ -250,6 +251,8 @@ export const ROUTES = [
   { path: "/api/auth/reset", method: "POST", handler: withHandler(handleReset) },
   { path: "/api/auth/verify", method: "POST", handler: withHandler(handleVerifyEmail) },
   { path: "/api/auth/resend-verification", method: "POST", handler: withHandler(handleResendVerification) },
+  { path: "/api/auth/code/request", method: "POST", handler: withHandler(handleRequestLoginCode) },
+  { path: "/api/auth/code/verify", method: "POST", handler: withHandler(handleVerifyLoginCode) },
   
   // Authenticated auth routes (CSRF required)
   { path: "/api/auth/logout", method: "POST", handler: withHandler(handleLogout) },

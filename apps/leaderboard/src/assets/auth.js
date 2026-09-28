@@ -282,3 +282,141 @@ form.addEventListener("submit", async (e) => {
     }
   } catch (_) { errEl.textContent = "Network error. Try again."; setPending(false, orig); }
 });
+
+/* Sign-in method toggle + email-code flow (login page only). The password
+   form above is untouched — this block only exists when the page ships the
+   #codeForm markup, so /forgot /reset /signup are unaffected. */
+const codeForm = document.getElementById("codeForm");
+if (mode === "login" && codeForm) {
+  const methodCode = document.getElementById("methodCode");
+  const methodPassword = document.getElementById("methodPassword");
+  const step1 = document.getElementById("codeStep1");
+  const step2 = document.getElementById("codeStep2");
+  const codeEmailInput = document.getElementById("codeEmail");
+  const codeInput = document.getElementById("code");
+  const codeSentTo = document.getElementById("codeSentTo");
+  const codeSubmit = document.getElementById("codeSubmit");
+  const codeVerify = document.getElementById("codeVerify");
+  const codeResend = document.getElementById("codeResend");
+  const codeChangeEmail = document.getElementById("codeChangeEmail");
+  const codeErr = document.getElementById("codeErr");
+  const codeErr2 = document.getElementById("codeErr2");
+  let codeStep = 1;
+  let codeEmail = "";
+  let resendTimer = null;
+
+  const post = (path, payload) => fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+    body: JSON.stringify(payload),
+  }).then(r => r.json().then(data => ({ status: r.status, data })));
+
+  function showCodeError(el, status, data) {
+    el.textContent = status === 429
+      ? `${data.error || "Too many attempts."} Try again in a moment.`
+      : (data.error || "Something went wrong.");
+  }
+
+  function startResendCountdown(seconds = 60) {
+    if (!codeResend) return;
+    clearInterval(resendTimer);
+    codeResend.disabled = true;
+    let left = seconds;
+    codeResend.textContent = `Resend code (${left}s)`;
+    resendTimer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(resendTimer);
+        codeResend.disabled = false;
+        codeResend.textContent = "Resend code";
+      } else {
+        codeResend.textContent = `Resend code (${left}s)`;
+      }
+    }, 1000);
+  }
+
+  async function requestCode(email) {
+    const { status, data } = await post("/api/auth/code/request", { email });
+    return { status, data };
+  }
+
+  methodCode?.addEventListener("click", () => {
+    methodCode.classList.add("is-on"); methodCode.setAttribute("aria-selected", "true");
+    methodPassword.classList.remove("is-on"); methodPassword.setAttribute("aria-selected", "false");
+    codeForm.hidden = false; form.hidden = true;
+  });
+  methodPassword?.addEventListener("click", () => {
+    methodPassword.classList.add("is-on"); methodPassword.setAttribute("aria-selected", "true");
+    methodCode.classList.remove("is-on"); methodCode.setAttribute("aria-selected", "false");
+    form.hidden = false; codeForm.hidden = true;
+  });
+
+  codeChangeEmail?.addEventListener("click", () => {
+    codeStep = 1;
+    step2.hidden = true; step1.hidden = false;
+    codeErr2.textContent = "";
+    codeEmailInput.focus();
+  });
+
+  codeResend?.addEventListener("click", async () => {
+    if (!codeEmail || codeResend.disabled) return;
+    codeResend.disabled = true;
+    try {
+      const { status, data } = await requestCode(codeEmail);
+      if (status === 429) { codeErr2.textContent = `${data.error || "Too many attempts."} Try again in a moment.`; codeResend.disabled = false; return; }
+      if (!data.ok) { codeErr2.textContent = data.error || "Could not send a new code."; codeResend.disabled = false; return; }
+      startResendCountdown(60);
+    } catch (_) {
+      codeErr2.textContent = "Network error. Try again.";
+      codeResend.disabled = false;
+    }
+  });
+
+  codeForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (codeStep === 1) {
+      codeErr.textContent = "";
+      const email = codeEmailInput.value.trim();
+      if (!EMAIL_RE.test(email)) {
+        codeEmailInput.setAttribute("aria-invalid", "true");
+        const box = fieldErrEl("codeEmail"); if (box) box.textContent = "Enter a valid email address";
+        codeEmailInput.focus();
+        return;
+      }
+      codeSubmit.disabled = true; codeSubmit.textContent = "Sending…";
+      try {
+        const { status, data } = await requestCode(email);
+        if (!data.ok) { showCodeError(codeErr, status, data); return; }
+        codeEmail = email;
+        codeSentTo.textContent = email;
+        codeStep = 2;
+        step1.hidden = true; step2.hidden = false;
+        codeErr2.textContent = "";
+        codeInput.value = "";
+        startResendCountdown(60);
+        codeInput.focus();
+      } catch (_) { codeErr.textContent = "Network error. Try again."; }
+      finally { codeSubmit.disabled = false; codeSubmit.textContent = "Send code"; }
+      return;
+    }
+    // Step 2 — verify the 6-digit code.
+    codeErr2.textContent = "";
+    const code = codeInput.value.trim();
+    if (!/^\d{6}$/.test(code)) {
+      codeInput.setAttribute("aria-invalid", "true");
+      const box = fieldErrEl("code"); if (box) box.textContent = "Enter the 6-digit code";
+      codeInput.focus();
+      return;
+    }
+    codeVerify.disabled = true; codeVerify.textContent = "Signing in…";
+    try {
+      const { status, data } = await post("/api/auth/code/verify", { email: codeEmail, code });
+      if (!data.ok) { showCodeError(codeErr2, status, data); codeVerify.disabled = false; codeVerify.textContent = "Sign in"; return; }
+      location.href = nextPath || "/dashboard";
+    } catch (_) {
+      codeErr2.textContent = "Network error. Try again.";
+      codeVerify.disabled = false; codeVerify.textContent = "Sign in";
+    }
+  });
+}
