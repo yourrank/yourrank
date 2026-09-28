@@ -33,8 +33,11 @@ const LOGIN_CODE_MAX_ATTEMPTS = 5;
 // Uniform 6-digit code derived from crypto.getRandomValues — the raw code is
 // never stored, only hashToken(`${email}:${code}`) lands in login_codes.
 function newLoginCode() {
-  const bytes = crypto.getRandomValues(new Uint32Array(1));
-  return String(bytes[0] % 1000000).padStart(6, "0");
+  const limit = 2 ** 32 - ((2 ** 32) % 1000000);
+  for (;;) {
+    const [value] = crypto.getRandomValues(new Uint32Array(1));
+    if (value < limit) return String(value % 1000000).padStart(6, "0");
+  }
 }
 
 export function emailVerificationDeliveryState(env = {}) {
