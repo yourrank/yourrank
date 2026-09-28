@@ -45,7 +45,6 @@ const SENSITIVE_TABLES = [
   "site_invites",
   "oauth_states",
   "password_resets",
-  "login_codes",
   "admin_recovery_codes",
   "postback_keys",
   "audit_log",
