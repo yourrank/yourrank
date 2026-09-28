@@ -299,7 +299,7 @@ describe("Giveaway draw flow", () => {
     expect($id("gw-kick-eligibility-section").hidden).toBe(true);
     expect($id("gw-winner-verification-section").hidden).toBe(true);
     expect($id("gw-anti-abuse-section").hidden).toBe(true);
-    expect($id("gw-rules-panel").open).toBe(false);
+    expect($id("gw-rules-panel").open).toBe(true);
     expect($id("gw-advanced-options").open).toBe(false);
 
     $id("gw-advanced-options").open = true;
