@@ -3383,15 +3383,20 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
   text-transform: none;
 }
 
-/* Table / list shell: one card with a head (title, description, actions),
-   a body the feature fills, and an optional foot for totals or paging. */
-.v3-dash[data-auth-workspace] .v3-list-shell { padding: 0; overflow: hidden; }
+/* Table / list shell: a head (title, description, actions), a body the
+   feature fills, and an optional foot for totals or paging. Layout-neutral
+   by default; `.v3-list-shell--card` opts into bordered card containment. */
+.v3-dash[data-auth-workspace] .v3-list-shell { display: flex; flex-direction: column; min-width: 0; }
+.v3-dash[data-auth-workspace] .v3-list-shell--card { padding: 0; overflow: hidden; }
 .v3-dash[data-auth-workspace] .v3-list-shell-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  padding: 0 0 14px;
+}
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-head {
   padding: 18px 20px 14px;
   border-bottom: 1px solid var(--ws-line);
 }
@@ -3399,22 +3404,29 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
 .v3-dash[data-auth-workspace] .v3-list-shell-copy h2 { margin: 0; font-size: var(--ws-type-card-size); line-height: var(--ws-type-card-leading); color: var(--ws-text); }
 .v3-dash[data-auth-workspace] .v3-list-shell-copy p { margin: 4px 0 0; font-size: 13px; color: var(--ws-text-soft); }
 .v3-dash[data-auth-workspace] .v3-list-shell-body { min-width: 0; overflow-x: auto; }
-.v3-dash[data-auth-workspace] .v3-list-shell-body > .v3-empty { margin: 16px; }
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-body > .v3-empty { margin: 16px; }
 .v3-dash[data-auth-workspace] .v3-list-shell-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--ws-line);
-  background: var(--ws-surface-soft);
+  padding: 12px 0 0;
   color: var(--ws-text-soft);
   font-size: 13px;
 }
+.v3-dash[data-auth-workspace] .v3-list-shell--card .v3-list-shell-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--ws-line);
+  background: var(--ws-surface-soft);
+}
 
 /* Drawer / form shell: right-anchored panel with a fixed head and foot and a
-   scrolling body, so long forms keep their actions in reach. */
-.v3-dash[data-auth-workspace] .v3-drawer { position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
+   scrolling body, so long forms keep their actions in reach. Desktop width is
+   a per-drawer token: default 560px, `--compact` / `--wide` opt in, mobile is
+   always full-width. */
+.v3-dash[data-auth-workspace] .v3-drawer { --drawer-width: 560px; position: fixed; inset: 0; z-index: 1200; display: flex; justify-content: flex-end; }
+.v3-dash[data-auth-workspace] .v3-drawer--compact { --drawer-width: 420px; }
+.v3-dash[data-auth-workspace] .v3-drawer--wide { --drawer-width: 760px; }
 .v3-dash[data-auth-workspace] .v3-drawer[hidden] { display: none; }
 .v3-dash[data-auth-workspace] .v3-drawer-backdrop { position: absolute; inset: 0; background: rgba(18, 17, 17, 0.5); backdrop-filter: blur(4px); }
 .v3-dash[data-auth-workspace] .v3-drawer-panel {
@@ -3422,7 +3434,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 460px;
+  max-width: var(--drawer-width);
   height: min(100%, 100dvh);
   background: var(--ws-surface);
   color: var(--ws-text);

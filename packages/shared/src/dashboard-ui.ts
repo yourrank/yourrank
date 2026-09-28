@@ -232,10 +232,19 @@ export interface ListShellSpec {
   body: string;
   /** Pre-rendered footer (pagination, totals). */
   footer?: string;
+  /**
+   * Containment. `"none"` (default) is layout-neutral so lists can sit
+   * directly in the page; `"card"` adds the bordered `v3-table-card` surface.
+   */
+  surface?: ListShellSurface;
   id?: string;
   className?: string;
   attrs?: Record<string, string | number | boolean | null | undefined>;
 }
+
+export type ListShellSurface = "none" | "card";
+
+const LIST_SHELL_SURFACE_CLASS: Record<ListShellSurface, string> = { none: "", card: "v3-table-card v3-list-shell--card" };
 
 export function listShellHtml(spec: ListShellSpec): string {
   const heading = spec.title || spec.description || spec.actions?.length
@@ -244,7 +253,8 @@ export function listShellHtml(spec: ListShellSpec): string {
       `${actionsHtml(spec.actions, "v3-list-shell-actions")}</div>`
     : "";
   const footer = spec.footer ? `<div class="v3-list-shell-foot">${spec.footer}</div>` : "";
-  return `<section class="${classes("v3-table-card v3-list-shell", spec.className)}" aria-label="${esc(spec.label)}"` +
+  const surface = LIST_SHELL_SURFACE_CLASS[spec.surface ?? "none"];
+  return `<section class="${classes("v3-list-shell", surface, spec.className)}" aria-label="${esc(spec.label)}"` +
     `${spec.id ? ` id="${esc(spec.id)}"` : ""}${attrs(spec.attrs)}>${heading}<div class="v3-list-shell-body">${spec.body}</div>${footer}</section>`;
 }
 
@@ -265,9 +275,15 @@ export interface DrawerShellSpec {
   form?: Record<string, string | number | boolean | null | undefined>;
   closeLabel?: string;
   hidden?: boolean;
+  /** Desktop panel width; mobile is always full-width. Defaults to `"default"`. */
+  size?: DrawerSize;
   className?: string;
   attrs?: Record<string, string | number | boolean | null | undefined>;
 }
+
+export type DrawerSize = "compact" | "default" | "wide";
+
+const DRAWER_SIZE_CLASS: Record<DrawerSize, string> = { compact: "v3-drawer--compact", default: "", wide: "v3-drawer--wide" };
 
 export function drawerShellHtml(spec: DrawerShellSpec): string {
   const titleId = `${spec.id}-title`;
@@ -276,7 +292,8 @@ export function drawerShellHtml(spec: DrawerShellSpec): string {
   const footer = footerInner ? `<footer class="v3-drawer-foot">${footerInner}</footer>` : "";
   const inner = `<div class="v3-drawer-body">${spec.body}</div>${footer}`;
   const content = spec.form ? `<form class="v3-drawer-form"${attrs(spec.form)}>${inner}</form>` : inner;
-  return `<div class="${classes("v3-drawer", spec.className)}" id="${esc(spec.id)}" data-drawer${spec.hidden ? " hidden" : ""}${attrs(spec.attrs)}>` +
+  const size = spec.size ?? "default";
+  return `<div class="${classes("v3-drawer", DRAWER_SIZE_CLASS[size], spec.className)}" id="${esc(spec.id)}" data-drawer data-drawer-size="${size}"${spec.hidden ? " hidden" : ""}${attrs(spec.attrs)}>` +
     `<div class="v3-drawer-backdrop" data-drawer-close></div>` +
     `<aside class="v3-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="${esc(titleId)}"${descId ? ` aria-describedby="${esc(descId)}"` : ""}>` +
     `<header class="v3-drawer-head"><div class="v3-drawer-copy"><h2 id="${esc(titleId)}">${esc(spec.title)}</h2>` +

@@ -126,13 +126,21 @@ describe("dashboard ui primitives", () => {
     expect(loadingStateHtml({ label: "Loading", hidden: true })).toContain(" hidden");
   });
 
-  it("wraps list bodies in a labelled table shell with optional head and foot", () => {
+  it("wraps list bodies in a layout-neutral labelled shell with optional head and foot", () => {
     const bare = listShellHtml({ label: "Members", body: "<table></table>" });
-    expect(bare).toBe('<section class="v3-table-card v3-list-shell" aria-label="Members"><div class="v3-list-shell-body"><table></table></div></section>');
+    expect(bare).toBe('<section class="v3-list-shell" aria-label="Members"><div class="v3-list-shell-body"><table></table></div></section>');
+    expect(bare).not.toContain("v3-table-card");
     const full = listShellHtml({ label: "Members", title: "Members", description: "Who joined", actions: [{ label: "Export" }], body: "<ul></ul>", footer: "<p>10 of 40</p>", id: "members" });
     expect(full).toContain('<div class="v3-list-shell-head"><div class="v3-list-shell-copy"><h2>Members</h2><p>Who joined</p></div><div class="v3-list-shell-actions">');
     expect(full).toContain('<div class="v3-list-shell-foot"><p>10 of 40</p></div>');
     expect(full).toContain(' id="members"');
+  });
+
+  it("opts list shells into card containment explicitly", () => {
+    const card = listShellHtml({ label: "Members", body: "<table></table>", surface: "card" });
+    expect(card).toContain('<section class="v3-list-shell v3-table-card v3-list-shell--card" aria-label="Members">');
+    expect(listShellHtml({ label: "Members", body: "", surface: "none", className: "members-list" }))
+      .toContain('<section class="v3-list-shell members-list"');
   });
 
   it("renders an accessible drawer shell that can host a form", () => {
@@ -145,7 +153,7 @@ describe("dashboard ui primitives", () => {
       form: { method: "post", "data-drawer-form": true },
       hidden: true,
     });
-    expect(html).toContain('<div class="v3-drawer" id="rw-drawer" data-drawer hidden>');
+    expect(html).toContain('<div class="v3-drawer" id="rw-drawer" data-drawer data-drawer-size="default" hidden>');
     expect(html).toContain('<div class="v3-drawer-backdrop" data-drawer-close></div>');
     expect(html).toContain('role="dialog" aria-modal="true" aria-labelledby="rw-drawer-title" aria-describedby="rw-drawer-desc"');
     expect(html).toContain('<h2 id="rw-drawer-title">Edit reward</h2><p id="rw-drawer-desc">Changes save on submit.</p>');
@@ -153,5 +161,12 @@ describe("dashboard ui primitives", () => {
     expect(html).toContain('<footer class="v3-drawer-foot"><div class="v3-drawer-actions">');
     expect(html).toContain('aria-label="Close"');
     expect(drawerShellHtml({ id: "d", title: "T", body: "", footer: "<b>custom</b>" })).toContain('<footer class="v3-drawer-foot"><b>custom</b></footer>');
+  });
+
+  it("lets drawers opt into compact or wide desktop widths", () => {
+    expect(drawerShellHtml({ id: "d", title: "T", body: "", size: "compact" }))
+      .toContain('<div class="v3-drawer v3-drawer--compact" id="d" data-drawer data-drawer-size="compact">');
+    expect(drawerShellHtml({ id: "d", title: "T", body: "", size: "wide", className: "rw-drawer" }))
+      .toContain('<div class="v3-drawer v3-drawer--wide rw-drawer" id="d" data-drawer data-drawer-size="wide">');
   });
 });
