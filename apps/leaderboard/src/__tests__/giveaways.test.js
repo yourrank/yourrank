@@ -71,7 +71,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).toContain("safeAvatarUrl(entrant.avatar_url, DEFAULT_AVATAR)");
   });
 
-  it("keeps giveaway setup compact and exposes dashboard-managed entrants", () => {
+  it("keeps giveaway controls visible and exposes dashboard-managed entrants", () => {
     const html = renderGiveawaysHtml("chat");
     expect(html).toContain('id="gw-layout"');
     expect(html).toContain('id="gw-manual-start-hint"');
@@ -79,7 +79,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(html).toContain('id="gw-add-entrant-name" name="username" type="text" maxlength="40"');
     expect(html.indexOf('id="gw-keyword-field"')).toBeLessThan(html.indexOf('class="gw-actions"'));
     expect(html.indexOf('class="gw-actions"')).toBeLessThan(html.indexOf('id="gw-rules-panel"'));
-    expect(html).toContain('<details class="gw-rules-panel" id="gw-rules-panel">');
+    expect(html).toContain('<details class="gw-rules-panel" id="gw-rules-panel" open>');
     expect(html).toContain('id="gw-rules-summary"');
     expect(html.indexOf('id="gw-rules-panel"')).toBeLessThan(html.indexOf('id="gw-settings-note"'));
     expect(html).toContain('id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.');
@@ -91,6 +91,16 @@ describe("Giveaway Chatroom Handler", () => {
     expect(sidebarCss).not.toContain("position: sticky;");
     expect(sidebarCss).not.toContain("max-height:");
     expect(sidebarCss).not.toContain("overflow: auto;");
+    expect(giveawaysCssSource).toContain("@media (min-width: 961px)");
+    expect(giveawaysCssSource).toContain(".gw-main {\n    position: sticky;");
+    expect(giveawaysCssSource).toContain("--gw-pinned-top");
+    expect(giveawaysCssSource).toContain("overflow-y: auto;");
+    expect(giveawaysCssSource).toContain(".gw-main > * {\n    flex-shrink: 0;");
+    expect(giveawaysCssSource).toContain("max-height: min(60vh, 520px);");
+    const giveawaysSource = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+    expect(giveawaysSource).toContain('document.querySelector(".gw-subnav")');
+    expect(giveawaysSource).toContain("--gw-pinned-top");
+    expect(giveawaysSource).toContain('window.addEventListener("resize", syncPinnedTop)');
   });
 
   it("runs Chat Giveaways through the connected Kick channel and server API, not the legacy listener", () => {
@@ -200,7 +210,7 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysHtml).toContain('id="tournament-dialogs"');
   });
 
-  it("keeps draw options behind the disclosure", () => {
+  it("keeps nested advanced options behind their disclosure", () => {
     expect(giveawaysHtml).toContain('id="gw-settings"');
     expect(giveawaysHtml).toContain('Entry Mode');
     expect(giveawaysHtml).toContain('YourRank Members Only');
