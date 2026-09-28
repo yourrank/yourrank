@@ -147,6 +147,7 @@ export function startTour({ force = false } = {}) {
     nextBtn.classList.toggle("btn--ghost", hasCta && last);
     nextBtn.classList.toggle("btn--accent", !(hasCta && last));
     backBtn.hidden = index === 0;
+    skipBtn.hidden = last;
     let cta = bubble.querySelector(".yr-tour-cta");
     if (hasCta && !cta) {
       cta = document.createElement("button");
