@@ -193,13 +193,13 @@ function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt,
     token.textContent = detail || (connected ? "Authorization can renew automatically" : "Not connected yet");
     token.classList.toggle("cr-attention", warn);
   }
-  const delivery = $("cr-channel-delivery");
-  if (delivery) {
+  const deliveryEl = $("cr-channel-delivery");
+  if (deliveryEl) {
     // Event delivery is verified by observed webhook traffic (delivery.verified),
     // not the connection status: refresh_required is a normal OAuth state and
     // sites without reward/chat features still receive subscribed events.
-    delivery.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "needs_attention" ? "Blocked by authorization" : delivery?.verified ? "Verified" : "Not verified yet";
-    delivery.classList.toggle("cr-attention", deliveryFailed);
+    deliveryEl.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "needs_attention" ? "Blocked by authorization" : delivery?.verified ? "Verified" : "Not verified yet";
+    deliveryEl.classList.toggle("cr-attention", deliveryFailed);
   }
   const repair = $("cr-channel-repair");
   if (repair) repair.hidden = !(connected && canManage && (canRepair || deliveryFailed || status === "authorized"));
