@@ -101,6 +101,8 @@ describe("signed-in shell navigation", () => {
     const html = renderPage(AudienceMembersPage);
     for (const href of [
       "/dashboard/leaderboard",
+      "/dashboard/giveaways",
+      "/dashboard/activities",
       "/dashboard/giveaways/tournaments",
       "/dashboard/giveaways/chat",
       "/dashboard/telegram",
@@ -110,7 +112,6 @@ describe("signed-in shell navigation", () => {
     ]) {
       expect(html).toContain(`href="${href}"`);
     }
-    expect(html).not.toContain('href="/dashboard/giveaways"');
     expect(html).not.toContain('href="/dashboard/games"');
     expect(html).not.toContain('class="lb-site-settings"');
     expect(html).toContain('href="/help/support?area=credits');
@@ -257,13 +258,14 @@ describe("signed-in shell navigation", () => {
     for (const href of [
       "/dashboard",
       "/dashboard/leaderboard",
+      "/dashboard/giveaways",
+      "/dashboard/activities",
       "/dashboard/giveaways/tournaments",
       "/dashboard/giveaways/chat",
       "/dashboard/telegram",
       "/dashboard/analytics",
       "/dashboard/settings",
     ]) expect(html).toContain(`href="${href}"`);
-    expect(html).not.toContain('href="/dashboard/giveaways"');
     expect(html).not.toContain('href="/dashboard/games"');
     expect(html).toContain('href="/help/support?area=account');
     expect(html).toContain("Help &amp; feedback");

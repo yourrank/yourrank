@@ -1,7 +1,9 @@
-// Pure mapping from the four Engage feature API payloads to hub-card state.
-// Consumed by assets/giveaways.js (bootEngageHub); the "none" copies mirror the
-// server-rendered defaults in pages/giveaway-pages.js ENGAGE_FEATURES so a card
-// reads identically before and after the client status pass.
+// Pure mapping from the Engage hub-card feature API payloads to card state.
+// Consumed by assets/giveaways.js (bootEngageHub): the Giveaways card reports
+// the chat giveaway and the Tournaments card the latest tournament; the
+// Activities card stays static (no status source). The "none" copies mirror
+// the server-rendered defaults in pages/giveaway-pages.js ENGAGE_FEATURES so
+// a card reads identically before and after the client status pass.
 
 const FEATURE_DEFAULTS = {
   chat: {
@@ -13,16 +15,6 @@ const FEATURE_DEFAULTS = {
     label: "No active tournament",
     meta: ["Set up a bracket for your community."],
     action: { label: "Create tournament", variant: "accent" },
-  },
-  raffles: {
-    label: "No active raffle",
-    meta: ["Set up a raffle to reward your community."],
-    action: { label: "Create raffle", variant: "accent" },
-  },
-  preds: {
-    label: "No active prediction",
-    meta: ["Create a prediction to get your community involved."],
-    action: { label: "Create prediction", variant: "accent" },
   },
 };
 
@@ -48,43 +40,6 @@ export function engageCardState(feature, payload = {}) {
         label: "Live giveaway",
         meta: [`Keyword ${session.keyword || ""} · ${plural(entries.length, "entry", "entries")}`],
         action: openAction("Open giveaway"),
-      };
-    }
-    return none;
-  }
-
-  if (feature === "raffles") {
-    const raffles = Array.isArray(payload?.raffles) ? payload.raffles : [];
-    const active = raffles.find((r) => r.status === "active");
-    if (active) {
-      return {
-        tone: "live",
-        label: "Raffle open",
-        meta: [`${active.title} · ${plural(Number(active.total_tickets) || 0, "ticket")}`],
-        action: openAction("Open raffle"),
-      };
-    }
-    return none;
-  }
-
-  if (feature === "preds") {
-    const predictions = Array.isArray(payload?.predictions) ? payload.predictions : [];
-    const open = predictions.find((p) => p.status === "open");
-    if (open) {
-      return {
-        tone: "live",
-        label: "Prediction open",
-        meta: [open.title],
-        action: openAction("Open prediction"),
-      };
-    }
-    const locked = predictions.find((p) => p.status === "locked");
-    if (locked) {
-      return {
-        tone: "warn",
-        label: "Awaiting result",
-        meta: [locked.title],
-        action: openAction("Open prediction"),
       };
     }
     return none;

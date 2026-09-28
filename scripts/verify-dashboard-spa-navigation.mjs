@@ -62,6 +62,8 @@ try {
     modalLock: document.documentElement.classList.contains('yr-modal-open'),
     tournamentApp: !!document.getElementById('tournament-app'),
     engageCurrent: !!document.querySelector('[data-nav-group="engage"][data-current-group]'),
+    subnavCurrent: (document.querySelector('.gw-subnav [aria-current="page"]')?.getAttribute('href') || "").split('?')[0] || null,
+    subnavPresent: !!document.querySelector('.gw-subnav'),
     actLoading: document.getElementById('act-loading') ? !document.getElementById('act-loading').hidden : null,
     actError: document.getElementById('act-error') ? !document.getElementById('act-error').hidden : null,
     actRows: document.querySelectorAll('#act-list .act-row, .act-row').length,
@@ -90,13 +92,31 @@ try {
   const activityAssertions = (name) => expectState(name, (s) => {
     assert.ok(s.url.startsWith('/dashboard/activities'), s.url);
     assert.ok(s.h1.includes('Activities'), `h1 ${s.h1}`);
+    assert.ok(s.activeNav.includes('activities'), `activeNav ${s.activeNav}`);
     assert.equal(s.actLoading, false);
     assert.equal(s.actError, false);
     assert.ok(s.actRows > 0, 'no activity rows');
     assert.equal(s.tournamentApp, false);
     assert.equal(s.engageCurrent, true);
+    assert.equal(s.subnavPresent, false);
     assert.equal(s.skeleton, false);
     assert.equal(s.modalLock, false);
+  });
+  const ensureEngageExpanded = async () => {
+    const toggle = '[data-nav-group="engage"] [data-toggle-nav-group]';
+    if (await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-expanded') !== 'true', toggle)) {
+      await page.click(toggle);
+    }
+  };
+  const subtypeAssertions = (name, path) => expectState(name, (s) => {
+    assert.equal(s.url.split('?')[0], path);
+    assert.ok(s.activeNav.includes('giveaways'), `activeNav ${s.activeNav}`);
+    assert.equal(s.engageCurrent, true);
+    assert.equal(s.subnavPresent, true);
+    assert.equal(s.subnavCurrent, path);
+    assert.equal(s.skeleton, false);
+    assert.equal(s.modalLock, false);
+    assert.ok(s.h1.includes('Giveaways'), `h1 ${s.h1}`);
   });
 
   // 1-3. Home → Engage group → Tournaments via SPA navigation.
@@ -104,19 +124,17 @@ try {
   await snap('home');
   errors = [];
   await page.click('[data-nav-group="engage"] [data-toggle-nav-group], [data-toggle-nav-group]');
-  await page.click('.lb-nav[href="/dashboard/giveaways/tournaments"]');
+  await page.click('.lb-nav[href^="/dashboard/giveaways/tournaments"]');
   await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
   await snap('tournaments');
   await tournamentAssertions('tournaments-first');
   await page.screenshot({ path: `${output}/tournaments.png`, fullPage: true });
 
-  // 4. Tournaments → Activities. Activities lives on the Engage tab strip,
-  // which the tournaments pane intentionally drops — the trip goes through
-  // the Giveaways chat page first (which still renders engage-tabs).
+  // 4. Tournaments → Activities: the Engage rail's Activities child is a
+  // first-class destination, so this is one sidebar click.
   errors = [];
-  await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
-  await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
-  await page.click('.engage-tabs a[href^="/dashboard/activities"]');
+  await ensureEngageExpanded();
+  await page.click('.lb-nav[href^="/dashboard/activities"]');
   await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('activities-after-tournaments');
   await page.screenshot({ path: `${output}/activities.png`, fullPage: true });
@@ -124,7 +142,7 @@ try {
 
   // 5. Back to Tournaments: re-init against fresh fragment DOM.
   errors = [];
-  await page.click('.lb-nav[href="/dashboard/giveaways/tournaments"]');
+  await page.click('.lb-nav[href^="/dashboard/giveaways/tournaments"]');
   await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
   await tournamentAssertions('tournaments-reenter');
   expectNoErrors('tournaments-reenter');
@@ -173,45 +191,75 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   expectNoErrors('workspace-tabs');
 
-  // 6. Route sweep without a document reload.
+  // 6. Route sweep without a document reload: the Engage hub is the rail's
+  // Overview child; Giveaways subtypes switch through the page subnav.
   const sweeps = [
-    // The tournaments pane has no link back to the hub: go via the Giveaways
-    // chat page, then the Engage strip's Giveaways tab.
-    ['giveaways-hub', 'HUB', '#engage-hub', (s) => {
+    ['giveaways-hub', '.lb-nav[href^="/dashboard/giveaways"]', '#engage-hub', (s) => {
       assert.equal(s.url.split('?')[0], '/dashboard/giveaways');
-      assert.ok(s.h1.length, 'no h1');
+      assert.ok(s.activeNav.includes('overview'), `activeNav ${s.activeNav}`);
+      assert.equal(s.engageCurrent, true);
+      assert.ok(s.h1.includes('Engage'), `h1 ${s.h1}`);
+      assert.equal(s.subnavPresent, false);
       assert.equal(s.skeleton, false);
     }],
-    ['giveaways-chat', '.lb-nav[href="/dashboard/giveaways/chat"]', '#pane-chat', (s) => {
+    ['giveaways-chat', '.lb-nav[href^="/dashboard/giveaways/chat"]', '#pane-chat', (s) => {
       assert.equal(s.url.split('?')[0], '/dashboard/giveaways/chat');
       assert.ok(s.h1.length, 'no h1');
+      assert.equal(s.subnavCurrent, '/dashboard/giveaways/chat');
+      assert.equal(s.subnavPresent, true);
       assert.equal(s.skeleton, false);
       assert.equal(s.modalLock, false);
     }],
   ];
   for (const [name, sel, waitSel, assertFn] of sweeps) {
     errors = [];
-    if (sel === 'HUB') {
-      await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
-      await page.waitForSelector('.engage-tabs a[href="/dashboard/giveaways"]', { timeout: 15000 });
-      await page.click('.engage-tabs a[href="/dashboard/giveaways"]');
-    } else {
-      await page.click(sel);
-    }
+    await ensureEngageExpanded();
+    await page.click(sel);
     await page.waitForSelector(waitSel, { timeout: 15000 });
     await page.waitForTimeout(300);
     await expectState(name, assertFn);
     expectNoErrors(name);
   }
+
+  // 6b. Giveaways subtype subnav: Chat Giveaway → Raffle → Prediction through
+  // the page subnav, asserting rail child and subnav state on each.
+  for (const [name, path] of [
+    ['subtype-raffle', '/dashboard/giveaways/raffles'],
+    ['subtype-prediction', '/dashboard/giveaways/predictions'],
+    ['subtype-chat', '/dashboard/giveaways/chat'],
+  ]) {
+    errors = [];
+    await page.click(`.gw-subnav a[href^="${path}"]`);
+    await page.waitForSelector(`.gw-subnav a[aria-current="page"][href^="${path}"]`, { timeout: 15000 });
+    await page.waitForTimeout(250);
+    await subtypeAssertions(name, path);
+    expectNoErrors(name);
+  }
+  // And back through the rail children: Tournaments → Activities → Giveaways.
   errors = [];
-  await page.click('.lb-nav[href="/dashboard/giveaways/tournaments"]');
+  await ensureEngageExpanded();
+  await page.click('.lb-nav[href^="/dashboard/giveaways/tournaments"]');
+  await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
+  await tournamentAssertions('rail-tournaments');
+  errors = [];
+  await ensureEngageExpanded();
+  await page.click('.lb-nav[href^="/dashboard/activities"]');
+  await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
+  await activityAssertions('rail-activities');
+  errors = [];
+  await ensureEngageExpanded();
+  await page.click('.lb-nav[href^="/dashboard/giveaways/chat"]');
+  await page.waitForSelector('.gw-subnav a[aria-current="page"][href^="/dashboard/giveaways/chat"]', { timeout: 15000 });
+  await page.waitForTimeout(250);
+  await subtypeAssertions('rail-giveaways', '/dashboard/giveaways/chat');
+  errors = [];
+  await page.click('.lb-nav[href^="/dashboard/giveaways/tournaments"]');
   await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
   await tournamentAssertions('sweep-tournaments');
 
   errors = [];
-  await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
-  await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
-  await page.click('.engage-tabs a[href^="/dashboard/activities"]');
+  await ensureEngageExpanded();
+  await page.click('.lb-nav[href^="/dashboard/activities"]');
   await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('sweep-activities');
 
@@ -268,15 +316,18 @@ try {
   });
 
   // 8. Deep links + refresh: every route boots standalone.
-  for (const [name, path] of [
-    ['dl-giveaways', '/dashboard/giveaways'],
-    ['dl-chat', '/dashboard/giveaways/chat'],
-    ['dl-tournaments', '/dashboard/giveaways/tournaments'],
-    ['dl-activities', '/dashboard/activities'],
-    ['dl-rewards', '/dashboard/rewards'],
-    ['dl-members', '/dashboard/audience/members'],
-    ['dl-account', '/dashboard/settings/account'],
-  ]) {
+  const deepLinks = [
+    ['dl-giveaways', '/dashboard/giveaways', 'overview', null],
+    ['dl-chat', '/dashboard/giveaways/chat', 'giveaways', '/dashboard/giveaways/chat'],
+    ['dl-raffles', '/dashboard/giveaways/raffles', 'giveaways', '/dashboard/giveaways/raffles'],
+    ['dl-predictions', '/dashboard/giveaways/predictions', 'giveaways', '/dashboard/giveaways/predictions'],
+    ['dl-tournaments', '/dashboard/giveaways/tournaments', 'tournaments', null],
+    ['dl-activities', '/dashboard/activities', 'activities', null],
+    ['dl-rewards', '/dashboard/rewards', 'rewards', null],
+    ['dl-members', '/dashboard/audience/members', 'audience', null],
+    ['dl-account', '/dashboard/settings/account', 'settings', null],
+  ];
+  for (const [name, path, rail, subnav] of deepLinks) {
     errors = [];
     await page.goto(origin + path, { waitUntil: 'networkidle' });
     await page.reload({ waitUntil: 'networkidle' });
@@ -284,26 +335,52 @@ try {
       assert.ok(s.h1.length > 0, 'no visible h1');
       assert.equal(s.skeleton, false);
       assert.equal(s.modalLock, false);
+      assert.ok(s.activeNav.includes(rail), `activeNav ${s.activeNav}`);
+      if (subnav) assert.equal(s.subnavCurrent, subnav);
+      if (path.startsWith('/dashboard/giveaways') || path.startsWith('/dashboard/activities')) {
+        assert.equal(s.engageCurrent, true);
+      }
       if (path.includes('tournaments')) assert.ok(s.tournamentWorkspace === true || s.tournamentEmpty === true, 'tournament pane hidden');
     });
     expectNoErrors(name);
   }
 
+  // 8b. Giveaways subnav at 390px: no page-level horizontal overflow and the
+  // active tab stays inside the viewport on direct load and reload.
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const path of ['/dashboard/giveaways/chat', '/dashboard/giveaways/raffles', '/dashboard/giveaways/predictions']) {
+    errors = [];
+    await page.goto(origin + path, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    const mobile = await page.evaluate(() => {
+      const current = document.querySelector('.gw-subnav [aria-current="page"]');
+      const rect = current?.getBoundingClientRect();
+      return {
+        docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        hasSubnav: !!document.querySelector('.gw-subnav'),
+        activeVisible: rect ? rect.left >= -1 && rect.right <= window.innerWidth + 1 : false,
+      };
+    });
+    check(`mobile-390 ${path}`, () => {
+      assert.equal(mobile.hasSubnav, true);
+      assert.ok(mobile.docOverflow <= 0, `doc overflow ${mobile.docOverflow}px`);
+      assert.ok(mobile.activeVisible, 'active subnav tab outside viewport');
+    });
+    expectNoErrors(`mobile-390 ${path}`);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+
   // 9. Repeated switching: leave/enter cycles must not degrade.
   // The Engage group may be collapsed after deep links or full reloads;
   // expand it whenever the tournaments nav link isn't clickable.
-  const engageToggle = '[data-nav-group="engage"] [data-toggle-nav-group]';
   for (let i = 0; i < 3; i++) {
     errors = [];
-    if (await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-expanded') !== 'true', engageToggle)) {
-      await page.click(engageToggle);
-    }
-    await page.click('.lb-nav[href="/dashboard/giveaways/tournaments"]');
+    await ensureEngageExpanded();
+    await page.click('.lb-nav[href^="/dashboard/giveaways/tournaments"]');
     await page.waitForSelector('#tournament-workspace:not([hidden]), #tournament-empty:not([hidden])', { timeout: 15000 });
     await tournamentAssertions(`cycle-${i}-tournaments`);
-    await page.click('.lb-nav[href="/dashboard/giveaways/chat"]');
-    await page.waitForSelector('.engage-tabs a[href^="/dashboard/activities"]', { timeout: 15000 });
-    await page.click('.engage-tabs a[href^="/dashboard/activities"]');
+    await ensureEngageExpanded();
+    await page.click('.lb-nav[href^="/dashboard/activities"]');
     await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
     await activityAssertions(`cycle-${i}-activities`);
     expectNoErrors(`cycle-${i}`);

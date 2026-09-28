@@ -22,7 +22,9 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
     expect(DASHBOARD_ROUTES.find((r) => r.id === "giveaways.drops")).toBeUndefined();
     expect(DASHBOARD_ROUTES.find((r) => r.canonicalPath === LEGACY_DROPS)).toBeUndefined();
     expect(DYNAMIC_SECTIONS.giveaways.tabs).toEqual(["hub", "chat", "raffles", "preds", "tournaments"]);
-    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds", "tournaments"]);
+    // The subnav carries the three Giveaways subtypes; tournaments renders
+    // its own pane and has a rail child of its own.
+    expect(GIVEAWAY_TABS.map(([tab]) => tab)).toEqual(["chat", "raffles", "preds"]);
     expect(parseDynamicPath(LEGACY_DROPS)).toBeNull();
     expect(resolveFragment(LEGACY_DROPS)).toBeNull();
     expect(dashboardChromeStateForLocation(ACTIVITIES, "?siteId=site-42").documentTitle).toBe("Engage · YourRank");
@@ -100,7 +102,6 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
       "../assets/dashboard/shell.js",
       "../assets/dashboard.js",
       "../pages/dashboard-shell.jsx",
-      "../pages/engage-tabs.jsx",
       "../assets/activity-pages.js",
     ]) {
       expect(read(rel), rel).not.toContain(LEGACY_DROPS);
@@ -110,17 +111,16 @@ describe("Code Drops have one canonical creator surface (Activities)", () => {
     expect(quick).toContain("drop: `/dashboard/activities");
   });
 
-  it("keeps the four Giveaways feature panes reachable through the Engage hub cards", () => {
+  it("keeps the Giveaways panes reachable through the Engage hub cards", () => {
     const html = renderGiveawaysContentHtml("chat");
     expect(html).toContain('id="pane-chat"');
     expect(html).not.toContain("gw-tab-btn");
     expect(html).not.toContain("data-tabs-more");
     const hub = renderGiveawaysContentHtml("hub");
     for (const [feature, href] of [
+      ["activities", "/dashboard/activities"],
       ["chat", "/dashboard/giveaways/chat"],
       ["tournaments", "/dashboard/giveaways/tournaments"],
-      ["raffles", "/dashboard/giveaways/raffles"],
-      ["preds", "/dashboard/giveaways/predictions"],
     ]) {
       expect(hub).toContain(`data-feature="${feature}"`);
       expect(hub).toContain(`href="${href}"`);

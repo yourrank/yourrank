@@ -1112,6 +1112,16 @@
    COMMUNITY EVENTS HUB STYLES (Tabs, Raffles, Drawers, Chips)
    ========================================================================== */
 
+/* The Giveaways subtype subnav scrolls horizontally instead of wrapping when
+   the viewport is narrower than the strip; the boot pass scrolls the active
+   tab into view. Sticky behavior comes from the shared #gw-app > .v3-tabs rule. */
+.gw-subnav {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+.gw-subnav > * { flex-shrink: 0; white-space: nowrap; }
+
 /* Engage page tabs are painted by the shared authenticated tab strip
    (.v3-tabs/.v3-tab in dashboard-v4.css). These two selectors stay behind only
    as the controller's scroll-the-active-tab-into-view hooks. */
@@ -2150,15 +2160,3 @@
   color: var(--ws-text-soft);
 }
 .engage-card__meta span { display: block; }
-
-/* Back link from a feature page to the Engage hub. */
-.engage-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--ws-text-soft);
-}
-.engage-back:hover { color: var(--ws-accent); }
-.engage-back svg { width: 14px; height: 14px; }
