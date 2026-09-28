@@ -20,6 +20,17 @@ export interface SendResult {
   reason?: string;
 }
 
+export function sanitizeProviderMessage(s: string): string {
+  return s
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/re_[A-Za-z0-9_]+/g, "[key]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(/[A-Za-z0-9_-]{24,}/g, "[token]")
+    .replace(/\b\d{6}\b/g, "[code]")
+    .slice(0, 300);
+}
+
 export async function sendEmail(env: EmailEnv, { to, subject, html, text, from }: EmailPayload): Promise<SendResult> {
   if (!env.RESEND_API_KEY) return { sent: false, reason: "not_configured" };
   const supportEmail = env.SUPPORT_EMAIL || "contact@yourrank.site";
@@ -31,7 +42,47 @@ export async function sendEmail(env: EmailEnv, { to, subject, html, text, from }
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
       body: JSON.stringify({ from: fromAddr, to: [toAddr], subject, html, text }),
     });
-    return r.ok ? { sent: true } : { sent: false, reason: `http_${r.status}` };
+    if (r.ok) return { sent: true };
+
+    let body = "";
+    try {
+      body = (await r.text()).slice(0, 2000);
+    } catch {
+      body = "";
+    }
+
+    let name: string | undefined;
+    let message = body;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed && typeof parsed === "object") {
+        if (typeof parsed.name === "string") name = parsed.name;
+        if (typeof parsed.message === "string") message = parsed.message;
+      }
+    } catch {
+      message = body;
+    }
+
+    const trimmedFrom = fromAddr.trim();
+    const at = trimmedFrom.lastIndexOf("@");
+    const fromDomain = at < 0 ? "invalid" : trimmedFrom.slice(at + 1).match(/^[^<>@\s]+/)?.[0] || "invalid";
+    const fromFormat = /^[^<>]+<[^<>@\s]+@[^<>@\s]+>$/.test(trimmedFrom)
+      ? "name_angle"
+      : /^[^<>@\s]+@[^<>@\s]+$/.test(trimmedFrom)
+        ? "bare"
+        : "other";
+
+    console.error(
+      "[email]: resend rejected",
+      JSON.stringify({
+        status: r.status,
+        name,
+        message: sanitizeProviderMessage(message),
+        from_domain: fromDomain,
+        from_format: fromFormat,
+      }),
+    );
+    return { sent: false, reason: `http_${r.status}` };
   } catch (err) {
     console.error("[email]: resend API call failed", err);
     return { sent: false, reason: "network" };
