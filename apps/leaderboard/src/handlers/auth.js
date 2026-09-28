@@ -21,6 +21,9 @@ const defaultDependencies = {
   destroyAllUserSessions,
   createSession,
   cookieSet,
+  rateLimit,
+  issueVerificationEmail: (...args) => issueVerificationEmail(...args),
+  getEnabledFeatureKeys,
 };
 const withTransaction = defaultWithTransaction;
 const one = defaultOne;
@@ -150,19 +153,19 @@ export async function handleSignup(request, env, deps = {}) {
   }
 }
 
-export async function handleLogin(request, env) {
+export async function handleLogin(request, env, deps = defaultDependencies) {
   try {
     // SEC-110: IP-based rate limit
-    if (!(await rateLimit(env, `login:${clientIp(request)}`, 20, 600)).ok) return bad("Too many attempts. Try again in a few minutes.", 429);
+    if (!(await deps.rateLimit(env, `login:${clientIp(request)}`, 20, 600)).ok) return bad("Too many attempts. Try again in a few minutes.", 429);
     const body = await readJson(request);
     if (!body) return bad("Invalid request");
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     if (!isEmail(email) || !password) return bad("Email and password required");
     // SEC-110: Per-account rate limit (prevents brute-force across multiple IPs)
-    if (!(await rateLimit(env, `login-email:${email}`, 10, 900)).ok) return bad("Too many attempts on this account. Try again later.", 429);
+    if (!(await deps.rateLimit(env, `login-email:${email}`, 10, 900)).ok) return bad("Too many attempts on this account. Try again later.", 429);
     // QA-002: Check per-account lockout before password verification
-    const user = await one("SELECT id,email,password_hash,password_salt,status,email_verified,failed_login_count,locked_until FROM users WHERE email=$1", [email]);
+    const user = await deps.one("SELECT id,email,password_hash,password_salt,status,email_verified,failed_login_count,locked_until FROM users WHERE email=$1", [email]);
     if (user?.locked_until && new Date(user.locked_until) > new Date()) {
       return bad("Account temporarily locked due to too many failed attempts. Try again later.", 429);
     }
@@ -170,14 +173,14 @@ export async function handleLogin(request, env) {
     const { ok, needsRehash } = await verifyPassword(password, user.password_salt, user.password_hash);
     if (!ok) {
       // QA-002: Increment failed login counter; lock account after 10 failures
-      await exec("UPDATE users SET failed_login_count = failed_login_count + 1 WHERE email=$1", [email]);
+      await deps.exec("UPDATE users SET failed_login_count = failed_login_count + 1 WHERE email=$1", [email]);
       if ((user.failed_login_count || 0) + 1 >= 10) {
-        await exec("UPDATE users SET locked_until = NOW() + INTERVAL '30 minutes' WHERE email=$1", [email]);
+        await deps.exec("UPDATE users SET locked_until = NOW() + INTERVAL '30 minutes' WHERE email=$1", [email]);
       }
       return bad("Incorrect email or password", 401);
     }
     // QA-002: Successful login — reset lockout counter
-    await exec("UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE email=$1", [email]);
+    await deps.exec("UPDATE users SET failed_login_count = 0, locked_until = NULL WHERE email=$1", [email]);
     // BE-014: Use generic error even for suspended accounts to prevent
     // account enumeration. Previously the suspended message confirmed the
     // email existed, distinguishing it from a wrong-password error.
@@ -187,20 +190,20 @@ export async function handleLogin(request, env) {
     // needed. Fire-and-forget so login latency isn't dominated by the rehash.
     if (needsRehash) {
       const { hash, salt } = await hashPassword(password);
-      exec("UPDATE users SET password_hash=$1, password_salt=$2, updated_at=now() WHERE id=$3", [hash, salt, user.id]).catch(() => {});
+      deps.exec("UPDATE users SET password_hash=$1, password_salt=$2, updated_at=now() WHERE id=$3", [hash, salt, user.id]).catch(() => {});
     }
     // PERF-003-v8: Parallelize site lookup + session creation (were sequential)
     const [site, token, features] = await Promise.all([
-      one("SELECT slug FROM sites WHERE user_id=$1", [user.id]),
-      createSession(env, user.id),
-      getEnabledFeatureKeys(user.id),
+      deps.one("SELECT slug FROM sites WHERE user_id=$1", [user.id]),
+      deps.createSession(env, user.id),
+      deps.getEnabledFeatureKeys(user.id),
     ]);
     const origin = new URL(request.url).origin;
     if (!user.email_verified) {
-      const verification = await issueVerificationEmail(env, user.id, user.email, origin);
-      return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": cookieSet(token, env) });
+      const verification = await deps.issueVerificationEmail(env, user.id, user.email, origin);
+      return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: false }, needsVerification: true, verificationSent: verification.sent === true }, 200, { "set-cookie": deps.cookieSet(token, env) });
     }
-    return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: true } }, 200, { "set-cookie": cookieSet(token, env) });
+    return json({ ok: true, user: { id: user.id, email: user.email, slug: site?.slug || null, features, emailVerified: true } }, 200, { "set-cookie": deps.cookieSet(token, env) });
   } catch (e) {
     console.error("login failed:", String(e?.message || e));
     return bad("Login failed, please try again", 500);

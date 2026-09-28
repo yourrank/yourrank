@@ -438,6 +438,7 @@ export const QUERY_PARAM_AUDIT: Readonly<Record<string, readonly QueryParamUse[]
   ref: [{ classification: "feature", context: "public/marketing pages", where: "Marketing/referral attribution on public pages." }],
   returnTo: [{ classification: "feature", context: "auth flows", where: "Auth flow return address (login/logout), validated by safe-next; not dashboard routing." }],
   next: [{ classification: "feature", context: "auth flows", where: "Auth flow return address; validated by safe-next." }],
+  from: [{ classification: "feature", context: "auth flows", where: "Verify-email interstitial source (login vs signup) used to render context-aware copy on /auth/verify-email; not routing." }],
   state: [{ classification: "feature", context: "OAuth flows", where: "OAuth state parameter (Kick/Telegram flows)." }],
   code: [{ classification: "feature", context: "OAuth flows", where: "OAuth authorization code." }],
   area: [{ classification: "feature", context: "public help pages", where: "/help/support contact area preselect (public help pages)." }],

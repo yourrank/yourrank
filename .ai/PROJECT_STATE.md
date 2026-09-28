@@ -2,6 +2,44 @@
 
 Maintained to prevent architecture drift.
 
+## Creator login and registration — 2026-09-28
+
+Owner clarified the initial Home redesign request to mean login and registration
+first. `/login` and `/signup` now use one shared auth frame, centered forms, the
+canonical brand mark, reduced copy, adjacent password recovery, and a separate
+viewer entry. Removed their sales/configuration panels. Required fields,
+password policy, handle normalization, CSRF, and auth endpoints remain intact.
+Switching account-entry forms retains validated return paths and selected plans.
+Recovery pages and the signed-in dashboard retain their existing layouts.
+
+Verified: build, root lint and typecheck PASSED. Five targeted authentication
+suites passed (46 tests), followed by 16 passing tests in the two updated suites,
+including two new return-context regression tests. Browser checks PASSED at
+1440, 390 and 320px for both pages: no overflow, labelled controls, invalid-field
+focus, password toggle, Enter submission, retained input after rejection, handle
+normalization, password feedback, CSRF, safe form switching, viewer context, and
+success/verification redirects. No browser page errors. Evidence and fixture
+runner: `.local-logs/auth-entry/`. Production page renderers and bundled assets
+were exercised with synthetic auth API responses; no account was created.
+
+Pre-PR verification: `bun run test` FAILED in the unchanged
+`giveaway-draw-flow.test.js` (24 passed, 10 failed, 4 between-test errors;
+several tests hit their 5-second timeout). The runner stopped there, so later
+suites were NOT RUN. Full output: `.local-logs/auth-entry/full-test.log`.
+This does not establish the cause of the unrelated giveaway failures.
+
+Not verified: live authentication, email delivery, or deployed Worker rendering.
+PR #858 targets main and includes the existing unmerged login fixes from #853.
+After main introduced email-code sign-in (#861), the login modify/delete conflict
+was resolved in the canonical string page: the clean shared frame now contains
+the email-code default and password alternative. Main's code-request/verification
+handlers and client behavior are preserved. Browser verification additionally
+passed code request, resend countdown, change-email, rejected-code recovery and
+success redirect at 1440/390px. Targeted auth tests passed after updating the
+viewer-entry copy assertions. The post-merge root test run again stopped in
+`giveaway-draw-flow.test.js` (20 passed, 14 failed, 6 between-test errors);
+see `.local-logs/auth-entry/merge-full-test.log`. No deployment.
+
 ## Competition management — 2026-09-21
 
 Competition management extends Community → Competitions with Overview and Standings

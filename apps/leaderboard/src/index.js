@@ -15,7 +15,7 @@ import { parseSitePath, renderSiteRoute } from "./site-routes.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { viewerDashboardPage } from "./pages/viewer-dashboard.js";
 import { resolveViewerOAuthStatus, viewerOAuthAvailability } from "./viewer-oauth.js";
-import { verifyEmailPageHtml } from "./pages/verify-email.js";
+import { verifyEmailPageHtml, verifyEmailPromptState } from "./pages/verify-email.js";
 import { telegramAccountLinkHeaders, telegramAccountLinkPage } from "./pages/telegram-account-link.js";
 import { emailVerificationDeliveryState, verifyEmailToken } from "./handlers/auth.js";
 import { verifyBoardPassword, issueBoardPasswordToken, boardPasswordSetCookieHeader } from "./board-password.js";
@@ -893,9 +893,17 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // Verification happens server-side: the emailed link must work even if
         // client JavaScript fails to load or run.
         const token = url.searchParams.get("token");
-        let verifyState = url.searchParams.get("delivery") === "failed"
-          ? { message: "We couldn't send your verification email.", error: "Email delivery is temporarily unavailable. Try sending it again later.", showResend: true }
-          : { message: "Open the link we emailed you to confirm your address.", showResend: true };
+        let loginNeedsVerification = false;
+        if (!token && url.searchParams.get("from") === "login") {
+          try {
+            const user = await currentUserImpl(request, env);
+            loginNeedsVerification = user?.email_verified === false;
+          } catch { /* Keep the generic prompt when the session cannot be confirmed. */ }
+        }
+        let verifyState = verifyEmailPromptState({
+          deliveryFailed: url.searchParams.get("delivery") === "failed",
+          loginNeedsVerification,
+        });
         let status = 200;
         if (token) {
           const result = await verifyEmailToken(token);

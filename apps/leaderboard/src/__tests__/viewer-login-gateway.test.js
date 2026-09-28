@@ -5,10 +5,10 @@
 // server-rendered first paint.
 import { describe, expect, test } from "bun:test";
 import { PAGES } from "../pages.jsx";
+const loginHtml = require("../pages/login.js").loginPage.toString();
 import { viewerDashboardPage } from "../pages/viewer-dashboard.js";
 import { handleKickViewerAuthStart, handleDiscordViewerAuthStart } from "../handlers/viewer-auth.js";
 
-const loginHtml = PAGES.login.Component().toString();
 const signupHtml = PAGES.signup;
 const viewer = { id: "v1", kick_username: "member", avatar_url: null, created_at: "2026-01-02T00:00:00.000Z" };
 const authed = { state: "authenticated", viewer };
@@ -25,7 +25,7 @@ describe("creator login page", () => {
     expect(loginHtml).toContain('id="email"');
     expect(loginHtml).toContain('id="password"');
     expect(loginHtml).toContain(">Sign in</button>");
-    expect(loginHtml).toContain('No account? <a href="/signup">Create one</a>');
+    expect(loginHtml).toContain('New to YourRank? <a href="/signup" data-auth-switch>Create an account</a>');
     expect(loginHtml).toContain('<a href="/forgot">Forgot password?</a>');
   });
 
@@ -45,12 +45,12 @@ describe("creator login page", () => {
 
   test("points viewers at the /me gateway without naming providers", () => {
     expect(loginHtml).not.toContain("Kick or Discord");
-    expect(loginHtml).toContain("Are you a viewer?");
-    expect(loginHtml).toContain('<a href="/me">Sign in to your Viewer Account</a>');
+    expect(loginHtml).toContain("Here for a creator’s community?");
+    expect(loginHtml).toContain('<a href="/me">Continue as a viewer <span aria-hidden="true">→</span></a>');
     expect(loginHtml).not.toContain("/api/viewer/auth/kick");
     expect(loginHtml).not.toContain("/api/viewer/auth/discord");
     expect(signupHtml).not.toContain("Kick or Discord");
-    expect(signupHtml).toContain('Are you a viewer? <a href="/me">Sign in to your Viewer Account</a>');
+    expect(signupHtml).toContain('<a href="/me">Continue as a viewer <span aria-hidden="true">→</span></a>');
   });
 });
 
