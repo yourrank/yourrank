@@ -85,6 +85,10 @@ if (!window.__yrSpaShell) {
     wireEvents();
     syncPinnedTop();
     window.addEventListener("resize", syncPinnedTop);
+    const subnav = document.querySelector(".gw-subnav");
+    if (subnav && typeof MutationObserver === "function") {
+      new MutationObserver(syncPinnedTop).observe(subnav, { attributes: true, attributeFilter: ["style"] });
+    }
     try { if (localStorage.getItem("yr:gw-advanced-open") === "1") $("gw-advanced-options").open = true; } catch { /* storage unavailable */ }
     loadBoardShell().then((shell) => {
       siteId = shell.activeSiteId || "";
