@@ -71,10 +71,20 @@ if (!window.__yrSpaShell) {
   // DOM Elements
   const $ = (id) => document.getElementById(id);
 
+  function syncPinnedTop() {
+    const nav = document.querySelector(".gw-subnav");
+    const layout = $("gw-layout");
+    if (!nav || !layout) return;
+    const top = parseFloat(getComputedStyle(nav).top) || 0;
+    layout.style.setProperty("--gw-pinned-top", `${Math.round(top + nav.offsetHeight + 16)}px`);
+  }
+
   function init() {
     // Wire the giveaway UI first so a failing shell request can never leave the
     // page unresponsive.
     wireEvents();
+    syncPinnedTop();
+    window.addEventListener("resize", syncPinnedTop);
     try { if (localStorage.getItem("yr:gw-advanced-open") === "1") $("gw-advanced-options").open = true; } catch { /* storage unavailable */ }
     loadBoardShell().then((shell) => {
       siteId = shell.activeSiteId || "";

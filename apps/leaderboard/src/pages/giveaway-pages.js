@@ -340,7 +340,7 @@ ${giveawaysSubnavHtml(active)}`}
           </div>
           <p class="hint">Entries keep collecting on our servers even if you close or refresh this page.</p>
 
-          <details class="gw-rules-panel" id="gw-rules-panel">
+          <details class="gw-rules-panel" id="gw-rules-panel" open>
             <summary><span>Giveaway rules</span><span class="gw-rules-summary" id="gw-rules-summary">Anyone in chat · Win once · No chat response</span></summary>
             <div class="gw-rules-panel-body">
           <fieldset class="gw-settings" id="gw-settings">
