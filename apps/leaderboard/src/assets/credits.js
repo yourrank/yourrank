@@ -179,7 +179,7 @@ function updateKickAuthLinks() {
 // Delivery health is separate from authorization: `delivery_failed` means the
 // OAuth grant is fine but a required webhook subscription is missing, so the
 // card offers Repair (reconcile subscriptions) rather than Reconnect.
-function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt, canRepair = false, canManage = true }) {
+function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt, canRepair = false, canManage = true, delivery = null }) {
   const needsAttention = connected && status === "needs_attention";
   const deliveryFailed = connected && status === "delivery_failed";
   const warn = needsAttention || deliveryFailed;
@@ -193,10 +193,13 @@ function renderChannelHealth({ connected, status, statusLabel, detail, linkedAt,
     token.textContent = detail || (connected ? "Authorization can renew automatically" : "Not connected yet");
     token.classList.toggle("cr-attention", warn);
   }
-  const delivery = $("cr-channel-delivery");
-  if (delivery) {
-    delivery.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "ready" ? "Verified" : status === "needs_attention" ? "Blocked by authorization" : "Not verified yet";
-    delivery.classList.toggle("cr-attention", deliveryFailed);
+  const deliveryEl = $("cr-channel-delivery");
+  if (deliveryEl) {
+    // Event delivery is verified by observed webhook traffic (delivery.verified),
+    // not the connection status: refresh_required is a normal OAuth state and
+    // sites without reward/chat features still receive subscribed events.
+    deliveryEl.textContent = !connected ? "—" : deliveryFailed ? "Setup failed" : status === "needs_attention" ? "Blocked by authorization" : delivery?.verified ? "Verified" : "Not verified yet";
+    deliveryEl.classList.toggle("cr-attention", deliveryFailed);
   }
   const repair = $("cr-channel-repair");
   if (repair) repair.hidden = !(connected && canManage && (canRepair || deliveryFailed || status === "authorized"));
@@ -503,7 +506,7 @@ function render() {
       accessNote.textContent = "Connection credentials and authentication settings are managed by the site owner.";
     }
     const connectionStatus = state.channel?.status || (connected ? "authorized" : "not_connected");
-    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt, canRepair: state.channel?.canRepair, canManage: capabilities.manageConnections });
+    renderChannelHealth({ connected, status: connectionStatus, statusLabel: state.channel?.statusLabel, detail: state.channel?.detail, linkedAt: state.channel?.linkedAt, canRepair: state.channel?.canRepair, canManage: capabilities.manageConnections, delivery: state.channel?.delivery });
     $("cr-channel-reconnect")?.toggleAttribute("hidden", !capabilities.manageConnections || connectionStatus !== "needs_attention");
     $("cr-usage").innerHTML = [usageCard(metric(usage.rewardMappings), metric(limits.rewardMappings), "ways to earn"), usageCard(metric(usage.shopItems), metric(limits.shopItems), "items"), usageCard(metric(usage.pendingRedemptions), metric(limits.pendingRedemptions), "pending claims"), usageCard(metric(usage.redemptionsPer30Days), metric(limits.redemptionsPer30Days), "claims / 30 days"), usageCard(metric(usage.newViewersPer30Days), metric(limits.newViewersPer30Days), "new members / 30 days")].join("");
     const auth = state.viewerAuth || {};

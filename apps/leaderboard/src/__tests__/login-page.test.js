@@ -53,11 +53,17 @@ describe("login page document", () => {
 });
 
 describe("signup page fields", () => {
-  it("asks for only Email, Your name, and Password", () => {
-    const inputIds = [...signupHtml.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
-    expect(inputIds).toEqual(["email", "name", "password"]);
+  it("keeps the password signup form slim and provides the email-code fields", () => {
+    const passwordForm = signupHtml.match(/<form id="form"[\s\S]*?<\/form>/)?.[0] || "";
+    const passwordInputIds = [...passwordForm.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
+    expect(passwordInputIds).toEqual(["email", "name", "password"]);
+    const codeForm = signupHtml.match(/<form id="codeForm"[\s\S]*?<\/form>/)?.[0] || "";
+    const codeInputIds = [...codeForm.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
+    expect(codeInputIds).toEqual(["codeEmail", "codeName", "code"]);
     expect(signupHtml).toContain('<label for="name">Your name</label>');
     expect(signupHtml).toContain('placeholder="How viewers will see you"');
+    expect(signupHtml).toContain('<label for="codeName">Your name</label>');
+    expect(codeForm).toContain('placeholder="How viewers will see you"');
     expect(signupHtml).not.toContain('id="slug"');
   });
 
@@ -89,6 +95,21 @@ describe("verify-email prompt state", () => {
   it("keeps generic copy for signup hints and bare visits", () => {
     expect(verifyEmailPromptState({}).message).toBe("Check your inbox for a verification link, or request a new one below.");
     expect(verifyEmailPromptState({ from: "login" }).message).toBe("Check your inbox for a verification link, or request a new one below.");
+  });
+
+  it("offers a continue-to-dashboard link to signed-in users", () => {
+    const state = verifyEmailPromptState({ signedIn: true });
+    expect(state.showContinue).toBe(true);
+    const html = verifyEmailPageHtml(state);
+    expect(html).toContain('id="continueWrap">');
+    expect(html).toContain("Continue to your dashboard");
+    expect(html).not.toContain('id="continueWrap" hidden');
+  });
+
+  it("hides the continue link by default", () => {
+    const html = verifyEmailPageHtml(verifyEmailPromptState({}));
+    expect(html).toContain('id="continueWrap" hidden');
+    expect(html).not.toContain("{{VERIFY_");
   });
 
   it("renders the login-context message into the page", () => {

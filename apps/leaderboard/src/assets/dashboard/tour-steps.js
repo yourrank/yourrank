@@ -29,6 +29,7 @@ export const TOUR_STEPS = [
   {
     id: "overlays",
     target: "#overlayDesignerCard",
+    centerWhenHidden: true,
     title: "Put the board on your stream",
     body: "The Leaderboard overlay in Community → Share is a transparent browser source for OBS or Streamlabs. Pick a widget, copy the OBS link, and your leaderboard renders live on stream.",
   },
@@ -41,6 +42,14 @@ export const TOUR_STEPS = [
     ctaRoute: ["siteConnections", "channel"],
   },
 ];
+
+// Steps render when they float (no target or centerWhenHidden) or when their
+// target can actually be spotlighted on the current surface.
+export function availableTourSteps(canSpotlight) {
+  return TOUR_STEPS.filter((step) => step.target === NO_TARGET || step.centerWhenHidden || canSpotlight(step.target));
+}
+
+export function tourProgressLabel(index, total) { return `Step ${index + 1} of ${total}`; }
 
 /** Storage key per account so a shared browser does not suppress new tours forever. */
 export function tourSeenKey(userId) {

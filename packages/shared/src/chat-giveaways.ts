@@ -342,6 +342,29 @@ export async function markChannelEventSubscriptions(
   );
 }
 
+/**
+ * Record that webhook traffic actually arrived for a channel event. Receiving
+ * an event proves the subscription exists, so the persisted fact becomes
+ * "subscribed" even without a reconciliation pass (`checked_at` untouched).
+ * The WHERE clause skips the write once both flags are already set, so chat
+ * volume does not translate into a row update per message.
+ */
+export async function markChannelEventObserved(
+  run: SqlRunner, provider: ProviderId, externalChannelId: string,
+  event: "rewardEvents" | "chatEvents",
+): Promise<void> {
+  if (!externalChannelId) return;
+  await run(
+    `UPDATE community_channels
+        SET reward_events_subscribed_at = CASE WHEN $3 THEN COALESCE(reward_events_subscribed_at, now()) ELSE reward_events_subscribed_at END,
+            chat_events_subscribed_at = CASE WHEN $4 THEN COALESCE(chat_events_subscribed_at, now()) ELSE chat_events_subscribed_at END,
+            updated_at = now()
+      WHERE provider = $1 AND external_channel_id = $2 AND status = 'active'
+        AND (($3 AND reward_events_subscribed_at IS NULL) OR ($4 AND chat_events_subscribed_at IS NULL))`,
+    [provider, externalChannelId, event === "rewardEvents", event === "chatEvents"],
+  );
+}
+
 /** Stored delivery facts for the site's active channel (all NULL when none). */
 export async function loadChannelEventDelivery(
   run: SqlRunner, siteId: string, provider: ProviderId = "kick",

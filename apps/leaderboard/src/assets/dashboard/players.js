@@ -399,7 +399,11 @@ export function playerRow(p = { name: "", wagered: "", prize: "", score: "", han
     updateNameCounter(event.currentTarget);
     updateDuplicateWarnings();
   });
-  tr.querySelector(".row-x").addEventListener("click", async () => {
+  tr.querySelector(".row-x").addEventListener("click", async (event) => {
+    // Adding a row focuses its name input, which scrolls the toolbar button
+    // off-cursor and slides this new row under it — a rapid second click (or
+    // any sub-600ms hit) belongs to Add player, not Remove.
+    if (event.detail > 1 || Date.now() - Number(tr.dataset.addedAt || 0) < 600) return;
     const name = tr.querySelector(".p-name")?.value.trim() || "this player";
     if (!await showConfirmModal("Remove player", `Remove ${name}? You can restore it only by re-adding it before saving.`, "Remove", true)) return;
     commitDraftMutation(() => {
@@ -698,6 +702,7 @@ $("addRow")?.addEventListener("click", () => {
   if ($("addRow").disabled) return;
   const row = commitDraftMutation(() => {
     const next = playerRow();
+    next.dataset.addedAt = String(Date.now());
     $("rows").appendChild(next);
     renumber();
     toggleEmpty();

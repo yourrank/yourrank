@@ -17,27 +17,29 @@ export const verifyEmailPage = `<!DOCTYPE html><html lang="en"><head>
 <p class="sub" id="msg">{{VERIFY_MSG}}</p>
 <div class="err" id="err" role="alert" aria-live="assertive"{{VERIFY_ERR_HIDDEN}}>{{VERIFY_ERR}}</div>
 <p class="foot" id="resendWrap"{{VERIFY_RESEND_HIDDEN}}>Didn't get it? <button class="btn btn--ghost btn--sm" id="resendBtn" type="button">Send again</button></p>
+<p class="foot" id="continueWrap"{{VERIFY_CONTINUE_HIDDEN}}><a href="/dashboard">Continue to your dashboard</a> and confirm later.</p>
 <p class="foot"><a href="/login">Back to sign in</a></p></div></main></div>
 <script src="/assets/verify-email.js" type="module"></script></body></html>`;
 
 // Server-rendered states for the page above.
-export function verifyEmailPageHtml({ message, error = "", showResend = false } = {}) {
+export function verifyEmailPageHtml({ message, error = "", showResend = false, showContinue = false } = {}) {
   return verifyEmailPage
     .replace("{{VERIFY_MSG}}", message)
     .replace("{{VERIFY_ERR}}", error)
     .replace("{{VERIFY_ERR_HIDDEN}}", error ? "" : " hidden")
-    .replace("{{VERIFY_RESEND_HIDDEN}}", showResend ? "" : " hidden");
+    .replace("{{VERIFY_RESEND_HIDDEN}}", showResend ? "" : " hidden")
+    .replace("{{VERIFY_CONTINUE_HIDDEN}}", showContinue ? "" : " hidden");
 }
 
 // Only a resolved, unverified account session can identify email verification
 // as the current blocker. The public `from` and `delivery` URL parameters are
 // hints, not evidence of a password check or a successful email send.
-export function verifyEmailPromptState({ deliveryFailed = false, loginNeedsVerification = false } = {}) {
+export function verifyEmailPromptState({ deliveryFailed = false, loginNeedsVerification = false, signedIn = false } = {}) {
   const message = loginNeedsVerification
     ? "You're signed in, but your email address isn't verified yet. Check your inbox for a confirmation link, or request a new one below."
     : "Check your inbox for a verification link, or request a new one below.";
   if (deliveryFailed) {
-    return { message, error: "The verification email may not have been delivered. Request a new link below.", showResend: true };
+    return { message, error: "The verification email may not have been delivered. Request a new link below.", showResend: true, showContinue: signedIn };
   }
-  return { message, showResend: true };
+  return { message, showResend: true, showContinue: signedIn };
 }

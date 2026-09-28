@@ -70,6 +70,53 @@ async function issueVerificationEmail(env, userId, email, origin, sendVerificati
   }
 }
 
+async function createCreatorAccount(io, env, request, { email, name, hash, salt, requestedSlug = "" }) {
+  const defaultName = name || email.split("@")[0] || "my-board";
+  const base = slugify(defaultName).slice(0, 35).replace(/-+$/, "") || "site";
+  const slug = requestedSlug || `${base}-${Math.random().toString(36).slice(2, 6)}`;
+  let finalSlug = slug;
+  for (let n = 2; ; n++) { const c = await io.findSiteBySlug(finalSlug); if (!c) break; finalSlug = `${slug}-${n}`; }
+  const displayName = name || defaultName;
+  const userId = uuid();
+
+  // created_at/updated_at default to now(); id generated in-app for consistency.
+  // The slug check above is a TOCTOU race: two concurrent signups choosing the
+  // same slug can both pass the SELECT, then the second INSERT hits sites.slug
+  // UNIQUE and threw an unhandled 500. Wrap the inserts; on a unique violation
+  // (23505) on the slug, regenerate and retry once.
+  let created = false;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await io.withTransaction(async (tx) => {
+        await io.createUser(tx, userId, email, hash, salt);
+        const board = await io.createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
+        if (!board.ok) throw new Error(board.error || "board_create_failed");
+      });
+      created = true;
+      break;
+    } catch (e) {
+      const msg = String(e?.message || e);
+      if (/23505/.test(msg)) {
+        const duplicate = await io.findUserByEmail(email);
+        if (duplicate) return { ok: false, response: json({
+          ok: false,
+          error: "This email is already registered.",
+          field: "email",
+          code: "email_registered",
+        }, 409) };
+        if (attempt < 2) {
+          // unique violation — likely the slug raced; retry with a fresh suffix
+          finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+          continue;
+        }
+      }
+      return { ok: false, response: bad("Sign-up failed, please try again", 500) };
+    }
+  }
+  if (!created) return { ok: false, response: bad("Sign-up failed, please try again", 500) };
+  return { ok: true, userId, slug: finalSlug, displayName };
+}
+
 export async function handleSignup(request, env, deps = {}) {
   const io = {
     rateLimit, findUserByEmail, findSiteBySlug,
@@ -88,7 +135,6 @@ export async function handleSignup(request, env, deps = {}) {
     const email = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
     const name = String(body.name || "").trim();
-    const defaultName = name || email.split("@")[0] || "my-board";
     // A URL the streamer typed is a choice, not a suggestion: signup used to
     // silently hand out `<slug>-2` (or a random suffix for reserved words), so
     // people learned their public URL only after their first share link failed.
@@ -98,8 +144,6 @@ export async function handleSignup(request, env, deps = {}) {
     if (!passwordCheck.ok) return bad(passwordCheck.message);
     if (requested && !requested.ok) return json({ ok: false, error: requested.error, field: "slug" }, 400);
     const requestedSlug = requested ? requested.handle : "";
-    const base = slugify(defaultName).slice(0, 35).replace(/-+$/, "") || "site";
-    const slug = requestedSlug || `${base}-${Math.random().toString(36).slice(2, 6)}`;
     const existing = await io.findUserByEmail(email);
     if (existing) return json({
       ok: false,
@@ -110,47 +154,10 @@ export async function handleSignup(request, env, deps = {}) {
     if (requestedSlug && await io.findSiteBySlug(requestedSlug)) {
       return json({ ok: false, error: "That page URL is already taken. Pick another.", field: "slug" }, 400);
     }
-    let finalSlug = slug;
-    for (let n = 2; ; n++) { const c = await io.findSiteBySlug(finalSlug); if (!c) break; finalSlug = `${slug}-${n}`; }
-    const displayName = name || defaultName;
     const { hash, salt } = await hashPassword(password);
-    const userId = uuid();
-
-    // created_at/updated_at default to now(); id generated in-app for consistency.
-    // The slug check above is a TOCTOU race: two concurrent signups choosing the
-    // same slug can both pass the SELECT, then the second INSERT hits sites.slug
-    // UNIQUE and threw an unhandled 500. Wrap the inserts; on a unique violation
-    // (23505) on the slug, regenerate and retry once.
-    let created = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await io.withTransaction(async (tx) => {
-          await io.createUser(tx, userId, email, hash, salt);
-          const board = await io.createBoard(env, userId, { slug: finalSlug, name: displayName, published: false, is_draft: true }, request, tx);
-          if (!board.ok) throw new Error(board.error || "board_create_failed");
-        });
-        created = true;
-        break;
-      } catch (e) {
-        const msg = String(e?.message || e);
-        if (/23505/.test(msg)) {
-          const duplicate = await io.findUserByEmail(email);
-          if (duplicate) return json({
-            ok: false,
-            error: "This email is already registered.",
-            field: "email",
-            code: "email_registered",
-          }, 409);
-          if (attempt < 2) {
-            // unique violation — likely the slug raced; retry with a fresh suffix
-            finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-            continue;
-          }
-        }
-        return bad("Sign-up failed, please try again", 500);
-      }
-    }
-    if (!created) return bad("Sign-up failed, please try again", 500);
+    const account = await createCreatorAccount(io, env, request, { email, name, hash, salt, requestedSlug });
+    if (!account.ok) return account.response;
+    const { userId, slug: finalSlug, displayName } = account;
 
     const token = await io.createSession(env, userId);
     const origin = new URL(request.url).origin;
@@ -465,6 +472,7 @@ export async function handleRequestLoginCode(request, env, deps = {}) {
     }
     const body = await readJson(request);
     const email = String(body?.email || "").trim().toLowerCase();
+    const intent = body?.intent === "signup" ? "signup" : "login";
     if (!isEmail(email)) return bad("Enter a valid email");
     if (!(await io.rateLimit(env, `login-code:email:${email}`, 5, 3600)).ok) {
       return bad("Too many attempts. Try again later.", 429);
@@ -473,10 +481,12 @@ export async function handleRequestLoginCode(request, env, deps = {}) {
       return bad("Wait a moment before requesting another code.", 429);
     }
     // Mirrors handleLogin's eligibility checks: suspended and locked accounts
-    // get no code, but the response stays generic either way.
+    // get no code, but the response stays generic either way. An unknown
+    // address is eligible only when the visitor declared a signup intent.
     const user = await io.one("SELECT id, status, locked_until FROM users WHERE email=$1", [email]);
     const locked = user?.locked_until && new Date(user.locked_until) > new Date();
-    if (user && user.status === "active" && !locked) {
+    const eligible = user ? (user.status === "active" && !locked) : intent === "signup";
+    if (eligible) {
       await io.exec("DELETE FROM login_codes WHERE email=$1 AND expires_at > now()", [email]);
       const code = newLoginCode();
       const codeHash = await hashToken(`${email}:${code}`);
@@ -492,7 +502,7 @@ export async function handleRequestLoginCode(request, env, deps = {}) {
         console.error("[login-code] email send failed:", result.reason || "unknown");
       }
     }
-    return ok({ message: "If that account exists, a sign-in code is on its way." });
+    return ok({ message: intent === "signup" ? "Check your inbox for a 6-digit code." : "If that account exists, a sign-in code is on its way." });
   } catch (e) {
     console.error("[login-code] request failed:", String(e?.message || e).replace(/[a-f0-9]{32,}/gi, "[REDACTED]"));
     return bad("Couldn't process your request. Please try again.", 500);
@@ -503,7 +513,13 @@ export async function handleRequestLoginCode(request, env, deps = {}) {
 // On a correct code the user gets the same session + response shape as
 // handleLogin, and the inbox ownership is recorded as email_verified.
 export async function handleVerifyLoginCode(request, env, deps = {}) {
-  const io = { rateLimit, one, exec, withTransaction, createSession, cookieSet, getEnabledFeatureKeys, ...deps };
+  const io = {
+    rateLimit, one, exec, withTransaction, createSession, cookieSet,
+    getEnabledFeatureKeys, findUserByEmail, findSiteBySlug, createUser,
+    createBoard, sendOnboardingEmail, trackActivation,
+    waitUntil: (request, promise) => routeContext(request).waitUntil(promise),
+    ...deps,
+  };
   try {
     if (!(await io.rateLimit(env, `login-code-verify:ip:${clientIp(request)}`, 30, 600)).ok) {
       return bad("Too many attempts. Try again later.", 429);
@@ -511,6 +527,7 @@ export async function handleVerifyLoginCode(request, env, deps = {}) {
     const body = await readJson(request);
     const email = String(body?.email || "").trim().toLowerCase();
     const code = String(body?.code || "").trim();
+    const name = String(body?.name || "").trim().slice(0, 80);
     if (!isEmail(email) || !/^\d{6}$/.test(code)) {
       return bad("Enter your email and the 6-digit code.");
     }
@@ -534,7 +551,26 @@ export async function handleVerifyLoginCode(request, env, deps = {}) {
       [email]
     );
     const locked = user?.locked_until && new Date(user.locked_until) > new Date();
-    if (!user || user.status !== "active" || locked) {
+    if (!user) {
+      const account = await createCreatorAccount(io, env, request, { email, name, hash: null, salt: null });
+      if (!account.ok) {
+        await io.exec("DELETE FROM login_codes WHERE id=$1", [row.id]);
+        return account.response;
+      }
+      const userId = account.userId;
+      const createdSlug = account.slug;
+      await io.withTransaction(async (tx) => {
+        await tx.unsafe("DELETE FROM login_codes WHERE id=$1", [row.id]);
+        await tx.unsafe("UPDATE users SET email_verified=true WHERE id=$1", [userId]);
+      });
+      const token = await io.createSession(env, userId);
+      const origin = new URL(request.url).origin;
+      const onboardingPromise = io.sendOnboardingEmail(env, 0, { id: userId, email, display_name: account.displayName, slug: createdSlug, origin });
+      io.waitUntil(request, onboardingPromise.catch((err) => console.error("[login-code] onboarding day 0 failed:", err)));
+      io.trackActivation("leaderboard", userId, "signup", { email, method: "email_code" });
+      return json({ ok: true, created: true, user: { id: userId, email, slug: createdSlug, features: [], emailVerified: true } }, 200, { "set-cookie": io.cookieSet(token, env) });
+    }
+    if (user.status !== "active" || locked) {
       await io.exec("DELETE FROM login_codes WHERE id=$1", [row.id]);
       return bad("Invalid or expired code.", 401);
     }

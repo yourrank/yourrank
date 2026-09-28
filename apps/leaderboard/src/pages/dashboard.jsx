@@ -525,6 +525,7 @@ function BoardSettingsSection({ active } = {}) {
   <section class="v3-settings-panel" id="settingsPanelNotifications" role="tabpanel" aria-labelledby="settingsTabNotifications" data-settings-panel="notifications" hidden>
     <div class="v3-settings-card">
       <div class="v3-settings-card-head"><div><h2>Where should YourRank send updates?</h2><p>Send reset and top-three activity to the services your community already uses.</p></div></div>
+      <div class="v3-settings-inline" id="notifyLock" hidden>Notifications are available on Pro and Team. <a href="/dashboard/settings/billing?from=notifications">View billing</a>.</div>
       <div class="v3-settings-row v3-settings-row--top"><div><b>Discord</b><p>Send updates to a Discord channel.</p></div><input class="v3-toggle" id="settingsWebhookEnabled" type="checkbox" aria-label="Send site updates to Discord" /></div>
       <div class="v3-settings-notify-body" id="notifyBody">
         <div class="v3-settings-field">
@@ -533,7 +534,6 @@ function BoardSettingsSection({ active } = {}) {
         </div>
         <details class="v3-settings-help"><summary>How to find the webhook URL</summary><p class="v3-settings-muted">In Discord, open Channel settings, then Integrations and Webhooks. Create or open a webhook and copy its URL.</p></details>
       </div>
-      <div class="v3-settings-inline" id="notifyLock" hidden>Discord notifications are available on Pro. <a href="/dashboard/settings/billing?from=notifications">View billing</a>.</div>
       <div class="v3-settings-divider"></div>
       <div class="v3-settings-notify-account">
         <div><b>Telegram</b><p class="v3-settings-muted">Send updates to a Telegram group you manage.</p></div>
