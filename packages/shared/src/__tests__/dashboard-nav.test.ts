@@ -47,8 +47,10 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       home: routeById("home").canonicalPath,
       board: routeById("board").canonicalPath,
       audience: routeById("audience.viewers").canonicalPath,
-      tournaments: routeById("giveaways.tournaments").canonicalPath,
+      overview: routeById("giveaways.hub").canonicalPath,
+      activities: routeById("activities.overview").canonicalPath,
       giveaways: routeById("giveaways.chat").canonicalPath,
+      tournaments: routeById("giveaways.tournaments").canonicalPath,
       rewards: routeById("rewards.overview").canonicalPath,
       performance: routeById("performance").canonicalPath,
       telegram: routeById("telegram").canonicalPath,
@@ -61,10 +63,17 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
       "Home", "Community", "Audience", "Engage", "Rewards", "Insights", "Telegram", "Settings",
     ]);
     const engage = dashboardNavItems().find(item => item.key === "engage");
-    expect(engage && "children" in engage && engage.children.map(item => item.label)).toEqual(["Tournaments", "Giveaways"]);
+    expect(engage && "children" in engage && engage.children.map(item => item.label)).toEqual(["Overview", "Activities", "Giveaways", "Tournaments"]);
+    expect(engage && "children" in engage && engage.children.map(item => item.key)).toEqual(["overview", "activities", "giveaways", "tournaments"]);
+    // Rail ownership is manifest data: railKey selects the Engage child,
+    // navKey is the fallback for routes without one.
+    expect(routeById("giveaways.hub").railKey).toBe("overview");
+    expect(routeById("activities.overview").railKey).toBe("activities");
+    expect(["giveaways.chat", "giveaways.raffles", "giveaways.preds"].map(id => routeById(id).railKey)).toEqual(["giveaways", "giveaways", "giveaways"]);
+    expect(routeById("giveaways.tournaments").railKey).toBe("tournaments");
     for (const route of DASHBOARD_ROUTES) {
       const selected = sidebarActiveKey(route.canonicalPath);
-      expect(selected).toBe(route.id === "giveaways.tournaments" ? "tournaments" : route.section === "giveaways" ? "giveaways" : route.navKey);
+      expect(selected, route.id).toBe(route.railKey ?? route.navKey);
     }
     expect(sidebarActiveKey("/dashboard/giveaways/tournaments/tourn_123/settings?siteId=site-1")).toBe("tournaments");
   });
@@ -79,6 +88,8 @@ describe("dashboard-nav regression gate: no second routing registry", () => {
     expect(NAV_OWNER_MAP).toEqual({
       board: "board", leaderboard: "board",
       activities: "engage",
+      // Engage's rail owner route is the hub Overview; the owner value is
+      // still the group key, so spelling → rail mapping is unchanged.
       engage: "engage", giveaways: "engage", raffles: "engage",
       predictions: "engage", drops: "engage", tournaments: "engage",
       games: "games",
