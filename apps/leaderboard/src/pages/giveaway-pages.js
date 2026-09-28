@@ -3,6 +3,7 @@
 // Tournaments renders its own pane without the Giveaways subnav.
 
 import { routeById } from "@yourrank/shared/dashboard-routes";
+import { subnavHtml } from "@yourrank/shared/dashboard-ui";
 
 export const GIVEAWAY_TABS = [
   ["chat", "Chat Giveaway"],
@@ -18,11 +19,12 @@ const SUBNAV_ROUTES = { chat: "giveaways.chat", raffles: "giveaways.raffles", pr
 // Giveaways secondary nav: Chat Giveaway | Raffle | Prediction. Always visible
 // on the three subtype pages; plain anchors ride the SPA router.
 function giveawaysSubnavHtml(active) {
-  const items = GIVEAWAY_TABS.map(([key, label]) => {
-    const href = routeById(SUBNAV_ROUTES[key]).canonicalPath;
-    return `<a class="v3-tab${key === active ? " is-on" : ""}" href="${href}"${key === active ? ' aria-current="page"' : ""}>${label}</a>`;
-  }).join("");
-  return `<nav class="v3-tabs gw-subnav" aria-label="Giveaways">${items}</nav>`;
+  return subnavHtml({
+    items: GIVEAWAY_TABS.map(([key, label]) => ({ key, label, href: routeById(SUBNAV_ROUTES[key]).canonicalPath })),
+    active,
+    label: "Giveaways",
+    className: "gw-subnav",
+  });
 }
 
 // Lucide 24x24 stroke icons (fill="none" stroke="currentColor" stroke-width="2"

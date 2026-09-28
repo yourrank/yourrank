@@ -180,7 +180,9 @@ describe("signed-in shell navigation", () => {
     const html = PAGES.dashboardNotFound.Component({ user }).toString();
     expect(html).toContain('data-auth-workspace="true"');
     expect(html).toMatch(/This dashboard page doesn(?:&#39;|')t exist/);
-    expect(html).toContain('href="/dashboard/leaderboard/setup"');
+    expect(html).toContain('class="v3-empty"');
+    expect(html).toMatch(/<a class="v3-btn v3-btn--accent[^"]*" href="\/dashboard">Go to Home<\/a>/);
+    expect(html).not.toContain('aria-label="Dashboard destinations"');
     expect(html).not.toContain("No leaderboard here");
     expect(PAGES.dashboardNotFound.config.scripts.join("")).not.toContain("dashboard.js");
     expect(PAGES.dashboardNotFound.config.configFor).toBeUndefined();

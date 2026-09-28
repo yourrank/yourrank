@@ -138,8 +138,8 @@ function sectionCrumbHead(section: string): DashboardCrumb | undefined {
     case "rewards":
       return { label: DASHBOARD_SECTION_TITLES.rewards, href: routeById("rewards.overview").canonicalPath };
     case "giveaways":
-      // Giveaways are an Engage surface: the section crumb links the workspace root.
-      return { label: DASHBOARD_SECTION_TITLES.giveaways, href: routeById("activities.overview").canonicalPath };
+      // Giveaways are an Engage surface: the section crumb links the Engage hub.
+      return { label: DASHBOARD_SECTION_TITLES.giveaways, href: routeById("giveaways.hub").canonicalPath };
     case "audience":
       return { label: DASHBOARD_SECTION_TITLES.audience, href: routeById("audience.viewers").canonicalPath };
     case "settings":

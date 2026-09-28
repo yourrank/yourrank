@@ -129,7 +129,7 @@ describe("dashboard chrome state — exact visible behavior pins", () => {
     const preds = dashboardChromeState("giveaways.preds");
     expect(preds.navKey).toBe("engage");
     expect(preds.crumbs).toEqual([
-      { label: "Engage", href: "/dashboard/activities" },
+      { label: "Engage", href: "/dashboard/giveaways" },
       { label: "Predictions" },
     ]);
     expect(preds.documentTitle).toBe("Engage · YourRank");
