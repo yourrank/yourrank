@@ -2,7 +2,7 @@ import { withTransaction as defaultWithTransaction, one as defaultOne, exec as d
 // Authentication handlers for signup, login, logout, password reset
 import { hashPassword, verifyPassword, uuid, newToken, createSession, destroySession, destroyAllUserSessions, currentUser, isEmail, slugify, cookieSet, cookieClear, readToken, json, bad, ok, readJson, rateLimit, clientIp, safeEqual } from "../auth.js";
 import { hashToken } from "@yourrank/shared/crypto";
-import { normalizeCommunityHandle, RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
+import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 import { routeContext } from "../middleware/handler.js";
 import { trackActivation } from "@yourrank/shared/activation-funnel";
 import { createBoard, getUserBoardsList } from "../site.js";
@@ -98,10 +98,15 @@ export async function handleSignup(request, env, deps = {}) {
     if (!passwordCheck.ok) return bad(passwordCheck.message);
     if (requested && !requested.ok) return json({ ok: false, error: requested.error, field: "slug" }, 400);
     const requestedSlug = requested ? requested.handle : "";
-    let slug = requestedSlug || slugify(defaultName);
-    if (!slug || RESERVED_COMMUNITY_HANDLES.has(slug)) slug = `${slug || "site"}-${Math.random().toString(36).slice(2, 6)}`;
+    const base = slugify(defaultName).slice(0, 35).replace(/-+$/, "") || "site";
+    const slug = requestedSlug || `${base}-${Math.random().toString(36).slice(2, 6)}`;
     const existing = await io.findUserByEmail(email);
-    if (existing) return bad("If this email isn't already registered, check your inbox to confirm.");
+    if (existing) return json({
+      ok: false,
+      error: "This email is already registered.",
+      field: "email",
+      code: "email_registered",
+    }, 409);
     if (requestedSlug && await io.findSiteBySlug(requestedSlug)) {
       return json({ ok: false, error: "That page URL is already taken. Pick another.", field: "slug" }, 400);
     }
@@ -128,14 +133,21 @@ export async function handleSignup(request, env, deps = {}) {
         break;
       } catch (e) {
         const msg = String(e?.message || e);
-        if (/23505/.test(msg) && attempt < 2) {
-          // unique violation — likely the slug raced; retry with a fresh suffix
-          finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
-          continue;
+        if (/23505/.test(msg)) {
+          const duplicate = await io.findUserByEmail(email);
+          if (duplicate) return json({
+            ok: false,
+            error: "This email is already registered.",
+            field: "email",
+            code: "email_registered",
+          }, 409);
+          if (attempt < 2) {
+            // unique violation — likely the slug raced; retry with a fresh suffix
+            finalSlug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+            continue;
+          }
         }
-        // users.email UNIQUE collision (already checked above, but concurrent) or
-        // a real error: surface a clean message, never a raw 500.
-        return bad("If this email isn't already registered, check your inbox to confirm.");
+        return bad("Sign-up failed, please try again", 500);
       }
     }
     if (!created) return bad("Sign-up failed, please try again", 500);

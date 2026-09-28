@@ -97,6 +97,11 @@ describe("markup: Site answers what viewers see", () => {
     expect(customize).toContain('id="sitePublicCopy"');
     expect(customize).toMatch(/id="sitePublicOpen"[^>]*rel="noopener noreferrer"/);
     expect(customize).toMatch(/id="sitePublicCopyStatus"[^>]*aria-live="polite"/);
+    expect(customize).toContain('<label class="v3-settings-label" for="sitePublicSlug">Page URL</label>');
+    expect(customize).toContain('<span class="auth-url-prefix">yourrank.site/</span>');
+    expect(customize).toContain('id="sitePublicSlugSave" type="button">Change URL</button>');
+    expect(customize).toMatch(/id="sitePublicSlugStatus" role="status" aria-live="polite"/);
+    expect(customize).toContain("Lowercase letters, numbers and hyphens. If your site is already published, old links stop working.");
     expect(customize).toContain('id="sitePublicDomainSummary"');
     // Domain infrastructure keeps its own tab; this is a pointer to it.
     expect(customize).toMatch(/id="sitePublicDomainManage"[^>]*data-settings-tab-link="domain"/);
