@@ -12,6 +12,40 @@ import { PAGES } from "../pages.jsx";
 const assets = path.resolve(import.meta.dir, "../assets");
 const read = (file) => fs.readFileSync(path.join(assets, file), "utf8");
 
+function runWatchdogError(event) {
+  const listeners = {};
+  const classes = [];
+  const surface = {
+    hidden: true,
+    innerHTML: "",
+    classList: { add: (className) => classes.push(className) },
+    querySelector: () => null,
+  };
+  const window = {
+    addEventListener: (name, listener) => {
+      listeners[name] = listener;
+    },
+  };
+  const document = {
+    getElementById: (id) => id === "gw-app" ? surface : null,
+  };
+  const location = {
+    origin: "https://yourrank.site",
+    href: "https://yourrank.site/dashboard",
+  };
+  const watchdog = new Function(
+    "window",
+    "document",
+    "location",
+    "setTimeout",
+    "clearTimeout",
+    read("dashboard-boot-watchdog.js"),
+  );
+  watchdog(window, document, location, () => 1, () => {});
+  listeners.error(event);
+  return { surface, classes };
+}
+
 describe("dashboard loading states", () => {
   it("announces the initial dashboard and credits loaders", () => {
     const dashboardHtml = PAGES.dashboard.Component({ activePath: "/dashboard" }).toString();
@@ -131,7 +165,7 @@ describe("dashboard loading states", () => {
     const shell = fs.readFileSync(path.resolve(assets, "../../../../packages/shared/src/page-shell.ts"), "utf8");
     const watchdog = read("dashboard-boot-watchdog.js");
     expect(shell).toContain("DASHBOARD_BOOT_WATCHDOG");
-    expect(shell).toContain('/assets/dashboard-boot-watchdog.js?v=1');
+    expect(shell).toContain('/assets/dashboard-boot-watchdog.js?v=2');
     expect(watchdog).toContain("setTimeout(function ()");
     expect(watchdog).toContain("8000");
     expect(watchdog).toContain("unhandledrejection");
@@ -140,6 +174,53 @@ describe("dashboard loading states", () => {
     expect(read("giveaways.js")).toContain("withDashboardTimeout");
     expect(read("giveaways.js")).toContain('window.__yrBoot?.fail');
     expect(read("giveaways.js")).not.toContain("await fetch(");
+  });
+
+  it("ignores third-party boot errors but catches same-origin assets", () => {
+    const thirdPartyScript = runWatchdogError({
+      target: {
+        tagName: "SCRIPT",
+        src: "https://static.cloudflareinsights.com/beacon.min.js",
+      },
+      error: {},
+    });
+    expect(thirdPartyScript.surface.hidden).toBe(true);
+    expect(thirdPartyScript.surface.innerHTML).toBe("");
+    expect(thirdPartyScript.classes).toEqual([]);
+
+    const anonymousRuntimeError = runWatchdogError({ error: {} });
+    expect(anonymousRuntimeError.surface.hidden).toBe(false);
+    expect(anonymousRuntimeError.surface.innerHTML).toContain("Couldn't load this dashboard.");
+    expect(anonymousRuntimeError.classes).toContain("yr-boot-failure");
+
+    const localScript = runWatchdogError({
+      target: { tagName: "SCRIPT", src: "https://yourrank.site/assets/giveaways.js" },
+    });
+    expect(localScript.surface.hidden).toBe(false);
+    expect(localScript.surface.innerHTML).toContain("Couldn't load this dashboard.");
+    expect(localScript.classes).toContain("yr-boot-failure");
+
+    const extensionError = runWatchdogError({
+      filename: "moz-extension://abc/content.js",
+      error: {},
+    });
+    expect(extensionError.surface.hidden).toBe(true);
+    expect(extensionError.surface.innerHTML).toBe("");
+    expect(extensionError.classes).toEqual([]);
+
+    const localRuntimeError = runWatchdogError({
+      filename: "https://yourrank.site/assets/giveaways.js",
+    });
+    expect(localRuntimeError.surface.hidden).toBe(false);
+    expect(localRuntimeError.surface.innerHTML).toContain("Couldn't load this dashboard.");
+    expect(localRuntimeError.classes).toContain("yr-boot-failure");
+
+    const localStylesheet = runWatchdogError({
+      target: { tagName: "LINK", href: "/assets/giveaways.css" },
+    });
+    expect(localStylesheet.surface.hidden).toBe(false);
+    expect(localStylesheet.surface.innerHTML).toContain("Couldn't load this dashboard.");
+    expect(localStylesheet.classes).toContain("yr-boot-failure");
   });
 
   it("hides list controls and invalid page labels when lists are empty", () => {

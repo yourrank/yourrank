@@ -12,6 +12,11 @@
       document.getElementById("gw-app");
   }
 
+  function sameOrigin(url) {
+    if (!url) return false;
+    try { return new URL(url, location.href).origin === location.origin; } catch (e) { return false; }
+  }
+
   function failure(message) {
     var el = surface();
     if (!el || done) return;
@@ -41,8 +46,10 @@
   window.addEventListener("error", function (event) {
     var target = event.target;
     if (target && (target.tagName === "SCRIPT" || target.tagName === "LINK")) {
-      fail("A dashboard script or stylesheet could not be loaded.");
-    } else if (event.filename || event.error) {
+      if (sameOrigin(target.src || target.href)) {
+        fail("A dashboard script or stylesheet could not be loaded.");
+      }
+    } else if ((event.filename && sameOrigin(event.filename)) || (!event.filename && event.error)) {
       fail("A dashboard script failed before the app could start.");
     }
   }, true);
