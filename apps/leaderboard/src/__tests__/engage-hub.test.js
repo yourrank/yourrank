@@ -64,7 +64,7 @@ describe("Engage hub markup", () => {
     const expected = [
       ["activities", "Activities", "Run code drops and community activities.", "Activities", "Share a free code with your community. Track claims here.", "Open activities", "/dashboard/activities"],
       ["chat", "Giveaways", "Run chat giveaways, raffles, and predictions.", "No active giveaway", "Create a giveaway to engage your viewers.", "Create giveaway", "/dashboard/giveaways/chat"],
-      ["tournaments", "Tournament", "Run brackets and community competitions.", "No active tournament", "Set up a bracket for your community.", "Create tournament", "/dashboard/giveaways/tournaments"],
+      ["tournaments", "Tournaments", "Run brackets and community competitions.", "No active tournament", "Set up a bracket for your community.", "Create tournament", "/dashboard/giveaways/tournaments"],
     ];
     for (const [feature, title, desc, state, meta, action, href] of expected) {
       expect(cardText(feature, ".engage-card__title")).toBe(title);
@@ -87,7 +87,7 @@ describe("Engage hub markup", () => {
     expect(html).not.toContain("gw-drawer-backdrop");
   });
 
-  it("renders Giveaways pages with the subnav, back-link and active subtype", () => {
+  it("renders Giveaways pages with the subnav below the head and active subtype", () => {
     const subnavPaths = {
       chat: "/dashboard/giveaways/chat",
       raffles: "/dashboard/giveaways/raffles",
@@ -95,13 +95,15 @@ describe("Engage hub markup", () => {
     };
     for (const tab of ["chat", "raffles", "preds"]) {
       const html = renderGiveawaysHtml(tab);
-      expect(html, tab).toContain('class="engage-back" href="/dashboard/giveaways"');
+      expect(html, tab).not.toContain("engage-back");
       expect(html, tab).toContain("<h1>Giveaways</h1>");
       expect(html, tab).not.toContain("gw-nav-tabs");
       expect(html, tab).not.toContain("gw-tab-btn");
       expect(html, tab).not.toContain("data-tabs-more");
       expect(html, tab).not.toContain("engage-tabs");
       expect(html, tab).toContain('class="v3-tabs gw-subnav" aria-label="Giveaways"');
+      // The subtype subnav sits under the page head: h1 first, tabs second.
+      expect(html.indexOf("v3-head"), tab).toBeLessThan(html.indexOf("gw-subnav"));
       expect(html, tab).toContain(`aria-current="page"`);
       // The active subtype carries aria-current; the other two do not.
       document.body.innerHTML = html;

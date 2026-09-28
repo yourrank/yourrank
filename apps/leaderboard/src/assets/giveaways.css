@@ -2160,15 +2160,3 @@
   color: var(--ws-text-soft);
 }
 .engage-card__meta span { display: block; }
-
-/* Back link from a feature page to the Engage hub. */
-.engage-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--ws-text-soft);
-}
-.engage-back:hover { color: var(--ws-accent); }
-.engage-back svg { width: 14px; height: 14px; }

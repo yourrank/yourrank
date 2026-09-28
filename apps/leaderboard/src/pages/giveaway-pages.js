@@ -34,12 +34,9 @@ const ENGAGE_ICONS = {
   ticket: '<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>',
   "bar-chart-3": '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
-  "chevron-left": '<path d="m15 18-6-6 6-6"/>',
 };
 
 const engageIcon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ENGAGE_ICONS[name]}</svg>`;
-
-const ENGAGE_BACK = `<a class="engage-back" href="/dashboard/giveaways">${engageIcon("chevron-left")}Engage</a>`;
 
 // Engage hub: the three Engage destinations as equal cards. Status copy is
 // the server-rendered default; giveaways.js rewrites it for the cards that
@@ -56,7 +53,7 @@ const ENGAGE_FEATURES = [
     state: "No active giveaway", meta: "Create a giveaway to engage your viewers.", action: "Create giveaway",
   },
   {
-    feature: "tournaments", icon: "network", title: "Tournament", href: "/dashboard/giveaways/tournaments",
+    feature: "tournaments", icon: "network", title: "Tournaments", href: "/dashboard/giveaways/tournaments",
     desc: "Run brackets and community competitions.",
     state: "No active tournament", meta: "Set up a bracket for your community.", action: "Create tournament",
   },
@@ -270,17 +267,16 @@ export function renderGiveawaysContentHtml(activeTab = "chat") {
   const html = `
 ${active === "tournaments"
     ? ""
-    : `${giveawaysSubnavHtml(active)}
-<div class="v3-head v3-head--row">
+    : `<div class="v3-head v3-head--row">
   <div class="v3-head-col">
-    ${ENGAGE_BACK}
     <h1>Giveaways</h1>
     <p class="v3-head-sub">${activeLabel} · ${activeDescription}</p>
   </div>
   <div class="d-flex gap-8 items-center flex-wrap"${active === "preds" ? "" : " hidden"}>
     <button class="btn btn--sm btn--accent" id="btn-open-event-drawer" type="button">+ Create Event</button>
   </div>
-</div>`}
+</div>
+${giveawaysSubnavHtml(active)}`}
 
 <!-- The one place an Engage action reports a refusal. It lives outside the tab
      panes so a refusal on any tab is actually painted: the previous target was
