@@ -60,16 +60,29 @@ describe("buildViewModel", () => {
   });
 
   it("maps lifecycle to primary action and secondary buttons", () => {
-    const draft = vm({ lifecycle: "draft", tournament: { signup_state: "closed", chat_channel: "" }, board: { kickChannelName: "mychan" } });
+    const draft = vm({
+      lifecycle: "draft",
+      tournament: { signup_state: "closed", chat_channel: "" },
+      entries: [entries[0]],
+      board: { kickChannelName: "mychan" },
+    });
     expect(draft.primary).toEqual({ action: "use-site-channel", label: "Use mychan" });
+    expect(draft.stepHtml).toContain("add players manually below");
     const connected = vm({
       lifecycle: "draft",
       tournament: { signup_state: "closed", chat_channel: "" },
+      entries: [entries[0]],
       board: { kickChannelName: "mychan" },
       chatRegistration: { connected: true, channelName: "connected" },
     });
     expect(connected.siteChannel).toBe("connected");
     expect(connected.primary).toEqual({ action: "use-site-channel", label: "Use connected" });
+    const populatedDraft = vm({
+      lifecycle: "draft",
+      tournament: { signup_state: "closed", chat_channel: "" },
+    });
+    expect(populatedDraft.primary).toEqual({ action: "lock", label: "Close entries" });
+    expect(populatedDraft.stepHtml).toBe("Add players below, or connect Kick to collect entries from chat.");
     const open = vm({ lifecycle: "signups_open" });
     expect(open.primary).toEqual({ action: "lock", label: "Lock signups" });
     const locked = vm({ lifecycle: "signups_locked", entryCounts: { ...counts, eligible: 5 } });
@@ -137,6 +150,31 @@ describe("workspaceHtml", () => {
     expect(html).toContain("Bracket not created yet.");
     const live = workspaceHtml(vm({ lifecycle: "bracket", matches: buildBracket(["a", "b"], 4) }), "<div class=\"tn-bracket\"></div>");
     expect(live).not.toContain('id="tournament-bracket-empty"');
+  });
+
+  it("adds players for draft, open and locked signups only", () => {
+    for (const lifecycle of ["draft", "signups_open", "signups_locked"]) {
+      const html = workspaceHtml(vm({
+        lifecycle,
+        tournament: { signup_state: lifecycle === "draft" ? "closed" : "open", chat_channel: "" },
+      }));
+      expect(html).toContain('id="tournament-add-entry-form"');
+      expect(html).toContain('id="tournament-add-entry-name"');
+      expect(html).toContain('maxlength="80"');
+    }
+    for (const lifecycle of ["bracket", "completed", "cancelled"]) {
+      const html = workspaceHtml(vm({ lifecycle, tournament: { status: lifecycle } }));
+      expect(html).not.toContain('id="tournament-add-entry-form"');
+    }
+  });
+
+  it("uses the manual-first draft empty-state copy", () => {
+    const html = workspaceHtml(vm({
+      lifecycle: "draft",
+      tournament: { signup_state: "closed", chat_channel: "" },
+      entries: [],
+    }));
+    expect(html).toContain("<b>No entries yet.</b><span>Add players below, or open signups to collect them from Kick chat.</span>");
   });
 
   it("renders the read-only settings sections for finished tournaments", () => {

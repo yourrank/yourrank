@@ -98,7 +98,7 @@ function stopChat() {
   chatConnection = null;
 }
 
-// Entries are created by the webhook; poll so they appear without the socket.
+// Kick chat entries arrive through the webhook; poll so they appear without the socket.
 function updateEntriesPolling(lifecycle) {
   if (lifecycle === "signups_open") {
     if (!entriesPollTimer) {
@@ -320,11 +320,36 @@ async function submitCreate(event) {
   }
 }
 
+async function submitAddEntry(event) {
+  event.preventDefault();
+  const input = $("tournament-add-entry-name");
+  const submit = $("tournament-add-entry-submit");
+  const displayName = String(input?.value || "").trim();
+  if (!displayName) {
+    setMessage("Enter a player name.", true);
+    input?.focus();
+    return;
+  }
+  if (!tournament) return;
+  submit.disabled = true;
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries`, {
+      method: "POST",
+      body: JSON.stringify({ displayName }),
+    });
+    await loadEntries();
+    setMessage("");
+  } catch (error) {
+    setMessage(error.message || "Could not add player.", true);
+  } finally {
+    if (submit.isConnected) submit.disabled = false;
+  }
+}
+
 // ---- Live entries refresh -----------------------------------------------
 //
-// Entries are created server-side by the Kick chat webhook; the socket below
-// is only a low-latency hint to refetch, and the 15s poll above is the
-// fallback when the socket is unavailable.
+// The socket below is a low-latency hint to refetch chat entries, and the
+// 15s poll above is the fallback when the socket is unavailable.
 
 async function refreshEntriesSoon() {
   entriesRefreshQueued = true;
@@ -786,6 +811,8 @@ function onSubmit(event) {
   if (!$("tournament-app")) return;
   if (event.target.id === "tournament-create-form") {
     submitCreate(event).catch((error) => setCreateError(error.message || "Could not create the tournament."));
+  } else if (event.target.id === "tournament-add-entry-form") {
+    submitAddEntry(event).catch((error) => setMessage(error.message || "Could not add player.", true));
   } else if (event.target.id === "tournament-settings-form") {
     event.preventDefault();
     saveSettings(event).catch((error) => setMessage(error.message || "Could not save settings.", true));

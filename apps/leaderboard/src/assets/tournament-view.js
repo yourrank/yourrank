@@ -100,12 +100,17 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
   let stepHtml = "";
   if (lifecycle === "draft") {
     if (!channel) {
-      primary = siteChannel
-        ? { action: "use-site-channel", label: `Use ${siteChannel}` }
-        : { action: "add-channel", label: "Add Kick channel" };
-      stepHtml = siteChannel
-        ? "<b>Kick channel required.</b> Use your connected Kick channel to open signups."
-        : "<b>Kick channel required.</b> Add your Kick channel before opening signups.";
+      if (activeCount >= 2) {
+        primary = { action: "lock", label: "Close entries" };
+        stepHtml = "Add players below, or connect Kick to collect entries from chat.";
+      } else {
+        primary = siteChannel
+          ? { action: "use-site-channel", label: `Use ${siteChannel}` }
+          : { action: "add-channel", label: "Add Kick channel" };
+        stepHtml = siteChannel
+          ? "<b>Kick channel required.</b> Use your connected Kick channel to open signups, or add players manually below."
+          : "<b>Kick channel required.</b> Add your Kick channel before opening signups, or add players manually below.";
+      }
     } else {
       primary = { action: "open", label: "Open signups" };
       stepHtml = "Open signups when you're ready for viewers to join.";
@@ -278,6 +283,7 @@ export function entryRowsHtml(vm) {
 
 function entriesPanelHtml(vm) {
   const rows = entryRowsHtml(vm);
+  const canAddEntries = ["draft", "signups_open", "signups_locked"].includes(vm.lifecycle);
 
   let empty = "";
   if (!vm.entriesVm.length) {
@@ -285,14 +291,24 @@ function entriesPanelHtml(vm) {
       ? ["Waiting for viewers.", `Ask viewers to type ${vm.keyword} in chat.`]
       : vm.lifecycle === "signups_locked"
         ? ["No entries.", "Reopen signups to collect entries from your audience."]
-        : ["No entries yet.", "Open signups when you're ready for viewers to join."];
+        : ["No entries yet.", "Add players below, or open signups to collect them from Kick chat."];
     empty = `<div class="tn-empty" id="tournament-entries-empty"><b>${esc(copy[0])}</b><span>${esc(copy[1])}</span></div>`;
   }
+  const addForm = canAddEntries
+    ? `<form class="tn-add-entry" id="tournament-add-entry-form" novalidate>
+      <label for="tournament-add-entry-name">Add player</label>
+      <div class="tn-add-entry-row">
+        <input id="tournament-add-entry-name" name="displayName" type="text" maxlength="80" autocomplete="off" required class="tn-input" />
+        <button class="btn btn--accent" id="tournament-add-entry-submit" type="submit">Add</button>
+      </div>
+    </form>`
+    : "";
   return `<section class="tn-panel${vm.activeTab === "entries" ? "" : ""}" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries"${vm.activeTab === "entries" ? "" : " hidden"}>
     <div class="tn-panel-head">
       <h2 id="tournament-list-heading">Entries</h2>
       <p class="tn-sub" id="tournament-list-sub">Review tournament entries and their status.</p>
     </div>
+    ${addForm}
     ${empty}
     <div class="tn-entries" id="tournament-entries"${vm.entriesVm.length ? "" : " hidden"}>
       <div class="tn-entry tn-entry--head" role="row">

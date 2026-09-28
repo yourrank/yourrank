@@ -289,6 +289,17 @@
 
 /* ---- Entries -------------------------------------------------------------- */
 
+.tn-add-entry { margin: 0 0 16px; }
+.tn-add-entry > label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--tn-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.tn-add-entry-row { display: flex; gap: 8px; }
+.tn-add-entry-row .tn-input { min-width: 0; }
+
 .tn-entries { min-width: 0; }
 .tn-entry {
   display: grid;

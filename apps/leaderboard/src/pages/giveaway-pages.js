@@ -295,7 +295,7 @@ ${giveawaysSubnavHtml(active)}`}
      TAB 1: LIVE CHAT GIVEAWAYS
      ========================================================================= -->
 <div class="gw-tab-pane${active === "chat" ? " is-active" : ""}" id="pane-chat"${active === "chat" ? "" : " hidden"}>
-  <div class="gw-layout">
+  <div class="gw-layout" id="gw-layout">
     <!-- Left Column: Setup, Anti-Alt Shield & Live Feed -->
     <div class="gw-sidebar">
       <!-- Setup Card -->
@@ -303,7 +303,7 @@ ${giveawaysSubnavHtml(active)}`}
         <div class="v3-section-head">
           <div>
             <h2>Start collecting entries</h2>
-            <p class="v3-head-sub">Viewers who type your keyword in your connected Kick chat are entered automatically.</p>
+            <p class="v3-head-sub">Collect entries from Kick chat, or add viewer names yourself.</p>
           </div>
           <div id="gw-status-badge" class="gw-status-pill gw-status--idle" aria-live="polite">
             <span class="gw-status-dot"></span>
@@ -324,24 +324,35 @@ ${giveawaysSubnavHtml(active)}`}
           <div class="gw-connect-required" id="gw-channel-disconnected" hidden>
             <p>Chat giveaways require a connected Kick channel.</p>
             <a class="btn btn--accent" id="gw-btn-connect-kick" href="/dashboard/settings/connections">Connect Kick</a>
+            <p id="gw-manual-start-hint" hidden>Or run it manually — add viewer names yourself.</p>
           </div>
 
-          <div class="field">
+          <div class="field" id="gw-keyword-field">
             <label for="gw-keyword-input">Keyword</label>
             <input id="gw-keyword-input" name="keyword" type="text" value="!win" placeholder="e.g. !win, !enter, YOURRANK" maxlength="64" required />
             <span class="hint">Viewers who type this word in chat are entered once each. Matching ignores upper/lowercase.</span>
           </div>
 
+          <div class="gw-actions">
+            <button class="btn btn--accent" id="gw-btn-listen" type="submit" disabled>
+              <span id="gw-listen-btn-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M4 14v3a2 2 0 0 0 2 2h1v-5H4Z"/><path d="M20 14v3a2 2 0 0 1-2 2h-1v-5h3Z"/></svg> <span id="gw-listen-btn-label">Start giveaway</span></span>
+            </button>
+          </div>
+          <p class="hint">Entries keep collecting on our servers even if you close or refresh this page.</p>
+
+          <details class="gw-rules-panel" id="gw-rules-panel">
+            <summary><span>Giveaway rules</span><span class="gw-rules-summary" id="gw-rules-summary">Anyone in chat · Win once · No chat response</span></summary>
+            <div class="gw-rules-panel-body">
           <fieldset class="gw-settings" id="gw-settings">
-            <legend>Entry Mode</legend>
-            <div class="gw-entry-modes">
+            <legend id="gw-entry-mode-legend">Entry Mode</legend>
+            <div class="gw-entry-modes" id="gw-entry-modes">
               <label><input type="radio" name="gw-entry-mode" value="chat" checked><span><b>Anyone in Kick Chat</b><small>Anyone who types the keyword can participate.</small></span></label>
               <label><input type="radio" name="gw-entry-mode" value="members"><span><b>YourRank Members Only</b><small>Requires a YourRank account linked to the Kick account used in chat.</small></span></label>
               <label><input type="radio" name="gw-entry-mode" value="verified"><span><b>Verified Entry</b><small>Viewers type the keyword, then verify through YourRank before entering the draw.</small></span></label>
             </div>
-            <section class="gw-settings-section" aria-labelledby="gw-eligibility-title">
+            <section class="gw-settings-section" id="gw-kick-eligibility-section" aria-labelledby="gw-eligibility-title">
               <h3 id="gw-eligibility-title">Eligibility</h3>
-              <label class="cr-toggle-row"><span><b>One entry per Kick account</b><small>Always enforced by Kick account ID.</small></span><input type="checkbox" checked disabled></label>
+              <label class="cr-toggle-row" id="gw-kick-identity-rule"><span><b>One entry per Kick account</b><small>Always enforced by Kick account ID.</small></span><input type="checkbox" checked disabled></label>
             </section>
             <section class="gw-settings-section" aria-labelledby="gw-winner-repeat-title">
               <h3 id="gw-winner-repeat-title">Winner repeat</h3>
@@ -350,7 +361,7 @@ ${giveawaysSubnavHtml(active)}`}
                 <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-again" value="again"><span><b>Can win again</b><small>A re-roll may pick the same participant again.</small></span></label>
               </div>
             </section>
-            <section class="gw-settings-section" aria-labelledby="gw-winner-verification-title">
+            <section class="gw-settings-section" id="gw-winner-verification-section" aria-labelledby="gw-winner-verification-title">
               <h3 id="gw-winner-verification-title">Winner verification</h3>
               <label class="cr-toggle-row"><span>Winner must respond in chat</span><input type="checkbox" class="v3-toggle" id="gw-opt-claim-req"></label>
               <div id="gw-claim-duration-wrap" hidden>
@@ -365,13 +376,13 @@ ${giveawaysSubnavHtml(active)}`}
             <details class="gw-setup-advanced" id="gw-advanced-options"><summary>Advanced options<span class="gw-advanced-summary-state" aria-hidden="true">▾</span></summary><div class="gw-setup-advanced-body">
               <section class="gw-settings-section" aria-labelledby="gw-advanced-eligibility-title">
                 <h3 id="gw-advanced-eligibility-title">Eligibility</h3>
-                <label class="cr-toggle-row"><span>Subscriber only</span><input id="gw-opt-subscriber" type="checkbox" class="v3-toggle"></label>
-                <label class="cr-toggle-row"><span>VIP only</span><input id="gw-opt-vip" type="checkbox" class="v3-toggle"></label>
+                <label class="cr-toggle-row" id="gw-subscriber-rule"><span>Subscriber only</span><input id="gw-opt-subscriber" type="checkbox" class="v3-toggle"></label>
+                <label class="cr-toggle-row" id="gw-vip-rule"><span>VIP only</span><input id="gw-opt-vip" type="checkbox" class="v3-toggle"></label>
                 <label class="cr-toggle-row"><span><b>Exclude past giveaway winners</b><small>Winners recorded in this community’s earlier giveaways. Winner repeat above covers this giveaway.</small></span><input id="gw-opt-skip-past" type="checkbox" class="v3-toggle"></label>
-                <p class="hint">Subscriber and VIP checks use the badges on the entry message. Selecting both requires both badges.</p>
-                <p class="hint">Account age and follow duration are unavailable: reliable Kick data is not connected.</p>
+                <p class="hint" id="gw-subscriber-hint">Subscriber and VIP checks use the badges on the entry message. Selecting both requires both badges.</p>
+                <p class="hint" id="gw-kick-history-hint">Account age and follow duration are unavailable: reliable Kick data is not connected.</p>
               </section>
-              <section class="gw-settings-section" aria-labelledby="gw-abuse-title">
+              <section class="gw-settings-section" id="gw-anti-abuse-section" aria-labelledby="gw-abuse-title">
                 <h3 id="gw-abuse-title">Anti-abuse</h3>
                 <label class="cr-toggle-row"><span><b>One account per IP</b><small id="gw-ip-requirement">Locked — Requires Verified Entry</small></span><input id="gw-opt-ip" type="checkbox" class="v3-toggle" disabled aria-describedby="gw-ip-requirement"></label>
                 <label class="cr-toggle-row"><span><b>VPN / Proxy detection</b><small id="gw-vpn-requirement">Locked — Requires Verified Entry and a detection provider</small></span><input type="checkbox" disabled aria-describedby="gw-vpn-requirement"></label>
@@ -379,21 +390,18 @@ ${giveawaysSubnavHtml(active)}`}
                 <p class="hint">Participants must verify through YourRank because Kick chat does not expose IP or device information.</p>
                 <button class="btn btn--ghost" id="gw-enable-verified" type="button">Enable Verified Entry</button>
               </section>
-              <section class="gw-settings-section" aria-labelledby="gw-winner-instruction-title">
+              <section class="gw-settings-section" id="gw-winner-instruction-section" aria-labelledby="gw-winner-instruction-title">
                 <h3 id="gw-winner-instruction-title">Winner instruction</h3>
                 <div class="field"><label for="gw-custom-rule-text">Winner instruction (optional)</label><textarea id="gw-custom-rule-text" rows="2" placeholder="e.g. Say your in-game name in chat"></textarea><span class="hint">A display instruction on this page; not an eligibility check.</span></div>
               </section>
             </div></details>
           </fieldset>
+            </div>
+          </details>
           <p class="hint" id="gw-settings-note">Settings are saved when you start a giveaway. Changes apply to the next giveaway.</p>
+          <p class="hint" id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.</p>
           <p id="gw-verification-link-wrap" hidden><a id="gw-verification-link" target="_blank" rel="noopener">Open viewer verification page</a><span class="hint"> Share this link in Kick chat so pending viewers can verify.</span></p>
 
-          <div class="gw-actions">
-            <button class="btn btn--accent" id="gw-btn-listen" type="submit" disabled>
-              <span id="gw-listen-btn-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14a8 8 0 0 1 16 0"/><path d="M4 14v3a2 2 0 0 0 2 2h1v-5H4Z"/><path d="M20 14v3a2 2 0 0 1-2 2h-1v-5h3Z"/></svg> <span id="gw-listen-btn-label">Start giveaway</span></span>
-            </button>
-          </div>
-          <p class="hint">Entries keep collecting on our servers even if you close or refresh this page.</p>
         </form>
       </section>
     </div>
@@ -485,7 +493,7 @@ ${giveawaysSubnavHtml(active)}`}
         <div class="v3-section-head">
           <div>
             <h2>Entrants (<span id="gw-count-header">0</span>)</h2>
-            <p class="v3-head-sub">Viewers who typed the keyword in your Kick chat during this giveaway.</p>
+            <p class="v3-head-sub">Collect entries from chat or add viewer names here.</p>
           </div>
           <div class="gw-entrants-tools">
             <label class="sr-only" for="gw-search-entrants">Search entrants</label>
@@ -493,6 +501,15 @@ ${giveawaysSubnavHtml(active)}`}
             <button class="btn btn--sm btn--ghost" id="gw-btn-export" type="button">Export CSV</button>
           </div>
         </div>
+
+        <form id="gw-add-entrant-form" class="gw-add-entrant-form" hidden>
+          <label for="gw-add-entrant-name">Add entrant</label>
+          <div class="gw-add-entrant-row">
+            <input id="gw-add-entrant-name" name="username" type="text" maxlength="40" autocomplete="off" required />
+            <button class="btn btn--accent" type="submit">Add</button>
+          </div>
+          <p id="gw-add-entrant-error" class="gw-add-entrant-error" role="alert" aria-live="assertive" hidden></p>
+        </form>
 
         <div class="v3-table-scroll">
           <table class="v3-table">
@@ -511,7 +528,7 @@ ${giveawaysSubnavHtml(active)}`}
         </div>
 
         <div class="v3-state-inline" id="gw-entrants-empty" role="status">
-          <span class="v3-state-inline-copy"><b>No entrants yet</b><span>Start a giveaway and viewers who type the keyword in your Kick chat will appear here.</span></span>
+          <span class="v3-state-inline-copy"><b>No entrants yet</b><span>Start a giveaway, then add viewer names or collect entries from Kick chat.</span></span>
         </div>
       </section>
     </div>

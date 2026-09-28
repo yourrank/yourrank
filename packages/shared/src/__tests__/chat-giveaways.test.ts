@@ -104,6 +104,7 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
     if (sql.startsWith("SELECT gs.id")) {
       const [provider, channel] = params as [string, string];
       expect(provider).toBe("kick");
+      expect(sql).toContain("AND gs.provider = $1");
       return (sessionsByChannel[channel] || []).map((s) => ({
         ...s, winner_entry_id: null, winner_confirmed_at: null, winner_provider_user_id: null,
       }));

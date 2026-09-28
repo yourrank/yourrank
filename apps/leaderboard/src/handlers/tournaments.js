@@ -712,20 +712,39 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
 }
 
 /**
- * Insert (or reactivate) one entry under the tournament's row lock. Shared by
- * the dashboard endpoint and the Kick chat webhook ingest; signups must be
- * open regardless of the entry source.
+ * Insert (or reactivate) one entry under the tournament's row lock. The
+ * dashboard may add entries before signups open, but chat remains open-only.
  */
-export async function addTournamentEntryTx(tx, tournamentId, { displayName, viewerId, source, trustScore, altFlag, altReason }) {
+export async function addTournamentEntryTx(tx, tournamentId, {
+  displayName,
+  viewerId,
+  source,
+  trustScore,
+  altFlag,
+  altReason,
+  allowClosedSignups = false,
+}) {
   const tournament = await tx.one(
-    `SELECT id, signup_state, entry_cap
+    `SELECT id, signup_state, entry_cap, status
        FROM tournaments
       WHERE id=$1
       FOR UPDATE`,
     [tournamentId]
   );
   if (!tournament) return { error: "Tournament not found.", status: 404 };
-  if (tournament.signup_state !== "open") {
+  if (["completed", "cancelled"].includes(tournament.status)) {
+    return { error: "Tournament is already finished.", status: 409 };
+  }
+  if (allowClosedSignups) {
+    if (!["closed", "open", "locked"].includes(tournament.signup_state)) {
+      return { error: "Tournament signups are not open.", status: 409 };
+    }
+    const matches = await tx.one(
+      "SELECT count(*)::integer AS count FROM tournament_matches WHERE tournament_id=$1",
+      [tournament.id]
+    );
+    if ((matches?.count || 0) > 0) return { error: "The bracket already exists.", status: 409 };
+  } else if (tournament.signup_state !== "open") {
     return { error: "Tournament signups are not open.", status: 409 };
   }
   if (isReservedName(displayName)) {
@@ -765,12 +784,12 @@ export async function addTournamentEntryTx(tx, tournamentId, { displayName, view
   if (tournament.entry_cap && (active?.count || 0) >= tournament.entry_cap) {
     // A full tournament may never stay open; the FOR UPDATE row lock already
     // serialized this entrant behind the one that took the last slot.
-    await lockSignups();
+    if (tournament.signup_state === "open") await lockSignups();
     return { error: "Tournament signups are full.", status: 409 };
   }
   const status = "pending";
   if (tournament.entry_cap && (active?.count || 0) + 1 >= tournament.entry_cap) {
-    await lockSignups();
+    if (tournament.signup_state === "open") await lockSignups();
   }
 
   if (existing) {
@@ -891,12 +910,14 @@ export async function handleAddTournamentEntry(request, env, deps = {}) {
       trustScore,
       altFlag,
       altReason,
+      allowClosedSignups: true,
     }));
   } catch (error) {
-    if (error?.code === "23505") return bad("This name is already entered.", 409);
+    if (error?.code === "23505") return bad(`${displayName} is already entered.`, 409);
     throw error;
   }
   if (result.error) return bad(result.error, result.status);
+  if (result.duplicate) return bad(`${displayName} is already entered.`, 409);
   if (!result.duplicate) {
     await logAudit({
       actorId: user.id,

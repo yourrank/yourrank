@@ -92,8 +92,9 @@ const ENTRANTS = [
   { id: "e3", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u3", username: "charlie", avatar_url: null, message: "!win", badges: [], entered_at: "2026-09-28T00:00:02Z", eligibility_status: "eligible" },
 ];
 
-const server = { session: null, entries: [], draws: [], requests: [], predictions: null, predictionCreateResponse: null };
+const server = { session: null, entries: [], draws: [], requests: [], predictions: null, predictionCreateResponse: null, connection };
 function resetServer({ session, entries } = {}) {
+  server.connection = connection;
   server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
   server.entries = (entries || ENTRANTS).map((e) => ({ ...e }));
   server.draws.length = 0;
@@ -103,7 +104,7 @@ function resetServer({ session, entries } = {}) {
 }
 const winnerEntry = () => server.entries.find((e) => e.id === server.session?.winner_entry_id) || null;
 function statePayload() {
-  return { ok: true, connection, session: server.session, entries: server.entries, winner: winnerEntry() };
+  return { ok: true, connection: server.connection, session: server.session, entries: server.entries, winner: winnerEntry() };
 }
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -115,7 +116,29 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
   if (path === "/api/giveaways/chat") return json(statePayload());
   if (path === "/api/giveaways/chat/start") {
-    Object.assign(server.session, { status: "active", keyword: body?.keyword || "!win", rules: body?.rules || {} });
+    server.session ||= { id: "gs-1", site_id: "site-1", winner_entry_id: null };
+    Object.assign(server.session, {
+      status: "active",
+      provider: body?.mode === "manual" ? "manual" : "kick",
+      keyword: body?.mode === "manual" ? "manual" : body?.keyword || "!win",
+      rules: body?.rules || {},
+    });
+    return json(statePayload());
+  }
+  if (path === "/api/giveaways/chat/entries/add") {
+    const username = String(body?.username || "").trim();
+    server.entries.push({
+      id: `manual-${server.entries.length + 1}`,
+      giveaway_session_id: server.session?.id,
+      provider: "manual",
+      provider_user_id: `manual:${username.toLowerCase()}`,
+      username,
+      avatar_url: null,
+      message: "",
+      badges: [],
+      entered_at: new Date(now).toISOString(),
+      eligibility_status: "eligible",
+    });
     return json(statePayload());
   }
   if (path === "/api/giveaways/chat/draw") {
@@ -259,6 +282,70 @@ describe("Giveaway draw flow", () => {
     }
     await clock.tick(950);
     expect($id("gw-winner-modal").hidden).toBe(false);
+  });
+
+  it("starts a manual giveaway and adds dashboard-entered viewers without Kick links", async () => {
+    server.session = null;
+    server.entries = [];
+    server.connection = { connected: false, chatReady: false, channelName: null };
+    enter();
+    await clock.tick(50);
+
+    expect($id("gw-manual-start-hint").hidden).toBe(false);
+    expect($id("gw-keyword-field").hidden).toBe(true);
+    expect($id("gw-btn-listen").disabled).toBe(false);
+    expect($id("gw-listen-btn-label").textContent).toBe("Start manual giveaway");
+    expect($id("gw-entry-modes").hidden).toBe(true);
+    expect($id("gw-kick-eligibility-section").hidden).toBe(true);
+    expect($id("gw-winner-verification-section").hidden).toBe(true);
+    expect($id("gw-anti-abuse-section").hidden).toBe(true);
+    expect($id("gw-rules-panel").open).toBe(false);
+    expect($id("gw-advanced-options").open).toBe(false);
+
+    $id("gw-advanced-options").open = true;
+    $id("gw-opt-skip-past").checked = true;
+    $id("gw-opt-skip-past").dispatchEvent(new window.Event("change", { bubbles: true }));
+    document.querySelector('input[name="gw-winner-repeat"][value="again"]').click();
+    expect($id("gw-rules-summary").textContent).toBe("Anyone in chat · Can win again · Exclude past winners · No chat response");
+
+    $id("gw-btn-listen").click();
+    await flushMicrotasks();
+    const startRequest = requestsTo("/api/giveaways/chat/start")[0];
+    expect(startRequest.body.mode).toBe("manual");
+    expect(startRequest.body.keyword).toBeUndefined();
+    expect(startRequest.body.rules).toMatchObject({
+      entryMode: "chat",
+      subscriberOnly: false,
+      vipOnly: false,
+      onePerIp: false,
+      winnerMustRespond: false,
+      responseTimeout: 60,
+      autoReroll: false,
+      winnerRepeat: "again",
+      excludePreviousWinners: true,
+    });
+    expect(server.session.provider).toBe("manual");
+    expect(server.session.keyword).toBe("manual");
+    expect($id("gw-status-text").textContent).toBe("LIVE");
+    expect($id("gw-stat-keyword").textContent).toBe("Manual");
+    expect($id("gw-add-entrant-form").hidden).toBe(false);
+    expect($id("gw-layout").classList.contains("is-live")).toBe(true);
+
+    const input = $id("gw-add-entrant-name");
+    input.value = "Alex Rivera";
+    $id("gw-add-entrant-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+    await flushMicrotasks();
+    const addRequest = requestsTo("/api/giveaways/chat/entries/add")[0];
+    expect(addRequest.body).toMatchObject({ sessionId: "gs-1", username: "Alex Rivera", siteId: "site-1" });
+    expect(input.value).toBe("");
+    expect(document.activeElement).toBe(input);
+
+    const row = $id("entrant-manual-1");
+    expect(row.querySelector("a")).toBeNull();
+    expect(row.querySelector(".gw-entrant-name").tagName).toBe("SPAN");
+    expect(row.querySelector(".gw-entrant-avatar").src.startsWith("data:image/svg+xml")).toBe(true);
+    expect(row.querySelector(".gw-trust-badge").textContent).toBe("Added manually");
+    expect(row.querySelector(".gw-entrant-msg").textContent).toBe("—");
   });
 
   it("locks prediction entry points for a free owner while preserving the page", async () => {

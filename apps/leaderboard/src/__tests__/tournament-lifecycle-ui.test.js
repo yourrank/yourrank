@@ -214,7 +214,7 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-count")).toBe("0");
     expect(text("tournament-primary")).toBe("Open signups");
     expect($id("tournament-entries-empty").textContent).toContain("No entries yet.");
-    expect($id("tournament-entries-empty").textContent).toContain("Open signups when you're ready for viewers to join.");
+    expect($id("tournament-entries-empty").textContent).toContain("Add players below, or open signups to collect them from Kick chat.");
   });
 
   it("sends a custom signup limit independently of the bracket size", async () => {
