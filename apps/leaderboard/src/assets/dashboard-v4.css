@@ -1105,6 +1105,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] #acc-app > .v3-head + .v3-tabs,
 .v3-dash[data-auth-workspace] .v3-analytics-page > .v3-tabs,
 .v3-dash[data-auth-workspace] .cr-workspace-content > .v3-tabs,
+.v3-dash[data-auth-workspace] .act-workspace-content > .v3-tabs,
 .v3-dash[data-auth-workspace] #gw-app > .v3-tabs {
   position: sticky;
   top: calc(var(--ws-topbar-h) + var(--sticky-head-offset, 0px));
@@ -1123,6 +1124,7 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   top: var(--ws-topbar-h);
   z-index: 20;
 }
+.v3-dash[data-auth-workspace] .act-workspace-content > .v3-head { margin-bottom: 0; }
 .v3-dash[data-auth-workspace] .cr-workspace-content #cr-app > .v3-head {
   position: static;
 }

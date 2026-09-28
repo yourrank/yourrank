@@ -69,7 +69,11 @@ globalThis.fetch = async (input) => {
   if (path === "/api/tournaments") return json({ ok: true, tournaments: [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
   if (path.endsWith("/entries")) return json({ ok: true, entries: [], counts: { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
   if (path.endsWith("/bracket")) return json({ ok: true, tournament, matches: [] });
-  if (path === "/api/activities") return json({ activities: [activity], total: 1, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+  if (path === "/api/activities") {
+    const state = new URLSearchParams(raw.split("?")[1]).get("state");
+    const rows = state === "completed" ? [] : [activity];
+    return json({ activities: rows, total: rows.length, page: { hasMore: false, nextCursor: null }, automation: { templates: [], schedules: [], entitlement: { canAutomate: true } } });
+  }
   if (path === "/api/giveaways/chat") return json({ ok: true, state: null, entries: [] });
   if (path === "/api/giveaways/chatroom") return json({ error: "offline" }, 404);
   return json({ ok: true });
@@ -114,10 +118,11 @@ describe("dynamic-section lifecycle", () => {
 
     // Away to Activities: tournaments leave runs, activities enter succeeds.
     expect(await ds.loadDynamicSection("activities", "overview")).toBe(true);
-    expect($id("act-loading").hidden).toBe(true);
-    expect($id("act-error").hidden).toBe(true);
-    expect($id("act-count").textContent.trim()).toBe("1");
-    expect($id("act-list").hidden).toBe(false);
+    expect($id("act-live-loading").hidden).toBe(true);
+    expect($id("act-live-error").hidden).toBe(true);
+    expect($id("act-live-list").hidden).toBe(false);
+    expect($id("act-live-list").children.length).toBe(1);
+    expect($id("act-history-empty").hidden).toBe(false);
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
 
     // Back to Tournaments: re-enter refetches rather than replaying stale DOM.

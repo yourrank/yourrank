@@ -80,6 +80,14 @@ const DROP_COLUMNS = `id, code, points_reward, max_claims, claimed_count, status
 // its total describe the same set.
 const OPEN_DROP_SQL = `d.status='active' AND d.closed_at IS NULL
         AND (d.expires_at IS NULL OR d.expires_at > now())`;
+// Everything dropState() reports as "completed": exhausted, expired, ended by
+// the creator or otherwise no longer active. The exact complement of open so
+// the two filtered lists partition `all`.
+const STATE_SQL = {
+  all: "",
+  open: ` AND ${OPEN_DROP_SQL}`,
+  completed: ` AND NOT (${OPEN_DROP_SQL})`,
+};
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseActivityId(raw) {
@@ -173,8 +181,8 @@ export async function handleGetActivities(request, env, injected = {}) {
   const { cursor, valid } = readListCursor(url);
   if (!valid) return bad("Invalid cursor.", 400);
   const stateParam = String(url.searchParams.get("state") || "all").trim().toLowerCase();
-  if (stateParam !== "all" && stateParam !== "open") return bad("Invalid state filter.", 400);
-  const stateSql = stateParam === "open" ? ` AND ${OPEN_DROP_SQL}` : "";
+  if (!Object.hasOwn(STATE_SQL, stateParam)) return bad("Invalid state filter.", 400);
+  const stateSql = STATE_SQL[stateParam];
   if (cursor) {
     const anchor = await deps.one(
       `SELECT id FROM code_drops WHERE site_id=$1 AND id=$2`,

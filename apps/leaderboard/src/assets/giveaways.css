@@ -2042,121 +2042,46 @@
 .gw-settings:disabled { color: var(--ws-text-soft); }
 #gw-verification-link { overflow-wrap: anywhere; }
 
-/* Engage feature hub: 2x2 card grid at the Giveaways section root. Flat by
-   rule — the card is a bordered surface, the only accent is the icon tint and
-   the status dot. */
-.engage-hub {
+/* Engage overview: one divided list of destinations. Each row is a single
+   link — icon, name, current state, chevron — so the page reads as a status
+   board, not a card grid. Flat: hairline dividers, tinted icon well, badge
+   tone carries state. */
+.engage-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--ws-line); }
+.engage-row { border-bottom: 1px solid var(--ws-line); }
+.engage-row__link {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--ws-space-3, 16px);
-}
-@media (max-width: 900px) {
-  .engage-hub { grid-template-columns: minmax(0, 1fr); }
-}
-.engage-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--ws-surface, #ffffff);
-  border: 1px solid var(--ws-line);
-  border-radius: var(--ws-radius);
-  padding: 20px 24px;
-}
-.engage-card:hover { border-color: var(--ws-line-strong, var(--ws-line)); }
-.engage-card:focus-within {
-  outline: 2px solid var(--ws-focus, var(--ws-accent));
-  outline-offset: 2px;
-}
-/* Stretched link: the whole card navigates, explicit controls sit above. */
-.engage-card__link {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-}
-.engage-card__top,
-.engage-card__foot {
-  position: relative;
-  z-index: 1;
-  pointer-events: none;
-}
-.engage-card__action { pointer-events: auto; }
-.engage-card__top {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ws-space-3);
-}
-.engage-card__icon {
-  flex: 0 0 auto;
-  display: inline-flex;
+  grid-template-columns: 40px minmax(0, 1.1fr) minmax(0, 1.4fr) 20px;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
+  gap: var(--ws-space-4);
+  padding: var(--ws-space-4) var(--ws-space-2);
+  color: inherit;
+  text-decoration: none;
   border-radius: var(--ws-radius-sm);
-  background: var(--ws-accent-soft);
-  color: var(--ws-accent);
+  transition: background-color .15s ease;
 }
-.engage-card__icon svg { width: 22px; height: 22px; }
-.engage-card__text { flex: 1 1 auto; min-width: 0; }
-.engage-card__title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-  color: var(--ws-text);
+.engage-row__link:hover { background: var(--ws-surface-soft); }
+.engage-row__link:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
+.engage-row__icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  background: var(--ws-accent-soft); color: var(--ws-accent);
 }
-.engage-card__desc {
-  margin: var(--ws-space-1, 4px) 0 0;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ws-text-soft);
+.engage-row__icon svg { width: 20px; height: 20px; }
+.engage-row__copy, .engage-row__state { display: grid; gap: 2px; min-width: 0; }
+.engage-row__title { font-weight: 600; color: var(--ws-text); }
+.engage-row__desc, .engage-row__meta { font-size: 13px; line-height: 18px; color: var(--ws-text-soft); }
+.engage-row__state .v3-badge { justify-self: start; }
+.engage-row[data-status="pending"] .v3-badge { color: var(--ws-text-mute); }
+.engage-row[data-status="pending"] .v3-badge-dot { animation: engage-pulse 1.2s ease-in-out infinite; }
+@keyframes engage-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .engage-row[data-status="pending"] .v3-badge-dot { animation: none; } }
+.engage-row__chevron { color: var(--ws-text-mute); display: inline-flex; }
+.engage-row__chevron svg { width: 18px; height: 18px; }
+.engage-row__link:hover .engage-row__chevron { color: var(--ws-text); }
+@media (max-width: 720px) {
+  .engage-row__link { grid-template-columns: 36px minmax(0, 1fr) 20px; grid-template-areas: "icon copy chevron" "icon state chevron"; row-gap: var(--ws-space-2); }
+  .engage-row__icon { grid-area: icon; width: 36px; height: 36px; align-self: start; }
+  .engage-row__copy { grid-area: copy; }
+  .engage-row__state { grid-area: state; }
+  .engage-row__chevron { grid-area: chevron; }
 }
-.engage-card__chevron {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: var(--ws-text-mute, var(--ws-text-soft));
-}
-.engage-card__chevron svg { width: 18px; height: 18px; display: block; }
-.engage-card__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--ws-line);
-}
-.engage-card__status {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ws-space-2, 8px);
-  min-width: 0;
-}
-.engage-card__dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: var(--ws-text-mute, var(--ws-text-soft));
-}
-.engage-card.is-live .engage-card__dot,
-.engage-card.is-done .engage-card__dot { background: var(--ws-success, var(--ok, #16c784)); }
-.engage-card.is-warn .engage-card__dot { background: var(--ws-warning, var(--warn, #f59e0b)); }
-.engage-card.is-done .engage-card__state { color: var(--ws-success-text, var(--ok, #16c784)); }
-.engage-card__state {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--ws-text);
-}
-.engage-card__meta {
-  margin: 2px 0 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ws-text-soft);
-}
-.engage-card__meta span { display: block; }

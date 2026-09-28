@@ -64,9 +64,9 @@ try {
     engageCurrent: !!document.querySelector('[data-nav-group="engage"][data-current-group]'),
     subnavCurrent: (document.querySelector('.gw-subnav [aria-current="page"]')?.getAttribute('href') || "").split('?')[0] || null,
     subnavPresent: !!document.querySelector('.gw-subnav'),
-    actLoading: document.getElementById('act-loading') ? !document.getElementById('act-loading').hidden : null,
-    actError: document.getElementById('act-error') ? !document.getElementById('act-error').hidden : null,
-    actRows: document.querySelectorAll('#act-list .act-row, .act-row').length,
+    actLoading: document.getElementById('act-live-loading') ? !document.getElementById('act-live-loading').hidden : null,
+    actError: document.getElementById('act-live-error') ? !document.getElementById('act-live-error').hidden : null,
+    actRows: document.querySelectorAll('#act-live-list .act-drop').length,
     tournamentTitle: document.getElementById('tournament-title-display')?.textContent.trim() || null,
     tournamentWorkspace: document.getElementById('tournament-workspace') ? !document.getElementById('tournament-workspace').hidden : null,
     tournamentEmpty: document.getElementById('tournament-empty') ? !document.getElementById('tournament-empty').hidden : null,
@@ -135,7 +135,7 @@ try {
   errors = [];
   await ensureEngageExpanded();
   await page.click('.lb-nav[href^="/dashboard/activities"]');
-  await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('act-live-loading')?.hidden === true || document.getElementById('act-live-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('activities-after-tournaments');
   await page.screenshot({ path: `${output}/activities.png`, fullPage: true });
   expectNoErrors('activities');
@@ -244,7 +244,7 @@ try {
   errors = [];
   await ensureEngageExpanded();
   await page.click('.lb-nav[href^="/dashboard/activities"]');
-  await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('act-live-loading')?.hidden === true || document.getElementById('act-live-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('rail-activities');
   errors = [];
   await ensureEngageExpanded();
@@ -260,7 +260,7 @@ try {
   errors = [];
   await ensureEngageExpanded();
   await page.click('.lb-nav[href^="/dashboard/activities"]');
-  await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('act-live-loading')?.hidden === true || document.getElementById('act-live-error')?.hidden === false, null, { timeout: 15000 });
   await activityAssertions('sweep-activities');
 
   errors = [];
@@ -381,7 +381,7 @@ try {
     await tournamentAssertions(`cycle-${i}-tournaments`);
     await ensureEngageExpanded();
     await page.click('.lb-nav[href^="/dashboard/activities"]');
-    await page.waitForFunction(() => document.getElementById('act-loading')?.hidden === true || document.getElementById('act-error')?.hidden === false, null, { timeout: 15000 });
+    await page.waitForFunction(() => document.getElementById('act-live-loading')?.hidden === true || document.getElementById('act-live-error')?.hidden === false, null, { timeout: 15000 });
     await activityAssertions(`cycle-${i}-activities`);
     expectNoErrors(`cycle-${i}`);
   }
