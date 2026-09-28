@@ -117,7 +117,7 @@ describe("Plan limits (shared/plans)", () => {
   });
 
   it("all plan tiers exist", () => {
-    for (const tier of ["free", "pro", "team"] as const) {
+    for (const tier of ["free", "starter", "pro", "team"] as const) {
       expect(getPlanLimit(tier, "players_per_site")).toBeGreaterThan(0);
     }
   });

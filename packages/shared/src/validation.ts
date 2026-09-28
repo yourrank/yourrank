@@ -371,7 +371,7 @@ export const handlerSchemas: Record<string, ZodSchema<any>> = {
   handleAction: z
     .object({
       userId: z.string().uuid(),
-      action: z.enum(["pro", "team", "free", "suspend", "unsuspend", "reset-link"]),
+      action: z.enum(["starter", "pro", "team", "free", "suspend", "unsuspend", "reset-link"]),
       days: optionalNumber(3650),
       amountUsd: optionalNumber(1e9),
       plan: z.string().max(20).optional(),

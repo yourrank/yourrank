@@ -271,7 +271,7 @@ Who is eligible"></textarea></div></div>
   </div>
   <p class="hint" id="odHint">In OBS, add the copied link as a Browser Source sized 1920 × 1080 with “Shutdown source when not visible” unchecked, so it stays live across scene switches.</p>
 </div>
-<div class="empty upsell-card" id="embedObsLock" hidden>Stream overlays are available on Pro and Team. <a href="/dashboard/settings/billing?from=overlay" id="overlayUpgrade">Upgrade your plan</a> to add this leaderboard to OBS, Streamlabs, or another streaming app.</div></div>
+<div class="empty upsell-card" id="embedObsLock" hidden>The branded live overlay is available on Starter and above. Pro and existing Team plans also unlock advanced layouts and positioning. <a href="/dashboard/settings/billing?from=overlay" id="overlayUpgrade">Get Starter</a> to add this leaderboard to OBS, Streamlabs, or another streaming app.</div></div>
 <details class="editor-more" data-editor-more="share-embed"><summary>Embed on a website</summary>
 <div class="field"><span class="hint">Paste this code where you want the leaderboard to appear.</span><div class="embed-code-block" id="embedCodeBlock"><code id="embedCodeInline"></code><button class="embed-copy-btn" id="embedCodeCopy" type="button" aria-label="Copy embed code">Copy</button></div></div>
 <div class="d-flex gap-8 flex-wrap"><label class="chk"><input type="checkbox" id="embedTransparent" /> Transparent background</label><label class="chk"><input type="checkbox" id="embedHideBranding" /> Remove YourRank branding</label></div></details>

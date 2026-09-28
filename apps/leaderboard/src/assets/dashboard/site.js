@@ -13,7 +13,7 @@ import { DashboardRequestError, fetchDashboardJson, withDashboardTimeout } from 
 import { requestBillingRedirect } from "./shell.js";
 import { effectiveBoardRole } from "./role-preview.js";
 import { wirePlanLock, trackFunnel } from "./plan-lock.js";
-import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
+import { PLAN_META, PLAN_PRICING, PLAN_TIERS } from "@yourrank/shared/plans";
 import { planChangeFor, formatPlanPrice } from "@yourrank/shared/plan-changes";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
 import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
@@ -35,7 +35,7 @@ export const DEFAULT_SECTIONS = {
   loyaltyLeaderboard: false,
 };
 
-const PLAN_ORDER = ["free", "pro", "team"];
+const PLAN_ORDER = PLAN_TIERS;
 const DEFAULT_PRIZES = { prizePoolLabel: "Prize pool", payoutsLabel: "Payouts", countdownLabel: "", currency: "$", hidePrizeAmounts: false, payoutNote: "" };
 
 export function isPro() {
@@ -307,8 +307,8 @@ function currentSubscription() {
   if (!sub || !sub.plan || !sub.interval || sub.plan === "free") return null;
   return { plan: sub.plan, interval: sub.interval, status: sub.status, cancelAtPeriodEnd: !!sub.cancel_at_period_end, periodEnd: sub.current_period_end, pending: sub.pending || null };
 }
-function planDefs() {
-  return PLAN_ORDER.map((key) => ({ key, ...PLAN_META[key],
+function planDefs(showTeam = false) {
+  return PLAN_ORDER.filter((key) => showTeam || key !== "team").map((key) => ({ key, ...PLAN_META[key],
     priceStr: `$${billingInterval === "annual" ? PLAN_PRICING[key].effectiveAnnualMonthlyUsd : PLAN_PRICING[key].monthlyUsd}`,
     period: key === "free" ? "forever" : "/month",
     note: key === "free" ? "No card needed" : billingInterval === "annual" ? `$${PLAN_PRICING[key].annualUsd} billed annually` : "Billed monthly",
@@ -450,7 +450,7 @@ function renderPlanCard(p, isCurrent, cta, { accent = false, disabled = false, a
   if (isCurrent) classes.push("plan-card--current", "is-current");
   if (p.highlight) classes.push("plan-card--popular");
   const note = tag ? `<span class="plan-card-note">${esc(tag)}</span>` : p.highlight ? '<span class="plan-card-note">Recommended</span>' : "";
-  const list = p.features.filter((_, index) => p.key === "pro" ? [0, 1, 3, 4].includes(index) : index < 4).map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
+  const list = p.features.filter((_, index) => p.key === "pro" ? [0, 1, 2, 3, 4].includes(index) : index < 4).map((f) => `<li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>${esc(f)}</li>`).join("");
   const ctaEl = `<button class="${accent ? "btn btn--sm btn--accent plan-card-cta" : "btn btn--sm plan-card-cta"}" data-plan="${esc(p.key)}" data-action="${esc(action)}" ${disabled ? "disabled" : ""}>${esc(cta)}</button>`;
   return `<article class="${classes.join(" ")}"><div class="plan-card-head"><div class="plan-card-name">${esc(p.name)}${note}</div><p class="plan-card-sub">${esc(p.positioning)}</p><div class="plan-card-price">${esc(p.priceStr)}<span>${esc(p.period)}</span></div><p class="plan-card-sub">${esc(p.note)}</p></div>${ctaEl}<ul class="plan-card-features">${list}</ul></article>`;
 }
@@ -475,7 +475,7 @@ function subscriberCard(p, current) {
 export function renderPlan() {
   const plan = state.ME.plan || "free";
   const isTrial = state.ME.isTrial;
-  const planNames = { free: "Free", pro: "Pro", team: "Team" };
+  const planNames = { free: "Free", starter: "Starter", pro: "Pro", team: "Team" };
   const currentName = planNames[plan] || plan;
   const expiry = state.ME.planExpiresAt;
   const parsedExpiry = expiry ? (Number(expiry) > 0 ? Number(expiry) : Date.parse(expiry)) : NaN;
@@ -547,10 +547,10 @@ export function renderPlan() {
       const days = Math.floor((expiresMs - Date.now()) / 86_400_000);
       if (days < 0) {
         banner.hidden = false;
-        banner.textContent = "Your plan has expired. Renew to restore Pro features.";
+        banner.textContent = "Your plan has expired. Renew to restore paid features.";
       } else if (days <= 7) {
         banner.hidden = false;
-        banner.textContent = `Your plan expires in ${days} day${days === 1 ? "" : "s"}. Renew to keep your Pro features.`;
+        banner.textContent = `Your plan expires in ${days} day${days === 1 ? "" : "s"}. Renew to keep your paid features.`;
       } else {
         banner.hidden = true;
         banner.textContent = "";
@@ -564,7 +564,7 @@ export function renderPlan() {
   const grid = $("planGrid");
   if (grid) {
     const currentIdx = PLAN_ORDER.indexOf(plan);
-    grid.innerHTML = planDefs().map((p) => {
+    grid.innerHTML = planDefs(plan === "team").map((p) => {
       if (current) {
         const card = subscriberCard(p, current);
         return renderPlanCard(p, !!card.isCurrent, card.cta, card);
@@ -766,7 +766,7 @@ export function collect({ reportPlayerErrors = true } = {}) {
   }
   if (state.ACTIVE_SITE_ID) out.siteId = state.ACTIVE_SITE_ID;
   if (state.SITE_UPDATED_AT) out.expectedUpdatedAt = state.SITE_UPDATED_AT;
-  if (state.ME && state.ME.plan !== "free") {
+  if (isPro()) {
     out.branding = {
       template: state.CURRENT_BRANDING?.template || "cyber_arcade",
       font: $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter",
@@ -1782,7 +1782,7 @@ subscribe((keys) => {
 export function applyTheme(accentA, label, font = null) {
   const selectedFont = font || $("f_font")?.value || state.CURRENT_BRANDING?.font || "Inter";
   state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, font: selectedFont };
-  const isPaid = state.ME.plan !== "free";
+  const isPaid = isPro();
   if (isPaid && accentA) {
     state.CURRENT_BRANDING.accentA = accentA;
     if ($("c_a")) $("c_a").value = accentA;
@@ -1801,7 +1801,7 @@ export function applyTheme(accentA, label, font = null) {
 }
 
 export function applyViewerTemplate(value) {
-  if (!state.ME || state.ME.plan === "free") return;
+  if (!isPro()) return;
   const template = resolveViewerTemplate(value);
   if (template.value === resolveViewerTemplate(state.CURRENT_BRANDING?.template).value) return;
   state.CURRENT_BRANDING = { ...state.CURRENT_BRANDING, template: template.value };
@@ -1827,7 +1827,7 @@ export function renderBranding(br) {
     accentB: br.accentB || null,
     font: br.font || "Inter",
   };
-  const paid = state.ME.plan !== "free";
+  const paid = isPro();
   // Branding is edited in Community → Appearance; Site keeps only the viewer
   // template and text style. Both surfaces share the same Pro gate state.
   const appearanceBody = $("appearanceBrandBody");
@@ -2067,10 +2067,10 @@ wireAccentPicker();
 $("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 
 export function renderNotifications(n) {
-  const paid = state.ME.plan !== "free";
+  const paid = isPro();
   $("notifyBody").hidden = !paid; $("notifyLock").hidden = paid;
-  // The Telegram block sits outside #notifyBody, so Free would otherwise keep
-  // live inputs whose only feedback is a 403 after the request fires.
+  // The Telegram block sits outside #notifyBody, so locked plans would otherwise
+  // keep live inputs whose only feedback is a 403 after the request fires.
   for (const id of ["testTelegram", "f_tgChatId", "f_tgNotify", "settingsWebhookEnabled"]) {
     const el = $(id);
     if (el) el.disabled = !paid;
@@ -3103,7 +3103,7 @@ export function renderEmbedShare() {
         upgrade.addEventListener("click", (event) => {
           event.preventDefault();
           trackFunnel("upgrade_clicked", "advanced_overlays");
-          checkout("pro", event.currentTarget);
+          checkout("starter", event.currentTarget);
         });
       }
     }

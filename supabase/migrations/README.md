@@ -30,6 +30,7 @@ The following migrations were consolidated from the previous `db/migrations/` di
 - `20260625000005_rls_fix_anon_access.sql` - Fixes RLS policies that were too permissive (was migration 006). Resolves security issue where anon role had full access to all tables between migrations 003-006.
 - `20260703000003_fix_missing_columns_and_enums.sql` - Fixes missing `suspended` column on sites table and casinos.created_by foreign key (BUG-002, BUG-007)
 - `20260703000004_add_missing_enum_values.sql` - Adds missing enum values for pay_provider ('trial') and plan_tier ('starter') (BUG-003, BUG-004). Note: This migration must run non-transactionally due to Postgres limitations.
+- `20261008000000_plan_tier_starter.sql` - Ensures the Starter tier is available before Pro in the plan_tier enum.
 
 ## Migration Order
 

@@ -54,7 +54,7 @@ const nextPath = safeNextPath(urlParams.get("next") || "");
 document.querySelectorAll("[data-auth-switch]").forEach(link => {
   const target = new URL(link.getAttribute("href"), location.origin);
   if (nextPath) target.searchParams.set("next", nextPath);
-  if (["free", "pro", "team"].includes(planParam)) target.searchParams.set("plan", planParam);
+  if (["free", "starter", "pro", "team"].includes(planParam)) target.searchParams.set("plan", planParam);
   link.href = target.pathname + target.search;
 });
 
@@ -175,7 +175,7 @@ if ((mode === "signup" || mode === "reset") && pwInput) {
 
 const submit = document.getElementById("submit");
 const nameInput = document.getElementById("name");
-const PLAN_NAMES = { free: "Free", pro: "Pro", team: "Team" };
+const PLAN_NAMES = { free: "Free", starter: "Starter", pro: "Pro", team: "Team" };
 if (mode === "signup" && PLAN_NAMES[planParam]) {
   const banner = document.getElementById("planBanner");
   if (banner) {
@@ -247,7 +247,7 @@ form.addEventListener("submit", async (e) => {
         if (fieldBox) {
           const signInParams = new URLSearchParams();
           if (nextPath) signInParams.set("next", nextPath);
-          if (["free", "pro", "team"].includes(planParam)) signInParams.set("plan", planParam);
+          if (["free", "starter", "pro", "team"].includes(planParam)) signInParams.set("plan", planParam);
           const link = document.createElement("a");
           link.href = `/login?email=${encodeURIComponent(payload.email)}${signInParams.size ? `&${signInParams}` : ""}`;
           link.textContent = "Sign in instead";
@@ -290,7 +290,7 @@ form.addEventListener("submit", async (e) => {
     }
     if (mode === "signup") {
       const p = (planParam || "").toLowerCase();
-      if (["pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
+      if (["starter", "pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
       else location.href = nextPath || "/dashboard";
     } else {
       location.href = nextPath || "/dashboard";
@@ -453,7 +453,7 @@ if ((mode === "login" || mode === "signup") && codeForm) {
       if (!data.ok) { showCodeError(codeErr2, status, data); codeVerify.disabled = false; codeVerify.textContent = verifyDone; return; }
       if (isSignup) {
         const p = (planParam || "").toLowerCase();
-        if (["pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
+        if (["starter", "pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
         else location.href = nextPath || "/dashboard";
       } else {
         location.href = nextPath || "/dashboard";

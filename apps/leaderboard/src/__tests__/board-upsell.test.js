@@ -29,9 +29,11 @@ describe("board-limit upsell", () => {
     expect(boardsJs).toContain('else newBtn.setAttribute("aria-expanded", $("boardLimitUpsell")?.hidden ? "false" : "true")');
   });
 
-  it("offers Pro, Team, or support according to the current plan", () => {
+  it("offers Pro to Free and Starter accounts and support to Pro and Team accounts", () => {
     expect(boardsJs).toContain("Pro unlocks up to 3 independent sites.");
-    expect(boardsJs).toContain("Team supports up to 10 independent sites and 5 team seats.");
+    expect(boardsJs).toContain('const planName = plan === "starter" ? "Starter" : "Free"');
+    expect(boardsJs).toContain("Pro includes up to 3 sites. Contact support for higher limits.");
+    expect(boardsJs).toContain("Team includes up to 10 sites. Contact support if you need help consolidating your communities.");
     expect(boardsJs).toContain('cta: "Contact support"');
   });
 });

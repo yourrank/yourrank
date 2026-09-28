@@ -103,7 +103,7 @@ describe("handleCreditsCreateReward Kick connection failures", () => {
     const body = await res.json();
     expect(body.code).toBe("plan_limit_reached");
     expect(body.limit).toBe("active_viewers_30d");
-    expect(body.required_plan).toBe("pro");
+    expect(body.required_plan).toBe("starter");
     expect(deps.oneResponses).toHaveLength(0);
   });
 

@@ -417,6 +417,10 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const freeRes = await handleGetTournaments(new Request("http://localhost/api/tournaments"), mockEnv(), deps);
       expect((await freeRes.json()).entitlement.enabled).toBe(false);
 
+      ownerPlan.plan = "starter";
+      const starterRes = await handleGetTournaments(new Request("http://localhost/api/tournaments"), mockEnv(), deps);
+      expect((await starterRes.json()).entitlement.enabled).toBe(true);
+
       ownerPlan.plan = "pro";
       const proRes = await handleGetTournaments(new Request("http://localhost/api/tournaments"), mockEnv(), deps);
       expect((await proRes.json()).entitlement.enabled).toBe(true);
@@ -565,7 +569,10 @@ describe("Quests, Duels & Tournaments Suite", () => {
       expect(mockOne.mock.calls.at(-1)[1]).toEqual([null, "tourn-1"]);
     });
 
-    it("creates an 8-player single-elimination tournament bracket", async () => {
+    it("allows Starter to create an 8-player single-elimination tournament", async () => {
+      deps.one = (sql, ...a) => String(sql).includes("FROM users")
+        ? Promise.resolve({ plan: "starter", plan_expires_at: null, status: "active" })
+        : mockOne(sql, ...a);
       mockOne.mockResolvedValueOnce({
         id: "tourn-1",
         title: "Valorant 1v1",

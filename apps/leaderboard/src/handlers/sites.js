@@ -575,7 +575,8 @@ export async function handleNotifyTest(request, env, {
   const authorization = await requireSiteCapabilityImpl(user, site, "canRoleManageConnections");
   if (authorization.res) return authorization.res;
   const siteOwner = await oneImpl("SELECT plan, plan_expires_at, status FROM users WHERE id=$1", [site.user_id]);
-  if (effectivePlan(siteOwner) === "free") return bad("Notifications are a Pro feature. Upgrade to unlock.", 403);
+  const plan = effectivePlan(siteOwner);
+  if (plan !== "pro" && plan !== "team") return bad("Notifications are a Pro feature. Upgrade to unlock.", 403);
 
   if (channel === "discord") {
     let webhookUrl = body.webhook_url ? String(body.webhook_url).trim() : null;

@@ -63,6 +63,8 @@ describe("plan change matrix (shared)", () => {
     ["team_annual", "pro_annual", "downgrade", "next_period", "period_end"],
     ["team_annual", "pro_monthly", "downgrade", "next_period", "period_end"],
     ["team_monthly", "pro_annual", "downgrade", "next_period", "period_end"],
+    ["starter_monthly", "pro_monthly", "upgrade", "invoice", "immediate"],
+    ["pro_monthly", "starter_monthly", "downgrade", "next_period", "period_end"],
   ];
   const split = (key) => { const [plan, interval] = key.split("_"); return { plan, interval }; };
   test.each(cases)("%s → %s is %s (%s)", (from, to, kind, proration, timing) => {

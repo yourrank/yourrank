@@ -102,7 +102,7 @@ export interface DbOps {
 }
 
 export interface OperatorSeatUsage {
-  plan: "free" | "pro" | "team";
+  plan: "free" | "starter" | "pro" | "team";
   used: number;
   limit: number;
 }

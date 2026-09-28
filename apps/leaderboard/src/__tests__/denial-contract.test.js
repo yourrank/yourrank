@@ -54,7 +54,7 @@ describe("commercial denial contract (403 + structured body)", () => {
     expect(body.code).toBe("plan_limit_reached");
     expect(body.limit).toBe("reward_mappings");
     expect(body.current_plan).toBe("free");
-    expect(body.required_plan).toBe("pro");
+    expect(body.required_plan).toBe("starter");
     expect(body.usage).toBe(3);
     expect(body.allowance).toBe(3);
     expect(typeof body.error).toBe("string");

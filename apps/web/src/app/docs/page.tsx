@@ -91,7 +91,7 @@ export default function DocsPage() {
             </Section>
 
             <Section id="obs-setup" title="OBS overlay setup">
-              <p className={P}>The overlay is a browser source (Pro and Team plans). In OBS Studio or Streamlabs:</p>
+              <p className={P}>The branded overlay is a browser source. Pro and existing Team accounts can also use its advanced layouts and positioning. In OBS Studio or Streamlabs:</p>
               <ol className="mt-4 max-w-2xl list-decimal space-y-2 pl-5 leading-relaxed text-devin-ink-soft">
                 <li>Add a source &rarr; <b className="font-medium text-devin-ink">Browser</b>.</li>
                 <li>Set the URL to your overlay address: <span className={IC}>https://yourrank.site/&#123;your-handle&#125;/overlay</span>.</li>
@@ -108,7 +108,7 @@ export default function DocsPage() {
             </Section>
 
             <Section id="custom-domain" title="Custom domain">
-              <p className={P}>Pro and Team plans can serve the site from your own domain (for example <span className={IC}>leaderboard.yourstream.com</span>):</p>
+              <p className={P}>Pro and existing Team accounts can serve the site from your own domain (for example <span className={IC}>leaderboard.yourstream.com</span>):</p>
               <ol className="mt-4 max-w-2xl list-decimal space-y-2 pl-5 leading-relaxed text-devin-ink-soft">
                 <li>Add your domain in the dashboard&apos;s site settings.</li>
                 <li>At your DNS provider (Cloudflare, Namecheap, etc.), create a <span className={IC}>CNAME</span> record pointing your subdomain at the target shown in the dashboard.</li>

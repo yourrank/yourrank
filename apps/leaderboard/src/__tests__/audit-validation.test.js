@@ -286,7 +286,7 @@ describe("saveSite Free player limit", () => {
     const result = await saveSite(mockEnv(), USER_ROW, { players: players(11) }, "site-1");
     expect(result).toMatchObject({
       code: "player_limit",
-      denial: { code: "plan_limit_reached", limit: "players_per_site", required_plan: "pro", current_plan: "free", allowance: 10, usage: 11 },
+      denial: { code: "plan_limit_reached", limit: "players_per_site", required_plan: "starter", current_plan: "free", allowance: 10, usage: 11 },
     });
   });
 

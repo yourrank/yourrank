@@ -43,7 +43,7 @@ export async function handlePolarCheckout(request, env, deps = {}) {
   if (res) return res;
   if (user.status === "suspended") return bad("This account is suspended.", 403);
   const body = await request.json().catch(() => null);
-  if (!["pro", "team"].includes(body?.plan) || !["monthly", "annual"].includes(body?.interval)) return bad("Choose a valid plan and billing interval.", 400);
+  if (!["starter", "pro", "team"].includes(body?.plan) || !["monthly", "annual"].includes(body?.interval)) return bad("Choose a valid plan and billing interval.", 400);
   try {
     const config = polarConfig(env);
     if (!config.options[body.plan][body.interval]) return bad(UNAVAILABLE, 503);
@@ -161,7 +161,7 @@ export async function handlePolarPlanChange(request, env, deps = {}) {
   const target = keep ? null : { plan: body?.plan, interval: body?.interval };
   if (!keep) {
     if (target.plan === "free") target.interval = null;
-    else if (!["pro", "team"].includes(target.plan) || !["monthly", "annual"].includes(target.interval)) return bad("Choose a valid plan and billing interval.", 400);
+    else if (!["starter", "pro", "team"].includes(target.plan) || !["monthly", "annual"].includes(target.interval)) return bad("Choose a valid plan and billing interval.", 400);
   }
   const config = polarConfig(env);
   if (!config.ready) return bad(UNAVAILABLE, 503);
@@ -285,7 +285,7 @@ export async function syncPolarCustomer(tx, env, userId, requestApi = polarReque
   // Preserve valid manual/trial grants. Polar revocation only removes Polar access.
   const entitlement = await tx.one(`SELECT plan, current_period_end FROM subscriptions
     WHERE user_id=$1 AND status IN ('active','trialing','past_due') AND current_period_end > now()
-    ORDER BY CASE plan WHEN 'team' THEN 2 WHEN 'pro' THEN 1 ELSE 0 END DESC, current_period_end DESC LIMIT 1`, [userId]);
+    ORDER BY CASE plan WHEN 'team' THEN 3 WHEN 'pro' THEN 2 WHEN 'starter' THEN 1 ELSE 0 END DESC, current_period_end DESC LIMIT 1`, [userId]);
   await tx.unsafe("UPDATE users SET plan=$2, plan_expires_at=$3, updated_at=now() WHERE id=$1", [userId, entitlement?.plan || "free", entitlement?.current_period_end || null]);
   if (customer) {
     const hasLive = subscriptions.some((s) => LIVE_SUB_STATUSES.includes(s.status));

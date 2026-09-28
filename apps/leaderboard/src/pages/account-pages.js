@@ -232,7 +232,7 @@ const teamWidget = `<div class="lb-widget lb-widget--full" id="team">
           <div class="team-head-actions">
             <label for="teamSiteSelector">Selected site <select class="field-select" id="teamSiteSelector"><option value="">Loading sites…</option></select></label>
             <button class="btn btn--accent" id="btnOpenInviteModal" type="button" hidden>Invite member</button>
-            <a class="btn btn--accent" id="teamUpgradeLink" href="/dashboard/settings/billing" hidden>Upgrade to Team</a>
+            <a class="btn btn--accent" id="teamUpgradeLink" href="/help/support?area=billing&amp;return=/dashboard/settings" hidden>Contact support about Team</a>
           </div>
         </div>
 

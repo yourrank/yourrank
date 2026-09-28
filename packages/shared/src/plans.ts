@@ -3,10 +3,11 @@
 // Both Workers and the marketing app consume this module.
 // ------------------------------------------------------------------
 
-export type PlanTier = "free" | "pro" | "team";
+export type PlanTier = "free" | "starter" | "pro" | "team";
 export type BillingInterval = "monthly" | "annual";
 
-export const PLAN_TIERS: readonly PlanTier[] = ["free", "pro", "team"];
+export const PLAN_TIERS: readonly PlanTier[] = ["free", "starter", "pro", "team"];
+export const PUBLIC_PLAN_TIERS: readonly PlanTier[] = ["free", "starter", "pro"];
 
 export function isPlanTier(value: unknown): value is PlanTier {
   return typeof value === "string" && PLAN_TIERS.includes(value as PlanTier);
@@ -40,6 +41,19 @@ export const PLAN_LIMITS: Record<PlanTier, Record<PlanLimitKey, number>> = {
     telegram_bots: 1,
     telegram_offers: 2,
     telegram_interactions_per_month: 1_000,
+    broadcast_deliveries_per_month: 0,
+    operator_seats: 1,
+  },
+  starter: {
+    sites: 1,
+    players_per_site: 100,
+    active_viewers_30d: 250,
+    history_days: 90,
+    reward_mappings: 10,
+    shop_items: 20,
+    telegram_bots: 1,
+    telegram_offers: 5,
+    telegram_interactions_per_month: 5_000,
     broadcast_deliveries_per_month: 0,
     operator_seats: 1,
   },
@@ -120,8 +134,8 @@ export const FEATURE_MIN_TIER: Record<PlanFeature, PlanTier> = {
   advanced_overlays: "pro",
   activity_automation: "pro",
   advanced_giveaways: "pro",
-  predictions: "pro",
-  tournaments: "pro",
+  predictions: "starter",
+  tournaments: "starter",
   wheel: "pro",
   quests: "pro",
   duels: "pro",
@@ -180,12 +194,14 @@ export const ACTIVE_VIEWER_GRACE_DAYS = 14;
 
 export const CREDITS_PENDING_REDEMPTIONS_LIMITS: Record<PlanTier, number> = {
   free: 20,
+  starter: 100,
   pro: 500,
   team: 2_500,
 };
 
 export const CREDITS_REDEMPTIONS_PER_30D_LIMITS: Record<PlanTier, number> = {
   free: 50,
+  starter: 250,
   pro: 2_000,
   team: 10_000,
 };
@@ -200,6 +216,7 @@ export const PLAN_PRICING: Record<PlanTier, {
   effectiveAnnualMonthlyUsd: number;
 }> = {
   free: { monthlyUsd: 0, annualUsd: 0, effectiveAnnualMonthlyUsd: 0 },
+  starter: { monthlyUsd: 12, annualUsd: 120, effectiveAnnualMonthlyUsd: 10 },
   pro: { monthlyUsd: 24, annualUsd: 240, effectiveAnnualMonthlyUsd: 20 },
   team: { monthlyUsd: 69, annualUsd: 690, effectiveAnnualMonthlyUsd: 57.5 },
 };
@@ -207,6 +224,7 @@ export const PLAN_PRICING: Record<PlanTier, {
 /** Monthly prices retained as a derived compatibility view for existing consumers. */
 export const PLAN_PRICES: Record<PlanTier, number> = {
   free: PLAN_PRICING.free.monthlyUsd,
+  starter: PLAN_PRICING.starter.monthlyUsd,
   pro: PLAN_PRICING.pro.monthlyUsd,
   team: PLAN_PRICING.team.monthlyUsd,
 };
@@ -234,14 +252,28 @@ export const PLAN_META: Record<PlanTier, {
     cta: "Start free",
     availability: "",
   },
+  starter: {
+    name: "Starter",
+    positioning: "Run live community games",
+    highlight: false,
+    features: [
+      `Everything in Free, bigger: ${PLAN_LIMITS.starter.sites} site · ${PLAN_LIMITS.starter.players_per_site} players · ${PLAN_LIMITS.starter.active_viewers_30d} viewers`,
+      "Predictions and tournaments",
+      `${PLAN_LIMITS.starter.reward_mappings} reward mappings · ${PLAN_LIMITS.starter.shop_items} shop items`,
+      `${PLAN_LIMITS.starter.telegram_offers} Telegram offers · ${PLAN_LIMITS.starter.telegram_interactions_per_month.toLocaleString("en-US")} interactions/mo`,
+      `Branded OBS overlay · ${PLAN_LIMITS.starter.history_days} days of history`,
+    ],
+    cta: "Get Starter",
+    availability: "",
+  },
   pro: {
     name: "Pro",
     positioning: "Grow and automate your community",
     highlight: true,
     features: [
-      `Everything in Free, at scale: ${PLAN_LIMITS.pro.sites} sites · ${PLAN_LIMITS.pro.players_per_site.toLocaleString("en-US")} players · ${PLAN_LIMITS.pro.active_viewers_30d.toLocaleString("en-US")} viewers`,
+      `Everything in Starter, at scale: ${PLAN_LIMITS.pro.sites} sites · ${PLAN_LIMITS.pro.players_per_site.toLocaleString("en-US")} players · ${PLAN_LIMITS.pro.active_viewers_30d.toLocaleString("en-US")} viewers`,
       "Activity templates, scheduling and automation",
-      "Predictions, tournaments, wheel, quests, duels, battlepass",
+      "Wheel, quests, duels and battlepass",
       `Telegram broadcasts, scheduling, postbacks and segmentation (${PLAN_LIMITS.pro.broadcast_deliveries_per_month.toLocaleString("en-US")} deliveries/mo)`,
       "Custom domain, signed API and no YourRank branding",
       `Advanced analytics · 12 months of history`,
@@ -296,7 +328,7 @@ export function computeProratedExpiry(args: {
   const targetPrice = Number(prices[targetPlan]) || 0;
   const targetDaily = targetPrice / periodDays;
   const currentPlanStr = String(currentPlan || "free").toLowerCase();
-  const currentIsPaid = currentPlanStr === "pro" || currentPlanStr === "team";
+  const currentIsPaid = tierIndex(currentPlanStr) > 0;
 
   let baseMs = nowMs;
   let creditMs = 0;

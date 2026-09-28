@@ -9,7 +9,7 @@ const FREE_VIEWERS = getPlanLimit("free", "active_viewers_30d").toLocaleString("
 
 export const metadata: Metadata = {
   title: "Pricing · YourRank",
-  description: "Free, Pro, and Team plans for creator communities, with clear active-viewer and operational limits.",
+  description: "Free, Starter, and Pro plans for creator communities, with clear active-viewer and operational limits.",
   alternates: { canonical: "https://yourrank.site/pricing" },
 };
 
@@ -23,8 +23,8 @@ const BILLING_FAQ = [
     a: `You get a 14-day grace period. Viewers keep access, memberships, credits, orders, and participation. If usage remains over ${FREE_VIEWERS} after grace, only new creator-side expansion is paused until usage falls or the plan is upgraded.`,
   },
   {
-    q: "Can I pay for Pro or Team today?",
-    a: "Yes. Card checkout with Polar is live for monthly and annual billing; paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal.",
+    q: "Can I pay for Starter or Pro today?",
+    a: "Yes. Card checkout with Polar is live for monthly and annual billing; paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal. Team is not currently sold; existing Team accounts remain supported.",
   },
   {
     q: "Do viewers pay?",

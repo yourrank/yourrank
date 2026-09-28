@@ -32,7 +32,7 @@ async function init() {
   if (!me.ok || !me.user) { location.href = "/login"; return; }
   $("userEmail").textContent = me.user.email;
   const [ov] = await Promise.all([api("/api/admin/overview")]); // 403s here for non-admins
-  $("s_users").textContent = ov.users; $("s_pro").textContent = ov.pro;
+  $("s_users").textContent = ov.users; $("s_pro").textContent = ov.paid;
   $("s_leads").textContent = ov.leads; $("s_rev").textContent = "$" + Number(ov.revenue || 0).toLocaleString();
   await Promise.all([loadUsers(), loadLeads(), loadPayments(), loadSupport(), loadIdentity(), loadFeatures(), loadAudit()]);
   $("loading").hidden = true; $("panel").hidden = false;
@@ -133,7 +133,7 @@ async function loadUsers(page) {
   $("usersEmpty").hidden = rows.length > 0;
   $("usersBody").innerHTML = rows.map((u) => {
     const plan = String(u.plan || "free").toLowerCase();
-    const paid = ["pro", "team"].includes(plan) && (u.plan_expires_at == null || Number(u.plan_expires_at) > Date.now());
+    const paid = ["starter", "pro", "team"].includes(plan) && (u.plan_expires_at == null || Number(u.plan_expires_at) > Date.now());
     let planTxt = "free";
     if (paid) {
       planTxt = plan + (u.plan_expires_at ? " · until " + when(u.plan_expires_at) : " · no expiry");
@@ -149,6 +149,7 @@ async function loadUsers(page) {
 <td class="ta-r">${u.player_count ?? 0}</td>
 <td>${when(u.created_at)}</td>
 <td class="actions">
+<button class="btn btn--xs" data-act="starter" data-id="${u.id}" title="Activate/extend Starter 31 days">+31d Starter</button>
 <button class="btn btn--xs" data-act="pro" data-id="${u.id}" title="Activate/extend Pro 31 days">+31d Pro</button>
 <button class="btn btn--xs" data-act="free" data-id="${u.id}" title="Downgrade to Free">Free</button>
 ${u.status === "suspended"
@@ -184,8 +185,9 @@ async function action(btn) {
   btn.disabled = true;
   try {
     const body = { userId, action: act };
-    if (act === "pro") {
-      const amt = await showPromptModal("Activate Pro plan", "Amount they paid you in USD (for the revenue ledger — 0 if comped):", { confirmText: "Activate", inputType: "number", defaultValue: "29" });
+    if (act === "starter" || act === "pro") {
+      const name = act === "starter" ? "Starter" : "Pro";
+      const amt = await showPromptModal(`Activate ${name} plan`, "Amount they paid you in USD (for the revenue ledger — 0 if comped):", { confirmText: "Activate", inputType: "number", defaultValue: act === "starter" ? "12" : "29" });
       if (amt === null) { btn.disabled = false; return; }
       body.amountUsd = Number(amt) || 0;
     }
@@ -199,7 +201,7 @@ async function action(btn) {
     }
     await loadUsers();
     const ov = await api("/api/admin/overview");
-    $("s_pro").textContent = ov.pro; $("s_rev").textContent = "$" + Number(ov.revenue || 0).toLocaleString();
+    $("s_pro").textContent = ov.paid; $("s_rev").textContent = "$" + Number(ov.revenue || 0).toLocaleString();
   } catch (error) {
     showToast(error?.message || "Could not complete that action. Try again.", "error");
     btn.disabled = false;

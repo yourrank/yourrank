@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
+import { PLAN_META, PLAN_PRICING, PUBLIC_PLAN_TIERS } from "@yourrank/shared/plans";
 
 const PROOF_ITEMS = [
   "Branded community sites",
@@ -175,7 +175,7 @@ export function ComparisonSection() {
   );
 }
 
-const PLAN_ORDER = ["free", "pro", "team"] as const;
+const PLAN_ORDER = PUBLIC_PLAN_TIERS;
 
 export function PricingSnapshot() {
   return (
@@ -226,7 +226,7 @@ export function PricingSnapshot() {
           })}
         </div>
         <p className="mt-5 font-mono text-[10px] uppercase tracking-[0.1em] text-devin-ink-soft">
-          Free is available now. Recurring paid checkout will open only after a verified billing provider is configured.
+          Starter and Pro checkout is live, with access activated after verified payment. Team is not currently sold; existing Team accounts remain supported.
         </p>
       </div>
     </section>

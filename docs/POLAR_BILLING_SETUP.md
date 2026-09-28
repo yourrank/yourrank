@@ -4,20 +4,20 @@ The integration is implemented in the Leaderboard Worker. The dashboard remains 
 
 ## Connect the account
 
-1. Start with a Polar **sandbox** organization. Create four distinct recurring, fixed-price, USD products. Use a single price per product, no provider trial, and one month/year per billing period.
+1. Start with a Polar **sandbox** organization. Create four distinct recurring, fixed-price, USD products for Starter and Pro. Use a single price per product, no provider trial, and one month/year per billing period. Team products are archived in the production Polar organization and Team is not currently sold; existing Team accounts remain supported.
 
    | Product | Price | Interval | Worker variable |
    | --- | ---: | --- | --- |
+   | Starter monthly | $12 | Month | `POLAR_PRODUCT_STARTER_MONTHLY` |
+   | Starter annual | $120 | Year | `POLAR_PRODUCT_STARTER_ANNUAL` |
    | Pro monthly | $24 | Month | `POLAR_PRODUCT_PRO_MONTHLY` |
    | Pro annual | $240 | Year | `POLAR_PRODUCT_PRO_ANNUAL` |
-   | Team monthly | $69 | Month | `POLAR_PRODUCT_TEAM_MONTHLY` |
-   | Team annual | $690 | Year | `POLAR_PRODUCT_TEAM_ANNUAL` |
 
    These prices come from `packages/shared/src/plans.ts`. The Worker validates each product's price, currency, interval, and organization before creating checkout. Leave an unconfigured interval blank to keep its checkout disabled. Do not reuse one product ID for multiple options or replace IDs used by existing subscriptions without a migration.
 
 2. Add an organization access token with `checkouts:read`, `checkouts:write`, `customer_sessions:write`, `customers:read`, `orders:read`, `products:read`, `subscriptions:read`, and `subscriptions:write` permissions (`subscriptions:write` is required for in-app plan changes, which call `PATCH /v1/subscriptions/{id}`). Set `POLAR_ACCESS_TOKEN` as a Worker secret. Never put this token in client code or commit it. A missing scope surfaces in Worker logs as `PolarRequestError status=403 detail={"error":"insufficient_scope",...}` on `[polar.webhook]` / `[polar.plan_change]` lines; webhooks then return 500 so Polar retries them once the scope is added.
 
-3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the product IDs above, `POLAR_PAST_DUE_GRACE_DAYS` (must mirror the Polar organization's benefit-revocation grace period: 0, 2, 7, 14 or 21 days), and `PUBLIC_BASE_URL` to the canonical public origin. The grace window is anchored to the first locally observed `past_due` reconciliation (`subscriptions.past_due_since`) and is not extended by later webhooks or re-syncs.
+3. Set `POLAR_SERVER=sandbox`, `POLAR_ORGANIZATION_ID`, the Starter and Pro product IDs above, `POLAR_PAST_DUE_GRACE_DAYS` (must mirror the Polar organization's benefit-revocation grace period: 0, 2, 7, 14 or 21 days), and `PUBLIC_BASE_URL` to the canonical public origin. Production Starter IDs are configured; staging Starter IDs remain blank until staging products are created. Production Team IDs remain blank because those products are archived; the existing staging Team IDs are unchanged. The grace window is anchored to the first locally observed `past_due` reconciliation (`subscriptions.past_due_since`) and is not extended by later webhooks or re-syncs.
 
    | Setting | Staging | Production |
    | --- | --- | --- |
@@ -41,8 +41,8 @@ The integration is implemented in the Leaderboard Worker. The dashboard remains 
 
 Execute with Polar test payment details in sandbox:
 
-- Free account → Pro monthly checkout → payment confirmed → Pro entitlement and payment record.
-- Annual checkout → correct total ($240/$690) and annual period.
+- Free account → Starter monthly checkout → payment confirmed → Starter entitlement and payment record.
+- Starter and Pro annual checkout → correct totals ($120/$240) and annual period.
 - Abandoned checkout → return to Billing without paid access; retry reuses the unexpired session.
 - Existing subscriber → Manage subscription → invoices/payment method/cancellation supported by your Polar portal configuration.
 - In-app plan change (`POST /api/billing/change`, `PATCH /v1/subscriptions/{id}`): upgrade or monthly→annual → `proration_behavior: invoice`, product changes immediately and the prorated difference is invoiced; downgrade or annual→monthly → `next_period`, Polar returns `pending_update` and Billing shows "Scheduled"; paid→Free → `cancel_at_period_end: true`, access continues to period end; Keep current plan → `cancel_at_period_end: false` or `pending_update: null`. Changing plan while a cancellation is scheduled is refused until it is kept. Never a second active subscription. The subscription row caches `billing_interval`/`pending_*` from Polar only; entitlement still comes from plan/status/period.

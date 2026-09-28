@@ -90,12 +90,12 @@ function boardLimitOffer() {
   if (plan === "pro") {
     return {
       title: `You've reached ${limit} sites`,
-      text: "Team supports up to 10 independent sites and 5 team seats.",
-      cta: "View Team plan",
-      href: "/dashboard/settings",
+      text: "Pro includes up to 3 sites. Contact support for higher limits.",
+      cta: "Contact support",
+      href: "/help/support?area=billing&return=/dashboard",
     };
   }
-  const planName = "Free";
+  const planName = plan === "starter" ? "Starter" : "Free";
   return {
     title: "Need another site?",
     text: `${planName} includes ${limit} site. Pro unlocks up to 3 independent sites.`,
