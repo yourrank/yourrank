@@ -93,7 +93,7 @@ export async function handlePolarCheckout(request, env, deps = {}) {
       checkout = await d.request(env, "/checkouts/", { body: {
         products: [mapping.id], external_customer_id: user.id, customer_email: user.email,
         ...(request.headers.get("CF-Connecting-IP") ? { customer_ip_address: request.headers.get("CF-Connecting-IP") } : {}),
-        allow_trial: false, allow_discount_codes: false,
+        allow_trial: false, allow_discount_codes: true,
         success_url: `${returnUrl}?billing=return`, return_url: returnUrl,
       } });
     } catch (error) {
