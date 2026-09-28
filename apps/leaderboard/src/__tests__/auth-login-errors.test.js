@@ -1,7 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
-import { normalizeCommunityHandle, COMMUNITY_HANDLE_HOST } from "@yourrank/shared/community-handle";
 
 // Regression gates for "login fails with no useful feedback" on staging.
 // These run the real src/assets/auth.js against a happy-dom login page and a
@@ -9,12 +8,12 @@ import { normalizeCommunityHandle, COMMUNITY_HANDLE_HOST } from "@yourrank/share
 // element — the form-level #err or a per-field [data-field-err] box — and that
 // the verify-email redirect carries the context the interstitial needs.
 
-const authJsSource = readFileSync(new URL("../assets/auth.js", import.meta.url), "utf8")
-  .replace(/^import \{[^}]*\} from "@yourrank\/shared\/community-handle";\r?\n/, "");
+const authJsSource = readFileSync(new URL("../assets/auth.js", import.meta.url), "utf8");
 
 const LOGIN_FORM_HTML = `
   <h1 id="auth-title">Sign in</h1><p class="sub" id="auth-sub">Welcome back.</p>
   <div class="plan-banner" id="viewerBanner" hidden></div>
+  <input id="codeEmail" type="email" />
   <form id="form" method="POST" action="/api/auth/login" novalidate>
     <input id="email" name="email" type="email" />
     <span class="field-err" id="email-err" data-field-err="email"></span>
@@ -27,9 +26,23 @@ const LOGIN_FORM_HTML = `
   <a href="/signup" data-auth-switch>Create account</a>
   <aside class="auth-side"></aside>`;
 
-function setupLoginPage(fetchImpl, { url = "https://staging.yourrank.site/login?next=%2Fdashboard" } = {}) {
+const SIGNUP_FORM_HTML = `
+  <div class="plan-banner" id="planBanner" hidden></div>
+  <form id="form" method="POST" action="/api/auth/signup" novalidate>
+    <input id="email" name="email" type="email" />
+    <span class="field-err" data-field-err="email"></span>
+    <input id="name" name="name" type="text" />
+    <span class="field-err" data-field-err="name"></span>
+    <input id="password" name="password" type="password" />
+    <span class="field-err" data-field-err="password"></span>
+    <div class="err" id="err" role="alert" aria-live="assertive"></div>
+    <button type="submit" id="submit">Create account</button>
+  </form>
+  <a href="/login" data-auth-switch>Sign in</a>`;
+
+function setupAuthPage(markup, fetchImpl, { url }) {
   const window = new Window({ url, settings: { disableJavaScriptFileLoading: true, fetch: { virtualServers: [] } } });
-  window.document.body.innerHTML = LOGIN_FORM_HTML;
+  window.document.body.innerHTML = markup;
   const fetchMock = (input, init) => {
     const target = typeof input === "string" ? input : input.url;
     if (target === "/api/auth/me") {
@@ -37,12 +50,8 @@ function setupLoginPage(fetchImpl, { url = "https://staging.yourrank.site/login?
     }
     return fetchImpl(target, init);
   };
-  const run = new Function(
-    "window", "document", "location", "fetch",
-    "normalizeCommunityHandle", "COMMUNITY_HANDLE_HOST",
-    authJsSource,
-  );
-  run(window, window.document, window.location, fetchMock, normalizeCommunityHandle, COMMUNITY_HANDLE_HOST);
+  const run = new Function("window", "document", "location", "fetch", authJsSource);
+  run(window, window.document, window.location, fetchMock);
   return {
     window,
     document: window.document,
@@ -52,11 +61,27 @@ function setupLoginPage(fetchImpl, { url = "https://staging.yourrank.site/login?
   };
 }
 
+function setupLoginPage(fetchImpl, { url = "https://staging.yourrank.site/login?next=%2Fdashboard" } = {}) {
+  return setupAuthPage(LOGIN_FORM_HTML, fetchImpl, { url });
+}
+
+function setupSignupPage(fetchImpl, { url = "https://staging.yourrank.site/signup" } = {}) {
+  return setupAuthPage(SIGNUP_FORM_HTML, fetchImpl, { url });
+}
+
 async function submitLogin(page, { email = "person@example.com", password = "CorrectPass123!" } = {}) {
   page.document.getElementById("email").value = email;
   page.document.getElementById("password").value = password;
   page.form.dispatchEvent(new page.window.Event("submit", { bubbles: true, cancelable: true }));
   // Let the async submit handler (fetch -> json -> DOM write) settle.
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
+async function submitSignup(page, { email = "person@example.com", name = "Alex Rivera", password = "CorrectPass123!" } = {}) {
+  page.document.getElementById("email").value = email;
+  page.document.getElementById("name").value = name;
+  page.document.getElementById("password").value = password;
+  page.form.dispatchEvent(new page.window.Event("submit", { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
@@ -77,6 +102,19 @@ describe("account entry continuity", () => {
     const target = new URL(page.document.querySelector("[data-auth-switch]").href);
     expect(target.pathname).toBe("/signup");
     expect(target.search).toBe("");
+  });
+
+  test("a valid email query prefills both login methods without submitting", () => {
+    const page = setupLoginPage(jsonResponse(200, {}), { url: "https://staging.yourrank.site/login?email=person%2Btag%40example.com" });
+    expect(page.document.getElementById("codeEmail").value).toBe("person+tag@example.com");
+    expect(page.document.getElementById("email").value).toBe("person+tag@example.com");
+    expect(page.submitBtn.disabled).toBe(false);
+  });
+
+  test("an invalid email query does not prefill either login method", () => {
+    const page = setupLoginPage(jsonResponse(200, {}), { url: "https://staging.yourrank.site/login?email=not-an-email" });
+    expect(page.document.getElementById("codeEmail").value).toBe("");
+    expect(page.document.getElementById("email").value).toBe("");
   });
 });
 
@@ -170,5 +208,39 @@ describe("login form success routing", () => {
     }));
     await submitLogin(page);
     expect(page.window.location.pathname).toBe("/dashboard");
+  });
+});
+
+describe("duplicate email signup recovery", () => {
+  test("shows a safe sign-in link with the email, destination, and plan preserved", async () => {
+    let signupPayload;
+    const email = "alex<svg@example.com";
+    const page = setupSignupPage((target, init) => {
+      if (target === "/api/auth/signup") signupPayload = JSON.parse(init.body);
+      return jsonResponse(409, {
+        ok: false,
+        error: "This email is already registered.",
+        field: "email",
+        code: "email_registered",
+      })();
+    }, {
+      url: "https://staging.yourrank.site/signup?next=%2Fdashboard%2Frewards%2Fshop%3FsiteId%3Dsite-1&plan=pro",
+    });
+
+    await submitSignup(page, { email });
+
+    const emailError = page.document.querySelector('[data-field-err="email"]');
+    const link = emailError.querySelector("a");
+    const signIn = new URL(link.href);
+    expect(emailError.textContent).toBe("This email is already registered. Sign in instead");
+    expect(emailError.querySelector("svg")).toBeNull();
+    expect(page.document.getElementById("email").getAttribute("aria-invalid")).toBe("true");
+    expect(page.document.activeElement.id).toBe("email");
+    expect(page.errEl.textContent).toBe("");
+    expect(signIn.pathname).toBe("/login");
+    expect(signIn.searchParams.get("email")).toBe(email);
+    expect(signIn.searchParams.get("next")).toBe("/dashboard/rewards/shop?siteId=site-1");
+    expect(signIn.searchParams.get("plan")).toBe("pro");
+    expect(signupPayload).not.toHaveProperty("slug");
   });
 });

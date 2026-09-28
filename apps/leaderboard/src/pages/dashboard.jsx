@@ -502,6 +502,18 @@ function BoardSettingsSection({ active } = {}) {
               <a class="btn btn--sm" id="sitePublicOpen" href="#" target="_blank" rel="noopener noreferrer">Open site ↗</a>
             </div>
           </div>
+          <div class="v3-settings-row v3-settings-row--top">
+            <div class="v3-settings-field">
+              <label class="v3-settings-label" for="sitePublicSlug">Page URL</label>
+              <div class="auth-url-wrap">
+                <span class="auth-url-prefix">yourrank.site/</span>
+                <input class="auth-url-input" id="sitePublicSlug" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" maxlength="40" aria-describedby="sitePublicSlugHint sitePublicSlugStatus" />
+              </div>
+              <p class="v3-settings-muted" id="sitePublicSlugHint">Lowercase letters, numbers and hyphens. If your site is already published, old links stop working.</p>
+            </div>
+            <button class="v3-set-btn v3-set-btn--outline" id="sitePublicSlugSave" type="button">Change URL</button>
+          </div>
+          <p class="v3-settings-status" id="sitePublicSlugStatus" role="status" aria-live="polite"></p>
           <p class="v3-settings-status" id="sitePublicCopyStatus" role="status" aria-live="polite"></p>
           <div class="v3-settings-row" data-ui-advanced><div><b>Custom domain</b><p id="sitePublicDomainSummary">Checking your domain…</p></div><button class="v3-set-btn v3-set-btn--outline" id="sitePublicDomainManage" type="button" data-settings-tab-link="domain">Manage domain</button></div>
         </div>

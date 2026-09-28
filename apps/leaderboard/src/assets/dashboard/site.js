@@ -16,6 +16,7 @@ import { wirePlanLock, trackFunnel } from "./plan-lock.js";
 import { PLAN_META, PLAN_PRICING } from "@yourrank/shared/plans";
 import { planChangeFor, formatPlanPrice } from "@yourrank/shared/plan-changes";
 import { CREATOR_CONTACT_FIELD_LABELS, CREATOR_CONTACT_TYPES, validateCreatorContact } from "@yourrank/shared/creator-contact";
+import { normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 
 export const DEFAULT_SECTIONS = {
   hero: true,
@@ -2327,6 +2328,68 @@ export function renderSitePublicAddress() {
       link.href = publicUrl;
       link.title = publicUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
     }
+  }
+  const slugInput = $("sitePublicSlug");
+  const slugStatus = $("sitePublicSlugStatus");
+  const slugSave = $("sitePublicSlugSave");
+  if (slugInput && !slugInput._dirty && (typeof document === "undefined" || document.activeElement !== slugInput)) {
+    slugInput.value = state.SLUG || "";
+  }
+  if (slugInput && !slugInput._wired) {
+    slugInput._wired = true;
+    slugInput.addEventListener("input", () => {
+      slugInput._dirty = true;
+      slugInput.removeAttribute("aria-invalid");
+      if (slugStatus) slugStatus.textContent = "";
+    });
+  }
+  if (slugSave && !slugSave._wired) {
+    slugSave._wired = true;
+    slugSave.addEventListener("click", async () => {
+      if (slugSave.disabled || !slugInput || !slugStatus) return;
+      const handle = normalizeCommunityHandle(slugInput.value);
+      if (!handle.ok) {
+        slugInput.setAttribute("aria-invalid", "true");
+        slugStatus.textContent = handle.error || "Enter a valid page URL.";
+        return;
+      }
+      if (handle.handle === state.SLUG) {
+        slugInput.value = state.SLUG || "";
+        slugInput._dirty = false;
+        slugInput.removeAttribute("aria-invalid");
+        slugStatus.textContent = "This page URL is unchanged.";
+        return;
+      }
+
+      slugStatus.textContent = "Saving…";
+      slugSave.disabled = true;
+      slugSave.setAttribute("aria-busy", "true");
+      try {
+        const { body } = await fetchDashboardJson("/api/site", {
+          method: "PUT",
+          credentials: "include",
+          headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+          body: JSON.stringify({ siteId: state.ACTIVE_SITE_ID || undefined, slug: handle.handle }),
+        });
+        if (!body?.ok) throw new Error(body?.error || "Couldn't update the page URL.");
+        const slug = body.slug || handle.handle;
+        slugInput._dirty = false;
+        slugInput.value = slug;
+        slugInput.removeAttribute("aria-invalid");
+        setState({ SLUG: slug });
+        renderSitePublicAddress();
+        slugStatus.textContent = "Page URL updated.";
+        showToast("Page URL updated.", "success");
+      } catch (error) {
+        const message = error?.message || "Couldn't update the page URL.";
+        slugInput.setAttribute("aria-invalid", "true");
+        slugStatus.textContent = message;
+        showToast(message, "error");
+      } finally {
+        slugSave.disabled = false;
+        slugSave.removeAttribute("aria-busy");
+      }
+    });
   }
   const copy = $("sitePublicCopy");
   const copyStatus = $("sitePublicCopyStatus");

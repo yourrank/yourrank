@@ -1,4 +1,3 @@
-import { COMMUNITY_HANDLE_HOST, normalizeCommunityHandle } from "@yourrank/shared/community-handle";
 /* Shared logic for login / signup / forgot / reset pages.
  * Mode is derived from the URL path so no inline <script> is needed (the
  * auth pages run under a strict CSP with script-src 'self', which blocks
@@ -89,6 +88,15 @@ if (mode === "reset" && !new URLSearchParams(location.search).get("token")) {
   if (errEl && errEl.parentNode) errEl.parentNode.appendChild(backLink);
 }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (mode === "login") {
+  const email = urlParams.get("email") || "";
+  if (EMAIL_RE.test(email)) {
+    for (const id of ["codeEmail", "email"]) {
+      const input = document.getElementById(id);
+      if (input) input.value = email;
+    }
+  }
+}
 function fieldErrEl(id) { return document.querySelector('[data-field-err="' + id + '"]'); }
 function setFieldError(id, msg) {
   const inp = document.getElementById(id);
@@ -167,33 +175,6 @@ if ((mode === "signup" || mode === "reset") && pwInput) {
 
 const submit = document.getElementById("submit");
 const nameInput = document.getElementById("name");
-const slugInput = document.getElementById("slug");
-const slugPreview = document.getElementById("slugPreview");
-const slugNote = document.getElementById("slugNote");
-function updateHandlePreview() {
-  if (!slugPreview) return;
-  const typed = slugInput ? slugInput.value : "";
-  const result = normalizeCommunityHandle(typed.trim() ? typed : nameInput?.value);
-  slugPreview.textContent = result.handle ? `${COMMUNITY_HANDLE_HOST}/${result.handle}` : `${COMMUNITY_HANDLE_HOST}/…`;
-  if (slugNote) slugNote.textContent = typed.trim() && result.ok ? result.note || "" : "";
-}
-let userEditedSlug = false;
-if (nameInput && slugInput) {
-  nameInput.addEventListener("input", () => { if (!userEditedSlug) { slugInput.value = normalizeCommunityHandle(nameInput.value).handle; updateHandlePreview(); } });
-}
-if (slugInput) {
-  slugInput.addEventListener("input", () => { userEditedSlug = true; updateHandlePreview(); clearFieldError("slug"); });
-  slugInput.addEventListener("blur", () => {
-    const typed = slugInput.value.trim();
-    if (!typed) return;
-    const result = normalizeCommunityHandle(typed);
-    if (result.ok) {
-      if (slugInput.value !== result.handle) slugInput.value = result.handle;
-      updateHandlePreview();
-      if (slugNote && result.note) slugNote.textContent = result.note;
-    } else setFieldError("slug", result.error);
-  });
-}
 const PLAN_NAMES = { free: "Free", pro: "Pro", team: "Team" };
 if (mode === "signup" && PLAN_NAMES[planParam]) {
   const banner = document.getElementById("planBanner");
@@ -228,11 +209,6 @@ form.addEventListener("submit", async (e) => {
     payload = { email: document.getElementById("email").value.trim(), password: document.getElementById("password").value };
     if (mode === "signup") {
       if (nameInput) payload.name = nameInput.value.trim();
-      if (slugInput) {
-        const handle = normalizeCommunityHandle(slugInput.value.trim() ? slugInput.value : nameInput?.value || "");
-        payload.slug = handle.handle;
-        payload.slugError = handle.ok ? "" : handle.error;
-      }
     }
   }
   if (mode === "login" || mode === "signup" || mode === "reset") {
@@ -245,9 +221,7 @@ form.addEventListener("submit", async (e) => {
       const passwordError = passwordRuleMessage(payload.password || "");
       if (passwordError) { setFieldError("password", passwordError); firstInvalid = firstInvalid || "password"; }
     }
-    if (mode === "signup" && !(payload.name || "").trim()) { setFieldError("name", "Enter your name or handle"); firstInvalid = firstInvalid || "name"; }
-    if (mode === "signup" && payload.slugError) { setFieldError("slug", payload.slugError); firstInvalid = firstInvalid || "slug"; }
-    delete payload.slugError;
+    if (mode === "signup" && !(payload.name || "").trim()) { setFieldError("name", "Enter your name"); firstInvalid = firstInvalid || "name"; }
     if (firstInvalid) {
       const el = document.getElementById(firstInvalid);
       if (el) { el.setAttribute("aria-invalid", "true"); el.focus(); }
@@ -267,6 +241,22 @@ form.addEventListener("submit", async (e) => {
       setPending(false, orig); return;
     }
     if (!res.ok || !data.ok) {
+      if (mode === "signup" && data.code === "email_registered") {
+        setFieldError("email", "This email is already registered. ");
+        const fieldBox = fieldErrEl("email");
+        if (fieldBox) {
+          const signInParams = new URLSearchParams();
+          if (nextPath) signInParams.set("next", nextPath);
+          if (["free", "pro", "team"].includes(planParam)) signInParams.set("plan", planParam);
+          const link = document.createElement("a");
+          link.href = `/login?email=${encodeURIComponent(payload.email)}${signInParams.size ? `&${signInParams}` : ""}`;
+          link.textContent = "Sign in instead";
+          fieldBox.appendChild(link);
+        }
+        document.getElementById("email")?.focus();
+        errEl.textContent = "";
+        setPending(false, orig); return;
+      }
       // Field-scoped failures (e.g. a taken page URL) belong next to the input,
       // not only in the form-level error line. If the server names a field this
       // form does not have, fall back to the form-level error — never go silent.

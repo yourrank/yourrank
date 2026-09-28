@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import { verifyEmailPromptState, verifyEmailPageHtml } from "../pages/verify-email.js";
+import { signupPage } from "../pages/signup.js";
 
 // Regression gates for the staging login failure report:
 //  1. /login shipped without <!DOCTYPE html> — login.jsx was the only JSX
@@ -11,6 +13,8 @@ import { verifyEmailPromptState, verifyEmailPageHtml } from "../pages/verify-ema
 //     must say so, otherwise it reads exactly like a silent login failure.
 
 const loginHtml = require("../pages/login.js").loginPage.toString();
+const signupHtml = signupPage.toString();
+const authJs = readFileSync(new URL("../assets/auth.js", import.meta.url), "utf8");
 
 describe("login page document", () => {
   it("starts with <!DOCTYPE html> so browsers stay in standards mode", () => {
@@ -39,6 +43,30 @@ describe("login page document", () => {
     expect(scripts.length).toBeGreaterThan(0);
     for (const tag of scripts) expect(tag).toContain("src=");
     expect(loginHtml).toContain('type="module" src="/assets/auth.js');
+  });
+
+  it("prefills both login methods from an email query parameter without submitting", () => {
+    expect(loginHtml).toContain('id="codeEmail"');
+    expect(authJs).toContain('urlParams.get("email")');
+    expect(authJs).toContain('for (const id of ["codeEmail", "email"])');
+  });
+});
+
+describe("signup page fields", () => {
+  it("asks for only Email, Your name, and Password", () => {
+    const inputIds = [...signupHtml.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
+    expect(inputIds).toEqual(["email", "name", "password"]);
+    expect(signupHtml).toContain('<label for="name">Your name</label>');
+    expect(signupHtml).toContain('placeholder="How viewers will see you"');
+    expect(signupHtml).not.toContain('id="slug"');
+  });
+
+  it("uses the explicit duplicate-email recovery state", () => {
+    expect(authJs).toContain('data.code === "email_registered"');
+    expect(authJs).toContain("This email is already registered.");
+    expect(authJs).toContain('link.textContent = "Sign in instead"');
+    expect(authJs).toContain("/login?email=");
+    expect(authJs).toContain("encodeURIComponent(payload.email)");
   });
 });
 
