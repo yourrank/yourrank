@@ -85,7 +85,12 @@ describe("Giveaway Chatroom Handler", () => {
     expect(html).toContain('id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.');
     expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-main");
     expect(giveawaysCssSource).toContain(".gw-layout.is-live .gw-sidebar");
-    expect(giveawaysCssSource).toContain("position: sticky;");
+    const sidebarRules = giveawaysCssSource.match(/[^{}]*\.gw-sidebar[^{}]*\{[^{}]*\}/g) ?? [];
+    const sidebarCss = sidebarRules.join("\n");
+    expect(giveawaysCssSource).not.toContain("overscroll-behavior");
+    expect(sidebarCss).not.toContain("position: sticky;");
+    expect(sidebarCss).not.toContain("max-height:");
+    expect(sidebarCss).not.toContain("overflow: auto;");
   });
 
   it("runs Chat Giveaways through the connected Kick channel and server API, not the legacy listener", () => {
