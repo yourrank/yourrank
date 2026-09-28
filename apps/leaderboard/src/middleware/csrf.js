@@ -54,6 +54,8 @@ export const CSRF_EXEMPT = new Set([
   "/api/auth/reset",
   "/api/auth/verify",
   "/api/auth/resend-verification",
+  "/api/auth/code/request",
+  "/api/auth/code/verify",
 ]);
 
 export function shouldRequireCsrf(method, path) {

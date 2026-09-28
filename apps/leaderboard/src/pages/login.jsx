@@ -42,7 +42,36 @@ export function LoginPage() {
               <a href="/" class="auth-brand-m">Your<b>Rank</b></a>
               <h1 id="auth-title">Sign in</h1><p class="sub" id="auth-sub">Welcome back.</p>
               <div class="plan-banner" id="viewerBanner" hidden role="status">Sign in with the account you use in creator communities. After signing in you go back to the community you came from.</div>
-              <form id="form" method="POST" action="/api/auth/login" novalidate>
+              <div class="auth-methods" role="tablist" aria-label="Sign-in method">
+                <button type="button" class="auth-method is-on" id="methodCode" role="tab" aria-selected="true" data-method="code">Email code</button>
+                <button type="button" class="auth-method" id="methodPassword" role="tab" aria-selected="false" data-method="password">Password</button>
+              </div>
+              <form id="codeForm" method="POST" action="/api/auth/code/request" novalidate>
+                <div id="codeStep1">
+                  <div class="field">
+                    <label for="codeEmail">Email</label>
+                    <input id="codeEmail" name="email" type="email" autocomplete="email" required aria-describedby="codeEmail-err" />
+                    <span class="field-err" id="codeEmail-err" data-field-err="codeEmail" role="alert" aria-live="polite"></span>
+                  </div>
+                  <div class="err" id="codeErr" role="alert" aria-live="assertive"></div>
+                  <button class="btn btn--accent w-full" type="submit" id="codeSubmit">Send code</button>
+                </div>
+                <div id="codeStep2" hidden>
+                  <p class="sub">We sent a code to <b id="codeSentTo"></b>.</p>
+                  <div class="field">
+                    <label for="code">6-digit code</label>
+                    <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required aria-describedby="code-err" />
+                    <span class="field-err" id="code-err" data-field-err="code" role="alert" aria-live="polite"></span>
+                  </div>
+                  <div class="err" id="codeErr2" role="alert" aria-live="assertive"></div>
+                  <button class="btn btn--accent w-full" type="submit" id="codeVerify">Sign in</button>
+                  <div class="code-actions">
+                    <button type="button" class="btn btn--ghost" id="codeResend" disabled>Resend code</button>
+                    <button type="button" class="btn btn--ghost" id="codeChangeEmail">Use a different email</button>
+                  </div>
+                </div>
+              </form>
+              <form id="form" method="POST" action="/api/auth/login" novalidate hidden>
                 <div class="field">
                   <label for="email">Email</label>
                   <input id="email" name="email" type="email" autocomplete="email" required aria-describedby="email-err" />
