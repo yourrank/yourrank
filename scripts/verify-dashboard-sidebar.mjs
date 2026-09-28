@@ -28,7 +28,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 900 });
   assert.equal(await group.getAttribute('aria-expanded'), 'true');
   assert.equal(await group.getAttribute('aria-current'), null);
-  assert.deepEqual(await page.locator('.lb-side-nav .lb-nav').allTextContents(), ['Home', 'Community', 'Audience', 'Engage', 'Tournaments', 'Giveaways', 'Rewards', 'Insights', 'Telegram', 'Settings']);
+  assert.deepEqual(await page.locator('.lb-side-nav .lb-nav').allTextContents(), ['Home', 'Community', 'Audience', 'Engage', 'Overview', 'Activities', 'Giveaways', 'Tournaments', 'Rewards', 'Insights', 'Telegram', 'Settings']);
   const item = page.locator('[data-nav="audience"]');
   const before = await item.evaluate(e => getComputedStyle(e).backgroundColor);
   await item.hover();
@@ -36,8 +36,8 @@ try {
   assert.notEqual(await item.evaluate(e => getComputedStyle(e).backgroundColor), before);
   await group.focus();
   await page.keyboard.press('Tab');
-  assert.equal(await page.evaluate(() => document.activeElement.dataset.nav), 'tournaments');
-  assert.notEqual(await current.evaluate(e => getComputedStyle(e).outlineStyle), 'none');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.nav), 'overview');
+  assert.notEqual(await page.evaluate(() => getComputedStyle(document.activeElement).outlineStyle), 'none');
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
   assert.equal(await group.getAttribute('aria-expanded'), 'false');
@@ -56,7 +56,7 @@ try {
   await page.getByRole('button', { name: 'Collapse navigation', exact: true }).click();
   assert.equal((await rail.boundingBox()).width, 68);
   assert.equal(await page.locator('.lb-bento').innerHTML(), content);
-  assert.equal(await page.locator('.lb-side-nav .lb-nav:visible').count(), 10);
+  assert.equal(await page.locator('.lb-side-nav .lb-nav:visible').count(), 12);
   for (const link of await page.locator('.lb-side-nav .lb-nav').all()) {
     assert.ok(await link.getAttribute('title'), 'Every icon has a native hover tooltip');
   }

@@ -1,6 +1,8 @@
 /** @jsxRuntime automatic */
 /** @jsxImportSource hono/jsx */
 
+import { raw } from "hono/html";
+import { subnavHtml } from "@yourrank/shared/dashboard-ui";
 import { membersPage, memberActivityPage } from "./credits-pages.js";
 import { DashboardShell } from "./dashboard-shell.jsx";
 import { chromeStateFor } from "../assets/dashboard/routes.js";
@@ -18,13 +20,7 @@ export const PEOPLE_TABS = [
 ];
 
 function PeopleTabs({ tab }) {
-  return <nav class="v3-tabs" aria-label="Audience pages">
-    {PEOPLE_TABS.map((item) => <a
-      class={"v3-tab" + (item.key === tab ? " is-on" : "")}
-      href={item.href}
-      aria-current={item.key === tab ? "page" : undefined}
-    >{item.label}</a>)}
-  </nav>;
+  return raw(subnavHtml({ items: PEOPLE_TABS, active: tab, label: "Audience pages" }));
 }
 const MEMBER_HISTORY_DRAWER = `
   <div class="cr-member-history-backdrop" id="cr-member-history-backdrop" hidden></div>

@@ -134,7 +134,7 @@ describe("dashboard views", () => {
     expect(html).toContain('data-product-link="telegram"');
     expect(html).toMatch(/data-nav="telegram"[^>]*aria-current="page"/);
     expect(html).toContain('<nav class="v3-tabs telegram-tabs" aria-label="Telegram pages"');
-    expect(html).toContain('href="/dashboard/telegram/offers" aria-current="page">Offers</a>');
+    expect(html).toContain('href="/dashboard/telegram/offers" aria-current="page" data-subnav="offers">Offers</a>');
     expect(html).toContain('<nav class="v3-crumbs" aria-label="Breadcrumb">');
     // One shell, not the product header stacked on a second rail.
     expect(html).not.toContain("gm-shell-nav");

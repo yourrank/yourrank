@@ -54,7 +54,7 @@ describe("Site settings creator UX", () => {
 describe("Account settings creator UX", () => {
   it("server-renders the requested tab as current and visible", () => {
     const html = UnifiedSettingsPage({ fragment: true, tab: "connections" }).toString();
-    expect(html).toMatch(/data-settings-tab="connections"[^>]*aria-current="page"/);
+    expect(html).toMatch(/<a class="v3-tab is-on"[^>]*aria-current="page"[^>]*data-settings-tab="connections"/);
     expect(html).toContain('data-settings-panel="connections"');
     expect(html).toMatch(/data-settings-panel="account"[^>]*hidden/);
     expect(html).not.toMatch(/data-settings-panel="connections"[^>]*hidden/);
