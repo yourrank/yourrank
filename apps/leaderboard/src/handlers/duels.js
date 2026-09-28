@@ -102,7 +102,7 @@ export async function handleCreateDuel(request, env, deps = {}) {
 
   const result = await withTransaction(async (tx) => {
     const updatedChallenger = await tx.one(
-      "UPDATE site_viewers SET balance = balance - $1, updated_at=now() WHERE id=$2 AND balance >= $1 RETURNING id, balance",
+      "UPDATE site_viewers SET balance = balance - $1, total_spent = total_spent + $1, updated_at=now() WHERE id=$2 AND balance >= $1 RETURNING id, balance",
       [wagerAmount, challengerSv.id]
     );
     if (!updatedChallenger) return { error: `Insufficient credits. You need ${wagerAmount} pts to challenge (you have ${challengerSv.balance || 0} pts).`, status: 400 };
@@ -116,8 +116,8 @@ export async function handleCreateDuel(request, env, deps = {}) {
 
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'bet', $2, $3)`,
-      [challengerSv.id, -wagerAmount, `Duel Challenge against @${targetViewer.kick_username} (${wagerAmount} pts)`]
+       VALUES ($1, 'spend', $2, $3)`,
+      [challengerSv.id, wagerAmount, `Duel Challenge against @${targetViewer.kick_username} (${wagerAmount} pts)`]
     );
 
     return { duel, balance: updatedChallenger.balance };
@@ -201,7 +201,7 @@ export async function handleAcceptDuel(request, env, deps = {}) {
 
   const result = await withTransaction(async (tx) => {
     const updatedTarget = await tx.one(
-      "UPDATE site_viewers SET balance = balance - $1, updated_at=now() WHERE id=$2 AND balance >= $1 RETURNING id, balance",
+      "UPDATE site_viewers SET balance = balance - $1, total_spent = total_spent + $1, updated_at=now() WHERE id=$2 AND balance >= $1 RETURNING id, balance",
       [duel.wager_amount, targetSv.id]
     );
     if (!updatedTarget) return { error: `Insufficient credits. You need ${duel.wager_amount} pts to accept.`, status: 400 };
@@ -215,13 +215,13 @@ export async function handleAcceptDuel(request, env, deps = {}) {
     // 3. Record in ledger
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'bet', $2, $3)`,
-      [targetSv.id, -duel.wager_amount, `Accepted Duel vs @${duel.challenger_name} (${duel.wager_amount} pts)`]
+       VALUES ($1, 'spend', $2, $3)`,
+      [targetSv.id, duel.wager_amount, `Accepted Duel vs @${duel.challenger_name} (${duel.wager_amount} pts)`]
     );
 
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'win', $2, $3)`,
+       VALUES ($1, 'earn', $2, $3)`,
       [winnerSiteViewerId, totalPot, `Won Duel Pot vs ${challengerWon ? duel.target_name : duel.challenger_name} (+${totalPot} pts)`]
     );
 
@@ -288,13 +288,13 @@ export async function handleDeclineDuel(request, env, deps = {}) {
   await withTransaction(async (tx) => {
     // Refund challenger
     await tx.unsafe(
-      "UPDATE site_viewers SET balance = balance + $1, updated_at=now() WHERE id=$2",
+      "UPDATE site_viewers SET balance = balance + $1, total_spent = GREATEST(total_spent - $1, 0), updated_at=now() WHERE id=$2",
       [duel.wager_amount, duel.challenger_site_viewer_id]
     );
 
     await tx.unsafe(
       `INSERT INTO credit_ledger (site_viewer_id, type, amount, description)
-       VALUES ($1, 'refund', $2, 'Duel Cancelled/Declined Refund')`,
+       VALUES ($1, 'revoke', $2, 'Duel Cancelled/Declined Refund')`,
       [duel.challenger_site_viewer_id, duel.wager_amount]
     );
 
