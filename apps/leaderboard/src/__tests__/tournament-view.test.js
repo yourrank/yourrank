@@ -36,6 +36,7 @@ const vm = (over = {}) => buildViewModel({
   chatRegistration: over.chatRegistration ?? null,
   board: over.board ?? {},
   activeTab: over.activeTab ?? "entries",
+  tournamentsEnabled: over.tournamentsEnabled ?? true,
 });
 
 describe("buildViewModel", () => {
@@ -61,6 +62,14 @@ describe("buildViewModel", () => {
   it("maps lifecycle to primary action and secondary buttons", () => {
     const draft = vm({ lifecycle: "draft", tournament: { signup_state: "closed", chat_channel: "" }, board: { kickChannelName: "mychan" } });
     expect(draft.primary).toEqual({ action: "use-site-channel", label: "Use mychan" });
+    const connected = vm({
+      lifecycle: "draft",
+      tournament: { signup_state: "closed", chat_channel: "" },
+      board: { kickChannelName: "mychan" },
+      chatRegistration: { connected: true, channelName: "connected" },
+    });
+    expect(connected.siteChannel).toBe("connected");
+    expect(connected.primary).toEqual({ action: "use-site-channel", label: "Use connected" });
     const open = vm({ lifecycle: "signups_open" });
     expect(open.primary).toEqual({ action: "lock", label: "Lock signups" });
     const locked = vm({ lifecycle: "signups_locked", entryCounts: { ...counts, eligible: 5 } });
@@ -170,6 +179,15 @@ describe("empty + dialog markup", () => {
     expect(html).toContain('id="tournament-create"');
     expect(html).toContain('id="tournament-workspace" hidden');
     expect(html).toContain("Run a tournament for your community.");
+    expect(html).not.toContain('data-plan-lock="tournaments"');
+  });
+
+  it("empty state locks creation with a described shared plan card", () => {
+    const html = emptyStateHtml({ locked: true });
+    expect(html).toContain('id="tournament-create"');
+    expect(html).toContain('id="tournament-create" type="button" disabled aria-describedby="tournament-plan-lock"');
+    expect(html).toContain('id="tournament-plan-lock"');
+    expect(html).toContain('data-plan-lock="tournaments"');
   });
 
   it("create dialog exposes every behavior hook", () => {
@@ -179,6 +197,40 @@ describe("empty + dialog markup", () => {
     }
     expect(html).toContain('value="sitechan"');
     expect(html).not.toMatch(/class="[^"]*\bmodal\b/);
+  });
+
+  it("hides the new-tournament action for locked existing workspaces", () => {
+    const html = workspaceHtml(vm({
+      lifecycle: "completed",
+      tournament: { status: "completed", winner_name: "alpha" },
+      tournamentsEnabled: false,
+    }), "");
+    expect(html).toContain('id="tournament-new"');
+    expect(html).toContain('id="tournament-new" type="button" hidden');
+  });
+
+  it("locks the connected Kick channel in the creation dialog", () => {
+    const html = createDialogHtml({
+      chatRegistration: { connected: true, channelName: "streamer" },
+      siteChannel: "board-channel",
+    });
+    expect(html).toContain('value="streamer"');
+    expect(html).toContain('id="tc-chat-channel"');
+    expect(html).toContain("readonly");
+    expect(html).toContain("Your connected Kick channel. Signups are collected here.");
+    expect(html).not.toContain('href="/dashboard/settings/connections"');
+  });
+
+  it("keeps the channel editable and links to Connections when disconnected", () => {
+    const html = createDialogHtml({
+      chatRegistration: { connected: false },
+      siteChannel: "board-channel",
+    });
+    expect(html).toContain('value="board-channel"');
+    expect(html).not.toContain('id="tc-chat-channel" name="chatChannel" type="text" value="board-channel" placeholder="channelname" autocomplete="off" class="tn-input" readonly');
+    expect(html).toContain("Connect Kick in ");
+    expect(html).toContain('href="/dashboard/settings/connections"');
+    expect(html).toContain("Settings → Connections");
   });
 
   it("select dialog exposes modes, panes and list hooks", () => {

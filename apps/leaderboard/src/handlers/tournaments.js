@@ -3,6 +3,7 @@ import {
   requireUser as defaultRequireUser,
   ok,
   bad,
+  json,
   readJson,
   rateLimit as defaultRateLimit,
   clientIp as defaultClientIp,
@@ -10,6 +11,7 @@ import {
 } from "../auth.js";
 import { getByUser as defaultGetByUser, getBoardById as defaultGetBoardById } from "../site.js";
 import { requireSiteOwner } from "../site-authorization.js";
+import { canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import {
   one as defaultOne,
   query as defaultQuery,
@@ -188,6 +190,7 @@ export async function handleGetTournaments(request, env, deps = {}) {
     requireUser = defaultRequireUser,
     getByUser = defaultGetByUser,
     getBoardById = defaultGetBoardById,
+    one = defaultOne,
     query = defaultQuery,
     rateLimit = defaultRateLimit,
     clientIp = defaultClientIp,
@@ -205,6 +208,10 @@ export async function handleGetTournaments(request, env, deps = {}) {
   if (!site) return bad("Site not found.", 404);
   const authorization = await requireSiteOwnerImpl(user, site);
   if (authorization.res) return authorization.res;
+  const owner = await one(
+    "SELECT plan, plan_expires_at, status FROM users WHERE id=$1",
+    [site.user_id],
+  );
 
   const tournaments = await query(
     `SELECT id, title, game_name, bracket_size, status, winner_name, created_at,
@@ -223,6 +230,9 @@ export async function handleGetTournaments(request, env, deps = {}) {
   return ok({
     tournaments: tournaments || [],
     chatRegistration: await loadChatGiveawayConnection(query, site.id, "kick"),
+    entitlement: {
+      enabled: canUseFeature(effectivePlan(owner), "tournaments"),
+    },
   });
 }
 
@@ -238,6 +248,8 @@ export async function handleCreateTournament(request, env, deps = {}) {
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
     one = defaultOne,
+    query = defaultQuery,
+    loadChatGiveawayConnection = defaultLoadChatGiveawayConnection,
   } = deps;
 
   const { user, res } = await requireUser(request, env);
@@ -266,7 +278,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   const minCredits = Math.max(0, parseInt(body?.minCredits, 10) || 0);
   const entryFee = Math.max(0, parseInt(body?.entryFee, 10) || 0);
   const entryKeyword = String(body?.entryKeyword || "!join").trim().slice(0, 40) || "!join";
-  const chatChannel = normalizeChatChannel(body?.chatChannel) || null;
+  let chatChannel = normalizeChatChannel(body?.chatChannel) || null;
 
   const rawParticipants = Array.isArray(body?.participants) ? body.participants : [];
   const providedParticipantCount = rawParticipants.length;
@@ -294,6 +306,18 @@ export async function handleCreateTournament(request, env, deps = {}) {
   {
     const gateRes = await requireSiteFeature(site, "tournaments", { request, oneImpl: one });
     if (gateRes) return gateRes;
+  }
+  const connection = await loadChatGiveawayConnection(query, site.id, "kick");
+  if (connection.connected) {
+    if (!chatChannel) {
+      chatChannel = normalizeChatChannel(connection.channelName) || null;
+    } else if (chatChannel.toLowerCase() !== String(connection.channelName || "").toLowerCase()) {
+      return json({
+        ok: false,
+        error: `Use your connected Kick channel (${connection.channelName}). Signups are collected from that channel.`,
+        field: "chatChannel",
+      }, 400);
+    }
   }
 
   // A tournament is a draft until a bracket exists: either seeded from explicit
@@ -475,6 +499,8 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   const {
     requireUser = defaultRequireUser,
     one = defaultOne,
+    query = defaultQuery,
+    loadChatGiveawayConnection = defaultLoadChatGiveawayConnection,
     withTransaction = defaultWithTransaction,
     logAudit = defaultLogAudit,
     requireSiteCapabilityImpl = requireSiteOwner,
@@ -485,6 +511,19 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
   if (access.error) return access.error;
   const body = await readJson(request) || {};
+  if (Object.prototype.hasOwnProperty.call(body, "chatChannel")
+      && String(body.chatChannel || "").trim()) {
+    const connection = await loadChatGiveawayConnection(query, access.tournament.site_id, "kick");
+    const normalized = normalizeChatChannel(body.chatChannel);
+    if (connection.connected
+        && normalized.toLowerCase() !== String(connection.channelName || "").toLowerCase()) {
+      return json({
+        ok: false,
+        error: `Use your connected Kick channel (${connection.channelName}). Signups are collected from that channel.`,
+        field: "chatChannel",
+      }, 400);
+    }
+  }
   const updates = [];
   const values = [];
   const addUpdate = (column, value) => {

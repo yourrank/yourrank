@@ -9,6 +9,7 @@ const siteSource = readFileSync(new URL("../assets/dashboard/site.js", import.me
 const dashboardSource = readFileSync(new URL("../assets/dashboard.js", import.meta.url), "utf8");
 const previewTabsSource = readFileSync(new URL("../assets/dashboard/preview-tabs.js", import.meta.url), "utf8");
 const giveawaysSource = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
+const giveawayPagesSource = readFileSync(new URL("../pages/giveaway-pages.js", import.meta.url), "utf8");
 const giveawaysCssSource = readFileSync(new URL("../assets/giveaways.css", import.meta.url), "utf8");
 const shellSource = readFileSync(new URL("../assets/dashboard/shell.js", import.meta.url), "utf8");
 
@@ -100,6 +101,16 @@ describe("Giveaway Chatroom Handler", () => {
     expect(source).not.toContain('"cd-drawer"');
     expect(source).toContain('if (activeTab === "preds") loadPredictions();');
     expect(source).not.toContain('querySelectorAll(".gw-tab-btn").forEach((btn) => {');
+  });
+
+  it("locks prediction entry points and builds stale entitlement recovery safely", () => {
+    expect(giveawayPagesSource).toContain('id="pred-plan-lock"');
+    expect(giveawaysSource).toContain('planLockMarkup("predictions")');
+    expect(giveawaysSource).toContain('button.setAttribute("aria-describedby", "pred-plan-lock")');
+    expect(giveawaysSource).toContain('link.href = "/dashboard/settings/billing?from=predictions"');
+    expect(giveawaysSource).toContain('link.textContent = "Upgrade your plan"');
+    expect(giveawaysSource).toContain('status.classList.add(isError ? "error" : "status--success")');
+    expect(giveawaysSource).not.toContain("status.className = `status${isError ? \" status--error\"");
   });
 
   it("renders GiveawaysPage properly", () => {

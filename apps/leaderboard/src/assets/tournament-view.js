@@ -4,6 +4,7 @@
 // ids and data-* attributes emitted here are the behavior contract the
 // controller's delegated listeners and tests rely on; classes are all tn-*.
 import { BYE, CROWN_ICON } from "./tournament-bracket-view.js";
+import { planLockMarkup } from "./dashboard/plan-lock.js";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
   "&": "&amp;",
@@ -75,12 +76,12 @@ export function formatCreated(value) {
 // Derived once per render so every panel agrees on labels, counts and which
 // controls exist. `board` only feeds the Kick-channel fallback for draft
 // primaries; `chatRegistration` drives the registration-status text.
-export function buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab }) {
+export function buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab, tournamentsEnabled = true }) {
   const finished = lifecycle === "completed" || lifecycle === "cancelled";
   const activeCount = (entries || []).filter((entry) => ACTIVE_STATUSES.includes(entry.status)).length;
   const keyword = tournament?.entry_keyword || "!join";
   const channel = String(tournament?.chat_channel || "").trim();
-  const siteChannel = String(board?.kickChannelName || "").trim();
+  const siteChannel = String(chatRegistration?.channelName || board?.kickChannelName || "").trim();
   const played = (matches || []).filter((m) => m.status === "completed" && m.player1_name !== BYE && m.player2_name !== BYE).length;
 
   // Chat-registration state is the single source for the form hint and the
@@ -156,6 +157,7 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
     primary,
     reopen,
     showNew,
+    tournamentsEnabled,
     stepHtml,
     hasMatches: Boolean(matches?.length) || Boolean(tournament?.winner_name),
     playedMatches: played,
@@ -207,7 +209,7 @@ function headerHtml(vm) {
   const actions = [
     vm.primary ? `<button class="btn btn--accent" id="tournament-primary" type="button" data-action="${esc(vm.primary.action)}">${esc(vm.primary.label)}</button>` : `<button class="btn btn--accent" id="tournament-primary" type="button" hidden></button>`,
     `<button class="btn btn--ghost" id="tournament-reopen" type="button"${vm.reopen ? "" : " hidden"}>Reopen signups</button>`,
-    `<button class="btn btn--ghost" id="tournament-new" type="button"${vm.showNew ? "" : " hidden"}>${ICONS.plus} New tournament</button>`,
+    `<button class="btn btn--ghost" id="tournament-new" type="button"${vm.showNew && vm.tournamentsEnabled ? "" : " hidden"}>${ICONS.plus} New tournament</button>`,
   ].join("");
   return `<header class="tn-head">
     <div class="tn-head-main">
@@ -480,12 +482,13 @@ export function workspaceHtml(vm, bracketHtml = "") {
 
 // No tournament yet: the empty card carries the page heading + create button;
 // #tournament-workspace stays in the DOM (hidden) like its counterpart above.
-export function emptyStateHtml() {
+export function emptyStateHtml({ locked = false } = {}) {
   return `<section class="tn-empty-card" id="tournament-empty" aria-labelledby="tournament-empty-heading">
     <span class="tn-empty-mark" aria-hidden="true">${ICONS.trophy}</span>
     <h1 id="tournament-empty-heading">Tournaments</h1>
     <p>Run a tournament for your community. Collect entries from your audience, select participants, then manage the bracket here.</p>
-    <button class="btn btn--accent" id="tournament-create" type="button">Create tournament</button>
+    <button class="btn btn--accent" id="tournament-create" type="button"${locked ? ' disabled aria-describedby="tournament-plan-lock"' : ""}>Create tournament</button>
+    ${locked ? planLockMarkup("tournaments", { id: "tournament-plan-lock" }) : ""}
   </section>
   <div id="tournament-workspace" hidden></div>
   <p class="tn-message" id="tournament-message" role="status" aria-live="polite" hidden></p>`;
@@ -496,8 +499,12 @@ export function emptyStateHtml() {
 const dialogShell = (id, labelledBy, inner, extraClass = "") =>
   `<div class="tn-dialog${extraClass}" id="${id}" role="dialog" aria-modal="true" aria-labelledby="${labelledBy}">${inner}</div>`;
 
-export function createDialogHtml({ chatChannel = "", siteChannel = "" } = {}) {
-  const channelValue = chatChannel || siteChannel || "";
+export function createDialogHtml({ chatChannel = "", siteChannel = "", chatRegistration = null } = {}) {
+  const connectedChannel = chatRegistration?.connected ? String(chatRegistration.channelName || "").trim() : "";
+  const channelValue = connectedChannel || chatChannel || siteChannel || "";
+  const channelHint = connectedChannel
+    ? `<span class="hint">Your connected Kick channel. Signups are collected here.</span>`
+    : `<span class="hint">Connect Kick in <a href="/dashboard/settings/connections">Settings → Connections</a> before opening signups.</span>`;
   return dialogShell("tournament-create-modal", "tournament-create-heading", `
     <form class="tn-dialog-card" id="tournament-create-form" novalidate>
       <h3 id="tournament-create-heading">Create tournament</h3>
@@ -533,8 +540,9 @@ export function createDialogHtml({ chatChannel = "", siteChannel = "" } = {}) {
           <label for="tc-chat-channel">Kick channel</label>
           <div class="gw-input-row">
             <span class="gw-input-prefix">kick.com/</span>
-            <input id="tc-chat-channel" name="chatChannel" type="text" value="${esc(channelValue)}" placeholder="channelname" autocomplete="off" class="tn-input" />
+            <input id="tc-chat-channel" name="chatChannel" type="text" value="${esc(channelValue)}" placeholder="channelname" autocomplete="off" class="tn-input"${connectedChannel ? " readonly" : ""} />
           </div>
+          ${channelHint}
         </div>
         <div class="field">
           <label for="tc-keyword">Chat command</label>

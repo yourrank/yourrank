@@ -7,7 +7,7 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
-import { giveawaysHtml } from "../pages/giveaway-pages.js";
+import { giveawaysHtml, renderGiveawaysHtml } from "../pages/giveaway-pages.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/chat" });
 const { document } = window;
@@ -92,12 +92,14 @@ const ENTRANTS = [
   { id: "e3", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u3", username: "charlie", avatar_url: null, message: "!win", badges: [], entered_at: "2026-09-28T00:00:02Z", eligibility_status: "eligible" },
 ];
 
-const server = { session: null, entries: [], draws: [], requests: [] };
+const server = { session: null, entries: [], draws: [], requests: [], predictions: null, predictionCreateResponse: null };
 function resetServer({ session, entries } = {}) {
   server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
   server.entries = (entries || ENTRANTS).map((e) => ({ ...e }));
   server.draws.length = 0;
   server.requests.length = 0;
+  server.predictions = { ok: true, predictions: [], entitlement: { enabled: true } };
+  server.predictionCreateResponse = null;
 }
 const winnerEntry = () => server.entries.find((e) => e.id === server.session?.winner_entry_id) || null;
 function statePayload() {
@@ -172,6 +174,12 @@ globalThis.fetch = async (input, init = {}) => {
     }
     Object.assign(server.session, { winner_finalized_at: "2026-09-28T00:02:00Z", winner_finalized_by: user.id });
     return json(statePayload());
+  }
+  if (path === "/api/predictions") {
+    if ((init.method || "GET").toUpperCase() === "POST" && server.predictionCreateResponse) {
+      return json(server.predictionCreateResponse.body, server.predictionCreateResponse.status);
+    }
+    return json(server.predictions);
   }
   return json({ ok: true, raffles: [], predictions: [] });
 };
@@ -251,6 +259,51 @@ describe("Giveaway draw flow", () => {
     }
     await clock.tick(950);
     expect($id("gw-winner-modal").hidden).toBe(false);
+  });
+
+  it("locks prediction entry points for a free owner while preserving the page", async () => {
+    server.predictions = { ok: true, predictions: [], entitlement: { enabled: false } };
+    document.body.innerHTML = renderGiveawaysHtml("preds");
+    enter();
+    await clock.tick(50);
+
+    expect($id("btn-create-pred").disabled).toBe(true);
+    expect($id("btn-open-event-drawer").disabled).toBe(true);
+    expect($id("btn-create-pred").getAttribute("aria-describedby")).toBe("pred-plan-lock");
+    expect($id("btn-open-event-drawer").getAttribute("aria-describedby")).toBe("pred-plan-lock");
+    expect($id("pred-plan-lock").hidden).toBe(false);
+    expect($id("pred-plan-lock").querySelector('[data-plan-lock="predictions"]')).toBeTruthy();
+    expect($id("pred-drawer").hidden).toBe(true);
+    $id("btn-create-pred").disabled = false;
+    await new Promise((resolve) => {
+      $id("btn-create-pred").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+      resolve();
+    });
+    expect($id("pred-drawer").hidden).toBe(true);
+  });
+
+  it("adds a safe upgrade link to a stale prediction entitlement error", async () => {
+    server.predictionCreateResponse = {
+      status: 403,
+      body: { ok: false, code: "entitlement_required", error: "Predictions is available on Pro and Team." },
+    };
+    document.body.innerHTML = renderGiveawaysHtml("preds");
+    enter();
+    await clock.tick(50);
+    $id("btn-create-pred").click();
+    $id("pred-title").value = "Who wins?";
+    $id("pred-opt-1").value = "Yes";
+    $id("pred-opt-2").value = "No";
+    $id("pred-min-bet").value = "1";
+    $id("pred-max-bet").value = "10";
+    $id("pred-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+    await flushMicrotasks();
+
+    const status = $id("pred-status");
+    expect(status.classList.contains("error")).toBe(true);
+    expect(status.textContent).toContain("Predictions is available on Pro and Team.");
+    expect(status.querySelector("a").textContent).toBe("Upgrade your plan");
+    expect(status.querySelector("a").getAttribute("href")).toBe("/dashboard/settings/billing?from=predictions");
   });
 
   it("with a required response the confirm action waits on chat", async () => {

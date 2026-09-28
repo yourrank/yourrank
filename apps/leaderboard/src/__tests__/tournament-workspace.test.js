@@ -57,7 +57,7 @@ const completedEntries = [
   { id: "e2", display_name: "forolo_GB", source: "chat", status: "selected", eligible: true, alt_flag: false },
 ];
 
-const server = { tournament: completed, entries: [], matches: [], requests: [] };
+const server = { tournament: completed, entries: [], matches: [], requests: [], entitlementEnabled: true };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 globalThis.fetch = async (input, init = {}) => {
@@ -65,7 +65,12 @@ globalThis.fetch = async (input, init = {}) => {
   server.requests.push({ path, method: init.method || "GET" });
   if (path === "/api/auth/me") return json({ ok: true, user });
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
-  if (path === "/api/tournaments") return json({ ok: true, tournaments: [server.tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
+  if (path === "/api/tournaments") return json({
+    ok: true,
+    tournaments: server.tournament ? [server.tournament] : [],
+    chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
+    entitlement: { enabled: server.entitlementEnabled },
+  });
   if (path.endsWith("/entries")) return json({ entries: server.entries, counts: { active: server.entries.length, eligible: server.entries.length, waitlist: 0, removed: 0, blocked: 0 } });
   if (path.endsWith("/bracket")) return json({ matches: server.matches, tournament: server.tournament });
   return json({ ok: true });
@@ -81,10 +86,11 @@ const click = async (id) => {
 };
 const mod = await import("../assets/tournaments.js");
 
-function boot(tournament, entries = [], matches = []) {
+function boot(tournament, entries = [], matches = [], entitlementEnabled = true) {
   server.tournament = tournament;
   server.entries = entries.map((e) => ({ ...e }));
   server.matches = matches.map((m) => ({ ...m }));
+  server.entitlementEnabled = entitlementEnabled;
   clearSession();
   return mod.enter();
 }
@@ -103,6 +109,17 @@ describe("tournament workspace chrome", () => {
     expect(html).not.toContain("<h1>Tournaments</h1>");
     // Other panes keep their chrome untouched.
     expect(renderGiveawaysContentHtml("chat")).toContain('v3-tabs gw-subnav');
+  });
+
+  it("shows the shared plan lock and blocks creation when tournaments are unavailable", async () => {
+    await boot(null, [], [], false);
+    expect($id("tournament-create").disabled).toBe(true);
+    expect($id("tournament-create").getAttribute("aria-describedby")).toBe("tournament-plan-lock");
+    expect($id("tournament-plan-lock").dataset.planLock).toBe("tournaments");
+    $id("tournament-create").disabled = false;
+    await click("tournament-create");
+    expect(text("tournament-message")).toBe("Tournaments is available on Pro and Team.");
+    expect($id("tournament-create-modal")).toBeNull();
   });
 });
 

@@ -4,6 +4,7 @@ import { withDashboardTimeout, loginRedirectPath } from "./dashboard/request.js"
 import { clearSession } from "./dashboard/session.js";
 import { engageCardState } from "./dashboard/engage-hub-state.js";
 import { inlineStateHtml, renderInlineState } from "./dashboard/states.js";
+import { isEntitlementError, planLockMarkup, wirePlanLock } from "./dashboard/plan-lock.js";
 import { showConfirmModal, paginate, wirePager } from "./dashboard/utils.js";
 
 // Client-side script for the Engage hub: server-backed Chat Giveaways
@@ -110,7 +111,8 @@ if (!window.__yrSpaShell) {
     if (!status) return;
     status.textContent = message || "";
     status.hidden = !message;
-    status.className = `status${isError ? " status--error" : " status--success"}`;
+    status.classList.remove("status--error", "status--success", "error", "success");
+    status.classList.add(isError ? "error" : "status--success");
     status.setAttribute("role", isError ? "alert" : "status");
   }
 
@@ -1281,13 +1283,17 @@ if (!window.__yrSpaShell) {
 
     // Drawers
     $("btn-open-event-drawer")?.addEventListener("click", (event) => {
+      if (!predictionsEnabled) return;
       openEventDrawer("pred-drawer", event.currentTarget);
     });
     $("btn-create-raffle")?.addEventListener("click", (event) => openEventDrawer("rf-drawer", event.currentTarget));
     $("rf-drawer-close")?.addEventListener("click", () => closeEventDrawer("rf-drawer"));
     $("rf-cancel")?.addEventListener("click", () => closeEventDrawer("rf-drawer", { clear: true }));
 
-    $("btn-create-pred")?.addEventListener("click", (event) => openEventDrawer("pred-drawer", event.currentTarget));
+    $("btn-create-pred")?.addEventListener("click", (event) => {
+      if (!predictionsEnabled) return;
+      openEventDrawer("pred-drawer", event.currentTarget);
+    });
     $("pred-drawer-close")?.addEventListener("click", () => closeEventDrawer("pred-drawer"));
     $("pred-cancel")?.addEventListener("click", () => closeEventDrawer("pred-drawer", { clear: true }));
 
@@ -1470,6 +1476,26 @@ if (!window.__yrSpaShell) {
   // =========================================================================
 
   let activePredictionsList = [];
+  let predictionsEnabled = true;
+
+  function applyPredictionEntitlement(enabled) {
+    predictionsEnabled = enabled;
+    const lock = $("pred-plan-lock");
+    for (const id of ["btn-create-pred", "btn-open-event-drawer"]) {
+      const button = $(id);
+      if (!button) continue;
+      button.disabled = !enabled;
+      if (enabled) button.removeAttribute("aria-describedby");
+      else button.setAttribute("aria-describedby", "pred-plan-lock");
+    }
+    if (!lock) return;
+    lock.replaceChildren();
+    lock.hidden = enabled;
+    if (!enabled) {
+      lock.innerHTML = planLockMarkup("predictions");
+      wirePlanLock(lock.firstElementChild, "predictions");
+    }
+  }
 
   async function loadPredictions() {
     const activeList = $("pred-active-list");
@@ -1483,6 +1509,7 @@ if (!window.__yrSpaShell) {
         return;
       }
       const data = await res.json();
+      applyPredictionEntitlement(data.entitlement?.enabled !== false);
       activePredictionsList = data.predictions || [];
       renderPredictions(activePredictionsList);
     } catch (err) {
@@ -1490,6 +1517,21 @@ if (!window.__yrSpaShell) {
         renderInlineState(activeList, { kind: "error", title: "Couldn't load predictions", body: "Network error. Check your connection and try again.", actions: [{ label: "Retry", onClick: loadPredictions }] });
       }
     }
+  }
+
+  function setPredictionEntitlementError(message) {
+    const status = $("pred-status");
+    if (!status) return;
+    status.replaceChildren(document.createTextNode(message || "Predictions are unavailable on your current plan."));
+    status.append(document.createTextNode(" "));
+    const link = document.createElement("a");
+    link.href = "/dashboard/settings/billing?from=predictions";
+    link.textContent = "Upgrade your plan";
+    status.append(link);
+    status.hidden = false;
+    status.classList.remove("status--error", "status--success", "success");
+    status.classList.add("error");
+    status.setAttribute("role", "alert");
   }
 
   function renderPredictions(predictions) {
@@ -1640,6 +1682,10 @@ if (!window.__yrSpaShell) {
       });
       const data = await responseData(res);
       if (!res.ok) {
+        if (isEntitlementError({ status: res.status, code: data.code })) {
+          setPredictionEntitlementError(data.error);
+          return;
+        }
         setInlineStatus("pred-status", data.error || "Failed to create prediction", true);
         return;
       }

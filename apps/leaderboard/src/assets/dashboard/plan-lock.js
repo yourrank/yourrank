@@ -30,11 +30,11 @@ function tierList(feature) {
 }
 
 /** Markup for the locked state. Wire with wirePlanLock(container, feature). */
-export function planLockMarkup(feature, { ctaId } = {}) {
+export function planLockMarkup(feature, { ctaId, id } = {}) {
   const label = FEATURE_LABELS[feature];
   const name = label?.name || "This feature";
   const desc = label?.description || "";
-  return `<div class="empty upsell-card plan-lock" data-plan-lock="${esc(feature)}"><p><strong>${esc(name)}</strong>${desc ? ` — ${esc(desc)}` : ""}</p><p class="hint">Available on ${esc(tierList(feature))}. <a href="/dashboard/settings/billing?from=${esc(feature)}"${ctaId ? ` id="${esc(ctaId)}"` : ""} data-plan-lock-upgrade>Upgrade your plan</a></p></div>`;
+  return `<div${id ? ` id="${esc(id)}"` : ""} class="empty upsell-card plan-lock" data-plan-lock="${esc(feature)}"><p><strong>${esc(name)}</strong>${desc ? ` — ${esc(desc)}` : ""}</p><p class="hint">Available on ${esc(tierList(feature))}. <a href="/dashboard/settings/billing?from=${esc(feature)}"${ctaId ? ` id="${esc(ctaId)}"` : ""} data-plan-lock-upgrade>Upgrade your plan</a></p></div>`;
 }
 
 /** Attaches funnel tracking to a plan-lock container (or an existing upsell

@@ -581,6 +581,7 @@ ${giveawaysSubnavHtml(active)}`}
         </div>
         <button class="btn btn--sm btn--accent" id="btn-create-pred" type="button">+ New Prediction</button>
       </div>
+      <div id="pred-plan-lock" hidden></div>
 
       <div class="gw-preds-container" id="pred-active-list">
         <div class="v3-empty" id="pred-empty-active">
