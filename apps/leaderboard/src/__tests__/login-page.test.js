@@ -53,11 +53,17 @@ describe("login page document", () => {
 });
 
 describe("signup page fields", () => {
-  it("asks for only Email, Your name, and Password", () => {
-    const inputIds = [...signupHtml.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
-    expect(inputIds).toEqual(["email", "name", "password"]);
+  it("keeps the password signup form slim and provides the email-code fields", () => {
+    const passwordForm = signupHtml.match(/<form id="form"[\s\S]*?<\/form>/)?.[0] || "";
+    const passwordInputIds = [...passwordForm.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
+    expect(passwordInputIds).toEqual(["email", "name", "password"]);
+    const codeForm = signupHtml.match(/<form id="codeForm"[\s\S]*?<\/form>/)?.[0] || "";
+    const codeInputIds = [...codeForm.matchAll(/<input\b[^>]*\bid="([^"]+)"/gi)].map((match) => match[1]);
+    expect(codeInputIds).toEqual(["codeEmail", "codeName", "code"]);
     expect(signupHtml).toContain('<label for="name">Your name</label>');
     expect(signupHtml).toContain('placeholder="How viewers will see you"');
+    expect(signupHtml).toContain('<label for="codeName">Your name</label>');
+    expect(codeForm).toContain('placeholder="How viewers will see you"');
     expect(signupHtml).not.toContain('id="slug"');
   });
 

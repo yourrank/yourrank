@@ -156,6 +156,30 @@ describe("handleRequestLoginCode", () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
+  test("signup intent issues a code to an unknown email", async () => {
+    mockOne.mockResolvedValueOnce(null);
+    const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "new@example.com", intent: "signup" }), {}, codeDeps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.message).toBe("Check your inbox for a 6-digit code.");
+    const inserts = mockExec.mock.calls.filter(([sql]) => sql.includes("INSERT INTO login_codes"));
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0][1][0]).toBe("new@example.com");
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendEmail.mock.calls[0][1].to).toBe("new@example.com");
+  });
+
+  test("login intent keeps unknown emails codeless", async () => {
+    mockOne.mockResolvedValueOnce(null);
+    const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "nobody@example.com", intent: "login" }), {}, codeDeps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.message).toBe("If that account exists, a sign-in code is on its way.");
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
   test("suspended user gets no code but the same ok response", async () => {
     mockOne.mockResolvedValueOnce({ id: "u-2", status: "suspended", locked_until: null });
     const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "sus@example.com" }), {}, codeDeps);
@@ -255,6 +279,92 @@ describe("handleVerifyLoginCode", () => {
       .mockResolvedValueOnce({ id: "u-9", email: EMAIL, status: "suspended", locked_until: null });
     const res = await handleVerifyLoginCode(codeReq("/api/auth/code/verify", { email: EMAIL, code: CODE }), {}, codeDeps);
     expect(res.status).toBe(401);
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+});
+
+describe("email-code signup", () => {
+  const EMAIL = "new@example.com";
+  const CODE = "482913";
+  const mockCreateUser = mock(() => Promise.resolve());
+  const mockCreateBoard = mock(() => Promise.resolve({ ok: true }));
+  const mockFindUser = mock(() => Promise.resolve(null));
+  const mockFindSite = mock(() => Promise.resolve(null));
+  const mockOnboarding = mock(() => Promise.resolve());
+  const mockTrack = mock(() => {});
+  const mockWaitUntil = mock(() => {});
+
+  const signupDeps = {
+    ...codeDeps,
+    findUserByEmail: (...args) => mockFindUser(...args),
+    findSiteBySlug: (...args) => mockFindSite(...args),
+    createUser: (...args) => mockCreateUser(...args),
+    createBoard: (...args) => mockCreateBoard(...args),
+    sendOnboardingEmail: (...args) => mockOnboarding(...args),
+    trackActivation: (...args) => mockTrack(...args),
+    waitUntil: (...args) => mockWaitUntil(...args),
+  };
+
+  beforeEach(() => {
+    mockOne.mockReset(); mockExec.mockReset(); mockUnsafe.mockReset();
+    mockRateLimit.mockReset(); mockRateLimit.mockResolvedValue({ ok: true });
+    mockFeatures.mockReset();
+    mockCreateSession.mockReset(); mockCreateSession.mockResolvedValue("new-session");
+    for (const m of [mockCreateUser, mockCreateBoard, mockFindUser, mockFindSite, mockOnboarding, mockTrack, mockWaitUntil]) m.mockReset();
+    mockCreateUser.mockResolvedValue();
+    mockCreateBoard.mockResolvedValue({ ok: true });
+    mockFindUser.mockResolvedValue(null);
+    mockFindSite.mockResolvedValue(null);
+    mockOnboarding.mockResolvedValue();
+  });
+
+  async function rowFor(email, code, attempts = 0) {
+    return { id: "lc-1", code_hash: await hashToken(`${email}:${code}`), attempts };
+  }
+
+  test("a correct code for an unknown email creates the account, verified, and signs in", async () => {
+    mockOne
+      .mockResolvedValueOnce(await rowFor(EMAIL, CODE))
+      .mockResolvedValueOnce(null);
+    const res = await handleVerifyLoginCode(codeReq("/api/auth/code/verify", { email: EMAIL, code: CODE, name: "Alex Rivera" }), {}, signupDeps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.created).toBe(true);
+    expect(body.user.email).toBe(EMAIL);
+    expect(body.user.emailVerified).toBe(true);
+    expect(body.user.slug).toMatch(/^alex-rivera-[a-z0-9]{1,4}$/);
+    expect(res.headers.get("set-cookie")).toBe("yr_session=new-session");
+    const userCall = mockCreateUser.mock.calls[0];
+    expect(userCall[2]).toBe(EMAIL);
+    expect(userCall[3]).toBeNull();
+    expect(userCall[4]).toBeNull();
+    expect(mockUnsafe.mock.calls[0][0]).toContain("DELETE FROM login_codes");
+    expect(mockUnsafe.mock.calls[1][0]).toContain("email_verified=true");
+    expect(mockOnboarding).toHaveBeenCalledTimes(1);
+    expect(mockTrack.mock.calls[0][3]).toEqual({ email: EMAIL, method: "email_code" });
+    expect(mockWaitUntil).toHaveBeenCalledTimes(1);
+  });
+
+  test("a correct code for an existing user keeps the login path unchanged", async () => {
+    mockOne
+      .mockResolvedValueOnce(await rowFor(EMAIL, CODE))
+      .mockResolvedValueOnce({ id: "u-1", email: EMAIL, status: "active", locked_until: null })
+      .mockResolvedValueOnce({ slug: "board" });
+    const res = await handleVerifyLoginCode(codeReq("/api/auth/code/verify", { email: EMAIL, code: CODE, name: "Alex" }), {}, signupDeps);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.created).toBeUndefined();
+    expect(body.user.id).toBe("u-1");
+    expect(body.user.slug).toBe("board");
+    expect(mockCreateUser).not.toHaveBeenCalled();
+  });
+
+  test("a wrong code for an unknown email returns 401 and creates nothing", async () => {
+    mockOne.mockResolvedValueOnce(await rowFor(EMAIL, CODE));
+    const res = await handleVerifyLoginCode(codeReq("/api/auth/code/verify", { email: EMAIL, code: "000000", name: "Alex" }), {}, signupDeps);
+    expect(res.status).toBe(401);
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });

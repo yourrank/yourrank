@@ -298,11 +298,11 @@ form.addEventListener("submit", async (e) => {
   } catch (_) { errEl.textContent = "Network error. Try again."; setPending(false, orig); }
 });
 
-/* Sign-in method toggle + email-code flow (login page only). The password
-   form above is untouched — this block only exists when the page ships the
-   #codeForm markup, so /forgot /reset /signup are unaffected. */
+/* Sign-in method toggle + email-code flow (login and signup pages). The
+   password form above is untouched — this block only exists when the page
+   ships the #codeForm markup, so /forgot and /reset are unaffected. */
 const codeForm = document.getElementById("codeForm");
-if (mode === "login" && codeForm) {
+if ((mode === "login" || mode === "signup") && codeForm) {
   const methodCode = document.getElementById("methodCode");
   const methodPassword = document.getElementById("methodPassword");
   const step1 = document.getElementById("codeStep1");
@@ -352,7 +352,8 @@ if (mode === "login" && codeForm) {
   }
 
   async function requestCode(email) {
-    const { status, data } = await post("/api/auth/code/request", { email });
+    const payload = mode === "signup" ? { email, intent: "signup" } : { email };
+    const { status, data } = await post("/api/auth/code/request", payload);
     return { status, data };
   }
 
@@ -399,9 +400,27 @@ if (mode === "login" && codeForm) {
         codeEmailInput.focus();
         return;
       }
+      if (mode === "signup") {
+        const codeNameInput = document.getElementById("codeName");
+        if (codeNameInput && !codeNameInput.value.trim()) {
+          codeNameInput.setAttribute("aria-invalid", "true");
+          const box = fieldErrEl("codeName"); if (box) box.textContent = "Enter your name";
+          codeNameInput.focus();
+          return;
+        }
+      }
+      const origSubmitLabel = codeSubmit.textContent;
       codeSubmit.disabled = true; codeSubmit.textContent = "Sending…";
       try {
         const { status, data } = await requestCode(email);
+        if (mode === "signup" && status === 503) {
+          // Codes are disabled (email delivery unconfigured): the visitor can
+          // still join via the password method.
+          methodPassword?.click();
+          const errBox = document.getElementById("err");
+          if (errBox) errBox.textContent = data.error || "Something went wrong.";
+          return;
+        }
         if (!data.ok) { showCodeError(codeErr, status, data); return; }
         codeEmail = email;
         codeSentTo.textContent = email;
@@ -412,7 +431,7 @@ if (mode === "login" && codeForm) {
         startResendCountdown(60);
         codeInput.focus();
       } catch (_) { codeErr.textContent = "Network error. Try again."; }
-      finally { codeSubmit.disabled = false; codeSubmit.textContent = "Send code"; }
+      finally { codeSubmit.disabled = false; codeSubmit.textContent = origSubmitLabel; }
       return;
     }
     // Step 2 — verify the 6-digit code.
@@ -424,14 +443,24 @@ if (mode === "login" && codeForm) {
       codeInput.focus();
       return;
     }
-    codeVerify.disabled = true; codeVerify.textContent = "Signing in…";
+    const isSignup = mode === "signup";
+    const verifyDone = isSignup ? "Create account" : "Sign in";
+    codeVerify.disabled = true; codeVerify.textContent = isSignup ? "Creating…" : "Signing in…";
     try {
-      const { status, data } = await post("/api/auth/code/verify", { email: codeEmail, code });
-      if (!data.ok) { showCodeError(codeErr2, status, data); codeVerify.disabled = false; codeVerify.textContent = "Sign in"; return; }
-      location.href = nextPath || "/dashboard";
+      const payload = { email: codeEmail, code };
+      if (isSignup) payload.name = document.getElementById("codeName")?.value.trim() || "";
+      const { status, data } = await post("/api/auth/code/verify", payload);
+      if (!data.ok) { showCodeError(codeErr2, status, data); codeVerify.disabled = false; codeVerify.textContent = verifyDone; return; }
+      if (isSignup) {
+        const p = (planParam || "").toLowerCase();
+        if (["pro", "team"].includes(p)) location.href = `/dashboard/settings/billing?plan=${encodeURIComponent(p)}`;
+        else location.href = nextPath || "/dashboard";
+      } else {
+        location.href = nextPath || "/dashboard";
+      }
     } catch (_) {
       codeErr2.textContent = "Network error. Try again.";
-      codeVerify.disabled = false; codeVerify.textContent = "Sign in";
+      codeVerify.disabled = false; codeVerify.textContent = verifyDone;
     }
   });
 }
