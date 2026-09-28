@@ -2069,6 +2069,12 @@ $("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 export function renderNotifications(n) {
   const paid = state.ME.plan !== "free";
   $("notifyBody").hidden = !paid; $("notifyLock").hidden = paid;
+  // The Telegram block sits outside #notifyBody, so Free would otherwise keep
+  // live inputs whose only feedback is a 403 after the request fires.
+  for (const id of ["testTelegram", "f_tgChatId", "f_tgNotify", "settingsWebhookEnabled"]) {
+    const el = $(id);
+    if (el) el.disabled = !paid;
+  }
   if (!paid) return;
   const wh = $("f_webhook");
   if (wh) {
