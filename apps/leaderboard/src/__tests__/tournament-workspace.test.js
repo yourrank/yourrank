@@ -102,7 +102,7 @@ describe("tournament workspace chrome", () => {
     // The pane's only h1s live inside the tournament app itself.
     expect(html).not.toContain("<h1>Tournaments</h1>");
     // Other panes keep their chrome untouched.
-    expect(renderGiveawaysContentHtml("chat")).toContain("engage-tabs");
+    expect(renderGiveawaysContentHtml("chat")).toContain('v3-tabs gw-subnav');
   });
 });
 

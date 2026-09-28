@@ -114,7 +114,7 @@ describe("Giveaway Chatroom Handler", () => {
 
   it("renders each giveaway tab as a deep-linkable active server view", () => {
     const html = renderGiveawaysHtml("raffles");
-    expect(html).toContain("<h1>Raffles</h1>");
+    expect(html).toContain("<h1>Giveaways</h1>");
     expect(html).toContain('class="engage-back" href="/dashboard/giveaways"');
     expect(html).toContain('id="pane-raffles"');
     expect(html).toContain('class="gw-tab-pane is-active" id="pane-raffles"');

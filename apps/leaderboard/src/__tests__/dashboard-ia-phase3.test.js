@@ -10,7 +10,7 @@ import { dashboardChromeState } from "@yourrank/shared/dashboard-chrome-state";
 import { PAGES } from "../pages.jsx";
 import { RewardsChannelPage } from "../pages/rewards.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
-import { ENGAGE_TABS } from "../pages/engage-tabs.jsx";
+import { GIVEAWAY_TABS, renderGiveawaysContentHtml } from "../pages/giveaway-pages.js";
 import { REWARDS_TABS } from "../pages/rewards.jsx";
 import { defaultTab } from "../assets/dashboard/routes.js";
 
@@ -79,9 +79,10 @@ describe("Phase 3 dashboard information architecture", () => {
   });
 
   it("keeps Engage and Rewards strips separate", () => {
-    expect(ENGAGE_TABS.map(({ label }) => label)).toEqual(["Activities", "Giveaways"]);
+    expect(GIVEAWAY_TABS.map(([, label]) => label)).toEqual(["Chat Giveaway", "Raffle", "Prediction"]);
     expect(REWARDS_TABS.map(({ label }) => label)).toEqual(["Overview", "Ways to earn", "Shop", "Claims"]);
-    expect(PAGES.rewardsShop.Component({ user: {} }).toString()).not.toContain("engage-tabs");
+    expect(PAGES.rewardsShop.Component({ user: {} }).toString()).not.toContain("gw-subnav");
+    expect(renderGiveawaysContentHtml("chat")).toContain('class="v3-tabs gw-subnav" aria-label="Giveaways"');
   });
 
   it("renames palette destinations without dropping legacy search terms", () => {
