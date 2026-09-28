@@ -91,6 +91,21 @@ describe("verify-email prompt state", () => {
     expect(verifyEmailPromptState({ from: "login" }).message).toBe("Check your inbox for a verification link, or request a new one below.");
   });
 
+  it("offers a continue-to-dashboard link to signed-in users", () => {
+    const state = verifyEmailPromptState({ signedIn: true });
+    expect(state.showContinue).toBe(true);
+    const html = verifyEmailPageHtml(state);
+    expect(html).toContain('id="continueWrap">');
+    expect(html).toContain("Continue to your dashboard");
+    expect(html).not.toContain('id="continueWrap" hidden');
+  });
+
+  it("hides the continue link by default", () => {
+    const html = verifyEmailPageHtml(verifyEmailPromptState({}));
+    expect(html).toContain('id="continueWrap" hidden');
+    expect(html).not.toContain("{{VERIFY_");
+  });
+
   it("renders the login-context message into the page", () => {
     const html = verifyEmailPageHtml(verifyEmailPromptState({ loginNeedsVerification: true }));
     expect(html.startsWith("<!DOCTYPE html>")).toBe(true);

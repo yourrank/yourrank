@@ -5,10 +5,9 @@
 // command palette or the help drawer. Navigation uses requestDashboardRoute
 // so every destination stays manifest-backed — no route literals live here.
 // Pure data and persistence live in tour-steps.js (unit-testable).
-import { $ } from "./utils.js";
 import { state } from "./state.js";
 import { currentRoute, requestDashboardRoute } from "./shell.js";
-import { NO_TARGET, TOUR_STEPS, hasSeenTour, markTourSeen } from "./tour-steps.js";
+import { availableTourSteps, hasSeenTour, markTourSeen, tourProgressLabel } from "./tour-steps.js";
 
 export { MAX_TOUR_STEPS, NO_TARGET, hasSeenTour, markTourSeen, tourSeenKey } from "./tour-steps.js";
 
@@ -16,12 +15,16 @@ function tourUserId() {
   return state.ME?.id || state.ME?.email || "";
 }
 
+// Step targets are CSS selectors, so resolve them with querySelector —
+// getElementById would drop "#selector" steps as null.
+const targetEl = (selector) => (selector ? document.querySelector(selector) : null);
+
 function isSpotlightable(el) {
   return Boolean(el && el.getClientRects().length && !el.closest("[hidden]"));
 }
 
 function activeSteps() {
-  return TOUR_STEPS.filter((step) => step.target === NO_TARGET || isSpotlightable($(step.target)));
+  return availableTourSteps((sel) => isSpotlightable(targetEl(sel)));
 }
 
 let running = false;
@@ -95,13 +98,14 @@ export function startTour({ force = false } = {}) {
 
   function position() {
     const step = steps[index];
-    if (!step.target) {
+    const el = targetEl(step.target);
+    // centerWhenHidden steps (e.g. the Share-page overlay card) stay as a
+    // floating bubble instead of stranding it at the previous position.
+    if (!step.target || !isSpotlightable(el)) {
       spot.style.opacity = "0";
       centerBubble();
       return;
     }
-    const el = $(step.target);
-    if (!isSpotlightable(el)) return;
     spot.style.opacity = "1";
     const pad = 6;
     const rect = el.getBoundingClientRect();
@@ -132,14 +136,16 @@ export function startTour({ force = false } = {}) {
 
   function render() {
     const step = steps[index];
-    const stepNumber = TOUR_STEPS.indexOf(step) + 1;
-    progressEl.textContent = `Step ${stepNumber} of ${TOUR_STEPS.length}`;
+    progressEl.textContent = tourProgressLabel(index, steps.length);
     titleEl.textContent = step.title;
     bodyEl.textContent = step.body;
     const last = index === steps.length - 1;
     const hasCta = Boolean(step.ctaRoute);
-    nextBtn.textContent = last && !hasCta ? "Finish" : "Next";
-    nextBtn.hidden = hasCta;
+    nextBtn.textContent = last ? "Finish" : "Next";
+    // A CTA replaces Next mid-tour, but the last step still needs a way out.
+    nextBtn.hidden = hasCta && !last;
+    nextBtn.classList.toggle("btn--ghost", hasCta && last);
+    nextBtn.classList.toggle("btn--accent", !(hasCta && last));
     backBtn.hidden = index === 0;
     let cta = bubble.querySelector(".yr-tour-cta");
     if (hasCta && !cta) {
@@ -158,8 +164,8 @@ export function startTour({ force = false } = {}) {
       cta.remove();
     }
     if (step.target) {
-      const el = $(step.target);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const el = targetEl(step.target);
+      if (isSpotlightable(el)) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
     requestAnimationFrame(position);
     nextBtn.focus({ preventScroll: true });

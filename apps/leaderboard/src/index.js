@@ -894,15 +894,18 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         // client JavaScript fails to load or run.
         const token = url.searchParams.get("token");
         let loginNeedsVerification = false;
-        if (!token && url.searchParams.get("from") === "login") {
+        let signedIn = false;
+        if (!token) {
           try {
             const user = await currentUserImpl(request, env);
-            loginNeedsVerification = user?.email_verified === false;
+            signedIn = Boolean(user);
+            loginNeedsVerification = url.searchParams.get("from") === "login" && user?.email_verified === false;
           } catch { /* Keep the generic prompt when the session cannot be confirmed. */ }
         }
         let verifyState = verifyEmailPromptState({
           deliveryFailed: url.searchParams.get("delivery") === "failed",
           loginNeedsVerification,
+          signedIn,
         });
         let status = 200;
         if (token) {

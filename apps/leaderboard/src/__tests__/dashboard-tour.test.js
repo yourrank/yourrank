@@ -4,8 +4,10 @@ import {
   MAX_TOUR_STEPS,
   NO_TARGET,
   TOUR_STEPS,
+  availableTourSteps,
   hasSeenTour,
   markTourSeen,
+  tourProgressLabel,
   tourSeenKey,
 } from "../assets/dashboard/tour-steps.js";
 
@@ -90,6 +92,29 @@ describe("tour steps", () => {
     // Completion is recorded up front, so closing the tab mid-tour still
     // respects "never show the same onboarding twice".
     expect(src).toContain("markTourSeen(tourUserId())");
+  });
+
+  it("keeps every step when all targets spotlight", () => {
+    expect(availableTourSteps(() => true).map((s) => s.id)).toEqual(["welcome", "setup", "scoring", "overlays", "kick"]);
+  });
+
+  it("keeps floating and centerWhenHidden steps when no target spotlights", () => {
+    expect(availableTourSteps(() => false).map((s) => s.id)).toEqual(["welcome", "overlays", "kick"]);
+  });
+
+  it("numbers progress contiguously over the rendered steps", () => {
+    expect(tourProgressLabel(1, 3)).toBe("Step 2 of 3");
+  });
+
+  it("runner resolves step targets with querySelector, not getElementById", () => {
+    const src = readFileSync(
+      new URL("../assets/dashboard/tour.js", import.meta.url),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^[ \t]*\/\/.*$/gm, "");
+    expect(src).not.toMatch(/\$\(\s*step\.target/);
+    expect(src).toContain("document.querySelector(");
   });
 
   it("targets only elements rendered on the Home surface", () => {
