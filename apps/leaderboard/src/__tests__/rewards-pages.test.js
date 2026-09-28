@@ -29,6 +29,7 @@ const rewardsMarkupSource = readFileSync(new URL("../pages/credits-pages.js", im
 const rewardsClientSource = readFileSync(new URL("../assets/credits.js", import.meta.url), "utf8");
 const dashboardV4Source = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
 const viewerClientSource = readFileSync(new URL("../assets/viewer-dashboard.js", import.meta.url), "utf8");
+const CHECKIN_AMOUNT_ERROR = "Check-in credits must be a whole number from 1 to 1,000.";
 
 describe("server-rendered rewards pages", () => {
   for (const [tab, render] of pages) {
@@ -59,6 +60,23 @@ describe("server-rendered rewards pages", () => {
     expect(dashboardV4Source).toContain("grid-template-columns: minmax(0, 1fr)");
     expect(dashboardV4Source).toContain("#cr-rewards details");
     expect(dashboardV4Source).toContain("overflow-wrap: anywhere");
+  });
+
+  it("offers daily check-in settings before Kick rewards", () => {
+    const html = RewardsRulesPage().toString();
+    expect(html).toContain('id="cr-checkin"');
+    expect(html).toContain("Daily check-in");
+    expect(html).toContain("Signed-in members can check in once a day (UTC) to earn credits. Works without Kick.");
+    expect(html).toContain('id="cr-checkin-active"');
+    expect(html).toContain('id="cr-checkin-amount" name="amount" type="number" min="1" max="1000" step="1"');
+    expect(html).toContain('id="cr-checkin-save"');
+    expect(html).toContain('id="cr-checkin-status"');
+    expect(html).toContain('/dashboard/audience/members">Award credits from Members.</a>');
+    expect(html.indexOf('id="cr-checkin"')).toBeLessThan(html.indexOf('id="cr-rewards"'));
+    expect(html.indexOf('id="cr-checkin-status"')).toBeLessThan(html.indexOf('class="cr-drawer-actions"'));
+    expect(rewardsMarkupSource).toContain('Choose how members earn Credits.');
+    expect(rewardsClientSource).toContain('/api/credits/earning-rules');
+    expect(rewardsClientSource).toContain(CHECKIN_AMOUNT_ERROR);
   });
 
   it("surfaces Kick OAuth results in the channel status and cleans one-time params", () => {

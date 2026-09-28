@@ -607,6 +607,76 @@
     });
   }
 
+  // ── My Community: daily check-in ─────────────────────────────────
+  var checkinButton = document.querySelector("[data-checkin]");
+  var checkinStatus = document.getElementById("yr-checkin-status");
+  var setCheckinStatus = function (message, isError) {
+    if (!checkinStatus) return;
+    checkinStatus.textContent = message || "";
+    checkinStatus.classList.toggle("is-error", !!isError);
+  };
+  if (checkinButton) {
+    checkinButton.addEventListener("click", function () {
+      var label = checkinButton.textContent;
+      var checkinSite = checkinButton.dataset.siteSlug || slug;
+      checkinButton.disabled = true;
+      checkinButton.setAttribute("aria-busy", "true");
+      checkinButton.textContent = "Checking in…";
+      setCheckinStatus("Checking in…");
+      fetch("/api/viewer/checkin", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        body: JSON.stringify({ site: checkinSite }),
+      })
+        .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
+        .then(async function (result) {
+          if (result.ok && result.data.ok) {
+            checkinButton.textContent = "Checked in today";
+            checkinButton.removeAttribute("aria-busy");
+            checkinButton.classList.add("is-success");
+            var points = Number(result.data.pointsAwarded || 0);
+            var successMessage = "Checked in. " + points.toLocaleString("en-US") + " credits added.";
+            setCheckinStatus(successMessage);
+            if (typeof result.data.newBalance === "number") updateBalance(result.data.newBalance);
+            focusWithoutScroll(checkinStatus || checkinButton);
+            if (window.YRViewerApp) {
+              try {
+                await window.YRViewerApp.refresh();
+              } catch (refreshError) {
+                console.error("[site-shell] check-in refresh failed", refreshError);
+              }
+              checkinStatus = document.getElementById("yr-checkin-status");
+              setCheckinStatus(successMessage);
+              focusWithoutScroll(checkinStatus);
+            } else {
+              window.location.reload();
+            }
+            return;
+          }
+          checkinButton.disabled = false;
+          checkinButton.removeAttribute("aria-busy");
+          checkinButton.textContent = label;
+          var message = result.data.error === "already_checked_in"
+            ? "You already checked in today. Come back tomorrow."
+            : result.data.error === "Too many attempts. Please wait a minute."
+              ? "Too many attempts. Wait a minute, then try again."
+              : result.data.error === "unauthorized"
+                ? "Sign in again to check in."
+                : "Couldn't check in. Try again.";
+          setCheckinStatus(message, true);
+          focusWithoutScroll(checkinStatus || checkinButton);
+        })
+        .catch(function () {
+          checkinButton.disabled = false;
+          checkinButton.removeAttribute("aria-busy");
+          checkinButton.textContent = label;
+          setCheckinStatus("Network error. Your check-in was not confirmed; try again.", true);
+          focusWithoutScroll(checkinStatus || checkinButton);
+        });
+    });
+  }
+
   // ── Shop: redeem ────────────────────────────────────────────────────
   var redeemStatus = document.getElementById("yr-redeem-status");
   var setRedeemStatus = function (message, isError) {

@@ -1425,7 +1425,7 @@ function meMain(ctx) {
     return `${heading}${authError}<section class="member-gate" data-viewer-intent="${esc(intent.intent)}"><span class="member-gate-ico" aria-hidden="true">${viewerIcon('user')}</span><div><h2>${esc(copy.heading)}</h2><p>${esc(copy.body)}</p><div class="member-actions">${providers || '<p role="status">Sign-in is not available for this community right now.</p>'}<a class="yr-sec-link" href="${homeHref}">Back to ${creator}</a><a class="yr-sec-link" href="${accountHref}">My communities</a></div>${joinOffer}</div></section>`;
   }
   if (membershipStatus === "absent") {
-    return `${heading}${authError}<section class="member-gate"><span class="member-gate-ico" aria-hidden="true">${viewerIcon('user')}</span><div><h2>You haven't joined this community yet.</h2><p>Join to keep your Rewards, free credits and Claims together here.</p><div class="member-actions"><button class="yr-btn" id="yr-membership-join" type="button" data-membership-join data-site-slug="${esc(slug)}">Join community</button></div><p id="yr-membership-join-status" role="status" aria-live="polite" tabindex="-1"></p></div></section>${codeDropClaimSection({slug,creator,joinsMembership:true})}`;
+    return `${heading}${authError}<section class="member-gate"><span class="member-gate-ico" aria-hidden="true">${viewerIcon('user')}</span><div><h2>You haven't joined this community yet.</h2><p>Join to keep your Rewards, free credits and Claims together here.</p><div class="member-actions"><button class="yr-btn" id="yr-membership-join" type="button" data-membership-join data-site-slug="${esc(slug)}">Join community</button></div><p id="yr-membership-join-status" role="status" aria-live="polite" tabindex="-1"></p></div></section>${viewerData?.checkin ? checkinSection({ slug, creator, amount: viewerData.checkin.amount, claimedToday: viewerData.checkin.claimedToday, joinsMembership: true }) : ""}${codeDropClaimSection({slug,creator,joinsMembership:true})}`;
   }
   if (!member) {
     return `${heading}${authError}<section class="member-gate"><span class="member-gate-ico" aria-hidden="true">${viewerIcon('user')}</span><div><h2>Your membership couldn't load</h2><p>Your account is signed in, but this community's information is unavailable. Try reloading or return to your communities.</p><div class="member-actions"><a class="yr-btn" href="${siteSectionHref("me",slug,isCustomDomain)}">Reload membership</a><a class="yr-sec-link" href="${accountHref}">All communities</a></div></div></section>`;
@@ -1450,13 +1450,23 @@ ${claims.length
   : `<div class="member-empty"><div><h3>No claims yet</h3><p>${blocked ? 'Claiming is unavailable for this membership.' : 'Choose a reward in the Reward shop. Its status will appear here after you claim it.'}</p></div></div>`}
 </section>
 <section class="member-section" id="membership-participation" role="tabpanel" aria-labelledby="membership-tab-participation" tabindex="0"><div class="member-section-head"><h2 id="member-participation-title">Participation</h2><p>${formatNumber(participation.length)} recent</p></div>${participationRows ? `<ul class="yr-parts" role="list">${participationRows}</ul>${viewerData.participationTruncated ? `<p class="yr-fine">Showing the ${formatNumber(viewerData.participationLimit || participation.length)} most recent participation records.</p>` : ""}` : '<div class="member-empty"><p>No participation history yet. Successful free code-drop claims will appear here.</p></div>'}</section>
-${blocked ? "" : codeDropClaimSection({slug,creator,asTabPanel:true})}
+${blocked ? "" : `${viewerData.checkin ? checkinSection({ slug, creator, amount: viewerData.checkin.amount, claimedToday: viewerData.checkin.claimedToday }) : ""}${codeDropClaimSection({slug,creator,asTabPanel:true})}`}
 `;
 }
 
 /** One My Activity tab; the href keeps the panel reachable as a plain anchor when the shell script is unavailable. */
 function membershipTab(key, label, selected = false) {
   return `<a role="tab" id="membership-tab-${key}" href="#membership-${key}" aria-controls="membership-${key}" aria-selected="${selected ? "true" : "false"}">${label}</a>`;
+}
+
+function checkinSection({ slug, creator, amount, claimedToday = false, joinsMembership = false }) {
+  const note = `Check in once a day to earn ${esc(String(amount))} credits from ${creator}.${joinsMembership ? " Checking in joins this community." : ""}`;
+  return `<section class="member-code yr-checkin" aria-label="Daily check-in">
+<h2>Daily check-in</h2>
+<p class="yr-note">${note}</p>
+<button class="yr-btn yr-btn--sm" type="button" data-checkin data-site-slug="${esc(slug)}"${claimedToday ? " disabled" : ""}>${claimedToday ? "Checked in today" : "Check in"}</button>
+<p class="yr-code-drop-status" id="yr-checkin-status" role="status" aria-live="polite"></p>
+</section>`;
 }
 
 function codeDropClaimSection({ slug, creator, joinsMembership = false, asTabPanel = false }) {
@@ -1477,4 +1487,3 @@ function codeDropClaimSection({ slug, creator, joinsMembership = false, asTabPan
 </form>
 </section>`;
 }
-

@@ -233,7 +233,7 @@ describe("parseSitePath", () => {
     expect(parseSitePath("/shop/a/b", true, "foo")).toBeNull();
   });
 
-  it("passes only supported viewer auth, Join, and free code-drop claim paths through custom-domain routing", () => {
+  it("passes only supported viewer auth, Join, check-in, and free code-drop claim paths through custom-domain routing", () => {
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/callback")).toBe(true);
     expect(isCustomViewerAuthPath("GET", "/api/viewer/auth/kick/handoff")).toBe(true);
@@ -243,6 +243,7 @@ describe("parseSitePath", () => {
     expect(isCustomViewerAuthPath("GET", "/api/dashboard/status")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/membership/join")).toBe(true);
     expect(isCustomViewerApiPath("POST", "/api/events/drops/claim")).toBe(true);
+    expect(isCustomViewerApiPath("POST", "/api/viewer/checkin")).toBe(true);
     expect(isCustomViewerApiPath("GET", "/api/events/drops/claim")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/events/raffles")).toBe(false);
     expect(isCustomViewerApiPath("POST", "/api/viewer/redeem")).toBe(false);
@@ -563,7 +564,7 @@ describe("logged-out vs logged-in rendering", () => {
     expect(routeSiteData.calls.at(-1)).toEqual({
       siteId: "site-1",
       viewerId: "v1",
-      opts: { shop: true, claims: true, ledger: true, participation: true },
+      opts: { shop: true, claims: true, ledger: true, participation: true, checkin: true },
     });
     expect(html).toContain("Claimed a code drop");
     expect(html).toContain("Shoutout");
