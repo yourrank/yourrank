@@ -48,9 +48,9 @@ describe("dashboard navigation ownership", () => {
     const groups = items.filter((item) => "kind" in item && item.kind === "group");
     const topLevel = items.filter((item) => !("kind" in item && item.kind === "group"));
 
-    // Engage discloses its two destinations; route scope remains unchanged.
+    // Engage discloses its four destinations; route scope remains unchanged.
     expect(groups.map(item => item.key)).toEqual(["engage"]);
-    expect(groups[0].children.map(item => item.key)).toEqual(["tournaments", "giveaways"]);
+    expect(groups[0].children.map(item => item.key)).toEqual(["overview", "activities", "giveaways", "tournaments"]);
     expect(topLevel.map((item) => item.key)).toEqual([
       "home", "board", "audience", "rewards", "performance", "telegram", "settings",
     ]);
@@ -197,11 +197,12 @@ describe("dashboard navigation ownership", () => {
     for (const path of ["/dashboard", "/dashboard/leaderboard/setup", "/dashboard/analytics/activity", "/dashboard/leaderboards", "/dashboard/site", "/dashboard/audience/members", "/dashboard/rewards/activity", "/dashboard/settings/billing"]) {
       expect((dashboardHtml(path).match(/class="lb-nav[^"]* is-on/g) || []).length).toBe(1);
     }
-    // Activities remains reachable from the page-owned tabs. It opens Engage
-    // without falsely selecting either of the sidebar's two child destinations.
+    // Activities is an Engage rail child: exactly one sidebar destination is
+    // selected and it is the Activities child.
     const activities = dashboardHtml("/dashboard/activities");
     expect(activities).toContain('data-nav-group="engage" data-current-group="true"');
-    expect(activities.match(/class="lb-nav[^"]* is-on/g) || []).toHaveLength(0);
+    expect(activities.match(/class="lb-nav[^"]* is-on/g) || []).toHaveLength(1);
+    expect(activities).toMatch(/data-nav="activities"[^>]*aria-current="page"/);
     expect(dashboardHtml("/dashboard/leaderboards")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
     expect(dashboardHtml("/dashboard/site")).toMatch(/data-nav="board"[^>]*aria-current="page"/);
   });
