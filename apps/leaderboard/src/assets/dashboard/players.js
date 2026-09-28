@@ -231,10 +231,15 @@ function playerDraftStorage() {
   }
 }
 
+function isBlankPlayerRow(tr) {
+  return !(tr.querySelector(".p-name")?.value || "").trim()
+    && PLAYER_NUMBER_FIELDS.every(({ selector }) => !(tr.querySelector(selector)?.value || "").trim());
+}
+
 function rawPlayerRows() {
   const rows = $("rows");
   if (!rows) return [];
-  return [...rows.children].map((tr) => Object.fromEntries([
+  return [...rows.children].filter((tr) => !isBlankPlayerRow(tr)).map((tr) => Object.fromEntries([
     ["name", tr.querySelector(".p-name")?.value || ""],
     ...PLAYER_NUMBER_FIELDS.map(({ key, selector }) => [key, tr.querySelector(selector)?.value || ""]),
   ]));
@@ -317,6 +322,11 @@ export function collectPlayers({ focusInvalid = false, reportErrors = true } = {
   const invalid = [];
   const players = rows ? [...rows.children].map((tr) => {
     const nameInput = tr.querySelector(".p-name");
+    if (isBlankPlayerRow(tr)) {
+      setPlayerFieldError(nameInput, "");
+      for (const { selector } of PLAYER_NUMBER_FIELDS) clearPlayerFieldError(tr.querySelector(selector));
+      return null;
+    }
     const name = nameInput?.value.trim() || "";
     const duplicateName = name && [...rows.children].filter((row) => normalizePlayerIdentity(row.querySelector(".p-name")?.value) === normalizePlayerIdentity(name)).length > 1;
     if (!name) {
@@ -343,7 +353,7 @@ export function collectPlayers({ focusInvalid = false, reportErrors = true } = {
       }
     }
     return player;
-  }).filter((player) => player.name) : [];
+  }).filter((player) => player?.name) : [];
   if (focusInvalid && invalid[0]?.input) invalid[0].input.focus();
   return { players, invalid };
 }

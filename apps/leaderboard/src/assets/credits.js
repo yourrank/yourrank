@@ -229,6 +229,17 @@ function setLoading(idOrEl, loading, text = "Loading…") {
   if (loading) { el.dataset.origText = el.textContent; el.disabled = true; el.setAttribute("aria-busy", "true"); el.textContent = text; }
   else { el.disabled = false; el.removeAttribute("aria-busy"); el.textContent = el.dataset.origText || el.textContent; delete el.dataset.origText; }
 }
+async function submitWithFeedback({ btn, statusId, busyLabel = "Saving…", run }) {
+  setLoading(btn, true, busyLabel);
+  try { return await run(); }
+  catch (err) {
+    const message = err?.message || "Something went wrong. Try again.";
+    setStatus(statusId, message, true);
+    $(statusId)?.scrollIntoView?.({ block: "nearest" });
+    showToast(message, "error");
+    return undefined;
+  } finally { setLoading(btn, false); }
+}
 function setGlobalLoading(loading) { if ($("cr-loading")) $("cr-loading").hidden = !loading; }
 function setCreditsPanelLoading(loading) {
   const panel = $("cr-empty");
@@ -1172,18 +1183,25 @@ async function submitClaimSupportReply(event) {
   const button = $("cr-claim-support-send");
   const id = claimDetailId;
   claimSupportBusy = true;
-  setLoading(button, true, "Sending…");
   try {
-    const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/messages`), { message });
-    if (id !== claimDetailId) return;
-    textarea.value = "";
-    renderClaimSupport(data.support);
-    setStatus("cr-claim-support-status", "Reply sent.");
-  } catch (error) {
-    if (id === claimDetailId) setStatus("cr-claim-support-status", error.message, true);
+    await submitWithFeedback({
+      btn: button,
+      statusId: "cr-claim-support-status",
+      busyLabel: "Sending…",
+      run: async () => {
+        try {
+          const data = await api("POST", sitePath(`/api/claims/${encodeURIComponent(claimIdForRedemption(id))}/support/messages`), { message });
+          if (id !== claimDetailId) return;
+          textarea.value = "";
+          renderClaimSupport(data.support);
+          setStatus("cr-claim-support-status", "Reply sent.");
+        } catch (error) {
+          if (id === claimDetailId) throw error;
+        }
+      },
+    });
   } finally {
     claimSupportBusy = false;
-    setLoading(button, false);
   }
 }
 async function resolveClaimSupport(button) {
@@ -1467,10 +1485,19 @@ function wireActions() {
   });
   $("cr-bulk-clear")?.addEventListener("click", () => clearMemberSelection());
   wireAutosave("cr-channel-form", "channel"); wireAutosave("cr-reward-form", "reward"); wireAutosave("cr-reward-create-form", "reward-create"); wireAutosave("cr-shop-form", "shop"); wireAutosave("cr-viewer-auth-form", "viewer-auth"); wireAutosave("cr-history-form", "history");
-  $("cr-channel-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); const btn = e.submitter || $("cr-channel-submit"); setLoading(btn, true, "Saving…");
-    try { const data = await api("POST", sitePath("/api/credits/connect"), { externalId: $("cr-channel-id-input").value.trim(), name: $("cr-channel-name-input").value.trim() }); state.channel = data.channel; setStatus("cr-channel-status", "Channel saved."); render(); }
-    catch (err) { setStatus("cr-channel-status", err.message, true); } finally { setLoading(btn, false); }
+  $("cr-channel-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("cr-channel-submit");
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-channel-status",
+      run: async () => {
+        const data = await api("POST", sitePath("/api/credits/connect"), { externalId: $("cr-channel-id-input").value.trim(), name: $("cr-channel-name-input").value.trim() });
+        state.channel = data.channel;
+        setStatus("cr-channel-status", "Channel saved.");
+        render();
+      },
+    });
   });
   $("cr-checkin-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1519,23 +1546,59 @@ function wireActions() {
     try { await api("POST", sitePath("/api/kick/disconnect", activeSiteId)); state.channel = { connected: false, name: null }; render(); setStatus("cr-channel-status", "Disconnected."); }
     catch (err) { setStatus("cr-channel-status", err.message, true); } finally { setLoading(btn, false); }
   });
-  $("cr-reward-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); const btn = e.submitter || $("cr-reward-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/rewards"), { id: $("cr-reward-id").value || undefined, kickRewardId: $("cr-reward-kick-id").value.trim(), kickRewardTitle: $("cr-reward-title").value.trim(), kickRewardCost: Number($("cr-reward-cost").value), credits: Number($("cr-reward-credits").value) }); setStatus("cr-reward-status", "Way to earn saved."); $("cr-reward-form").reset(); $("cr-reward-id").value = ""; await load(); }
-    catch (err) { setStatus("cr-reward-status", err.message, true); } finally { setLoading(btn, false); }
+  $("cr-reward-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("cr-reward-submit");
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-reward-status",
+      run: async () => {
+        await api("POST", sitePath("/api/credits/rewards"), { id: $("cr-reward-id").value || undefined, kickRewardId: $("cr-reward-kick-id").value.trim(), kickRewardTitle: $("cr-reward-title").value.trim(), kickRewardCost: Number($("cr-reward-cost").value), credits: Number($("cr-reward-credits").value) });
+        setStatus("cr-reward-status", "Way to earn saved.");
+        $("cr-reward-form").reset();
+        $("cr-reward-id").value = "";
+        await load();
+      },
+    });
   });
-  $("cr-reward-create-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); const btn = e.submitter || $("cr-reward-create-submit"); setLoading(btn, true, "Creating…");
-    try { await api("POST", sitePath("/api/credits/rewards/create"), { title: $("cr-reward-create-title").value.trim(), cost: Number($("cr-reward-create-cost").value), credits: Number($("cr-reward-create-credits").value), description: $("cr-reward-create-desc").value.trim(), backgroundColor: $("cr-reward-create-color").value }); setStatus("cr-reward-create-status", "Kick reward created and linked to credits."); $("cr-reward-create-form").reset(); $("cr-reward-create-color").value = "#00e701"; await load(); }
-    catch (err) { if (err?.code === "kick_reconnect_required") markKickNeedsAttention(); setStatus("cr-reward-create-status", err.message, true); } finally { setLoading(btn, false); }
+  $("cr-reward-create-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("cr-reward-create-submit");
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-reward-create-status",
+      busyLabel: "Creating…",
+      run: async () => {
+        try {
+          await api("POST", sitePath("/api/credits/rewards/create"), { title: $("cr-reward-create-title").value.trim(), cost: Number($("cr-reward-create-cost").value), credits: Number($("cr-reward-create-credits").value), description: $("cr-reward-create-desc").value.trim(), backgroundColor: $("cr-reward-create-color").value });
+          setStatus("cr-reward-create-status", "Kick reward created and linked to credits.");
+          $("cr-reward-create-form").reset();
+          $("cr-reward-create-color").value = "#00e701";
+          await load();
+        } catch (err) {
+          if (err?.code === "kick_reconnect_required") markKickNeedsAttention();
+          throw err;
+        }
+      },
+    });
   });
   $("cr-shop-new")?.addEventListener("click", () => openShop()); $("cr-shop-close")?.addEventListener("click", closeShop); $("cr-shop-cancel")?.addEventListener("click", closeShop);
   $("cr-shop-desc")?.addEventListener("input", renderShopReview); $("cr-shop-active")?.addEventListener("change", renderShopReview);
 
-  $("cr-shop-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); if (rewardImageProcessing) return; const btn = e.submitter || $("cr-shop-submit"); setLoading(btn, true, "Saving…");
-    try { await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), cooldownSeconds: Number($("cr-shop-cooldown").value) || 0, active: $("cr-shop-active").checked, imageData: rewardImageDraft }); setStatus("cr-shop-status", "Shop item saved."); closeShop(); await load(); }
-    catch (err) { setStatus("cr-shop-status", err.message, true); } finally { setLoading(btn, false); }
+  $("cr-shop-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (rewardImageProcessing) return;
+    const btn = e.submitter || $("cr-shop-submit");
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-shop-status",
+      run: async () => {
+        await api("POST", sitePath("/api/credits/shop"), { id: $("cr-shop-item-id").value || undefined, name: $("cr-shop-name").value.trim(), description: $("cr-shop-desc").value.trim(), cost: Number($("cr-shop-cost").value), stock: $("cr-shop-stock").value === "" ? null : Number($("cr-shop-stock").value), cooldownSeconds: Number($("cr-shop-cooldown").value) || 0, active: $("cr-shop-active").checked, imageData: rewardImageDraft });
+        setStatus("cr-shop-status", "Shop item saved.");
+        closeShop();
+        await load();
+      },
+    });
   });
   $("cr-shop-image")?.addEventListener("change", async () => {
     const version = ++rewardImageVersion;
@@ -1587,7 +1650,7 @@ function wireActions() {
     const input = $("cr-tip-amount");
     if (input && amt) input.value = amt;
   }));
-  $("cr-tip-form")?.addEventListener("submit", async (e) => {
+  $("cr-tip-form")?.addEventListener("submit", (e) => {
     e.preventDefault();
     const btn = e.submitter || $("cr-tip-submit");
     const viewerId = $("cr-tip-viewer-id").value;
@@ -1608,7 +1671,6 @@ function wireActions() {
       return;
     }
 
-    setLoading(btn, true, "Sending…");
     // P3-6: optimistic balance update — reflect the award instantly, roll back
     // if the server rejects it. The authoritative reload follows success.
     const member = (state.members || []).find((m) => m.id === viewerId);
@@ -1618,29 +1680,41 @@ function wireActions() {
       member.totalEarned = (Number(member.totalEarned) || 0) + amount;
       render();
     }
-    try {
-      await adjustMemberCredits(viewerId, amount, reason);
-      setStatus("cr-tip-status", `Sent +${amount} credits to ${username || "this member"}.`);
-      setTimeout(() => {
-        closeTip();
-        load();
-      }, 900);
-    } catch (err) {
-      if (member) {
-        member.balance = previousBalance;
-        member.totalEarned = (Number(member.totalEarned) || 0) - amount;
-        render();
-      }
-      setStatus("cr-tip-status", `${err.message} — the balance was restored.`, true);
-    } finally {
-      setLoading(btn, false);
-    }
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-tip-status",
+      busyLabel: "Sending…",
+      run: async () => {
+        try {
+          await adjustMemberCredits(viewerId, amount, reason);
+          setStatus("cr-tip-status", `Sent +${amount} credits to ${username || "this member"}.`);
+          setTimeout(() => {
+            closeTip();
+            load();
+          }, 900);
+        } catch (err) {
+          if (member) {
+            member.balance = previousBalance;
+            member.totalEarned = (Number(member.totalEarned) || 0) - amount;
+            render();
+          }
+          throw new Error(`${err?.message || "Something went wrong. Try again."} — the balance was restored.`, { cause: err });
+        }
+      },
+    });
   });
 
-  $("cr-viewer-auth-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault(); const btn = e.submitter || $("cr-viewer-auth-submit"); setLoading(btn, true, "Saving…");
-    try { state.viewerAuth = await api("POST", "/api/credits/viewer-auth", { kick: $("cr-viewer-auth-kick").checked, discord: $("cr-viewer-auth-discord").checked, public: $("cr-viewer-auth-public").checked }); setStatus("cr-viewer-auth-status", "Member login settings saved."); }
-    catch (err) { setStatus("cr-viewer-auth-status", err.message, true); } finally { setLoading(btn, false); }
+  $("cr-viewer-auth-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("cr-viewer-auth-submit");
+    void submitWithFeedback({
+      btn,
+      statusId: "cr-viewer-auth-status",
+      run: async () => {
+        state.viewerAuth = await api("POST", "/api/credits/viewer-auth", { kick: $("cr-viewer-auth-kick").checked, discord: $("cr-viewer-auth-discord").checked, public: $("cr-viewer-auth-public").checked });
+        setStatus("cr-viewer-auth-status", "Member login settings saved.");
+      },
+    });
   });
   $("cr-history-form")?.addEventListener("submit", (e) => {
     e.preventDefault();

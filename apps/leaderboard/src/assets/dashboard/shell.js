@@ -81,6 +81,7 @@ async function allowNavigation() {
   if (!state._dirty) return true;
   const action = await chooseDirtyAction().catch((error) => {
     logError("dirty-modal", error);
+    showToast("Couldn't open the save prompt. Navigation was canceled; your changes are still here.", "error");
     return "cancel";
   });
   if (action === "discard") return "discard";

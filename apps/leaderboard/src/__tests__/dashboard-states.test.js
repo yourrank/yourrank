@@ -4,6 +4,7 @@
 import { describe, it, expect } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
+import { setMetricUnknown } from "../assets/dashboard/states.js";
 
 const assets = path.resolve(import.meta.dir, "../assets");
 const read = (f) => fs.readFileSync(path.join(assets, f), "utf8");
@@ -25,6 +26,22 @@ describe("empty and error states", () => {
     expect(utils).toContain("el.dataset.emptyHtml = el.innerHTML");
     expect(utils).toContain("export function clearLoadError");
     expect(utils).toContain('textContent = "Try again"');
+  });
+
+  it("renders plan-gated metrics as locked Pro values", () => {
+    const attributes = new Map();
+    const node = {
+      removeAttribute(name) { attributes.delete(name); },
+      setAttribute(name, value) { attributes.set(name, value); },
+    };
+
+    setMetricUnknown(node, "locked");
+
+    expect(attributes.get("data-metric-unavailable")).toBe("locked");
+    expect(node.title).toBe("Available on the Pro plan.");
+    expect(node.innerHTML).toBe('<span class="metric-unavailable metric-locked" aria-label="Available on Pro">Pro</span>');
+    expect(performance).toContain("data.gated?.rewards");
+    expect(performance).toContain('setMetricUnknown(node, "locked")');
   });
 
   const failing = [

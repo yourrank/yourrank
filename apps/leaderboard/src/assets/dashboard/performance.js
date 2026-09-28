@@ -3,9 +3,12 @@ import { setState, state } from "./state.js";
 import { renderEmpty, renderError, setMetricEmpty, setMetricLoading, setMetricUnknown, setMetricValue, setRowsLoading } from "./states.js";
 import { defaultTab, parseDashboardPath, SECTIONS } from "./routes.js";
 import { registerRouteRenderer, requestDashboardRoute } from "./shell.js";
+import { fetchDashboardJson, retryTransient } from "./request.js";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 let insightsRequestKey = "";
+let insightsRequestId = 0;
+let insightsInFlight = null;
 
 export function initPerformance() {
   if (initPerformance._done) return;
@@ -106,9 +109,10 @@ export function renderPerformance(stats) {
   if (activePerformanceTab() === "activity") loadInsights();
 }
 
-function setInsightValue(id, value, available = true) {
+function setInsightValue(id, value, available = true, locked = false) {
   const node = $(id);
   if (!node) return;
+  if (locked) return setMetricUnknown(node, "locked");
   if (!available) return setMetricUnknown(node);
   setMetricValue(node, Number(value || 0).toLocaleString("en-US"));
 }
@@ -126,17 +130,26 @@ function renderInsights(data) {
   host.removeAttribute("aria-busy");
   clearLoadError($("insightsStatus"), false);
   const availability = data.availability || {};
+  const rewardsGated = data.gated?.rewards === true;
+  const participationAvailable = availability.participation !== false;
+  const rewardsFailed = availability.rewards === false && !rewardsGated;
   setInsightSectionStatus("insightsCommunityStatus", availability.community !== false);
-  setInsightSectionStatus("insightsParticipationStatus", availability.participation !== false && availability.rewards !== false);
+  const participationStatus = $("insightsParticipationStatus");
+  if (participationStatus) {
+    participationStatus.hidden = participationAvailable && !rewardsFailed && !rewardsGated;
+    participationStatus.textContent = !participationAvailable || rewardsFailed
+      ? "Some data in this section is unavailable."
+      : rewardsGated ? "Claim stats are available on the Pro plan." : "";
+  }
   setInsightValue("insightsNewMembers", data.community?.newMembers, availability.community !== false);
   setInsightValue("insightsReturningMembers", data.community?.returningMembers, availability.community !== false);
   setInsightValue("insightsParticipants", data.participation?.participants, availability.participation !== false);
-  setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted, availability.rewards !== false);
+  setInsightValue("insightsClaimsSubmitted", data.rewards?.claimsSubmitted, availability.rewards !== false, rewardsGated);
   setInsightValue("insightsRepeatParticipants", data.participation?.repeatParticipants, availability.participation !== false);
   setInsightValue("insightsActiveDrops", data.participation?.activeCodeDrops, availability.participation !== false);
-  setInsightValue("insightsClaimsCompleted", data.rewards?.claimsCompleted, availability.rewards !== false);
-  setInsightValue("insightsPendingReviews", data.operations?.pendingReviews, availability.pendingReviews !== false);
-  setInsightValue("insightsPendingClaims", data.operations?.pendingClaims, availability.pendingClaims !== false);
+  setInsightValue("insightsClaimsCompleted", data.rewards?.claimsCompleted, availability.rewards !== false, rewardsGated);
+  setInsightValue("insightsPendingReviews", data.operations?.pendingReviews, availability.pendingReviews !== false, data.gated?.pendingReviews === true);
+  setInsightValue("insightsPendingClaims", data.operations?.pendingClaims, availability.pendingClaims !== false, data.gated?.pendingClaims === true);
   const communityChart = $("insightsCommunityChart");
   if (communityChart) {
     const joined = Number(data.community?.newMembers) || 0;
@@ -155,12 +168,17 @@ function renderInsights(data) {
   if (participationMetrics) participationMetrics.hidden = noParticipation;
   const reviews = Number(data.operations?.pendingReviews) || 0;
   const claims = Number(data.operations?.pendingClaims) || 0;
-  const attentionKnown = availability.pendingReviews !== false && availability.pendingClaims !== false;
+  const reviewsGated = data.gated?.pendingReviews === true;
+  const claimsGated = data.gated?.pendingClaims === true;
+  const attentionKnown = (availability.pendingReviews !== false || reviewsGated)
+    && (availability.pendingClaims !== false || claimsGated);
   const operationsEmpty = $("insightsOperationsEmpty");
   const operationsMetrics = $("insightsOperationsMetrics");
   if (operationsEmpty) {
     operationsEmpty.hidden = reviews + claims > 0;
-    operationsEmpty.textContent = attentionKnown ? "Nothing needs attention." : "Pending work could not be checked right now.";
+    let emptyCopy = reviewsGated || claimsGated ? "Pending work stats are available on the Pro plan." : "Nothing needs attention.";
+    if (!attentionKnown) emptyCopy = "Pending work could not be checked right now.";
+    operationsEmpty.textContent = emptyCopy;
   }
   if (operationsMetrics) operationsMetrics.hidden = reviews + claims === 0;
   if ($("insightsReviewAction")) $("insightsReviewAction").hidden = !reviews;
@@ -189,28 +207,37 @@ export async function loadInsights({ force = false } = {}) {
   const siteId = state.ACTIVE_SITE_ID || "";
   const days = state.PERF_RANGE || 30;
   const key = `${siteId}:${days}`;
+  if (!force && insightsInFlight?.key === key) return insightsInFlight.promise;
   if (!force && insightsRequestKey === key && state.INSIGHTS) {
     renderInsights(state.INSIGHTS);
     return state.INSIGHTS;
   }
   insightsRequestKey = key;
+  const requestId = ++insightsRequestId;
   renderInsightsLoading();
   const params = new URLSearchParams({ days: String(days) });
   if (siteId) params.set("siteId", siteId);
-  try {
-    const response = await fetch(`/api/insights?${params.toString()}`, { credentials: "same-origin" });
-    const body = await response.json();
-    if (!response.ok || !body.ok) throw new Error(body.error || "Insights failed to load.");
-    if (insightsRequestKey !== key) return null;
+  const url = `/api/insights?${params.toString()}`;
+  let promise;
+  promise = retryTransient(
+    () => fetchDashboardJson(url, { credentials: "same-origin" }),
+    { shouldContinue: () => requestId === insightsRequestId && insightsRequestKey === key },
+  ).then(({ body }) => {
+    if (requestId !== insightsRequestId || insightsRequestKey !== key) return null;
     setState({ INSIGHTS: body });
     renderInsights(body);
     return body;
-  } catch (error) {
-    if (insightsRequestKey === key) insightsRequestKey = "";
+  }).catch((error) => {
+    if (requestId !== insightsRequestId || insightsRequestKey !== key) return null;
+    insightsRequestKey = "";
     logError("load-insights", error);
     showLoadError($("insightsStatus"), "Insights", () => loadInsights({ force: true }));
     return null;
-  }
+  }).finally(() => {
+    if (insightsInFlight?.promise === promise) insightsInFlight = null;
+  });
+  insightsInFlight = { key, promise };
+  return promise;
 }
 
 function totals(days) {

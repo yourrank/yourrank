@@ -58,6 +58,10 @@ async function loadIdentity() {
     }
   } catch (e) {
     console.error("loadIdentity failed", e);
+    const status = $("identityStatus");
+    status.hidden = false;
+    status.textContent = "Could not load company details. Try again.";
+    status.className = "status status--bad";
   }
 }
 
@@ -153,7 +157,7 @@ ${u.status === "suspended"
 <button class="btn btn--xs" data-act="reset-link" data-id="${u.id}" title="Generate a 24h password reset link">Reset link</button>
 </td></tr>`;
   }).join("");
-  $("usersBody").querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => action(b)));
+  $("usersBody").querySelectorAll("button[data-act]").forEach((b) => b.addEventListener("click", () => action(b).catch(() => showToast("Could not complete that action. Try again.", "error"))));
   const totalPages = Math.max(1, Math.ceil((d.total || 0) / (d.pageSize || 50)));
   const pagEl = $("usersPagination");
   if (pagEl) {
@@ -163,8 +167,8 @@ ${u.status === "suspended"
     pagEl.innerHTML = `<span class="hint" style="margin-right:auto">${d.total || 0} users · page ${page} of ${totalPages}</span>` +
       `<button class="btn btn--sm btn--ghost" id="usersPagPrev" ${prevDis}>← Previous</button>` +
       `<button class="btn btn--sm btn--ghost" id="usersPagNext" ${nextDis}>Next →</button>`;
-    $("usersPagPrev")?.addEventListener("click", () => loadUsers(page - 1));
-    $("usersPagNext")?.addEventListener("click", () => loadUsers(page + 1));
+    $("usersPagPrev")?.addEventListener("click", () => loadUsers(page - 1).catch(() => showToast("Could not load users. Try again.", "error")));
+    $("usersPagNext")?.addEventListener("click", () => loadUsers(page + 1).catch(() => showToast("Could not load users. Try again.", "error")));
   }
 }
 
@@ -196,7 +200,10 @@ async function action(btn) {
     await loadUsers();
     const ov = await api("/api/admin/overview");
     $("s_pro").textContent = ov.pro; $("s_rev").textContent = "$" + Number(ov.revenue || 0).toLocaleString();
-  } catch { btn.disabled = false; }
+  } catch (error) {
+    showToast(error?.message || "Could not complete that action. Try again.", "error");
+    btn.disabled = false;
+  }
 }
 
 async function loadLeads(page) {
@@ -286,13 +293,13 @@ async function submitReply(e) {
 
 $("replyForm")?.addEventListener("submit", submitReply);
 $("replyCancel")?.addEventListener("click", () => { $("supportReplyCard").hidden = true; });
-$("supportFilter")?.addEventListener("change", () => loadSupport(1, $("supportFilter").value));
+$("supportFilter")?.addEventListener("change", () => loadSupport(1, $("supportFilter").value).catch(() => showToast("Could not load support messages. Try again.", "error")));
 
 $("usersFilterApply")?.addEventListener("click", () => {
   userFilters.q = $("usersSearch").value.trim();
   userFilters.status = $("usersStatusFilter").value;
   userFilters.plan = $("usersPlanFilter").value;
-  loadUsers(1);
+  loadUsers(1).catch(() => showToast("Could not load users. Try again.", "error"));
 });
 $("usersSearch")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("usersFilterApply").click(); });
 
@@ -309,7 +316,7 @@ async function loadFeatures() {
       <td><button class="btn btn--xs" data-feature-override="${esc(f.key)}">Set override</button></td>
     </tr>`
   ).join("");
-  $("featuresBody").querySelectorAll("[data-feature-override]").forEach((b) => b.addEventListener("click", () => setFeatureOverride(b)));
+  $("featuresBody").querySelectorAll("[data-feature-override]").forEach((b) => b.addEventListener("click", () => setFeatureOverride(b).catch(() => showToast("Could not save the feature override. Try again.", "error"))));
 }
 
 async function setFeatureOverride(btn) {
@@ -318,9 +325,16 @@ async function setFeatureOverride(btn) {
   const userId = input?.value.trim();
   if (!userId) { showToast("Enter a user ID"); return; }
   const enabled = await showConfirmModal("Override feature flag", `Enable "${key}" for user ${userId}? Click Cancel to disable it.`, "Enable", false);
-  const d = await api("/api/admin/features/override", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, featureKey: key, enabled }) });
-  if (!d.ok) { showToast(d.error || "Failed"); return; }
-  showToast(`Override ${enabled ? "enabled" : "disabled"} for ${userId}.`, "success");
+  btn.disabled = true;
+  try {
+    const d = await api("/api/admin/features/override", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, featureKey: key, enabled }) });
+    if (!d.ok) { showToast(d.error || "Failed", "error"); return; }
+    showToast(`Override ${enabled ? "enabled" : "disabled"} for ${userId}.`, "success");
+  } catch (error) {
+    showToast(error?.message || "Could not save the feature override. Try again.", "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function loadAudit(page) {
@@ -351,8 +365,28 @@ function renderPag(containerId, data, page, loadFn) {
   el.innerHTML = `<span class="hint" style="margin-right:auto">${data.total || 0} items · page ${page} of ${totalPages}</span>` +
     `<button class="btn btn--sm btn--ghost" ${prevDis} data-pag="-1">← Previous</button>` +
     `<button class="btn btn--sm btn--ghost" ${nextDis} data-pag="1">Next →</button>`;
-  el.querySelectorAll("[data-pag]").forEach(b => b.addEventListener("click", () => loadFn(page + Number(b.dataset.pag))));
+  el.querySelectorAll("[data-pag]").forEach(b => b.addEventListener("click", () => loadFn(page + Number(b.dataset.pag)).catch(() => showToast("Could not load this page. Try again.", "error"))));
 }
 
-$("logout").addEventListener("click", async (e) => { e.preventDefault(); await fetch("/api/auth/logout", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } }); location.href = "/login"; });
-init();
+$("logout").addEventListener("click", async (e) => {
+  e.preventDefault();
+  const button = e.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST", credentials: "include", headers: { "x-csrf-token": getCsrf() } });
+    if (!response.ok) throw new Error("Sign-out failed.");
+    location.href = "/login";
+  } catch {
+    showToast("Could not sign out. Try again.", "error");
+    button.disabled = false;
+  }
+});
+init().catch((error) => {
+  console.error("admin init failed", error);
+  if (["auth", "2fa", "forbidden"].includes(error?.message)) return;
+  const loading = $("loading");
+  if (loading) {
+    loading.hidden = false;
+    loading.textContent = "Could not load admin data. Refresh to try again.";
+  }
+});

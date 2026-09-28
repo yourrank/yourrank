@@ -27,18 +27,18 @@ const COMMANDS = [
   { id: "act-publish", title: "Publish site", group: "Actions", icon: PALETTE_ICONS.publish, action: () => $("publishAction")?.click() },
   { id: "act-obs-alerts", title: "Copy OBS stream alerts & sound chime URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
     const url = location.origin + "/overlay/alerts?site=" + (state.SLUG || "");
-    await copyToClipboard(url);
-    showToast("OBS stream alerts URL copied!", "info");
+    const copied = await copyToClipboard(url);
+    showToast(copied ? "OBS stream alerts URL copied!" : "Copy failed — select the URL from the share box instead.", copied ? "info" : "error");
   }},
   { id: "act-obs-card", title: "Copy OBS podium overlay URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
     const url = location.origin + "/" + (state.SLUG || "") + "/overlay";
-    await copyToClipboard(url);
-    showToast("OBS podium URL copied!", "info");
+    const copied = await copyToClipboard(url);
+    showToast(copied ? "OBS podium URL copied!" : "Copy failed — select the URL from the share box instead.", copied ? "info" : "error");
   }},
   { id: "act-obs-ticker", title: "Copy OBS horizontal ticker URL", group: "OBS overlays", icon: PALETTE_ICONS.copy, action: async () => {
     const url = location.origin + "/" + (state.SLUG || "") + "/overlay?layout=ticker";
-    await copyToClipboard(url);
-    showToast("OBS ticker URL copied!", "info");
+    const copied = await copyToClipboard(url);
+    showToast(copied ? "OBS ticker URL copied!" : "Copy failed — select the URL from the share box instead.", copied ? "info" : "error");
   }},
   { id: "act-export-drops", title: "Download drop claims CSV report", group: "Reports", icon: PALETTE_ICONS.share, action: () => {
     window.open("/api/export/drop-claims.csv?siteId=" + (state.SITE_ID || ""), "_blank");
