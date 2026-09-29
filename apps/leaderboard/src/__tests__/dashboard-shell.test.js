@@ -158,6 +158,11 @@ describe("signed-in shell navigation", () => {
     }
   });
 
+  it("offers New tournament after New drop in the global action menu", () => {
+    const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
+    expect(html).toMatch(/data-new="drop"[^>]*>New drop<\/a>[\s\S]*data-new="tournament"[^>]*data-chrome-contextual-action="true"[^>]*href="\/dashboard\/giveaways\/tournaments\?new=1">New tournament<\/a>/);
+  });
+
   it("keeps one main landmark and a topbar drawer trigger", () => {
     const html = renderPage(AudienceMembersPage);
     // The page shell already wraps the content in <main id="main-content">, so

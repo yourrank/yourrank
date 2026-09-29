@@ -55,6 +55,9 @@ const EXCEPTIONS = {
   "giveaways.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
   ],
+  "tournaments.js": [
+    { match: 'window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);', reason: "one-shot ?new=1 query scrub after opening the create modal: same document, no navigation" },
+  ],
   "dashboard/account.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "session expired: redirect to login" },
     { match: 'location.href = "/dashboard";', reason: "post-board-deletion reset: the current context no longer exists" },

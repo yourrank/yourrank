@@ -437,7 +437,7 @@ describe("Kick webhook → tournament chat reply", () => {
     },
   );
 
-  it("replies 'Bracket is full.' after a full entry commits", async () => {
+  it("replies 'Signups are full.' after a full entry commits", async () => {
     const deps = replyDeps();
     const res = await send(fullOutcome(), deps);
     expect(res.status).toBe(200);
@@ -446,7 +446,7 @@ describe("Kick webhook → tournament chat reply", () => {
     expect(token).toBe("kick-token");
     expect(input).toEqual({
       broadcasterUserId: "111",
-      content: "@viewer Bracket is full.",
+      content: "@viewer Signups are full.",
       replyToMessageId: "msg-9",
     });
   });
@@ -456,7 +456,7 @@ describe("Kick webhook → tournament chat reply", () => {
     const res = await send(fullOutcome({ full: false, waitlisted: true, waitlistPosition: 3 }), deps);
     expect(res.status).toBe(200);
     expect(deps.postChatMessage.mock.calls[0][1].content).toBe(
-      "@viewer Bracket is full — you're on the waitlist (#3)."
+      "@viewer Signups are full — you're on the waitlist (#3)."
     );
   });
 

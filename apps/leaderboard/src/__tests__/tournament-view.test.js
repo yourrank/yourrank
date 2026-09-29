@@ -3,6 +3,7 @@
 // Run: bun test src/__tests__/tournament-view.test.js
 import { describe, expect, it } from "bun:test";
 import { buildBracket } from "../lib/tournament-bracket.js";
+import { entryViews, tournamentViewState } from "../lib/tournament-state.js";
 import {
   buildViewModel,
   workspaceHtml,
@@ -26,30 +27,48 @@ const entries = [
   { id: "e2", display_name: "beta", source: "page", status: "selected", alt_flag: true, alt_reason: "Possible duplicate account." },
   { id: "e3", display_name: "gamma", source: "manual", status: "removed", alt_flag: false },
 ];
-const counts = { active: 2, eligible: 2, waitlist: 0, removed: 1, blocked: 0 };
-const vm = (over = {}) => buildViewModel({
-  tournament: tournament(over.tournament || {}),
-  entries: over.entries ?? entries,
-  entryCounts: over.entryCounts ?? counts,
-  matches: over.matches ?? [],
-  lifecycle: over.lifecycle ?? "setup",
-  chatRegistration: over.chatRegistration ?? null,
-  board: over.board ?? {},
-  activeTab: over.activeTab ?? "entries",
-  tournamentsEnabled: over.tournamentsEnabled ?? true,
-});
+const counts = { active: 2, eligible: 2, waitlist: 0, removed: 1, blocked: 0, inactive: 1 };
+const vm = (over = {}) => {
+  const currentTournament = tournament(over.tournament || {});
+  const currentEntries = over.entries ?? entries;
+  const entryCounts = over.entryCounts ?? counts;
+  const matches = over.matches ?? [];
+  let matchCount = matches.length;
+  if (over.lifecycle === "setup") currentTournament.status = "draft";
+  if (over.lifecycle === "live") {
+    currentTournament.status = "active";
+    matchCount = Math.max(1, matchCount);
+  }
+  if (over.lifecycle === "finished") currentTournament.status = "completed";
+  if (over.lifecycle === "cancelled") currentTournament.status = "cancelled";
+  const state = tournamentViewState({ tournament: currentTournament, counts: entryCounts, matchCount });
+  return buildViewModel({
+    tournament: currentTournament,
+    entries: entryViews(currentEntries, { tournament: currentTournament, matches, lifecycle: state.lifecycle }),
+    entryCounts,
+    matches,
+    tournamentState: state,
+    lifecycle: state.lifecycle,
+    chatRegistration: over.chatRegistration ?? null,
+    board: over.board ?? {},
+    activeTab: over.activeTab ?? "entries",
+    tournaments: over.tournaments ?? [],
+    selectedId: over.selectedId,
+    tournamentsEnabled: over.tournamentsEnabled ?? true,
+  });
+};
 
 describe("buildViewModel", () => {
   it("derives status/meta/stats from data only", () => {
     const model = vm({ tournament: { game_name: "", status: "draft", signup_state: "closed" } });
     expect(model.statusLabel).toBe("Setup");
-    expect(model.meta).toBe("8-player bracket · Single elimination");
+    expect(model.meta).toBe("8-player bracket");
     expect(model.meta).not.toContain("Fortnite");
-    const [entriesStat, spots, keyword, cap] = model.stats;
+    const [entriesStat, spots, cap] = model.stats;
     expect(entriesStat.value).toBe("2"); // active entries only (removed excluded)
     expect(spots.value).toBe("8");
-    expect(keyword.value).toBe("!join");
     expect(cap.value).toBe("Unlimited");
+    expect(model.stats.some((stat) => stat.id === "tournament-fact-keyword")).toBe(false);
     expect(model.entriesTabLabel).toBe("Entries (2)");
   });
 
@@ -62,7 +81,7 @@ describe("buildViewModel", () => {
 
   it("maps lifecycle to primary action and setup controls", () => {
     const setup = vm({ tournament: { signup_state: "closed", status: "draft" } });
-    expect(setup.primary).toEqual({ action: "start", label: "Start tournament" });
+    expect(setup.primary).toEqual({ action: "start", label: "Start tournament", disabledReason: null });
     expect(setup.setupControls.open).toBe(false);
     expect(setup.setupControls.stateText).toBe("Off");
     const sparse = vm({
@@ -77,8 +96,8 @@ describe("buildViewModel", () => {
       tournament: { entry_cap: 2, signup_state: "open" },
       entryCounts: { ...counts, eligible: 2 },
     });
-    expect(fullVm.full).toBe(true);
-    expect(fullVm.setupControls.stateText).toBe("Full — signups closed (2/2)");
+    expect(fullVm.addEntry.enabled).toBe(false);
+    expect(fullVm.setupControls.stateText).toBe("Full — signup limit reached (2/2)");
     const waitlistVm = vm({
       tournament: { entry_cap: 2, signup_state: "open", waitlist_enabled: true },
       entryCounts: { ...counts, eligible: 2, waitlist: 3 },
@@ -89,7 +108,7 @@ describe("buildViewModel", () => {
     expect(noChannel.setupControls.hasChannel).toBe(false);
     const done = vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } });
     expect(done.primary).toBeNull();
-    expect(done.showNew).toBe(true);
+    expect(done.tournamentsEnabled).toBe(true);
     expect(done.finished).toBe(true);
     expect(done.stepHtml).toContain("Champion: alpha");
     const cancelled = vm({ lifecycle: "cancelled", tournament: { status: "cancelled" } });
@@ -101,7 +120,7 @@ describe("buildViewModel", () => {
     const model = vm({});
     expect(model.entriesVm).toHaveLength(3);
     expect(model.entriesVm[1].statusLabel).toBe("In bracket");
-    expect(model.entriesVm[1].pillClass).toBe("in-bracket");
+    expect(model.entriesVm[1].statusTone).toBe("in-bracket");
     expect(model.entriesVm[1].flagged).toBe(true);
     expect(model.entriesVm[0].statusLabel).toBe("Registered");
     expect(model.entriesVm[0].flagged).toBe(false);
@@ -124,7 +143,7 @@ describe("buildViewModel", () => {
       entryCounts: { active: 2, eligible: 0, waitlist: 2, removed: 0, blocked: 0 },
     });
     expect(model.entriesVm.find((e) => e.id === "l").statusLabel).toBe("Eliminated");
-    expect(model.entriesVm.find((e) => e.id === "l").pillClass).toBe("eliminated");
+    expect(model.entriesVm.find((e) => e.id === "l").statusTone).toBe("eliminated");
     expect(model.entriesVm.find((e) => e.id === "w").statusLabel).toBe("In bracket");
     expect(model.entriesVm.find((e) => e.id === "q1").statusLabel).toBe("Waitlist #1");
     expect(model.entriesVm.find((e) => e.id === "q2").statusLabel).toBe("Waitlist #2");
@@ -133,7 +152,12 @@ describe("buildViewModel", () => {
 
 describe("workspaceHtml", () => {
   it("emits the behavior ids and no old classes", () => {
-    const model = vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } });
+    const model = vm({
+      lifecycle: "finished",
+      tournament: { status: "completed", winner_name: "alpha" },
+      tournaments: [{ id: "finished", title: "Finished Cup", lifecycle: "finished", status_label: "Finished" }],
+      selectedId: "finished",
+    });
     const html = workspaceHtml(model, "<div class=\"tn-bracket\"></div>");
     for (const id of [
       "tournament-workspace", "tournament-title-display", "tournament-status", "tournament-meta",
@@ -144,7 +168,7 @@ describe("workspaceHtml", () => {
       "tournament-entry-list", "tournament-bracket", "tournament-bracket-expand",
       "tournament-summary", "tournament-champion", "tournament-settings-view",
       "tournament-settings-form", "tournament-settings-aside", "tournament-message",
-      "tournament-dup-protection",
+      "tournament-dup-protection", "tournament-switcher",
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
@@ -158,11 +182,31 @@ describe("workspaceHtml", () => {
     expect(html).toContain('<form id="tournament-settings-form" class="tn-form" novalidate hidden');
   });
 
+  it("renders all tournaments with server lifecycle pills and current selection", () => {
+    const html = workspaceHtml(vm({
+      tournaments: [
+        { id: "t-1", title: "Friday Cup", lifecycle: "live", status_label: "Live" },
+        { id: "t-2", title: "Summer Cup", lifecycle: "finished", status_label: "Finished" },
+      ],
+      selectedId: "t-2",
+      lifecycle: "finished",
+      tournament: { status: "completed" },
+    }));
+    expect(html).toContain('id="tournament-switcher"');
+    expect(html).toContain("All tournaments (2)");
+    expect(html).toContain('data-tournament-switch="t-1"');
+    expect(html).toContain('class="tn-pill tn-pill--live">Live</span>');
+    expect(html).toContain('data-tournament-switch="t-2" aria-current="true"');
+  });
+
   it("hides entry menus when finished and shows them while active", () => {
     const done = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed" } }));
     expect(done).not.toContain("tn-menu");
     const open = workspaceHtml(vm({}));
     expect(open.match(/class="tn-menu"/g)).toHaveLength(3);
+    expect(open).toContain('id="tournament-removed"');
+    expect(open).toContain("Removed (1)");
+    expect(open).toMatch(/<details class="tn-removed"[^>]*>/);
     expect(open).toContain('data-entry-action="remove"');
     expect(open).toContain('data-entry-action="block"');
     expect(open).toContain('data-entry-action="restore"');
@@ -196,7 +240,7 @@ describe("workspaceHtml", () => {
       entryCounts: { ...counts, eligible: 2 },
     }));
     expect(full).toContain('id="tournament-add-entry-submit" type="submit" disabled');
-    expect(full).toContain("Bracket is full (2/2). Raise the signup limit in Settings or turn on Allow waitlist.");
+    expect(full).toContain("Signups are full (2/2). Raise the signup limit in Settings or turn on Allow waitlist.");
     const waitlistAdd = workspaceHtml(vm({
       lifecycle: "setup",
       tournament: { entry_cap: 2, signup_state: "open", waitlist_enabled: true },
@@ -217,8 +261,8 @@ describe("workspaceHtml", () => {
   it("renders the read-only settings sections for finished tournaments", () => {
     const html = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed" } }));
     const view = html.slice(html.indexOf('id="tournament-settings-view"'));
-    for (const section of ["General", "Registration", "Rules"]) expect(view).toContain(section);
-    expect(view).toContain("No rules added yet.");
+    for (const section of ["General", "Registration", "Advanced"]) expect(view).toContain(section);
+    expect(view).not.toContain("Rules");
     expect(view).toContain("Kick channel");
     expect(view).toContain("Signup limit");
     // read-only view must not render disabled inputs
@@ -229,17 +273,16 @@ describe("workspaceHtml", () => {
   it("keeps every summary aside label to one row", () => {
     const html = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } }), "<div class=\"tn-bracket\"></div>");
     const aside = html.slice(html.indexOf('id="tournament-summary"'), html.indexOf('id="tournament-champion"'));
-    for (const label of ["Entries", "Bracket size", "Matches played", "Status", "Game", "Bracket type", "Created"]) {
+    for (const label of ["Entries", "Bracket size", "Matches played", "Status", "Game", "Created"]) {
       expect(aside.split(label).length - 1).toBe(1);
     }
-    // The ID is copied via the Settings Details button, never printed.
     expect(aside).not.toContain("Tournament ID");
     const details = html.slice(html.indexOf('id="tournament-settings-aside"'));
-    for (const label of ["Created", "Tournament ID", "Entries", "Matches played"]) {
+    for (const label of ["Created", "Entries", "Matches played", "Delete tournament"]) {
       expect(details).toContain(label);
     }
-    expect(details).toContain('id="tournament-copy-id"');
-    expect(details).toContain('data-copy-id="t-1"');
+    expect(details).not.toContain('id="tournament-copy-id"');
+    expect(details).not.toContain("Tournament ID");
     // A blank game_name renders no Game row in the summary.
     const blank = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed", game_name: "  " } }), "");
     const blankAside = blank.slice(blank.indexOf('id="tournament-summary"'), blank.indexOf('id="tournament-champion"'));
@@ -280,6 +323,10 @@ describe("empty + dialog markup", () => {
       expect(html).toContain(`id="${id}"`);
     }
     expect(html).toContain('value="sitechan"');
+    expect(html).toContain('placeholder="e.g. Friday Night Cup"');
+    expect(html).not.toMatch(/id="tc-title"[^>]*value=/);
+    expect(html).toContain("<summary>More options</summary>");
+    expect(html).toContain('id="tc-game"');
     expect(html).not.toMatch(/class="[^"]*\bmodal\b/);
   });
 
@@ -322,6 +369,8 @@ describe("empty + dialog markup", () => {
     for (const id of ["tournament-select-modal", "ts-mode-random", "ts-mode-manual", "ts-pane-random", "ts-pane-manual", "ts-search", "ts-entry-list", "ts-counter", "ts-random-text", "tournament-select-error", "tournament-select-submit", "tournament-select-cancel"]) {
       expect(html).toContain(`id="${id}"`);
     }
+    expect(html).toContain('id="ts-select-first"');
+    expect(html).toContain("Select first 8");
     expect(html).toContain("Selected 0 / 8");
   });
 

@@ -24,6 +24,12 @@ import {
 } from "@yourrank/shared/chat-giveaways";
 import { reconcileKickWebhookDelivery as defaultReconcileKickWebhookDelivery } from "./kick-auth.js";
 import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE, MIN_BRACKET_PARTICIPANTS } from "../lib/tournament-bracket.js";
+import {
+  entryViews,
+  LIFECYCLE_LABELS,
+  tournamentLifecycle,
+  tournamentViewState,
+} from "../lib/tournament-state.js";
 
 const TOURNAMENT_READ_RATE_LIMIT = 60;
 const ENTRY_SOURCES = new Set(["chat", "page", "manual", "leaderboard"]);
@@ -229,15 +235,25 @@ export async function handleGetTournaments(request, env, deps = {}) {
             (SELECT count(*) FROM tournament_entries
               WHERE tournament_id=tournaments.id AND status IN ('pending','confirmed','selected'))::integer AS participant_count,
             (SELECT count(*) FROM tournament_entries
-              WHERE tournament_id=tournaments.id AND status='selected')::integer AS selected_count
+              WHERE tournament_id=tournaments.id AND status='selected')::integer AS selected_count,
+            (SELECT count(*) FROM tournament_matches
+              WHERE tournament_id=tournaments.id)::integer AS match_count
        FROM tournaments
       WHERE site_id=$1
-      ORDER BY created_at DESC LIMIT 20`,
+      ORDER BY created_at DESC`,
     [site.id]
   );
+  const listed = (tournaments || []).map((tournament) => {
+    const lifecycle = tournamentLifecycle(tournament, tournament.match_count);
+    return { ...tournament, lifecycle, status_label: LIFECYCLE_LABELS[lifecycle] };
+  });
+  const current = listed.find((tournament) => !["completed", "cancelled"].includes(tournament.status))
+    || listed[0]
+    || null;
 
   return ok({
-    tournaments: tournaments || [],
+    tournaments: listed,
+    current_id: current?.id || null,
     chatRegistration: await loadChatGiveawayConnection(query, site.id, "kick"),
     entitlement: {
       enabled: canUseFeature(effectivePlan(owner), "tournaments"),
@@ -265,7 +281,8 @@ export async function handleCreateTournament(request, env, deps = {}) {
   if (res) return res;
 
   const body = await readJson(request);
-  const title = String(body?.title || "").trim() || "Community Tournament";
+  const title = String(body?.title || "").trim();
+  if (!title) return bad("Enter a tournament name.");
   const gameName = String(body?.gameName || "").trim();
   const requestedBracketSize = body?.bracketSize === undefined || body?.bracketSize === null || body?.bracketSize === ""
     ? 8
@@ -488,7 +505,12 @@ async function updateSignupState(request, env, state, deps = {}) {
     request,
     details: { signupState: state },
   });
-  return ok({ tournament: result.tournament });
+  return ok({
+    tournament: result.tournament,
+    message: state === "open"
+      ? `Chat signups on — viewers can type ${result.tournament.entry_keyword || "!join"} in chat.`
+      : "Chat signups off — viewers can no longer join from chat.",
+  });
 }
 
 export function handleOpenTournamentSignups(request, env, deps = {}) {
@@ -518,6 +540,9 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
   const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
   if (access.error) return access.error;
   const body = await readJson(request) || {};
+  if (Object.prototype.hasOwnProperty.call(body, "title") && !String(body.title || "").trim()) {
+    return json({ ok: false, error: "Enter a tournament name.", field: "title" }, 400);
+  }
   if (Object.prototype.hasOwnProperty.call(body, "chatChannel")
       && String(body.chatChannel || "").trim()) {
     const connection = await loadChatGiveawayConnection(query, access.tournament.site_id, "kick");
@@ -538,7 +563,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     values.push(value);
   };
   if (Object.prototype.hasOwnProperty.call(body, "title")) {
-    addUpdate("title", String(body.title || "").trim() || access.tournament.title || "Tournament");
+    addUpdate("title", String(body.title).trim());
   }
   if (Object.prototype.hasOwnProperty.call(body, "gameName")) {
     addUpdate("game_name", String(body.gameName || "").trim());
@@ -632,7 +657,30 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
       );
       if (entryCapUpdate !== undefined && entryCapUpdate !== null
           && entryCapUpdate < (active?.count || 0)) {
-        return { error: `Signup limit cannot be lower than the current ${active.count} registrations.`, status: 400 };
+        const activeCount = active?.count || 0;
+        const bracketSizeChanged = wantsBracketSize && nextBracketSize !== access.tournament.bracket_size;
+        const followsBracket = !wantsEntryCap || body.entryCap === "bracket";
+        if (bracketSizeChanged && followsBracket) {
+          const oldCap = access.tournament.entry_cap;
+          const fix = oldCap != null && oldCap >= activeCount
+            ? { label: `Keep signup limit at ${oldCap}`, settings: { entryCap: oldCap } }
+            : { label: "Set signup limit to Unlimited", settings: { entryCap: "unlimited" } };
+          return {
+            error: `${activeCount} players are already registered — more than a ${nextBracketSize}-player signup limit. Keep the current signup limit; you'll choose who plays when you start.`,
+            field: "bracketSize",
+            fix,
+            status: 400,
+          };
+        }
+        return {
+          error: `Signup limit cannot be lower than the current ${activeCount} registrations.`,
+          field: "entryCap",
+          fix: {
+            label: `Set signup limit to ${activeCount}`,
+            settings: { entryCap: activeCount },
+          },
+          status: 400,
+        };
       }
       const txValues = [...values, access.tournament.id];
       const updated = await tx.one(
@@ -647,7 +695,14 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
         : { promoted: [] };
       return { tournament: updated, promoted: filled.promoted };
     });
-    if (outcome.error) return bad(outcome.error, outcome.status);
+    if (outcome.error) {
+      return json({
+        ok: false,
+        error: outcome.error,
+        field: outcome.field,
+        fix: outcome.fix,
+      }, outcome.status);
+    }
     tournament = outcome.tournament;
     promoted = outcome.promoted;
     await logAudit({
@@ -659,7 +714,73 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
       details: { fields: updates.map((update) => update.split("=")[0]) },
     });
   }
-  return ok({ tournament, promoted });
+  return ok({
+    tournament,
+    promoted,
+    ...(Object.prototype.hasOwnProperty.call(body, "antiAltEnabled")
+      ? { message: tournament.anti_alt_enabled ? "Duplicate protection on." : "Duplicate protection off." }
+      : {}),
+  });
+}
+
+export async function handleDeleteTournament(request, env, deps = {}) {
+  const {
+    requireUser = defaultRequireUser,
+    one = defaultOne,
+    withTransaction = defaultWithTransaction,
+    logAudit = defaultLogAudit,
+    requireSiteCapabilityImpl = requireSiteOwner,
+  } = deps;
+  const { user, res } = await requireUser(request, env);
+  if (res) return res;
+
+  const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
+  if (access.error) return access.error;
+  const body = await readJson(request) || {};
+  const confirmedTitle = String(body.confirmTitle || "").trim();
+  const title = String(access.tournament.title || "").trim();
+  if (confirmedTitle !== title) return bad("Type the tournament name exactly to delete it.");
+
+  const result = await withTransaction(async (tx) => {
+    const tournament = await tx.one(
+      "SELECT id, title, status FROM tournaments WHERE id=$1 FOR UPDATE",
+      [access.tournament.id]
+    );
+    if (!tournament) return { error: "Tournament not found.", status: 404 };
+    const lockedTitle = String(tournament.title || "").trim();
+    if (confirmedTitle !== lockedTitle) {
+      return { error: "Type the tournament name exactly to delete it.", status: 400 };
+    }
+    const counts = await tx.one(
+      `SELECT (SELECT count(*)::integer FROM tournament_entries WHERE tournament_id=$1) AS entries,
+              (SELECT count(*)::integer FROM tournament_matches WHERE tournament_id=$1) AS matches`,
+      [tournament.id]
+    );
+    await tx.one("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [tournament.id]);
+    await tx.one("DELETE FROM tournaments WHERE id=$1", [tournament.id]);
+    return {
+      id: tournament.id,
+      title: lockedTitle,
+      lifecycle: tournamentLifecycle({ ...access.tournament, ...tournament }, counts?.matches || 0),
+      entries: counts?.entries || 0,
+      matches: counts?.matches || 0,
+    };
+  });
+  if (result.error) return bad(result.error, result.status);
+  await logAudit({
+    actorId: user.id,
+    action: "tournament_delete",
+    entityType: "tournament",
+    entityId: result.id,
+    request,
+    details: {
+      title: result.title,
+      lifecycle: result.lifecycle,
+      entries: result.entries,
+      matches: result.matches,
+    },
+  });
+  return ok({ deleted: result.id, message: `Deleted “${result.title}”.` });
 }
 
 /**
@@ -705,7 +826,13 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
             count(*) FILTER (WHERE status='blocked')::integer AS blocked
        FROM tournament_entries
       WHERE tournament_id=$1`,
-    [tournamentId, flagOnlyWhenFree]
+      [tournamentId, flagOnlyWhenFree]
+  );
+  const matches = await query(
+    `SELECT player1_name, player2_name, winner_name, status
+       FROM tournament_matches
+      WHERE tournament_id=$1`,
+    [tournamentId]
   );
 
   // Linked-account overlays: when two active entries resolve to viewers linked
@@ -740,7 +867,25 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
   for (const entry of entries || []) {
     entry.flagged = tournament.anti_alt_enabled === true && (!!entry.alt_flag || !!entry.linked_to);
   }
-  return ok({ tournament, entries: entries || [], counts: counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
+  const entryCounts = {
+    active: counts?.active || 0,
+    eligible: counts?.eligible || 0,
+    waitlist: counts?.waitlist || 0,
+    removed: counts?.removed || 0,
+    blocked: counts?.blocked || 0,
+    inactive: (counts?.removed || 0) + (counts?.blocked || 0),
+  };
+  const state = tournamentViewState({
+    tournament,
+    counts: entryCounts,
+    matchCount: matches?.length || 0,
+  });
+  const viewedEntries = entryViews(entries || [], {
+    tournament,
+    matches: matches || [],
+    lifecycle: state.lifecycle,
+  });
+  return ok({ tournament, entries: viewedEntries, counts: entryCounts, state });
 }
 
 /**
@@ -809,7 +954,7 @@ export async function addTournamentEntryTx(tx, tournamentId, {
   // queue instead of being rejected.
   const status = full && tournament.waitlist_enabled === true ? "waitlist" : "pending";
   if (full && status === "pending") {
-    return { error: "Bracket is full.", status: 409, full: true };
+    return { error: "Signups are full.", status: 409, full: true };
   }
 
   let waitlistPosition;
@@ -1309,8 +1454,12 @@ export async function handleUpdateMatchScore(request, env, deps = {}) {
   const matchId = String(body?.matchId || "").trim();
   if (!matchId) return bad("matchId is required.");
 
-  const rawP1 = Number(body?.player1Score);
-  const rawP2 = Number(body?.player2Score);
+  const hasWinnerSlot = Object.prototype.hasOwnProperty.call(body, "winnerSlot");
+  if (hasWinnerSlot && body.winnerSlot !== 1 && body.winnerSlot !== 2) {
+    return bad("Choose the winner of this match.");
+  }
+  const rawP1 = hasWinnerSlot ? (body.winnerSlot === 1 ? 1 : 0) : Number(body?.player1Score);
+  const rawP2 = hasWinnerSlot ? (body.winnerSlot === 2 ? 1 : 0) : Number(body?.player2Score);
   if (!Number.isInteger(rawP1) || !Number.isInteger(rawP2) || rawP1 < 0 || rawP2 < 0) {
     return bad("Scores must be non-negative integers.");
   }
