@@ -213,7 +213,7 @@ describe("Giveaway Chatroom Handler", () => {
   it("keeps nested advanced options behind their disclosure", () => {
     expect(giveawaysHtml).toContain('id="gw-settings"');
     expect(giveawaysHtml).toContain('Entry Mode');
-    expect(giveawaysHtml).toContain('YourRank Members Only');
+    expect(giveawaysHtml).toContain('<b>Members only</b>');
     expect(giveawaysHtml).toContain('Verified Entry');
     expect(giveawaysHtml).toContain('id="gw-opt-subscriber"');
     expect(giveawaysHtml).toContain('id="gw-opt-vip"');

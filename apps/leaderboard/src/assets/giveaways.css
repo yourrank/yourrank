@@ -2226,6 +2226,48 @@
 .gw-settings:disabled { color: var(--ws-text-soft); }
 #gw-verification-link { overflow-wrap: anywhere; }
 
+/* Giveaway rules: full-width card below the draw workspace. Entry rules and
+   winner verification sit side by side; advanced options span both columns. */
+.gw-rules-card { margin-top: 28px; padding: 0; }
+.gw-rules-card > .gw-rules-panel { border: 0; background: transparent; }
+.gw-rules-card > .gw-rules-panel > summary { padding: var(--ws-space-4) var(--ws-space-5, 20px); font-weight: 700; }
+.gw-rules-card > .gw-rules-panel > .gw-rules-panel-body { padding: var(--ws-space-4) var(--ws-space-5, 20px); }
+.gw-rules-card > .hint,
+.gw-rules-card > p { margin: 0; padding: 0 var(--ws-space-5, 20px) var(--ws-space-3); }
+.gw-rules-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ws-space-4) 40px; align-items: start; }
+.gw-rules-grid > #gw-advanced-settings { grid-column: 1 / -1; }
+.gw-rules-grid > #gw-response-settings > .gw-settings-section:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.gw-rules-grid .gw-settings-section { padding-top: var(--ws-space-3); margin-top: var(--ws-space-3); }
+.gw-rules-grid .gw-settings h3 { margin-bottom: var(--ws-space-2); }
+.v3-dash[data-auth-workspace] .gw-rules-grid .cr-toggle-row { gap: var(--ws-space-4); padding: 8px 0; margin: 0; border-bottom: 1px solid var(--ws-line); background: transparent; }
+.v3-dash[data-auth-workspace] .gw-rules-grid .cr-toggle-row:last-of-type { border-bottom: 0; }
+.v3-dash[data-auth-workspace] .gw-rules-grid .cr-toggle-row span { gap: 2px; }
+.gw-rules-grid .cr-toggle-row small { font-size: 12px; line-height: 16px; }
+.gw-rules-grid .gw-settings-section .field { margin-top: var(--ws-space-2); }
+
+.gw-segmented { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 4px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-sm); background: var(--ws-surface-soft); }
+.gw-segmented label { position: relative; justify-content: center; align-items: center; padding: 8px 10px; border: 1px solid transparent; text-align: center; font-size: 13px; line-height: 18px; }
+.gw-segmented label:has(:checked) { background: var(--ws-surface, #fff); border-color: var(--ws-accent); }
+.gw-segmented label:has(:focus-visible) { outline: 2px solid var(--ws-accent); outline-offset: 1px; }
+.gw-segmented input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.gw-segmented small { display: none; }
+.gw-segmented-desc { margin: var(--ws-space-2) 0 0; }
+
+.gw-rules-grid .gw-setup-advanced summary { padding: var(--ws-space-3) 0; border-top: 1px solid var(--ws-line); font-weight: 700; }
+.gw-rules-grid .gw-setup-advanced summary > span:first-child { flex: 0 0 auto; }
+.gw-advanced-summary-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ws-text-soft); font-size: 13px; font-weight: 500; }
+.gw-rules-grid .gw-setup-advanced-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--ws-space-4) 32px; padding: 0 0 var(--ws-space-2); align-items: start; }
+.gw-rules-grid .gw-setup-advanced-body .gw-settings-section { border-top: 0; padding-top: 0; margin-top: 0; }
+
+@media (max-width: 1100px) {
+  .gw-rules-grid .gw-setup-advanced-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .gw-rules-grid,
+  .gw-rules-grid .gw-setup-advanced-body { grid-template-columns: 1fr; }
+}
+
 /* Engage overview: one divided list of destinations. Each row is a single
    link — icon, name, current state, chevron — so the page reads as a status
    board, not a card grid. Flat: hairline dividers, tinted icon well, badge
