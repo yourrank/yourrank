@@ -707,6 +707,39 @@ export async function handleListTournamentEntries(request, env, deps = {}) {
       WHERE tournament_id=$1`,
     [tournamentId, flagOnlyWhenFree]
   );
+
+  // Linked-account overlays: when two active entries resolve to viewers linked
+  // by account_links, both rows carry `linked_to`/`linked_reasons` so the UI
+  // can flag them without exposing viewer ids, IPs, or device hashes.
+  const activeEntries = (entries || []).filter((entry) =>
+    ["pending", "confirmed", "selected"].includes(entry.status) && entry.viewer_id);
+  const viewerIds = [...new Set(activeEntries.map((entry) => entry.viewer_id))];
+  const linkRows = viewerIds.length ? await query(
+    `SELECT al.viewer_a, al.viewer_b, al.reasons
+       FROM account_links al
+      WHERE al.site_id = $1
+        AND al.status IN ('pending','watching','restricted')
+        AND (al.viewer_a = ANY($2::uuid[]) OR al.viewer_b = ANY($2::uuid[]))`,
+    [tournament.site_id, viewerIds]
+  ) : [];
+  const byViewer = new Map();
+  for (const entry of activeEntries) {
+    if (!byViewer.has(entry.viewer_id)) byViewer.set(entry.viewer_id, []);
+    byViewer.get(entry.viewer_id).push(entry);
+  }
+  for (const link of linkRows || []) {
+    for (const [viewerId, otherViewerId] of [[link.viewer_a, link.viewer_b], [link.viewer_b, link.viewer_a]]) {
+      const partner = (byViewer.get(otherViewerId) || [])[0];
+      if (!partner) continue;
+      for (const entry of byViewer.get(viewerId) || []) {
+        entry.linked_to = partner.display_name;
+        entry.linked_reasons = link.reasons || [];
+      }
+    }
+  }
+  for (const entry of entries || []) {
+    entry.flagged = tournament.anti_alt_enabled === true && (!!entry.alt_flag || !!entry.linked_to);
+  }
   return ok({ tournament, entries: entries || [], counts: counts || { active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0 } });
 }
 

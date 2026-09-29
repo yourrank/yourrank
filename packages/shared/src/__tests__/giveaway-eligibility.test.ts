@@ -33,6 +33,13 @@ describe("giveaway eligibility", () => {
     expect(evaluate({ ...p, vpnCheckAvailable: true, anonymousNetwork: true }, r).reason).toBe("vpn_detected");
     expect(evaluate({ ...p, vpnCheckAvailable: true, anonymousNetwork: false }, r).status).toBe("eligible");
   });
+  it("rejects restricted linked accounts right after the duplicate-account check", () => {
+    expect(evaluate({ linkedRestricted: true }, rules({})).reason).toBe("linked_account_restricted");
+    expect(evaluate({ duplicateAccount: true, linkedRestricted: true }, rules({})).reason).toBe("duplicate_account");
+    // Chat-mode entries are covered too (the check runs before entry-mode gates).
+    expect(evaluate({ linkedRestricted: true }, rules({ entryMode: "chat" })).reason).toBe("linked_account_restricted");
+    expect(evaluate({ linkedRestricted: true, verified: true, viewerId: "v", kickLinked: true }, rules({ entryMode: "verified" })).reason).toBe("linked_account_restricted");
+  });
   it("rejects unsupported or incompatible settings at the server boundary", () => {
     for (const r of [{ onePerIp: true }, { vpnDetection: true }, { duplicateDevice: true }, { minimumAccountAge: 1 }, { autoReroll: true }]) {
       expect(() => rules(r)).toThrow();

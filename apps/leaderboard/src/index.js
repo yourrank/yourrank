@@ -1,5 +1,6 @@
 import { runGiveawayTimeouts } from "./chat-giveaway-service.js";
 import { cleanupIpObservations } from "./abuse-signals.js";
+import { runAccountLinkDetection } from "./account-link-detection.js";
 import { RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { destroySession, cookieClear, readToken, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
@@ -211,6 +212,7 @@ export function resolveFragment(targetPath) {
   if (clean === "/dashboard/audience/members") return { pageKey: "audienceMembers", tab: "viewers" };
   if (clean === "/dashboard/audience/activity") return { pageKey: "audienceActivity", tab: "activity" };
   if (clean === "/dashboard/audience/reviews") return { pageKey: "audienceReviews", tab: "reviews" };
+  if (clean === "/dashboard/audience/linked") return { pageKey: "audienceLinked", tab: "linked" };
   // Account settings
   if (clean === "/dashboard/settings") return { pageKey: "settingsUnified", tab: "account" };
   if (clean.startsWith("/dashboard/settings/")) {
@@ -356,6 +358,9 @@ export default {
 
 async function handleScheduled(event, env, ctx) {
   populateEnv(env, { setGlobalEnv: true });
+  if (event.cron === "0 4 * * *") {
+    ctx.waitUntil(runAccountLinkDetection().catch((err) => console.error("[scheduled] account link detection failed:", String(err?.message || err))));
+  }
   if (event.cron === "*/5 * * * *") {
     ctx.waitUntil(runGiveawayTimeouts().catch((err) => console.error("[scheduled] giveaway timeout processing failed:", String(err?.message || err))));
     ctx.waitUntil(cleanupIpObservations().catch((err) => console.error("[scheduled] ip observation cleanup failed:", String(err?.message || err))));
@@ -1033,6 +1038,9 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
       }
       if (path === "/dashboard/audience/reviews") {
         return renderDashboardPage("audienceReviews", "audience_reviews_render_failed");
+      }
+      if (path === "/dashboard/audience/linked") {
+        return renderDashboardPage("audienceLinked", "audience_linked_render_failed");
       }
       if (path === "/dashboard/activities") {
         return renderDashboardPage("activities", "activities_render_failed", "overview");

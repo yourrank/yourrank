@@ -29,6 +29,7 @@ export interface GiveawayParticipant {
   previousWinner?: boolean;
   verified?: boolean;
   duplicateAccount?: boolean;
+  linkedRestricted?: boolean;
   duplicateIp?: boolean;
   ipAvailable?: boolean;
   vpnCheckAvailable?: boolean;
@@ -40,6 +41,7 @@ export function evaluateGiveawayEligibility(p: GiveawayParticipant, rules: Givea
   const reject = (reason: string): EligibilityResult => ({ status: "rejected", reason });
   const badges = new Set((p.badges ?? []).flatMap((b) => b && typeof b === "object" && "type" in b ? [String(b.type)] : []));
   if (p.duplicateAccount) return reject("duplicate_account");
+  if (p.linkedRestricted) return reject("linked_account_restricted");
   // Founder/gifter/moderator badges do not prove current subscriber or VIP status.
   if (rules.subscriberOnly && !badges.has("subscriber")) return reject("subscriber_required");
   if (rules.vipOnly && !badges.has("vip")) return reject("vip_required");
@@ -67,6 +69,11 @@ export async function giveawayParticipantFacts(run: SqlRunner, siteId: string, p
       WHERE vi.provider = 'kick' AND vi.external_user_id = $2
         AND vi.status = 'active' AND vi.linked_at IS NOT NULL AND v.is_system = false LIMIT 1) AS viewer_id,
     EXISTS (SELECT 1 FROM chat_giveaway_draws d JOIN chat_giveaway_sessions gs ON gs.id = d.giveaway_session_id
-      WHERE gs.site_id = $1 AND d.provider_user_id = $2) AS previous_winner`, [siteId, providerUserId]) as Array<{ viewer_id: string | null; previous_winner: boolean }>;
-  return { viewerId: rows[0]?.viewer_id ?? null, kickLinked: !!rows[0]?.viewer_id, previousWinner: !!rows[0]?.previous_winner };
+      WHERE gs.site_id = $1 AND d.provider_user_id = $2) AS previous_winner,
+    EXISTS (SELECT 1 FROM account_links al
+      JOIN viewer_identities vi ON vi.provider = 'kick' AND vi.external_user_id = $2
+        AND vi.status = 'active' AND vi.linked_at IS NOT NULL
+      WHERE al.site_id = $1 AND al.status = 'restricted'
+        AND vi.viewer_id IN (al.viewer_a, al.viewer_b)) AS linked_restricted`, [siteId, providerUserId]) as Array<{ viewer_id: string | null; previous_winner: boolean; linked_restricted: boolean }>;
+  return { viewerId: rows[0]?.viewer_id ?? null, kickLinked: !!rows[0]?.viewer_id, previousWinner: !!rows[0]?.previous_winner, linkedRestricted: !!rows[0]?.linked_restricted };
 }

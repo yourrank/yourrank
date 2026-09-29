@@ -17,6 +17,7 @@ export const PEOPLE_TABS = [
   { key: "viewers", label: "Members", href: "/dashboard/audience/members" },
   { key: "activity", label: "Activity", href: "/dashboard/audience/activity" },
   { key: "reviews", label: "Reviews", href: "/dashboard/audience/reviews" },
+  { key: "linked", label: "Linked accounts", href: "/dashboard/audience/linked" },
 ];
 
 function PeopleTabs({ tab }) {
@@ -144,6 +145,38 @@ export function AudienceReviewsPage({ activePath, user, fragment } = {}) {
   </DashboardShell>;
 }
 
+export function AudienceLinkedAccountsPage({ activePath, user, fragment } = {}) {
+  const content = <div class="cr-workspace-content">
+    <PeopleTabs tab="linked" />
+    <div class="people-reviews people-linked" id="people-linked-app" data-people-tab="linked">
+      <header class="v3-head people-reviews__head">
+        <div><h1>Linked accounts</h1><p class="v3-head-sub">Accounts that look like they belong to the same person. Nothing is restricted automatically.</p></div>
+        <div class="people-review-count" aria-live="polite"><strong id="people-linked-pending-count">—</strong><span>need attention</span></div>
+      </header>
+      <section class="people-review-queue" aria-labelledby="people-linked-title">
+        <div class="people-review-toolbar">
+          <div><h2 id="people-linked-title">Likely links</h2><p>Review pairs flagged from shared devices, linked accounts, IPs, or claim timing. Viewers never see this.</p></div>
+          <div class="people-review-filters" role="group" aria-label="Link status">
+            <button class="btn btn--sm is-active" type="button" data-linked-filter="active" aria-pressed="true">Active</button>
+            <button class="btn btn--sm" type="button" data-linked-filter="dismissed" aria-pressed="false">Dismissed</button>
+          </div>
+        </div>
+        <div class="people-review-feedback"><p class="status" id="people-linked-status" role="status" aria-live="polite"></p><button class="btn btn--sm" id="people-linked-retry" type="button" hidden>Try again</button></div>
+        <div class="people-linked-groups" id="people-linked-groups" aria-live="polite"></div>
+        <div class="v3-empty people-review-empty" id="people-linked-empty" hidden>
+          <h3>No linked accounts to review.</h3><p>Accounts that look operated by the same person will appear here when detected.</p>
+        </div>
+      </section>
+    </div>
+    <div id="people-linked-loading" class="people-review-loading" role="status" aria-live="polite" aria-busy="true" hidden><div class="ui-loading__spinner" aria-hidden="true"></div><span>Loading linked accounts…</span></div>
+  </div>;
+  const chrome = chromeStateFor("audience", "linked");
+  if (fragment) return content;
+  return <DashboardShell activeNav={chrome.navKey} activePath={activePath || chrome.canonicalPath} boardContext="selector" crumbs={chrome.crumbs} footer="rewards" rootId="cr-dash" user={user}>
+    {content}
+  </DashboardShell>;
+}
+
 const audienceConfigBase = { styles: ["/assets/app.css", "/assets/shell-nav.css", "/assets/ui.css", "/assets/dashboard-v4.css", "/assets/people.css"], scripts: ['<script src="/assets/people.js?v=1" type="module"></script>', '<script src="/assets/shell-nav.js?v=4" defer></script>'], nav: false, footer: false, wide: true, bootWatchdog: true };
 
 export const audienceMembersPage = {
@@ -159,4 +192,9 @@ export const audienceActivityPage = {
 export const audienceReviewsPage = {
   config: { ...audienceConfigBase, title: chromeStateFor("audience", "reviews").documentTitle, canonical: "https://yourrank.site/dashboard/audience/reviews" },
   Component: AudienceReviewsPage,
+};
+
+export const audienceLinkedPage = {
+  config: { ...audienceConfigBase, title: chromeStateFor("audience", "linked").documentTitle, canonical: "https://yourrank.site/dashboard/audience/linked" },
+  Component: AudienceLinkedAccountsPage,
 };

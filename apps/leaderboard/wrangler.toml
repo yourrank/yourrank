@@ -62,7 +62,7 @@ binding = "HYPERDRIVE"
 id = "9e5b625bfdd84cd691b44c4780bdaf13"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/5 * * * *", "0 4 * * *"]
 
 [vars]
 # Producers must fail closed when EVENTS_QUEUE is unbound instead of silently

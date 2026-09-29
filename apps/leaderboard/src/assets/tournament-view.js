@@ -20,6 +20,12 @@ const SOURCE_LABELS = {
   manual: "Manual",
   leaderboard: "Leaderboard",
 };
+const LINKED_REASON_LABELS = {
+  same_device: "Same device",
+  same_identity: "Same account",
+  same_ip_24h: "Same IP",
+  same_time_claims: "Same-time claims",
+};
 const STATUS_LABELS = {
   pending: "Registered",
   confirmed: "Registered",
@@ -192,8 +198,11 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
       id: entry.id,
       name: entry.display_name || "?",
       initial: String(entry.display_name || "?").trim().charAt(0).toUpperCase() || "?",
-      flagged: Boolean(tournament?.anti_alt_enabled && entry.alt_flag),
-      flagReason: entry.alt_reason || "Possible duplicate account.",
+      flagged: Boolean(tournament?.anti_alt_enabled && (entry.flagged || entry.alt_flag || entry.linked_to)),
+      flagReason: entry.linked_to
+        ? `Linked to ${entry.linked_to} · ${(entry.linked_reasons || []).map((code) => LINKED_REASON_LABELS[code] || code).join(" · ")}`
+        : entry.alt_reason || "Possible duplicate account.",
+      linked: !!entry.linked_to,
       sourceLabel: SOURCE_LABELS[entry.source] || entry.source || "—",
       status: entry.status,
       statusLabel: entry.status === "waitlist"
@@ -304,7 +313,7 @@ function tabsHtml(vm) {
 export function entryRowsHtml(vm) {
   return vm.entriesVm.map((entry) => {
     const flag = entry.flagged
-      ? `<span class="tn-entry-flag"><span class="tn-pill tn-pill--duplicate">Possible duplicate</span> <span class="tn-entry-flag-reason">${esc(entry.flagReason)}</span></span>`
+      ? `<span class="tn-entry-flag"><span class="tn-pill tn-pill--duplicate">Possible duplicate</span> <span class="tn-entry-flag-reason">${esc(entry.flagReason)}${entry.linked ? ' · <a href="/dashboard/audience/linked">Review</a>' : ""}</span>`
       : "";
     const menu = vm.finished
       ? ""

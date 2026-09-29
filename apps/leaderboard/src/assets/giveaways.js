@@ -432,6 +432,10 @@ if (!window.__yrSpaShell) {
     $("gw-btn-copy-winner")?.addEventListener("click", (e) => copyWinnerDetails(e.currentTarget));
     $("gw-btn-confirm")?.addEventListener("click", () => confirmWinner());
     $("gw-btn-export")?.addEventListener("click", () => exportCSV());
+    $("gw-linked-exclude-all")?.addEventListener("click", () => {
+      const plan = linkedExcludePlan();
+      if (plan.length) excludeEntrants(plan.map((entry) => entry.id));
+    });
 
     $("gw-search-entrants")?.addEventListener("input", (e) => {
       filterEntrantsTable(e.target.value);
@@ -770,6 +774,15 @@ if (!window.__yrSpaShell) {
     return { isSub, isVip };
   }
 
+  function linkedReasonLabel(code) {
+    return {
+      same_device: "Same device",
+      same_identity: "Same account",
+      same_ip_24h: "Same IP",
+      same_time_claims: "Same-time claims",
+    }[code] || String(code || "").replaceAll("_", " ");
+  }
+
   function formatEnteredAt(value) {
     const d = new Date(value);
     return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
@@ -781,6 +794,7 @@ if (!window.__yrSpaShell) {
     tbody.replaceChildren();
     entrants.forEach((entrant, idx) => renderEntrantRow(tbody, entrant, idx + 1));
     updateEntrantsCount();
+    renderLinkedBanner();
     filterEntrantsTable($("gw-search-entrants")?.value || "");
   }
 
@@ -836,7 +850,18 @@ if (!window.__yrSpaShell) {
     }
     if (entrant.eligibility_status === "pending_verification") statusBadge.textContent = "Pending verification";
     if (entrant.eligibility_status === "rejected") statusBadge.textContent = `Rejected: ${String(entrant.eligibility_reason || "ineligible").replaceAll("_", " ")}`;
+    if (entrant.eligibility_reason === "excluded_linked_account") statusBadge.textContent = "Excluded: linked account";
     statusCell.append(statusBadge);
+    // Likely-linked badge: streamer-only signal, never shown to viewers.
+    const linked = Array.isArray(entrant.linked) ? entrant.linked : [];
+    if (linked.length && entrant.eligibility_reason !== "excluded_linked_account") {
+      const badge = document.createElement("span");
+      badge.className = "gw-linked-badge";
+      const reasonText = linked.map((link) => `${link.username}: ${(link.reasons || []).map(linkedReasonLabel).join(", ")}`).join(" · ");
+      badge.textContent = `Linked · ${linked[0].username}${linked.length > 1 ? ` (+${linked.length - 1})` : ""}`;
+      badge.title = reasonText;
+      statusCell.append(" ", badge);
+    }
 
     const messageCell = document.createElement("td");
     messageCell.dataset.label = "Chat message";
@@ -853,6 +878,21 @@ if (!window.__yrSpaShell) {
     const actionCell = document.createElement("td");
     actionCell.className = "ta-r";
     actionCell.dataset.label = "Action";
+    if (entrant.eligibility_reason === "excluded_linked_account") {
+      const includeButton = document.createElement("button");
+      includeButton.className = "btn btn--sm";
+      includeButton.type = "button";
+      includeButton.textContent = "Include again";
+      includeButton.addEventListener("click", () => includeEntrant(entrant.id));
+      actionCell.append(includeButton, " ");
+    } else if (linked.length) {
+      const excludeButton = document.createElement("button");
+      excludeButton.className = "btn btn--sm btn--ghost";
+      excludeButton.type = "button";
+      excludeButton.textContent = "Exclude";
+      excludeButton.addEventListener("click", () => excludeEntrants([entrant.id]));
+      actionCell.append(excludeButton, " ");
+    }
     const removeButton = document.createElement("button");
     removeButton.className = "btn btn--sm btn--ghost btn--danger-text";
     removeButton.type = "button";
@@ -864,6 +904,91 @@ if (!window.__yrSpaShell) {
 
     tr.append(numberCell, userCell, statusCell, messageCell, timeCell, actionCell);
     tbody.appendChild(tr);
+  }
+
+  // Union-find over the session's linked pairs, then keep the earliest-entered
+  // entry per component and exclude the rest (one bulk action, not auto).
+  function linkedExcludePlan() {
+    const linked = entrants.filter((entry) => Array.isArray(entry.linked) && entry.linked.length);
+    const parent = new Map();
+    const find = (v) => {
+      while (parent.get(v) !== v) v = parent.get(v);
+      return v;
+    };
+    const ordered = [...linked].sort((a, b) => String(a.entered_at).localeCompare(String(b.entered_at)));
+    for (const entry of ordered) if (!parent.has(entry.id)) parent.set(entry.id, entry.id);
+    for (const entry of ordered) {
+      for (const link of entry.linked) {
+        const other = ordered.find((candidate) => candidate.id === link.entryId);
+        if (other) {
+          if (!parent.has(other.id)) parent.set(other.id, other.id);
+          parent.set(find(other.id), find(entry.id));
+        }
+      }
+    }
+    const components = new Map();
+    for (const entry of ordered) {
+      const root = find(entry.id);
+      if (!components.has(root)) components.set(root, []);
+      components.get(root).push(entry);
+    }
+    const keepers = [];
+    const excludable = [];
+    for (const group of components.values()) {
+      const notExcluded = group.filter((entry) => entry.eligibility_reason !== "excluded_linked_account");
+      if (!notExcluded.length) continue;
+      keepers.push(notExcluded[0]);
+      excludable.push(...notExcluded.slice(1));
+    }
+    return excludable;
+  }
+
+  function renderLinkedBanner() {
+    const banner = $("gw-linked-banner");
+    if (!banner) return;
+    const linkedCount = entrants.filter((entry) =>
+      (Array.isArray(entry.linked) && entry.linked.length) || entry.eligibility_reason === "excluded_linked_account").length;
+    const excludable = linkedExcludePlan();
+    banner.hidden = linkedCount === 0;
+    const text = $("gw-linked-banner-text");
+    if (text) text.textContent = `${linkedCount} entrants are linked to another entrant.`;
+    const button = $("gw-linked-exclude-all");
+    if (button) {
+      button.hidden = excludable.length === 0;
+      button.textContent = `Exclude linked duplicates (${excludable.length})`;
+    }
+  }
+
+  async function excludeEntrants(entryIds) {
+    clearEngageError();
+    try {
+      const res = await chatApi("/entries/exclude", { entryIds, sessionId: session?.id, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not exclude linked entrants.");
+        return;
+      }
+      applyState({ connection, ...data });
+      const n = Array.isArray(data.excluded) ? data.excluded.length : 0;
+      showEngageError(`Excluded ${n} linked entrant${n === 1 ? "" : "s"}. Use Include again to undo.`);
+    } catch {
+      showEngageError("Network error excluding linked entrants.");
+    }
+  }
+
+  async function includeEntrant(entryId) {
+    clearEngageError();
+    try {
+      const res = await chatApi("/entries/include", { entryId, sessionId: session?.id, siteId: siteId || undefined });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not include the entrant again.");
+        return;
+      }
+      applyState({ connection, ...data });
+    } catch {
+      showEngageError("Network error including the entrant.");
+    }
   }
 
   async function removeEntrant(id) {

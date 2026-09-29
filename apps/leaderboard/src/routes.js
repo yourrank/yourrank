@@ -65,6 +65,8 @@ import {
   handleChatGiveawayFinalize,
   handleChatGiveawayAddEntry,
   handleChatGiveawayRemoveEntry,
+  handleChatGiveawayExcludeLinkedEntries,
+  handleChatGiveawayIncludeLinkedEntry,
   handleChatGiveawayUpdateResponseRules,
 } from "./handlers/chat-giveaways.js";
 import { handleGetActivities, handleCloseActivity } from "./handlers/activities.js";
@@ -204,6 +206,10 @@ import {
   handlePeopleReviewDetail,
   handlePeopleReviews,
 } from "./handlers/people-reviews.js";
+import {
+  handleLinkedAccounts,
+  handleLinkedAccountsDecision,
+} from "./handlers/linked-accounts.js";
 import {
   handleKickViewerAuthStart,
   handleKickViewerAuthCallback,
@@ -357,6 +363,8 @@ export const ROUTES = [
   { path: "/api/giveaways/chat/response-rules", method: "POST", handler: withHandler(handleChatGiveawayUpdateResponseRules) },
   { path: "/api/giveaways/chat/entries/add", method: "POST", handler: withHandler(handleChatGiveawayAddEntry) },
   { path: "/api/giveaways/chat/entries/remove", method: "POST", handler: withHandler(handleChatGiveawayRemoveEntry) },
+  { path: "/api/giveaways/chat/entries/exclude", method: "POST", handler: withHandler(handleChatGiveawayExcludeLinkedEntries) },
+  { path: "/api/giveaways/chat/entries/include", method: "POST", handler: withHandler(handleChatGiveawayIncludeLinkedEntry) },
 
   // Safe Activities foundation (existing free-workflow adapters only)
   { path: "/api/activities", method: "GET", handler: withHandler(handleGetActivities) },
@@ -469,6 +477,8 @@ export const ROUTES = [
   { path: "/api/people/reviews", method: "GET", handler: withHandler(handlePeopleReviews) },
   { path: "/api/people/reviews/:id", method: "GET", handler: withHandler(handlePeopleReviewDetail) },
   { path: "/api/people/reviews/:id/decision", method: "POST", handler: withHandler(handlePeopleReviewDecision) },
+  { path: "/api/people/linked-accounts", method: "GET", handler: withHandler(handleLinkedAccounts) },
+  { path: "/api/people/linked-accounts/decision", method: "POST", handler: withHandler(handleLinkedAccountsDecision) },
 
   // Public credits / shop API (CSRF-exempt, read-only balance lookup)
   { path: "/api/public/credits", method: "GET", handler: withHandler(handlePublicCredits) },

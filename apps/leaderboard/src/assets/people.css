@@ -471,3 +471,82 @@
     scroll-behavior: auto;
   }
 }
+
+/* Linked accounts (People → Linked accounts) */
+.v3-dash[data-auth-workspace] .people-linked-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ws-space-3);
+  margin-top: var(--ws-space-3);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-group {
+  border: 1px solid var(--ws-border);
+  border-radius: var(--ws-radius-lg, 12px);
+  padding: var(--ws-space-4);
+  background: var(--ws-surface-2, transparent);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-group__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--ws-space-3);
+  flex-wrap: wrap;
+}
+
+.v3-dash[data-auth-workspace] .people-linked-accounts {
+  display: flex;
+  gap: var(--ws-space-2);
+  flex-wrap: wrap;
+}
+
+.v3-dash[data-auth-workspace] .people-linked-account {
+  font-weight: 600;
+}
+
+.v3-dash[data-auth-workspace] .people-linked-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--ws-space-2);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-confidence {
+  font-size: var(--ws-text-sm, 13px);
+  font-weight: 600;
+  color: var(--ws-text-secondary, #64748b);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-summary,
+.v3-dash[data-auth-workspace] .people-linked-detected {
+  margin: var(--ws-space-2) 0 0;
+  font-size: var(--ws-text-sm, 13px);
+  color: var(--ws-text-secondary, #64748b);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-actions {
+  display: flex;
+  gap: var(--ws-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--ws-space-3);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-pill--pending {
+  background: var(--ws-info-soft, #e0f2fe);
+  color: var(--ws-info, #0369a1);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-pill--watching {
+  background: var(--ws-warning-soft, #fef3c7);
+  color: var(--ws-warning, #b45309);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-pill--restricted {
+  background: var(--ws-danger-soft, #fee2e2);
+  color: var(--ws-danger, #b91c1c);
+}
+
+.v3-dash[data-auth-workspace] .people-linked-pill--dismissed {
+  background: var(--ws-surface-3, #f1f5f9);
+  color: var(--ws-text-secondary, #64748b);
+}

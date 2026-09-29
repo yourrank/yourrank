@@ -21,7 +21,7 @@ import {
   rewardsShopPage,
   rewardsRedemptionsPage,
 } from "./pages/rewards.jsx";
-import { audienceActivityPage, audienceMembersPage, audienceReviewsPage } from "./pages/audience.jsx";
+import { audienceActivityPage, audienceLinkedPage, audienceMembersPage, audienceReviewsPage } from "./pages/audience.jsx";
 import { settingsUnifiedPage } from "./pages/account.jsx";
 import { reviewsPage } from "./pages/reviews.js";
 import { invitePage } from "./pages/invite.jsx";
@@ -55,6 +55,7 @@ export const PAGES = {
   audienceMembers: audienceMembersPage,
   audienceActivity: audienceActivityPage,
   audienceReviews: audienceReviewsPage,
+  audienceLinked: audienceLinkedPage,
   rewardsRedemptions: rewardsRedemptionsPage,
   settingsUnified: settingsUnifiedPage,
   reviews: reviewsPage,

@@ -7,6 +7,8 @@ import {
   handleChatGiveawayStart,
   handleChatGiveawayState,
   handleChatGiveawayAddEntry,
+  handleChatGiveawayExcludeLinkedEntries,
+  handleChatGiveawayIncludeLinkedEntry,
   handleChatGiveawayStop,
   handleChatGiveawayUpdateResponseRules,
 } from "../handlers/chat-giveaways.js";
@@ -201,7 +203,7 @@ function deps(overrides = {}) {
 describe("Chat Giveaway API", () => {
   it("registers the server-backed routes alongside the legacy chatroom lookup", () => {
     const paths = routes.map((r) => `${r.method} ${r.path}`);
-    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/add", "POST /api/giveaways/chat/entries/remove", "POST /api/giveaways/chat/response-rules"]) {
+    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/add", "POST /api/giveaways/chat/entries/remove", "POST /api/giveaways/chat/entries/exclude", "POST /api/giveaways/chat/entries/include", "POST /api/giveaways/chat/response-rules"]) {
       expect(paths).toContain(p);
     }
   });
@@ -1035,5 +1037,104 @@ describe("runGiveawayTimeouts sweep", () => {
     expect(counts).toEqual({ rerolled: 0, exhausted: 0, failed: 1 });
     expect(errors.join("\n")).toContain("s1");
     expect(errors.join("\n")).toContain("lock lost");
+  });
+});
+
+describe("linked-account exclude/include", () => {
+  const E1 = "11111111-1111-4111-8111-111111111111";
+  const E2 = "22222222-2222-4222-8222-222222222222";
+
+  function linkedDeps({ session = {}, entries = [] } = {}) {
+    const statements = [];
+    return {
+      statements,
+      d: deps({
+        one: async () => ({ id: "gs-1", site_id: siteA.id, status: "active", ...session }),
+        query: async (sql) => {
+          if (String(sql).includes("FROM account_links")) return [];
+          return entries;
+        },
+        transaction: async (fn) => fn(async (sql, params) => {
+          statements.push({ text: String(sql), params });
+          const text = String(sql);
+          if (text.includes("FOR UPDATE") && text.includes("chat_giveaway_sessions")) {
+            return [{ id: "gs-1", site_id: siteA.id, status: "active", ...session }];
+          }
+          if (text.includes("FOR UPDATE") && text.includes("chat_giveaway_entries")) {
+            return entries.filter((e) => (params?.[1] || []).includes(e.id));
+          }
+          if (text.startsWith("UPDATE chat_giveaway_entries")) {
+            const row = entries.find((e) => e.id === params?.[1]);
+            if (!row) return [];
+            if (text.includes("eligibility_reason='excluded_linked_account'") &&
+                row.eligibility_reason !== "excluded_linked_account") return [];
+            return [row];
+          }
+          if (text.includes("INSERT INTO audit_log")) return [{ id: "a1" }];
+          if (text.includes("FROM chat_giveaway_entries e")) return entries;
+          if (text.includes("FROM account_links")) return [];
+          if (text.includes("FROM chat_giveaway_draws")) return [];
+          return [];
+        }),
+      }),
+    };
+  }
+
+  it("excludes linked entries and writes audit rows", async () => {
+    const entries = [
+      { id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible" },
+      { id: E2, giveaway_session_id: "gs-1", eligibility_status: "eligible" },
+    ];
+    const { d, statements } = linkedDeps({ entries });
+    const res = await handleChatGiveawayExcludeLinkedEntries(
+      apiRequest("/api/giveaways/chat/entries/exclude", { sessionId: "gs-1", siteId: siteA.id, entryIds: [E1, E2] }), {}, d);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.excluded.sort()).toEqual([E1, E2].sort());
+    const audits = statements.filter((s) => s.text.includes("audit_log"));
+    expect(audits).toHaveLength(2);
+    expect(audits[0].text).toContain("giveaway_entry_excluded_linked");
+  });
+
+  it("409s when the current winner is in the exclude list", async () => {
+    const { d } = linkedDeps({
+      session: { winner_entry_id: E1 },
+      entries: [
+        { id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible" },
+        { id: E2, giveaway_session_id: "gs-1", eligibility_status: "eligible" },
+      ],
+    });
+    const res = await handleChatGiveawayExcludeLinkedEntries(
+      apiRequest("/api/giveaways/chat/entries/exclude", { sessionId: "gs-1", siteId: siteA.id, entryIds: [E1, E2] }), {}, d);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("Re-roll before excluding the current winner.");
+  });
+
+  it("404s when an entry id is not part of the session", async () => {
+    const { d } = linkedDeps({ entries: [{ id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible" }] });
+    const res = await handleChatGiveawayExcludeLinkedEntries(
+      apiRequest("/api/giveaways/chat/entries/exclude", { sessionId: "gs-1", siteId: siteA.id, entryIds: [E1, E2] }), {}, d);
+    expect(res.status).toBe(404);
+  });
+
+  it("include reinstates only excluded_linked_account entries and audits it", async () => {
+    const entries = [
+      { id: E1, giveaway_session_id: "gs-1", eligibility_status: "rejected", eligibility_reason: "excluded_linked_account" },
+    ];
+    const { d, statements } = linkedDeps({ entries });
+    const res = await handleChatGiveawayIncludeLinkedEntry(
+      apiRequest("/api/giveaways/chat/entries/include", { sessionId: "gs-1", siteId: siteA.id, entryId: E1 }), {}, d);
+    expect(res.status).toBe(200);
+    expect(statements.some((s) => s.text.includes("giveaway_entry_included"))).toBe(true);
+    expect(statements.some((s) => s.text.includes("eligibility_status='eligible'"))).toBe(true);
+  });
+
+  it("include 409s for an entry that was never linked-excluded", async () => {
+    const entries = [{ id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible" }];
+    // UPDATE...RETURNING finds nothing (the predicate requires the excluded reason).
+    const { d } = linkedDeps({ entries });
+    const res = await handleChatGiveawayIncludeLinkedEntry(
+      apiRequest("/api/giveaways/chat/entries/include", { sessionId: "gs-1", siteId: siteA.id, entryId: E1 }), {}, d);
+    expect(res.status).toBe(409);
   });
 });
