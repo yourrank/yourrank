@@ -4,7 +4,8 @@ import { giveawayRules, evaluateGiveawayEligibility } from "@yourrank/shared/giv
 export const SESSION_COLUMNS = `id, site_id, provider, keyword, rules, status, started_at, stopped_at,
   winner_entry_id, drawn_at, winner_confirmed_at, winner_confirmation_message,
   winner_finalized_at, winner_finalized_by,
-  winner_response_required, winner_response_timeout_seconds, winner_response_deadline, created_at`;
+  winner_response_required, winner_response_timeout_seconds, winner_response_deadline,
+  auto_reroll_exhausted_at, created_at`;
 export const ENTRY_COLUMNS = `id, giveaway_session_id, provider, provider_user_id, username, avatar_url, message,
   badges, entered_at, eligibility_status, eligibility_reason`;
 export const giveawayTransaction = (fn) => withTransaction((tx) => fn((sql, params = []) => tx.unsafe(sql, params)));
@@ -64,16 +65,24 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
       ipAvailable: !!entry.ip_hash }, rules).status === "eligible");
   const pool = rules.winnerRepeat === "again" ? eligible : eligible.filter((entry) => !entry.already_drawn);
   if (!pool.length) {
-    if (automatic) await run("UPDATE chat_giveaway_sessions SET winner_response_deadline=NULL WHERE id=$1", [session.id]);
+    if (automatic) {
+      // Persist that auto re-roll stopped here: the deadline is disarmed so the
+      // sweep won't retry forever, and the flag lets the dashboard tell the
+      // streamer why the giveaway is waiting instead of failing silently.
+      const [row] = await run(`UPDATE chat_giveaway_sessions
+        SET winner_response_deadline=NULL, auto_reroll_exhausted_at=now()
+        WHERE id=$1 RETURNING ${SESSION_COLUMNS}`, [session.id]);
+      return { error: eligible.length ? NO_OTHER_ENTRANTS_ERROR : "No eligible entrants to draw from.", exhausted: true, session: row };
+    }
     return { error: eligible.length ? NO_OTHER_ENTRANTS_ERROR : "No eligible entrants to draw from." };
   }
   const winner = pool[randomIndex(pool.length)];
-  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id) VALUES ($1,$2,$3)`,
-    [session.id, winner.id, winner.provider_user_id]);
   // drawn_at strictly advances even within one transaction so every draw has a
   // distinct identity; the deadline is derived from that same instant so the
-  // persisted window and winner_response_deadline can never disagree.
-  const responseRequired = rules.winnerMustRespond;
+  // persisted window and winner_response_deadline can never disagree. A
+  // manually-added winner has no chat identity to respond with, so the
+  // response requirement is never armed for them.
+  const responseRequired = rules.winnerMustRespond && winner.provider !== "manual";
   const responseTimeoutSeconds = responseRequired ? rules.responseTimeout : null;
   const cas = expectedWinnerEntryId == null && !automatic
     ? "AND s.winner_entry_id IS NULL"
@@ -90,11 +99,19 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
            winner_finalized_at = NULL, winner_finalized_by = NULL,
            winner_response_required = $4::boolean, winner_response_timeout_seconds = $5::int,
            winner_response_deadline = CASE WHEN $4::boolean THEN stamp.new_drawn_at + make_interval(secs => $5::int) ELSE NULL END,
+           auto_reroll_exhausted_at = NULL,
            status = 'completed', stopped_at = COALESCE(s.stopped_at, now())
       FROM stamp
      WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL ${cas}
     RETURNING ${SESSION_COLUMNS}`, params);
   if (!updated.length) return { conflict: true, error: DRAW_CHANGED_ERROR };
+  // The history row lands only after the CAS commits the draw itself, so a
+  // racing draw never leaves a phantom entry in history.
+  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id, reason, replaced_entry_id)
+    VALUES ($1,$2,$3,$4,$5)`,
+    [session.id, winner.id, winner.provider_user_id,
+     automatic ? "auto_reroll" : expectedWinnerEntryId != null ? "reroll" : "draw",
+     session.winner_entry_id]);
   return { winnerId: winner.id, session: updated[0] };
 }
 
@@ -104,8 +121,25 @@ export async function runGiveawayTimeouts({ queryImpl = query, transaction = giv
     AND winner_confirmed_at IS NULL AND winner_finalized_at IS NULL
     AND winner_response_deadline <= now() AND rules->>'autoReroll'='true'
     ORDER BY winner_response_deadline LIMIT 100`);
-  for (const row of due) await transaction(async (run) => {
-    const [session] = await run(`SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id=$1 FOR UPDATE`, [row.id]);
-    if (session) await drawGiveaway(run, session, { automatic: true });
-  });
+  const counts = { rerolled: 0, exhausted: 0, failed: 0 };
+  for (const row of due) {
+    try {
+      const result = await transaction(async (run) => {
+        const [session] = await run(`SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id=$1 FOR UPDATE`, [row.id]);
+        return session ? drawGiveaway(run, session, { automatic: true }) : { unchanged: true };
+      });
+      if (result?.exhausted) {
+        counts.exhausted += 1;
+        console.warn(`[giveaway-timeouts] auto re-roll stopped for session ${row.id}: ${result.error}`);
+      } else if (result?.error) {
+        console.warn(`[giveaway-timeouts] session ${row.id} draw failed: ${result.error}`);
+      } else if (!result?.unchanged) {
+        counts.rerolled += 1;
+      }
+    } catch (err) {
+      counts.failed += 1;
+      console.error(`[giveaway-timeouts] session ${row.id} failed:`, String(err?.message || err));
+    }
+  }
+  return counts;
 }

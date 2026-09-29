@@ -42,6 +42,8 @@ if (!window.__yrSpaShell) {
   let connection = { connected: false, chatReady: false, channelName: null };
   let session = null;      // current chat_giveaway_sessions row (or null)
   let entrants = [];       // persisted chat_giveaway_entries for `session`
+  let draws = [];          // persisted chat_giveaway_draws for `session`
+  let responseRulesInFlight = false;
   let currentWinner = null;
   let pollTimer = null;
   let pollInFlight = false;
@@ -338,8 +340,15 @@ if (!window.__yrSpaShell) {
       if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").value = String(r.responseTimeout || 60);
     }
     renderRuleAvailability();
+    // Entry-side rules lock while a giveaway collects; winner verification is
+    // a draw-phase rule and stays editable until the winner is confirmed.
     if ($("gw-settings")) $("gw-settings").disabled = isActive();
-    if ($("gw-settings-note")) $("gw-settings-note").textContent = isActive() ? "These rules are saved and locked for the current giveaway." : "Settings are saved when you start a giveaway. Changes apply to the next giveaway.";
+    if ($("gw-advanced-settings")) $("gw-advanced-settings").disabled = isActive();
+    if ($("gw-response-settings")) $("gw-response-settings").disabled = false;
+    if ($("gw-response-live-note")) $("gw-response-live-note").hidden = !isResponseRulesLiveEditable();
+    if ($("gw-settings-note")) $("gw-settings-note").textContent = isActive()
+      ? "Entry rules are locked for the current giveaway. Winner verification can still change until you confirm a winner."
+      : "Settings are saved when you start a giveaway. Changes apply to the next giveaway.";
     const verification = session?.rules?.entryMode === "verified";
     if ($("gw-verification-link-wrap")) $("gw-verification-link-wrap").hidden = !verification;
     if (verification && $("gw-verification-link")) $("gw-verification-link").href = `/giveaways/verify?sessionId=${encodeURIComponent(session.id)}`;
@@ -356,13 +365,26 @@ if (!window.__yrSpaShell) {
       });
       const data = await responseData(response);
       if (response.ok) applyState({ connection, ...data });
-      else showEngageError(data.error || "Auto re-roll failed.");
+      else {
+        // A 409 can carry the persisted session (e.g. auto re-roll exhausted):
+        // apply it so the notice/history reflect server truth before the error.
+        if (data.session) applyState({ connection, ...data });
+        showEngageError(data.error || "Auto re-roll failed.");
+      }
     } catch { showEngageError("Network error during auto re-roll."); }
     finally { autoRerollInFlight = false; }
   }
 
   function wireEvents() {
     $("gw-settings")?.addEventListener("change", renderRuleAvailability);
+    $("gw-advanced-settings")?.addEventListener("change", renderRuleAvailability);
+    $("gw-response-settings")?.addEventListener("change", (event) => {
+      renderRuleAvailability();
+      const id = event.target?.id;
+      if (isResponseRulesLiveEditable() && ["gw-opt-claim-req", "gw-opt-claim-duration", "gw-opt-auto-reroll"].includes(id)) {
+        saveResponseRules();
+      }
+    });
     // Advanced disclosure state is a local preference, never a giveaway rule.
     $("gw-advanced-options")?.addEventListener("toggle", (e) => {
       try { localStorage.setItem("yr:gw-advanced-open", e.currentTarget.open ? "1" : "0"); } catch { /* storage unavailable */ }
@@ -453,6 +475,7 @@ if (!window.__yrSpaShell) {
     connection = data.connection || { connected: false, chatReady: false, channelName: null };
     session = data.session || null;
     entrants = Array.isArray(data.entries) ? data.entries : [];
+    draws = Array.isArray(data.draws) ? data.draws : [];
     const previousWinnerId = currentWinner?.id || null;
     currentWinner = data.winner || null;
 
@@ -460,10 +483,94 @@ if (!window.__yrSpaShell) {
     renderRules();
     renderSessionControls();
     renderEntrants();
+    renderDrawHistory();
     renderWinner(previousWinnerId);
   }
 
   function isActive() { return session?.status === "active"; }
+
+  // Winner verification rules can still be saved on a live Kick giveaway until
+  // the winner is confirmed; after that they are next-giveaway settings again.
+  function isResponseRulesLiveEditable() {
+    return Boolean(session) && session.provider === "kick" && session.status !== "cancelled" && !session.winner_finalized_at;
+  }
+
+  function restoreResponseControls() {
+    const r = session?.rules || {};
+    if ($("gw-opt-claim-req")) $("gw-opt-claim-req").checked = !!r.winnerMustRespond;
+    if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").value = String(r.responseTimeout || 60);
+    if ($("gw-opt-auto-reroll")) $("gw-opt-auto-reroll").checked = !!r.autoReroll;
+    renderRuleAvailability();
+  }
+
+  async function saveResponseRules() {
+    if (responseRulesInFlight || !session) return;
+    const rules = readRules();
+    const controls = ["gw-opt-claim-req", "gw-opt-claim-duration", "gw-opt-auto-reroll"].map($).filter(Boolean);
+    responseRulesInFlight = true;
+    for (const control of controls) control.disabled = true;
+    try {
+      const res = await chatApi("/response-rules", {
+        sessionId: session.id,
+        siteId: siteId || undefined,
+        winnerMustRespond: rules.winnerMustRespond,
+        responseTimeout: rules.responseTimeout,
+        autoReroll: rules.autoReroll,
+      });
+      const data = await responseData(res);
+      if (!res.ok) {
+        showEngageError(data.error || "Could not update winner verification.");
+        restoreResponseControls();
+        return;
+      }
+      applyState({ connection, ...data });
+    } catch {
+      showEngageError("Network error updating winner verification.");
+      restoreResponseControls();
+    } finally {
+      responseRulesInFlight = false;
+      for (const control of controls) control.disabled = false;
+      renderRuleAvailability();
+    }
+  }
+
+  function renderDrawHistory() {
+    const section = $("gw-draw-history");
+    const list = $("gw-draw-history-list");
+    if (!section || !list) return;
+    list.replaceChildren();
+    const rows = [...draws].reverse(); // newest first
+    for (const draw of rows) {
+      const name = draw.username || "a previous entrant";
+      const replaced = draw.replaced_username || "the previous winner";
+      const text = draw.reason === "auto_reroll"
+        ? `Auto re-roll to ${name} — ${replaced} didn't respond in time`
+        : draw.reason === "reroll"
+          ? `Re-rolled to ${name} (replaced ${replaced})`
+          : `Drew ${name}`;
+      const li = document.createElement("li");
+      li.className = "gw-draw-history-row";
+      const label = document.createElement("span");
+      label.textContent = text;
+      const when = document.createElement("span");
+      when.className = "gw-draw-history-time hint";
+      when.textContent = formatEnteredAt(draw.drawn_at);
+      li.append(label, when);
+      list.appendChild(li);
+    }
+    if (session?.auto_reroll_exhausted_at) {
+      const li = document.createElement("li");
+      li.className = "gw-draw-history-row";
+      const label = document.createElement("span");
+      label.textContent = `Auto re-roll stopped — no other eligible entrants left (${currentWinner?.username || "the winner"} didn't respond)`;
+      const when = document.createElement("span");
+      when.className = "gw-draw-history-time hint";
+      when.textContent = formatEnteredAt(session.auto_reroll_exhausted_at);
+      li.append(label, when);
+      list.prepend(li);
+    }
+    section.hidden = rows.length === 0 && !session?.auto_reroll_exhausted_at;
+  }
 
   function renderConnection() {
     const nameEl = $("gw-channel-name");
@@ -910,6 +1017,22 @@ if (!window.__yrSpaShell) {
     }
     const stage = $("gw-winner-stage");
     if (stage) stage.classList.toggle("gw-winner-stage--confirmed", finalized);
+    const manualHint = $("gw-winner-manual-hint");
+    if (manualHint) {
+      manualHint.hidden = !(currentWinner?.provider === "manual" && session?.rules?.winnerMustRespond && !finalized);
+    }
+    // Auto re-roll can stop itself when no eligible entrant is left; the flag is
+    // persisted server-side, so this notice survives reloads until the draw
+    // resolves (confirm or a successful draw clears the column).
+    const exhausted = Boolean(session?.auto_reroll_exhausted_at) && !finalized && !session?.winner_confirmed_at;
+    for (const id of ["gw-auto-reroll-stopped", "gw-modal-auto-reroll-stopped"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.hidden = !exhausted;
+      if (exhausted) {
+        el.textContent = `Auto re-roll stopped — ${currentWinner?.username || "the winner"} didn't respond and no other eligible entrants remain, so re-roll isn't possible. Start a new giveaway when you're ready.`;
+      }
+    }
     const chip = $("gw-modal-verify-chip");
     if (chip) chip.hidden = !winnerClaimed;
     if (finalized) {

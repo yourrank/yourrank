@@ -361,6 +361,8 @@ ${giveawaysSubnavHtml(active)}`}
                 <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-again" value="again"><span><b>Can win again</b><small>A re-roll may pick the same participant again.</small></span></label>
               </div>
             </section>
+          </fieldset>
+          <fieldset class="gw-settings" id="gw-response-settings">
             <section class="gw-settings-section" id="gw-winner-verification-section" aria-labelledby="gw-winner-verification-title">
               <h3 id="gw-winner-verification-title">Winner verification</h3>
               <label class="cr-toggle-row"><span>Winner must respond in chat</span><input type="checkbox" class="v3-toggle" id="gw-opt-claim-req"></label>
@@ -372,7 +374,10 @@ ${giveawaysSubnavHtml(active)}`}
               <div id="gw-auto-reroll-wrap" hidden>
                 <label class="cr-toggle-row"><span><b>Auto re-roll on timeout</b><small>Runs at expiry while this page is open, or on the next server check within five minutes.</small></span><input id="gw-opt-auto-reroll" type="checkbox" class="v3-toggle" disabled></label>
               </div>
+              <p class="hint" id="gw-response-live-note" hidden>Changes apply to the next draw or re-roll.</p>
             </section>
+          </fieldset>
+          <fieldset class="gw-settings" id="gw-advanced-settings">
             <details class="gw-setup-advanced" id="gw-advanced-options"><summary>Advanced options<span class="gw-advanced-summary-state" aria-hidden="true">▾</span></summary><div class="gw-setup-advanced-body">
               <section class="gw-settings-section" aria-labelledby="gw-advanced-eligibility-title">
                 <h3 id="gw-advanced-eligibility-title">Eligibility</h3>
@@ -459,6 +464,10 @@ ${giveawaysSubnavHtml(active)}`}
               </div>
             </div>
 
+            <p class="gw-auto-reroll-stopped" id="gw-auto-reroll-stopped" role="status" hidden></p>
+
+            <p class="hint gw-winner-manual-hint" id="gw-winner-manual-hint" hidden>Added manually — no chat response needed. Confirm when ready.</p>
+
             <div class="gw-winner-actions">
               <button class="btn btn--ghost btn--sm" id="gw-btn-copy-winner" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg> Copy Info</button>
               <button class="btn btn--ghost btn--sm" id="gw-btn-reroll" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.2-6.5L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.2 6.5L3 16"/><path d="M3 21v-5h5"/></svg> Re-roll Winner</button>
@@ -486,6 +495,11 @@ ${giveawaysSubnavHtml(active)}`}
             </button>
           </div>
         </div>
+
+        <section class="gw-draw-history" id="gw-draw-history" hidden>
+          <h3 class="gw-draw-history-title">Draw history</h3>
+          <ul class="gw-draw-history-list" id="gw-draw-history-list"></ul>
+        </section>
       </section>
 
       <!-- Entrants Live Roster -->
@@ -695,6 +709,7 @@ ${giveawaysSubnavHtml(active)}`}
         <p class="hint gw-claim-hint" id="gw-modal-claim-hint">
           Ask the winner to send a message in chat. Their live responses appear in the log below.
         </p>
+        <p class="gw-auto-reroll-stopped" id="gw-modal-auto-reroll-stopped" role="status" hidden></p>
       </div>
 
       <!-- Dedicated Winner Live Chat Feed -->

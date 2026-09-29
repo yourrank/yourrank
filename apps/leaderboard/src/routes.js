@@ -65,6 +65,7 @@ import {
   handleChatGiveawayFinalize,
   handleChatGiveawayAddEntry,
   handleChatGiveawayRemoveEntry,
+  handleChatGiveawayUpdateResponseRules,
 } from "./handlers/chat-giveaways.js";
 import { handleGetActivities, handleCloseActivity } from "./handlers/activities.js";
 import {
@@ -353,6 +354,7 @@ export const ROUTES = [
   { path: "/api/giveaways/chat/stop", method: "POST", handler: withHandler(handleChatGiveawayStop) },
   { path: "/api/giveaways/chat/draw", method: "POST", handler: withHandler(handleChatGiveawayDraw) },
   { path: "/api/giveaways/chat/finalize", method: "POST", handler: withHandler(handleChatGiveawayFinalize) },
+  { path: "/api/giveaways/chat/response-rules", method: "POST", handler: withHandler(handleChatGiveawayUpdateResponseRules) },
   { path: "/api/giveaways/chat/entries/add", method: "POST", handler: withHandler(handleChatGiveawayAddEntry) },
   { path: "/api/giveaways/chat/entries/remove", method: "POST", handler: withHandler(handleChatGiveawayRemoveEntry) },
 
