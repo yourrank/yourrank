@@ -83,7 +83,7 @@ export function buildKickAuthorizeURL(
   env: any,
   state: string,
   codeChallenge: string,
-  scope = "user:read channel:read channel:rewards:read channel:rewards:write events:subscribe",
+  scope = "user:read channel:read channel:rewards:read channel:rewards:write events:subscribe chat:write",
   viewerFlow = false,
   redirectUri?: string
 ): string {
@@ -348,6 +348,37 @@ export async function getValidKickAccessToken(
     refreshEnc: newRefreshEnc,
     expiresAt: newExpiresAt,
   };
+}
+
+export interface KickChatMessageInput {
+  broadcasterUserId: number | string;
+  content: string;
+  replyToMessageId?: string | null;
+}
+
+export async function postKickChatMessage(
+  accessToken: string,
+  input: KickChatMessageInput
+): Promise<void> {
+  const res = await kickCircuit.call(() =>
+    fetch("https://api.kick.com/public/v1/chat", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        type: "user",
+        broadcaster_user_id: Number(input.broadcasterUserId),
+        content: String(input.content || "").slice(0, 500),
+        ...(input.replyToMessageId ? { reply_to_message_id: String(input.replyToMessageId) } : {}),
+      }),
+    })
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Kick chat post failed ${res.status}: ${text}`);
+  }
 }
 
 export interface KickRewardInput {

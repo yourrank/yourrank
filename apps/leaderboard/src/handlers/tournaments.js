@@ -42,6 +42,15 @@ function isSupportedBracketSize(n) {
   return Number.isInteger(n) && SUPPORTED_BRACKET_SIZES.includes(n);
 }
 
+// "bracket"/empty means "cap at the bracket size"; null/"unlimited" removes
+// the cap; anything else parses to an integer clamped to >= 1.
+function parseEntryCap(value, bracketSize) {
+  if (value === undefined || value === "" || value === "bracket") return bracketSize;
+  if (value === null || value === "unlimited") return null;
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? Math.max(1, n) : 1;
+}
+
 async function seedTournamentMatches(tx, tournamentId, participants, bracketSize) {
   for (const match of buildBracket(participants, bracketSize)) {
     await tx.unsafe(
@@ -216,7 +225,7 @@ export async function handleGetTournaments(request, env, deps = {}) {
   const tournaments = await query(
     `SELECT id, title, game_name, bracket_size, status, winner_name, created_at,
             signup_state, entry_cap, format, anti_alt_enabled, require_login,
-            min_credits, entry_fee, entry_keyword, chat_channel,
+            min_credits, entry_fee, entry_keyword, chat_channel, waitlist_enabled,
             (SELECT count(*) FROM tournament_entries
               WHERE tournament_id=tournaments.id AND status IN ('pending','confirmed','selected'))::integer AS participant_count,
             (SELECT count(*) FROM tournament_entries
@@ -270,9 +279,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
   if (!CREATABLE_FORMATS.includes(tournamentFormat)) {
     return bad("Unsupported tournament format.");
   }
-  const entryCap = body?.entryCap === "" || body?.entryCap === null || body?.entryCap === undefined
-    ? null
-    : Math.max(1, parseInt(body.entryCap, 10) || 1);
+  const entryCap = parseEntryCap(body?.entryCap, requestedBracketSize);
   const antiAltEnabled = body?.antiAltEnabled === true;
   const requireLogin = body?.requireLogin === true;
   const minCredits = Math.max(0, parseInt(body?.minCredits, 10) || 0);
@@ -332,7 +339,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id, title, game_name, bracket_size, status, signup_state, entry_cap,
               format, anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
-              chat_channel, created_at`,
+              chat_channel, waitlist_enabled, created_at`,
       [
         site.id,
         title,
@@ -569,13 +576,25 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
       addUpdate("format", body.format);
     }
   }
+  const nextBracketSize = wantsBracketSize && isSupportedBracketSize(parseInt(body.bracketSize, 10))
+    ? parseInt(body.bracketSize, 10)
+    : access.tournament.bracket_size;
   const wantsEntryCap = Object.prototype.hasOwnProperty.call(body, "entryCap");
-  const entryCap = !wantsEntryCap ? undefined
-    : body.entryCap === "" || body.entryCap === null
-      ? null
-      : Math.max(1, parseInt(body.entryCap, 10) || 1);
+  // entryCapUpdate records the cap actually being written (undefined = untouched),
+  // whether it came from the body or followed a bracket-size change.
+  let entryCapUpdate;
   if (wantsEntryCap) {
-    addUpdate("entry_cap", entryCap);
+    entryCapUpdate = parseEntryCap(body.entryCap, nextBracketSize);
+    addUpdate("entry_cap", entryCapUpdate);
+  } else if (nextBracketSize !== access.tournament.bracket_size
+      && access.tournament.entry_cap === access.tournament.bracket_size) {
+    // A cap equal to the old bracket size was "same as bracket", so it follows.
+    entryCapUpdate = nextBracketSize;
+    addUpdate("entry_cap", entryCapUpdate);
+  }
+  const wantsWaitlist = Object.prototype.hasOwnProperty.call(body, "waitlistEnabled");
+  if (wantsWaitlist) {
+    addUpdate("waitlist_enabled", body.waitlistEnabled === true);
   }
   if (Object.prototype.hasOwnProperty.call(body, "antiAltEnabled")) {
     addUpdate("anti_alt_enabled", body.antiAltEnabled === true);
@@ -598,69 +617,49 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
 
   const returning = `id, title, game_name, bracket_size, status, signup_state, entry_cap, format,
                      anti_alt_enabled, require_login, min_credits, entry_fee, entry_keyword,
-                     chat_channel`;
+                     chat_channel, waitlist_enabled`;
   let tournament = access.tournament;
-  let autoLocked = false;
+  let promoted = [];
   if (updates.length) {
-    if (wantsEntryCap) {
-      // The cap is checked and applied under the tournament row lock so a
-      // concurrent signup can never land between the count and the update.
-      const outcome = await withTransaction(async (tx) => {
-        const locked = await tx.one(
-          "SELECT id, signup_state, entry_cap, status FROM tournaments WHERE id=$1 FOR UPDATE",
-          [access.tournament.id]
-        );
-        const active = await tx.one(
-          `SELECT count(*)::integer AS count FROM tournament_entries
-            WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
-          [access.tournament.id]
-        );
-        if (entryCap !== null && entryCap < (active?.count || 0)) {
-          return { error: `Signup limit cannot be lower than the current ${active.count} registrations.`, status: 400 };
-        }
-        const txValues = [...values, access.tournament.id];
-        let updated = await tx.one(
-          `UPDATE tournaments
-              SET ${updates.join(", ")}, updated_at=now()
-            WHERE id=$${txValues.length}
-            RETURNING ${returning}`,
-          txValues
-        );
-        let lockedNow = false;
-        if (locked?.signup_state === "open" && entryCap !== null && (active?.count || 0) >= entryCap) {
-          updated = await tx.one(
-            `UPDATE tournaments SET signup_state='locked', updated_at=now()
-              WHERE id=$1 RETURNING ${returning}`,
-            [access.tournament.id]
-          );
-          await tx.unsafe("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [access.tournament.id]);
-          lockedNow = true;
-        }
-        return { tournament: updated, autoLocked: lockedNow };
-      });
-      if (outcome.error) return bad(outcome.error, outcome.status);
-      tournament = outcome.tournament;
-      autoLocked = outcome.autoLocked;
-    } else {
-      values.push(access.tournament.id);
-      tournament = await one(
+    // The cap is checked and applied under the tournament row lock so a
+    // concurrent signup can never land between the count and the update.
+    const outcome = await withTransaction(async (tx) => {
+      await tx.one("SELECT id FROM tournaments WHERE id=$1 FOR UPDATE", [access.tournament.id]);
+      const active = await tx.one(
+        `SELECT count(*)::integer AS count FROM tournament_entries
+          WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
+        [access.tournament.id]
+      );
+      if (entryCapUpdate !== undefined && entryCapUpdate !== null
+          && entryCapUpdate < (active?.count || 0)) {
+        return { error: `Signup limit cannot be lower than the current ${active.count} registrations.`, status: 400 };
+      }
+      const txValues = [...values, access.tournament.id];
+      const updated = await tx.one(
         `UPDATE tournaments
             SET ${updates.join(", ")}, updated_at=now()
-          WHERE id=$${values.length}
+          WHERE id=$${txValues.length}
           RETURNING ${returning}`,
-        values
+        txValues
       );
-    }
+      const filled = entryCapUpdate !== undefined || wantsWaitlist
+        ? await promoteWaitlistTx(tx, access.tournament.id, { actorUserId: user.id })
+        : { promoted: [] };
+      return { tournament: updated, promoted: filled.promoted };
+    });
+    if (outcome.error) return bad(outcome.error, outcome.status);
+    tournament = outcome.tournament;
+    promoted = outcome.promoted;
     await logAudit({
       actorId: user.id,
       action: "tournament_settings_update",
       entityType: "tournament",
       entityId: access.tournament.id,
       request,
-      details: { fields: updates.map((update) => update.split("=")[0]), ...(autoLocked ? { autoLocked: true } : {}) },
+      details: { fields: updates.map((update) => update.split("=")[0]) },
     });
   }
-  return ok({ tournament });
+  return ok({ tournament, promoted });
 }
 
 /**
@@ -725,7 +724,7 @@ export async function addTournamentEntryTx(tx, tournamentId, {
   allowClosedSignups = false,
 }) {
   const tournament = await tx.one(
-    `SELECT id, signup_state, entry_cap, status
+    `SELECT id, signup_state, entry_cap, status, waitlist_enabled
        FROM tournaments
       WHERE id=$1
       FOR UPDATE`,
@@ -771,26 +770,27 @@ export async function addTournamentEntryTx(tx, tournamentId, {
       WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
     [tournament.id]
   );
-  const lockSignups = async () => {
-    await tx.one(
-      "UPDATE tournaments SET signup_state='locked', updated_at=now() WHERE id=$1 RETURNING id",
+  const full = tournament.entry_cap && (active?.count || 0) >= tournament.entry_cap;
+  // Full is a derived state: signups stay open so chat keeps routing and can
+  // answer with the full/waitlist reply. With a waitlist, overflow entrants
+  // queue instead of being rejected.
+  const status = full && tournament.waitlist_enabled === true ? "waitlist" : "pending";
+  if (full && status === "pending") {
+    return { error: "Bracket is full.", status: 409, full: true };
+  }
+
+  let waitlistPosition;
+  if (status === "waitlist") {
+    const ahead = await tx.one(
+      "SELECT count(*)::integer AS count FROM tournament_entries WHERE tournament_id=$1 AND status='waitlist'",
       [tournament.id]
     );
-    await tx.one(
-      "DELETE FROM tournament_open_signups WHERE tournament_id=$1 RETURNING site_id",
-      [tournament.id]
-    );
-  };
-  if (tournament.entry_cap && (active?.count || 0) >= tournament.entry_cap) {
-    // A full tournament may never stay open; the FOR UPDATE row lock already
-    // serialized this entrant behind the one that took the last slot.
-    if (tournament.signup_state === "open") await lockSignups();
-    return { error: "Tournament signups are full.", status: 409 };
+    waitlistPosition = (ahead?.count || 0) + 1;
   }
-  const status = "pending";
-  if (tournament.entry_cap && (active?.count || 0) + 1 >= tournament.entry_cap) {
-    if (tournament.signup_state === "open") await lockSignups();
-  }
+
+  const waitlistResult = status === "waitlist"
+    ? { waitlisted: true, waitlistPosition }
+    : {};
 
   if (existing) {
     return {
@@ -804,6 +804,7 @@ export async function addTournamentEntryTx(tx, tournamentId, {
         [displayName, viewerId, source, status, trustScore, altFlag, altReason, existing.id]
       ),
       duplicate: false,
+      ...waitlistResult,
     };
   }
   return {
@@ -816,7 +817,60 @@ export async function addTournamentEntryTx(tx, tournamentId, {
       [tournament.id, displayName, viewerId, source, status, trustScore, altFlag, altReason]
     ),
     duplicate: false,
+    ...waitlistResult,
   };
+}
+
+/**
+ * Fill freed spots from the waitlist, oldest first. Runs inside the caller's
+ * transaction under the tournament row lock; a tournament with a bracket or a
+ * terminal status never promotes.
+ */
+export async function promoteWaitlistTx(tx, tournamentId, { actorUserId = null } = {}) {
+  const tournament = await tx.one(
+    "SELECT id, status, entry_cap FROM tournaments WHERE id=$1 FOR UPDATE",
+    [tournamentId]
+  );
+  const promoted = [];
+  if (!tournament || ["completed", "cancelled"].includes(tournament.status)) {
+    return { promoted };
+  }
+  const bracket = await tx.one(
+    "SELECT count(*)::integer AS count FROM tournament_matches WHERE tournament_id=$1",
+    [tournamentId]
+  );
+  if ((bracket?.count || 0) > 0) return { promoted };
+
+  for (;;) {
+    if (tournament.entry_cap !== null && tournament.entry_cap !== undefined) {
+      const active = await tx.one(
+        `SELECT count(*)::integer AS count FROM tournament_entries
+          WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
+        [tournamentId]
+      );
+      if ((active?.count || 0) >= tournament.entry_cap) break;
+    }
+    const next = await tx.one(
+      `SELECT id FROM tournament_entries
+        WHERE tournament_id=$1 AND status='waitlist'
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+        FOR UPDATE`,
+      [tournamentId]
+    );
+    if (!next) break;
+    await tx.one(
+      "UPDATE tournament_entries SET status='pending', updated_at=now() WHERE id=$1 RETURNING id",
+      [next.id]
+    );
+    await tx.unsafe(
+      `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+       VALUES ($1, 'tournament_entry_promoted', 'tournament_entry', $2, $3::jsonb)`,
+      [actorUserId, next.id, JSON.stringify({ tournamentId })]
+    );
+    promoted.push(next.id);
+  }
+  return { promoted };
 }
 
 /**
@@ -835,7 +889,8 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
   // Route through the open-signups lock row: one site can hold at most one,
   // so a message can never pick among several open tournaments.
   const route = await tx.one(
-    `SELECT t.id, t.entry_keyword
+    `SELECT t.id, t.entry_keyword, l.site_id, s.user_id AS owner_user_id,
+            ch.external_channel_id AS broadcaster_user_id
        FROM community_channels ch
        JOIN sites s ON s.id = ch.site_id
        JOIN creator_connections cc ON cc.id = ch.creator_connection_id
@@ -858,17 +913,44 @@ export async function ingestTournamentChatMessageTx(tx, payload) {
   if (!keyword || firstToken !== keyword) return outcome;
   outcome.matched = true;
 
+  outcome.senderUsername = input.senderUsername;
+  outcome.messageId = payload?.message_id ? String(payload.message_id) : null;
+  outcome.ownerUserId = route.owner_user_id;
+  outcome.broadcasterUserId = route.broadcaster_user_id;
+
+  // The entry can carry the sender's YourRank viewer when this site has one
+  // linked to that Kick identity.
+  const viewer = input.senderUserId
+    ? await tx.one(
+        `SELECT sv.viewer_id
+           FROM viewer_identities vi
+           JOIN site_viewers sv ON sv.viewer_id = vi.viewer_id
+          WHERE vi.provider = 'kick' AND vi.external_user_id = $1
+            AND vi.status = 'active' AND sv.site_id = $2
+          LIMIT 1`,
+        [input.senderUserId, route.site_id]
+      )
+    : null;
+
   const result = await addTournamentEntryTx(tx, route.id, {
     displayName: input.senderUsername,
-    viewerId: null,
+    viewerId: viewer?.viewer_id || null,
     source: "chat",
     trustScore: null,
     altFlag: false,
     altReason: null,
   });
-  if (result.error) outcome.rejected = result.error;
-  else if (result.duplicate) outcome.duplicate = true;
-  else outcome.entered = true;
+  if (result.error) {
+    outcome.rejected = result.error;
+    if (result.full) outcome.full = true;
+  } else if (result.duplicate) outcome.duplicate = true;
+  else {
+    outcome.entered = true;
+    if (result.waitlisted) {
+      outcome.waitlisted = true;
+      outcome.waitlistPosition = result.waitlistPosition;
+    }
+  }
   return outcome;
 }
 
@@ -916,7 +998,9 @@ export async function handleAddTournamentEntry(request, env, deps = {}) {
     if (error?.code === "23505") return bad(`${displayName} is already entered.`, 409);
     throw error;
   }
-  if (result.error) return bad(result.error, result.status);
+  if (result.error) {
+    return json({ ok: false, error: result.error, ...(result.full ? { full: true } : {}) }, result.status);
+  }
   if (result.duplicate) return bad(`${displayName} is already entered.`, 409);
   if (!result.duplicate) {
     await logAudit({
@@ -928,7 +1012,11 @@ export async function handleAddTournamentEntry(request, env, deps = {}) {
       details: { tournamentId: access.tournament.id, source, altFlag, status: result.entry.status },
     });
   }
-  return ok({ entry: result.entry, duplicate: result.duplicate });
+  return ok({
+    entry: result.entry,
+    duplicate: result.duplicate,
+    ...(result.waitlisted ? { waitlisted: true, waitlistPosition: result.waitlistPosition } : {}),
+  });
 }
 
 async function updateTournamentEntryStatus(request, env, nextStatus, deps = {}) {
@@ -966,7 +1054,8 @@ async function updateTournamentEntryStatus(request, env, nextStatus, deps = {}) 
                   team_no, created_at, updated_at`,
       [nextStatus, entryId]
     );
-    return { entry };
+    const filled = await promoteWaitlistTx(tx, access.tournament.id, { actorUserId: user.id });
+    return { entry, promoted: filled.promoted };
   });
   if (result.error) return bad(result.error, result.status);
   await logAudit({
@@ -977,7 +1066,7 @@ async function updateTournamentEntryStatus(request, env, nextStatus, deps = {}) 
     request,
     details: { tournamentId: access.tournament.id, status: nextStatus },
   });
-  return ok({ entry: result.entry });
+  return ok({ entry: result.entry, promoted: result.promoted });
 }
 
 export function handleRemoveTournamentEntry(request, env, deps = {}) {
@@ -1003,7 +1092,7 @@ export async function handleRestoreTournamentEntry(request, env, deps = {}) {
   const entryId = new URL(request.url).pathname.split("/")[5] || "";
   const result = await withTransaction(async (tx) => {
     const tournament = await tx.one(
-      "SELECT id, signup_state, entry_cap FROM tournaments WHERE id=$1 FOR UPDATE",
+      "SELECT id, signup_state, entry_cap, waitlist_enabled FROM tournaments WHERE id=$1 FOR UPDATE",
       [access.tournament.id]
     );
     const existing = await tx.one(
@@ -1017,10 +1106,11 @@ export async function handleRestoreTournamentEntry(request, env, deps = {}) {
         WHERE tournament_id=$1 AND status IN ('pending', 'confirmed', 'selected')`,
       [tournament.id]
     );
-    if (tournament.entry_cap && (count?.count || 0) >= tournament.entry_cap) {
+    const full = tournament.entry_cap && (count?.count || 0) >= tournament.entry_cap;
+    if (full && tournament.waitlist_enabled !== true) {
       return { error: "Signup limit reached. Raise the limit before restoring this entry.", status: 409 };
     }
-    const status = "pending";
+    const status = full ? "waitlist" : "pending";
     const entry = await tx.one(
       `UPDATE tournament_entries SET status=$1, updated_at=now() WHERE id=$2
        RETURNING id, tournament_id, display_name, source, status, trust_score, alt_flag, alt_reason,
@@ -1057,11 +1147,17 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
   if (res) return res;
   const body = await readJson(request);
   const mode = body?.mode;
-  if (mode !== "random" && mode !== "manual") {
+  if (mode !== "all" && mode !== "random" && mode !== "manual") {
     return bad("Unsupported selection mode.", 400);
   }
   const access = await getTournamentForMutation(request, user, one, requireSiteCapabilityImpl);
   if (access.error) return access.error;
+
+  const seeding = body?.seeding === "shuffle" ? "shuffle" : "signup";
+  const bySignupOrder = (a, b) => {
+    const time = new Date(a.created_at) - new Date(b.created_at);
+    return time !== 0 ? time : String(a.id).localeCompare(String(b.id));
+  };
 
   const result = await withTransaction(async (tx) => {
     const tournament = await tx.one(
@@ -1070,9 +1166,6 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
     );
     if (tournament.status === "completed" || tournament.status === "cancelled") {
       return { error: "Tournament is already finished.", status: 409 };
-    }
-    if (tournament.signup_state !== "locked") {
-      return { error: "Lock signups before creating the bracket.", status: 409 };
     }
     const existing = await tx.one(
       "SELECT count(*)::integer AS count FROM tournament_matches WHERE tournament_id=$1",
@@ -1087,12 +1180,16 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
               team_no, created_at, updated_at
          FROM tournament_entries
         WHERE tournament_id=$1 AND ${ELIGIBLE_ENTRY_PREDICATE}
+        ORDER BY created_at ASC, id ASC
         FOR UPDATE`,
       [access.tournament.id, flagOnlyWhenFree]
     );
     const eligibleCount = (eligible || []).length;
     if (eligibleCount < MIN_BRACKET_PARTICIPANTS) {
       return { error: `Need at least ${MIN_BRACKET_PARTICIPANTS} eligible players to start.`, status: 409 };
+    }
+    if (mode === "all" && eligibleCount > tournament.bracket_size) {
+      return { error: "More players than spots. Choose who plays.", status: 409 };
     }
     if (mode === "manual" && eligibleCount <= tournament.bracket_size) {
       return { error: "All eligible players fit the bracket; use random selection.", status: 400 };
@@ -1115,9 +1212,10 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
         return { error: "One or more selected entries are not eligible.", status: 400 };
       }
       picked = eligible.filter((entry) => eligibleIds.has(entry.id) && entryIds.includes(entry.id));
+    } else if (mode === "random" && eligibleCount > tournament.bracket_size) {
+      picked = shuffle(eligible).slice(0, tournament.bracket_size);
     } else {
-      const count = Math.min(eligibleCount, tournament.bracket_size);
-      picked = shuffle(eligible).slice(0, count);
+      picked = eligible;
     }
 
     const ids = picked.map((entry) => entry.id);
@@ -1129,15 +1227,21 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
                   team_no, created_at, updated_at`,
       [ids]
     );
-
-    const selectedNames = shuffle((selected || []).map((entry) => entry.display_name));
-    if (selectedNames.length !== picked.length) {
+    if ((selected || []).length !== picked.length) {
       return { error: "Could not select the requested entries.", status: 400 };
     }
+
+    // "signup" seeding keeps the registration order (seed 1 = first signup);
+    // "shuffle" randomizes it. Either way the bracket is seeded from this list.
+    const seeded = seeding === "shuffle"
+      ? shuffle(selected)
+      : [...selected].sort(bySignupOrder);
+    const selectedNames = seeded.map((entry) => entry.display_name);
     await tx.unsafe(
-      "UPDATE tournaments SET participants_json=$1, status='active', updated_at=now() WHERE id=$2",
+      "UPDATE tournaments SET participants_json=$1, status='active', signup_state='locked', updated_at=now() WHERE id=$2",
       [selectedNames, tournament.id]
     );
+    await tx.unsafe("DELETE FROM tournament_open_signups WHERE tournament_id=$1", [tournament.id]);
     await seedTournamentMatches(tx, tournament.id, selectedNames, tournament.bracket_size);
 
     return { entries: selected || [], count: picked.length };
@@ -1149,7 +1253,7 @@ export async function handleSelectTournamentEntries(request, env, deps = {}) {
     entityType: "tournament",
     entityId: access.tournament.id,
     request,
-    details: { mode, count: result.count },
+    details: { mode, seeding, count: result.count },
   });
   return ok({ entries: result.entries });
 }

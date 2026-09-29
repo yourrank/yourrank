@@ -75,12 +75,10 @@ async function api(path, options = {}) {
 // here is persisted separately.
 export function lifecycleOf(tourn, matchCount = 0) {
   if (!tourn) return "none";
-  if (tourn.status === "completed") return "completed";
   if (tourn.status === "cancelled") return "cancelled";
-  if (matchCount > 0) return "bracket";
-  if (tourn.signup_state === "open") return "signups_open";
-  if (tourn.signup_state === "locked") return "signups_locked";
-  return "draft";
+  if (tourn.status === "completed") return "finished";
+  if (matchCount > 0) return "live";
+  return "setup";
 }
 
 function setMessage(text = "", error = false) {
@@ -98,7 +96,7 @@ function stopChat() {
 
 // Kick chat entries arrive through the webhook; poll so they appear without the socket.
 function updateEntriesPolling(lifecycle) {
-  if (lifecycle === "signups_open") {
+  if (lifecycle === "setup" && tournament?.signup_state === "open") {
     if (!entriesPollTimer) {
       entriesPollTimer = setInterval(() => { refreshEntriesSoon(); }, 15000);
     }
@@ -273,8 +271,9 @@ export function readCreateForm() {
   if (!SUPPORTED_BRACKET_SIZES.includes(bracketSize)) {
     return { error: `Bracket size must be one of ${SUPPORTED_BRACKET_SIZES.join(", ")}.` };
   }
-  let entryCap = null;
-  if ($("tc-entry-cap").value === "custom") {
+  const capMode = $("tc-entry-cap").value;
+  let entryCap = capMode;
+  if (capMode === "custom") {
     entryCap = parseInt($("tc-entry-cap-custom").value, 10);
     if (!Number.isInteger(entryCap) || entryCap < 1) return { error: "Enter a signup limit of at least 1, or choose Unlimited." };
   }
@@ -404,58 +403,84 @@ function requireChatChannel() {
   return false;
 }
 
-async function openSignups() {
-  if (!tournament || !requireChatChannel()) return;
-  try {
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/open`, { method: "POST", body: "{}" });
-  } catch (error) {
-    setMessage(error.message || "Could not open signups.", true);
+function currentSeeding() {
+  return document.querySelector('input[name="tournament-seeding"]:checked')?.value === "shuffle"
+    ? "shuffle"
+    : "signup";
+}
+
+async function toggleChatSignup(input) {
+  if (!tournament || !input) return;
+  const opening = input.checked;
+  if (opening && !requireChatChannel()) {
+    input.checked = false;
     return;
   }
+  input.disabled = true;
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/${opening ? "open" : "lock"}`, {
+      method: "POST",
+      body: "{}",
+    });
+  } catch (error) {
+    input.checked = !opening;
+    setMessage(error.message || `Could not ${opening ? "open" : "close"} signups.`, true);
+    return;
+  } finally {
+    input.disabled = false;
+  }
+  if (opening) await startChat();
+  else stopChat();
   setMessage("");
   await loadTournament();
-  return startChat();
 }
 
 async function handlePrimary() {
   if (!tournament) return openCreateModal();
   const action = $("tournament-primary").dataset.action;
-  if (action === "add-channel") {
-    switchTab("settings");
-    $("tournament-chat-channel")?.focus();
-    return;
-  }
-  if (action === "use-site-channel") {
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
-      method: "POST",
-      body: JSON.stringify({ chatChannel: chatRegistration?.channelName || board.kickChannelName }),
-    });
-    setMessage("");
-    await loadTournament();
-    return;
-  }
-  if (action === "open") return openSignups();
-  if (action === "lock") {
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/signups/lock`, { method: "POST", body: "{}" });
-    stopChat();
-    return loadTournament();
-  }
-  if (action === "create-bracket") {
+  if (action === "start") {
     const eligible = entryCounts.eligible || 0;
-    if (!await showConfirmModal(
-      "Create bracket",
-      `Create the bracket with ${eligible} players? Players will be randomly placed in the bracket. This cannot be undone.`,
-      "Create bracket",
-      true
-    )) return;
-    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/select`, {
-      method: "POST",
-      body: JSON.stringify({ mode: "random" }),
-    });
-    activeTab = "bracket";
-    await loadEntries();
+    const size = tournament.bracket_size || 0;
+    if (eligible < 2) return;
+    const seeding = currentSeeding();
+    if (eligible < size) {
+      if (!await showConfirmModal(
+        "Start tournament",
+        `Start with ${eligible} players? Empty spots become BYEs.`,
+        "Start tournament",
+        true
+      )) return;
+      try {
+        await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/select`, {
+          method: "POST",
+          body: JSON.stringify({ mode: "all", seeding }),
+        });
+      } catch (error) {
+        setMessage(error.message || "Could not start the tournament.", true);
+        return;
+      }
+      stopChat();
+      activeTab = "bracket";
+      await loadEntries();
+      return;
+    }
+    if (eligible === size) {
+      try {
+        await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/entries/select`, {
+          method: "POST",
+          body: JSON.stringify({ mode: "all", seeding }),
+        });
+      } catch (error) {
+        setMessage(error.message || "Could not start the tournament.", true);
+        return;
+      }
+      stopChat();
+      activeTab = "bracket";
+      await loadEntries();
+      return;
+    }
+    return openSelectModal();
   }
-  if (action === "select-participants") return openSelectModal();
 }
 
 // ---- Select participants dialog -------------------------------------------
@@ -524,9 +549,10 @@ function closeSelectModal() {
 
 async function submitSelect() {
   const submit = $("tournament-select-submit");
+  const seeding = currentSeeding();
   const body = $("ts-mode-manual").checked
-    ? { mode: "manual", entryIds: selectedIds() }
-    : { mode: "random" };
+    ? { mode: "manual", entryIds: selectedIds(), seeding }
+    : { mode: "random", seeding };
   submit.disabled = true;
   setSelectError("");
   try {
@@ -535,6 +561,7 @@ async function submitSelect() {
       body: JSON.stringify(body),
     });
     closeSelectModal();
+    stopChat();
     activeTab = "bracket";
     await loadEntries();
   } catch (error) {
@@ -641,7 +668,7 @@ function settingsSnapshot() {
     capMode: el("tournament-entry-cap-mode").value,
     cap: el("tournament-entry-cap").value,
     channel: el("tournament-chat-channel").value,
-    antiAlt: el("tournament-anti-alt").checked,
+    waitlist: el("tournament-waitlist").checked,
     bracketSize: el("tournament-bracket-size").value,
   });
 }
@@ -656,7 +683,7 @@ async function saveSettings(event) {
   if (settingsReadonly) return;
   clearFieldErrors();
   const capMode = $("tournament-entry-cap-mode").value;
-  let entryCap = null;
+  let entryCap = capMode;
   if (capMode === "custom") {
     entryCap = parseInt($("tournament-entry-cap").value, 10);
     if (!Number.isInteger(entryCap) || entryCap < 1) {
@@ -669,7 +696,7 @@ async function saveSettings(event) {
     gameName: $("tournament-game").value.trim(),
     entryCap,
     entryKeyword: $("tournament-keyword").value.trim() || "!join",
-    antiAltEnabled: $("tournament-anti-alt").checked,
+    waitlistEnabled: $("tournament-waitlist").checked,
     chatChannel: $("tournament-chat-channel").value.trim(),
   };
   // Locked fields are disabled in the form and never sent, so the server
@@ -806,17 +833,55 @@ function onSubmit(event) {
 function onChange(event) {
   if (event.target.name === "tournament-select-mode") return syncSelectMode();
   if (event.target.closest?.("#ts-entry-list")) return toggleManualSelection(event.target);
+  if (event.target.id === "tournament-chat-signup") {
+    toggleChatSignup(event.target).catch((error) => setMessage(error.message || "Could not update signups.", true));
+    return;
+  }
+  if (event.target.id === "tournament-dup-protection") {
+    toggleDuplicateProtection(event.target).catch((error) => setMessage(error.message || "Could not update duplicate protection.", true));
+    return;
+  }
   if (event.target.id === "tc-entry-cap") {
     const custom = $("tc-entry-cap-custom");
     custom.hidden = event.target.value !== "custom";
     if (!custom.hidden) custom.focus();
+  }
+  if (event.target.id === "tc-bracket-size") {
+    const opt = $("tc-entry-cap")?.querySelector('option[value="bracket"]');
+    if (opt) opt.textContent = `Same as bracket size (${event.target.value})`;
   }
   if (event.target.id === "tournament-entry-cap-mode") {
     const cap = $("tournament-entry-cap");
     cap.hidden = event.target.value !== "custom";
     if (!cap.hidden) cap.focus();
   }
+  if (event.target.id === "tournament-bracket-size") {
+    const opt = $("tournament-entry-cap-mode")?.querySelector('option[value="bracket"]');
+    if (opt) opt.textContent = `Same as bracket size (${event.target.value})`;
+  }
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
+}
+
+// Duplicate protection saves immediately — it lives in the Entries header, not
+// in the deferred-save Settings form.
+async function toggleDuplicateProtection(input) {
+  if (!tournament || !input) return;
+  const enabled = input.checked;
+  input.disabled = true;
+  try {
+    await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
+      method: "POST",
+      body: JSON.stringify({ antiAltEnabled: enabled }),
+    });
+    tournament.anti_alt_enabled = enabled;
+    await loadEntries();
+    setMessage(enabled ? "Duplicate protection on." : "Duplicate protection off.");
+  } catch (error) {
+    input.checked = !enabled;
+    setMessage(error.message || "Could not update duplicate protection.", true);
+  } finally {
+    input.disabled = false;
+  }
 }
 
 function onInput(event) {
@@ -844,7 +909,7 @@ async function onClick(event) {
     (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tn-menu[open]").forEach((menu) => { menu.open = false; });
   }
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, #tournament-copy-id, [data-tournament-tab], [data-entry-action], button[data-score-match]"
+    "#tournament-primary, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, #tournament-copy-id, #tournament-use-channel, [data-tournament-tab], [data-entry-action], button[data-score-match]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -881,7 +946,19 @@ async function onClick(event) {
         },
       );
     }
-    if (target.id === "tournament-reopen") return await openSignups();
+    if (target.id === "tournament-use-channel") {
+      const channelName = target.dataset.channel;
+      if (channelName) {
+        await api(`/api/tournaments/${encodeURIComponent(tournament.id)}/settings`, {
+          method: "POST",
+          body: JSON.stringify({ chatChannel: channelName }),
+        });
+        setMessage("");
+        return await loadTournament();
+      }
+      switchTab("settings");
+      return $("tournament-chat-channel")?.focus();
+    }
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
     if (target.id === "tournament-select-cancel") return closeSelectModal();

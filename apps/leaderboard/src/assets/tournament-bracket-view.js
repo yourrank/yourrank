@@ -196,14 +196,14 @@ function placeholderCard(round, index) {
 // slot-units tall so match k of round r+1 centres between feeders 2k/2k+1.
 // mode: "embedded" (interactive scores) | "expanded" (read-only stream view).
 export function renderBracket({ tournament, matches, lifecycle, mode = "embedded" }) {
-  const finished = lifecycle === "completed" || lifecycle === "cancelled";
+  const finished = lifecycle === "finished" || lifecycle === "cancelled";
   const model = buildRoundModel(matches, tournament?.bracket_size);
   const slots = model.rounds[0]?.expected || 1;
   const championName = finished && tournament?.winner_name ? tournament.winner_name : null;
   // Exactly one live match: the first playable match (round asc, index asc) in
   // a live bracket. Nothing in the data marks "started", so scorable = live.
   let liveId = null;
-  if (lifecycle === "bracket") {
+  if (lifecycle === "live") {
     const live = [...(matches || [])]
       .sort((a, b) => (a.round_number - b.round_number) || (a.match_index - b.match_index))
       .find((m) => matchState(m, false) === "scorable");

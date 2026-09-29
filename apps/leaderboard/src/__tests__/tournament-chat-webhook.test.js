@@ -54,10 +54,14 @@ describe("ingestTournamentChatMessage", () => {
   it("enters the sender when signups are open and the channel matches", async () => {
     const { tx, calls } = fakeTx();
     const outcome = await ingest(chatPayload("!join"), tx);
-    expect(outcome).toEqual({
+    const { messageId, ...rest } = outcome;
+    expect(rest).toEqual({
       routed: true, matched: true, entered: true,
       duplicate: false, rejected: null, tournamentId: "tournament-1",
+      senderUsername: "viewer",
+      ownerUserId: undefined, broadcasterUserId: undefined,
     });
+    expect(typeof messageId).toBe("string");
     expect(inserted(calls)).toBe(true);
   });
 
@@ -390,5 +394,144 @@ describe("Kick webhook delivery idempotency", () => {
     expect(retry.status).toBe(200);
     expect((await retry.json()).duplicate).toBe(false);
     expect(db.committedReceipts.has(messageId)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Chat replies: after a full/waitlisted entry commits, the webhook answers in
+// the streamer's chat through replyDeps. Replies must never fail the webhook.
+// ---------------------------------------------------------------------------
+describe("Kick webhook → tournament chat reply", () => {
+  const CONNECTION = {
+    user_id: "owner-1",
+    external_user_id: "111",
+    access_token_enc: "enc-access",
+    refresh_token_enc: "enc-refresh",
+    token_expires_at: null,
+  };
+  const replyDeps = (overrides = {}) => ({
+    rateLimit: mock(async () => ({ ok: true })),
+    dbOne: mock(async () => CONNECTION),
+    dbRun: mock(async () => []),
+    getAccessToken: mock(async () => ({
+      accessToken: "kick-token", accessEnc: "enc-access", refreshEnc: "enc-refresh", expiresAt: null,
+    })),
+    storeTokens: mock(async () => {}),
+    postChatMessage: mock(async () => ({})),
+    ...overrides,
+  });
+  const fullOutcome = (extra = {}) => ({
+    routed: true, matched: true, entered: false, duplicate: false, rejected: null,
+    tournamentId: "tournament-1", full: true,
+    senderUsername: "viewer", messageId: "msg-9", ownerUserId: "owner-1", broadcasterUserId: "111",
+    ...extra,
+  });
+  const send = async (outcome, deps) => handleKickWebhook(
+    await signedRequest("chat.message.sent", chatPayload("!join")),
+    { KICK_WEBHOOK_PUBLIC_KEY: publicKeyPem },
+    {
+      ingestChatMessage: async () => ({}),
+      ingestTournamentMessage: async () => outcome,
+      withTransaction: passThroughTx,
+      replyDeps: deps,
+    },
+  );
+
+  it("replies 'Bracket is full.' after a full entry commits", async () => {
+    const deps = replyDeps();
+    const res = await send(fullOutcome(), deps);
+    expect(res.status).toBe(200);
+    expect(deps.postChatMessage).toHaveBeenCalledTimes(1);
+    const [token, input] = deps.postChatMessage.mock.calls[0];
+    expect(token).toBe("kick-token");
+    expect(input).toEqual({
+      broadcasterUserId: "111",
+      content: "@viewer Bracket is full.",
+      replyToMessageId: "msg-9",
+    });
+  });
+
+  it("replies with the waitlist position for a waitlisted entry", async () => {
+    const deps = replyDeps();
+    const res = await send(fullOutcome({ full: false, waitlisted: true, waitlistPosition: 3 }), deps);
+    expect(res.status).toBe(200);
+    expect(deps.postChatMessage.mock.calls[0][1].content).toBe(
+      "@viewer Bracket is full — you're on the waitlist (#3)."
+    );
+  });
+
+  it("never sends a reply for a normal entry", async () => {
+    const deps = replyDeps();
+    const res = await send({ routed: true, matched: true, entered: true, tournamentId: "tournament-1" }, deps);
+    expect(res.status).toBe(200);
+    expect(deps.postChatMessage).not.toHaveBeenCalled();
+    expect(deps.dbOne).not.toHaveBeenCalled();
+  });
+
+  it("logs tournament_chat_reply_failed and still returns 200 when the post fails", async () => {
+    const errorSpy = mock(() => {});
+    const realError = console.error;
+    console.error = errorSpy;
+    try {
+      const deps = replyDeps({ postChatMessage: mock(async () => { throw new Error("Kick chat post failed 500: boom"); }) });
+      const res = await send(fullOutcome(), deps);
+      expect(res.status).toBe(200);
+      const events = errorSpy.mock.calls.map(([line]) => JSON.parse(String(line)).event);
+      expect(events).toContain("tournament_chat_reply_failed");
+    } finally {
+      console.error = realError;
+    }
+  });
+
+  it("marks 401/403 failures as needing a Kick reconnect for chat write", async () => {
+    const errorSpy = mock(() => {});
+    const realError = console.error;
+    console.error = errorSpy;
+    try {
+      const deps = replyDeps({ postChatMessage: mock(async () => { throw new Error("Kick chat post failed 401: unauthorized"); }) });
+      const res = await send(fullOutcome(), deps);
+      expect(res.status).toBe(200);
+      const failed = errorSpy.mock.calls
+        .map(([line]) => JSON.parse(String(line)))
+        .find((event) => event.event === "tournament_chat_reply_failed");
+      expect(failed.reason).toBe("reconnect_kick_for_chat_write");
+      expect(failed.status).toBe(401);
+    } finally {
+      console.error = realError;
+    }
+  });
+
+  it("throttles replies per tournament and logs an info event", async () => {
+    const infoSpy = mock(() => {});
+    const realInfo = console.info;
+    console.info = infoSpy;
+    try {
+      const deps = replyDeps({ rateLimit: mock(async () => ({ ok: false })) });
+      const res = await send(fullOutcome(), deps);
+      expect(res.status).toBe(200);
+      expect(deps.postChatMessage).not.toHaveBeenCalled();
+      const events = infoSpy.mock.calls.map(([line]) => JSON.parse(String(line)).event);
+      expect(events).toContain("tournament_chat_reply_throttled");
+    } finally {
+      console.info = realInfo;
+    }
+  });
+
+  it("reconnect reason when the creator connection has no stored tokens", async () => {
+    const errorSpy = mock(() => {});
+    const realError = console.error;
+    console.error = errorSpy;
+    try {
+      const deps = replyDeps({ dbOne: mock(async () => null) });
+      const res = await send(fullOutcome(), deps);
+      expect(res.status).toBe(200);
+      expect(deps.postChatMessage).not.toHaveBeenCalled();
+      const failed = errorSpy.mock.calls
+        .map(([line]) => JSON.parse(String(line)))
+        .find((event) => event.event === "tournament_chat_reply_failed");
+      expect(failed.reason).toBe("reconnect_kick_for_chat_write");
+    } finally {
+      console.error = realError;
+    }
   });
 });
