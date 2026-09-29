@@ -10,6 +10,7 @@ import {
   handleChatGiveawayStop,
   handleChatGiveawayUpdateResponseRules,
 } from "../handlers/chat-giveaways.js";
+import { runGiveawayTimeouts } from "../chat-giveaway-service.js";
 import { ROUTES as routes } from "../routes.js";
 
 // ---------------------------------------------------------------------------
@@ -989,5 +990,35 @@ describe("Chat Giveaway draw history", () => {
     const update = statements.find((s) => s.text.includes("UPDATE chat_giveaway_sessions"));
     expect(update.params.slice(0, 5)).toEqual(["gs-1", "m1", siteA.id, false, null]);
     expect(drawInsert(statements).params.slice(3)).toEqual(["draw", null]);
+  });
+});
+
+describe("runGiveawayTimeouts sweep", () => {
+  it("logs and continues when one session's transaction throws", async () => {
+    const seen = [];
+    const errors = [];
+    const origError = console.error;
+    console.error = (...a) => errors.push(a.join(" "));
+    let counts;
+    try {
+      counts = await runGiveawayTimeouts({
+        queryImpl: async () => [{ id: "s1" }, { id: "s2" }],
+        transaction: async (fn) => fn(async (text, params) => {
+          if (String(text).includes("FOR UPDATE")) {
+            seen.push(params[0]);
+            if (params[0] === "s1") throw new Error("lock lost");
+            return [];
+          }
+          return [];
+        }),
+      });
+    } finally {
+      console.error = origError;
+    }
+    // s1's failure is logged with its id and does not stop s2 from processing.
+    expect(seen).toEqual(["s1", "s2"]);
+    expect(counts).toEqual({ rerolled: 0, exhausted: 0, failed: 1 });
+    expect(errors.join("\n")).toContain("s1");
+    expect(errors.join("\n")).toContain("lock lost");
   });
 });

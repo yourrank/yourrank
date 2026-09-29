@@ -169,7 +169,16 @@ globalThis.fetch = async (input, init = {}) => {
     const eligible = server.entries.filter((e) => e.eligibility_status === "eligible");
     const pool = once ? eligible.filter((e) => !server.draws.includes(e.id)) : eligible;
     const winner = pool[pool.length - 1] || null;
-    if (!winner) return json({ ok: false, error: eligible.length ? "No other eligible entrants remain." : "No eligible entrants to draw from." }, 409);
+    if (!winner) {
+      if (body?.automatic === true) {
+        // Mirrors drawGiveaway's exhausted path: deadline disarmed, flag stamped,
+        // and the 409 carries the persisted session so the client can render it.
+        server.session.winner_response_deadline = null;
+        server.session.auto_reroll_exhausted_at = new Date(now).toISOString();
+        return json({ ok: false, error: eligible.length ? "No other eligible entrants remain." : "No eligible entrants to draw from.", exhausted: true, session: server.session, entries: server.entries, winner: winnerEntry(), draws: server.drawRows }, 409);
+      }
+      return json({ ok: false, error: eligible.length ? "No other eligible entrants remain." : "No eligible entrants to draw from." }, 409);
+    }
     server.draws.push(winner.id);
     const rules = server.session.rules || {};
     // A manually-added winner has no chat identity to respond with.
@@ -192,6 +201,7 @@ globalThis.fetch = async (input, init = {}) => {
       winner_response_required: required,
       winner_response_timeout_seconds: timeout,
       winner_response_deadline: required ? new Date(now + timeout * 1000).toISOString() : null,
+      auto_reroll_exhausted_at: null,
     });
     return json({ ok: true, session: server.session, entries: server.entries, winner, draws: server.drawRows });
   }
@@ -960,6 +970,21 @@ describe("Giveaway draw flow", () => {
     expect(auto.body.automatic).toBe(true);
     const after = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
     expect(after[0]).toContain("Auto re-roll to alpha — bravo didn't respond in time");
+
+    // Alpha's window lapses too; with no entrant left the sweep exhausts and the
+    // server-side flag lands in the client's state via the 409 payload.
+    await clock.tick(31_000);
+    expect(requestsTo("/api/giveaways/chat/draw").at(-1).body.automatic).toBe(true);
+    expect(server.session.auto_reroll_exhausted_at).not.toBeNull();
+    const notice = $id("gw-auto-reroll-stopped");
+    expect(notice.hidden).toBe(false);
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.textContent).toContain("alpha");
+    expect(notice.textContent).toContain("no other eligible entrants");
+    const items2 = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
+    expect(items2[0]).toContain("Auto re-roll stopped — no other eligible entrants left (alpha didn't respond)");
+    // Confirm stays disabled (unanswered required response); nothing else hid.
+    for (const b of confirmButtons()) expect(b.disabled).toBe(true);
   });
 
   it("a manually-added winner shows the no-response hint instead of the claim box", async () => {

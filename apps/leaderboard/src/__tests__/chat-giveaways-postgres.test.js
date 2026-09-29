@@ -443,6 +443,49 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(after.winner_response_deadline).not.toBeNull();
   });
 
+  integrationIt("an exhausted auto re-roll stamps the flag, warns, and does not retry", async () => {
+    const { session } = await freshSessionWithEntries("e1", "e2");
+    await run("UPDATE chat_giveaway_sessions SET rules=$2 WHERE id=$1",
+      [session.id, { winnerMustRespond: true, responseTimeout: 30, autoReroll: true }]);
+    const [locked] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    await drawGiveaway(run, locked);
+    await run("UPDATE chat_giveaway_sessions SET winner_response_deadline = now() - interval '1 second' WHERE id=$1", [session.id]);
+    // First expiry: an entrant remains, so the auto re-roll succeeds.
+    const first = await runGiveawayTimeouts({ queryImpl: run, transaction: (fn) => fn(run) });
+    expect(first).toEqual({ rerolled: 1, exhausted: 0, failed: 0 });
+
+    await run("UPDATE chat_giveaway_sessions SET winner_response_deadline = now() - interval '1 second' WHERE id=$1", [session.id]);
+    const warns = [];
+    const origWarn = console.warn;
+    console.warn = (...a) => warns.push(a.join(" "));
+    let counts;
+    try {
+      counts = await runGiveawayTimeouts({ queryImpl: run, transaction: (fn) => fn(run) });
+    } finally {
+      console.warn = origWarn;
+    }
+    expect(counts).toEqual({ rerolled: 0, exhausted: 1, failed: 0 });
+    expect(warns.join("\n")).toContain(`auto re-roll stopped for session ${session.id}`);
+
+    const rows = await run("SELECT reason FROM chat_giveaway_draws WHERE giveaway_session_id=$1 ORDER BY drawn_at", [session.id]);
+    expect(rows.map((r) => r.reason)).toEqual(["draw", "auto_reroll"]);
+    const [after] = await run("SELECT winner_response_deadline, auto_reroll_exhausted_at FROM chat_giveaway_sessions WHERE id=$1", [session.id]);
+    expect(after.winner_response_deadline).toBeNull();
+    expect(after.auto_reroll_exhausted_at).not.toBeNull();
+    // The disarmed deadline keeps the session out of every later sweep.
+    const again = await runGiveawayTimeouts({ queryImpl: run, transaction: (fn) => fn(run) });
+    expect(again).toEqual({ rerolled: 0, exhausted: 0, failed: 0 });
+
+    // A later successful draw (here, a new entrant + a manual re-roll) clears the flag.
+    await run("INSERT INTO chat_giveaway_entries (giveaway_session_id, provider, provider_user_id, username) VALUES ($1,'kick','e3','e3')", [session.id]);
+    const [lockedAgain] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    const rerolled = await drawGiveaway(run, lockedAgain, {
+      expectedWinnerEntryId: lockedAgain.winner_entry_id,
+      expectedDrawnAt: lockedAgain.drawn_at,
+    });
+    expect(rerolled.session.auto_reroll_exhausted_at).toBeNull();
+  });
+
   integrationIt("a manually-added winner never gets a response deadline", async () => {
     const { session } = await freshSessionWithEntries();
     const [m] = await run(
