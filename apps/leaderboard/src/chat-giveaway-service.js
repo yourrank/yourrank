@@ -68,12 +68,12 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
     return { error: eligible.length ? NO_OTHER_ENTRANTS_ERROR : "No eligible entrants to draw from." };
   }
   const winner = pool[randomIndex(pool.length)];
-  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id) VALUES ($1,$2,$3)`,
-    [session.id, winner.id, winner.provider_user_id]);
   // drawn_at strictly advances even within one transaction so every draw has a
   // distinct identity; the deadline is derived from that same instant so the
-  // persisted window and winner_response_deadline can never disagree.
-  const responseRequired = rules.winnerMustRespond;
+  // persisted window and winner_response_deadline can never disagree. A
+  // manually-added winner has no chat identity to respond with, so the
+  // response requirement is never armed for them.
+  const responseRequired = rules.winnerMustRespond && winner.provider !== "manual";
   const responseTimeoutSeconds = responseRequired ? rules.responseTimeout : null;
   const cas = expectedWinnerEntryId == null && !automatic
     ? "AND s.winner_entry_id IS NULL"
@@ -95,6 +95,13 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
      WHERE s.id = $1 AND s.site_id = $3 AND s.winner_finalized_at IS NULL ${cas}
     RETURNING ${SESSION_COLUMNS}`, params);
   if (!updated.length) return { conflict: true, error: DRAW_CHANGED_ERROR };
+  // The history row lands only after the CAS commits the draw itself, so a
+  // racing draw never leaves a phantom entry in history.
+  await run(`INSERT INTO chat_giveaway_draws (giveaway_session_id, entry_id, provider_user_id, reason, replaced_entry_id)
+    VALUES ($1,$2,$3,$4,$5)`,
+    [session.id, winner.id, winner.provider_user_id,
+     automatic ? "auto_reroll" : expectedWinnerEntryId != null ? "reroll" : "draw",
+     session.winner_entry_id]);
   return { winnerId: winner.id, session: updated[0] };
 }
 
