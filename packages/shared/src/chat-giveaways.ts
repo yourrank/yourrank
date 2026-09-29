@@ -180,8 +180,7 @@ export async function ingestChatGiveawayMessage(
       if (!chatMessageMatchesKeyword(input.content, session.keyword)) continue;
       outcome.matched = true;
       const rules = giveawayRules(session.rules);
-      const facts = rules.entryMode !== "chat" || rules.excludePreviousWinners
-        ? await giveawayParticipantFacts(run, session.site_id, input.senderUserId) : {};
+      const facts = await giveawayParticipantFacts(run, session.site_id, input.senderUserId);
       const eligibility = evaluateGiveawayEligibility({ ...facts, badges: input.badges }, rules);
       const inserted = (await run(
         `INSERT INTO chat_giveaway_entries

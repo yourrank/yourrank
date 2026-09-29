@@ -105,6 +105,7 @@ const TAB_LABELS: Readonly<Partial<Record<DashboardRouteId, string>>> = {
   "audience.viewers": "Members",
   "audience.activity": "Activity",
   "audience.reviews": "Reviews",
+  "audience.linked": "Linked accounts",
   "settings.account": "Account",
   "settings.team": "Team",
   "settings.plan": "Billing",

@@ -116,6 +116,11 @@ function fakeDb(sessionsByChannel: Record<string, Array<{ id: string; site_id: s
       entries.add(key);
       return [{ id: crypto.randomUUID() }];
     }
+    // giveawayParticipantFacts runs for every matched keyword (linked-account
+    // restriction applies even in chat mode).
+    if (sql.includes("AS linked_restricted")) {
+      return [{ viewer_id: null, previous_winner: false, linked_restricted: false }];
+    }
     throw new Error(`unexpected sql: ${sql}`);
   };
   return { run, entries, inserts };

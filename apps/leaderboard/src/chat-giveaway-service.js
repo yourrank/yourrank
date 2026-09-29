@@ -56,11 +56,18 @@ export async function drawGiveaway(run, session, { automatic = false, expectedWi
         AND d.provider_user_id=e.provider_user_id) AS already_drawn,
       (SELECT vi.viewer_id FROM viewer_identities vi JOIN viewers v ON v.id=vi.viewer_id
         WHERE vi.provider='kick' AND vi.external_user_id=e.provider_user_id AND vi.status='active'
-          AND vi.linked_at IS NOT NULL AND v.is_system=false LIMIT 1) AS linked_viewer_id
+          AND vi.linked_at IS NOT NULL AND v.is_system=false LIMIT 1) AS linked_viewer_id,
+      EXISTS (SELECT 1 FROM account_links al
+        JOIN viewers lv ON lv.id IN (al.viewer_a, al.viewer_b)
+        JOIN viewer_identities vi ON vi.viewer_id = lv.id AND vi.provider='kick' AND vi.status='active'
+          AND vi.linked_at IS NOT NULL AND vi.external_user_id = e.provider_user_id
+        JOIN viewers x ON x.id = vi.viewer_id AND x.is_system = false
+       WHERE al.site_id=$2 AND al.status='restricted') AS linked_restricted
     FROM chat_giveaway_entries e WHERE e.giveaway_session_id=$1 ORDER BY entered_at`, [session.id, session.site_id]);
   const eligible = entries.filter((entry) => entry.eligibility_status === "eligible" &&
     evaluateGiveawayEligibility({ badges: entry.badges, viewerId: entry.linked_viewer_id,
       kickLinked: !!entry.linked_viewer_id, previousWinner: entry.previous_winner,
+      linkedRestricted: !!entry.linked_restricted,
       verified: !!entry.verified_at && entry.viewer_id === entry.linked_viewer_id,
       ipAvailable: !!entry.ip_hash }, rules).status === "eligible");
   const pool = rules.winnerRepeat === "again" ? eligible : eligible.filter((entry) => !entry.already_drawn);

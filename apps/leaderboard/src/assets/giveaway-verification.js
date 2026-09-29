@@ -11,6 +11,7 @@ const messages = {
   duplicate_ip: "Another account has already verified from this connection.",
   ip_unavailable: "Your connection could not be verified. Please try again.",
   giveaway_closed: "This giveaway is closed. Entries can no longer be verified.",
+  linked_account_restricted: "This entry isn't eligible for this giveaway.",
   vpn_detected: "VPN or proxy detected. Turn it off, then select Verify Entry again.",
   vpn_check_unavailable: "The VPN check is temporarily unavailable. Please try again in a minute.",
 };

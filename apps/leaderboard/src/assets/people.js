@@ -20,11 +20,14 @@ const relative = (value) => {
 let memberModule;
 let activeSiteId = "";
 let activeFilter = "pending";
+let linkedFilter = "active";
+let linkedData = { groups: [], counts: {} };
 let selectedReview;
 let reviewRelease;
 let reviewTrigger;
 let listeners;
 let decisionPending = false;
+let linkedPending = false;
 
 async function request(path, init = {}) {
   try {
@@ -248,6 +251,144 @@ function wireReviews() {
   $("people-review-exclude")?.addEventListener("click", () => decide("exclude"), { signal });
 }
 
+// ---- Linked accounts (People → Linked accounts) -----------------------------
+//
+// Detection output only ever lands here for the streamer. Decisions are per
+// link set; the server writes audit_log for every action.
+
+const LINKED_STATUS_LABEL = { pending: "New", watching: "Watching", restricted: "Restricted", dismissed: "Dismissed" };
+const LINKED_PILL_CLASS = { pending: "pending", watching: "watching", restricted: "restricted", dismissed: "dismissed" };
+
+function setLinkedStatus(message, error = false) {
+  const status = $("people-linked-status");
+  if (!status) return;
+  status.textContent = message;
+  status.className = error ? "status error" : "status";
+  const retry = $("people-linked-retry");
+  if (retry) retry.hidden = !error;
+}
+
+function linkedStatusPill(group) {
+  const cls = LINKED_PILL_CLASS[group.status] || "pending";
+  return `<span class="v3-chip people-linked-pill--${cls}">${LINKED_STATUS_LABEL[group.status] || group.status}</span>`;
+}
+
+function linkedActionsHtml(group) {
+  const buttons = [];
+  if (group.status === "restricted") {
+    buttons.push(`<button class="btn btn--sm" type="button" data-linked-action="unrestrict" data-linked-ids="${esc(group.linkIds.join(","))}">Remove restriction</button>`);
+  } else {
+    buttons.push(`<button class="btn btn--sm" type="button" data-linked-action="watch" data-linked-ids="${esc(group.linkIds.join(","))}">Watch</button>`);
+    buttons.push(`<button class="btn btn--sm" type="button" data-linked-action="restrict" data-linked-ids="${esc(group.linkIds.join(","))}">Restrict</button>`);
+  }
+  if (group.status !== "dismissed") {
+    buttons.push(`<button class="btn btn--sm btn--ghost" type="button" data-linked-action="dismiss" data-linked-ids="${esc(group.linkIds.join(","))}">Dismiss</button>`);
+  }
+  return buttons.join("");
+}
+
+function renderLinked() {
+  const wrap = $("people-linked-groups");
+  const empty = $("people-linked-empty");
+  const groups = linkedData.groups || [];
+  if ($("people-linked-pending-count")) {
+    const counts = linkedData.counts || {};
+    $("people-linked-pending-count").textContent =
+      linkedFilter === "dismissed" ? (counts.dismissed ?? 0) : (counts.pending ?? 0);
+  }
+  if (!wrap || !empty) return;
+  wrap.innerHTML = groups.map((group) => `
+    <article class="people-linked-group" data-linked-group="${esc(group.id)}">
+      <header class="people-linked-group__head">
+        <div class="people-linked-accounts">
+          ${group.accounts.map((account) => `<span class="v3-chip people-linked-account">${esc(account.displayName)}</span>`).join("")}
+        </div>
+        <div class="people-linked-meta">
+          <span class="people-linked-confidence">${group.confidence}% Likely linked</span>
+          ${linkedStatusPill(group)}
+        </div>
+      </header>
+      <p class="people-linked-summary">${esc(group.summary)}</p>
+      <p class="people-linked-detected">First detected ${esc(relative(group.firstDetectedAt))}</p>
+      <footer class="people-linked-actions">${linkedActionsHtml(group)}</footer>
+    </article>`).join("");
+  wrap.hidden = groups.length === 0;
+  empty.hidden = groups.length > 0;
+}
+
+async function loadLinked() {
+  const region = $("people-linked-loading");
+  if (region) region.hidden = false;
+  setLinkedStatus("");
+  try {
+    linkedData = await request(`/api/people/linked-accounts?status=${encodeURIComponent(linkedFilter)}`);
+    renderLinked();
+    preserveSiteContextLinks(activeSiteId);
+  } catch (error) {
+    setLinkedStatus(error?.message || "Linked accounts could not be loaded. Try again.", true);
+  } finally {
+    if (region) region.hidden = true;
+    window.__yrBoot?.signal();
+  }
+}
+
+const LINKED_CONFIRM = {
+  watch: ["Watch this link?", "The pair stays flagged for review. No restriction is applied.", "Watch"],
+  restrict: ["Restrict this link?", "Linked accounts won't be able to enter giveaways together until you remove the restriction.", "Restrict"],
+  unrestrict: ["Remove this restriction?", "Linked accounts can enter giveaways together again.", "Remove restriction"],
+  dismiss: ["Dismiss this link?", "The pair stops appearing here and won't be flagged again.", "Dismiss"],
+};
+
+async function linkedAction(action, linkIds) {
+  if (linkedPending || !linkIds.length) return;
+  linkedPending = true;
+  const buttons = [...document.querySelectorAll(".people-linked-actions button")];
+  buttons.forEach((button) => { button.disabled = true; });
+  try {
+    const [title, text, label] = LINKED_CONFIRM[action];
+    const confirmed = await showConfirmModal(title, text, label, action === "restrict" || action === "dismiss");
+    if (!confirmed) return;
+    linkedData = await request("/api/people/linked-accounts/decision", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-csrf-token": csrf() },
+      body: JSON.stringify({ linkIds, action }),
+    });
+    renderLinked();
+    setLinkedStatus("Saved.");
+  } catch (error) {
+    setLinkedStatus(error?.message || "The decision could not be saved.", true);
+  } finally {
+    linkedPending = false;
+    buttons.forEach((button) => { button.disabled = false; });
+  }
+}
+
+async function enterLinked() {
+  linkedFilter = "active";
+  linkedPending = false;
+  listeners?.abort();
+  listeners = new AbortController();
+  const signal = listeners.signal;
+  document.querySelectorAll("[data-linked-filter]").forEach((button) => button.addEventListener("click", async () => {
+    linkedFilter = button.dataset.linkedFilter;
+    document.querySelectorAll("[data-linked-filter]").forEach((item) => {
+      const active = item === button;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-pressed", String(active));
+    });
+    await loadLinked();
+  }, { signal }));
+  $("people-linked-groups")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-linked-action]");
+    if (button) linkedAction(button.dataset.linkedAction, String(button.dataset.linkedIds || "").split(",").filter(Boolean));
+  }, { signal });
+  $("people-linked-retry")?.addEventListener("click", () => loadLinked(), { signal });
+  const shell = await loadBoardShell();
+  activeSiteId = shell.activeSiteId;
+  preserveSiteContextLinks(activeSiteId);
+  await loadLinked();
+}
+
 async function enterMembers() {
   memberModule = await import("./credits.js");
   if (window.__yrSpaShell) return memberModule.enter?.();
@@ -268,6 +409,7 @@ export async function enter() {
   const crTab = $("cr-app")?.dataset.crTab;
   if (crTab === "viewers" || crTab === "history") return enterMembers();
   if ($("people-reviews-app")) return enterReviews();
+  if ($("people-linked-app")) return enterLinked();
 }
 
 export function leave() {

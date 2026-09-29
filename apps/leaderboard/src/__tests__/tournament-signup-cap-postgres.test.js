@@ -87,7 +87,7 @@ describe("tournament signup cap (Postgres)", () => {
     expect(typeof handleSelectTournamentEntries).toBe("function");
   });
 
-  integrationIt("two concurrent entrants race for the last slot: exactly one wins and signups lock", async () => {
+  integrationIt("two concurrent entrants race for the last slot: exactly one wins and the loser hears the bracket is full", async () => {
     const siteId = await seedSite();
     const tournamentId = await seedTournament(siteId, { entryCap: 10, signupState: "open" });
     for (let i = 0; i < 9; i++) {
@@ -105,16 +105,17 @@ describe("tournament signup cap (Postgres)", () => {
     ]);
     const results = outcomes.map((o) => (o.status === "fulfilled" ? o.value : { error: o.reason?.message, status: 500 }));
     const wins = results.filter((r) => r.entry && !r.duplicate);
-    // The loser either overflows the cap ("signups are full") or arrives
-    // after the winner's lock fired ("signups are not open") — both are 409.
+    // The loser overflows the cap: "Bracket is full." while signups stay open.
     const losses = results.filter((r) => r.status === 409 && !r.entry);
     expect(wins).toHaveLength(1);
     expect(losses).toHaveLength(1);
+    expect(losses[0].error).toBe("Bracket is full.");
+    expect(losses[0].full).toBe(true);
 
     const [tournament] = await sql`SELECT signup_state FROM tournaments WHERE id=${tournamentId}`;
-    expect(tournament.signup_state).toBe("locked");
+    expect(tournament.signup_state).toBe("open");
     const holders = await sql`SELECT count(*)::int AS n FROM tournament_open_signups WHERE tournament_id=${tournamentId}`;
-    expect(holders[0].n).toBe(0);
+    expect(holders[0].n).toBe(1);
     const entries = await sql`SELECT count(*)::int AS n FROM tournament_entries
       WHERE tournament_id=${tournamentId} AND status IN ('pending','confirmed','selected')`;
     expect(entries[0].n).toBe(10);
@@ -229,17 +230,18 @@ describe("tournament signup cap (Postgres)", () => {
       expect(after.signup_state).toBe("open");
       expect(holders[0].n).toBe(1);
     } else {
-      // The settings tx won: entrant is rejected and signups are locked.
+      // The settings tx won: entrant overflows the new cap; signups stay
+      // open (full is derived, not locked) so chat keeps answering.
       expect(entries.n).toBe(9);
       expect(after.entry_cap).toBe(9);
       expect(settingsRes?.status).toBe(200);
       expect(entrant?.status ?? 409).toBe(409);
-      expect(after.signup_state).toBe("locked");
-      expect(holders[0].n).toBe(0);
+      expect(after.signup_state).toBe("open");
+      expect(holders[0].n).toBe(1);
     }
   });
 
-  integrationIt("applying a cap that is already reached locks signups and releases the holder", async () => {
+  integrationIt("applying a cap that is already reached stores it and keeps signups open", async () => {
     const siteId = await seedSite();
     const tournamentId = await seedTournament(siteId, { entryCap: null, signupState: "open" });
     for (let i = 0; i < 9; i++) {
@@ -255,9 +257,9 @@ describe("tournament signup cap (Postgres)", () => {
     expect(res.status).toBe(200);
     const { tournament } = await res.json();
     expect(tournament.entry_cap).toBe(9);
-    expect(tournament.signup_state).toBe("locked");
+    expect(tournament.signup_state).toBe("open");
     const holders = await sql`SELECT count(*)::int AS n FROM tournament_open_signups WHERE tournament_id=${tournamentId}`;
-    expect(holders[0].n).toBe(0);
+    expect(holders[0].n).toBe(1);
   });
 
   integrationIt("marks a flagged free entry ineligible until a people_review_allow audit exists", async () => {

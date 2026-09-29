@@ -32,7 +32,7 @@ const vm = (over = {}) => buildViewModel({
   entries: over.entries ?? entries,
   entryCounts: over.entryCounts ?? counts,
   matches: over.matches ?? [],
-  lifecycle: over.lifecycle ?? "signups_open",
+  lifecycle: over.lifecycle ?? "setup",
   chatRegistration: over.chatRegistration ?? null,
   board: over.board ?? {},
   activeTab: over.activeTab ?? "entries",
@@ -41,8 +41,8 @@ const vm = (over = {}) => buildViewModel({
 
 describe("buildViewModel", () => {
   it("derives status/meta/stats from data only", () => {
-    const model = vm({ lifecycle: "draft", tournament: { game_name: "", status: "draft", signup_state: "closed" } });
-    expect(model.statusLabel).toBe("Draft");
+    const model = vm({ tournament: { game_name: "", status: "draft", signup_state: "closed" } });
+    expect(model.statusLabel).toBe("Setup");
     expect(model.meta).toBe("8-player bracket · Single elimination");
     expect(model.meta).not.toContain("Fortnite");
     const [entriesStat, spots, keyword, cap] = model.stats;
@@ -50,47 +50,44 @@ describe("buildViewModel", () => {
     expect(spots.value).toBe("8");
     expect(keyword.value).toBe("!join");
     expect(cap.value).toBe("Unlimited");
+    expect(model.entriesTabLabel).toBe("Entries (2)");
   });
 
   it("computes the chat-registration state once for form + view", () => {
-    expect(vm({ lifecycle: "signups_open" }).chatReg).toBe("Unavailable");
-    expect(vm({ lifecycle: "draft", tournament: { signup_state: "closed" } }).chatReg).toBe("Off");
-    expect(vm({ lifecycle: "signups_open", chatRegistration: { connected: true, chatReady: true, channelName: "chan" } }).chatReg).toBe("Active");
-    expect(vm({ lifecycle: "signups_open", chatRegistration: { connected: true, chatReady: true, channelName: "other" } }).chatReg).toBe("Unavailable");
+    expect(vm({ chatRegistration: { connected: true, chatReady: true, channelName: "chan" } }).chatReg).toBe("Active");
+    expect(vm({}).chatReg).toBe("Unavailable");
+    expect(vm({ tournament: { signup_state: "closed" } }).chatReg).toBe("Off");
+    expect(vm({ chatRegistration: { connected: true, chatReady: true, channelName: "other" } }).chatReg).toBe("Unavailable");
   });
 
-  it("maps lifecycle to primary action and secondary buttons", () => {
-    const draft = vm({
-      lifecycle: "draft",
-      tournament: { signup_state: "closed", chat_channel: "" },
-      entries: [entries[0]],
-      board: { kickChannelName: "mychan" },
+  it("maps lifecycle to primary action and setup controls", () => {
+    const setup = vm({ tournament: { signup_state: "closed", status: "draft" } });
+    expect(setup.primary).toEqual({ action: "start", label: "Start tournament" });
+    expect(setup.setupControls.open).toBe(false);
+    expect(setup.setupControls.stateText).toBe("Off");
+    const sparse = vm({
+      tournament: { signup_state: "closed", status: "draft" },
+      entryCounts: { ...counts, eligible: 1 },
     });
-    expect(draft.primary).toEqual({ action: "use-site-channel", label: "Use mychan" });
-    expect(draft.stepHtml).toContain("add players manually below");
-    const connected = vm({
-      lifecycle: "draft",
-      tournament: { signup_state: "closed", chat_channel: "" },
-      entries: [entries[0]],
-      board: { kickChannelName: "mychan" },
-      chatRegistration: { connected: true, channelName: "connected" },
+    expect(sparse.primary.disabledReason).toBe("Add at least 2 players to start.");
+    const openVm = vm({ chatRegistration: { connected: true, chatReady: true, channelName: "chan" } });
+    expect(openVm.setupControls.open).toBe(true);
+    expect(openVm.setupControls.stateText).toBe("On — viewers type !join in chat");
+    const fullVm = vm({
+      tournament: { entry_cap: 2, signup_state: "open" },
+      entryCounts: { ...counts, eligible: 2 },
     });
-    expect(connected.siteChannel).toBe("connected");
-    expect(connected.primary).toEqual({ action: "use-site-channel", label: "Use connected" });
-    const populatedDraft = vm({
-      lifecycle: "draft",
-      tournament: { signup_state: "closed", chat_channel: "" },
+    expect(fullVm.full).toBe(true);
+    expect(fullVm.setupControls.stateText).toBe("Full — signups closed (2/2)");
+    const waitlistVm = vm({
+      tournament: { entry_cap: 2, signup_state: "open", waitlist_enabled: true },
+      entryCounts: { ...counts, eligible: 2, waitlist: 3 },
     });
-    expect(populatedDraft.primary).toEqual({ action: "lock", label: "Close entries" });
-    expect(populatedDraft.stepHtml).toBe("Add players below, or connect Kick to collect entries from chat.");
-    const open = vm({ lifecycle: "signups_open" });
-    expect(open.primary).toEqual({ action: "lock", label: "Lock signups" });
-    const locked = vm({ lifecycle: "signups_locked", entryCounts: { ...counts, eligible: 5 } });
-    expect(locked.primary).toEqual({ action: "create-bracket", label: "Create bracket with 5 players" });
-    expect(locked.reopen).toBe(true);
-    const crowded = vm({ lifecycle: "signups_locked", entryCounts: { ...counts, eligible: 12 } });
-    expect(crowded.primary).toEqual({ action: "select-participants", label: "Select participants" });
-    const done = vm({ lifecycle: "completed", tournament: { status: "completed", winner_name: "alpha" } });
+    expect(waitlistVm.setupControls.stateText).toBe("Full — new signups join the waitlist");
+    expect(waitlistVm.entriesTabLabel).toBe("Entries (2) · Waitlist 3");
+    const noChannel = vm({ tournament: { signup_state: "closed", status: "draft", chat_channel: "" } });
+    expect(noChannel.setupControls.hasChannel).toBe(false);
+    const done = vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } });
     expect(done.primary).toBeNull();
     expect(done.showNew).toBe(true);
     expect(done.finished).toBe(true);
@@ -103,39 +100,66 @@ describe("buildViewModel", () => {
   it("labels entries and keeps review flags data-driven", () => {
     const model = vm({});
     expect(model.entriesVm).toHaveLength(3);
-    expect(model.entriesVm[1].statusLabel).toBe("Picked");
+    expect(model.entriesVm[1].statusLabel).toBe("In bracket");
+    expect(model.entriesVm[1].pillClass).toBe("in-bracket");
     expect(model.entriesVm[1].flagged).toBe(true);
+    expect(model.entriesVm[0].statusLabel).toBe("Registered");
     expect(model.entriesVm[0].flagged).toBe(false);
     expect(model.entriesVm[0].sourceLabel).toBe("Chat");
     expect(model.entriesVm[1].sourceLabel).toBe("Signup page");
+  });
+
+  it("marks eliminated picks and numbers the waitlist", () => {
+    const model = vm({
+      lifecycle: "live",
+      entries: [
+        { id: "w", display_name: "winner", source: "chat", status: "selected" },
+        { id: "l", display_name: "loser", source: "chat", status: "selected" },
+        { id: "q1", display_name: "queued1", source: "chat", status: "waitlist", created_at: "2026-09-20T10:01:00Z" },
+        { id: "q2", display_name: "queued2", source: "chat", status: "waitlist", created_at: "2026-09-20T10:02:00Z" },
+      ],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "winner", player2_name: "loser", status: "completed", winner_name: "winner" },
+      ],
+      entryCounts: { active: 2, eligible: 0, waitlist: 2, removed: 0, blocked: 0 },
+    });
+    expect(model.entriesVm.find((e) => e.id === "l").statusLabel).toBe("Eliminated");
+    expect(model.entriesVm.find((e) => e.id === "l").pillClass).toBe("eliminated");
+    expect(model.entriesVm.find((e) => e.id === "w").statusLabel).toBe("In bracket");
+    expect(model.entriesVm.find((e) => e.id === "q1").statusLabel).toBe("Waitlist #1");
+    expect(model.entriesVm.find((e) => e.id === "q2").statusLabel).toBe("Waitlist #2");
   });
 });
 
 describe("workspaceHtml", () => {
   it("emits the behavior ids and no old classes", () => {
-    const model = vm({ lifecycle: "completed", tournament: { status: "completed", winner_name: "alpha" } });
+    const model = vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } });
     const html = workspaceHtml(model, "<div class=\"tn-bracket\"></div>");
     for (const id of [
       "tournament-workspace", "tournament-title-display", "tournament-status", "tournament-meta",
-      "tournament-step-label", "tournament-primary", "tournament-reopen", "tournament-new",
+      "tournament-step-label", "tournament-primary", "tournament-new",
       "tournament-count", "tournament-fact-spots", "tournament-fact-keyword", "tournament-fact-cap",
       "tournament-tab-entries", "tournament-tab-bracket", "tournament-tab-settings",
       "tournament-panel-entries", "tournament-panel-bracket", "tournament-panel-settings",
       "tournament-entry-list", "tournament-bracket", "tournament-bracket-expand",
       "tournament-summary", "tournament-champion", "tournament-settings-view",
       "tournament-settings-form", "tournament-settings-aside", "tournament-message",
+      "tournament-dup-protection",
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
     expect(html).not.toMatch(/class="[^"]*\b(?:tournament|tourn)-/);
-    // Completed: champion shown, settings view visible, form hidden.
+    expect(html).not.toContain("Reopen");
+    expect(html).not.toContain("Lock signups");
+    expect(html).not.toContain("Draft");
+    // Finished: champion shown, settings view visible, form hidden.
     expect(html).toContain("Champion: alpha");
     expect(html).toContain('id="tournament-settings-view"');
     expect(html).toContain('<form id="tournament-settings-form" class="tn-form" novalidate hidden');
   });
 
   it("hides entry menus when finished and shows them while active", () => {
-    const done = workspaceHtml(vm({ lifecycle: "completed", tournament: { status: "completed" } }));
+    const done = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed" } }));
     expect(done).not.toContain("tn-menu");
     const open = workspaceHtml(vm({}));
     expect(open.match(/class="tn-menu"/g)).toHaveLength(3);
@@ -145,40 +169,53 @@ describe("workspaceHtml", () => {
   });
 
   it("shows the bracket empty state until matches exist", () => {
-    const html = workspaceHtml(vm({ lifecycle: "signups_open" }));
+    const html = workspaceHtml(vm({}));
     expect(html).toContain('id="tournament-bracket-empty"');
     expect(html).toContain("Bracket not created yet.");
-    const live = workspaceHtml(vm({ lifecycle: "bracket", matches: buildBracket(["a", "b"], 4) }), "<div class=\"tn-bracket\"></div>");
+    const live = workspaceHtml(vm({ lifecycle: "live", matches: buildBracket(["a", "b"], 4) }), "<div class=\"tn-bracket\"></div>");
     expect(live).not.toContain('id="tournament-bracket-empty"');
   });
 
-  it("adds players for draft, open and locked signups only", () => {
-    for (const lifecycle of ["draft", "signups_open", "signups_locked"]) {
+  it("adds players during setup and disables the form when the bracket is full", () => {
+    for (const signupState of ["closed", "open", "locked"]) {
       const html = workspaceHtml(vm({
-        lifecycle,
-        tournament: { signup_state: lifecycle === "draft" ? "closed" : "open", chat_channel: "" },
+        lifecycle: "setup",
+        tournament: { signup_state: signupState, chat_channel: "" },
       }));
       expect(html).toContain('id="tournament-add-entry-form"');
       expect(html).toContain('id="tournament-add-entry-name"');
       expect(html).toContain('maxlength="80"');
     }
-    for (const lifecycle of ["bracket", "completed", "cancelled"]) {
+    for (const lifecycle of ["live", "finished", "cancelled"]) {
       const html = workspaceHtml(vm({ lifecycle, tournament: { status: lifecycle } }));
       expect(html).not.toContain('id="tournament-add-entry-form"');
     }
+    const full = workspaceHtml(vm({
+      lifecycle: "setup",
+      tournament: { entry_cap: 2, signup_state: "open" },
+      entryCounts: { ...counts, eligible: 2 },
+    }));
+    expect(full).toContain('id="tournament-add-entry-submit" type="submit" disabled');
+    expect(full).toContain("Bracket is full (2/2). Raise the signup limit in Settings or turn on Allow waitlist.");
+    const waitlistAdd = workspaceHtml(vm({
+      lifecycle: "setup",
+      tournament: { entry_cap: 2, signup_state: "open", waitlist_enabled: true },
+      entryCounts: { ...counts, eligible: 2 },
+    }));
+    expect(waitlistAdd).toContain(">Add to waitlist</button>");
+    expect(waitlistAdd).not.toContain('id="tournament-add-entry-submit" type="submit" disabled');
   });
 
-  it("uses the manual-first draft empty-state copy", () => {
+  it("uses the setup empty-state copy", () => {
     const html = workspaceHtml(vm({
-      lifecycle: "draft",
       tournament: { signup_state: "closed", chat_channel: "" },
       entries: [],
     }));
-    expect(html).toContain("<b>No entries yet.</b><span>Add players below, or open signups to collect them from Kick chat.</span>");
+    expect(html).toContain("<b>No entries yet.</b><span>Add players below, or turn on chat signup to collect them from Kick chat.</span>");
   });
 
   it("renders the read-only settings sections for finished tournaments", () => {
-    const html = workspaceHtml(vm({ lifecycle: "completed", tournament: { status: "completed" } }));
+    const html = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed" } }));
     const view = html.slice(html.indexOf('id="tournament-settings-view"'));
     for (const section of ["General", "Registration", "Rules"]) expect(view).toContain(section);
     expect(view).toContain("No rules added yet.");
@@ -190,7 +227,7 @@ describe("workspaceHtml", () => {
   });
 
   it("keeps every summary aside label to one row", () => {
-    const html = workspaceHtml(vm({ lifecycle: "completed", tournament: { status: "completed", winner_name: "alpha" } }), "<div class=\"tn-bracket\"></div>");
+    const html = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed", winner_name: "alpha" } }), "<div class=\"tn-bracket\"></div>");
     const aside = html.slice(html.indexOf('id="tournament-summary"'), html.indexOf('id="tournament-champion"'));
     for (const label of ["Entries", "Bracket size", "Matches played", "Status", "Game", "Bracket type", "Created"]) {
       expect(aside.split(label).length - 1).toBe(1);
@@ -204,7 +241,7 @@ describe("workspaceHtml", () => {
     expect(details).toContain('id="tournament-copy-id"');
     expect(details).toContain('data-copy-id="t-1"');
     // A blank game_name renders no Game row in the summary.
-    const blank = workspaceHtml(vm({ lifecycle: "completed", tournament: { status: "completed", game_name: "  " } }), "");
+    const blank = workspaceHtml(vm({ lifecycle: "finished", tournament: { status: "completed", game_name: "  " } }), "");
     const blankAside = blank.slice(blank.indexOf('id="tournament-summary"'), blank.indexOf('id="tournament-champion"'));
     expect(blankAside).not.toContain(">Game<");
     // A set game_name shows its real value.
@@ -248,7 +285,7 @@ describe("empty + dialog markup", () => {
 
   it("hides the new-tournament action for locked existing workspaces", () => {
     const html = workspaceHtml(vm({
-      lifecycle: "completed",
+      lifecycle: "finished",
       tournament: { status: "completed", winner_name: "alpha" },
       tournamentsEnabled: false,
     }), "");

@@ -144,7 +144,7 @@ describe("tournament workspace — completed tournament", () => {
     expect($id("tournament-workspace").hidden).toBe(false);
     expect($id("tournament-title-display").tagName).toBe("H1");
     expect(text("tournament-title-display")).toBe("Community tournament");
-    expect(text("tournament-status")).toBe("Completed");
+    expect(text("tournament-status")).toBe("Finished");
     expect(text("tournament-meta")).toBe("8-player bracket · Single elimination");
     expect(text("tournament-step-label")).toBe("Champion: 36_ates");
     expect($id("tournament-step-label").querySelector("svg.tn-crown")).toBeTruthy();
@@ -161,7 +161,10 @@ describe("tournament workspace — completed tournament", () => {
     expect(rows).toHaveLength(2);
     expect($id("tournament-entry-list").textContent).toContain("36_ates");
     expect($id("tournament-entry-list").textContent).toContain("forolo_GB");
-    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--selected")).toHaveLength(2);
+    // The champion stays "In bracket"; the player who lost a real match is Eliminated.
+    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--in-bracket")).toHaveLength(1);
+    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--eliminated")).toHaveLength(1);
+    expect($id("tournament-entry-list").textContent).toContain("Eliminated");
     expect($id("tournament-entry-list").textContent).toContain("Chat");
     expect($id("tournament-entry-list").querySelectorAll("details.tn-menu")).toHaveLength(0);
     expect($id("tournament-entry-table")).toBeTruthy();
@@ -236,19 +239,24 @@ describe("tournament workspace — completed tournament", () => {
 });
 
 describe("tournament workspace — editable lifecycles", () => {
-  it("closes draft entries without requiring a Kick channel", async () => {
+  it("starts a draft tournament straight from the entries list", async () => {
     await boot(draft, [
       { id: "e1", display_name: "alpha", source: "manual", status: "pending", eligible: true },
       { id: "e2", display_name: "beta", source: "manual", status: "confirmed", eligible: true },
     ]);
-    expect(text("tournament-primary")).toBe("Close entries");
-    expect($id("tournament-primary").dataset.action).toBe("lock");
+    expect(text("tournament-primary")).toBe("Start tournament");
+    expect($id("tournament-primary").dataset.action).toBe("start");
     const requestStart = server.requests.length;
+    // The real dialog.js may have replaced the stub; approve on whatever is live.
+    window.YRDialog.confirm = async () => true;
     await click("tournament-primary");
-    expect(server.tournament.signup_state).toBe("locked");
-    expect(server.requests.slice(requestStart).some(({ path, method }) =>
-      path.endsWith("/signups/lock") && method === "POST"
-    )).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // 2 eligible players in an 8 bracket: confirm, then start in signup order.
+    const selects = server.requests.slice(requestStart).filter(({ path, method }) =>
+      path.endsWith("/entries/select") && method === "POST"
+    );
+    expect(selects).toHaveLength(1);
+    expect(JSON.parse(selects[0].body)).toEqual({ mode: "all", seeding: "signup" });
   });
 
   it("adds a manual player and shows duplicate errors without losing the input", async () => {

@@ -103,9 +103,48 @@ async function loadSessionView(d, siteId, sessionId = null) {
     );
   if (!session) return { session: null, entries: [], winner: null, draws: [] };
   const entries = await d.query(
-    `SELECT ${ENTRY_COLUMNS} FROM chat_giveaway_entries WHERE giveaway_session_id = $1 ORDER BY entered_at ASC`,
+    `SELECT ${ENTRY_COLUMNS},
+        (SELECT vi.viewer_id FROM viewer_identities vi JOIN viewers v ON v.id=vi.viewer_id
+          WHERE vi.provider='kick' AND vi.external_user_id=e.provider_user_id AND vi.status='active'
+            AND vi.linked_at IS NOT NULL AND v.is_system=false LIMIT 1) AS resolved_viewer_id
+       FROM chat_giveaway_entries e WHERE e.giveaway_session_id = $1 ORDER BY entered_at ASC`,
     [session.id],
   );
+  // Phase 3: surface likely-linked pairs inside this session so the streamer
+  // can review and exclude duplicates. Resolved by Viewer Account (via the
+  // entry's active kick identity); viewer ids never leave the API shape.
+  const viewerIds = [...new Set((entries || []).map((entry) => entry.resolved_viewer_id).filter(Boolean))];
+  const linkRows = viewerIds.length ? await d.query(
+    `SELECT al.id, al.viewer_a, al.viewer_b, al.reasons, al.status
+       FROM account_links al
+      WHERE al.site_id = $1
+        AND al.status IN ('pending','watching','restricted')
+        AND (al.viewer_a = ANY($2::uuid[]) OR al.viewer_b = ANY($2::uuid[]))`,
+    [siteId, viewerIds],
+  ) : [];
+  const entriesByViewer = new Map();
+  for (const entry of entries || []) {
+    if (!entry.resolved_viewer_id) continue;
+    if (!entriesByViewer.has(entry.resolved_viewer_id)) entriesByViewer.set(entry.resolved_viewer_id, []);
+    entriesByViewer.get(entry.resolved_viewer_id).push(entry);
+  }
+  const sessionEntryIds = new Set((entries || []).map((entry) => entry.id));
+  for (const link of linkRows || []) {
+    for (const viewerId of [link.viewer_a, link.viewer_b]) {
+      for (const entry of entriesByViewer.get(viewerId) || []) {
+        const otherViewer = viewerId === link.viewer_a ? link.viewer_b : link.viewer_a;
+        const partner = (entriesByViewer.get(otherViewer) || []).find((candidate) => sessionEntryIds.has(candidate.id));
+        if (!partner) continue;
+        (entry.linked ||= []).push({
+          entryId: partner.id,
+          username: partner.username,
+          reasons: link.reasons || [],
+          status: link.status,
+        });
+      }
+    }
+  }
+  for (const entry of entries || []) delete entry.resolved_viewer_id;
   const winner = session.winner_entry_id ? entries.find((e) => e.id === session.winner_entry_id) || null : null;
   const draws = await d.query(
     `SELECT d.id, d.entry_id, d.reason, d.drawn_at, d.replaced_entry_id,
@@ -393,6 +432,96 @@ export async function handleChatGiveawayFinalize(request, env, deps = {}) {
     return conflict("The winner must respond in chat before you can confirm.");
   }
   return conflict("Could not confirm the winner. Refresh and try again.");
+}
+
+/** POST /api/giveaways/chat/entries/exclude — streamer excludes linked
+ * duplicates (marks entries rejected with reason `excluded_linked_account`). */
+export async function handleChatGiveawayExcludeLinkedEntries(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+  if (!body.sessionId) return bad("Missing sessionId", 400);
+  const entryIds = Array.isArray(body.entryIds) ? [...new Set(body.entryIds.map(String))] : [];
+  if (!entryIds.length) return bad("Missing entryIds", 400);
+
+  const result = await d.transaction(async (run) => {
+    const [session] = await run(
+      `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2 FOR UPDATE`,
+      [body.sessionId, site.id],
+    );
+    if (!session) return { error: "Giveaway not found", status: 404 };
+    const rows = await run(
+      `SELECT id, username, eligibility_status, eligibility_reason FROM chat_giveaway_entries
+        WHERE giveaway_session_id = $1 AND id = ANY($2::uuid[]) FOR UPDATE`,
+      [session.id, entryIds],
+    );
+    if ((rows || []).length !== entryIds.length) return { error: "Entry not found in this giveaway.", status: 404 };
+    if (session.winner_entry_id && entryIds.includes(session.winner_entry_id)) {
+      return { error: "Re-roll before excluding the current winner.", status: 409 };
+    }
+    const excluded = [];
+    const skipped = [];
+    for (const row of rows) {
+      // Only eligible entries may be excluded: overwriting another rejection
+      // (vpn_detected, duplicate_ip, …) would let "Include again" undo a real
+      // rule, not a linked-account decision.
+      if (row.eligibility_status !== "eligible") {
+        skipped.push(row.id);
+        continue;
+      }
+      await run(
+        `UPDATE chat_giveaway_entries
+            SET eligibility_status='rejected', eligibility_reason='excluded_linked_account'
+          WHERE id=$1 AND eligibility_status='eligible'`,
+        [row.id],
+      );
+      excluded.push(row.id);
+      await run(
+        `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+         VALUES ($1, 'giveaway_entry_excluded_linked', 'chat_giveaway_entry', $2, $3::jsonb)`,
+        [user.id, String(row.id), { siteId: site.id, sessionId: session.id, username: row.username }],
+      );
+    }
+    return { excluded, skipped };
+  });
+  if (result.error) return bad(result.error, result.status);
+  return ok({ excluded: result.excluded, skipped: result.skipped, ...await loadSessionView(d, site.id, body.sessionId) });
+}
+
+/** POST /api/giveaways/chat/entries/include — undo an earlier linked exclusion. */
+export async function handleChatGiveawayIncludeLinkedEntry(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+  if (!body.sessionId) return bad("Missing sessionId", 400);
+  if (!body.entryId) return bad("Missing entryId", 400);
+
+  const result = await d.transaction(async (run) => {
+    const [session] = await run(
+      `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2 FOR UPDATE`,
+      [body.sessionId, site.id],
+    );
+    if (!session) return { error: "Giveaway not found", status: 404 };
+    const rows = await run(
+      `UPDATE chat_giveaway_entries
+          SET eligibility_status='eligible', eligibility_reason=NULL
+        WHERE giveaway_session_id = $1 AND id = $2
+          AND eligibility_status='rejected' AND eligibility_reason='excluded_linked_account'
+        RETURNING id`,
+      [session.id, String(body.entryId)],
+    );
+    if (!rows?.length) return { error: "Entry is not excluded as a linked account.", status: 409 };
+    await run(
+      `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
+       VALUES ($1, 'giveaway_entry_included', 'chat_giveaway_entry', $2, $3::jsonb)`,
+      [user.id, String(body.entryId), { siteId: site.id, sessionId: session.id }],
+    );
+    return { ok: true };
+  });
+  if (result.error) return bad(result.error, result.status);
+  return ok(await loadSessionView(d, site.id, body.sessionId));
 }
 
 /** POST /api/giveaways/chat/entries/remove — remove one entrant from a session. */

@@ -2,8 +2,8 @@
 // Keeps the request thread thin: verify the signature, filter the event, then
 // drop redemptions onto the shared events queue (the consumer durably grants
 // credits) and turn chat messages into chat-giveaway entries inline.
-import { json, bad } from "../auth.js";
-import { query, withTransaction } from "@yourrank/shared/db";
+import { json, bad, rateLimit as defaultRateLimit } from "../auth.js";
+import { query, one, withTransaction } from "@yourrank/shared/db";
 import {
   KICK_CHAT_MESSAGE_EVENT,
   ingestChatGiveawayMessage,
@@ -18,6 +18,12 @@ import {
   isReversibleKickStatus,
   processKickRewardRedemption,
 } from "@yourrank/shared/kick-credits";
+import {
+  getValidKickAccessToken,
+  isDefinitiveKickAuthorizationFailure,
+  postKickChatMessage,
+} from "@yourrank/shared/kick-oauth";
+import { storeCreatorConnectionTokens } from "@yourrank/shared/provider-connections";
 
 const KICK_REWARD_EVENT = "channel.reward.redemption.updated";
 const KICK_WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
@@ -34,6 +40,80 @@ async function ingestKickChatMessage(payload, env, run = (sql, params) => query(
   return ingestChatGiveawayMessage(run, kickChatMessageToIngestInput(payload));
 }
 
+const replyFailed = (tournamentId, status, reason) =>
+  console.error(JSON.stringify({ event: "tournament_chat_reply_failed", tournamentId, status, reason }));
+
+// Answers a full-bracket !join in chat. Runs strictly after the ingest
+// transaction commits and never feeds back into the webhook response.
+async function replyTournamentChatOutcome(tournament, env, {
+  rateLimit = defaultRateLimit,
+  postChatMessage = postKickChatMessage,
+  getAccessToken = getValidKickAccessToken,
+  storeTokens = storeCreatorConnectionTokens,
+  dbOne = one,
+  dbRun = (sql, params) => query(sql, params),
+} = {}) {
+  const tournamentId = tournament.tournamentId;
+  const rl = await rateLimit(env, `tournament-chat-reply:${tournamentId}`, 3, 30);
+  if (!rl.ok) {
+    console.info(JSON.stringify({ event: "tournament_chat_reply_throttled", tournamentId }));
+    return;
+  }
+  const connection = await dbOne(
+    `SELECT user_id, external_user_id, access_token_enc, refresh_token_enc, token_expires_at
+       FROM creator_connections
+      WHERE user_id=$1 AND provider='kick' AND status='active'
+      LIMIT 1`,
+    [tournament.ownerUserId]
+  );
+  if (!connection?.access_token_enc) {
+    replyFailed(tournamentId, null, "reconnect_kick_for_chat_write");
+    return;
+  }
+  let tokenSet;
+  try {
+    tokenSet = await getAccessToken(
+      env,
+      connection.access_token_enc,
+      connection.refresh_token_enc || null,
+      connection.token_expires_at
+    );
+  } catch (err) {
+    replyFailed(
+      tournamentId,
+      null,
+      isDefinitiveKickAuthorizationFailure(err)
+        ? "reconnect_kick_for_chat_write"
+        : "token_refresh_failed"
+    );
+    return;
+  }
+  await storeTokens(dbRun, connection.user_id, "kick", {
+    accessTokenEnc: tokenSet.accessEnc,
+    refreshTokenEnc: tokenSet.refreshEnc,
+    tokenExpiresAt: tokenSet.expiresAt,
+  });
+  const content = tournament.waitlisted
+    ? `@${tournament.senderUsername} Bracket is full — you're on the waitlist (#${tournament.waitlistPosition}).`
+    : `@${tournament.senderUsername} Bracket is full.`;
+  try {
+    await postChatMessage(tokenSet.accessToken, {
+      broadcasterUserId: tournament.broadcasterUserId || connection.external_user_id,
+      content,
+      replyToMessageId: tournament.messageId,
+    });
+  } catch (err) {
+    const status = Number(/\b(\d{3})\b/.exec(String(err?.message || err))?.[1]) || null;
+    replyFailed(
+      tournamentId,
+      status,
+      status === 401 || status === 403
+        ? "reconnect_kick_for_chat_write"
+        : String(err?.message || err).slice(0, 200)
+    );
+  }
+}
+
 export async function handleKickWebhook(
   request,
   env,
@@ -42,6 +122,7 @@ export async function handleKickWebhook(
     ingestTournamentMessage = (payload, env, tx) => ingestTournamentChatMessageTx(tx, payload),
     withTransaction: withTransactionImpl = withTransaction,
     markEventObserved = markChannelEventObserved,
+    replyDeps,
   } = {},
 ) {
   const rawBody = await request.text();
@@ -108,6 +189,20 @@ export async function handleKickWebhook(
         const tournament = await ingestTournamentMessage(payload, env, tx);
         return { duplicate: false, chat, tournament };
       });
+      // Chat replies go out only after the entry write committed, and a reply
+      // failure must never turn into a webhook failure (Kick would retry).
+      if (outcome.tournament?.full || outcome.tournament?.waitlisted) {
+        try {
+          await replyTournamentChatOutcome(outcome.tournament, env, replyDeps);
+        } catch (err) {
+          console.error(JSON.stringify({
+            event: "tournament_chat_reply_failed",
+            tournamentId: outcome.tournament.tournamentId,
+            status: null,
+            reason: String(err?.message || err).slice(0, 200),
+          }));
+        }
+      }
       return json({ ok: true, ...outcome });
     } catch (err) {
       console.error("[kick-webhook] chat ingest failed:", err?.message || err);

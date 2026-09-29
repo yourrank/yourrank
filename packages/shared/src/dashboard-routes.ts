@@ -188,6 +188,7 @@ const ROUTE_DEFS = [
   { id: "audience.viewers", canonicalPath: "/dashboard/audience/members", section: "audience", tab: "viewers", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.activity", canonicalPath: "/dashboard/audience/activity", section: "audience", tab: "activity", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "audience.reviews", canonicalPath: "/dashboard/audience/reviews", section: "audience", tab: "reviews", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
+  { id: "audience.linked", canonicalPath: "/dashboard/audience/linked", section: "audience", tab: "linked", navKey: "audience", owner: "leaderboard", delivery: "fragment", scope: "site", navParams: ["siteId"] },
   { id: "settings.account", canonicalPath: "/dashboard/settings/account", section: "settings", tab: "account", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.team", canonicalPath: "/dashboard/settings/team", section: "settings", tab: "team", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },
   { id: "settings.plan", canonicalPath: "/dashboard/settings/billing", section: "settings", tab: "plan", navKey: "settings", owner: "leaderboard", delivery: "fragment", scope: "account", navParams: [] },

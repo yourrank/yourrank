@@ -450,6 +450,11 @@ ${giveawaysSubnavHtml(active)}`}
           </div>
         </div>
 
+        <div class="gw-linked-banner" id="gw-linked-banner" role="status" hidden>
+          <span id="gw-linked-banner-text"></span>
+          <button class="btn btn--sm" id="gw-linked-exclude-all" type="button">Exclude linked duplicates</button>
+        </div>
+
         <form id="gw-add-entrant-form" class="gw-add-entrant-form" hidden>
           <label for="gw-add-entrant-name">Add entrant</label>
           <div class="gw-add-entrant-row">

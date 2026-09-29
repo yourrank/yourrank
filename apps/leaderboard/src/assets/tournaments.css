@@ -137,33 +137,98 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
-.tn-pill--draft { color: var(--tn-text-soft); }
-.tn-pill--signups_open,
-.tn-pill--bracket {
+.tn-pill--setup,
+.tn-pill--registered { color: var(--tn-text-soft); }
+.tn-pill--live,
+.tn-pill--in-bracket {
   border-color: color-mix(in srgb, var(--tn-accent) 40%, transparent);
   background: var(--tn-accent-soft);
   color: var(--tn-accent);
 }
-.tn-pill--signups_locked { color: var(--tn-text-soft); }
-.tn-pill--completed,
-.tn-pill--selected,
-.tn-pill--confirmed {
+.tn-pill--finished {
   border-color: #16a34a33;
   background: #16a34a12;
   color: #16a34a;
 }
 .tn-pill--cancelled,
 .tn-pill--removed,
-.tn-pill--blocked {
+.tn-pill--blocked,
+.tn-pill--eliminated {
   border-color: #dc262633;
   background: #dc26260d;
   color: #dc2626;
 }
-.tn-pill--pending,
 .tn-pill--waitlist {
   border-color: #d9770633;
   background: #d977060f;
   color: #b45309;
+}
+.tn-pill--duplicate {
+  border-color: #d9770633;
+  background: #d977060f;
+  color: #b45309;
+}
+
+/* Setup header controls: seeding + chat-signup switch. */
+.tn-setup-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--tn-text-soft);
+}
+.tn-seeding {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tn-seeding-label { font-weight: 600; color: var(--tn-text); }
+.tn-seeding-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.tn-chat-signup {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tn-switch-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.tn-chat-signup-state { color: var(--tn-text-soft); }
+.tn-primary-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.tn-primary-reason {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tn-text-soft);
+  text-align: right;
+  max-width: 260px;
+}
+.tn-dup-protection {
+  margin-top: 8px;
+}
+.tn-dup-protection .hint { display: block; margin: 4px 0 0; }
+.tn-add-entry-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--tn-text-soft);
+}
+.tn-entry-flag-reason {
+  font-size: 11.5px;
+  color: var(--tn-text-soft);
 }
 
 /* Stats strip: icon + big value + small label, divided cells. */
