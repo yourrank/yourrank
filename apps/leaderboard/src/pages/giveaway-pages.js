@@ -464,6 +464,8 @@ ${giveawaysSubnavHtml(active)}`}
               </div>
             </div>
 
+            <p class="gw-auto-reroll-stopped" id="gw-auto-reroll-stopped" role="status" hidden></p>
+
             <p class="hint gw-winner-manual-hint" id="gw-winner-manual-hint" hidden>Added manually — no chat response needed. Confirm when ready.</p>
 
             <div class="gw-winner-actions">
@@ -707,6 +709,7 @@ ${giveawaysSubnavHtml(active)}`}
         <p class="hint gw-claim-hint" id="gw-modal-claim-hint">
           Ask the winner to send a message in chat. Their live responses appear in the log below.
         </p>
+        <p class="gw-auto-reroll-stopped" id="gw-modal-auto-reroll-stopped" role="status" hidden></p>
       </div>
 
       <!-- Dedicated Winner Live Chat Feed -->

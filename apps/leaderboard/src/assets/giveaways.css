@@ -2279,3 +2279,6 @@
 
 /* Manual winners never have a chat response to wait for. */
 .gw-winner-manual-hint { margin: var(--ws-space-3) 0 0; }
+
+/* Auto re-roll stopped itself: a persistent notice until the draw resolves. */
+.gw-auto-reroll-stopped { margin: var(--ws-space-3) 0 0; font-size: 13px; line-height: 18px; color: var(--ws-warning-text, var(--ws-text-soft)); }

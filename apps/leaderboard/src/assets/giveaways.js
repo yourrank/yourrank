@@ -365,7 +365,12 @@ if (!window.__yrSpaShell) {
       });
       const data = await responseData(response);
       if (response.ok) applyState({ connection, ...data });
-      else showEngageError(data.error || "Auto re-roll failed.");
+      else {
+        // A 409 can carry the persisted session (e.g. auto re-roll exhausted):
+        // apply it so the notice/history reflect server truth before the error.
+        if (data.session) applyState({ connection, ...data });
+        showEngageError(data.error || "Auto re-roll failed.");
+      }
     } catch { showEngageError("Network error during auto re-roll."); }
     finally { autoRerollInFlight = false; }
   }
@@ -553,7 +558,18 @@ if (!window.__yrSpaShell) {
       li.append(label, when);
       list.appendChild(li);
     }
-    section.hidden = rows.length === 0;
+    if (session?.auto_reroll_exhausted_at) {
+      const li = document.createElement("li");
+      li.className = "gw-draw-history-row";
+      const label = document.createElement("span");
+      label.textContent = `Auto re-roll stopped — no other eligible entrants left (${currentWinner?.username || "the winner"} didn't respond)`;
+      const when = document.createElement("span");
+      when.className = "gw-draw-history-time hint";
+      when.textContent = formatEnteredAt(session.auto_reroll_exhausted_at);
+      li.append(label, when);
+      list.prepend(li);
+    }
+    section.hidden = rows.length === 0 && !session?.auto_reroll_exhausted_at;
   }
 
   function renderConnection() {
@@ -1004,6 +1020,18 @@ if (!window.__yrSpaShell) {
     const manualHint = $("gw-winner-manual-hint");
     if (manualHint) {
       manualHint.hidden = !(currentWinner?.provider === "manual" && session?.rules?.winnerMustRespond && !finalized);
+    }
+    // Auto re-roll can stop itself when no eligible entrant is left; the flag is
+    // persisted server-side, so this notice survives reloads until the draw
+    // resolves (confirm or a successful draw clears the column).
+    const exhausted = Boolean(session?.auto_reroll_exhausted_at) && !finalized && !session?.winner_confirmed_at;
+    for (const id of ["gw-auto-reroll-stopped", "gw-modal-auto-reroll-stopped"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.hidden = !exhausted;
+      if (exhausted) {
+        el.textContent = `Auto re-roll stopped — ${currentWinner?.username || "the winner"} didn't respond and no other eligible entrants remain, so re-roll isn't possible. Start a new giveaway when you're ready.`;
+      }
     }
     const chip = $("gw-modal-verify-chip");
     if (chip) chip.hidden = !winnerClaimed;
