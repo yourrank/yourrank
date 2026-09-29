@@ -987,6 +987,37 @@ describe("Giveaway draw flow", () => {
     for (const b of confirmButtons()) expect(b.disabled).toBe(true);
   });
 
+  it("shows a no-match state when the entrant search filters out every row", async () => {
+    await boot();
+    const search = $id("gw-search-entrants");
+    const noMatch = $id("gw-entrants-no-match");
+    const rows = () => [...$id("gw-entrants-list").querySelectorAll("tr")];
+    const visible = () => rows().filter((r) => !r.hidden);
+    expect(visible()).toHaveLength(3);
+    expect(noMatch.hidden).toBe(true);
+
+    // A term matching nothing hides all rows but shows the no-match state.
+    search.value = "zzz";
+    search.dispatchEvent(new window.Event("input", { bubbles: true }));
+    expect(visible()).toHaveLength(0);
+    expect(noMatch.hidden).toBe(false);
+    expect(noMatch.getAttribute("role")).toBe("status");
+    expect($id("gw-entrants-no-match-text").textContent).toBe('No entrants match "zzz"');
+    expect($id("gw-entrants-empty").hidden).toBe(true);
+
+    // Clear search restores every row and hides the notice.
+    $id("gw-btn-clear-search").click();
+    expect(search.value).toBe("");
+    expect(visible()).toHaveLength(3);
+    expect(noMatch.hidden).toBe(true);
+
+    // A partial match shows only the matching row and no notice.
+    search.value = "alp";
+    search.dispatchEvent(new window.Event("input", { bubbles: true }));
+    expect(visible().map((r) => r.dataset.username)).toEqual(["alpha"]);
+    expect(noMatch.hidden).toBe(true);
+  });
+
   it("a manually-added winner shows the no-response hint instead of the claim box", async () => {
     server.session.status = "active";
     server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };

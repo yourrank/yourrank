@@ -478,6 +478,11 @@ ${giveawaysSubnavHtml(active)}`}
         <div class="v3-state-inline" id="gw-entrants-empty" role="status">
           <span class="v3-state-inline-copy"><b>No entrants yet</b><span>Start a giveaway, then add viewer names or collect entries from Kick chat.</span></span>
         </div>
+
+        <div class="v3-state-inline" id="gw-entrants-no-match" role="status" hidden>
+          <span class="v3-state-inline-copy"><b id="gw-entrants-no-match-text">No entrants match your search</b><span>Clear the search to see all entrants.</span></span>
+          <button class="btn btn--sm btn--ghost" id="gw-btn-clear-search" type="button">Clear search</button>
+        </div>
       </section>
     </div>
   </div>
