@@ -43,7 +43,7 @@ describe("demo credibility invariants", () => {
     // One row per player: no podium copy of the top three to filter, announce
     // or keep in sync with the standings below it.
     expect(markerCount).toBe(data.players.length);
-    expect(html).toContain("<div data-player-board>");
+    expect(html).toContain('<div id="standings" data-player-board');
     expect(html).not.toContain('data-name="');
     expect(html).not.toContain("yr-card-name");
     expect(shell).toContain('playerBoard.querySelectorAll("[data-player-name]")');
@@ -51,7 +51,9 @@ describe("demo credibility invariants", () => {
     expect(shell).toContain("representation.dataset.playerName");
     expect(shell).toContain("representation.hidden = representation.dataset.playerName.indexOf(q) === -1");
     expect(shell).toContain("representations().forEach(function (representation) { representation.hidden = false; });");
-    expect(shell).toContain("updatePlayerCount(totalCount)");
+    expect(shell).toContain('playerBoard.querySelector(".yr-pager")');
+    expect(shell).toContain("rowsRoot.innerHTML = savedRowsHtml;");
+    expect(shell).not.toContain("data-load-more");
   });
 
   it("keeps section identity, Rewards naming, and the shop route compatible", async () => {

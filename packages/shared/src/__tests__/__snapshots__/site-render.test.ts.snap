@@ -50,7 +50,7 @@ FORM: DESIGN.md owns the composition. Production routes and scoped records suppl
 </div>
 <div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/></svg></span></div>
 </section>
-<div data-player-board>
+<div id="standings" data-player-board>
 <div class="yr-panel yr-lb">
 <div class="yr-panel-head yr-panel-head--quiet"><h2 class="yr-sr">Standings</h2><span class="yr-panel-meta"><span data-player-count-badge>2 players</span></span></div>
 <div class="yr-search-row"><label class="yr-sr" for="yr-search">Search players</label><input class="yr-search" id="yr-search" type="search" placeholder="Search players by name" autocomplete="off" enterkeyhint="search" /></div><div class="yr-stand-head" aria-hidden="true" data-hide-prizes="false"><span>#</span><span>Player</span><span class="yr-r">Wagered</span><span class="yr-r">Prize</span></div>

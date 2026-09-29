@@ -36,6 +36,7 @@ const PUBLIC_ACCENT_DEFAULT = {
 };
 const CREDITS_DISCLAIMER = "Credits are community reward points earned through participation. They stay within each community and can be used to claim available rewards.";
 const REWARD_CLAIM_FINE = "Credits cannot be bought, transferred between communities, or cashed out. The creator fulfills each reward.";
+export const PUBLIC_BOARD_PAGE_SIZE = 25;
 
 // B-01: Build font URL dynamically from the board's active font choice so that
 // boards using Oswald, Playfair Display, Rajdhani or Bebas Neue actually load.
@@ -116,6 +117,44 @@ export function siteSectionHref(section, slug, isCustomDomain) {
 
 function globalViewerAccountHref(isCustomDomain, slug) {
   return viewerAccountHref(slug, isCustomDomain ? "https://yourrank.site" : "");
+}
+
+function publicBoardPageNumbers(page, totalPages) {
+  const pages = new Set([1, totalPages]);
+  for (let value = Math.max(1, page - 1); value <= Math.min(totalPages, page + 1); value++) pages.add(value);
+  const ordered = [...pages].sort((a, b) => a - b);
+  const items = [];
+  let previous = 0;
+  for (const value of ordered) {
+    if (previous && value - previous > 1) items.push({ gap: true });
+    items.push({ page: value });
+    previous = value;
+  }
+  return items;
+}
+
+function publicBoardPageHref(ctx, page) {
+  const params = new URLSearchParams();
+  const board = ctx.boardParam || (ctx.board !== "main" ? ctx.board : "");
+  const event = ctx.eventParam || ctx.data.eventId || "";
+  if (board) params.set("board", String(board));
+  if (event) params.set("event", String(event));
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return `${siteSectionHref("leaderboard", ctx.slug, ctx.isCustomDomain)}${query ? `?${query}` : ""}#standings`;
+}
+
+function publicBoardPagination(ctx, page, totalPages) {
+  const link = (target, label, className = "", ariaLabel = "") => {
+    const current = target === page && className === "yr-pager-number";
+    return `<a class="yr-btn yr-btn--ghost yr-btn--sm yr-pager-link${className ? ` ${className}` : ""}${current ? " is-current" : ""}" href="${esc(publicBoardPageHref(ctx, target))}"${ariaLabel ? ` aria-label="${esc(ariaLabel)}"` : ""}${current ? ' aria-current="page"' : ""}>${label}</a>`;
+  };
+  const pages = publicBoardPageNumbers(page, totalPages).map((item) => item.gap
+    ? '<span class="yr-pager-gap" aria-hidden="true">…</span>'
+    : link(item.page, String(item.page), "yr-pager-number", `Page ${item.page}`)).join("");
+  const previous = page > 1 ? link(page - 1, "Previous", "yr-pager-direction", "Previous page") : "";
+  const next = page < totalPages ? link(page + 1, "Next", "yr-pager-direction", "Next page") : "";
+  return `<nav class="yr-pagination yr-pager" aria-label="Leaderboard pages">${previous}<div class="yr-pager-pages">${pages}</div>${next}<span class="yr-pager-summary">Page ${formatNumber(page)} of ${formatNumber(totalPages)}</span></nav>`;
 }
 
 function formatNumber(n) {
@@ -656,6 +695,10 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
     rewardId: typeof opts.rewardId === "string" ? opts.rewardId : "",
     reward: opts.reward && typeof opts.reward === "object" ? opts.reward : null,
     board: parsePublicBoard(opts.board),
+    boardParam: typeof opts.boardParam === "string" ? opts.boardParam : "",
+    eventParam: typeof opts.eventParam === "string" ? opts.eventParam : "",
+    page: Number.isInteger(opts.page) && opts.page > 0 ? opts.page : 1,
+    pageSize: Number.isInteger(opts.pageSize) && opts.pageSize > 0 ? opts.pageSize : PUBLIC_BOARD_PAGE_SIZE,
     publicBoards: publicLeaderboardBoards(data),
     loyalty: Array.isArray(opts.loyalty) ? opts.loyalty : [],
   };
@@ -981,6 +1024,9 @@ function boardMain(ctx) {
   const ended = !!data.ended || (!data.scheduled && cd.kind === "expired");
   const players = (Array.isArray(data.players) ? data.players : []).slice().sort((x, z) => (x.rank || 0) - (z.rank || 0) || String(x.name || "").localeCompare(String(z.name || "")));
   const playerCount = Number(data.playerCount) || players.length;
+  const pageSize = Number.isInteger(ctx.pageSize) && ctx.pageSize > 0 ? ctx.pageSize : PUBLIC_BOARD_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(playerCount / pageSize));
+  const page = Number.isInteger(ctx.page) && ctx.page > 0 ? Math.min(ctx.page, totalPages) : 1;
   const rankBy = data.rankBy === "wagered" ? "wagered" : "score";
   const wagerLabel = esc(rankBy === "score" ? "Points" : (data.prizes?.wagerLabel || "Amount"));
   const rankValue = (player) => rankBy === "score" ? `${formatNumber(player.score || 0)} pts` : formatMoney(currency, player.wagered);
@@ -1017,14 +1063,11 @@ ${ctx.bannerUrl
     : `<div class="viewer-board-hero-scene" aria-hidden="true"><span class="viewer-board-orb viewer-board-orb--a"></span><span class="viewer-board-orb viewer-board-orb--b"></span><span class="viewer-board-hero-trophy">${ICONS.trophy}</span></div>`}
 </section>`;
 
-  // A podium is a presentation of the original rows, never a second player
-  // list. Tied top ranks keep equal rows rather than arbitrarily choosing a winner.
-  const podium = players.length >= 3 && players.every((p, i) =>
-    i < 3 ? Number(p.rank) === i + 1 : Number(p.rank) > 3);
+  const podium = page === 1 && players.length >= 3;
   const rows = players.map((p, i) => {
     const rank = Number(p.rank) || i + 1;
     const prize = showPrizes && p.prize ? esc(formatMoney(currency, p.prize)) : "";
-    const podiumSlot = podium && i < 3 ? ` data-podium-slot="${rank}"` : "";
+    const podiumSlot = podium && i < 3 ? ` data-podium-slot="${i + 1}"` : "";
     const mark = `<span class="yr-player-mark" aria-hidden="true">${esc(Array.from(String(p.name || "?")).slice(0, 2).join("").toUpperCase())}</span>`;
     const nameTag = data.eventId ? 'span' : 'a';
     return `<li class="yr-srow${rank === 1 ? " yr-srow--first" : rank <= 3 ? " yr-srow--top" : ""}" data-player-name="${esc(String(p.name || "").toLowerCase())}" data-position="${rank}"${podiumSlot}>
@@ -1039,12 +1082,13 @@ ${prize ? `<span class="yr-srow-prize"><span class="yr-sr">${prizeLabel}: </span
   // carries its own screen-reader label, so announcing them twice is noise.
   const columns = `<div class="yr-stand-head" aria-hidden="true" data-hide-prizes="${showPrizes ? "false" : "true"}"><span>#</span><span>Player</span><span class="yr-r">${wagerLabel}</span>${showPrizes ? `<span class="yr-r">${prizeLabel}</span>` : ""}</div>`;
 
+  const pagination = playerCount > pageSize ? publicBoardPagination(ctx, page, totalPages) : "";
   const standings = players.length
     ? `${columns}
 <ol class="yr-stand" data-rows aria-label="Standings for ${esc(b.name || slug)}" data-value-label="${wagerLabel}" data-prize-label="${prizeLabel}" data-hide-prizes="${showPrizes ? "false" : "true"}">${rows}</ol>
 <p class="yr-nomatch" id="yr-no-match" hidden>No players match that search.</p>
 <p class="yr-search-status" id="yr-search-status" role="status" aria-live="polite"></p>
-${playerCount > players.length ? `<div class="yr-pagination"><button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button><p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1"></p></div>` : ""}`
+${pagination}`
     : emptyState(ICONS.trophy, "No leaderboard entries yet.", scheduled ? "Standings fill in once the round starts. Ask the creator how to participate." : `Ask ${esc(b.name || slug)} how ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} counted on this leaderboard. Your first published ${rankBy === "score" ? "score" : "entry"} puts you on the board. Leaderboard ${wagerLabel.toLowerCase()} ${rankBy === "score" ? "are" : "is"} separate from Credits.`);
 
   const customPayoutNote = String(data.prizes?.payoutNote || "").trim();
@@ -1065,7 +1109,7 @@ ${rulesHtml}`;
   }
 
   return `${introHtml}${data.eventUnavailable ? '<p role="status">This event is no longer available. Showing the main leaderboard.</p>' : ''}${switcher}
-<div data-player-board${podium ? ` data-podium="${Math.min(players.length, 3)}"` : ""}>
+<div id="standings" data-player-board${podium ? ` data-podium="3"` : ""}>
 ${panel({
     title: "Standings",
     titleHidden: true,

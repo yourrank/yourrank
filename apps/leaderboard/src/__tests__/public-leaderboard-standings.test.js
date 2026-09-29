@@ -22,14 +22,14 @@ const baseData = {
 
 const seq = (count) => Array.from({ length: count }, (_, i) => player(`Player${i + 1}`, i + 1, 1000 - i, 0));
 
-function render(section = "leaderboard", { data = baseData, viewer = null, viewerData = null, custom = false, playerCount } = {}) {
+function render(section = "leaderboard", { data = baseData, viewer = null, viewerData = null, custom = false, playerCount, page = 1, pageSize, boardParam = "", eventParam = "" } = {}) {
   const board = playerCount === undefined ? data : { ...data, playerCount };
   return renderSite({
     r: { slug: "creator", plan: "pro", data: board },
     section,
     viewer,
     viewerData,
-    opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n", isCustomDomain: custom },
+    opts: { slug: "creator", homeUrl: "https://example.test", nonce: "n", isCustomDomain: custom, page, pageSize, boardParam, eventParam },
   });
 }
 
@@ -177,7 +177,7 @@ describe("public leaderboard standings", () => {
     expect(points).toContain("how points are counted on this leaderboard. Your first published score puts you on the board. Leaderboard points are separate from Credits.");
     expect(rowsOf(html).length).toBe(0);
     expect(html).not.toContain('id="yr-search"');
-    expect(html).not.toContain("data-load-more");
+    expect(html).not.toContain("yr-pager");
     expect(html).not.toContain("No players match that search.");
 
     const soon = await render("leaderboard", { data: { ...baseData, players: [], scheduled: true } });
@@ -305,40 +305,62 @@ describe("public leaderboard standings", () => {
     expect(shell).toContain('setSearchStatus("Couldn’t search players.", true)');
     expect(shell).toContain("addRetry(searchStatus, function () { search.dispatchEvent(new Event(\"input\", { bubbles: true })); })");
     expect(shell).toContain("rowsRoot.innerHTML = savedRowsHtml;");
-    expect(shell).toContain("if (!activeSearch) savedRowsHtml = rowsRoot.innerHTML;");
-    expect(shell).toContain("updatePlayerCount(totalCount)");
+    expect(shell).toContain("if (pager) pager.hidden = !!q;");
+    expect(shell).toContain('var params = new URLSearchParams({ limit: "100", offset: String(offset) });');
+    expect(shell).not.toContain("appendPage");
+    expect(shell).not.toContain("data-load-more");
     // A late response for an abandoned query can never repaint the list.
     expect(shell).toContain("if (searchController) searchController.abort();");
     expect(shell).toContain("if (requestId !== searchRequest || activeSearch !== q) return;");
   });
 
-  it("pages with an explicit button that cannot duplicate or lose rows", async () => {
-    const html = await render("leaderboard", { data: { ...baseData, players: seq(20) }, playerCount: 140 });
-    expect(html).toContain("<span data-player-count-badge>140 players</span>");
-    expect(html).toContain('<button class="yr-btn yr-btn--sm" type="button" data-load-more>Load more players</button>');
-    expect(html).toContain('<p class="yr-page-status" data-load-more-status role="status" aria-live="polite" tabindex="-1">');
+  it("renders a numbered pager window with a standings anchor", async () => {
+    const html = await render("leaderboard", { data: { ...baseData, players: seq(25) }, playerCount: 230, page: 5 });
+    expect(html).toContain("<span data-player-count-badge>230 players</span>");
+    expect(html).toContain('<nav class="yr-pagination yr-pager" aria-label="Leaderboard pages">');
+    expect(html).toContain('<div id="standings" data-player-board>');
+    expect(html).toContain('href="/creator/leaderboard#standings" aria-label="Page 1">1</a>');
+    expect(html).toContain('href="/creator/leaderboard?page=4#standings" aria-label="Page 4">4</a>');
+    expect(html).toContain('href="/creator/leaderboard?page=5#standings" aria-label="Page 5" aria-current="page">5</a>');
+    expect(html).toContain('href="/creator/leaderboard?page=6#standings" aria-label="Page 6">6</a>');
+    expect(html).toContain('href="/creator/leaderboard?page=10#standings" aria-label="Page 10">10</a>');
+    expect((html.match(/class="yr-pager-gap"/g) || []).length).toBe(2);
+    expect(html).toContain("Page 5 of 10");
+    expect(html).toContain(">Previous</a>");
+    expect(html).toContain(">Next</a>");
+    expect(html).not.toContain("data-load-more");
+    expect(css).toContain(".yr-pager-link { min-width: 44px; text-decoration: none; }");
+    expect(css).toContain(".yr-pagination[hidden] { display: none; }");
     expect(css).toMatch(/\.yr-btn--sm \{[^}]*min-height: 44px/);
 
-    const complete = await render("leaderboard", { data: { ...baseData, players: seq(20) }, playerCount: 20 });
-    expect(complete).not.toContain("data-load-more");
+    const first = await render("leaderboard", { data: { ...baseData, players: seq(25) }, playerCount: 30 });
+    const firstNavStart = first.indexOf('<nav class="yr-pagination');
+    const firstNav = first.slice(firstNavStart, first.indexOf("</nav>", firstNavStart) + 6);
+    expect(firstNav).not.toContain(">Previous</a>");
+    expect(firstNav).toContain(">Next</a>");
+    expect(firstNav).toContain('href="/creator/leaderboard#standings"');
+    expect(firstNav).not.toContain("?page=1");
 
-    expect(shell).toContain("if (known[key]) return;");
-    expect(shell).toContain('setPageStatus("Loading more players…")');
-    expect(shell).toContain("loadMore.disabled = true;");
-    expect(shell).toContain('setPageStatus("Couldn’t load more players.", true)');
-    expect(shell).toContain("addRetry(loadMoreStatus, loadNextPage)");
-    // Focus follows the vanished button for continuity, but the viewport stays
-    // where the reader was: never a scroll jump, never a drop to the document.
-    expect(shell).toContain("focusWithoutScroll(loadMoreStatus)");
-    expect(shell).toContain("el.focus({ preventScroll: true });");
-    expect(shell).toContain("if (window.scrollX !== restoreX || window.scrollY !== restoreY) window.scrollTo(restoreX, restoreY);");
-    expect(shell).not.toMatch(/loadMoreStatus\.focus\(\)/);
-    expect(shell).not.toContain("scrollIntoView");
-    expect(shell).toContain("loadMore.hidden && loadMoreStatus");
-    expect(html).toContain('data-load-more-status role="status" aria-live="polite" tabindex="-1"');
-    // Search paging and board paging are separate offsets.
-    expect(shell).toContain("fetchPage(query ? searchOffset : loadedCount, query)");
-    expect(shell).not.toContain("IntersectionObserver");
+    const last = await render("leaderboard", { data: { ...baseData, players: seq(5) }, playerCount: 30, page: 2 });
+    const lastNavStart = last.indexOf('<nav class="yr-pagination');
+    const lastNav = last.slice(lastNavStart, last.indexOf("</nav>", lastNavStart) + 6);
+    expect(lastNav).toContain(">Previous</a>");
+    expect(lastNav).not.toContain(">Next</a>");
+    expect(lastNav).toContain("Page 2 of 2");
+
+    const event = await render("leaderboard", {
+      data: { ...baseData, players: seq(5), playerCount: 30 },
+      playerCount: 30,
+      page: 2,
+      custom: true,
+      boardParam: "main",
+      eventParam: "season-1",
+    });
+    expect(event).toContain('href="/leaderboard?board=main&amp;event=season-1#standings"');
+    expect(event).toContain('href="/leaderboard?board=main&amp;event=season-1&amp;page=2#standings"');
+
+    const complete = await render("leaderboard", { data: { ...baseData, players: seq(20) }, playerCount: 20 });
+    expect(complete).not.toContain("yr-pager");
   });
 
   it("hides prize values and the prize column when the creator hides amounts", async () => {
@@ -369,7 +391,9 @@ describe("public leaderboard standings", () => {
       expect(names).not.toContain(forbidden);
     }
     expect(shell).toContain('document.getElementById("yr-search")');
-    expect(shell).toContain('document.querySelector("[data-load-more]")');
+    expect(shell).toContain('playerBoard.querySelector(".yr-pager")');
+    expect(shell).not.toContain("data-load-more");
+    expect(shell).not.toContain("loadNextPage");
   });
 
   it("keeps creator fonts on brand and display roles while utility copy stays sans", () => {

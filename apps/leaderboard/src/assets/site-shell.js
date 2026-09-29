@@ -67,7 +67,6 @@
     if (searchController) searchController.abort();
     clearInterval(countdownTimer);
     searchRequest++;
-    pageRequest++;
     closeSide();
   }, { once: true });
 
@@ -253,23 +252,17 @@
   // ── Standings: local filter with server fallback and real pagination ──
   var search = document.getElementById("yr-search");
   var playerBoard = document.querySelector("[data-player-board]");
-  var countBadge = playerBoard && playerBoard.querySelector("[data-player-count-badge]");
   var rowsRoot = playerBoard && playerBoard.querySelector("[data-rows]");
-  var loadMore = document.querySelector("[data-load-more]");
-  var loadMoreStatus = document.querySelector("[data-load-more-status]");
+  var pager = playerBoard && playerBoard.querySelector(".yr-pager");
   var slug = document.body.dataset.slug || "";
   var isCustomDomain = document.body.dataset.customDomain === "true";
-  var loadedCount = rowsRoot ? rowsRoot.querySelectorAll("[data-player-name]").length : 0;
-  var totalCount = Number((countBadge || {}).textContent?.replace(/[^\d]/g, "")) || loadedCount;
   var activeSearch = "";
-  var searchOffset = 0;
   var savedRowsHtml = rowsRoot ? rowsRoot.innerHTML : "";
   var searchStatus = document.getElementById("yr-search-status");
   var empty = document.getElementById("yr-no-match");
   var searchTimer = null;
   var searchRequest = 0;
   var searchController = null;
-  var pageRequest = 0;
   var currency = document.body.dataset.currency || "$";
   var rankBy = document.body.dataset.rankBy === "wagered" ? "wagered" : "score";
   var valueLabel = (rowsRoot && rowsRoot.dataset.valueLabel) || "Amount";
@@ -291,11 +284,6 @@
   };
   var plural = function (count) {
     return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (count === 1 ? " player" : " players");
-  };
-  // The badge always states the size of the board. Match counts belong to the
-  // search status, so a filtered view never rewrites the board's own total.
-  var updatePlayerCount = function (count) {
-    if (countBadge) countBadge.textContent = plural(count);
   };
   var rowHtml = function (p, rank) {
     var name = esc(String(p.name || "").toLowerCase());
@@ -335,49 +323,18 @@
     retry.addEventListener("click", run);
     host.appendChild(retry);
   };
-  // One row per player: a name already on the board is never appended twice,
-  // however often the button is pressed or a page is replayed.
-  var appendPage = function (page, replace) {
-    if (!rowsRoot) return 0;
-    if (replace) rowsRoot.innerHTML = "";
-    var known = {};
-    rowsRoot.querySelectorAll("[data-player-name]").forEach(function (row) { known[row.dataset.playerName] = true; });
-    var html = "";
-    var added = 0;
-    (page.players || []).forEach(function (p, i) {
-      var key = String(p.name || "").toLowerCase();
-      if (known[key]) return;
-      known[key] = true;
-      added += 1;
-      html += rowHtml(p, Number(p.rank) || i + 1);
-    });
-    if (html) rowsRoot.insertAdjacentHTML("beforeend", html);
-    loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
-    if (!activeSearch && Number(page.total)) totalCount = Number(page.total);
-    if (!activeSearch) savedRowsHtml = rowsRoot.innerHTML;
-    if (loadMore) loadMore.hidden = !page.hasMore;
-    return added;
-  };
   if (search && rowsRoot && playerBoard) {
     search.addEventListener("input", function () {
       var q = search.value.trim().toLowerCase();
+      if (pager) pager.hidden = !!q;
       if (playerBoard.hasAttribute("data-podium")) playerBoard.classList.toggle("is-searching", !!q);
       activeSearch = q;
-      searchOffset = 0;
       searchRequest += 1;
-      pageRequest += 1;
       var requestId = searchRequest;
       if (searchController) searchController.abort();
       searchController = null;
       clearTimeout(searchTimer);
-      if (loadMore) {
-        loadMore.disabled = false;
-        loadMore.textContent = loadMoreLabel;
-      }
-      if (loadMoreStatus) loadMoreStatus.textContent = "";
       rowsRoot.innerHTML = savedRowsHtml;
-      loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
-      if (loadMore) loadMore.hidden = loadedCount >= totalCount;
       var shown = 0;
       representations().forEach(function (representation) {
         var hit = !q || representation.dataset.playerName.indexOf(q) !== -1;
@@ -385,12 +342,8 @@
         if (hit) shown += 1;
       });
       if (!q) {
-        // Restore all unfiltered pages already loaded, including podium slots.
         rowsRoot.innerHTML = savedRowsHtml;
         representations().forEach(function (representation) { representation.hidden = false; });
-        loadedCount = rowsRoot.querySelectorAll("[data-player-name]").length;
-        updatePlayerCount(totalCount);
-        if (loadMore) loadMore.hidden = loadedCount >= totalCount;
         if (empty) empty.hidden = true;
         setSearchStatus("");
         return;
@@ -400,15 +353,17 @@
         setSearchStatus(plural(visiblePlayerCount()) + " match “" + q + "”.");
         return;
       }
-      if (loadMore) loadMore.hidden = true;
+      if (empty) empty.hidden = true;
       searchTimer = window.setTimeout(function () {
         setSearchStatus("Searching…");
         searchController = typeof AbortController === "function" ? new AbortController() : null;
         fetchPage(0, q, searchController && searchController.signal).then(function (page) {
           if (requestId !== searchRequest || activeSearch !== q) return;
-          appendPage(page, true);
-          searchOffset = (page.players || []).length;
-          var found = (page.players || []).length !== 0;
+          var players = Array.isArray(page.players) ? page.players : [];
+          rowsRoot.innerHTML = players.map(function (player, index) {
+            return rowHtml(player, Number(player.rank) || index + 1);
+          }).join("");
+          var found = players.length !== 0;
           representations().forEach(function (representation) {
             representation.hidden = representation.dataset.playerName.indexOf(q) === -1;
           });
@@ -424,49 +379,6 @@
     });
   }
 
-  if (loadMore) {
-    var loadMoreLabel = loadMore.textContent;
-    var setPageStatus = function (message, isError) {
-      if (!loadMoreStatus) return;
-      loadMoreStatus.textContent = message || "";
-      loadMoreStatus.classList.toggle("is-error", !!isError);
-    };
-    var loadNextPage = function () {
-      pageRequest += 1;
-      var requestId = pageRequest;
-      var query = activeSearch;
-      loadMore.disabled = true;
-      loadMore.textContent = "Loading…";
-      setPageStatus("Loading more players…");
-      fetchPage(query ? searchOffset : loadedCount, query).then(function (page) {
-        if (requestId !== pageRequest || query !== activeSearch) return;
-        var added = appendPage(page, false);
-        if (query) {
-          searchOffset += (page.players || []).length;
-          representations().forEach(function (representation) {
-            representation.hidden = representation.dataset.playerName.indexOf(query) === -1;
-          });
-        }
-        loadMore.disabled = false;
-        loadMore.textContent = loadMoreLabel;
-        setPageStatus(added ? plural(query ? visiblePlayerCount() : loadedCount) + " shown." : "No more players to load.");
-        // The button disappears with the last page, so the status it leaves
-        // behind takes the focus instead of dropping it back to the document —
-        // without scrolling the viewer away from the rows they just loaded.
-        if (loadMore.hidden && loadMoreStatus) focusWithoutScroll(loadMoreStatus);
-      }).catch(function () {
-        if (requestId !== pageRequest || query !== activeSearch) return;
-        loadMore.disabled = false;
-        loadMore.textContent = loadMoreLabel;
-        setPageStatus("Couldn’t load more players.", true);
-        addRetry(loadMoreStatus, loadNextPage);
-      });
-    };
-    loadMore.addEventListener("click", loadNextPage);
-  }
-
-  // Focus continuity without a viewport jump: the replacement element takes
-  // focus, and browsers that ignore preventScroll get the viewport put back.
   function focusWithoutScroll(el) {
     if (!el || typeof el.focus !== "function") return;
     var restoreX = window.scrollX;
