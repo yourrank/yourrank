@@ -99,7 +99,7 @@ describe("giveaway draw and timeout", () => {
       return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id }] : [];
     };
     expect(await drawGiveaway(run, { ...session, rules: { winnerRepeat: "again" } })).toMatchObject({ winnerId: "e1" });
-    expect(writes[0].sql).toContain("chat_giveaway_draws");
+    expect(writes[1].sql).toContain("chat_giveaway_draws");
   });
   it("records history and deadline for eligible draws", async () => {
     const writes = [];
@@ -109,9 +109,10 @@ describe("giveaway draw and timeout", () => {
       return sql.includes("UPDATE chat_giveaway_sessions") ? [{ id }] : [];
     };
     expect(await drawGiveaway(run, { ...session, rules: { winnerMustRespond: true, responseTimeout: 30 } })).toMatchObject({ winnerId: "e1" });
-    expect(writes[0].sql).toContain("chat_giveaway_draws");
-    expect(writes[1].sql).toContain("WITH stamp AS");
-    expect(writes[1].params).toEqual([id, "e1", "site", true, 30]);
+    // The history row lands only after the CAS update commits the draw.
+    expect(writes[0].sql).toContain("WITH stamp AS");
+    expect(writes[0].params).toEqual([id, "e1", "site", true, 30]);
+    expect(writes[1].sql).toContain("chat_giveaway_draws");
   });
   it("does not automatically reroll early, confirmed, disabled, or stale draws", async () => {
     for (const overrides of [{ winner_response_deadline: new Date(Date.now()+60000).toISOString() }, { winner_confirmed_at: new Date().toISOString() }, { rules: {} }]) {

@@ -92,19 +92,21 @@ const ENTRANTS = [
   { id: "e3", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u3", username: "charlie", avatar_url: null, message: "!win", badges: [], entered_at: "2026-09-28T00:00:02Z", eligibility_status: "eligible" },
 ];
 
-const server = { session: null, entries: [], draws: [], requests: [], predictions: null, predictionCreateResponse: null, connection };
+const server = { session: null, entries: [], draws: [], drawRows: [], requests: [], predictions: null, predictionCreateResponse: null, responseRulesResponse: null, connection };
 function resetServer({ session, entries } = {}) {
   server.connection = connection;
   server.session = session || { id: "gs-1", site_id: "site-1", provider: "kick", keyword: "!win", status: "stopped", rules: {}, winner_entry_id: null, drawn_at: null, winner_confirmed_at: null, winner_confirmation_message: null, winner_finalized_at: null, winner_finalized_by: null, winner_response_required: null, winner_response_timeout_seconds: null, winner_response_deadline: null, created_at: "2026-09-28T00:00:00Z" };
   server.entries = (entries || ENTRANTS).map((e) => ({ ...e }));
   server.draws.length = 0;
+  server.drawRows.length = 0;
   server.requests.length = 0;
   server.predictions = { ok: true, predictions: [], entitlement: { enabled: true } };
   server.predictionCreateResponse = null;
+  server.responseRulesResponse = null;
 }
 const winnerEntry = () => server.entries.find((e) => e.id === server.session?.winner_entry_id) || null;
 function statePayload() {
-  return { ok: true, connection: server.connection, session: server.session, entries: server.entries, winner: winnerEntry() };
+  return { ok: true, connection: server.connection, session: server.session, entries: server.entries, winner: winnerEntry(), draws: server.drawRows };
 }
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -170,8 +172,19 @@ globalThis.fetch = async (input, init = {}) => {
     if (!winner) return json({ ok: false, error: eligible.length ? "No other eligible entrants remain." : "No eligible entrants to draw from." }, 409);
     server.draws.push(winner.id);
     const rules = server.session.rules || {};
-    const required = rules.winnerMustRespond === true;
+    // A manually-added winner has no chat identity to respond with.
+    const required = rules.winnerMustRespond === true && winner.provider !== "manual";
     const timeout = required ? (rules.responseTimeout || 60) : null;
+    const replacedId = server.session.winner_entry_id;
+    server.drawRows.push({
+      id: `draw-${server.drawRows.length + 1}`,
+      entry_id: winner.id,
+      reason: body?.automatic === true ? "auto_reroll" : expectedId !== null ? "reroll" : "draw",
+      drawn_at: new Date(now).toISOString(),
+      replaced_entry_id: replacedId,
+      username: winner.username,
+      replaced_username: server.entries.find((e) => e.id === replacedId)?.username || null,
+    });
     Object.assign(server.session, {
       winner_entry_id: winner.id, drawn_at: new Date(now).toISOString(), status: "completed",
       winner_confirmed_at: null, winner_confirmation_message: null,
@@ -180,7 +193,19 @@ globalThis.fetch = async (input, init = {}) => {
       winner_response_timeout_seconds: timeout,
       winner_response_deadline: required ? new Date(now + timeout * 1000).toISOString() : null,
     });
-    return json({ ok: true, session: server.session, entries: server.entries, winner });
+    return json({ ok: true, session: server.session, entries: server.entries, winner, draws: server.drawRows });
+  }
+  if (path === "/api/giveaways/chat/response-rules") {
+    if (server.responseRulesResponse) return json(server.responseRulesResponse.body, server.responseRulesResponse.status);
+    if (!body?.sessionId) return json({ ok: false, error: "Missing sessionId" }, 400);
+    const s = server.session;
+    if (!s || s.id !== body.sessionId) return json({ ok: false, error: "Giveaway not found" }, 404);
+    if (s.provider !== "kick" || s.status === "cancelled" || s.winner_finalized_at) {
+      return json({ ok: false, error: "Winner verification can't change after the winner is confirmed or the giveaway ends." }, 409);
+    }
+    if (body.autoReroll && !body.winnerMustRespond) return json({ ok: false, error: "Auto re-roll requires winner response verification." }, 400);
+    s.rules = { ...(s.rules || {}), winnerMustRespond: !!body.winnerMustRespond, responseTimeout: body.responseTimeout || 60, autoReroll: !!body.autoReroll };
+    return json(statePayload());
   }
   if (path === "/api/giveaways/chat/finalize") {
     if (!body?.sessionId) return json({ ok: false, error: "Missing sessionId" }, 400);
@@ -840,9 +865,11 @@ describe("Giveaway draw flow", () => {
     await boot();
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
     $id("gw-opt-claim-req").click();
+    await flushMicrotasks();
     expect($id("gw-claim-duration-wrap").hidden).toBe(false);
     expect($id("gw-opt-claim-duration").disabled).toBe(false);
     $id("gw-opt-claim-req").click();
+    await flushMicrotasks();
     expect($id("gw-claim-duration-wrap").hidden).toBe(true);
   });
 
@@ -859,10 +886,93 @@ describe("Giveaway draw flow", () => {
     await boot();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
     $id("gw-opt-claim-req").click();
+    await flushMicrotasks();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(false);
     expect($id("gw-opt-auto-reroll").disabled).toBe(false);
     $id("gw-opt-claim-req").click();
+    await flushMicrotasks();
     expect($id("gw-auto-reroll-wrap").hidden).toBe(true);
     expect($id("gw-opt-auto-reroll").checked).toBe(false);
+  });
+
+  it("keeps winner verification editable on a live Kick giveaway while entry rules stay locked", async () => {
+    server.session.status = "active";
+    server.session.rules = { winnerMustRespond: true, responseTimeout: 60, autoReroll: false };
+    await boot();
+
+    expect($id("gw-settings").disabled).toBe(true);
+    expect($id("gw-advanced-settings").disabled).toBe(true);
+    expect($id("gw-response-settings").disabled).toBe(false);
+    expect(document.querySelector('input[name="gw-entry-mode"][value="chat"]').closest("fieldset").disabled).toBe(true);
+    expect($id("gw-opt-claim-req").disabled).toBe(false);
+    expect($id("gw-opt-claim-duration").disabled).toBe(false);
+    expect($id("gw-opt-auto-reroll").disabled).toBe(false);
+    expect($id("gw-response-live-note").hidden).toBe(false);
+    expect($id("gw-settings-note").textContent).toContain("Entry rules are locked");
+
+    $id("gw-opt-claim-duration").value = "30";
+    $id("gw-opt-claim-duration").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flushMicrotasks();
+    const req = requestsTo("/api/giveaways/chat/response-rules").at(-1);
+    expect(req.method).toBe("POST");
+    expect(req.body).toMatchObject({ sessionId: "gs-1", siteId: "site-1", winnerMustRespond: true, responseTimeout: 30, autoReroll: false });
+    expect(server.session.rules.responseTimeout).toBe(30);
+    expect($id("gw-opt-claim-duration").value).toBe("30");
+  });
+
+  it("restores the persisted response rules when the live save fails", async () => {
+    server.session.status = "active";
+    server.session.rules = { winnerMustRespond: true, responseTimeout: 60, autoReroll: false };
+    server.responseRulesResponse = { status: 409, body: { ok: false, error: "Winner verification can't change after the winner is confirmed or the giveaway ends." } };
+    await boot();
+
+    $id("gw-opt-claim-duration").value = "90";
+    $id("gw-opt-claim-duration").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flushMicrotasks();
+    expect(requestsTo("/api/giveaways/chat/response-rules")).toHaveLength(1);
+    expect($id("gw-page-alert").textContent).toContain("Winner verification can't change");
+    expect($id("gw-opt-claim-duration").value).toBe("60");
+    expect($id("gw-opt-claim-req").checked).toBe(true);
+    expect($id("gw-opt-claim-duration").disabled).toBe(false);
+  });
+
+  it("draw history logs the draw, the re-roll, and the auto re-roll reasons", async () => {
+    server.session.status = "active";
+    server.session.rules = { winnerMustRespond: true, responseTimeout: 30, autoReroll: true };
+    await boot();
+
+    await drawWinner(); // server picks e3 (charlie)
+    expect($id("gw-draw-history").hidden).toBe(false);
+    expect([...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent)).toEqual([
+      expect.stringContaining("Drew charlie"),
+    ]);
+
+    $id("gw-btn-reroll").click();
+    await tickUntilReveal();
+    const items = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toContain("Re-rolled to bravo (replaced charlie)");
+    expect(items[1]).toContain("Drew charlie");
+
+    // Let the response window lapse; the open page fires the automatic re-roll.
+    await clock.tick(31_000);
+    const auto = requestsTo("/api/giveaways/chat/draw").at(-1);
+    expect(auto.body.automatic).toBe(true);
+    const after = [...$id("gw-draw-history-list").querySelectorAll("li")].map((li) => li.textContent);
+    expect(after[0]).toContain("Auto re-roll to alpha — bravo didn't respond in time");
+  });
+
+  it("a manually-added winner shows the no-response hint instead of the claim box", async () => {
+    server.session.status = "active";
+    server.session.rules = { winnerMustRespond: true, responseTimeout: 30 };
+    server.entries = [{ id: "m1", giveaway_session_id: "gs-1", provider: "manual", provider_user_id: "manual:alice", username: "alice", avatar_url: null, message: "", badges: [], entered_at: "2026-09-28T00:00:00Z", eligibility_status: "eligible" }];
+    await boot();
+    await drawWinner();
+    expect(server.session.winner_response_required).toBe(false);
+    expect($id("gw-claim-box").hidden).toBe(true);
+    const hint = $id("gw-winner-manual-hint");
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toContain("no chat response needed");
+    for (const b of confirmButtons()) expect(b.disabled).toBe(false);
   });
 });

@@ -8,6 +8,7 @@ import {
   handleChatGiveawayState,
   handleChatGiveawayAddEntry,
   handleChatGiveawayStop,
+  handleChatGiveawayUpdateResponseRules,
 } from "../handlers/chat-giveaways.js";
 import { ROUTES as routes } from "../routes.js";
 
@@ -199,7 +200,7 @@ function deps(overrides = {}) {
 describe("Chat Giveaway API", () => {
   it("registers the server-backed routes alongside the legacy chatroom lookup", () => {
     const paths = routes.map((r) => `${r.method} ${r.path}`);
-    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/add", "POST /api/giveaways/chat/entries/remove"]) {
+    for (const p of ["GET /api/giveaways/chat", "POST /api/giveaways/chat/start", "POST /api/giveaways/chat/stop", "POST /api/giveaways/chat/draw", "POST /api/giveaways/chat/finalize", "POST /api/giveaways/chat/entries/add", "POST /api/giveaways/chat/entries/remove", "POST /api/giveaways/chat/response-rules"]) {
       expect(paths).toContain(p);
     }
   });
@@ -332,8 +333,37 @@ describe("Chat Giveaway API", () => {
       sessionId: "gs-kick", username: "Alice",
     }), {}, d);
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe("Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).");
+    expect((await res.json()).error).toBe("Manual entrants can't meet this giveaway's Kick entry rules (members, verified entry, subscriber/VIP only, one account per IP).");
     expect(inserts).toHaveLength(0);
+  });
+
+  it("adds a manual entrant to a Kick session that requires a winner response", async () => {
+    // Draw-phase rules (must respond / auto re-roll) are not entry gates: a
+    // typed-in viewer can still be added, they just can't respond in chat.
+    const { d, inserts } = addEntryDeps({
+      session: {
+        id: "gs-kick", site_id: siteA.id, provider: "kick", status: "active",
+        rules: { winnerMustRespond: true, responseTimeout: 30, autoReroll: true },
+      },
+    });
+    const res = await handleChatGiveawayAddEntry(apiRequest("/api/giveaways/chat/entries/add", {
+      sessionId: "gs-kick", username: "Alice",
+    }), {}, d);
+    expect(res.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].params[1]).toBe("manual:alice");
+  });
+
+  it("still rejects winner-response rules for manual-mode giveaways", async () => {
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", {
+      mode: "manual",
+      rules: { winnerMustRespond: true },
+    }), {}, deps({
+      loadChatGiveawayConnection: async () => { throw new Error("should not load Kick"); },
+      one: async () => null,
+    }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Manual giveaways can't use Kick-only rules (members, verified entry, subscriber/VIP only, winner chat response).");
   });
 
   it("rejects empty and overlong entrant names", async () => {
@@ -774,7 +804,7 @@ describe("Chat Giveaway API", () => {
   it("exposes connection + session + entries for the dashboard poll", async () => {
     const res = await handleChatGiveawayState(apiRequest("/api/giveaways/chat"), {}, deps({
       one: async () => ({ id: "gs-1", site_id: siteA.id, keyword: "!win", status: "active", winner_entry_id: null }),
-      query: async () => [{ id: "e1", username: "a", provider_user_id: "222" }],
+      query: async (text) => String(text).includes("chat_giveaway_draws") ? [] : [{ id: "e1", username: "a", provider_user_id: "222" }],
     }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
@@ -784,6 +814,7 @@ describe("Chat Giveaway API", () => {
       session: { id: "gs-1", site_id: siteA.id, keyword: "!win", status: "active", winner_entry_id: null },
       entries: [{ id: "e1", username: "a", provider_user_id: "222" }],
       winner: null,
+      draws: [],
     });
   });
 
@@ -792,5 +823,171 @@ describe("Chat Giveaway API", () => {
       requireSiteCapability: async () => ({ role: "moderator", res: new Response("forbidden", { status: 403 }) }),
     }));
     expect(res.status).toBe(403);
+  });
+});
+
+describe("Chat Giveaway response rules", () => {
+  const activeKick = (rules = {}) => ({
+    id: "gs-1", site_id: siteA.id, provider: "kick", status: "active",
+    rules, winner_entry_id: null, drawn_at: null, winner_finalized_at: null,
+  });
+  function responseRulesDeps({ session = activeKick(), updated = session, ownerPlan = "pro" } = {}) {
+    const calls = [];
+    const d = deps({
+      one: async (sql, params) => {
+        const text = String(sql);
+        calls.push({ text, params });
+        if (text.includes("FROM users")) return { plan: ownerPlan, plan_expires_at: null, status: "active" };
+        if (text.startsWith("UPDATE chat_giveaway_sessions")) return updated;
+        if (text.includes("FROM chat_giveaway_sessions")) return session;
+        return null;
+      },
+      query: async () => [],
+    });
+    return { d, calls };
+  }
+  const updateResponseRules = (body, d) =>
+    handleChatGiveawayUpdateResponseRules(apiRequest("/api/giveaways/chat/response-rules", body), {}, d);
+
+  it("updates only the three response rules on an active Kick session", async () => {
+    const { d, calls } = responseRulesDeps({ session: activeKick({ entryMode: "chat", winnerRepeat: "again" }) });
+    const res = await updateResponseRules({
+      sessionId: "gs-1", winnerMustRespond: true, responseTimeout: 30, autoReroll: true,
+      // Entry-side rules in the body are ignored: they merge from the session.
+      entryMode: "verified", subscriberOnly: true, winnerRepeat: "once",
+    }, d);
+    expect(res.status).toBe(200);
+    const update = calls.find((c) => c.text.startsWith("UPDATE chat_giveaway_sessions"));
+    expect(update.text).toContain("SET rules = $3::jsonb");
+    expect(update.text).toContain("provider = 'kick'");
+    expect(update.text).toContain("status <> 'cancelled'");
+    expect(update.text).toContain("winner_finalized_at IS NULL");
+    expect(update.params[0]).toBe("gs-1");
+    expect(update.params[1]).toBe(siteA.id);
+    expect(update.params[2]).toEqual(giveawayRules({
+      entryMode: "chat", winnerRepeat: "again",
+      winnerMustRespond: true, responseTimeout: 30, autoReroll: true,
+    }));
+    const data = await res.json();
+    expect(data.session.id).toBe("gs-1");
+    expect(data.connection.connected).toBe(true);
+  });
+
+  it("rejects auto re-roll without a required winner response", async () => {
+    const { d, calls } = responseRulesDeps();
+    const res = await updateResponseRules({ sessionId: "gs-1", winnerMustRespond: false, responseTimeout: 30, autoReroll: true }, d);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Auto re-roll requires winner response verification.");
+    expect(calls.some((c) => c.text.startsWith("UPDATE chat_giveaway_sessions"))).toBe(false);
+  });
+
+  it("requires a sessionId and a session owned by the site", async () => {
+    const res = await updateResponseRules({}, deps());
+    expect(res.status).toBe(400);
+    const missing = await updateResponseRules({ sessionId: "gs-nope" }, responseRulesDeps({ session: null }).d);
+    expect(missing.status).toBe(404);
+  });
+
+  it("returns 409 once the winner is confirmed, the giveaway is over, or it is a manual session", async () => {
+    for (const session of [
+      { ...activeKick(), winner_finalized_at: "2026-09-28T00:05:00Z" },
+      { ...activeKick(), status: "cancelled" },
+      { ...activeKick(), provider: "manual" },
+    ]) {
+      const { d, calls } = responseRulesDeps({ session, updated: null });
+      const res = await updateResponseRules({ sessionId: "gs-1", winnerMustRespond: true, responseTimeout: 60, autoReroll: false }, d);
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe("Winner verification can't change after the winner is confirmed or the giveaway ends.");
+      expect(calls.some((c) => c.text.startsWith("UPDATE chat_giveaway_sessions"))).toBe(true);
+    }
+  });
+
+  it("gates advanced response rules on the site owner's plan", async () => {
+    const { d, calls } = responseRulesDeps({ ownerPlan: "free" });
+    const res = await updateResponseRules({ sessionId: "gs-1", winnerMustRespond: false, responseTimeout: 30, autoReroll: false }, d);
+    expect(res.status).toBe(403);
+    expect(calls.some((c) => c.text.includes("FROM users"))).toBe(true);
+    expect(calls.some((c) => c.text.startsWith("UPDATE chat_giveaway_sessions"))).toBe(false);
+  });
+});
+
+describe("Chat Giveaway draw history", () => {
+  const kickEntries = [
+    { id: "e1", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u1", username: "a", avatar_url: null, message: "!win", badges: [], entered_at: "t1", eligibility_status: "eligible" },
+    { id: "e2", giveaway_session_id: "gs-1", provider: "kick", provider_user_id: "u2", username: "b", avatar_url: null, message: "!win", badges: [], entered_at: "t2", eligibility_status: "eligible" },
+  ];
+  function drawDeps({ session, entries = kickEntries, updatedRows = null }) {
+    const statements = [];
+    const d = deps({
+      one: async (text) => (String(text).startsWith("UPDATE") ? null : session),
+      query: async () => entries,
+      transaction: (fn) => fn(async (sql, params) => {
+        const text = String(sql);
+        statements.push({ text, params });
+        if (text.includes("FROM chat_giveaway_entries e")) return entries;
+        if (text.includes("UPDATE chat_giveaway_sessions")) {
+          return updatedRows ?? [{ ...session, status: "completed", winner_entry_id: params[1] }];
+        }
+        if (text.includes("FROM chat_giveaway_sessions")) return [session];
+        if (text.includes("FROM chat_giveaway_draws")) return [];
+        return [];
+      }),
+    });
+    return { d, statements };
+  }
+  const drawInsert = (statements) => statements.find((s) => s.text.startsWith("INSERT INTO chat_giveaway_draws"));
+
+  it("records a 'draw' reason for the first draw and 'reroll' with the replaced entrant", async () => {
+    const session = { id: "gs-1", site_id: siteA.id, status: "active", rules: {}, winner_entry_id: null, drawn_at: null };
+    const { d, statements } = drawDeps({ session });
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1" }), {}, d);
+    expect(res.status).toBe(200);
+    expect(drawInsert(statements).params.slice(3)).toEqual(["draw", null]);
+
+    const drawnAt = "2026-09-28T00:00:00.000Z";
+    const drawn = { ...session, status: "completed", winner_entry_id: "e1", drawn_at: drawnAt };
+    const { d: d2, statements: s2 } = drawDeps({ session: drawn });
+    const res2 = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", {
+      sessionId: "gs-1", expectedWinnerEntryId: "e1", expectedDrawnAt: drawnAt,
+    }), {}, d2);
+    expect(res2.status).toBe(200);
+    expect(drawInsert(s2).params.slice(3)).toEqual(["reroll", "e1"]);
+  });
+
+  it("records an 'auto_reroll' reason for the timed-out draw", async () => {
+    const session = {
+      id: "gs-1", site_id: siteA.id, status: "completed", rules: { winnerMustRespond: true, responseTimeout: 30, autoReroll: true },
+      winner_entry_id: "e1", drawn_at: "2026-09-28T00:00:00.000Z",
+      winner_confirmed_at: null, winner_finalized_at: null,
+      winner_response_deadline: "2000-01-01T00:00:00.000Z",
+    };
+    const { d, statements } = drawDeps({ session });
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1", automatic: true }), {}, d);
+    expect(res.status).toBe(200);
+    expect(drawInsert(statements).params.slice(3)).toEqual(["auto_reroll", "e1"]);
+  });
+
+  it("records no draw row when the compare-and-swap misses", async () => {
+    const session = {
+      id: "gs-1", site_id: siteA.id, status: "completed", rules: {},
+      winner_entry_id: "e1", drawn_at: "2026-09-28T00:00:00.000Z", winner_finalized_at: null,
+    };
+    const { d, statements } = drawDeps({ session, updatedRows: [] });
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", {
+      sessionId: "gs-1", expectedWinnerEntryId: "e1", expectedDrawnAt: "2026-09-28T00:00:00.000Z",
+    }), {}, d);
+    expect(res.status).toBe(409);
+    expect(drawInsert(statements)).toBeUndefined();
+  });
+
+  it("a manually-added winner never arms a response window", async () => {
+    const manual = [{ id: "m1", giveaway_session_id: "gs-1", provider: "manual", provider_user_id: "manual:alice", username: "alice", avatar_url: null, message: "", badges: [], entered_at: "t1", eligibility_status: "eligible" }];
+    const session = { id: "gs-1", site_id: siteA.id, status: "active", rules: { winnerMustRespond: true, responseTimeout: 30 }, winner_entry_id: null, drawn_at: null };
+    const { d, statements } = drawDeps({ session, entries: manual });
+    const res = await handleChatGiveawayDraw(apiRequest("/api/giveaways/chat/draw", { sessionId: "gs-1" }), {}, d);
+    expect(res.status).toBe(200);
+    const update = statements.find((s) => s.text.includes("UPDATE chat_giveaway_sessions"));
+    expect(update.params.slice(0, 5)).toEqual(["gs-1", "m1", siteA.id, false, null]);
+    expect(drawInsert(statements).params.slice(3)).toEqual(["draw", null]);
   });
 });

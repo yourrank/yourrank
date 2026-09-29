@@ -16,6 +16,7 @@ import {
   linkCreatorConnection,
   revokeCommunityChannel,
 } from "@yourrank/shared/provider-connections";
+import { drawGiveaway, runGiveawayTimeouts } from "../chat-giveaway-service.js";
 
 const url = process.env.AUDIT_TEST_DATABASE_URL || "";
 const integrationIt = (name, fn) => (url ? it : it.skip)(name, fn, 60000);
@@ -416,5 +417,49 @@ describe("Chat Giveaways (Postgres)", () => {
     expect(n).toBe(3);
     // Site B's active giveaway keeps collecting.
     expect(await ingestChatGiveawayMessage(run, msg(channelB, "u7", "!win"))).toMatchObject({ entered: true });
+  });
+
+  integrationIt("a timed-out response auto re-rolls and writes an auto_reroll draw row", async () => {
+    const { session } = await freshSessionWithEntries("t1", "t2");
+    await run("UPDATE chat_giveaway_sessions SET rules=$2 WHERE id=$1",
+      [session.id, { winnerMustRespond: true, responseTimeout: 30, autoReroll: true }]);
+    const [locked] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    const first = await drawGiveaway(run, locked);
+    expect(first.session.winner_response_required).toBe(true);
+    expect(first.session.winner_response_deadline).not.toBeNull();
+    await run("UPDATE chat_giveaway_sessions SET winner_response_deadline = now() - interval '1 second' WHERE id=$1", [session.id]);
+
+    await runGiveawayTimeouts({ queryImpl: run, transaction: (fn) => fn(run) });
+
+    const rows = await run(
+      "SELECT reason, entry_id, replaced_entry_id FROM chat_giveaway_draws WHERE giveaway_session_id=$1 ORDER BY drawn_at, id",
+      [session.id],
+    );
+    expect(rows.map((r) => r.reason)).toEqual(["draw", "auto_reroll"]);
+    expect(rows[1].replaced_entry_id).toBe(rows[0].entry_id);
+    expect(rows[1].entry_id).not.toBe(rows[0].entry_id);
+    const [after] = await run("SELECT winner_entry_id, winner_response_deadline FROM chat_giveaway_sessions WHERE id=$1", [session.id]);
+    expect(after.winner_entry_id).toBe(rows[1].entry_id);
+    expect(after.winner_response_deadline).not.toBeNull();
+  });
+
+  integrationIt("a manually-added winner never gets a response deadline", async () => {
+    const { session } = await freshSessionWithEntries();
+    const [m] = await run(
+      "INSERT INTO chat_giveaway_entries (giveaway_session_id, provider, provider_user_id, username) VALUES ($1,'manual','manual:bob','bob') RETURNING id",
+      [session.id],
+    );
+    await run("UPDATE chat_giveaway_sessions SET rules=$2 WHERE id=$1",
+      [session.id, { winnerMustRespond: true, responseTimeout: 30, autoReroll: true }]);
+    const [locked] = await sql`SELECT * FROM chat_giveaway_sessions WHERE id=${session.id}`;
+    const res = await drawGiveaway(run, locked);
+    expect(res.winnerId).toBe(m.id);
+    expect(res.session.winner_response_required).toBe(false);
+    expect(res.session.winner_response_deadline).toBeNull();
+    const rows = await run(
+      "SELECT reason, replaced_entry_id FROM chat_giveaway_draws WHERE giveaway_session_id=$1",
+      [session.id],
+    );
+    expect(rows).toEqual([{ reason: "draw", replaced_entry_id: null }]);
   });
 });
