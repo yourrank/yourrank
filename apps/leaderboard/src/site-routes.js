@@ -14,7 +14,7 @@ import { hashToken as defaultHashToken } from "@yourrank/shared/crypto";
 import { HTML, withNonce, notFoundPage, pendingVerificationPage, error500Page } from "./middleware/headers.js";
 import { generateCsrfToken, csrfCookie } from "./middleware/csrf.js";
 import { renderPasswordGate as defaultRenderPasswordGate } from "./password-gate.js";
-import { renderSite as defaultRenderSite, effectivePublicSections, parsePublicBoard, publicLeaderboardBoards, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
+import { renderSite as defaultRenderSite, effectivePublicSections, parsePublicBoard, publicLeaderboardBoards, PUBLIC_BOARD_PAGE_SIZE, siteSectionFromPath, siteSectionHref, siteSectionPath } from "@yourrank/shared/site-render";
 import { getViewerSiteData as defaultGetViewerSiteData, getShopItem as defaultGetShopItem, getLoyaltyBoard as defaultGetLoyaltyBoard } from "./site-data.js";
 import { gamesIslandHead, gamesIslandMount } from "@yourrank/shared/games-embed";
 import {
@@ -41,6 +41,24 @@ function sectionRoute(seg, slug, isCustomDomain) {
   // A renamed section answers only to its public segment, never its internal id.
   if (!SECTIONS.has(section) || siteSectionPath(section) !== seg) return null;
   return { slug, section };
+}
+
+function parsePublicBoardPage(value) {
+  if (!/^\d+$/.test(String(value || ""))) return 1;
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+function leaderboardPageRedirect(url, slug, isCustomDomain, page) {
+  const target = new URL(siteSectionHref("leaderboard", slug, isCustomDomain), url.origin);
+  for (const [key, value] of url.searchParams) {
+    if (key !== "page") target.searchParams.append(key, value);
+  }
+  if (page > 1) target.searchParams.set("page", String(page));
+  return new Response(null, {
+    status: 302,
+    headers: { location: `${target.pathname}${target.search}`, "cache-control": "no-store" },
+  });
 }
 
 export function parseSitePath(path, isCustomDomain, customSlug) {
@@ -118,7 +136,11 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     const url = new URL(request.url);
     const isDemo = url.searchParams.get("demo") === "1" || url.searchParams.get("preview") === "1" || url.searchParams.get("embed") === "1";
 
-    const r = await getPublicSite(env, slug, request, { limit: 100, offset: 0 });
+    const requestedBoard = section === "leaderboard" ? parsePublicBoard(url.searchParams.get("board")) : "main";
+    const paginatedBoard = section === "leaderboard" && requestedBoard !== "loyalty";
+    const pageSize = paginatedBoard ? PUBLIC_BOARD_PAGE_SIZE : 100;
+    const page = paginatedBoard ? parsePublicBoardPage(url.searchParams.get("page")) : 1;
+    const r = await getPublicSite(env, slug, request, { limit: pageSize, offset: (page - 1) * pageSize });
     if (r && r.requiresPassword && !isDemo) {
       return new Response(renderPasswordGate(r, { nonce, isCustomDomain }), { headers: respHeaders });
     }
@@ -148,12 +170,17 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     // falls back to Main instead of exposing the standings.
     let board = "main";
     if (section === "leaderboard") {
-      board = parsePublicBoard(url.searchParams.get("board"));
+      board = requestedBoard;
       if (board !== "main" && !publicLeaderboardBoards(r.data).includes(board)) {
         return new Response(null, {
           status: 302,
           headers: { location: siteSectionHref("leaderboard", slug, isCustomDomain), "cache-control": "no-store" },
         });
+      }
+      const playerCount = Math.max(0, Number(r.data?.playerCount) || 0);
+      const totalPages = Math.ceil(playerCount / pageSize);
+      if (page > Math.max(1, totalPages)) {
+        return leaderboardPageRedirect(url, slug, isCustomDomain, totalPages > 0 ? totalPages : 1);
       }
     }
 
@@ -249,6 +276,10 @@ ${gamesIslandHead()}
         csrfToken,
         boards: r.boards,
         board,
+        boardParam: section === "leaderboard" && url.searchParams.has("board") ? board : "",
+        eventParam: section === "leaderboard" ? url.searchParams.get("event") || "" : "",
+        page,
+        pageSize,
         loyalty,
         botUsername: r.botUsername,
         isDemo,

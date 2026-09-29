@@ -168,7 +168,7 @@ const LOYALTY_ROWS = [
 // ── Import after mocks ─────────────────────────────────────────────────
 import { parseSitePath, renderSiteRoute as renderSiteRouteImpl } from "../site-routes.js";
 import { handleRequest, isCustomViewerApiPath, isCustomViewerAuthPath } from "../index.js";
-const renderSiteRoute = (args) => renderSiteRouteImpl({ ...args, deps: routeDeps });
+const renderSiteRoute = (args, deps = {}) => renderSiteRouteImpl({ ...args, deps: { ...routeDeps, ...deps } });
 
 function req(url, opts = {}) {
   const request = new Request(url, { method: opts.method || "GET", headers: opts.headers || {} });
@@ -602,6 +602,133 @@ describe("logged-out vs logged-in rendering", () => {
     expect(html).toContain('class="viewer-main"');
     expect(html).not.toContain('class="yr-drawer"');
     expect(html).toContain("Leaderboard");
+  });
+
+  it("fetches 25-player event pages and keeps global ranks on a custom domain", async () => {
+    const allPlayers = Array.from({ length: 30 }, (_, index) => ({
+      name: `Player${String(index + 1).padStart(2, "0")}`,
+      rank: index === 0 ? 1 : index < 4 ? 2 : index + 1,
+      score: 100 - index,
+    }));
+    let fetchOptions;
+    const getPublicSite = (_env, slug, request, options) => {
+      fetchOptions = options;
+      const site = makeSite(slug);
+      site.data.playerCount = allPlayers.length;
+      site.data.eventId = new URL(request.url).searchParams.get("event");
+      site.data.players = allPlayers.slice(options.offset, options.offset + options.limit);
+      return site;
+    };
+    const res = await renderSiteRoute({
+      request: req("https://streamer.example/leaderboard?page=2&event=season-1"),
+      env, ctx, nonce: "n", slug: "streamer", section: "leaderboard", isCustomDomain: true,
+    }, { getPublicSite });
+    expect(fetchOptions).toEqual({ limit: 25, offset: 25 });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-position="26"');
+    expect(html).toContain('<span class="yr-srow-rank"><span class="yr-sr">Rank </span>26</span>');
+    expect(html).not.toContain("data-podium=");
+    expect(html).toContain('href="/leaderboard?event=season-1#standings" aria-label="Page 1">1</a>');
+    expect(html).toContain('href="/leaderboard?event=season-1&amp;page=2#standings" aria-label="Page 2" aria-current="page">2</a>');
+  });
+
+  it("defaults junk page values to page one and keeps other sections at 100 rows", async () => {
+    const players = Array.from({ length: 30 }, (_, index) => ({
+      name: `Player${String(index + 1).padStart(2, "0")}`,
+      rank: index === 0 ? 1 : index < 4 ? 2 : index + 1,
+      score: 100 - index,
+    }));
+    let leaderboardOptions;
+    const pagedSite = (_env, slug, _request, options) => {
+      leaderboardOptions = options;
+      const site = makeSite(slug);
+      site.data.playerCount = players.length;
+      site.data.players = players.slice(options.offset, options.offset + options.limit);
+      return site;
+    };
+    const leaderboard = await renderSiteRoute({
+      request: req("https://example.com/streamer/leaderboard?page=not-a-number"),
+      env, ctx, nonce: "n", slug: "streamer", section: "leaderboard", isCustomDomain: false,
+    }, { getPublicSite: pagedSite });
+    expect(leaderboardOptions).toEqual({ limit: 25, offset: 0 });
+    expect(leaderboard.status).toBe(200);
+    const html = await leaderboard.text();
+    expect(html).toContain('data-podium="3"');
+    expect(html).toContain("Page 1 of 2");
+    expect(html).not.toContain("?page=1");
+
+    let homeOptions;
+    const home = await renderSiteRoute({
+      request: req("https://example.com/streamer?page=2"),
+      env, ctx, nonce: "n", slug: "streamer", section: "home", isCustomDomain: false,
+    }, {
+      getPublicSite: (_env, slug, _request, options) => {
+        homeOptions = options;
+        return makeSite(slug);
+      },
+    });
+    expect(homeOptions).toEqual({ limit: 100, offset: 0 });
+    expect(home.status).toBe(200);
+  });
+
+  it("redirects out-of-range pages to the last page while preserving query state", async () => {
+    let fetchOptions;
+    const getPublicSite = (_env, slug, _request, options) => {
+      fetchOptions = options;
+      const site = makeSite(slug);
+      site.data.playerCount = 30;
+      return site;
+    };
+    const res = await renderSiteRoute({
+      request: req("https://example.com/streamer/leaderboard?page=9&event=season-1&board=main&campaign=mail"),
+      env, ctx, nonce: "n", slug: "streamer", section: "leaderboard", isCustomDomain: false,
+    }, { getPublicSite });
+    expect(fetchOptions).toEqual({ limit: 25, offset: 200 });
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location"), "https://example.com");
+    expect(location.pathname).toBe("/streamer/leaderboard");
+    expect(location.searchParams.get("page")).toBe("2");
+    expect(location.searchParams.get("event")).toBe("season-1");
+    expect(location.searchParams.get("board")).toBe("main");
+    expect(location.searchParams.get("campaign")).toBe("mail");
+  });
+
+  it("redirects an empty board to page one without adding a page parameter", async () => {
+    const res = await renderSiteRoute({
+      request: req("https://example.com/streamer/leaderboard?page=5&event=season-1&campaign=mail"),
+      env, ctx, nonce: "n", slug: "streamer", section: "leaderboard", isCustomDomain: false,
+    }, {
+      getPublicSite: (_env, slug) => {
+        const site = makeSite(slug);
+        site.data.playerCount = 0;
+        site.data.players = [];
+        return site;
+      },
+    });
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get("location"), "https://example.com");
+    expect(location.pathname).toBe("/streamer/leaderboard");
+    expect(location.searchParams.get("page")).toBeNull();
+    expect(location.searchParams.get("event")).toBe("season-1");
+    expect(location.searchParams.get("campaign")).toBe("mail");
+  });
+
+  it("leaves the Loyalty board unpaginated", async () => {
+    let fetchOptions;
+    const res = await renderSiteRoute({
+      request: req("https://example.com/loyal/leaderboard?board=loyalty&page=2"),
+      env, ctx, nonce: "n", slug: "loyal", section: "leaderboard", isCustomDomain: false,
+    }, {
+      getPublicSite: (_env, slug, _request, options) => {
+        fetchOptions = options;
+        return routeSite.getPublicSite(env, slug);
+      },
+      getLoyaltyBoard: async () => [],
+    });
+    expect(fetchOptions).toEqual({ limit: 100, offset: 0 });
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("yr-pager");
   });
 });
 

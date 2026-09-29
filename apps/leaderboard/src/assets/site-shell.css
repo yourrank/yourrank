@@ -702,11 +702,14 @@
 .yr-srow--first .yr-srow-rank { color: var(--yr-accent-readable); }
 .yr-srow--first .yr-srow-name { font-size: 16px; font-weight: 700; }
 
-.yr-nomatch, .yr-page-status { padding: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
-.yr-page-status { padding: 0; }
-.yr-page-status:empty { display: none; }
-.yr-page-status.is-error { color: var(--yr-warning-readable); }
-.yr-pagination { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px; border-top: 1px solid var(--yr-edge-soft); }
+.yr-nomatch { padding: 16px; font-size: 13px; line-height: 1.5; color: var(--yr-faint); }
+.yr-pagination { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 16px 12px; border-top: 1px solid var(--yr-edge-soft); }
+.yr-pager-pages { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.yr-pager-link { min-width: 44px; text-decoration: none; }
+.yr-pager-link[aria-current="page"] { background: var(--yr-primary); border-color: var(--yr-primary); color: #fff; }
+.yr-pager-gap { padding: 0 4px; color: var(--yr-faint); }
+.yr-pager-summary { flex: 1 0 100%; color: var(--yr-faint); font-size: 12px; line-height: 1.4; text-align: center; }
+.yr-pagination[hidden] { display: none; }
 
 .yr-list > * + * { border-top: 1px solid var(--yr-edge-soft); }
 .yr-list-item { padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }

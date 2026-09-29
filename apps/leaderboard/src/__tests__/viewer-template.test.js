@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderSite } from "@yourrank/shared/site-render";
 import { publicShape } from "../site.js";
 import { handleDashboardPreview } from "../handlers/preview.js";
 
+const viewerCss = readFileSync(join(import.meta.dir, "../assets/viewer-shell.css"), "utf8");
 const data = {
   brand: { name: "Northstar", period: "Weekly" },
   rankBy: "score",
@@ -13,6 +16,11 @@ const data = {
 const render = (template, section = "leaderboard", plan = "pro") => renderSite({
   r: { slug: "northstar", plan, data: { ...data, branding: { template } } }, section,
   opts: { slug: "northstar", homeUrl: "https://test.com", nonce: "n" },
+});
+const renderStandings = (players, page = 1, playerCount = players.length) => renderSite({
+  r: { slug: "northstar", plan: "pro", data: { ...data, playerCount, players, branding: { template: "spotlight" } } },
+  section: "leaderboard",
+  opts: { slug: "northstar", homeUrl: "https://test.com", nonce: "n", page, pageSize: 25 },
 });
 
 describe("optional viewer template", () => {
@@ -51,13 +59,57 @@ describe("optional viewer template", () => {
     expect(await render("cyber_arcade")).not.toContain('data-podium=');
   });
 
-  it("keeps tied leaders equal and handles empty boards without invented podium places", async () => {
-    for (const players of [[], data.players.slice(0, 1), data.players, [{ name: "Alex", rank: 1 }, { name: "Sam", rank: 1 }],
-      [{ name: "Alex", rank: 1 }, { name: "Sam", rank: 2 }, { name: "Jo", rank: 3 }, { name: "Lee", rank: 3 }]]) {
-      const html = await renderSite({ r: { slug: "northstar", plan: "pro", data: { ...data, players, branding: { template: "spotlight" } } }, section: "leaderboard", opts: { slug: "northstar", homeUrl: "https://test.com", nonce: "n" } });
-      expect(html).not.toContain('data-podium=');
-      expect((html.match(/data-player-name=/g) || [])).toHaveLength(players.length);
+  it("uses positional podium slots while retaining tied ranks and one row per player", async () => {
+    const players = [
+      { name: "Ava", rank: 1 },
+      { name: "Bea", rank: 2 },
+      { name: "Cleo", rank: 2 },
+      { name: "Drew", rank: 2 },
+      { name: "Evan", rank: 5 },
+    ];
+    const html = await renderStandings(players);
+    const rows = html.match(/<li class="yr-srow[\s\S]*?<\/li>/g) || [];
+    expect(html).toContain('data-podium="3"');
+    expect(rows[0]).toContain('data-position="1" data-podium-slot="1"');
+    expect(rows[1]).toContain('data-position="2" data-podium-slot="2"');
+    expect(rows[2]).toContain('data-position="2" data-podium-slot="3"');
+    expect(rows[0]).toContain('<span class="yr-srow-rank"><span class="yr-sr">Rank </span>1</span>');
+    expect(rows[1]).toContain('<span class="yr-srow-rank"><span class="yr-sr">Rank </span>2</span>');
+    expect(rows[2]).toContain('<span class="yr-srow-rank"><span class="yr-sr">Rank </span>2</span>');
+    expect(rows).toHaveLength(players.length);
+    for (const player of players) {
+      expect((html.match(new RegExp(`data-player-name="${player.name.toLowerCase()}"`, "g")) || [])).toHaveLength(1);
     }
+    expect(viewerCss).toContain(".viewer-shell .yr-stand{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))");
+    expect(viewerCss).toContain('[data-podium-slot]{grid-row:1;grid-column:2;');
+    expect(viewerCss).toContain('[data-podium-slot="2"]{grid-column:1');
+    expect(viewerCss).toContain('[data-podium-slot="3"]{grid-column:3');
+    expect(viewerCss).toContain('data-podium-slot="1"]::after{content:"";position:absolute;top:12px');
+
+    for (const short of [[], players.slice(0, 1), players.slice(0, 2)]) {
+      const shortHtml = await renderStandings(short);
+      expect(shortHtml).not.toContain("data-podium=");
+      expect((shortHtml.match(/data-player-name=/g) || [])).toHaveLength(short.length);
+    }
+  });
+
+  it("keeps positional podiums to page one and preserves supplied ranks on later pages", async () => {
+    const allPlayers = Array.from({ length: 30 }, (_, index) => ({
+      name: `Player${String(index + 1).padStart(2, "0")}`,
+      rank: index === 0 ? 1 : index < 4 ? 2 : index + 1,
+      score: 100 - index,
+    }));
+    const firstPage = await renderStandings(allPlayers.slice(0, 25), 1, allPlayers.length);
+    expect(firstPage).toContain('data-podium="3"');
+    expect((firstPage.match(/data-player-name=/g) || [])).toHaveLength(25);
+
+    const secondPage = await renderStandings(allPlayers.slice(25), 2, allPlayers.length);
+    const rows = secondPage.match(/<li class="yr-srow[\s\S]*?<\/li>/g) || [];
+    expect(secondPage).not.toContain("data-podium=");
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toContain('data-player-name="player26" data-position="26"');
+    expect(rows[0]).toContain('<span class="yr-srow-rank"><span class="yr-sr">Rank </span>26</span>');
+    expect((secondPage.match(/data-player-name=/g) || [])).toHaveLength(5);
   });
 
   it("previews an unsaved selection without mutating the saved template", async () => {
