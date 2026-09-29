@@ -202,6 +202,7 @@ describe("tournament lifecycle UI", () => {
       siteId: "site-1", title: "Friday Cup", gameName: "Fortnite", bracketSize: 4,
       entryCap: null, chatChannel: "36_ates", entryKeyword: "!cup",
     });
+    expect(server.tournaments[0].game_name).toBe("Fortnite");
     expect(visible("tournament-create-modal")).toBe(false);
     expect(visible("tournament-empty")).toBe(false);
     expect(visible("tournament-workspace")).toBe(true);
@@ -215,6 +216,16 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-primary")).toBe("Open signups");
     expect($id("tournament-entries-empty").textContent).toContain("No entries yet.");
     expect($id("tournament-entries-empty").textContent).toContain("Add players below, or open signups to collect them from Kick chat.");
+  });
+
+  it("stores an empty game name instead of a placeholder when the field is left blank", async () => {
+    await click("tournament-create");
+    $id("tc-game").value = "   ";
+    await submit("tournament-create-form");
+    const [post] = requestsTo("/api/tournaments", "POST");
+    expect(post.body.gameName).toBe("");
+    expect(server.tournaments[0].game_name).toBe("");
+    expect(text("tournament-meta")).not.toContain("Game");
   });
 
   it("sends a custom signup limit independently of the bracket size", async () => {
@@ -493,7 +504,7 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-bracket-size-hint")).toContain("locked");
   });
 
-  it("sends a PATCH correction from a completed match's Edit action", async () => {
+  it("sends a PATCH correction from a completed match's inline scores", async () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
@@ -505,24 +516,32 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-bracket");
     const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
-    card().querySelector("[data-score-edit]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
+    // The correction UI is always on the card: prefilled inputs, disabled Save.
     expect(card().dataset.scoreMode).toBe("correct");
+    expect(card().dataset.saved).toBe("2,1");
     expect(card().querySelector('[data-score-player="1"]').value).toBe("2");
+    const save = () => card().querySelector(".tn-match-save");
+    const note = () => card().querySelector(".tn-match-note");
+    expect(save().disabled).toBe(true);
+    expect(note().hidden).toBe(true);
+    // Editing an input unlocks Save and reveals the downstream note.
     card().querySelector('[data-score-player="1"]').value = "5";
+    card().querySelector('[data-score-player="1"]').dispatchEvent(new window.Event("input", { bubbles: true }));
     card().querySelector('[data-score-player="2"]').value = "3";
-    card().querySelector(".tn-match-save").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    card().querySelector('[data-score-player="2"]').dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect(save().disabled).toBe(false);
+    expect(note().hidden).toBe(false);
+    save().dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
     await flush();
     const patches = requestsTo("/api/tournaments/t-1/score", "PATCH");
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 5, player2Score: 3 });
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
     expect(text("tournament-message")).toBe("Score corrected.");
-    // Reloaded bracket is back to a plain completed card.
-    expect(card().dataset.scoreMode).not.toBe("correct");
   });
 
-  it("restores the completed card when a score correction is cancelled", async () => {
+  it("keeps Save disabled until a corrected score differs from the saved one", async () => {
     reset({
       tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
       matches: [
@@ -533,13 +552,25 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-bracket");
     const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
-    card().querySelector("[data-score-edit]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    const save = () => card().querySelector(".tn-match-save");
+    const note = () => card().querySelector(".tn-match-note");
+    const input = (player, value) => {
+      const el = card().querySelector(`[data-score-player="${player}"]`);
+      el.value = value;
+      el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    };
+    expect(save().disabled).toBe(true);
+    // A changed value unlocks Save; returning it to the saved score re-locks.
+    input(1, "7");
     await flush();
-    expect(card().dataset.scoreMode).toBe("correct");
-    card().querySelector("[data-score-cancel]").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(save().disabled).toBe(false);
+    expect(note().hidden).toBe(false);
+    input(1, "2");
     await flush();
-    expect(card().dataset.scoreMode).not.toBe("correct");
-    expect(card().dataset.state).toBe("completed");
+    expect(save().disabled).toBe(true);
+    expect(note().hidden).toBe(true);
+    save().dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
     expect(requestsTo("/api/tournaments/t-1/score", "PATCH")).toHaveLength(0);
   });
 
@@ -747,19 +778,24 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-bracket");
     const matches = [...$id("tournament-bracket").querySelectorAll(".tn-match")];
     expect(matches).toHaveLength(3);
-    // Alice vs BYE: no inputs, no score, advance caption, sentinel never leaks.
+    // Alice vs BYE: no inputs, no score, BYE tag, sentinel never leaks.
     expect(matches[0].dataset.state).toBe("bye");
     expect(matches[0].querySelectorAll("input")).toHaveLength(0);
     expect(matches[0].textContent).not.toContain(BYE_SLOT);
     expect(matches[0].textContent).toContain("Alice");
-    expect(matches[0].textContent).toContain("advances");
+    expect(matches[0].textContent).toContain("BYE");
+    expect(matches[0].querySelector(".tn-bye-tag")).toBeTruthy();
     expect(matches[0].textContent).not.toContain("0 - 0");
-    // BYE vs BYE: compact muted void placeholder.
+    // BYE vs BYE: dashed void line reading BYE / BYE.
     expect(matches[1].dataset.state).toBe("void");
     expect(matches[1].textContent).not.toContain(BYE_SLOT);
+    expect(matches[1].textContent).toContain("BYE");
     expect(matches[1].querySelectorAll("input")).toHaveLength(0);
-    // TBD slot: still no inputs until both players are known.
-    expect(matches[2].dataset.state).toBe("future");
+    // The bracket explains BYEs once, above the scroller.
+    expect($id("tournament-bracket").querySelector("[data-bye-note]")).toBeTruthy();
+    // The undecided final is a waiting card, not a TBD line.
+    expect(matches[2].dataset.state).toBe("waiting");
+    expect(matches[2].textContent).toContain("Waiting for semifinalists");
     expect(matches[2].querySelectorAll("input")).toHaveLength(0);
   });
 

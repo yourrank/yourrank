@@ -182,15 +182,18 @@ describe("tournament workspace — completed tournament", () => {
     // ResizeObserver): one path per non-final match.
     const paths = $id("tournament-bracket").querySelectorAll(".tn-connectors path[data-from]");
     expect(paths.length).toBe(completedMatches.length - 1);
-    const aside = $id("tournament-summary").textContent;
-    expect(aside).toContain("Matches played");
-    expect(aside).toContain("Tournament ID");
-    expect(aside).toContain("tourn_8f3a2c");
-    expect(aside).toContain("Created");
-    expect(aside).toContain("Sep 20, 2026");
-    expect(aside).toContain("Champion");
-    expect(aside).toContain("36_ates");
-    expect(aside).not.toContain("Completed on");
+    const aside = $id("tournament-summary");
+    expect(aside.textContent).toContain("Matches played");
+    // The tournament ID lives behind a Copy ID button in Settings, not the
+    // summary aside; a blank game_name renders no Game row.
+    expect(aside.textContent).not.toContain("Tournament ID");
+    expect(aside.innerHTML).not.toContain("tourn_8f3a2c");
+    expect(aside.textContent).not.toContain("Game");
+    expect(aside.textContent).toContain("Created");
+    expect(aside.textContent).toContain("Sep 20, 2026");
+    expect(aside.textContent).toContain("Champion");
+    expect(aside.textContent).toContain("36_ates");
+    expect(aside.textContent).not.toContain("Completed on");
   });
 
   it("opens the full-bracket modal with the same bracket markup and closes it", async () => {
@@ -225,6 +228,10 @@ describe("tournament workspace — completed tournament", () => {
     expect(view).toContain("8 players");
     expect($id("tournament-settings-aside").textContent).toContain("Tournament status");
     expect($id("tournament-settings-aside").textContent).toContain("Details");
+    expect($id("tournament-settings-aside").textContent).toContain("Tournament ID");
+    const copyId = $id("tournament-settings-aside").querySelector("#tournament-copy-id");
+    expect(copyId).toBeTruthy();
+    expect(copyId.dataset.copyId).toBe("tourn_8f3a2c");
   });
 });
 
