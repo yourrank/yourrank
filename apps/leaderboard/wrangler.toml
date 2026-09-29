@@ -62,7 +62,9 @@ binding = "HYPERDRIVE"
 id = "9e5b625bfdd84cd691b44c4780bdaf13"
 
 [triggers]
-crons = ["*/5 * * * *", "0 4 * * *"]
+# The daily account-link detection runs inside the 5-minute tick (04:00–04:04 UTC
+# window) — Workers Free capacity is 5 triggers account-wide and all are used.
+crons = ["*/5 * * * *"]
 
 [vars]
 # Producers must fail closed when EVENTS_QUEUE is unbound instead of silently

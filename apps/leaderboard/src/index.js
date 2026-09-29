@@ -358,10 +358,13 @@ export default {
 
 async function handleScheduled(event, env, ctx) {
   populateEnv(env, { setGlobalEnv: true });
-  if (event.cron === "0 4 * * *") {
-    ctx.waitUntil(runAccountLinkDetection().catch((err) => console.error("[scheduled] account link detection failed:", String(err?.message || err))));
-  }
   if (event.cron === "*/5 * * * *") {
+    // Daily account-link detection rides the 04:00–04:04 UTC tick (the */5 cron
+    // hits it exactly once) — Workers Free capacity allows no extra trigger.
+    const scheduledAt = new Date(Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now());
+    if (scheduledAt.getUTCHours() === 4 && scheduledAt.getUTCMinutes() < 5) {
+      ctx.waitUntil(runAccountLinkDetection().catch((err) => console.error("[scheduled] account link detection failed:", String(err?.message || err))));
+    }
     ctx.waitUntil(runGiveawayTimeouts().catch((err) => console.error("[scheduled] giveaway timeout processing failed:", String(err?.message || err))));
     ctx.waitUntil(cleanupIpObservations().catch((err) => console.error("[scheduled] ip observation cleanup failed:", String(err?.message || err))));
     ctx.waitUntil(
