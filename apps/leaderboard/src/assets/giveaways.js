@@ -425,6 +425,12 @@ if (!window.__yrSpaShell) {
     $("gw-search-entrants")?.addEventListener("input", (e) => {
       filterEntrantsTable(e.target.value);
     });
+    $("gw-btn-clear-search")?.addEventListener("click", () => {
+      const input = $("gw-search-entrants");
+      if (input) input.value = "";
+      filterEntrantsTable("");
+      input?.focus();
+    });
 
     const closeModal = () => {
       clearTimeout(modalOpenTimer);
@@ -886,10 +892,19 @@ if (!window.__yrSpaShell) {
   function filterEntrantsTable(query) {
     const term = String(query || "").toLowerCase().trim();
     const rows = $("gw-entrants-list")?.querySelectorAll("tr") || [];
+    let visible = 0;
     rows.forEach((row) => {
       const username = row.dataset.username || "";
       row.hidden = term ? !username.includes(term) : false;
+      if (!row.hidden) visible += 1;
     });
+    const noMatch = term !== "" && rows.length > 0 && visible === 0;
+    const noMatchEl = $("gw-entrants-no-match");
+    if (noMatchEl) {
+      noMatchEl.hidden = !noMatch;
+      const noMatchText = $("gw-entrants-no-match-text");
+      if (noMatch && noMatchText) noMatchText.textContent = `No entrants match "${String(query).trim()}"`;
+    }
   }
 
   // Animation uses eligible entries only; the server independently selects the pool.
