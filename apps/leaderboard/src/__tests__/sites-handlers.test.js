@@ -396,16 +396,16 @@ describe("handlePutSite", () => {
   it("returns the canonical 403 plan_limit_reached denial when saveSite denies", async () => {
     mockOne.mockResolvedValueOnce(USER_ROW);
     mockSaveSite.mockResolvedValueOnce({
-      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Starter for 100.",
       code: "player_limit",
       denial: {
-        error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+        error: "Your Free plan includes 10 players per leaderboard. Upgrade to Starter for 100.",
         code: "plan_limit_reached",
         limit: "players_per_site",
         usage: 11,
         allowance: 10,
         current_plan: "free",
-        required_plan: "pro",
+        required_plan: "starter",
       },
     });
     const res = await handlePutSite(req("https://test.com/api/site", "PUT", {
@@ -416,13 +416,13 @@ describe("handlePutSite", () => {
     const body = await res.json();
     expect(body).toEqual({
       ok: false,
-      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Pro for 1,000.",
+      error: "Your Free plan includes 10 players per leaderboard. Upgrade to Starter for 100.",
       code: "plan_limit_reached",
       limit: "players_per_site",
       usage: 11,
       allowance: 10,
       current_plan: "free",
-      required_plan: "pro",
+      required_plan: "starter",
     });
   });
 });

@@ -26,6 +26,12 @@ export const effectivePlan = _effectivePlan;
 export const priceUsd = _priceUsd;
 export const PRO_DAYS = 30;
 
+export function upgradeAllowanceFor(plan) {
+  if (plan === "free") return getPlanLimit("starter", "active_viewers_30d");
+  if (plan === "starter") return getPlanLimit("pro", "active_viewers_30d");
+  return null;
+}
+
 const GRANT_PROVIDERS = new Set(["manual", "trial"]);
 const MAX_GRANT_DAYS = 365;
 
@@ -171,9 +177,7 @@ export async function handleAccountUsage(request, env) {
       activeViewers: activeViewers ? {
         ...activeViewers,
         plan,
-        upgradeAllowance: plan === "free"
-          ? getPlanLimit("pro", "active_viewers_30d")
-          : plan === "pro" ? getPlanLimit("team", "active_viewers_30d") : null,
+        upgradeAllowance: upgradeAllowanceFor(plan),
       } : null,
       features: PLAN_FEATURES[plan] || [],
       overLimit,

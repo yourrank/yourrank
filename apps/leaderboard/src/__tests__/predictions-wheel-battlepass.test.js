@@ -78,11 +78,15 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.predictions.length).toBe(1);
     });
 
-    it("reports prediction entitlement for free and pro owners", async () => {
+    it("reports prediction entitlement for Free, Starter, and Pro owners", async () => {
       mockQuery.mockResolvedValue([]);
       deps.requireUser.mockResolvedValue({ user: { ...USER, plan: "free" }, res: null });
       const freeRes = await handleGetPredictions(new Request("http://localhost/api/predictions"), mockEnv(), deps);
       expect((await freeRes.json()).entitlement.enabled).toBe(false);
+
+      deps.requireUser.mockResolvedValue({ user: { ...USER, plan: "starter" }, res: null });
+      const starterRes = await handleGetPredictions(new Request("http://localhost/api/predictions"), mockEnv(), deps);
+      expect((await starterRes.json()).entitlement.enabled).toBe(true);
 
       deps.requireUser.mockResolvedValue({ user: USER, res: null });
       const proRes = await handleGetPredictions(new Request("http://localhost/api/predictions"), mockEnv(), deps);
@@ -133,6 +137,32 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.ok).toBe(true);
       expect(body.prediction.title).toBe("Clutch this 1v3 round?");
       expect(body.prediction.min_bet).toBe(20);
+    });
+
+    it("allows Starter to create predictions and keeps Free denied", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "pred-starter",
+        title: "Clutch this 1v3 round?",
+        options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
+        min_bet: 20,
+        max_bet: 500,
+        status: "open",
+      });
+      const request = () => new Request("http://localhost/api/predictions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: "Clutch this 1v3 round?", minBet: 20, maxBet: 500, lockMinutes: 3 }),
+      });
+
+      deps.requireUser.mockResolvedValue({ user: { ...USER, plan: "starter" }, res: null });
+      const starterRes = await handleCreatePrediction(request(), mockEnv(), deps);
+      expect(starterRes.status).toBe(200);
+      expect((await starterRes.json()).prediction.id).toBe("pred-starter");
+
+      deps.requireUser.mockResolvedValue({ user: { ...USER, plan: "free" }, res: null });
+      const freeRes = await handleCreatePrediction(request(), mockEnv(), deps);
+      expect(freeRes.status).toBe(403);
+      expect((await freeRes.json()).code).toBe("entitlement_required");
     });
 
     it("settles a prediction and computes proportional payouts for winners", async () => {

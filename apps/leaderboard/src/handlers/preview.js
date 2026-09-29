@@ -1,5 +1,5 @@
 import { currentUser } from "../auth.js";
-import { effectivePlan } from "@yourrank/shared/plans";
+import { canUseFeature, effectivePlan } from "@yourrank/shared/plans";
 import { getUserSiteById, FONT_KEYS } from "../site.js";
 import { renderSite } from "@yourrank/shared/site-render";
 import { SECURE_HTML, withNonce } from "../middleware/headers.js";
@@ -87,11 +87,12 @@ export async function handleDashboardPreview(request, env, nonce, {
 
   const mergedData = { ...site.data, ...draftData };
   const branding = { ...mergedData.branding };
-  if (plan !== "free" && HEX.test(accentA || "") && HEX.test(accentB || "")) {
+  const canRemoveBranding = canUseFeature(plan, "remove_branding");
+  if (canRemoveBranding && HEX.test(accentA || "") && HEX.test(accentB || "")) {
     branding.accentA = accentA;
     branding.accentB = accentB;
   }
-  if (plan !== "free" && FONT_KEYS.includes(font || "")) {
+  if (canRemoveBranding && FONT_KEYS.includes(font || "")) {
     branding.font = font;
   }
 
@@ -119,7 +120,7 @@ ${gamesIslandHead()}
     return new Response(embedHtml, { headers: { ...withNonce(SECURE_HTML, nonce), "cache-control": "no-store" } });
   }
 
-  const watermark = plan === "free" ? true : (mergedData.sections?.poweredBy === true);
+  const watermark = !canRemoveBranding || mergedData.sections?.poweredBy === true;
   const previewData = { ...mergedData, branding };
   let html = await renderSite({
     r: {
@@ -137,8 +138,8 @@ ${gamesIslandHead()}
       slug: site.slug,
       isCustomDomain: false,
       nonce,
-      logoUrl: plan !== "free" ? draftLogoUrl(draftData, site) : null,
-      bannerUrl: plan !== "free" ? draftBannerUrl(draftData, site) : null,
+      logoUrl: canRemoveBranding ? draftLogoUrl(draftData, site) : null,
+      bannerUrl: canRemoveBranding ? draftBannerUrl(draftData, site) : null,
       watermark,
       preview: true,
       previewDevice: device,

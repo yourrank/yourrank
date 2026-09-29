@@ -1254,7 +1254,7 @@ export async function saveSite(env, user, payload, siteId, request = null, { sco
   const rawThemeObj = fromJsonb(site.theme_json);
   let themeObj = (rawThemeObj && typeof rawThemeObj === "object") ? rawThemeObj : {};
   const br = payload.branding;
-  if (br && typeof user === "object" && plan !== "free") {
+  if (br && typeof user === "object" && isProPlan(plan)) {
     if (br.logo === null) logoData = "";
     else if ((typeof br.logo === "string" && br.logo) || (br.logo && typeof br.logo === "object")) {
       const validated = validateLogoData(br.logo);
@@ -1629,14 +1629,14 @@ export async function updateSiteTheme(env, user, payload = {}, request = null) {
     theme.template = payload.template === "classic" ? "cyber_arcade" : payload.template;
   }
   const plan = effectivePlan(user);
-  if (plan !== "free" && (payload.accentA != null || payload.accentB != null)) {
+  if (isProPlan(plan) && (payload.accentA != null || payload.accentB != null)) {
     if (!HEX.test(payload.accentA || "") || !HEX.test(payload.accentB || "")) {
       return { error: "Choose two valid accent colors.", code: "invalid_colors" };
     }
     theme.accentA = payload.accentA;
     theme.accentB = payload.accentB;
   }
-  if (plan !== "free" && payload.font && FONT_KEYS.includes(payload.font)) {
+  if (isProPlan(plan) && payload.font && FONT_KEYS.includes(payload.font)) {
     theme.font = payload.font;
   }
   if (isProPlan(plan) && payload.prizes && typeof payload.prizes === "object") {

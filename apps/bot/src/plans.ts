@@ -14,7 +14,7 @@ export { getPlanLimit } from "@yourrank/shared/plans";
  * directly.
  */
 export function getPlanTier(tier: string | null | undefined): PlanTier | undefined {
-  return tier === "free" || tier === "pro" || tier === "team" ? tier : undefined;
+  return tier === "free" || tier === "starter" || tier === "pro" || tier === "team" ? tier : undefined;
 }
 
 export async function getUserPlanTier(userId: string): Promise<PlanTier> {

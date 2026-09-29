@@ -458,7 +458,7 @@ function renderTeam(data) {
   const atLimit = used >= limit;
 
   const planChip = $("teamPlanChip");
-  if (planChip) planChip.textContent = { free: "Free", pro: "Pro", team: "Team" }[plan] || plan;
+  if (planChip) planChip.textContent = { free: "Free", starter: "Starter", pro: "Pro", team: "Team" }[plan] || plan;
   const seatBar = $("teamSeatBar");
   if (seatBar?.style) seatBar.style.width = `${Math.min(100, Math.round((used / limit) * 100))}%`;
   if (seatUsage) seatUsage.textContent = `${used} used · ${Math.max(0, limit - used)} available`;
@@ -467,7 +467,7 @@ function renderTeam(data) {
       ? atLimit
         ? "All seats in use. Pending invitations reserve a seat across the owner's sites; remove a member or revoke an invite to free one."
         : "Pending invitations reserve a seat across the owner's sites."
-      : "Free and Pro include the owner only; saved Moderator access is paused.";
+      : "Free, Starter and Pro include the owner only; saved Moderator access is paused.";
   }
   if (planNotice) {
     planNotice.hidden = !(canManageTeam && plan !== "team");
@@ -478,8 +478,8 @@ function renderTeam(data) {
     const scheduled = data.scheduledChange;
     const date = scheduled?.appliesAt ? new Date(scheduled.appliesAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "the end of this billing period";
     scheduledNotice.hidden = !scheduled || scheduled.plan === "team";
-    scheduledNotice.textContent = scheduled?.plan === "free" || scheduled?.plan === "pro"
-      ? `Scheduled change: ${scheduled.plan === "free" ? "Free" : "Pro"} starting ${date}. Team seats and member access stay active until then. After Team ends, moderator access pauses; members are not deleted.`
+    scheduledNotice.textContent = ["free", "starter", "pro"].includes(scheduled?.plan)
+      ? `Scheduled change: ${{ free: "Free", starter: "Starter", pro: "Pro" }[scheduled.plan]} starting ${date}. Team seats and member access stay active until then. After Team ends, moderator access pauses; members are not deleted.`
       : "";
   }
   if (readOnlyNotice) readOnlyNotice.hidden = currentRole !== "moderator";

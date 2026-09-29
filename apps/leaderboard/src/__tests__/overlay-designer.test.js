@@ -58,6 +58,8 @@ describe("overlay URL composition", () => {
     expect(buildOverlayPath("streamer", { animate: false })).toContain("&animate=0");
     expect(previewPath("streamer", { animate: false }, { plan: "team" })).toBe("/streamer/overlay?layout=card&x=50&y=50&scale=1&animate=0");
     expect(previewPath("streamer", { animate: false }, { plan: "free" })).toBe("/demo/overlay?layout=card&x=50&y=50&scale=1&animate=0");
+    expect(previewPath("streamer", { layout: "ticker", x: 30, animate: false }, { plan: "starter" }))
+      .toBe("/streamer/overlay?layout=card&x=50&y=50&scale=1&animate=1");
   });
 
   it("falls back to the demo overlay for free plans and keeps real sites otherwise", () => {
@@ -146,7 +148,7 @@ describe("designer surface wiring", () => {
     expect(src).toContain("pointerdown");
     expect(src).toContain('e.key === "ArrowLeft"');
     expect(src).toContain("odX");
-    expect(src).toContain("buildOverlayPath(slug(), design)");
+    expect(src).toContain("buildOverlayPath(slug(), linkDesign)");
     expect(src).toContain("design.animate = animateCb.checked;");
     expect(src).toContain('if (animateCb) animateCb.checked = design.animate;');
   });

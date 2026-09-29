@@ -27,6 +27,7 @@ import {
   putPublicBoardCache,
 } from "./public-html-cache.js";
 import { setRequestMetrics } from "@yourrank/shared/request-id";
+import { canUseFeature } from "@yourrank/shared/plans";
 
 const SECTIONS = new Set(["home", "leaderboard", "shop", "games", "me"]);
 // Former public segments; requests using them resolve to the section and carry
@@ -169,10 +170,10 @@ export async function renderSiteRoute({ request, env, ctx, nonce, slug, section,
     respHeaders.append("set-cookie", csrfCookie(csrfToken, request));
 
     const homeUrl = url.origin;
-    const paid = r.plan !== "free";
-    const watermark = !paid;
-    const logoUrl = paid && r.data?.branding?.hasLogo ? `${homeUrl}/logo/${slug}` : null;
-    const bannerUrl = paid && r.data?.branding?.hasBanner ? `${homeUrl}/banner/${slug}` : null;
+    const canRemoveBranding = canUseFeature(r.plan, "remove_branding");
+    const watermark = !canRemoveBranding;
+    const logoUrl = canRemoveBranding && r.data?.branding?.hasLogo ? `${homeUrl}/logo/${slug}` : null;
+    const bannerUrl = canRemoveBranding && r.data?.branding?.hasBanner ? `${homeUrl}/banner/${slug}` : null;
 
     let viewerData = null;
     if (section === "home" || section === "shop" || section === "me") {

@@ -595,8 +595,8 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   const bannerUrl = opts.bannerUrl || null;
   // Powered-by is mandatory unless the owner has the remove_branding feature;
   // the explicit sections.poweredBy flag only controls entitlement-bearing plans.
-  const watermark = !canUseFeature(r.plan, "remove_branding") ? true
-    : (data.sections?.poweredBy !== undefined ? !!data.sections?.poweredBy : r.plan === "free");
+  const canRemoveBranding = canUseFeature(r.plan, "remove_branding");
+  const watermark = !canRemoveBranding || data.sections?.poweredBy === true;
   // Only the restricted legacy surface retains its old chrome. All supported
   // viewer destinations share one navigation and material owner.
   const viewerShell = section !== "games";
@@ -604,7 +604,7 @@ export async function renderSite({ r, section, viewer, viewerData, opts }) {
   // shared navigation but drop the personal overview rail, the credits
   // footer strip and the share controls.
   const articleLayout = viewerShell && section == null && opts.layout === "article";
-  const viewerTemplate = resolveViewerTemplate(viewerShell && r.plan !== "free" ? br.template : undefined);
+  const viewerTemplate = resolveViewerTemplate(viewerShell && canRemoveBranding ? br.template : undefined);
 
   const casino = String(b.casino || "").trim();
   const pool = String(b.prizePool || "").trim();

@@ -128,13 +128,13 @@ export async function handleOverview(request, env) {
   if (res) return res;
   // QA-012: Audit-log admin page views
   await logAdminAction(env, admin.id, "overview", null, null, request);
-  const [users, pro, leads, revenue] = await Promise.all([
+  const [users, paid, leads, revenue] = await Promise.all([
     one("SELECT COUNT(*) n FROM users"),
-    one("SELECT COUNT(*) n FROM users WHERE plan IN ('pro','team') AND status!='suspended'"),
+    one("SELECT COUNT(*) n FROM users WHERE plan IN ('starter','pro','team') AND status!='suspended'"),
     one("SELECT COUNT(*) n FROM leads"),
     one("SELECT COALESCE(SUM(amount),0) n FROM payments WHERE status IN ('finished','manual')"),
   ]);
-  return ok({ users: Number(users?.n) || 0, pro: Number(pro?.n) || 0, leads: Number(leads?.n) || 0, revenue: Number(revenue?.n) || 0 });
+  return ok({ users: Number(users?.n) || 0, paid: Number(paid?.n) || 0, leads: Number(leads?.n) || 0, revenue: Number(revenue?.n) || 0 });
 }
 
 export async function handleUsers(request, env) {
@@ -149,7 +149,7 @@ export async function handleUsers(request, env) {
   const q = (url.searchParams.get("q") || "").trim().toLowerCase();
   const statusFilter = url.searchParams.get("status") || "all";
   const planFilter = url.searchParams.get("plan") || "all";
-  if (!["all", "free", "pro", "team"].includes(planFilter)) return bad("Unknown plan filter", 400);
+  if (!["all", "free", "starter", "pro", "team"].includes(planFilter)) return bad("Unknown plan filter", 400);
 
   const conditions = ["1=1"];
   const params = [];
@@ -229,13 +229,13 @@ export async function handlePayments(request, env) {
   return ok({ payments: rows || [], page, pageSize, total: total?.n || 0 });
 }
 
-// POST /api/admin/action — { userId, action: pro|team|free|suspend|unsuspend|reset-link, days?, plan? }
+// POST /api/admin/action — { userId, action: starter|pro|team|free|suspend|unsuspend|reset-link, days?, plan? }
 export async function handleAction(request, env) {
   // Sensitive actions (plan changes, reset-link) require fresh 2FA verification
   const body = await readJson(request);
   if (!body || !body.userId || !body.action) return bad("userId and action required");
 
-  const sensitiveActions = ["pro", "team", "free", "reset-link"];
+  const sensitiveActions = ["starter", "pro", "team", "free", "reset-link"];
   const requireFresh = sensitiveActions.includes(body.action);
 
   const { admin, res } = await requireAdminWith2fa(request, env, requireFresh);
@@ -245,6 +245,7 @@ export async function handleAction(request, env) {
   if (!target) return bad("No such user", 404);
 
   switch (body.action) {
+    case "starter":
     case "pro":
     case "team": {
       const days = Number(body.days);

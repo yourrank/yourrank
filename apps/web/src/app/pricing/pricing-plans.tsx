@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  canUseFeature,
   getPlanLimit,
   PLAN_META,
   PLAN_PRICING,
   PLAN_TIERS,
+  PUBLIC_PLAN_TIERS,
   tierIndex,
   type BillingInterval,
   type PlanTier,
@@ -69,6 +71,10 @@ export function accountPlanAction(account: AccountBilling, tier: PlanTier, inter
 const limit = getPlanLimit;
 
 const number = (value: number) => value.toLocaleString("en-US");
+const history = (tier: PlanTier) => {
+  const days = limit(tier, "history_days");
+  return days % 365 === 0 ? `${days / 365 * 12} months` : `${days} days`;
+};
 
 function displayPrice(tier: PlanTier, interval: BillingInterval) {
   if (tier === "free") return { amount: "$0", period: "forever", detail: "No credit card required" };
@@ -91,13 +97,20 @@ const strongestFeatures: Record<PlanTier, string[]> = {
     "Basic recent Insights",
     "Standard customization with YourRank badge",
   ],
+  starter: [
+    `${number(limit("starter","active_viewers_30d"))} active viewers`,
+    `${limit("starter","sites")} site · ${number(limit("starter","players_per_site"))} leaderboard players`,
+    `${limit("starter","reward_mappings")} reward mappings · ${limit("starter","shop_items")} shop items`,
+    "Predictions and tournaments",
+    `Branded OBS overlay · ${history("starter")} of history`,
+  ],
   pro: [
     `${number(limit("pro","active_viewers_30d"))} active viewers`,
     `${limit("pro","sites")} sites · ${number(limit("pro","players_per_site"))} players per site`,
     "Custom domain and stronger branding",
     `${limit("pro","reward_mappings")} reward mappings · ${limit("pro","shop_items")} shop items`,
     "CSV exports and automatic scores",
-    "12 months of accessible history",
+    `${history("pro")} of accessible history`,
   ],
   team: [
     `${number(limit("team","active_viewers_30d"))} active viewers`,
@@ -110,16 +123,17 @@ const strongestFeatures: Record<PlanTier, string[]> = {
 };
 
 const comparison = [
-  ["Active viewers · rolling 30 days", ...PLAN_TIERS.map((tier) => number(limit(tier,"active_viewers_30d")))],
-  ["Creator-owned sites", ...PLAN_TIERS.map((tier) => String(limit(tier,"sites")))],
-  ["Leaderboard players per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"players_per_site")))],
-  ["Accessible history", `${limit("free","history_days")} days`, "12 months", "24 months"],
-  ["Reward mappings per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"reward_mappings")))],
-  ["Shop items per site", ...PLAN_TIERS.map((tier) => number(limit(tier,"shop_items")))],
-  ["Connected Telegram bots", ...PLAN_TIERS.map((tier) => number(limit(tier,"telegram_bots")))],
-  ["Custom domain", "Not included", "Included", "Included"],
-  ["Automatic scores", "Not included", "Included", "Included"],
-  ["Operator seats", ...PLAN_TIERS.map((tier) => String(limit(tier,"operator_seats")))],
+  ["Active viewers · rolling 30 days", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"active_viewers_30d")))],
+  ["Creator-owned sites", ...PUBLIC_PLAN_TIERS.map((tier) => String(limit(tier,"sites")))],
+  ["Leaderboard players per site", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"players_per_site")))],
+  ["Accessible history", ...PUBLIC_PLAN_TIERS.map(history)],
+  ["Reward mappings per site", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"reward_mappings")))],
+  ["Shop items per site", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"shop_items")))],
+  ["Connected Telegram bots", ...PUBLIC_PLAN_TIERS.map((tier) => number(limit(tier,"telegram_bots")))],
+  ["Predictions & tournaments", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "predictions") && canUseFeature(tier, "tournaments") ? "Included" : "Not included")],
+  ["Custom domain", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "custom_domain") ? "Included" : "Not included")],
+  ["Automatic scores", ...PUBLIC_PLAN_TIERS.map((tier) => canUseFeature(tier, "signed_api") ? "Included" : "Not included")],
+  ["Operator seats", ...PUBLIC_PLAN_TIERS.map((tier) => String(limit(tier,"operator_seats")))],
 ] as const;
 
 export function PricingPlans() {
@@ -159,11 +173,11 @@ export function PricingPlans() {
                 </button>
               ))}
             </div>
-            <p className="text-sm text-devin-ink-soft">Annual Pro and Team include 2 months free.</p>
+            <p className="text-sm text-devin-ink-soft">Annual Starter and Pro include 2 months free.</p>
           </div>
 
           <div className="grid gap-px overflow-hidden rounded-[16px] border border-devin-line bg-devin-line lg:grid-cols-3">
-            {PLAN_TIERS.map((tier) => {
+            {PUBLIC_PLAN_TIERS.map((tier) => {
               const plan = PLAN_META[tier];
               const price = displayPrice(tier, interval);
               const action = account
@@ -206,7 +220,7 @@ export function PricingPlans() {
             <div>
               <h2 id="custom-scale-heading" className="text-lg font-medium tracking-[-0.02em] text-devin-ink">Need more scale?</h2>
               <p className="mt-1 max-w-xl text-sm leading-relaxed text-devin-ink-soft">
-                {`For communities with more than ${number(limit("team", "active_viewers_30d"))} active viewers, higher limits are available.`}
+                For communities with more than 2,500 active viewers, talk to us about higher limits.
               </p>
             </div>
             <Link href="/help/support" data-magnetic className="inline-flex min-h-12 shrink-0 items-center justify-center rounded-[2px] border border-devin-line px-5 text-sm font-medium text-devin-ink transition-colors hover:border-devin-ink/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-devin-primary">
@@ -214,7 +228,7 @@ export function PricingPlans() {
             </Link>
           </aside>
           <p className="mt-5 max-w-3xl text-sm leading-relaxed text-devin-ink-soft">
-            Free is available now. Pro and Team checkout is live — paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal.
+            Starter and Pro checkout is live — paid access activates only after a verified Polar confirmation, and you can cancel anytime from the customer portal. Team is not currently sold; existing Team accounts remain supported.
           </p>
         </div>
       </section>
@@ -228,14 +242,14 @@ export function PricingPlans() {
               <thead>
                 <tr className="border-b border-devin-line text-left">
                   <th scope="col" className="px-5 py-4 font-medium text-devin-ink">Capability</th>
-                  {PLAN_TIERS.map((tier) => <th key={tier} scope="col" className={`px-5 py-4 font-medium text-devin-ink ${tier === "pro" ? "bg-devin-secondary/45" : ""}`}>{PLAN_META[tier].name}</th>)}
+                  {PUBLIC_PLAN_TIERS.map((tier) => <th key={tier} scope="col" className={`px-5 py-4 font-medium text-devin-ink ${tier === "pro" ? "bg-devin-secondary/45" : ""}`}>{PLAN_META[tier].name}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {comparison.map(([label, ...values]) => (
                   <tr key={label} className="border-b border-devin-line last:border-b-0">
                     <th scope="row" className="px-5 py-3.5 text-left font-normal text-devin-ink">{label}</th>
-                    {values.map((value, index) => <td key={PLAN_TIERS[index]} className={`px-5 py-3.5 tabular-nums text-devin-ink-soft ${PLAN_TIERS[index] === "pro" ? "bg-devin-secondary/45 text-devin-ink" : ""}`}>{value}</td>)}
+                    {values.map((value, index) => <td key={PUBLIC_PLAN_TIERS[index]} className={`px-5 py-3.5 tabular-nums text-devin-ink-soft ${PUBLIC_PLAN_TIERS[index] === "pro" ? "bg-devin-secondary/45 text-devin-ink" : ""}`}>{value}</td>)}
                   </tr>
                 ))}
               </tbody>

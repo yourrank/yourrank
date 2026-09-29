@@ -13,7 +13,7 @@ describe("platform legal copy truth", () => {
     const responsible = applyLegalIdentity(responsiblePage, {});
     const copy = `${terms}\n${responsible}`;
 
-    expect(copy).toContain("When enabled in Billing, Pro and Team subscriptions are processed by Polar.");
+    expect(copy).toContain("Starter and Pro subscriptions are processed by Polar; Team is archived and not currently sold");
     expect(copy).toContain("Community credits have no cash value.");
     expect(copy).not.toMatch(/sign up or deposit|cryptocurrency|blockchain/i);
   });

@@ -79,35 +79,44 @@ describe("Home & Product components", () => {
     const html = renderToString(<PricingSnapshot />);
     expect(html).toContain("Start with the community you have");
     expect(html).toContain("Free");
+    expect(html).toContain("Starter");
     expect(html).toContain("Pro");
     expect(html).toContain("50 active viewers");
+    expect(html).toContain("250 viewers");
     expect(html).toContain("1 site · 10 leaderboard players");
+    expect(html).not.toContain("Get Team");
+    expect((html.match(/<article/g) || []).length).toBe(3);
     expect(html).not.toContain("100 active viewers");
   });
 
   it("renders the full pricing comparison with the corrected Free limits", () => {
     const html = renderToString(<PricingPlans />);
     expect(html).toContain("50 active viewers");
+    expect(html).toContain("250 active viewers");
     expect(html).toContain("1 site · 10 leaderboard players");
+    expect(html).toContain("100 leaderboard players");
+    expect(html).toContain("Predictions &amp; tournaments");
+    expect(html).toContain("90 days");
+    expect(html).not.toContain("Team</th>");
     expect(html).not.toContain("100 active viewers");
   });
 
   it("routes paid plan CTAs to signup with the selected plan", () => {
     const html = renderToString(<PricingPlans />);
+    expect(html).toMatch(/href="\/signup\?plan=starter&amp;interval=monthly">Get Starter<\/a>/);
     expect(html).toMatch(/href="\/signup\?plan=pro&amp;interval=monthly">Get Pro<\/a>/);
-    expect(html).toMatch(/href="\/signup\?plan=team&amp;interval=monthly">Get Team<\/a>/);
+    expect(html).not.toContain("Get Team");
     expect(html).toMatch(/href="\/signup\?plan=free&amp;interval=monthly">Start free<\/a>/);
   });
 
-  it("pricing shows the canonical Team capacity and the custom-scale CTA, without stale values", () => {
+  it("public pricing shows only public tiers and the Pro-scale support CTA", () => {
     const html = renderToString(<PricingPlans />);
-    expect(html).toContain("25,000 active viewers");
     expect(html).toContain("2,500 active viewers");
+    expect(html).toContain("more than 2,500 active viewers, talk to us about higher limits.");
     expect(html).toContain("Start your community");
     expect(html).toContain("Grow and automate your community");
-    expect(html).toContain("Run your community with a team");
     expect(html).toContain("Need more scale?");
-    expect(html).toContain("more than 25,000 active viewers");
+    expect(html).toContain("Team is not currently sold");
     expect(html).toMatch(/href="\/help\/support"[^>]*>Talk to us</);
     expect(html).not.toContain("10,000 active viewers");
     expect(html).not.toContain("100 active viewers");

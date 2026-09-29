@@ -4,7 +4,7 @@ import { legal } from "./legal-helper.js";
 export const refundPage = legal("Refund & Cancellation Policy", "July 2026", `
 <p><b>Free plan</b> — YourRank can be used free of charge, forever. No payment or credit card is required to create a page and test the service.</p>
 <h2>Paid plans</h2>
-<p>When enabled in Billing, Pro and Team subscriptions are processed by Polar. Selecting a plan does not itself create a charge or paid entitlement. The price, billing interval, and applicable taxes are shown at checkout. Access starts after payment is confirmed.</p>
+<p>Starter and Pro subscriptions are processed by Polar. Team is archived and not currently sold; existing Team accounts remain supported. Selecting a plan does not itself create a charge or paid entitlement. The price, billing interval, and applicable taxes are shown at checkout. Access starts after payment is confirmed.</p>
 <h2>Failed or duplicate charges</h2>
 <p>If a charge is duplicated by mistake, contact us within 14 days and we will review the transaction. Approved duplicate charges will be refunded to the original payment method.</p>
 <h2>How to cancel</h2>

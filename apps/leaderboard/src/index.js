@@ -1397,7 +1397,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
         if (!r || r.suspended) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
-        const paid = r.plan !== "free";
+        const paid = canUseFeature(r.plan, "remove_branding");
         return new Response(
           await renderNewHallOfFame(r.data, {
             nonce, slug, plan: r.plan, homeUrl: url.origin, isCustomDomain: false,
@@ -1430,7 +1430,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
         if (!r || r.suspended) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
-        const paid = r.plan !== "free";
+        const paid = canUseFeature(r.plan, "remove_branding");
         return new Response(
           await renderNewLegalPage(r.data, page, {
             nonce, slug, plan: r.plan, homeUrl: url.origin, isCustomDomain: false,
@@ -1454,7 +1454,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
         const profile = findProfilePlayer(r.data, playerName);
         if (!profile) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
         const history = await buildPlayerHistory(env, r.id, playerName, r.plan, r.data.rankBy);
-        const paid = r.plan !== "free";
+        const paid = canUseFeature(r.plan, "remove_branding");
         return new Response(
           await renderNewPlayerProfile(r.data, { ...profile.player, rank: profile.rank }, history, {
             nonce, slug, plan: r.plan, homeUrl: url.origin, isCustomDomain: false,
@@ -1474,7 +1474,7 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
           return new Response(renderPasswordGate(r, { nonce, isCustomDomain: false }), { headers: { ...HTML_N, "cache-control": "no-store" } });
         }
         if (!r || r.suspended) return new Response(notFoundPage(slug, nonce), { status: 404, headers: HTML_N });
-        const paid = r.plan !== "free";
+        const paid = canUseFeature(r.plan, "remove_branding");
         return new Response(
           await renderNewStreamerProfile(r.data, {
             nonce, slug, plan: r.plan, homeUrl: url.origin, isCustomDomain: false,
@@ -1592,10 +1592,10 @@ export async function handleRequest(request, env, ctx, meta, deps = {}) {
               slug,
               nonce,
               isCustomDomain: false,
-              logoUrl: r.plan !== "free" && r.data.branding?.hasLogo
+              logoUrl: canUseFeature(r.plan, "remove_branding") && r.data.branding?.hasLogo
                 ? `${url.origin}/logo/${slug}`
                 : null,
-              bannerUrl: r.plan !== "free" && r.data.branding?.hasBanner
+              bannerUrl: canUseFeature(r.plan, "remove_branding") && r.data.branding?.hasBanner
                 ? `${url.origin}/banner/${slug}`
                 : null,
             },

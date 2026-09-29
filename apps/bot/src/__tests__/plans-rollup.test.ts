@@ -54,14 +54,14 @@ mock.module(cryptoUrl, cryptoMock);
 mock.module(cryptoUrlTs, cryptoMock);
 
 // ── Import after mocks ─────────────────────────────────────────────────
-import { botPlanView } from "../plans.js";
+import { botPlanView, getPlanTier } from "../plans.js";
 import { effectivePlan, getPlanLimit, PLAN_TIERS } from "@yourrank/shared/plans";
 
 // ── PLANS constant (bot-specific) ──────────────────────────────────────
 describe("botPlanView", () => {
   it("derives a bot plan view for each canonical tier", () => {
     const views = PLAN_TIERS.map(botPlanView);
-    expect(views.map((v) => v.tier)).toEqual(["free", "pro", "team"]);
+    expect(views.map((v) => v.tier)).toEqual(["free", "starter", "pro", "team"]);
   });
 
   it("each plan view has required fields", () => {
@@ -71,6 +71,11 @@ describe("botPlanView", () => {
       expect(plan).toHaveProperty("maxBots");
       expect(plan).toHaveProperty("maxOffers");
     }
+  });
+
+  it("recognizes Starter as a canonical plan tier", () => {
+    expect(getPlanTier("starter")).toBe("starter");
+    expect(getPlanTier("agency")).toBeUndefined();
   });
 });
 
@@ -88,6 +93,7 @@ describe("effectivePlan", () => {
   it("returns plan name for active subscription", () => {
     const user = { plan: "pro", plan_expires_at: Date.now() + 86400000 };
     expect(effectivePlan(user)).toBe("pro");
+    expect(effectivePlan({ plan: "starter", plan_expires_at: Date.now() + 86400000 })).toBe("starter");
   });
 
   it("returns the plan when expiry is null (non-expiring admin grant)", () => {
@@ -104,10 +110,15 @@ describe("effectivePlan", () => {
 // ── PLAN_LIMITS hierarchy ──────────────────────────────────────────────
 describe("PLAN_LIMITS", () => {
   it("free has fewer players than pro", () => {
+    expect(getPlanLimit("starter", "players_per_site")).toBeGreaterThan(getPlanLimit("free", "players_per_site"));
+    expect(getPlanLimit("pro", "players_per_site")).toBeGreaterThan(getPlanLimit("starter", "players_per_site"));
     expect(getPlanLimit("free", "players_per_site")).toBeLessThan(getPlanLimit("pro", "players_per_site"));
   });
 
-  it("sites: free has fewer boards than pro", () => {
+  it("sites: Starter matches Free and Pro allows more", () => {
+    expect(getPlanLimit("starter", "sites")).toBe(1);
+    expect(getPlanLimit("starter", "sites")).toBe(getPlanLimit("free", "sites"));
+    expect(getPlanLimit("pro", "sites")).toBeGreaterThan(getPlanLimit("starter", "sites"));
     expect(getPlanLimit("free", "sites")).toBeLessThan(getPlanLimit("pro", "sites"));
   });
 });

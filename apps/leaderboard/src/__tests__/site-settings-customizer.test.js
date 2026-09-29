@@ -203,6 +203,7 @@ describe("markup: Appearance owns community branding", () => {
     expect(appearance).toContain('id="appearanceBrandBody"');
     expect(appearance).toContain('id="appearanceBrandLock"');
     expect(appearance).toContain("Branding is a Pro feature.");
+    expect(siteJs).toContain("const paid = isPro()");
     expect(siteJs).toContain("appearanceBody.hidden = !paid");
     expect(siteJs).toContain("appearanceLock.hidden = paid");
   });

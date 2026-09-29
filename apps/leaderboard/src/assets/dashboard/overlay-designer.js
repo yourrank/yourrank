@@ -52,7 +52,7 @@ export function buildOverlayPath(slug, design) {
 /** What the preview frame shows: real site when the plan allows it, demo otherwise. */
 export function previewPath(slug, design, { plan } = {}) {
   const paid = plan !== undefined ? plan !== "free" : true;
-  if (paid) return buildOverlayPath(slug, design);
+  if (paid) return buildOverlayPath(slug, plan === "starter" ? OVERLAY_DESIGN_DEFAULT : design);
   return buildOverlayPath("demo", design);
 }
 
@@ -92,8 +92,14 @@ export function initOverlayDesigner() {
   const hint = $("odHint");
   if (!canvas || !frame || !handle) return;
 
-  let design = loadDesign();
+  let design = state.ME?.plan === "starter" ? { ...OVERLAY_DESIGN_DEFAULT } : loadDesign();
   let frameTimer = null;
+
+  if (state.ME?.plan === "starter") {
+    for (const control of [handle, layoutSel, scaleSel, animateCb, xInput, yInput, resetBtn]) {
+      if (control) control.disabled = true;
+    }
+  }
 
   const slug = () => state.SLUG || "";
 
@@ -189,7 +195,8 @@ export function initOverlayDesigner() {
   });
   copyBtn?.addEventListener("click", async () => {
     try {
-      const copied = await copyToClipboard(location.origin + buildOverlayPath(slug(), design));
+      const linkDesign = state.ME?.plan === "starter" ? OVERLAY_DESIGN_DEFAULT : design;
+      const copied = await copyToClipboard(location.origin + buildOverlayPath(slug(), linkDesign));
       if (!copied) throw new Error("Could not copy the URL. Select it from the share box instead.");
       showToast("Composed OBS overlay URL copied to clipboard!", "info");
     } catch {
@@ -197,10 +204,12 @@ export function initOverlayDesigner() {
     }
   });
 
-  // Honest preview for free plans: the demo overlay renders sample data and
-  // the live route itself upsells, so say so here rather than faking it.
+  // Free previews use sample data; Starter gets the branded card, while Pro
+  // and existing Team accounts can customize advanced overlay layouts.
   if (hint && state.ME?.plan === "free") {
-    hint.innerHTML = `This preview uses sample data — live overlays are a Pro feature. <a href="/dashboard/settings/billing?from=overlay">View plans</a> to stream your real leaderboard.`;
+    hint.innerHTML = `This preview uses sample data. Starter includes the branded live card overlay; Pro and existing Team plans add advanced layouts and positioning. <a href="/dashboard/settings/billing?from=overlay">View plans</a>.`;
+  } else if (hint && state.ME?.plan === "starter") {
+    hint.innerHTML = `Starter includes the branded live card overlay. Pro and existing Team plans add advanced layouts and positioning.`;
   }
 
   render({ save: false });

@@ -372,7 +372,7 @@ describe("Giveaway draw flow", () => {
   it("adds a safe upgrade link to a stale prediction entitlement error", async () => {
     server.predictionCreateResponse = {
       status: 403,
-      body: { ok: false, code: "entitlement_required", error: "Predictions is available on Pro and Team." },
+      body: { ok: false, code: "entitlement_required", error: "Predictions is available on Starter and higher plans." },
     };
     document.body.innerHTML = renderGiveawaysHtml("preds");
     enter();
@@ -388,7 +388,7 @@ describe("Giveaway draw flow", () => {
 
     const status = $id("pred-status");
     expect(status.classList.contains("error")).toBe(true);
-    expect(status.textContent).toContain("Predictions is available on Pro and Team.");
+    expect(status.textContent).toContain("Predictions is available on Starter and higher plans.");
     expect(status.querySelector("a").textContent).toBe("Upgrade your plan");
     expect(status.querySelector("a").getAttribute("href")).toBe("/dashboard/settings/billing?from=predictions");
   });

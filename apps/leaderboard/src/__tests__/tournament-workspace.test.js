@@ -130,7 +130,7 @@ describe("tournament workspace chrome", () => {
     expect($id("tournament-plan-lock").dataset.planLock).toBe("tournaments");
     $id("tournament-create").disabled = false;
     await click("tournament-create");
-    expect(text("tournament-message")).toBe("Tournaments is available on Pro and Team.");
+    expect(text("tournament-message")).toBe("Tournaments is available on Starter and higher plans.");
     expect($id("tournament-create-modal")).toBeNull();
   });
 });

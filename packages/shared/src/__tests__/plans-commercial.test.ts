@@ -9,6 +9,7 @@ import {
   FEATURE_LABELS,
   LIMIT_LABELS,
   PLAN_TIERS,
+  priceUsd,
   type PlanFeature,
   type PlanLimitKey,
 } from "../plans.js";
@@ -37,6 +38,10 @@ describe("PLAN_LIMITS table", () => {
 
   it("approved commercial values", () => {
     expect(getPlanLimit("free", "players_per_site")).toBe(10);
+    expect(getPlanLimit("starter", "active_viewers_30d")).toBe(250);
+    expect(getPlanLimit("starter", "history_days")).toBe(90);
+    expect(getPlanLimit("starter", "reward_mappings")).toBe(10);
+    expect(getPlanLimit("starter", "telegram_interactions_per_month")).toBe(5_000);
     expect(getPlanLimit("pro", "players_per_site")).toBe(1_000);
     expect(getPlanLimit("team", "players_per_site")).toBe(5_000);
     expect(getPlanLimit("free", "active_viewers_30d")).toBe(50);
@@ -55,7 +60,9 @@ describe("PLAN_LIMITS table", () => {
 
   it("limits are monotonic across tiers", () => {
     for (const key of Object.keys(PLAN_LIMITS.free) as PlanLimitKey[]) {
+      expect(PLAN_LIMITS.starter[key]).toBeGreaterThanOrEqual(PLAN_LIMITS.free[key]);
       expect(PLAN_LIMITS.pro[key]).toBeGreaterThanOrEqual(PLAN_LIMITS.free[key]);
+      expect(PLAN_LIMITS.pro[key]).toBeGreaterThanOrEqual(PLAN_LIMITS.starter[key]);
       expect(PLAN_LIMITS.team[key]).toBeGreaterThanOrEqual(PLAN_LIMITS.pro[key]);
     }
   });
@@ -74,11 +81,26 @@ describe("features", () => {
   });
 
   it("canUseFeature honours the tier ladder", () => {
+    expect(canUseFeature("starter", "predictions")).toBe(true);
+    expect(canUseFeature("starter", "tournaments")).toBe(true);
+    expect(canUseFeature("starter", "wheel")).toBe(false);
+    expect(canUseFeature("starter", "quests")).toBe(false);
+    expect(canUseFeature("starter", "duels")).toBe(false);
+    expect(canUseFeature("starter", "battlepass")).toBe(false);
+    expect(canUseFeature("starter", "remove_branding")).toBe(false);
+    expect(canUseFeature("starter", "signed_api")).toBe(false);
+    expect(canUseFeature("starter", "advanced_overlays")).toBe(false);
+    expect(canUseFeature("starter", "custom_domain")).toBe(false);
     expect(canUseFeature("free", "custom_domain")).toBe(false);
     expect(canUseFeature("pro", "custom_domain")).toBe(true);
     expect(canUseFeature("team", "custom_domain")).toBe(true);
     expect(canUseFeature("pro", "team_collaboration")).toBe(false);
     expect(canUseFeature("team", "team_collaboration")).toBe(true);
+  });
+
+  it("prices Starter at $12 monthly and $120 annually", () => {
+    expect(priceUsd("starter")).toBe(12);
+    expect(priceUsd("starter", undefined, "annual")).toBe(120);
   });
 
   it("PLAN_FEATURES derives from FEATURE_MIN_TIER", () => {
@@ -111,8 +133,8 @@ describe("entitlements", () => {
     expect(d.limit).toBe("players_per_site");
     expect(d.usage).toBe(10);
     expect(d.allowance).toBe(10);
-    expect(d.required_plan).toBe("pro");
-    expect(d.error).toContain("1,000");
+    expect(d.required_plan).toBe("starter");
+    expect(d.error).toContain("100");
   });
 
   it("limitDenial at the top tier has required_plan null", () => {

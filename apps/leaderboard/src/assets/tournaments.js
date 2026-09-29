@@ -243,7 +243,7 @@ function setCreateError(text = "") {
 
 async function openCreateModal() {
   if (!tournamentsEnabled) {
-    setMessage("Tournaments is available on Pro and Team.", true);
+    setMessage("Tournaments is available on Starter and higher plans.", true);
     return;
   }
   if ($("tournament-create-modal")) return;

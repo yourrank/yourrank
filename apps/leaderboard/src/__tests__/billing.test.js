@@ -7,10 +7,12 @@ import {
   PLAN_PRICES,
   PLAN_PRICING,
   PLAN_TIERS,
+  PUBLIC_PLAN_TIERS,
   activeViewerUsageState,
   effectivePlan,
   priceUsd,
 } from "@yourrank/shared/plans";
+import { upgradeAllowanceFor } from "../billing.js";
 import { activeViewerUsageMarkup } from "../assets/dashboard/plan-usage.js";
 
 const NOW = Date.parse("2026-08-29T12:00:00Z");
@@ -24,10 +26,11 @@ const billingMigration = readFileSync(
   "utf8",
 );
 
-describe("canonical Free / Pro / Team model", () => {
-  test("has exactly three customer-facing tiers", () => {
-    expect(PLAN_TIERS).toEqual(["free", "pro", "team"]);
-    expect(Object.keys(PLAN_META)).toEqual(["free", "pro", "team"]);
+describe("canonical Free / Starter / Pro / Team model", () => {
+  test("orders all tiers and exposes only public pricing tiers", () => {
+    expect(PLAN_TIERS).toEqual(["free", "starter", "pro", "team"]);
+    expect(PUBLIC_PLAN_TIERS).toEqual(["free", "starter", "pro"]);
+    expect(Object.keys(PLAN_META)).toEqual(["free", "starter", "pro", "team"]);
   });
 
   test("implements approved scale and operator limits", () => {
@@ -46,7 +49,8 @@ describe("canonical Free / Pro / Team model", () => {
   });
 
   test("implements approved monthly and annual prices", () => {
-    expect(PLAN_PRICES).toEqual({ free: 0, pro: 24, team: 69 });
+    expect(PLAN_PRICES).toEqual({ free: 0, starter: 12, pro: 24, team: 69 });
+    expect(PLAN_PRICING.starter).toEqual({ monthlyUsd: 12, annualUsd: 120, effectiveAnnualMonthlyUsd: 10 });
     expect(PLAN_PRICING.pro).toEqual({ monthlyUsd: 24, annualUsd: 240, effectiveAnnualMonthlyUsd: 20 });
     expect(PLAN_PRICING.team).toEqual({ monthlyUsd: 69, annualUsd: 690, effectiveAnnualMonthlyUsd: 57.5 });
     expect(priceUsd({}, "pro", "annual")).toBe(240);
@@ -58,16 +62,28 @@ describe("canonical Free / Pro / Team model", () => {
   });
 
   test("dashboard plan cards stay contract-tested against canonical prices", () => {
-    const source = dashboardPlanSource.match(/function planDefs\(\) \{([\s\S]*?)\n\}/)[1];
-    const getPlans = new Function("PLAN_ORDER", "PLAN_META", "PLAN_PRICING", "billingInterval", source);
+    const source = dashboardPlanSource.match(/function planDefs\(showTeam = false\) \{([\s\S]*?)\n\}/)[1];
+    const getPlans = new Function("PLAN_ORDER", "PLAN_META", "PLAN_PRICING", "billingInterval", "showTeam", source);
     for (const interval of ["monthly", "annual"]) {
-      const cards = getPlans(PLAN_TIERS, PLAN_META, PLAN_PRICING, interval);
+      const cards = getPlans(PLAN_TIERS, PLAN_META, PLAN_PRICING, interval, true);
+      const publicCards = getPlans(PLAN_TIERS, PLAN_META, PLAN_PRICING, interval, false);
+      expect(publicCards.map((card) => card.key)).toEqual([...PUBLIC_PLAN_TIERS]);
       for (const [index, tier] of PLAN_TIERS.entries()) {
         expect(cards[index].name).toBe(PLAN_META[tier].name);
         expect(cards[index].features).toEqual(PLAN_META[tier].features);
         expect(cards[index].priceStr).toBe(`$${PLAN_PRICING[tier][interval === "monthly" ? "monthlyUsd" : "effectiveAnnualMonthlyUsd"]}`);
       }
     }
+    expect(dashboardPlanSource).toContain("planDefs(plan === \"team\")");
+    expect(dashboardPlanSource).toContain("const available = billingInfo?.options?.[p.key]?.[billingInterval]");
+    expect(dashboardPlanSource).toContain("!available || !!billingInfo?.hasSubscription");
+  });
+
+  test("shows the next public active-viewer allowance", () => {
+    expect(upgradeAllowanceFor("free")).toBe(250);
+    expect(upgradeAllowanceFor("starter")).toBe(2_500);
+    expect(upgradeAllowanceFor("pro")).toBeNull();
+    expect(upgradeAllowanceFor("team")).toBeNull();
   });
 });
 
@@ -102,7 +118,7 @@ describe("canonical entitlement resolver", () => {
   });
 
   test("rejects removed and unknown tiers", () => {
-    for (const plan of ["starter", "agency", "lifetime", "vip"]) {
+    for (const plan of ["agency", "lifetime", "vip"]) {
       expect(effectivePlan({ plan, plan_expires_at: NOW + 86_400_000 }, NOW)).toBe("free");
     }
   });
@@ -161,7 +177,7 @@ describe("Free active-viewer grace", () => {
       return activeViewerUsageMarkup({
         ...state,
         activeViewers,
-        upgradeAllowance: getPlanLimit("pro", "active_viewers_30d"),
+        upgradeAllowance: upgradeAllowanceFor("free"),
       });
     };
 
@@ -174,5 +190,19 @@ describe("Free active-viewer grace", () => {
     expect(render(51, NOW - 14 * 86_400_000)).toContain('data-level="restricted"');
     expect(render(51, NOW - 14 * 86_400_000)).toContain("Viewer access, memberships, credits, orders and existing activity continue.");
     expect(render(43)).toContain('href="/pricing"');
+    expect(render(43)).toContain("Starter supports 250 active viewers.");
+  });
+
+  test("Starter viewer-limit messaging points to Pro", () => {
+    const state = activeViewerUsageState({ plan: "starter", activeViewers: 250, nowMs: NOW });
+    const markup = activeViewerUsageMarkup({
+      ...state,
+      plan: "starter",
+      activeViewers: 250,
+      upgradeAllowance: upgradeAllowanceFor("starter"),
+    });
+    expect(markup).toContain("You have reached the Starter allowance.");
+    expect(markup).toContain("Pro supports 2,500 active viewers.");
+    expect(markup).toContain('href="/pricing">Compare Pro</a>');
   });
 });

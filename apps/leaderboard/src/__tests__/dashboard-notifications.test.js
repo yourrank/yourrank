@@ -19,7 +19,7 @@ describe("webhook notification settings", () => {
       .toBe("https://discord.com/api/webhooks/1/token");
   });
 
-  it("disables every notifications control on the Free plan, not just the Discord body", () => {
+  it("disables every notifications control below Pro, not just the Discord body", () => {
     // The Telegram fields and Send test sit outside #notifyBody, so hiding the
     // Discord body alone left them live on Free — the click reached the API
     // and only then learned notifications are a paid feature.

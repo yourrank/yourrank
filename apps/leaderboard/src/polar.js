@@ -5,10 +5,14 @@ import { PLAN_PRICING } from "@yourrank/shared/plans";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isBillingId = (id) => typeof id === "string" && UUID.test(id);
 const PAST_DUE_GRACE_DAYS = [0, 2, 7, 14, 21];
+const ARCHIVED_PRODUCTION_TEAM_PRODUCTS = {
+  "18b35be4-962f-4688-aee8-6604de31ea4e": { plan: "team", interval: "monthly" },
+  "0a895095-b807-41f4-8e4f-f9c09f7e9573": { plan: "team", interval: "annual" },
+};
 
 export function polarConfig(env) {
   const products = {};
-  const options = { pro: {}, team: {} };
+  const options = { starter: {}, pro: {}, team: {} };
   const graceRaw = env.POLAR_PAST_DUE_GRACE_DAYS ?? "0";
   const graceDays = PAST_DUE_GRACE_DAYS.includes(Number(graceRaw)) && String(Number(graceRaw)) === String(graceRaw).trim() ? Number(graceRaw) : null;
   let error;
@@ -21,12 +25,17 @@ export function polarConfig(env) {
     ) error = "polar_environment_mismatch";
   }
   const ready = ["sandbox", "production"].includes(env.POLAR_SERVER) && !!env.POLAR_ACCESS_TOKEN && !!env.POLAR_WEBHOOK_SECRET && isBillingId(env.POLAR_ORGANIZATION_ID) && graceDays !== null && !error;
-  for (const plan of ["pro", "team"]) for (const interval of ["monthly", "annual"]) {
+  for (const plan of ["starter", "pro", "team"]) for (const interval of ["monthly", "annual"]) {
     const id = env[`POLAR_PRODUCT_${plan.toUpperCase()}_${interval.toUpperCase()}`];
     options[plan][interval] = ready && isBillingId(id);
     if (isBillingId(id)) {
       if (products[id]) throw new Error("Polar products must have distinct IDs.");
       products[id] = { plan, interval, id };
+    }
+  }
+  if (env.POLAR_SERVER === "production") {
+    for (const [id, mapping] of Object.entries(ARCHIVED_PRODUCTION_TEAM_PRODUCTS)) {
+      if (!products[id]) products[id] = { ...mapping, id };
     }
   }
   return { ready, error, products, options, graceDays: graceDays ?? 0, server: env.POLAR_SERVER,

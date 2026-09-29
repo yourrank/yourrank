@@ -1,11 +1,15 @@
 import { describe, test, expect } from "bun:test";
-import { polarConfig, polarRequest, PolarRequestError, polarRedirect, validatePolarProduct, verifyPolarWebhook, assertPolarDeletionAllowed } from "../polar.js";
+import { polarConfig, polarRequest, PolarRequestError, polarRedirect, validatePolarProduct, verifyPolarWebhook, assertPolarDeletionAllowed, isBillingId } from "../polar.js";
 import { handlePolarCheckout, handlePolarPortal, handlePolarWebhook, getPolarBillingStatus, syncPolarCustomer } from "../handlers/polar-billing.js";
 import { shouldRequireCsrf } from "../middleware/csrf.js";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const productId = "00000000-0000-4000-8000-000000000002";
 const orgId = "00000000-0000-4000-8000-000000000003";
+const starterMonthlyId = "00000000-0000-4000-8000-000000000005";
+const starterAnnualId = "00000000-0000-4000-8000-000000000006";
+const archivedTeamMonthlyId = "18b35be4-962f-4688-aee8-6604de31ea4e";
+const archivedTeamAnnualId = "0a895095-b807-41f4-8e4f-f9c09f7e9573";
 const secret = `whsec_${btoa("local-test-signature-key-32-bytes!")}`;
 const env = { POLAR_SERVER: "sandbox", POLAR_ACCESS_TOKEN: "test-token", POLAR_WEBHOOK_SECRET: secret, POLAR_ORGANIZATION_ID: orgId, POLAR_PRODUCT_PRO_MONTHLY: productId };
 const user = { id: userId, email: "test@example.invalid", status: "active" };
@@ -41,6 +45,36 @@ describe("Polar boundary", () => {
     expect(polarConfig(env).options.pro.annual).toBe(false);
     expect(() => polarConfig({ ...env, POLAR_PRODUCT_TEAM_ANNUAL: productId })).toThrow();
     expect(polarConfig({ ...env, POLAR_SERVER: "typo" }).ready).toBe(false);
+    expect(polarConfig(env).options.starter.monthly).toBe(false);
+    expect(polarConfig(env).options.team).toEqual({ monthly: false, annual: false });
+    expect(isBillingId("")).toBe(false);
+    const configured = polarConfig({
+      ...env,
+      POLAR_PRODUCT_STARTER_MONTHLY: starterMonthlyId,
+      POLAR_PRODUCT_STARTER_ANNUAL: starterAnnualId,
+    });
+    expect(configured.options.starter).toEqual({ monthly: true, annual: true });
+    expect(configured.products[starterMonthlyId]).toMatchObject({ plan: "starter", interval: "monthly" });
+  });
+  test("archived production Team products remain reconcilable without enabling checkout", async () => {
+    const productionEnv = {
+      ...env,
+      POLAR_SERVER: "production",
+      POLAR_PRODUCT_TEAM_MONTHLY: "",
+      POLAR_PRODUCT_TEAM_ANNUAL: "",
+    };
+    const config = polarConfig(productionEnv);
+    expect(config.options.team).toEqual({ monthly: false, annual: false });
+    expect(config.products[archivedTeamMonthlyId]).toMatchObject({ plan: "team", interval: "monthly" });
+    expect(config.products[archivedTeamAnnualId]).toMatchObject({ plan: "team", interval: "annual" });
+    expect((await handlePolarCheckout(req({ plan: "team", interval: "monthly" }), productionEnv, { requireUser: auth })).status).toBe(503);
+
+    const remote = subOf({ product_id: archivedTeamMonthlyId });
+    const { tx, writes, request } = syncFixture({ remoteSubs: [remote] });
+    await syncPolarCustomer(tx, productionEnv, userId, request);
+    const activeWrite = writes.find(([query]) => query.includes("INSERT INTO subscriptions") && !query.includes("'past_due'"));
+    expect(activeWrite[1]).toContain("team");
+    expect(activeWrite[1]).toContain("monthly");
   });
   test("checks catalog price, currency, interval, organization, and archive state", () => {
     const mapping = polarConfig(env).products[productId];
@@ -71,6 +105,29 @@ describe("Polar boundary", () => {
     expect(create.options.body.success_url).toBe("https://yourrank.site/dashboard/settings/billing?billing=return");
     expect(create.options.body.allow_trial).toBe(false);
     expect(writes.every(([sql]) => !sql.includes("UPDATE users") && !sql.includes("INSERT INTO subscriptions"))).toBe(true);
+  });
+  test("Starter checkout validates the configured product and creates a Polar checkout", async () => {
+    const starterEnv = { ...env, POLAR_PRODUCT_STARTER_MONTHLY: starterMonthlyId };
+    const starterProduct = {
+      ...product,
+      id: starterMonthlyId,
+      prices: [{ amount_type: "fixed", price_currency: "usd", price_amount: 1200 }],
+    };
+    let checkoutBody;
+    const response = await handlePolarCheckout(req({ plan: "starter", interval: "monthly" }), starterEnv, {
+      requireUser: auth,
+      transaction: fn => fn({ one: async () => null, unsafe: async () => {} }),
+      request: async (_env, path, options) => {
+        if (path.includes("/state")) return null;
+        if (path.includes("/products/")) return starterProduct;
+        if (path === "/checkouts/" && !options?.body) return { items: [] };
+        checkoutBody = options.body;
+        return { url: "https://sandbox.polar.sh/checkout/starter", expires_at: "2099-01-01T00:00:00Z" };
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(checkoutBody.products).toEqual([starterMonthlyId]);
+    expect(checkoutBody.external_customer_id).toBe(userId);
   });
   test("existing subscribers must use their own customer portal", async () => {
     let creations = 0;

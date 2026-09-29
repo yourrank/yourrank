@@ -7,6 +7,7 @@ const BANNER = `data:image/png;base64,${Buffer.from(PNG).toString("base64")}`;
 const OLD = `data:image/webp;base64,${Buffer.from("RIFF    WEBP").toString("base64")}`;
 const SITE = { id: "site-1", slug: "x", user_id: "user-1", name: "X", tagline: "", published: true, is_draft: false, updated_at: null };
 const FREE = { id: "user-1", plan: "free", plan_expires_at: null, status: "active" };
+const STARTER = { ...FREE, plan: "starter" };
 const PRO = { ...FREE, plan: "pro", plan_expires_at: Date.now() + 86_400_000 };
 
 function harness(existing = "") {
@@ -68,9 +69,11 @@ describe("saveSite banner persistence", () => {
     expect(svg.result.code).toBe("invalid_banner");
   });
 
-  it("ignores branding writes on the free plan", async () => {
-    const result = await run({ branding: { banner: BANNER } }, FREE);
-    expect(result.result.ok).toBe(true);
-    expect(savedBanner(result.calls)).toBe("");
+  it("ignores branding writes on Free and Starter", async () => {
+    for (const plan of [FREE, STARTER]) {
+      const result = await run({ branding: { banner: BANNER } }, plan);
+      expect(result.result.ok).toBe(true);
+      expect(savedBanner(result.calls)).toBe("");
+    }
   });
 });
