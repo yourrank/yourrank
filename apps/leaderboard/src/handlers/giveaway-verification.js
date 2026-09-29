@@ -4,7 +4,7 @@ import { linkedViewerIdentities } from "@yourrank/shared/viewer-identity";
 import { giveawayRules, giveawayParticipantFacts, evaluateGiveawayEligibility } from "@yourrank/shared/giveaway-eligibility";
 import { giveawayTransaction } from "../chat-giveaway-service.js";
 import { checkAnonymousIp } from "../proxycheck.js";
-import { normalizeClientIp, recordAbuseSignals } from "../abuse-signals.js";
+import { clientNetworkKey, recordAbuseSignals } from "../abuse-signals.js";
 import { bad, json, readJson, rateLimit } from "../auth.js";
 import { requestIsSameOrigin } from "../viewer-membership.js";
 import { generateCsrfToken, csrfCookie, SECURE_HTML } from "../middleware/index.js";
@@ -24,7 +24,9 @@ const privateJson = (data, cookie) => {
 
 export async function giveawayIpHash(raw, salt) {
   // CF provides the client address; normalization is shared with abuse-signals.
-  const normalized = normalizeClientIp(raw);
+  // Dedupe on the network key, not the device address: two phones on the
+  // same IPv6 connection share a /64 prefix but have different addresses.
+  const normalized = clientNetworkKey(raw);
   if (!normalized || !salt) return null;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(normalized))),
@@ -105,7 +107,7 @@ export function handleGiveawayVerificationPage(request, env) {
     <title>Verify giveaway entry · YourRank</title><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/ui.css"></head>
     <body><main class="wrap"><section class="card"><a href="/me">YourRank account</a><h1>Verify giveaway entry</h1>
     <h2 id="giveaway-community"></h2><p id="giveaway-identity"></p><p id="giveaway-state" role="status" aria-live="polite">Loading your entry…</p>
-    <p id="giveaway-ip-notice" hidden>One account per IP is enabled. YourRank stores a giveaway-specific hash, never your raw IP. People sharing a connection may be unable to enter together.</p>
+    <p id="giveaway-ip-notice" hidden>One account per IP is enabled. YourRank stores a giveaway-specific hash, never your raw IP. People sharing a connection or Wi-Fi may be unable to enter together.</p>
     <p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Your connection is checked with proxycheck.io when you verify. Turn off any VPN or proxy first.</p>
     <a class="btn" id="giveaway-signin" hidden>Sign in with Kick</a><button class="btn btn--accent" id="giveaway-verify" type="button" disabled>Verify Entry</button>
     </section></main><script src="/assets/device-signal.js" defer></script><script type="module" src="/assets/giveaway-verification.js"></script></body></html>`,

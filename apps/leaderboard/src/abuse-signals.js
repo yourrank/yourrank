@@ -12,6 +12,36 @@ export function normalizeClientIp(raw) {
   return isIP(raw) === 6 ? new URL(`http://[${raw}]/`).hostname : raw;
 }
 
+// The dedupe key is the network, not the device address: IPv6 SLAAC/privacy
+// addresses differ per device on the same connection, so hashing the full
+// address would let one household hold N devices. IPv6 collapses to its /64
+// prefix; IPv4-mapped spellings collapse to the dotted IPv4.
+export function clientNetworkKey(raw) {
+  const ip = normalizeClientIp(raw);
+  if (!ip) return null;
+  if (isIP(ip) === 4) return ip;
+  // URL hostnames keep IPv6's brackets; the network key drops them.
+  const normalized = ip.replace(/^\[|\]$/g, "");
+  const mapped = normalized.match(/^::ffff:(.+)$/i);
+  if (mapped) {
+    const tail = mapped[1];
+    if (isIP(tail) === 4) return tail;
+    const hexParts = tail.split(":");
+    if (hexParts.length === 2 && hexParts.every((p) => /^[0-9a-f]{1,4}$/i.test(p))) {
+      const hi = parseInt(hexParts[0], 16);
+      const lo = parseInt(hexParts[1], 16);
+      return `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+    }
+  }
+  const [head, tail = ""] = normalized.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if (missing < 0 || (!normalized.includes("::") && missing !== 0)) return null;
+  const hextets = [...left, ...Array(missing).fill("0"), ...right].map((h) => h.replace(/^0+/, "") || "0");
+  return `${hextets.slice(0, 4).join(":")}::/64`;
+}
+
 const hex = (buffer) => Array.from(new Uint8Array(buffer), (b) => b.toString(16).padStart(2, "0")).join("");
 
 export async function abuseSignalHash(value, env) {
@@ -27,7 +57,7 @@ export async function recordAbuseSignals({ run = query, env, request, viewerId, 
     return;
   }
   const writes = [];
-  const ip = normalizeClientIp(request.headers.get("cf-connecting-ip"));
+  const ip = clientNetworkKey(request.headers.get("cf-connecting-ip"));
   if (ip) writes.push({ kind: "ip", value: ip });
   else console.warn("[abuse-signals] missing or invalid client IP for", action);
   const device = request.headers.get("x-yr-device");
