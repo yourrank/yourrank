@@ -16,6 +16,7 @@ import { limitDenial } from "@yourrank/shared/entitlements";
 import { getPlanLimit } from "@yourrank/shared/plans";
 import { createCanonicalCodeDrop, validateCodeDropConfig } from "../code-drop-service.js";
 import { resolveJoinableCommunity as defaultResolveJoinableCommunity } from "../viewer-membership.js";
+import { recordAbuseSignals as defaultRecordSignals } from "../abuse-signals.js";
 function getCryptoRandomInt(max) {
   const arr = new Uint32Array(1);
   crypto.getRandomValues(arr);
@@ -300,6 +301,7 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
     requireViewer = defaultRequireViewer,
     resolveJoinableCommunity = defaultResolveJoinableCommunity,
     markActive = markSiteViewerActive,
+    recordSignals = defaultRecordSignals,
   } = deps;
 
   const body = await readJson(request);
@@ -425,6 +427,11 @@ export async function handleClaimCodeDrop(request, env, deps = {}) {
   }
 
   await markActive(site.id, viewerId, { one, exec });
+
+  // Anti-abuse signals record only after a successful claim commits and must
+  // never fail the viewer's claim.
+  await recordSignals({ env, request, viewerId, siteId: site.id, action: "drop_claim" })
+    .catch((err) => console.error("[abuse-signals] record failed:", "drop_claim", String(err?.message || err)));
 
   return ok({
     code: drop.code,

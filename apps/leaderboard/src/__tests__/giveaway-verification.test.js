@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 import { giveawayIpHash, handleGiveawayVerification } from "../handlers/giveaway-verification.js";
 import { drawGiveaway } from "../chat-giveaway-service.js";
 const id = "11111111-1111-4111-8111-111111111111";
@@ -99,6 +99,31 @@ describe("giveaway verification boundary", () => {
     // POST without the rule skips the call entirely.
     expect(await (await handleGiveawayVerification(request(), {}, { ...setup(), checkIp })).json()).toMatchObject({ status: "eligible", vpnCheck: false });
     expect(calls).toHaveLength(0);
+  });
+  it("records abuse signals on every resolved POST outcome, never on early exits", async () => {
+    const record = () => ({ recordSignals: mock().mockResolvedValue(undefined) });
+    // Eligible and rejected outcomes both record — the attempt is the signal.
+    let d = { ...setup(), ...record() };
+    expect(await (await handleGiveawayVerification(request(), {}, d)).json()).toMatchObject({ status: "eligible" });
+    expect(d.recordSignals).toHaveBeenCalledTimes(1);
+    expect(d.recordSignals.mock.calls[0][0]).toMatchObject({ action: "giveaway_verify", siteId: "site", viewerId: "viewer" });
+    d = { ...setup({ duplicate: true }), ...record() };
+    expect(await (await handleGiveawayVerification(request(), {}, d)).json()).toMatchObject({ status: "rejected" });
+    expect(d.recordSignals).toHaveBeenCalledTimes(1);
+    // Early exits (GET, unlinked viewer) never reach the recorder.
+    for (const [req, deps] of [[request(false), { ...setup(), ...record() }], [request(), { ...setup({ actor: null }), ...record() }]]) {
+      await handleGiveawayVerification(req, {}, deps);
+      expect(deps.recordSignals).not.toHaveBeenCalled();
+    }
+    // A rejecting recorder still leaves the normal success response.
+    d = { ...setup(), recordSignals: mock().mockRejectedValue(new Error("recorder blew up")) };
+    const origError = console.error;
+    console.error = () => {};
+    try {
+      const res = await handleGiveawayVerification(request(), {}, d);
+      expect(res.status).toBe(200);
+      expect((await res.json()).status).toBe("eligible");
+    } finally { console.error = origError; }
   });
   it("rejects a body giveaway ID that differs from the signed link ID", async () => {
     const mismatched = new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`, {

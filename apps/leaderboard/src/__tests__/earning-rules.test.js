@@ -230,4 +230,44 @@ describe("daily check-in earning rules", () => {
     expect((await response.json()).error).toBe("Too many attempts. Please wait a minute.");
     expect(one).not.toHaveBeenCalled();
   });
+
+  it("records abuse signals on a successful check-in, never on failure paths", async () => {
+    // Success: recorder runs once after the commit with the checkin action.
+    let { deps, one, txOne } = setup();
+    deps.recordSignals = mock().mockResolvedValue(undefined);
+    one.mockResolvedValueOnce(RULE);
+    txOne
+      .mockResolvedValueOnce({ id: "membership-1", balance: 5, blocked: false })
+      .mockResolvedValueOnce({ id: "claim-1" })
+      .mockResolvedValueOnce({ id: "membership-1", balance: 30 });
+    const ok = await handleViewerCheckin(request("POST", "/api/viewer/checkin", { site: "community" }), env, deps);
+    expect(ok.status).toBe(200);
+    expect(deps.recordSignals).toHaveBeenCalledTimes(1);
+    expect(deps.recordSignals.mock.calls[0][0]).toMatchObject({ action: "checkin", siteId: "site-1", viewerId: "viewer-1" });
+    // Already checked in (a failure path): no recording.
+    ({ deps, one, txOne } = setup());
+    deps.recordSignals = mock().mockResolvedValue(undefined);
+    one.mockResolvedValueOnce(RULE);
+    txOne
+      .mockResolvedValueOnce({ id: "membership-1", balance: 5, blocked: false })
+      .mockResolvedValueOnce(null);
+    const dup = await handleViewerCheckin(request("POST", "/api/viewer/checkin", { site: "community" }), env, deps);
+    expect(dup.status).toBe(409);
+    expect(deps.recordSignals).not.toHaveBeenCalled();
+    // A rejecting recorder still leaves the success response intact.
+    ({ deps, one, txOne } = setup());
+    deps.recordSignals = mock().mockRejectedValue(new Error("recorder blew up"));
+    one.mockResolvedValueOnce(RULE);
+    txOne
+      .mockResolvedValueOnce({ id: "membership-1", balance: 5, blocked: false })
+      .mockResolvedValueOnce({ id: "claim-1" })
+      .mockResolvedValueOnce({ id: "membership-1", balance: 30 });
+    const origError = console.error;
+    console.error = () => {};
+    try {
+      const res = await handleViewerCheckin(request("POST", "/api/viewer/checkin", { site: "community" }), env, deps);
+      expect(res.status).toBe(200);
+      expect((await res.json()).ok).toBe(true);
+    } finally { console.error = origError; }
+  });
 });

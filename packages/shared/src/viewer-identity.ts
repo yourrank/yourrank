@@ -258,6 +258,14 @@ export async function persistViewerIdentity(
   const newUsername = identity.username.trim().toLowerCase();
   if (oldUsername && oldUsername !== newUsername) await recordUsername(run, id, oldUsername);
 
+  // Anti-abuse history: a 'linked' event records a genuinely new link — a
+  // first link, a different external account, or a relink after revocation.
+  // A routine re-login of the same account writes no event.
+  const prior = (await run(
+    "SELECT external_user_id, status FROM viewer_identities WHERE viewer_id=$1 AND provider=$2",
+    [id, identity.provider],
+  )) as { external_user_id: string; status: string }[];
+
   await run(
     `INSERT INTO viewer_identities AS vi
        (viewer_id, provider, external_user_id, username, avatar_url, access_token_enc, refresh_token_enc, token_expires_at, linked_at)
@@ -275,6 +283,14 @@ export async function persistViewerIdentity(
     [id, identity.provider, identity.externalUserId, identity.username, identity.avatarUrl,
       identity.accessTokenEnc, identity.refreshTokenEnc, identity.tokenExpiresAt, tokens],
   );
+
+  const previous = prior?.[0];
+  if (!previous || previous.external_user_id !== identity.externalUserId || previous.status !== "active") {
+    await run(
+      "INSERT INTO viewer_identity_events (viewer_id, provider, external_user_id, event) VALUES ($1,$2,$3,'linked')",
+      [id, identity.provider, identity.externalUserId],
+    );
+  }
 
   const legacy = LEGACY_VIEWER_COLUMNS[identity.provider];
   if (legacy) {
@@ -352,12 +368,19 @@ export async function linkExternalViewerIdentity(
 
 /** Unlink a provider identity from a viewer. The row is kept (revoked) for audit; legacy mirror columns are cleared. */
 export async function revokeViewerIdentity(run: SqlRunner, viewerId: string, provider: ProviderId): Promise<void> {
-  await run(
+  const revoked = (await run(
     `UPDATE viewer_identities
         SET status = 'revoked', access_token_enc = NULL, refresh_token_enc = NULL, updated_at = now()
-      WHERE viewer_id = $1 AND provider = $2 AND status <> 'revoked'`,
+      WHERE viewer_id = $1 AND provider = $2 AND status <> 'revoked'
+      RETURNING external_user_id`,
     [viewerId, provider],
-  );
+  )) as { external_user_id: string }[];
+  for (const row of revoked || []) {
+    await run(
+      "INSERT INTO viewer_identity_events (viewer_id, provider, external_user_id, event) VALUES ($1,$2,$3,'revoked')",
+      [viewerId, provider, row.external_user_id],
+    );
+  }
   const legacy = LEGACY_VIEWER_COLUMNS[provider];
   if (legacy) {
     await run(

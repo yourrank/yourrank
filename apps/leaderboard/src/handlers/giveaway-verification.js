@@ -1,10 +1,10 @@
-import { isIP } from "node:net";
 import { one, query } from "@yourrank/shared/db";
 import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { linkedViewerIdentities } from "@yourrank/shared/viewer-identity";
 import { giveawayRules, giveawayParticipantFacts, evaluateGiveawayEligibility } from "@yourrank/shared/giveaway-eligibility";
 import { giveawayTransaction } from "../chat-giveaway-service.js";
 import { checkAnonymousIp } from "../proxycheck.js";
+import { normalizeClientIp, recordAbuseSignals } from "../abuse-signals.js";
 import { bad, json, readJson, rateLimit } from "../auth.js";
 import { requestIsSameOrigin } from "../viewer-membership.js";
 import { generateCsrfToken, csrfCookie, SECURE_HTML } from "../middleware/index.js";
@@ -23,9 +23,9 @@ const privateJson = (data, cookie) => {
 };
 
 export async function giveawayIpHash(raw, salt) {
-  if (!raw || !isIP(raw) || !salt) return null;
-  // WHATWG URL canonicalizes equivalent IPv6 spellings; CF provides the client address.
-  const normalized = isIP(raw) === 6 ? new URL(`http://[${raw}]/`).hostname : raw;
+  // CF provides the client address; normalization is shared with abuse-signals.
+  const normalized = normalizeClientIp(raw);
+  if (!normalized || !salt) return null;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(normalized))),
     (b) => b.toString(16).padStart(2, "0")).join("");
@@ -34,7 +34,7 @@ export async function giveawayIpHash(raw, salt) {
 export async function handleGiveawayVerification(request, env, deps = {}) {
   if (!platformRequest(request, env)) return bad("Use the YourRank giveaway verification link.", 404);
   if (!requestIsSameOrigin(request)) return bad("Origin mismatch", 403);
-  const d = { one, query, resolveViewer, transaction: giveawayTransaction, rateLimit, checkIp: checkAnonymousIp, ...deps };
+  const d = { one, query, resolveViewer, transaction: giveawayTransaction, rateLimit, checkIp: checkAnonymousIp, recordSignals: recordAbuseSignals, ...deps };
   const body = request.method === "POST" ? (await readJson(request)) || {} : {};
   const queryId = new URL(request.url).searchParams.get("sessionId");
   if (body.sessionId && queryId && body.sessionId !== queryId) return bad("Giveaway link mismatch.", 400);
@@ -91,6 +91,10 @@ export async function handleGiveawayVerification(request, env, deps = {}) {
       [entry.id, eligibility.status, eligibility.reason, viewer.id, ipHash]);
     return eligibility;
   });
+  // The verification attempt itself is the signal — record it on every POST
+  // outcome once viewer and identity resolved, without failing the response.
+  await d.recordSignals({ env, request, viewerId: viewer.id, siteId: session.site_id, action: "giveaway_verify" })
+    .catch((err) => console.error("[abuse-signals] record failed:", "giveaway_verify", String(err?.message || err)));
   return privateJson({ ...base, ...result }, cookie);
 }
 
@@ -104,6 +108,6 @@ export function handleGiveawayVerificationPage(request, env) {
     <p id="giveaway-ip-notice" hidden>One account per IP is enabled. YourRank stores a giveaway-specific hash, never your raw IP. People sharing a connection may be unable to enter together.</p>
     <p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Your connection is checked with proxycheck.io when you verify. Turn off any VPN or proxy first.</p>
     <a class="btn" id="giveaway-signin" hidden>Sign in with Kick</a><button class="btn btn--accent" id="giveaway-verify" type="button" disabled>Verify Entry</button>
-    </section></main><script type="module" src="/assets/giveaway-verification.js"></script></body></html>`,
+    </section></main><script src="/assets/device-signal.js" defer></script><script type="module" src="/assets/giveaway-verification.js"></script></body></html>`,
   { headers: { ...SECURE_HTML, "cache-control": "private, no-store", "set-cookie": csrfCookie(token, request) } });
 }
