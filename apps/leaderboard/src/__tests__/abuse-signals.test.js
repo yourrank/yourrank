@@ -1,7 +1,7 @@
 // Anti-abuse signal collection: HMAC hashing, IP/device recording, and the
 // never-fail guarantee. No module mocks — the db executor is injected as `run`.
 import { describe, expect, it } from "bun:test";
-import { abuseSignalHash, normalizeClientIp, recordAbuseSignals } from "../abuse-signals.js";
+import { abuseSignalHash, clientNetworkKey, normalizeClientIp, recordAbuseSignals } from "../abuse-signals.js";
 
 const env = { ABUSE_SIGNAL_HMAC_KEY: "test-hmac-key" };
 const VIEWER = "b3f1c2d4-0000-4000-8000-000000000001";
@@ -24,6 +24,26 @@ describe("normalizeClientIp", () => {
     expect(normalizeClientIp("192.0.2.9")).toBe("192.0.2.9");
     expect(normalizeClientIp("not-an-ip")).toBeNull();
     expect(normalizeClientIp(null)).toBeNull();
+  });
+});
+
+describe("clientNetworkKey", () => {
+  it("returns IPv4 unchanged, collapses IPv6 to its /64, and rejects non-IPs", () => {
+    expect(clientNetworkKey("192.0.2.9")).toBe("192.0.2.9");
+    // Two devices on the same connection share the /64, not the address.
+    expect(clientNetworkKey("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd")).toBe("2001:db8:abcd:12::/64");
+    expect(clientNetworkKey("2001:db8:abcd:12:1111:2222:3333:4444")).toBe(clientNetworkKey("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd"));
+    expect(clientNetworkKey("2001:db8:abcd:99:aaaa:bbbb:cccc:dddd")).not.toBe(clientNetworkKey("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd"));
+    // Compressed :: forms and uppercase/leading-zero spellings normalize.
+    expect(clientNetworkKey("2001:0DB8::1")).toBe("2001:db8:0:0::/64");
+    expect(clientNetworkKey("2001:0db8:0000:0000:0000:0000:0000:0001")).toBe(clientNetworkKey("2001:0DB8::1"));
+    expect(clientNetworkKey("2001:db8:abcd:12::dddd")).toBe("2001:db8:abcd:12::/64");
+    // IPv4-mapped IPv6 in either spelling collapses to the dotted IPv4.
+    expect(clientNetworkKey("::ffff:1.2.3.4")).toBe("1.2.3.4");
+    expect(clientNetworkKey("::ffff:102:304")).toBe("1.2.3.4");
+    expect(clientNetworkKey("not-an-ip")).toBeNull();
+    expect(clientNetworkKey("")).toBeNull();
+    expect(clientNetworkKey(null)).toBeNull();
   });
 });
 
@@ -53,6 +73,23 @@ describe("recordAbuseSignals", () => {
     expect(link.params[0]).toBe(await abuseSignalHash(device, env));
     expect(link.params[0]).not.toBe(device);
     expect(link.sql).toContain("seen_count = device_links.seen_count + 1");
+  });
+
+  it("hashes two IPv6 devices on the same /64 to the same ip_hash", async () => {
+    const statements = [];
+    const run = async (sql, params) => { statements.push({ sql, params }); return []; };
+    await recordAbuseSignals({
+      run, env, viewerId: VIEWER, siteId: SITE, action: "drop_claim",
+      request: request({ "cf-connecting-ip": "2001:db8:abcd:12:aaaa:bbbb:cccc:dddd" }),
+    });
+    await recordAbuseSignals({
+      run, env, viewerId: VIEWER, siteId: SITE, action: "drop_claim",
+      request: request({ "cf-connecting-ip": "2001:db8:abcd:12:9999:8888:7777:6666" }),
+    });
+    const hashes = statements.filter((s) => s.sql.includes("ip_observations")).map((s) => s.params[0]);
+    expect(hashes).toHaveLength(2);
+    expect(hashes[0]).toBe(hashes[1]);
+    expect(hashes[0]).toBe(await abuseSignalHash("2001:db8:abcd:12::/64", env));
   });
 
   it("logs an error and runs no queries when the key is missing", async () => {

@@ -46,8 +46,24 @@ describe("giveaway verification boundary", () => {
   });
   it("normalizes IPv6, scopes hashes by giveaway, and rejects missing addresses", async () => {
     expect(await giveawayIpHash("2001:db8::1", "a")).toBe(await giveawayIpHash("2001:0db8:0:0:0:0:0:1", "a"));
+    // Two IPv6 devices on the same /64 share one dedupe hash; a different
+    // /64 hashes differently.
+    expect(await giveawayIpHash("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd", "a")).toBe(await giveawayIpHash("2001:db8:abcd:12:1111:2222:3333:4444", "a"));
+    expect(await giveawayIpHash("2001:db8:abcd:99:aaaa:bbbb:cccc:dddd", "a")).not.toBe(await giveawayIpHash("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd", "a"));
     expect(await giveawayIpHash("192.0.2.1", "a")).not.toBe(await giveawayIpHash("192.0.2.1", "b"));
     expect(await giveawayIpHash(null, "a")).toBeNull();
+  });
+  it("rejects a second verification from the same IPv6 /64 and allows a different /64", async () => {
+    const req = (ip) => new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`, {
+      method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": ip },
+      body: JSON.stringify({ sessionId: id }),
+    });
+    // First device verifies fine; the second on the same Wi-Fi hits the
+    // duplicate_ip check because both hash to the same /64 network key.
+    expect(await (await handleGiveawayVerification(req("2001:db8:abcd:12:aaaa:bbbb:cccc:dddd"), {}, setup())).json()).toMatchObject({ status: "eligible" });
+    expect(await (await handleGiveawayVerification(req("2001:db8:abcd:12:1111:2222:3333:4444"), {}, setup({ duplicate: true }))).json()).toMatchObject({ status: "rejected", reason: "duplicate_ip" });
+    // A different /64 is a different network: both stay eligible.
+    expect(await (await handleGiveawayVerification(req("2001:db8:abcd:99:aaaa:bbbb:cccc:dddd"), {}, setup())).json()).toMatchObject({ status: "eligible" });
   });
   it("refuses custom-host and cross-origin requests", async () => {
     expect((await handleGiveawayVerification(new Request(`https://other.example/api/viewer/giveaway?sessionId=${id}`), {}, setup())).status).toBe(404);
