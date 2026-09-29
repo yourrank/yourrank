@@ -367,6 +367,11 @@ async function refreshEntriesSoon() {
   }, 180);
 }
 
+function reportChatFailure(error) {
+  console.error("[tournaments] live Kick chat connection failed:", error?.message || error);
+  setMessage("Live chat updates are unavailable. Chat entries are still saved; they appear when the entry list refreshes.", true);
+}
+
 async function startChat() {
   if (!tournament || tournament.signup_state !== "open" || chatConnection) return;
   const channel = String(tournament.chat_channel || "").trim();
@@ -377,12 +382,16 @@ async function startChat() {
     if (!response.ok || !data.chatroomId) throw new Error(data.error || "Could not find that Kick channel.");
     chatConnection = connectKickChat({
       chatroomId: data.chatroomId,
-      onError: () => { chatConnection = null; },
+      onError: (error) => {
+        chatConnection = null;
+        reportChatFailure(error);
+      },
       onClose: () => { chatConnection = null; },
       onMessage: handleChatMessage,
     });
-  } catch {
+  } catch (error) {
     chatConnection = null;
+    reportChatFailure(error);
   }
 }
 
