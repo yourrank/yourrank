@@ -88,7 +88,6 @@
           width: window.screen && window.screen.width,
           height: window.screen && window.screen.height,
           colorDepth: window.screen && window.screen.colorDepth,
-          pixelRatio: window.devicePixelRatio,
         };
       }),
       timeZone: component("timezone", function () {
