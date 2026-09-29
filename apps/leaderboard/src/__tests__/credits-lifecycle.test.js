@@ -157,6 +157,7 @@ function mockCommonPrefix({ existingSiteViewer = { id: "sv-1" } } = {}) {
   db.unsafeResponses.push([{ site_id: "site-1", user_id: "user-1" }]); // community_channels routing
   db.oneResponses.push({ plan: "pro", plan_expires_at: null, status: "active", email_verified: true }); // owner
   db.unsafeResponses.push([{ viewer_id: "viewer-1", username: "alice" }]); // viewer_identities lookup
+  db.unsafeResponses.push([{ external_user_id: "kick-1", status: "active" }]); // prior identity row: same active account, no link event
   db.unsafeResponses.push([]); // INSERT viewer_identities ... ON CONFLICT
   db.unsafeResponses.push([]); // UPDATE viewers (legacy mirror)
   db.unsafeResponses.push([]); // INSERT viewer_username_history (current name)
