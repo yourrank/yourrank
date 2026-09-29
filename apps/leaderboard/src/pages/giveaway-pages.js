@@ -340,72 +340,6 @@ ${giveawaysSubnavHtml(active)}`}
           </div>
           <p class="hint">Entries keep collecting on our servers even if you close or refresh this page.</p>
 
-          <details class="gw-rules-panel" id="gw-rules-panel" open>
-            <summary><span>Giveaway rules</span><span class="gw-rules-summary" id="gw-rules-summary">Anyone in chat · Win once · No chat response</span></summary>
-            <div class="gw-rules-panel-body">
-          <fieldset class="gw-settings" id="gw-settings">
-            <legend id="gw-entry-mode-legend">Entry Mode</legend>
-            <div class="gw-entry-modes" id="gw-entry-modes">
-              <label><input type="radio" name="gw-entry-mode" value="chat" checked><span><b>Anyone in Kick Chat</b><small>Anyone who types the keyword can participate.</small></span></label>
-              <label><input type="radio" name="gw-entry-mode" value="members"><span><b>YourRank Members Only</b><small>Requires a YourRank account linked to the Kick account used in chat.</small></span></label>
-              <label><input type="radio" name="gw-entry-mode" value="verified"><span><b>Verified Entry</b><small>Viewers type the keyword, then verify through YourRank before entering the draw.</small></span></label>
-            </div>
-            <section class="gw-settings-section" id="gw-kick-eligibility-section" aria-labelledby="gw-eligibility-title">
-              <h3 id="gw-eligibility-title">Eligibility</h3>
-              <label class="cr-toggle-row" id="gw-kick-identity-rule"><span><b>One entry per Kick account</b><small>Always enforced by Kick account ID.</small></span><input type="checkbox" checked disabled></label>
-            </section>
-            <section class="gw-settings-section" aria-labelledby="gw-winner-repeat-title">
-              <h3 id="gw-winner-repeat-title">Winner repeat</h3>
-              <div class="gw-entry-modes">
-                <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-once" value="once" checked><span><b>Win once per giveaway</b><small>Winners are excluded from later draws and re-rolls in this giveaway.</small></span></label>
-                <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-again" value="again"><span><b>Can win again</b><small>A re-roll may pick the same participant again.</small></span></label>
-              </div>
-            </section>
-          </fieldset>
-          <fieldset class="gw-settings" id="gw-response-settings">
-            <section class="gw-settings-section" id="gw-winner-verification-section" aria-labelledby="gw-winner-verification-title">
-              <h3 id="gw-winner-verification-title">Winner verification</h3>
-              <label class="cr-toggle-row"><span>Winner must respond in chat</span><input type="checkbox" class="v3-toggle" id="gw-opt-claim-req"></label>
-              <div id="gw-claim-duration-wrap" hidden>
-                <div class="field"><label for="gw-opt-claim-duration">Response timeout</label><select id="gw-opt-claim-duration" disabled>
-                  <option value="30">30 seconds</option><option value="60" selected>60 seconds</option><option value="90">90 seconds</option><option value="120">2 minutes</option>
-                </select></div>
-              </div>
-              <div id="gw-auto-reroll-wrap" hidden>
-                <label class="cr-toggle-row"><span><b>Auto re-roll on timeout</b><small>Runs at expiry while this page is open, or on the next server check within five minutes.</small></span><input id="gw-opt-auto-reroll" type="checkbox" class="v3-toggle" disabled></label>
-              </div>
-              <p class="hint" id="gw-response-live-note" hidden>Changes apply to the next draw or re-roll.</p>
-            </section>
-          </fieldset>
-          <fieldset class="gw-settings" id="gw-advanced-settings">
-            <details class="gw-setup-advanced" id="gw-advanced-options"><summary>Advanced options<span class="gw-advanced-summary-state" aria-hidden="true">▾</span></summary><div class="gw-setup-advanced-body">
-              <section class="gw-settings-section" aria-labelledby="gw-advanced-eligibility-title">
-                <h3 id="gw-advanced-eligibility-title">Eligibility</h3>
-                <label class="cr-toggle-row" id="gw-subscriber-rule"><span>Subscriber only</span><input id="gw-opt-subscriber" type="checkbox" class="v3-toggle"></label>
-                <label class="cr-toggle-row" id="gw-vip-rule"><span>VIP only</span><input id="gw-opt-vip" type="checkbox" class="v3-toggle"></label>
-                <label class="cr-toggle-row"><span><b>Exclude past giveaway winners</b><small>Winners recorded in this community’s earlier giveaways. Winner repeat above covers this giveaway.</small></span><input id="gw-opt-skip-past" type="checkbox" class="v3-toggle"></label>
-                <p class="hint" id="gw-subscriber-hint">Subscriber and VIP checks use the badges on the entry message. Selecting both requires both badges.</p>
-                <p class="hint" id="gw-kick-history-hint">Account age and follow duration are unavailable: reliable Kick data is not connected.</p>
-              </section>
-              <section class="gw-settings-section" id="gw-anti-abuse-section" aria-labelledby="gw-abuse-title">
-                <h3 id="gw-abuse-title">Anti-abuse</h3>
-                <label class="cr-toggle-row"><span><b>One account per IP</b><small id="gw-ip-requirement">Locked — Requires Verified Entry</small></span><input id="gw-opt-ip" type="checkbox" class="v3-toggle" disabled aria-describedby="gw-ip-requirement"></label>
-                <label class="cr-toggle-row"><span><b>VPN / Proxy detection</b><small id="gw-vpn-requirement">Locked — Requires Verified Entry and a detection provider</small></span><input type="checkbox" disabled aria-describedby="gw-vpn-requirement"></label>
-                <label class="cr-toggle-row"><span><b>Duplicate device detection</b><small id="gw-device-requirement">Locked — Requires Verified Entry and a supported device check</small></span><input type="checkbox" disabled aria-describedby="gw-device-requirement"></label>
-                <p class="hint">Participants must verify through YourRank because Kick chat does not expose IP or device information.</p>
-                <button class="btn btn--ghost" id="gw-enable-verified" type="button">Enable Verified Entry</button>
-              </section>
-              <section class="gw-settings-section" id="gw-winner-instruction-section" aria-labelledby="gw-winner-instruction-title">
-                <h3 id="gw-winner-instruction-title">Winner instruction</h3>
-                <div class="field"><label for="gw-custom-rule-text">Winner instruction (optional)</label><textarea id="gw-custom-rule-text" rows="2" placeholder="e.g. Say your in-game name in chat"></textarea><span class="hint">A display instruction on this page; not an eligibility check.</span></div>
-              </section>
-            </div></details>
-          </fieldset>
-            </div>
-          </details>
-          <p class="hint" id="gw-settings-note">Settings are saved when you start a giveaway. Changes apply to the next giveaway.</p>
-          <p class="hint" id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.</p>
-          <p id="gw-verification-link-wrap" hidden><a id="gw-verification-link" target="_blank" rel="noopener">Open viewer verification page</a><span class="hint"> Share this link in Kick chat so pending viewers can verify.</span></p>
 
         </form>
       </section>
@@ -547,6 +481,76 @@ ${giveawaysSubnavHtml(active)}`}
       </section>
     </div>
   </div>
+    <section class="v3-table-card gw-card gw-rules-card" id="gw-rules-card">
+      <details class="gw-rules-panel" id="gw-rules-panel" open>
+        <summary><span>Giveaway rules</span><span class="gw-rules-summary" id="gw-rules-summary">Anyone in chat · Win once · No chat response</span></summary>
+        <div class="gw-rules-panel-body gw-rules-grid">
+      <fieldset class="gw-settings" id="gw-settings">
+        <legend id="gw-entry-mode-legend">Entry Mode</legend>
+        <div class="gw-entry-modes gw-segmented" id="gw-entry-modes">
+          <label><input type="radio" name="gw-entry-mode" value="chat" checked><span><b>Anyone in chat</b><small>Anyone who types the keyword can participate.</small></span></label>
+          <label><input type="radio" name="gw-entry-mode" value="members"><span><b>Members only</b><small>Requires a YourRank account linked to the Kick account used in chat.</small></span></label>
+          <label><input type="radio" name="gw-entry-mode" value="verified"><span><b>Verified Entry</b><small>Viewers type the keyword, then verify through YourRank before entering the draw.</small></span></label>
+        </div>
+        <p class="hint gw-segmented-desc" id="gw-entry-mode-desc" aria-live="polite">Anyone who types the keyword can participate.</p>
+        <section class="gw-settings-section" id="gw-kick-eligibility-section" aria-labelledby="gw-eligibility-title">
+          <h3 id="gw-eligibility-title">Eligibility</h3>
+          <label class="cr-toggle-row" id="gw-kick-identity-rule"><span><b>One entry per Kick account</b><small>Always enforced by Kick account ID.</small></span><input type="checkbox" checked disabled></label>
+        </section>
+        <section class="gw-settings-section" aria-labelledby="gw-winner-repeat-title">
+          <h3 id="gw-winner-repeat-title">Winner repeat</h3>
+          <div class="gw-entry-modes gw-segmented" id="gw-winner-repeat-modes">
+            <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-once" value="once" checked><span><b>Win once</b><small>Winners are excluded from later draws and re-rolls in this giveaway.</small></span></label>
+            <label><input type="radio" name="gw-winner-repeat" id="gw-winner-repeat-again" value="again"><span><b>Can win again</b><small>A re-roll may pick the same participant again.</small></span></label>
+          </div>
+          <p class="hint gw-segmented-desc" id="gw-winner-repeat-desc" aria-live="polite">Winners are excluded from later draws and re-rolls in this giveaway.</p>
+        </section>
+      </fieldset>
+      <fieldset class="gw-settings" id="gw-response-settings">
+        <section class="gw-settings-section" id="gw-winner-verification-section" aria-labelledby="gw-winner-verification-title">
+          <h3 id="gw-winner-verification-title">Winner verification</h3>
+          <label class="cr-toggle-row"><span>Winner must respond in chat</span><input type="checkbox" class="v3-toggle" id="gw-opt-claim-req"></label>
+          <div id="gw-claim-duration-wrap" hidden>
+            <div class="field"><label for="gw-opt-claim-duration">Response timeout</label><select id="gw-opt-claim-duration" disabled>
+              <option value="30">30 seconds</option><option value="60" selected>60 seconds</option><option value="90">90 seconds</option><option value="120">2 minutes</option>
+            </select></div>
+          </div>
+          <div id="gw-auto-reroll-wrap" hidden>
+            <label class="cr-toggle-row"><span><b>Auto re-roll on timeout</b><small>Runs at expiry, or within 5 minutes if this page is closed.</small></span><input id="gw-opt-auto-reroll" type="checkbox" class="v3-toggle" disabled></label>
+          </div>
+          <p class="hint" id="gw-response-live-note" hidden>Changes apply to the next draw or re-roll.</p>
+        </section>
+      </fieldset>
+      <fieldset class="gw-settings" id="gw-advanced-settings">
+        <details class="gw-setup-advanced" id="gw-advanced-options"><summary><span>Advanced options</span><span class="gw-advanced-summary-text" id="gw-advanced-summary">Off</span><span class="gw-advanced-summary-state" aria-hidden="true">▾</span></summary><div class="gw-setup-advanced-body">
+          <section class="gw-settings-section" aria-labelledby="gw-advanced-eligibility-title">
+            <h3 id="gw-advanced-eligibility-title">Eligibility</h3>
+            <label class="cr-toggle-row" id="gw-subscriber-rule"><span>Subscriber only</span><input id="gw-opt-subscriber" type="checkbox" class="v3-toggle"></label>
+            <label class="cr-toggle-row" id="gw-vip-rule"><span>VIP only</span><input id="gw-opt-vip" type="checkbox" class="v3-toggle"></label>
+            <label class="cr-toggle-row"><span><b>Exclude past giveaway winners</b><small>Skips winners from this community’s earlier giveaways.</small></span><input id="gw-opt-skip-past" type="checkbox" class="v3-toggle"></label>
+            <p class="hint" id="gw-subscriber-hint">Checked against chat badges. Both on requires both badges.</p>
+            <p class="hint" id="gw-kick-history-hint">Account age and follow duration need Kick data that isn’t connected.</p>
+          </section>
+          <section class="gw-settings-section" id="gw-anti-abuse-section" aria-labelledby="gw-abuse-title">
+            <h3 id="gw-abuse-title">Anti-abuse</h3>
+            <label class="cr-toggle-row"><span><b>One account per IP</b><small id="gw-ip-requirement">Locked — Requires Verified Entry</small></span><input id="gw-opt-ip" type="checkbox" class="v3-toggle" disabled aria-describedby="gw-ip-requirement"></label>
+            <label class="cr-toggle-row"><span><b>VPN / Proxy detection</b><small id="gw-vpn-requirement">Locked — Requires Verified Entry and a detection provider</small></span><input type="checkbox" disabled aria-describedby="gw-vpn-requirement"></label>
+            <label class="cr-toggle-row"><span><b>Duplicate device detection</b><small id="gw-device-requirement">Locked — Requires Verified Entry and a supported device check</small></span><input type="checkbox" disabled aria-describedby="gw-device-requirement"></label>
+            <p class="hint">Needs Verified Entry — Kick chat doesn’t expose IP or device.</p>
+            <button class="btn btn--ghost" id="gw-enable-verified" type="button">Enable Verified Entry</button>
+          </section>
+          <section class="gw-settings-section" id="gw-winner-instruction-section" aria-labelledby="gw-winner-instruction-title">
+            <h3 id="gw-winner-instruction-title">Winner instruction</h3>
+            <div class="field"><label for="gw-custom-rule-text">Winner instruction (optional)</label><textarea id="gw-custom-rule-text" rows="2" placeholder="e.g. Say your in-game name in chat"></textarea><span class="hint">A display instruction on this page; not an eligibility check.</span></div>
+          </section>
+        </div></details>
+      </fieldset>
+        </div>
+      </details>
+      <p class="hint" id="gw-settings-note">Settings are saved when you start a giveaway. Changes apply to the next giveaway.</p>
+      <p class="hint" id="gw-manual-rules-note" hidden>Other rules need a connected Kick channel.</p>
+      <p id="gw-verification-link-wrap" hidden><a id="gw-verification-link" target="_blank" rel="noopener">Open viewer verification page</a><span class="hint"> Share this link in Kick chat so pending viewers can verify.</span></p>
+    </section>
 </div>
 
 <!-- =========================================================================

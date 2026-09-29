@@ -282,6 +282,21 @@ if (!window.__yrSpaShell) {
     if (rules.onePerIp) parts.push("One entry per IP");
     parts.push(rules.winnerMustRespond ? "Winner response required" : "No chat response");
     summary.textContent = parts.join(" · ");
+    const advanced = $("gw-advanced-summary");
+    if (advanced) {
+      const on = [
+        rules.subscriberOnly && "Subscriber only",
+        rules.vipOnly && "VIP only",
+        rules.excludePreviousWinners && "Exclude past winners",
+        rules.onePerIp && "One per IP",
+      ].filter(Boolean);
+      advanced.textContent = on.length ? on.join(" · ") : "Off";
+    }
+    for (const [descId, name] of [["gw-entry-mode-desc", "gw-entry-mode"], ["gw-winner-repeat-desc", "gw-winner-repeat"]]) {
+      const desc = $(descId);
+      const small = [...document.getElementsByName(name)].find((input) => input.checked)?.closest("label")?.querySelector("small");
+      if (desc && small) desc.textContent = small.textContent;
+    }
   }
 
   function renderRuleAvailability() {
@@ -290,6 +305,7 @@ if (!window.__yrSpaShell) {
     for (const id of [
       "gw-entry-mode-legend",
       "gw-entry-modes",
+      "gw-entry-mode-desc",
       "gw-kick-eligibility-section",
       "gw-winner-verification-section",
       "gw-subscriber-rule",
