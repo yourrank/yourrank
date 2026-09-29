@@ -113,6 +113,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1:8915');
     const path = url.pathname;
+    if (path === '/favicon.ico') { res.writeHead(204); return res.end(); }
     if (path === '/__fixture') { mode = url.searchParams.get('mode') || 'populated'; return json(res, { mode }); }
     if (ASSETS[path]) { const [body] = ASSETS[path]; res.writeHead(200, { 'content-type': path.endsWith('.css') ? 'text/css' : 'text/javascript' }); return res.end(body); }
     if (path === '/bot/dash/client.js') { res.setHeader('content-type', 'text/javascript'); return res.end(clientScriptSource()); }

@@ -61,15 +61,22 @@ describe("buildRoundModel", () => {
 });
 
 describe("renderBracket", () => {
-  it("emits identical markup for embedded and expanded modes apart from data-mode", () => {
-    const matches = buildBracket(["a", "b"], 8);
+  it("renders the same cards in both modes but keeps the stream view read-only", () => {
+    const matches = [pending("m1", 1, 0, "a", "b"), pending("m2", 1, 1, "c", "d"), ...buildBracket(["a", "b", "c", "d"], 8).filter((m) => m.round_number > 1)];
     const args = { tournament: tournament(), matches, lifecycle: "bracket" };
     const embedded = renderBracket({ ...args, mode: "embedded" });
     const expanded = renderBracket({ ...args, mode: "expanded" });
     expect(embedded).toContain('data-mode="embedded"');
     expect(expanded).toContain('data-mode="expanded"');
-    const strip = (html) => html.replace(/data-mode="[^"]+"/, "");
-    expect(strip(expanded)).toBe(strip(embedded));
+    // Embedded is interactive; expanded (stream view) never emits inputs/Save.
+    expect(embedded).toContain('class="tn-match-input"');
+    expect(embedded).toContain('data-score-match=');
+    expect(expanded).not.toContain("<input");
+    expect(expanded).not.toContain('data-score-match=');
+    const ids = (html) => [...html.matchAll(/data-match-id="([^"]+)"/g)].map((m) => m[1]).sort();
+    expect(ids(expanded)).toEqual(ids(embedded));
+    const rounds = (html) => [...html.matchAll(/class="tn-round"/g)].length;
+    expect(rounds(expanded)).toBe(rounds(embedded));
   });
 
   it("never leaks the BYE sentinel or per-match classes", () => {
@@ -92,11 +99,16 @@ describe("renderBracket", () => {
     expect(html).toContain('data-state="future"');
     expect(html).toContain('data-state="bye"');
     expect(html).toContain('data-state="void"');
-    // Scorable keeps the submit contract; BYE shows the advance note; void stays compact.
+    // Scorable keeps the submit contract; BYE and void lines say "BYE".
     expect(html).toContain('data-score-match="m2"');
-    expect(html).toContain("advances");
-    // TBD slots and missing model slots are thin placeholder lines.
+    expect(html).toContain('<span class="tn-bye-tag">BYE</span>');
+    expect(html).not.toContain("tn-match-adv\">advances");
+    // TBD slots are thin placeholder lines; the undecided final is a waiting card.
     expect(html).toContain('data-state="future"');
+    expect(html).toContain('data-state="waiting"');
+    expect(html).toContain("Waiting for semifinalists");
+    // A bracket containing a BYE explains itself above the scroller.
+    expect(html).toContain("data-bye-note");
   });
 
   it("marks winners with the crown and reserves gold for the final champion", () => {
@@ -115,29 +127,61 @@ describe("renderBracket", () => {
     expect(html.match(/tn-crown/g).length).toBe(1);
   });
 
-  it("shows an Edit action only on completed correctable cards", () => {
+  it("renders prefilled inputs and a disabled Save on a completed correctable card", () => {
     const correctable = { id: "m-1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true };
     const locked = { ...correctable, id: "m-2", match_index: 1, correctable: false };
     const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: [correctable, locked], lifecycle: "bracket" });
     expect(html).toContain('data-correctable="true"');
-    expect(html).toContain('data-score-edit="m-1"');
-    expect(html).not.toContain('data-score-edit="m-2"');
-  });
-
-  it("renders a correcting card prefilled with cancel and the downstream note", () => {
-    const match = { id: "m-1", round_number: 1, match_index: 0, player1_name: "a", player2_name: "b", player1_score: 2, player2_score: 1, winner_name: "a", status: "completed", correctable: true };
-    const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: [match], lifecycle: "bracket", correctingId: "m-1" });
+    // Same editable markup as a scorable card, prefilled with the saved score.
     expect(html).toContain('data-score-mode="correct"');
+    expect(html).toContain('data-saved="2,1"');
     expect(html).toContain('data-score-player="1" value="2"');
     expect(html).toContain('data-score-player="2" value="1"');
-    expect(html).toContain("data-score-cancel");
-    expect(html).toContain("Changing the winner updates later rounds.");
+    expect(html).toContain('<button class="tn-match-save" type="button" data-score-match="m-1" disabled>Save</button>');
+    expect(html).toContain('Changing the winner updates later rounds.');
+    expect(html).toContain('class="tn-match-note" hidden');
+    // Correction is inline-only: no Edit/Cancel mode remains.
+    expect(html).not.toContain("data-score-edit");
+    expect(html).not.toContain("data-score-cancel");
+    // The non-correctable completed card stays read-only.
+    expect(html).not.toContain('data-score-match="m-2"');
+  });
+
+  it("marks exactly one live match — the first scorable — and only while live", () => {
+    const matches = [pending("m1", 1, 0, "a", "b"), pending("m2", 1, 1, "c", "d")];
+    const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches, lifecycle: "bracket" });
+    expect(html.match(/data-live="true"/g)).toHaveLength(1);
+    expect(html).toContain('data-match-id="m1" data-round="1" data-index="0" data-live="true"');
+    expect(html).toContain('<span class="tn-live-tag">LIVE</span>');
+    const done = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches, lifecycle: "completed" });
+    expect(done).not.toContain("data-live");
   });
 
   it("renders placeholders for missing slots, not heavy cards", () => {
     const html = renderBracket({ tournament: tournament(), matches: [], lifecycle: "bracket" });
-    // Empty model still lays out the expected 8-player grid as placeholders.
-    expect((html.match(/data-placeholder/g) || []).length).toBe(7);
+    // Empty model lays out the 8-player grid: 6 placeholder lines plus the
+    // final column's waiting card.
+    expect((html.match(/data-placeholder/g) || []).length).toBe(6);
+    expect(html).toContain('data-state="waiting"');
+    expect(html).not.toContain("data-live");
+  });
+
+  it("renders the decided final as a normal card once both semifinalists exist", () => {
+    const matches = [pending("m1", 2, 0, "a", "b")];
+    const html = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches, lifecycle: "bracket" });
+    expect(html).not.toContain('data-state="waiting"');
+    expect(html).toContain('data-match-id="m1"');
+    // A BYE still counts as a known player for the waiting check.
+    const bye = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: [{ ...matches[0], player2_name: BYE }], lifecycle: "bracket" });
+    expect(bye).not.toContain('data-state="waiting"');
+    expect(bye).toContain('data-state="bye"');
+  });
+
+  it("emits the BYE explanation note only when a BYE exists", () => {
+    const withBye = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: buildBracket(["a", "b"], 4), lifecycle: "bracket" });
+    expect(withBye).toContain("data-bye-note");
+    const full = renderBracket({ tournament: tournament({ bracket_size: 4 }), matches: buildBracket(["a", "b", "c", "d"], 4), lifecycle: "bracket" });
+    expect(full).not.toContain("data-bye-note");
   });
 
   it("emits one connector path per non-final match once laid out", () => {

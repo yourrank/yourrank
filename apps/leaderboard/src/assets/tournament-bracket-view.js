@@ -99,33 +99,40 @@ function rowHtml({ seed = null, name, score = "", winner = false, champion = fal
   </div>`;
 }
 
-// Score inputs sit where the score digits would, keeping the card two rows.
-// `values` prefills a score correction; `cancel` adds the cancel button and
-// the explanatory note line a correction requires.
-function scoringRowsHtml(match, seedBase, { values = null, cancel = false } = {}) {
-  const row = (seed, name, player) => `<div class="tn-match-row">
+// One editable card pattern: two `[seed] name [input]` rows, then a full-width
+// footer with Save. `saved` prefills a score correction on a completed card —
+// Save stays disabled and the downstream note hidden until an input event
+// shows the values differ from `data-saved` (the controller owns that).
+function scoringRowsHtml(match, seedBase, { saved = null, winnerName = null } = {}) {
+  const row = (seed, name, player) => {
+    const winner = winnerName != null && name === winnerName;
+    return `<div class="tn-match-row${winner ? " is-winner" : ""}">
     ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
-    <span class="tn-match-name">${esc(name)}</span>
-    <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="${player}" value="${esc(values ? values[player - 1] : 0)}" aria-label="${esc(name)} score" />
-    ${player === 2 ? `<button class="tn-match-save" type="button" data-score-match="${esc(match.id)}">Save</button>${cancel ? `<button class="tn-match-edit" type="button" data-score-cancel>Cancel</button>` : ""}` : ""}
+    <span class="tn-match-name">${winner ? CROWN_ICON : ""}${esc(name)}</span>
+    <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="${player}" value="${esc(saved ? saved[player - 1] : 0)}" aria-label="${esc(name)} score" />
   </div>`;
+  };
   return `${row(seedBase, match.player1_name, 1)}
     ${row(seedBase !== null ? seedBase + 1 : null, match.player2_name, 2)}
-    ${cancel ? `<div class="tn-match-note">Changing the winner updates later rounds.</div>` : ""}`;
+    <div class="tn-match-actions"><button class="tn-match-save" type="button" data-score-match="${esc(match.id)}"${saved ? " disabled" : ""}>Save</button></div>
+    ${saved ? `<div class="tn-match-note" hidden>Changing the winner updates later rounds.</div>` : ""}`;
 }
 
-function matchCard(match, { finished, isFinal, championName, correctingId }) {
+function matchCard(match, { finished, isFinal, championName, liveId, mode }) {
   const state = matchState(match, finished);
-  const correcting = state === "completed" && correctingId != null && String(match.id) === String(correctingId);
+  const editable = mode !== "expanded" && !finished;
+  const correctable = state === "completed" && match.correctable && editable;
   const seedBase = Number(match.round_number) === 1 ? match.match_index * 2 + 1 : null;
-  const attrs = `class="tn-match${isFinal ? " tn-match--final" : ""}" data-state="${correcting ? "scorable" : state}" data-match-id="${esc(match.id)}" data-round="${esc(match.round_number)}" data-index="${esc(match.match_index)}"${state === "completed" && match.correctable ? ' data-correctable="true"' : ""}${correcting ? ' data-score-mode="correct"' : ""}`;
+  const live = liveId != null && String(match.id) === String(liveId);
+  const attrs = `class="tn-match${isFinal ? " tn-match--final" : ""}" data-state="${state}" data-match-id="${esc(match.id)}" data-round="${esc(match.round_number)}" data-index="${esc(match.match_index)}"${state === "completed" && match.correctable ? ' data-correctable="true"' : ""}${correctable ? ` data-score-mode="correct" data-saved="${esc(match.player1_score ?? 0)},${esc(match.player2_score ?? 0)}"` : ""}${live ? ' data-live="true"' : ""}`;
+  const liveTag = live ? `<span class="tn-live-tag">LIVE</span>` : "";
   if (state === "void" || state === "future") {
     // BYE/BYE and TBD slots get a thin placeholder line, never a card.
-    const label = state === "void" ? "—" : TBD;
+    const label = state === "void" ? "BYE" : TBD;
     return `<div ${attrs}><div class="tn-match-line">${seedBase !== null ? `<span class="tn-match-seed">${seedBase}</span>` : ""}<span class="tn-match-name">${esc(label)}</span><span class="tn-match-name">${esc(label)}</span></div></div>`;
   }
   if (state === "bye") {
-    // One real player: a single compact line — it advances, it is not a match.
+    // One real player: a single compact line tagged BYE — it is not a match.
     // A completed bye (or the champion's final) still earns the crown.
     const player = isBye(match.player1_name) ? match.player2_name : match.player1_name;
     const seed = isBye(match.player1_name) ? seedBase + 1 : seedBase;
@@ -134,34 +141,44 @@ function matchCard(match, { finished, isFinal, championName, correctingId }) {
     return `<div ${attrs}><div class="tn-match-line">
       ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
       <span class="tn-match-name${winner || champion ? " is-winner" : ""}${champion ? " is-champion" : ""}">${champion ? CROWN_ICON : ""}${esc(player)}</span>
-      <span class="tn-match-adv">${champion ? "champion" : "advances"}</span>
+      ${champion ? `<span class="tn-match-adv">champion</span>` : `<span class="tn-bye-tag">BYE</span>`}
     </div></div>`;
   }
   if (state === "scorable") {
-    // Two rows like a played match: the score inputs sit where the score
-    // digits would, and a compact Save rides the second row's edge.
-    return `<div ${attrs}>
+    if (!editable) {
+      // Stream view: names with a "–" score placeholder, never inputs.
+      return `<div ${attrs}>${liveTag}
+        ${rowHtml({ seed: seedBase, name: match.player1_name, score: "–" })}
+        ${rowHtml({ seed: seedBase !== null ? seedBase + 1 : null, name: match.player2_name, score: "–" })}
+      </div>`;
+    }
+    return `<div ${attrs}>${liveTag}
       ${scoringRowsHtml(match, seedBase)}
     </div>`;
   }
   // completed
-  if (correcting) {
-    // Same inputs, prefilled; the PATCH correction contract reuses
-    // data-score-* plus a cancel and the downstream warning note.
-    return `<div ${attrs}>
-      ${scoringRowsHtml(match, seedBase, { values: [match.player1_score ?? 0, match.player2_score ?? 0], cancel: true })}
+  if (correctable) {
+    // Same editable markup, prefilled; the PATCH correction contract reuses
+    // data-score-* plus data-saved for change detection.
+    return `<div ${attrs}>${liveTag}
+      ${scoringRowsHtml(match, seedBase, { saved: [match.player1_score ?? 0, match.player2_score ?? 0], winnerName: match.winner_name })}
     </div>`;
   }
   const p1Winner = match.winner_name === match.player1_name;
   const p2Winner = match.winner_name === match.player2_name;
   const p1Champion = isFinal && championName === match.player1_name;
   const p2Champion = isFinal && championName === match.player2_name;
-  const edit = match.correctable
-    ? `<button class="tn-match-edit" type="button" data-score-edit="${esc(match.id)}" aria-label="Correct score">Edit</button>`
-    : "";
   return `<div ${attrs}>
     ${rowHtml({ seed: seedBase, name: match.player1_name, score: match.player1_score ?? 0, winner: p1Winner, champion: p1Champion, muted: p2Winner })}
-    ${rowHtml({ seed: seedBase !== null ? seedBase + 1 : null, name: match.player2_name, score: match.player2_score ?? 0, winner: p2Winner, champion: p2Champion, muted: p1Winner, tail: edit })}
+    ${rowHtml({ seed: seedBase !== null ? seedBase + 1 : null, name: match.player2_name, score: match.player2_score ?? 0, winner: p2Winner, champion: p2Champion, muted: p1Winner })}
+  </div>`;
+}
+
+// The final column before both semifinalists are known: a waiting card that
+// still carries data-round/data-index so connectors land on it.
+function waitingCard(round, index, match) {
+  return `<div class="tn-match" data-state="waiting" data-round="${round}" data-index="${index}"${match ? ` data-match-id="${esc(match.id)}"` : ""}>
+    <div class="tn-match-waiting"><b>Waiting for semifinalists</b><span>The final appears when both semifinals are decided.</span></div>
   </div>`;
 }
 
@@ -177,24 +194,43 @@ function placeholderCard(round, index) {
 
 // The grid stacks rounds left to right; each round's slots are `2^(r-1)`
 // slot-units tall so match k of round r+1 centres between feeders 2k/2k+1.
-// mode: "embedded" | "expanded" — identical markup apart from the flag.
-export function renderBracket({ tournament, matches, lifecycle, mode = "embedded", correctingId = null }) {
+// mode: "embedded" (interactive scores) | "expanded" (read-only stream view).
+export function renderBracket({ tournament, matches, lifecycle, mode = "embedded" }) {
   const finished = lifecycle === "completed" || lifecycle === "cancelled";
   const model = buildRoundModel(matches, tournament?.bracket_size);
   const slots = model.rounds[0]?.expected || 1;
   const championName = finished && tournament?.winner_name ? tournament.winner_name : null;
+  // Exactly one live match: the first playable match (round asc, index asc) in
+  // a live bracket. Nothing in the data marks "started", so scorable = live.
+  let liveId = null;
+  if (lifecycle === "bracket") {
+    const live = [...(matches || [])]
+      .sort((a, b) => (a.round_number - b.round_number) || (a.match_index - b.match_index))
+      .find((m) => matchState(m, false) === "scorable");
+    liveId = live ? live.id : null;
+  }
+  const hasBye = (matches || []).some((m) => isBye(m.player1_name) || isBye(m.player2_name));
   const roundsHtml = model.rounds.map((round) => {
     const count = `${round.matches.length} ${round.matches.length === 1 ? "match" : "matches"}`;
-    const body = round.matches.map(({ match, index }) =>
-      `<div class="tn-slot">${match
-        ? matchCard(match, { finished, isFinal: round.number === model.totalRounds, championName, correctingId })
-        : placeholderCard(round.number, index)}</div>`).join("");
+    const isFinalRound = round.number === model.totalRounds;
+    const body = round.matches.map(({ match, index }) => {
+      let card;
+      if (isFinalRound && model.totalRounds >= 2 && (!match || isTbd(match.player1_name) || isTbd(match.player2_name))) {
+        card = waitingCard(round.number, index, match);
+      } else if (match) {
+        card = matchCard(match, { finished, isFinal: isFinalRound, championName, liveId, mode });
+      } else {
+        card = placeholderCard(round.number, index);
+      }
+      return `<div class="tn-slot">${card}</div>`;
+    }).join("");
     return `<section class="tn-round" style="--span:${2 ** (round.number - 1)}">
       <div class="tn-round-head"><h3>${esc(round.label)}</h3><span>${esc(count)}</span></div>
       <div class="tn-round-body">${body}</div>
     </section>`;
   }).join("");
   return `<div class="tn-bracket" data-mode="${esc(mode)}">
+    ${hasBye ? `<p class="tn-bracket-note" data-bye-note>BYE: fewer entries than bracket spots, so a player with no opponent advances automatically.</p>` : ""}
     <div class="tn-bracket-scroll">
       <div class="tn-bracket-grid" style="--rounds:${model.totalRounds};--slots:${slots}">
         <svg class="tn-connectors" aria-hidden="true"></svg>
@@ -233,6 +269,7 @@ export function layoutBracket(root) {
     let totalRounds = 0;
     for (const key of cards.keys()) totalRounds = Math.max(totalRounds, Number(key.split(":")[0]));
     const paths = [];
+    const dashed = [];
     for (const [key, el] of cards) {
       const round = Number(el.dataset.round);
       if (round >= totalRounds) continue;
@@ -243,18 +280,21 @@ export function layoutBracket(root) {
       const b = target.getBoundingClientRect();
       let d = "";
       if (gridRect.width && a.width) {
-        const x1 = a.right - gridRect.left;
-        const y1 = a.top + a.height / 2 - gridRect.top;
-        const x2 = b.left - gridRect.left;
-        const y2 = b.top + b.height / 2 - gridRect.top;
-        const mid = x1 + (x2 - x1) / 2;
+        // Snap to integers: stroke-width 2 lands sharp on whole pixels.
+        const x1 = Math.round(a.right - gridRect.left);
+        const y1 = Math.round(a.top + a.height / 2 - gridRect.top);
+        const x2 = Math.round(b.left - gridRect.left);
+        const y2 = Math.round(b.top + b.height / 2 - gridRect.top);
+        const mid = Math.round(x1 + (x2 - x1) / 2);
         d = `M ${x1} ${y1} L ${mid} ${y1} L ${mid} ${y2} L ${x2} ${y2}`;
       }
       // Stub paths (empty d) still carry data-from/data-to so layout-less
-      // environments can count connectors.
-      paths.push(`<path d="${d}" data-from="${key}" data-to="${toKey}"${el.dataset.state === "bye" || el.dataset.state === "void" ? ' class="is-bye"' : ""}/>`);
+      // environments can count connectors. Dashed (bye) paths render before
+      // solid ones so a shared leg is covered by the solid feeder.
+      const tag = `<path d="${d}" data-from="${key}" data-to="${toKey}"${el.dataset.state === "bye" || el.dataset.state === "void" ? ' class="is-bye"' : ""}/>`;
+      (el.dataset.state === "bye" || el.dataset.state === "void" ? dashed : paths).push(tag);
     }
-    svg.innerHTML = paths.join("");
+    svg.innerHTML = dashed.concat(paths).join("");
   };
 
   const measure = () => {

@@ -186,15 +186,14 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
     siteChannel,
     // Bracket summary aside — metadata rows after the stats list + champion.
     summaryRows: tournament ? [
-      { icon: ICONS.game, label: "Game", value: tournament.game_name || "Not specified" },
+      ...(String(tournament.game_name || "").trim() ? [{ icon: ICONS.game, label: "Game", value: tournament.game_name.trim() }] : []),
       { icon: ICONS.bracket, label: "Bracket type", value: "Single elimination" },
       { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
-      { icon: ICONS.id, label: "Tournament ID", value: tournament.id, mono: true, title: tournament.id },
     ] : [],
     // Settings "Details" card — General already covers Game/Bracket type/size.
     settingsDetailRows: tournament ? [
       { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
-      { icon: ICONS.id, label: "Tournament ID", value: tournament.id, mono: true, title: tournament.id },
+      { icon: ICONS.id, label: "Tournament ID", value: `<button class="btn btn--ghost btn--sm" id="tournament-copy-id" type="button" data-copy-id="${esc(tournament.id)}">Copy ID</button>`, raw: true },
       { icon: ICONS.entries, label: "Entries", value: String(entryCounts?.active || 0) },
       { icon: ICONS.played, label: "Matches played", value: String(played) },
     ] : [],
@@ -333,7 +332,7 @@ function bracketPanelHtml(vm, bracketHtml) {
             <h2 id="tournament-bracket-heading">Tournament bracket</h2>
             <p class="tn-sub" id="tournament-bracket-sub">${esc(sub)}</p>
           </div>
-          <button class="btn btn--ghost btn--sm" id="tournament-bracket-expand" type="button">View full bracket</button>
+          <button class="btn btn--ghost btn--sm" id="tournament-bracket-expand" type="button">Open stream view</button>
         </div>
         ${vm.hasMatches
           ? `<div id="tournament-bracket" class="tn-bracket-host">${bracketHtml}</div>`
@@ -625,8 +624,11 @@ export function fullBracketDialogHtml() {
   return dialogShell("tournament-bracket-modal", "tournament-bracket-modal-heading", `
     <div class="tn-dialog-card tn-dialog-card--bracket">
       <div class="tn-dialog-head">
-        <h3 id="tournament-bracket-modal-heading">Full bracket</h3>
-        <button class="btn btn--sm btn--ghost" id="tournament-bracket-close" type="button" aria-label="Close full bracket">✕</button>
+        <div>
+          <h3 id="tournament-bracket-modal-heading">Stream view</h3>
+          <p class="tn-sub">Read-only, sized for screen sharing. Enter scores in the Bracket tab.</p>
+        </div>
+        <button class="btn btn--sm btn--ghost" id="tournament-bracket-close" type="button" aria-label="Close stream view">✕</button>
       </div>
       <div id="tournament-bracket-full" class="tn-dialog-scroll"></div>
     </div>`, " tn-dialog--bracket");

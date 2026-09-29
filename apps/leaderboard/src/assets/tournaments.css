@@ -480,10 +480,11 @@
 /* Expanded mode grows width only — columns flex to fill the dialog (capped
    per card), never height, so the grid stays compact vertically. */
 .tn-bracket[data-mode="expanded"] .tn-round { flex-grow: 1; }
-.tn-bracket[data-mode="expanded"] .tn-match { max-width: 360px; margin-inline: auto; }
-.tn-bracket[data-mode="expanded"] .tn-match-name { font-size: 14px; }
-.tn-bracket[data-mode="expanded"] .tn-match-score { font-size: 14px; }
-.tn-bracket[data-mode="expanded"] .tn-round-head h3 { font-size: 14px; }
+.tn-bracket[data-mode="expanded"] .tn-match { max-width: 320px; margin-inline: auto; }
+.tn-bracket[data-mode="expanded"] .tn-match-name { font-size: 16px; }
+.tn-bracket[data-mode="expanded"] .tn-match-score { font-size: 16px; }
+.tn-bracket[data-mode="expanded"] .tn-match-row { padding: 12px 14px; }
+.tn-bracket[data-mode="expanded"] .tn-round-head h3 { font-size: 16px; }
 
 .tn-connectors {
   position: absolute;
@@ -496,8 +497,8 @@
   fill: none;
   stroke: var(--tn-text-mute);
   stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
+  stroke-linejoin: miter;
+  stroke-linecap: butt;
 }
 .tn-connectors path.is-bye { stroke-dasharray: 4 4; opacity: 0.5; }
 
@@ -608,8 +609,8 @@
   font-size: 12px;
 }
 .tn-match[data-state="future"] .tn-match-line,
+.tn-match[data-state="void"] .tn-match-line,
 .tn-match[data-placeholder] .tn-match-line { border-style: dashed; }
-.tn-match[data-state="void"] .tn-match-line { border-color: transparent; padding-left: 26px; }
 .tn-match-line .tn-match-name { color: var(--tn-text-mute); font-size: 12px; font-weight: 400; }
 .tn-match-line .tn-match-name.is-winner { color: var(--tn-text); font-weight: 600; }
 .tn-match-line .tn-match-name.is-champion { color: var(--tn-gold); }
@@ -617,50 +618,96 @@
 .tn-match[data-state="bye"].tn-match--final { border: 1.5px solid var(--tn-gold); }
 .tn-match-adv { font-size: 11px; letter-spacing: 0.04em; color: var(--tn-text-mute); }
 
-/* Scorable rows: inputs inline where the score digits sit; the compact Save
-   rides the second row's right edge. Same markup drives both modes. */
+/* Scorable cards: inputs inline where the score digits sit, Save full-width
+   in a footer below the rows. Same markup drives both modes. */
 .tn-match-input {
-  width: 42px;
+  width: 56px;
+  height: 36px;
   flex: none;
   padding: 4px 6px;
   border: 1px solid var(--tn-line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--tn-surface);
   color: var(--tn-text);
-  font: 600 12px var(--tn-mono);
+  font: 600 15px var(--tn-mono);
   text-align: center;
 }
 .tn-match-input:focus { border-color: var(--tn-accent); outline: none; }
+.tn-match-actions { display: flex; padding: 0 10px 10px; }
 .tn-match-save {
-  flex: none;
-  margin-left: 6px;
+  flex: 1;
+  min-height: 36px;
   padding: 4px 10px;
   border: 1px solid var(--tn-accent);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--tn-accent);
   color: #fff;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 .tn-match-save:hover { background: var(--ws-accent-hover, var(--tn-accent)); }
-.tn-match-edit {
-  flex: none;
-  margin-left: 6px;
-  padding: 4px 9px;
-  border: 1px solid var(--tn-line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--tn-text-mute);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.tn-match-edit:hover { color: var(--tn-accent); border-color: var(--tn-accent); }
+.tn-match-save:disabled { opacity: 0.55; cursor: default; }
 .tn-match-note {
   padding: 6px 10px;
   font-size: 11px;
   color: var(--tn-text-mute);
+}
+.tn-bye-tag {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--tn-line);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--tn-text-mute);
+}
+.tn-bracket-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--tn-text-mute);
+}
+.tn-match[data-state="waiting"] { border-style: dashed; }
+.tn-match-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.tn-match-waiting b { font-size: 12px; }
+.tn-match-waiting span { font-size: 11px; color: var(--tn-text-mute); }
+
+/* The one playable match in a live bracket gets the accent frame + pulsing dot. */
+.tn-match[data-live="true"] {
+  border: 2px solid var(--tn-accent);
+  box-shadow: 0 0 0 4px var(--tn-accent-soft);
+}
+.tn-live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 10px 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--tn-accent);
+}
+.tn-live-tag::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tn-accent);
+  animation: tn-live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tn-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tn-live-tag::before { animation: none; }
 }
 
 /* ---- Settings form -------------------------------------------------------- */

@@ -257,7 +257,7 @@ export async function handleCreateTournament(request, env, deps = {}) {
 
   const body = await readJson(request);
   const title = String(body?.title || "").trim() || "Community Tournament";
-  const gameName = String(body?.gameName || "Game").trim();
+  const gameName = String(body?.gameName || "").trim();
   const requestedBracketSize = body?.bracketSize === undefined || body?.bracketSize === null || body?.bracketSize === ""
     ? 8
     : parseInt(body.bracketSize, 10);
@@ -534,7 +534,7 @@ export async function handleUpdateTournamentSettings(request, env, deps = {}) {
     addUpdate("title", String(body.title || "").trim() || access.tournament.title || "Tournament");
   }
   if (Object.prototype.hasOwnProperty.call(body, "gameName")) {
-    addUpdate("game_name", String(body.gameName || "").trim() || access.tournament.game_name || "Game");
+    addUpdate("game_name", String(body.gameName || "").trim());
   }
   const wantsFormat = Object.prototype.hasOwnProperty.call(body, "format");
   const wantsBracketSize = Object.prototype.hasOwnProperty.call(body, "bracketSize");

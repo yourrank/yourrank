@@ -44,7 +44,9 @@ async function startFixture(variant, port) {
   return proc;
 }
 
-const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
+const browser = process.env.CHROMIUM_CDP
+  ? await chromium.connectOverCDP(process.env.CHROMIUM_CDP)
+  : await chromium.launch({ headless: true, ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
 
 // In-page audit: everything measured against the live DOM.
 const auditJs = `(() => {
@@ -68,7 +70,7 @@ const auditJs = `(() => {
     if (!a || !b) return true;
     const ax = a.right - gridRect.left, ay = a.top + a.height / 2 - gridRect.top;
     const bx = b.left - gridRect.left, by = b.top + b.height / 2 - gridRect.top;
-    return Math.abs(x1 - ax) > 2 || Math.abs(y1 - ay) > 2 || Math.abs(x2 - bx) > 2 || Math.abs(y2 - by) > 2;
+    return Math.abs(x1 - ax) > 1 || Math.abs(y1 - ay) > 1 || Math.abs(x2 - bx) > 1 || Math.abs(y2 - by) > 1;
   }).map((p) => p.dataset.from + '->' + p.dataset.to);
   // No two cards inside a column may overlap vertically.
   const overlaps = [];
@@ -99,6 +101,10 @@ const auditJs = `(() => {
     scrollWidth: scroller.scrollWidth,
     winnerRows: grid.querySelectorAll('.tn-match-row.is-winner').length,
     completedCards: grid.querySelectorAll('.tn-match[data-state="completed"]').length,
+    liveCards: grid.querySelectorAll('.tn-match[data-live="true"]').length,
+    waitingFinal: !!grid.querySelector('.tn-match[data-state="waiting"]'),
+    inputs: grid.querySelectorAll('input').length,
+    byeNote: !!grid.closest('.tn-bracket')?.querySelector('[data-bye-note]'),
     docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
   };
 })()`;
@@ -146,6 +152,19 @@ try {
       const embedded = await auditBracket(page, `${variant.name}-embedded`, variant);
       if (variant.completed) {
         check(`${variant.name}: winner rows highlighted`, () => assert.ok(embedded.winnerRows >= 1, `winnerRows ${embedded.winnerRows}`));
+        check(`${variant.name}: no live highlight when finished`, () => assert.equal(embedded.liveCards, 0));
+      } else {
+        check(`${variant.name}: exactly one live match`, () => assert.equal(embedded.liveCards, 1));
+      }
+      // Every fixture has at least one BYE, so the explainer note renders.
+      check(`${variant.name}: BYE explainer note present`, () => assert.ok(embedded.byeNote));
+      // live8/16/32 leave the final's feeders undecided; live4's tiny bracket
+      // already has both semifinalists, so no waiting card is expected there.
+      if (variant.name !== 'completed8' && variant.name !== 'live4') {
+        check(`${variant.name}: undecided final shows the waiting card`, () => assert.ok(embedded.waitingFinal));
+      }
+      if (variant.name === 'live4') {
+        check(`${variant.name}: decided final shows a normal card`, () => assert.ok(!embedded.waitingFinal));
       }
       if (shots[variant.name]?.includes('embedded')) {
         await page.screenshot({ path: `${output}/${variant.name}-embedded-1440.png`, fullPage: true });
@@ -157,6 +176,10 @@ try {
       const expanded = await page.evaluate(auditJs.replaceAll('#tournament-bracket', '#tournament-bracket-full'));
       check(`${variant.name}-expanded: round count`, () => assert.equal(expanded.rounds, Math.log2(variant.size)));
       check(`${variant.name}-expanded: same card count`, () => assert.equal(expanded.paths, embedded.paths));
+      check(`${variant.name}-expanded: stream view is read-only`, () => assert.equal(expanded.inputs, 0));
+      if (!variant.completed) {
+        check(`${variant.name}-expanded: live highlight carries over`, () => assert.equal(expanded.liveCards, 1));
+      }
       if (variant.size >= 8) {
         check(`${variant.name}-expanded: >=1.2x embedded width`, () => assert.ok(expanded.gridWidth >= embedded.gridWidth * 1.2, `width ${expanded.gridWidth} vs ${embedded.gridWidth}`));
       } else {
@@ -194,38 +217,53 @@ try {
       await page.click('#tournament-bracket-close');
       // Score correction: the live8 fixture plays one round-2 match, so its
       // round-1 feeder is blocked while the other feeders stay correctable.
+      // Editable cards carry inputs + Save directly — there is no Edit mode.
       if (variant.name === 'live8') {
         const editFlags = await page.evaluate(() => ({
-          played: !!document.querySelector('.tn-match[data-round="1"][data-index="1"] [data-score-edit]'),
-          bye: !!document.querySelector('.tn-match[data-round="1"][data-index="0"] [data-score-edit]'),
-          open: !!document.querySelector('.tn-match[data-round="1"][data-index="2"] [data-score-edit]'),
+          played: !!document.querySelector('.tn-match[data-round="1"][data-index="1"] input'),
+          bye: !!document.querySelector('.tn-match[data-round="1"][data-index="0"] input'),
+          open: !!document.querySelector('.tn-match[data-round="1"][data-index="2"] input'),
+          openDisabled: document.querySelector('.tn-match[data-round="1"][data-index="2"] .tn-match-save')?.disabled,
+          openNoteHidden: document.querySelector('.tn-match[data-round="1"][data-index="2"] .tn-match-note')?.hidden,
         }));
-        check('live8: no Edit on downstream-played or bye matches', () => {
+        check('live8: no inputs on downstream-played or bye matches', () => {
           assert.equal(editFlags.played, false);
           assert.equal(editFlags.bye, false);
         });
-        check('live8: correctable match exposes Edit', () => assert.ok(editFlags.open));
-        await page.click('.tn-match[data-round="1"][data-index="2"] [data-score-edit]');
-        await page.waitForSelector('.tn-match[data-round="1"][data-index="2"][data-score-mode="correct"]', { timeout: 5000 });
+        check('live8: correctable match has inputs and a disabled Save', () => {
+          assert.ok(editFlags.open);
+          assert.equal(editFlags.openDisabled, true);
+          assert.equal(editFlags.openNoteHidden, true);
+        });
         await page.fill('.tn-match[data-round="1"][data-index="2"] [data-score-player="1"]', '9');
         await page.fill('.tn-match[data-round="1"][data-index="2"] [data-score-player="2"]', '4');
+        const enabled = await page.evaluate(() => ({
+          disabled: document.querySelector('.tn-match[data-round="1"][data-index="2"] .tn-match-save').disabled,
+          noteHidden: document.querySelector('.tn-match[data-round="1"][data-index="2"] .tn-match-note').hidden,
+        }));
+        check('live8: changing a score enables Save and shows the note', () => {
+          assert.equal(enabled.disabled, false);
+          assert.equal(enabled.noteHidden, false);
+        });
         await page.click('.tn-match[data-round="1"][data-index="2"] .tn-match-save');
         await page.waitForFunction(() => {
           const c = document.querySelector('.tn-match[data-round="1"][data-index="2"]');
-          return c && c.dataset.state === 'completed' && !c.dataset.scoreMode;
+          return c && c.dataset.saved === '9,4';
         }, { timeout: 10000 });
         const corrected = await page.evaluate(() => {
           const card = document.querySelector('.tn-match[data-round="1"][data-index="2"]');
           const next = document.querySelector('.tn-match[data-round="2"][data-index="1"]');
           return {
             names: [...card.querySelectorAll('.tn-match-name')].map((n) => n.textContent.trim()),
-            scores: [...card.querySelectorAll('.tn-match-score')].map((n) => n.textContent.trim()),
+            scores: [...card.querySelectorAll('.tn-match-input')].map((n) => n.value),
+            winnerName: card.querySelector('.tn-match-row.is-winner .tn-match-name')?.textContent.trim(),
             nextNames: next ? [...next.querySelectorAll('.tn-match-name')].map((n) => n.textContent.trim()) : [],
           };
         });
         check('live8: corrected card shows new scores and winner', () => {
           assert.deepEqual(corrected.scores, ['9', '4']);
           assert.equal(corrected.names[0], 'seed_2');
+          assert.equal(corrected.winnerName, 'seed_2');
         });
         check('live8: corrected winner propagates into the next round slot', () => {
           assert.ok(corrected.nextNames.some((n) => n.includes('seed_2')), JSON.stringify(corrected.nextNames));

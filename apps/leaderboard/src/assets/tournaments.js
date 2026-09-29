@@ -50,8 +50,6 @@ let disposeExpandedLayout = () => {};
 let settingsBaseline = "";
 let settingsSavedTimer = null;
 let settingsReadonly = false;
-// Match id whose completed card is being re-scored via PATCH; null = off.
-let correctingMatchId = null;
 
 function apiPath(path) {
   return siteId ? `${path}${path.includes("?") ? "&" : "?"}siteId=${encodeURIComponent(siteId)}` : path;
@@ -131,7 +129,7 @@ function render() {
   }
   root.innerHTML = workspaceHtml(
     vm,
-    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded", correctingId: correctingMatchId }) : ""
+    vm.hasMatches ? bracketViewHtml({ tournament, matches, lifecycle, mode: "embedded" }) : ""
   );
   const bracket = $("tournament-bracket");
   disposeEmbeddedLayout = bracket && !bracket.hidden ? layoutBracket(bracket) : () => {};
@@ -284,7 +282,7 @@ export function readCreateForm() {
     body: {
       siteId,
       title: $("tc-title").value.trim() || "Community Tournament",
-      gameName: $("tc-game").value.trim() || "Game",
+      gameName: $("tc-game").value.trim(),
       bracketSize,
       entryCap,
       chatChannel: $("tc-chat-channel").value.trim(),
@@ -578,20 +576,8 @@ async function openBracketModal() {
 function renderExpandedBracket(full = $("tournament-bracket-full")) {
   if (!full || !$("tournament-bracket-modal")) return;
   disposeExpandedLayout();
-  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded", correctingId: correctingMatchId });
+  full.innerHTML = bracketViewHtml({ tournament, matches, lifecycle: lifecycleOf(tournament, matches.length), mode: "expanded" });
   disposeExpandedLayout = layoutBracket(full);
-}
-
-function startScoreCorrection(matchId) {
-  correctingMatchId = matchId;
-  render();
-  renderExpandedBracket();
-}
-
-function cancelScoreCorrection() {
-  correctingMatchId = null;
-  render();
-  renderExpandedBracket();
 }
 
 function closeBracketModal() {
@@ -620,7 +606,6 @@ async function submitScore(matchId, target) {
     method: correcting ? "PATCH" : "POST",
     body: JSON.stringify({ matchId, player1Score, player2Score }),
   });
-  correctingMatchId = null;
   if (correcting) await loadEntries();
   else await loadTournament();
   setMessage(data?.message || "");
@@ -747,7 +732,6 @@ function resetTransientState() {
   if (settingsSavedTimer) { clearTimeout(settingsSavedTimer); settingsSavedTimer = null; }
   entriesRefreshRunning = false;
   entriesRefreshQueued = false;
-  correctingMatchId = null;
   closeCreateModal();
   closeSelectModal();
   closeBracketModal();
@@ -837,6 +821,21 @@ function onChange(event) {
 
 function onInput(event) {
   if (event.target.id === "ts-search") return renderSelectList();
+  // A correction card's Save + note stay inert until a score differs from the
+  // saved values recorded on the card.
+  const scoreInput = event.target.closest?.(".tn-match-input");
+  if (scoreInput) {
+    const card = scoreInput.closest(".tn-match");
+    if (card?.dataset.scoreMode === "correct") {
+      const saved = (card.dataset.saved || "").split(",");
+      const differs = card.querySelector('[data-score-player="1"]')?.value !== saved[0]
+        || card.querySelector('[data-score-player="2"]')?.value !== saved[1];
+      const save = card.querySelector(".tn-match-save");
+      if (save) save.disabled = !differs;
+      const note = card.querySelector(".tn-match-note");
+      if (note) note.hidden = !differs;
+    }
+  }
   if (event.target.closest?.("#tournament-settings-form")) updateDirty();
 }
 
@@ -845,7 +844,7 @@ async function onClick(event) {
     (event.target.ownerDocument || document).querySelectorAll("#tournament-app details.tn-menu[open]").forEach((menu) => { menu.open = false; });
   }
   const target = event.target.closest?.(
-    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, [data-tournament-tab], [data-entry-action], button[data-score-match], [data-score-edit], [data-score-cancel]"
+    "#tournament-primary, #tournament-reopen, #tournament-new, #tournament-create, #tournament-create-cancel, #tournament-create-modal, #tournament-settings-discard, #tournament-select-modal, #tournament-select-cancel, #tournament-select-submit, #tournament-bracket-expand, #tournament-bracket-close, #tournament-bracket-modal, #tournament-copy-id, [data-tournament-tab], [data-entry-action], button[data-score-match]"
   );
   if (!target || !$("tournament-app")) return;
   if (target.id === "tournament-create-modal") {
@@ -867,9 +866,21 @@ async function onClick(event) {
       target.closest("details.tn-menu")?.removeAttribute("open");
       return await handleEntryAction(target);
     }
-    if (target.matches("[data-score-edit]")) return startScoreCorrection(target.dataset.scoreEdit);
-    if (target.matches("[data-score-cancel]")) return cancelScoreCorrection();
     if (target.matches("button[data-score-match]")) return await submitScore(target.dataset.scoreMatch, target);
+    if (target.id === "tournament-copy-id") {
+      const copyId = target.dataset.copyId || "";
+      if (!navigator.clipboard?.writeText) {
+        console.error("[tournaments] Clipboard API unavailable; cannot copy the tournament ID.");
+        return setMessage("Couldn't copy the tournament ID: clipboard unavailable.", true);
+      }
+      return navigator.clipboard.writeText(copyId).then(
+        () => setMessage("Tournament ID copied."),
+        (error) => {
+          console.error("[tournaments] Tournament ID copy failed:", error);
+          setMessage(`Couldn't copy the tournament ID: ${error?.message || error}`, true);
+        },
+      );
+    }
     if (target.id === "tournament-reopen") return await openSignups();
     if (target.id === "tournament-create" || target.id === "tournament-new") return await openCreateModal();
     if (target.id === "tournament-create-cancel") return closeCreateModal();
