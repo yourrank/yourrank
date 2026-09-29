@@ -326,9 +326,9 @@ export async function handleChatGiveawayDraw(request, env, deps = {}) {
       expectedDrawnAt: reroll ? body.expectedDrawnAt : null,
     });
   });
-  if (result.conflict) {
+  if (result.conflict || result.exhausted) {
     const view = await loadSessionView(d, site.id, body.sessionId);
-    return json({ ok: false, error: result.error, ...view }, 409);
+    return json({ ok: false, error: result.error, exhausted: result.exhausted === true || undefined, ...view }, 409);
   }
   if (result.error) return bad(result.error, result.status || 409);
   return ok(await loadSessionView(d, site.id, body.sessionId));

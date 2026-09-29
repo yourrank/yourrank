@@ -356,7 +356,7 @@ export default {
 async function handleScheduled(event, env, ctx) {
   populateEnv(env, { setGlobalEnv: true });
   if (event.cron === "*/5 * * * *") {
-    ctx.waitUntil(runGiveawayTimeouts().catch(() => console.error("[scheduled] giveaway timeout processing failed")));
+    ctx.waitUntil(runGiveawayTimeouts().catch((err) => console.error("[scheduled] giveaway timeout processing failed:", String(err?.message || err))));
     ctx.waitUntil(
       runAutoReset(env).catch((err) => {
         console.error("[scheduled] auto-reset failed:", err);
