@@ -26,7 +26,7 @@ describe("webhook notification settings", () => {
     expect(siteJs).toMatch(/for \(const id of \["f_tgChatId", "f_tgNotify", "settingsWebhookEnabled"\]\)/);
     expect(siteJs).toMatch(/document\.addEventListener\("click"/);
     expect(siteJs).toMatch(/e\.target\.closest\?\.\("#testTelegram, #testDiscord"\)/);
-    expect(siteJs).toContain("if (!window.__yrNotifyTestWired)");
+    expect(siteJs).toContain('if (typeof window !== "undefined" && !window.__yrNotifyTestWired)');
     expect(siteJs).toContain("window.__yrNotifyTestWired = true;");
     expect(siteJs).not.toContain('$("testDiscord")?.addEventListener');
     expect(siteJs).not.toContain('$("testTelegram")?.addEventListener');

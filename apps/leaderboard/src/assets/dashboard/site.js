@@ -3215,7 +3215,7 @@ function renderStatsError() {
 // succeeds. This avoids duplicating the logout implementation and keeps the
 // failure/redirect semantics identical everywhere.
 $("upgrade")?.addEventListener("click", (e) => { e.preventDefault(); checkout("pro", e.target); });
-if (!window.__yrNotifyTestWired) {
+if (typeof window !== "undefined" && !window.__yrNotifyTestWired) {
   window.__yrNotifyTestWired = true;
   document.addEventListener("click", (e) => {
     const button = e.target.closest?.("#testTelegram, #testDiscord");
