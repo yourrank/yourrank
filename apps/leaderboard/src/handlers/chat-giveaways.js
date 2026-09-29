@@ -46,6 +46,24 @@ export function manualEntryRulesError(rules) {
   return null;
 }
 
+const MANUAL_ADD_RULES_ERROR = "Manual entrants can't meet this giveaway's Kick entry rules (members, verified entry, subscriber/VIP only, one account per IP).";
+
+// Streamer-added viewers enter Kick sessions too. Only entry-side rules block
+// them (a typed name can't satisfy Kick identity gates); draw-phase rules like
+// winnerMustRespond/autoReroll are fine — a manually-added winner simply has
+// no chat response to wait for (see drawGiveaway).
+export function manualAddRulesError(rules) {
+  if (
+    rules?.entryMode !== "chat" ||
+    rules.subscriberOnly ||
+    rules.vipOnly ||
+    rules.onePerIp
+  ) {
+    return MANUAL_ADD_RULES_ERROR;
+  }
+  return null;
+}
+
 async function resolveSite(request, env, deps) {
   const { requireUser, getByUser, getBoardById, requireSiteCapability, siteIdOverride } = deps;
   const { user, res } = await requireUser(request, env);
@@ -83,13 +101,23 @@ async function loadSessionView(d, siteId, sessionId = null) {
         ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1`,
       [siteId],
     );
-  if (!session) return { session: null, entries: [], winner: null };
+  if (!session) return { session: null, entries: [], winner: null, draws: [] };
   const entries = await d.query(
     `SELECT ${ENTRY_COLUMNS} FROM chat_giveaway_entries WHERE giveaway_session_id = $1 ORDER BY entered_at ASC`,
     [session.id],
   );
   const winner = session.winner_entry_id ? entries.find((e) => e.id === session.winner_entry_id) || null : null;
-  return { session, entries, winner };
+  const draws = await d.query(
+    `SELECT d.id, d.entry_id, d.reason, d.drawn_at, d.replaced_entry_id,
+            e.username, re.username AS replaced_username
+       FROM chat_giveaway_draws d
+       LEFT JOIN chat_giveaway_entries e ON e.id = d.entry_id
+       LEFT JOIN chat_giveaway_entries re ON re.id = d.replaced_entry_id
+      WHERE d.giveaway_session_id = $1
+      ORDER BY d.drawn_at, d.id`,
+    [session.id],
+  );
+  return { session, entries, winner, draws };
 }
 
 /** GET /api/giveaways/chat — connection readiness + current session + entrants. */
@@ -180,7 +208,7 @@ export async function handleChatGiveawayAddEntry(request, env, deps = {}) {
 
   const rules = giveawayRules(session.rules);
   if (session.provider === "kick") {
-    const rulesError = manualEntryRulesError(rules);
+    const rulesError = manualAddRulesError(rules);
     if (rulesError) return bad(rulesError, 409);
   }
 
@@ -206,6 +234,52 @@ export async function handleChatGiveawayAddEntry(request, env, deps = {}) {
   if (!entry) return bad(`${username} is already entered.`, 409);
 
   return ok(await loadSessionView(d, site.id, session.id));
+}
+
+/** POST /api/giveaways/chat/response-rules — winner verification is a
+ * draw-phase rule: it stays editable on a live Kick giveaway until the winner
+ * is confirmed, while entry-side rules stay locked. Applies to the next draw
+ * or re-roll; the current draw's persisted window is not rewritten. */
+export async function handleChatGiveawayUpdateResponseRules(request, env, deps = {}) {
+  const d = withDefaults(deps);
+  const body = (await readJson(request)) || {};
+  const { res, site, user } = await resolveSite(request, env, { ...d, siteIdOverride: body.siteId });
+  if (res) return res;
+  if (!body.sessionId) return bad("Missing sessionId", 400);
+
+  const session = await d.one(
+    `SELECT ${SESSION_COLUMNS} FROM chat_giveaway_sessions WHERE id = $1 AND site_id = $2`,
+    [body.sessionId, site.id],
+  );
+  if (!session) return bad("Giveaway not found", 404);
+
+  // Only the three response rules come from the request; entry rules merge in
+  // unchanged from the persisted session.
+  const merged = {
+    ...giveawayRules(session.rules),
+    winnerMustRespond: body.winnerMustRespond,
+    responseTimeout: body.responseTimeout,
+    autoReroll: body.autoReroll,
+  };
+  const parsedRules = giveawayRulesSchema.safeParse(merged);
+  if (!parsedRules.success) return bad(parsedRules.error.issues[0]?.message || "Invalid giveaway rules.", 400);
+  if (usesAdvancedGiveawayRules(parsedRules.data)) {
+    const gateRes = await requireSiteFeature(site, "advanced_giveaways", { actorId: user.id, request, oneImpl: d.one });
+    if (gateRes) return gateRes;
+  }
+
+  const updated = await d.one(
+    `UPDATE chat_giveaway_sessions SET rules = $3::jsonb
+      WHERE id = $1 AND site_id = $2 AND provider = 'kick' AND status <> 'cancelled'
+        AND winner_finalized_at IS NULL
+      RETURNING ${SESSION_COLUMNS}`,
+    [body.sessionId, site.id, parsedRules.data],
+  );
+  if (!updated) {
+    return bad("Winner verification can't change after the winner is confirmed or the giveaway ends.", 409);
+  }
+  const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
+  return ok({ connection, ...await loadSessionView(d, site.id, body.sessionId) });
 }
 
 /** POST /api/giveaways/chat/stop — stop collecting; entrants are kept. */
