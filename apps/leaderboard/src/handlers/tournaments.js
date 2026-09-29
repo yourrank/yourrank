@@ -866,7 +866,7 @@ export async function promoteWaitlistTx(tx, tournamentId, { actorUserId = null }
     await tx.unsafe(
       `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
        VALUES ($1, 'tournament_entry_promoted', 'tournament_entry', $2, $3::jsonb)`,
-      [actorUserId, next.id, JSON.stringify({ tournamentId })]
+      [actorUserId, next.id, { tournamentId }]
     );
     promoted.push(next.id);
   }
