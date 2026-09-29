@@ -480,7 +480,7 @@ export async function handleChatGiveawayExcludeLinkedEntries(request, env, deps 
       await run(
         `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
          VALUES ($1, 'giveaway_entry_excluded_linked', 'chat_giveaway_entry', $2, $3::jsonb)`,
-        [user.id, String(row.id), JSON.stringify({ siteId: site.id, sessionId: session.id, username: row.username })],
+        [user.id, String(row.id), { siteId: site.id, sessionId: session.id, username: row.username }],
       );
     }
     return { excluded, skipped };
@@ -516,7 +516,7 @@ export async function handleChatGiveawayIncludeLinkedEntry(request, env, deps = 
     await run(
       `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
        VALUES ($1, 'giveaway_entry_included', 'chat_giveaway_entry', $2, $3::jsonb)`,
-      [user.id, String(body.entryId), JSON.stringify({ siteId: site.id, sessionId: session.id })],
+      [user.id, String(body.entryId), { siteId: site.id, sessionId: session.id }],
     );
     return { ok: true };
   });

@@ -132,12 +132,12 @@ export async function runAccountLinkDetection({ run = defaultRun } = {}) {
              VALUES (NULL, 'account_link_detected', 'account_link', $1, $2::jsonb)`,
             [
               String(rows[0].id),
-              JSON.stringify({
+              {
                 siteId,
                 confidence,
                 reasons,
                 sameTimeClaims: pair.same_time_claims || 0,
-              }),
+              },
             ],
           );
         } else {

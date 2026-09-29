@@ -244,7 +244,7 @@ export async function handleLinkedAccountsDecision(request, env, injected = {}) 
          VALUES ($1, $2, 'account_link', $3, $4::jsonb)`,
         [
           user.id, DECISION_AUDIT[action], String(link.id),
-          JSON.stringify({ siteId: site.id, viewerA: link.viewer_a, viewerB: link.viewer_b, previousStatus: link.status }),
+          { siteId: site.id, viewerA: link.viewer_a, viewerB: link.viewer_b, previousStatus: link.status },
         ],
       );
     }

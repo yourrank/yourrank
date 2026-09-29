@@ -1147,7 +1147,7 @@ describe("linked-account exclude/include", () => {
     expect(updates[0].params[0]).toBe(E1);
     const audits = statements.filter((s) => s.text.includes("audit_log"));
     expect(audits).toHaveLength(1);
-    expect(JSON.parse(audits[0].params[2]).username).toBeDefined();
+    expect(audits[0].params[2].username).toBeDefined();
 
     const res2 = await handleChatGiveawayIncludeLinkedEntry(
       apiRequest("/api/giveaways/chat/entries/include", { sessionId: "gs-1", siteId: siteA.id, entryId: E2 }), {}, d);
