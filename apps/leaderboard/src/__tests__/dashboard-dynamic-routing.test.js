@@ -52,7 +52,7 @@ const EXPECTED = {
   },
   audience: {
     boot: "people",
-    tabs: { viewers: "audienceMembers", activity: "audienceActivity", reviews: "audienceReviews" },
+    tabs: { viewers: "audienceMembers", activity: "audienceActivity", reviews: "audienceReviews", linked: "audienceLinked" },
   },
   settings: {
     boot: "account",
