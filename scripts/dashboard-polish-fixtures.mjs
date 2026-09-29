@@ -9,6 +9,7 @@ import { resolveFragment, renderFragmentPayload } from '../apps/leaderboard/src/
 import { leaderboardPageHtml } from '../packages/shared/dist/page-shell.js';
 import { ASSETS } from '../apps/leaderboard/src/assets_bundled.js';
 import { buildBracket, canCorrectMatch, resolveByes, isBye, BYE } from '../apps/leaderboard/src/lib/tournament-bracket.js';
+import { entryViews, tournamentLifecycle, tournamentViewState } from '../apps/leaderboard/src/lib/tournament-state.js';
 import { appHtml } from '../apps/bot/src/dashboard-views/app.ts';
 import { clientScriptSource } from '../apps/bot/src/dashboard-views/client-script.ts';
 
@@ -151,8 +152,22 @@ const server = createServer(async (req, res) => {
     const empty = mode === 'empty';
     const { tournament, fixtureEntries } = tournamentState;
     const matches = tournamentState.matches;
-    if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [tournament], chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
-    if (path === `/api/tournaments/${tournament.id}/entries`) return json(res, { entries: empty ? [] : fixtureEntries, counts: { active: fixtureEntries.length, eligible: fixtureEntries.length, waitlist: 0, removed: 0, blocked: 0 } });
+    const counts = {
+      active: fixtureEntries.filter((entry) => ['pending', 'confirmed', 'selected'].includes(entry.status)).length,
+      eligible: fixtureEntries.filter((entry) => entry.eligible === true).length,
+      waitlist: fixtureEntries.filter((entry) => entry.status === 'waitlist').length,
+      removed: fixtureEntries.filter((entry) => entry.status === 'removed').length,
+      blocked: fixtureEntries.filter((entry) => entry.status === 'blocked').length,
+      inactive: fixtureEntries.filter((entry) => ['removed', 'blocked'].includes(entry.status)).length,
+    };
+    const lifecycle = tournamentLifecycle(tournament, matches.length);
+    const listedTournament = { ...tournament, match_count: matches.length, lifecycle, status_label: ({ setup: 'Setup', live: 'Live', finished: 'Finished', cancelled: 'Cancelled' })[lifecycle] };
+    if (path === '/api/tournaments' && req.method === 'GET') return json(res, { ok: true, tournaments: empty ? [] : [listedTournament], current_id: empty ? null : tournament.id, chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null } });
+    if (path === `/api/tournaments/${tournament.id}/entries`) {
+      const state = tournamentViewState({ tournament, counts, matchCount: matches.length });
+      const entries = entryViews(empty ? [] : fixtureEntries, { tournament, matches, lifecycle });
+      return json(res, { entries, counts: empty ? { ...counts, active: 0, eligible: 0, waitlist: 0, removed: 0, blocked: 0, inactive: 0 } : counts, state });
+    }
     if (path === `/api/tournaments/${tournament.id}/bracket`) return json(res, { matches: empty ? [] : matches.map((m) => ({ ...m, correctable: canCorrectMatch(matches, m).ok })), tournament });
     if (path === `/api/tournaments/${tournament.id}/score` && req.method === 'PATCH') {
       let raw = ''; for await (const chunk of req) raw += chunk;

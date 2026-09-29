@@ -10,6 +10,7 @@ import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 import { Window } from "happy-dom";
 import { renderGiveawaysHtml, renderGiveawaysContentHtml } from "../pages/giveaway-pages.js";
 import { clearSession } from "../assets/dashboard/session.js";
+import { entryViews, tournamentLifecycle, tournamentViewState } from "../lib/tournament-state.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments?siteId=site-1" });
 const { document } = window;
@@ -66,12 +67,26 @@ globalThis.fetch = async (input, init = {}) => {
   server.requests.push({ path, method, body: init.body });
   if (path === "/api/auth/me") return json({ ok: true, user });
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
-  if (path === "/api/tournaments") return json({
-    ok: true,
-    tournaments: server.tournament ? [server.tournament] : [],
-    chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
-    entitlement: { enabled: server.entitlementEnabled },
-  });
+  if (path === "/api/tournaments") {
+    const lifecycle = server.tournament
+      ? tournamentLifecycle(server.tournament, server.matches.length)
+      : null;
+    const listed = server.tournament
+      ? [{
+          ...server.tournament,
+          match_count: server.matches.length,
+          lifecycle,
+          status_label: ({ setup: "Setup", live: "Live", finished: "Finished", cancelled: "Cancelled" })[lifecycle],
+        }]
+      : [];
+    return json({
+      ok: true,
+      tournaments: listed,
+      current_id: listed[0]?.id || null,
+      chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
+      entitlement: { enabled: server.entitlementEnabled },
+    });
+  }
   if (path.endsWith("/signups/lock") && method === "POST") {
     server.tournament = { ...server.tournament, signup_state: "locked" };
     return json({ ok: true });
@@ -82,7 +97,26 @@ globalThis.fetch = async (input, init = {}) => {
     server.entries.push({ id: `e${server.entries.length + 1}`, display_name: displayName, source: "manual", status: "pending", eligible: true });
     return json({ ok: true, entry: server.entries.at(-1) });
   }
-  if (path.endsWith("/entries")) return json({ entries: server.entries, counts: { active: server.entries.length, eligible: server.entries.length, waitlist: 0, removed: 0, blocked: 0 } });
+  if (path.endsWith("/entries")) {
+    const entries = server.entries.map((entry) => ({
+      eligible: ["pending", "confirmed"].includes(entry.status),
+      ...entry,
+    }));
+    const counts = {
+      active: entries.filter((entry) => ["pending", "confirmed", "selected"].includes(entry.status)).length,
+      eligible: entries.filter((entry) => entry.eligible).length,
+      waitlist: entries.filter((entry) => entry.status === "waitlist").length,
+      removed: entries.filter((entry) => entry.status === "removed").length,
+      blocked: entries.filter((entry) => entry.status === "blocked").length,
+      inactive: entries.filter((entry) => ["removed", "blocked"].includes(entry.status)).length,
+    };
+    const lifecycle = tournamentLifecycle(server.tournament, server.matches.length);
+    return json({
+      entries: entryViews(entries, { tournament: server.tournament, matches: server.matches, lifecycle }),
+      counts,
+      state: tournamentViewState({ tournament: server.tournament, counts, matchCount: server.matches.length }),
+    });
+  }
   if (path.endsWith("/bracket")) return json({ matches: server.matches, tournament: server.tournament });
   return json({ ok: true });
 };
@@ -145,12 +179,12 @@ describe("tournament workspace — completed tournament", () => {
     expect($id("tournament-title-display").tagName).toBe("H1");
     expect(text("tournament-title-display")).toBe("Community tournament");
     expect(text("tournament-status")).toBe("Finished");
-    expect(text("tournament-meta")).toBe("8-player bracket · Single elimination");
+    expect(text("tournament-meta")).toBe("8-player bracket");
     expect(text("tournament-step-label")).toBe("Champion: 36_ates");
     expect($id("tournament-step-label").querySelector("svg.tn-crown")).toBeTruthy();
     expect(text("tournament-count")).toBe("2");
     expect(text("tournament-fact-spots")).toBe("8");
-    expect(text("tournament-fact-keyword")).toBe("!join");
+    expect($id("tournament-fact-keyword")).toBeNull();
     expect(text("tournament-fact-cap")).toBe("Unlimited");
     expect($id("tournament-workspace").querySelector(".tn-head").textContent).not.toContain("Kick channel");
   });
@@ -161,8 +195,8 @@ describe("tournament workspace — completed tournament", () => {
     expect(rows).toHaveLength(2);
     expect($id("tournament-entry-list").textContent).toContain("36_ates");
     expect($id("tournament-entry-list").textContent).toContain("forolo_GB");
-    // The champion stays "In bracket"; the player who lost a real match is Eliminated.
-    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--in-bracket")).toHaveLength(1);
+    // The selected winner is Champion; the player who lost a real match is Eliminated.
+    expect($id("tournament-entry-list").querySelectorAll(".tn-pill--champion")).toHaveLength(1);
     expect($id("tournament-entry-list").querySelectorAll(".tn-pill--eliminated")).toHaveLength(1);
     expect($id("tournament-entry-list").textContent).toContain("Eliminated");
     expect($id("tournament-entry-list").textContent).toContain("Chat");
@@ -175,7 +209,7 @@ describe("tournament workspace — completed tournament", () => {
     expect(visible("tournament-panel-bracket")).toBe(true);
     const headings = [...$id("tournament-bracket").querySelectorAll(".tn-round-head h3")].map((h) => h.textContent);
     expect(headings).toEqual(["Quarterfinals", "Semifinals", "Final"]);
-    expect(text("tournament-bracket-sub")).toBe("Single elimination · 8-player bracket");
+    expect(text("tournament-bracket-sub")).toBe("8-player bracket");
     expect($id("tournament-bracket").querySelectorAll("input")).toHaveLength(0);
     expect($id("tournament-bracket").querySelectorAll(".tn-match-row.is-winner")).not.toHaveLength(0);
     expect($id("tournament-bracket").querySelector('.tn-match[data-state="bye"]')).toBeTruthy();
@@ -187,8 +221,7 @@ describe("tournament workspace — completed tournament", () => {
     expect(paths.length).toBe(completedMatches.length - 1);
     const aside = $id("tournament-summary");
     expect(aside.textContent).toContain("Matches played");
-    // The tournament ID lives behind a Copy ID button in Settings, not the
-    // summary aside; a blank game_name renders no Game row.
+    // A blank game_name renders no Game row in the summary.
     expect(aside.textContent).not.toContain("Tournament ID");
     expect(aside.innerHTML).not.toContain("tourn_8f3a2c");
     expect(aside.textContent).not.toContain("Game");
@@ -231,10 +264,8 @@ describe("tournament workspace — completed tournament", () => {
     expect(view).toContain("8 players");
     expect($id("tournament-settings-aside").textContent).toContain("Tournament status");
     expect($id("tournament-settings-aside").textContent).toContain("Details");
-    expect($id("tournament-settings-aside").textContent).toContain("Tournament ID");
-    const copyId = $id("tournament-settings-aside").querySelector("#tournament-copy-id");
-    expect(copyId).toBeTruthy();
-    expect(copyId.dataset.copyId).toBe("tourn_8f3a2c");
+    expect($id("tournament-settings-aside").textContent).not.toContain("Tournament ID");
+    expect($id("tournament-settings-aside").textContent).toContain("Delete tournament");
   });
 });
 

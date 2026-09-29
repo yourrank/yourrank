@@ -26,20 +26,6 @@ const LINKED_REASON_LABELS = {
   same_ip_24h: "Same IP",
   same_time_claims: "Same-time claims",
 };
-const STATUS_LABELS = {
-  pending: "Registered",
-  confirmed: "Registered",
-  selected: "In bracket",
-  waitlist: "Waitlist",
-  removed: "Removed",
-  blocked: "Blocked",
-};
-const LIFECYCLE_LABELS = {
-  setup: "Setup",
-  live: "Live",
-  finished: "Finished",
-  cancelled: "Cancelled",
-};
 // One sentence of guidance per lifecycle for the Settings status card.
 const LIFECYCLE_STATUS_COPY = {
   setup: "Collect entries, then start the tournament to create the bracket.",
@@ -47,8 +33,6 @@ const LIFECYCLE_STATUS_COPY = {
   finished: "This tournament has finished. No new signups are being accepted.",
   cancelled: "This tournament was cancelled.",
 };
-const ACTIVE_STATUSES = ["pending", "confirmed", "selected"];
-
 // Compact inline SVG icons (lucide-style strokes) — no emoji in the UI.
 const icon = (path) => `<svg class="tn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
 const ICONS = {
@@ -59,7 +43,6 @@ const ICONS = {
   limit: icon('<path d="M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z"/>'),
   expand: icon('<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>'),
   calendar: icon('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>'),
-  id: icon('<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M15 8h4"/><path d="M15 12h4"/><path d="M6 16h12"/>'),
   game: icon('<path d="M6 12h4"/><path d="M8 10v4"/><path d="m15 13 .5-1"/><path d="m18 15 .5-1"/><path d="M17.32 5H6.68a4 4 0 0 0-3.98 3.59c-.04.36-.7 4.91-.7 5.41a3 3 0 0 0 5.12 2.12L9 14h6l1.88 2.12A3 3 0 0 0 22 14c0-.5-.66-5.05-.7-5.41A4 4 0 0 0 17.32 5Z"/>'),
   bracket: icon('<path d="M4 4h4v16H4z" fill="currentColor" stroke="none" opacity="0"/><path d="M8 6h4"/><path d="M8 12h4"/><path d="M8 18h4"/><circle cx="8" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="8" cy="18" r="2"/><path d="M14 6h2v6h-2z"/><circle cx="15" cy="6" r="1.6"/><path d="M14 15h2v3h-2z"/><circle cx="15" cy="18" r="1.6"/>'),
   played: icon('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'),
@@ -78,36 +61,35 @@ export function formatCreated(value) {
 // Derived once per render so every panel agrees on labels, counts and which
 // controls exist. `board` only feeds the Kick-channel fallback for draft
 // primaries; `chatRegistration` drives the registration-status text.
-export function buildViewModel({ tournament, entries, entryCounts, matches, lifecycle, chatRegistration, board, activeTab, tournamentsEnabled = true }) {
+export function buildViewModel({
+  tournament,
+  entries,
+  entryCounts,
+  matches,
+  tournamentState,
+  lifecycle: lifecycleFallback,
+  tournaments,
+  selectedId,
+  duplicateProtectionInFlight = false,
+  pendingAntiAltEnabled = null,
+  chatRegistration,
+  board,
+  activeTab,
+  tournamentsEnabled = true,
+}) {
+  const lifecycle = tournamentState?.lifecycle ?? lifecycleFallback ?? tournament?.lifecycle ?? "setup";
   const finished = lifecycle === "finished" || lifecycle === "cancelled";
-  const activeCount = (entries || []).filter((entry) => ACTIVE_STATUSES.includes(entry.status)).length;
+  const activeCount = entryCounts?.active || 0;
   const keyword = tournament?.entry_keyword || "!join";
   const channel = String(tournament?.chat_channel || "").trim();
   const siteChannel = String(chatRegistration?.channelName || board?.kickChannelName || "").trim();
   const played = (matches || []).filter((m) => m.status === "completed" && m.player1_name !== BYE && m.player2_name !== BYE).length;
-  const bracketSize = Number(tournament?.bracket_size) || 0;
   const cap = tournament?.entry_cap ?? null;
-  const waitlistOn = tournament?.waitlist_enabled === true;
   const signupsOpen = tournament?.signup_state === "open";
-  const full = cap !== null && cap !== undefined && activeCount >= cap;
-  const waitlistCount = entryCounts?.waitlist
-    ?? (entries || []).filter((entry) => entry.status === "waitlist").length;
-
-  // Names that lost a completed real-vs-real match show as "Eliminated".
-  const eliminatedNames = new Set();
-  for (const m of matches || []) {
-    if (m.status === "completed" && m.winner_name
-        && m.player1_name && m.player2_name
-        && m.player1_name !== BYE && m.player2_name !== BYE
-        && m.player1_name !== "TBD" && m.player2_name !== "TBD") {
-      eliminatedNames.add(m.winner_name === m.player1_name ? m.player2_name : m.player1_name);
-    }
-  }
-  // Waitlist position counts earlier waitlist rows in signup order.
-  const waitlistOrder = (entries || [])
-    .filter((entry) => entry.status === "waitlist")
-    .sort((a, b) => (new Date(a.created_at) - new Date(b.created_at)) || String(a.id).localeCompare(String(b.id)));
-  const waitlistPositionOf = (entry) => waitlistOrder.findIndex((item) => item.id === entry.id) + 1;
+  const waitlistCount = entryCounts?.waitlist || 0;
+  const start = tournamentState?.start;
+  const addEntry = tournamentState?.add_entry || { visible: false, enabled: false };
+  const antiAltEnabled = pendingAntiAltEnabled ?? (tournament?.anti_alt_enabled === true);
 
   // Chat-registration state is the single source for the form hint and the
   // read-only Settings row — they can never disagree.
@@ -119,38 +101,26 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
 
   // Primary action + step guidance per lifecycle.
   let primary = null;
-  let showNew = false;
   let stepHtml = "";
   let setupControls = null;
   if (lifecycle === "setup") {
-    const eligible = entryCounts?.eligible || 0;
-    primary = eligible < 2
-      ? { action: "start", label: "Start tournament", disabledReason: "Add at least 2 players to start." }
-      : { action: "start", label: "Start tournament" };
-    stepHtml = signupsOpen
-      ? `Chat signup is on — viewers join by typing ${esc(keyword)} in chat.`
+    primary = start
+      ? { action: "start", label: "Start tournament", disabledReason: start.reason }
+      : null;
+    stepHtml = tournamentState?.chat_signup_text
+      ? esc(tournamentState.chat_signup_text)
       : "Add players below, or turn on chat signup to collect entries from Kick chat.";
     setupControls = {
       hasChannel: Boolean(channel),
       siteChannel,
       open: signupsOpen,
-      stateText: !channel
-        ? null
-        : full && !waitlistOn
-          ? `Full — signups closed (${activeCount}/${cap})`
-          : full
-            ? "Full — new signups join the waitlist"
-            : signupsOpen
-              ? `On — viewers type ${esc(keyword)} in chat`
-              : "Off",
+      stateText: tournamentState?.chat_signup_text || null,
     };
   } else if (lifecycle === "live") {
-    stepHtml = "Enter match results in the Bracket tab to advance winners.";
+    stepHtml = "Click the winner's name in the Bracket tab to advance them, or enter scores.";
   } else if (lifecycle === "finished") {
-    showNew = true;
     stepHtml = `${CROWN_ICON}<span>Champion: ${esc(tournament?.winner_name || "—")}</span>`;
   } else if (lifecycle === "cancelled") {
-    showNew = true;
     stepHtml = "Tournament cancelled.";
   }
 
@@ -158,7 +128,6 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
     ? [
         ...(String(tournament.game_name || "").trim() ? [tournament.game_name] : []),
         `${tournament.bracket_size}-player bracket`,
-        "Single elimination",
       ].join(" · ")
     : "";
 
@@ -166,7 +135,7 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
     tournament,
     lifecycle,
     finished,
-    statusLabel: LIFECYCLE_LABELS[lifecycle] || lifecycle,
+    statusLabel: tournamentState?.status_label || tournament?.status_label || lifecycle,
     statusCopy: LIFECYCLE_STATUS_COPY[lifecycle] || "",
     meta,
     keyword,
@@ -175,16 +144,18 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
     activeTab: activeTab || "entries",
     primary,
     setupControls,
-    full,
-    waitlistOn,
     waitlistCount,
     cap,
-    antiAltEnabled: tournament?.anti_alt_enabled === true,
+    addEntry,
+    inactiveCount: entryCounts?.inactive || 0,
+    antiAltEnabled,
+    duplicateProtectionBusy: duplicateProtectionInFlight,
     entriesTabLabel: waitlistCount > 0
       ? `Entries (${activeCount}) · Waitlist ${waitlistCount}`
       : `Entries (${activeCount})`,
-    showNew,
     tournamentsEnabled,
+    tournaments: tournaments || [],
+    selectedId: selectedId || tournament?.id || "",
     stepHtml,
     hasMatches: Boolean(matches?.length) || Boolean(tournament?.winner_name),
     playedMatches: played,
@@ -193,40 +164,33 @@ export function buildViewModel({ tournament, entries, entryCounts, matches, life
       { icon: ICONS.spots, value: String(tournament?.bracket_size ?? "—"), label: "Bracket spots", id: "tournament-fact-spots" },
       { icon: ICONS.command, value: keyword, label: "Join command", id: "tournament-fact-keyword" },
       { icon: ICONS.limit, value: cap ? String(cap) : "Unlimited", label: "Signup limit", id: "tournament-fact-cap" },
-    ],
+    ].filter((stat) => stat.id !== "tournament-fact-keyword" || signupsOpen),
     entriesVm: (entries || []).map((entry) => ({
       id: entry.id,
       name: entry.display_name || "?",
       initial: String(entry.display_name || "?").trim().charAt(0).toUpperCase() || "?",
-      flagged: Boolean(tournament?.anti_alt_enabled && (entry.flagged || entry.alt_flag || entry.linked_to)),
+      flagged: Boolean(antiAltEnabled && (entry.flagged || entry.alt_flag || entry.linked_to)),
       flagReason: entry.linked_to
         ? `Linked to ${entry.linked_to} · ${(entry.linked_reasons || []).map((code) => LINKED_REASON_LABELS[code] || code).join(" · ")}`
         : entry.alt_reason || "Possible duplicate account.",
       linked: !!entry.linked_to,
       sourceLabel: SOURCE_LABELS[entry.source] || entry.source || "—",
       status: entry.status,
-      statusLabel: entry.status === "waitlist"
-        ? `Waitlist #${waitlistPositionOf(entry) || "?"}`
-        : entry.status === "selected" && eliminatedNames.has(entry.display_name)
-          ? "Eliminated"
-          : STATUS_LABELS[entry.status] || "Registered",
-      pillClass: entry.status === "waitlist" ? "waitlist"
-        : entry.status === "selected"
-          ? (eliminatedNames.has(entry.display_name) ? "eliminated" : "in-bracket")
-          : ["removed", "blocked"].includes(entry.status) ? entry.status : "registered",
-      removed: ["removed", "blocked"].includes(entry.status),
+      statusLabel: entry.status_label,
+      statusTone: entry.status_tone,
+      actions: entry.actions,
+      inactive: entry.inactive === true,
+      eligibleRank: entry.eligible_rank,
     })),
     siteChannel,
     // Bracket summary aside — metadata rows after the stats list + champion.
     summaryRows: tournament ? [
       ...(String(tournament.game_name || "").trim() ? [{ icon: ICONS.game, label: "Game", value: tournament.game_name.trim() }] : []),
-      { icon: ICONS.bracket, label: "Bracket type", value: "Single elimination" },
       { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
     ] : [],
     // Settings "Details" card — General already covers Game/Bracket type/size.
     settingsDetailRows: tournament ? [
       { icon: ICONS.calendar, label: "Created", value: formatCreated(tournament.created_at) },
-      { icon: ICONS.id, label: "Tournament ID", value: `<button class="btn btn--ghost btn--sm" id="tournament-copy-id" type="button" data-copy-id="${esc(tournament.id)}">Copy ID</button>`, raw: true },
       { icon: ICONS.entries, label: "Entries", value: String(entryCounts?.active || 0) },
       { icon: ICONS.played, label: "Matches played", value: String(played) },
     ] : [],
@@ -251,7 +215,7 @@ function headerHtml(vm) {
     : "";
   const actions = [
     `<span class="tn-primary-wrap">${primaryBtn}${primaryReason}</span>`,
-    `<button class="btn btn--ghost" id="tournament-new" type="button"${vm.showNew && vm.tournamentsEnabled ? "" : " hidden"}>${ICONS.plus} New tournament</button>`,
+    `<button class="btn btn--ghost" id="tournament-new" type="button"${vm.tournamentsEnabled ? "" : " hidden"}>${ICONS.plus} New tournament</button>`,
   ].join("");
   const controls = vm.setupControls
     ? `<div class="tn-setup-controls">
@@ -276,8 +240,9 @@ function headerHtml(vm) {
       <span class="tn-head-mark" aria-hidden="true">${ICONS.trophy}</span>
       <div class="tn-head-text">
         <div class="tn-head-title-row">
-          <h1 id="tournament-title-display">${esc(t.title || "Community Tournament")}</h1>
+          <h1 id="tournament-title-display">${esc(t.title || "")}</h1>
           ${statusPill(vm.lifecycle, vm.statusLabel)}
+          ${tournamentSwitcherHtml(vm)}
         </div>
         <p class="tn-meta" id="tournament-meta">${esc(vm.meta)}</p>
         <p class="tn-step" id="tournament-step-label">${vm.stepHtml}</p>
@@ -285,7 +250,7 @@ function headerHtml(vm) {
       </div>
       <div class="tn-head-actions">${actions}</div>
     </div>
-    <dl class="tn-stats">${vm.stats.map((s) => `
+    <dl class="tn-stats tn-stats--${vm.stats.length}">${vm.stats.map((s) => `
       <div class="tn-stat">
         <dt><span class="tn-stat-ic" aria-hidden="true">${s.icon}</span>${esc(s.label)}</dt>
         <dd id="${s.id}"${s.id === "tournament-count" ? ' aria-live="polite"' : ""}>${esc(s.value)}</dd>
@@ -293,6 +258,24 @@ function headerHtml(vm) {
     </dl>
     <span class="tn-status-anchor" id="tournament-status" data-lifecycle="${esc(vm.lifecycle)}" hidden>${esc(vm.statusLabel)}</span>
   </header>`;
+}
+
+function tournamentSwitcherHtml(vm) {
+  if (!vm.tournaments.length) return "";
+  return `<details class="tn-switcher" id="tournament-switcher">
+    <summary>All tournaments (${vm.tournaments.length})</summary>
+    <div class="tn-switcher-list" role="menu">
+      ${vm.tournaments.map((item) => {
+    const current = item.id === vm.selectedId;
+    const lifecycle = current ? vm.lifecycle : item.lifecycle;
+    const label = current ? vm.statusLabel : item.status_label;
+    return `<button type="button" role="menuitem" data-tournament-switch="${esc(item.id)}"${current ? ' aria-current="true"' : ""}>
+      <span class="tn-switcher-title">${esc(item.title || "")}</span>
+      ${statusPill(lifecycle, label)}
+    </button>`;
+  }).join("")}
+    </div>
+  </details>`;
 }
 
 function tabsHtml(vm) {
@@ -310,83 +293,94 @@ function tabsHtml(vm) {
 
 // Rows only — also used by the controller to refresh the list in place
 // while a dirty settings form must not be rebuilt.
-export function entryRowsHtml(vm) {
-  return vm.entriesVm.map((entry) => {
+export function entryRowsHtml(vm, entries = vm.entriesVm) {
+  return entries.map((entry) => {
     const flag = entry.flagged
       ? `<span class="tn-entry-flag"><span class="tn-pill tn-pill--duplicate">Possible duplicate</span> <span class="tn-entry-flag-reason">${esc(entry.flagReason)}${entry.linked ? ' · <a href="/dashboard/audience/linked">Review</a>' : ""}</span>`
       : "";
-    const menu = vm.finished
-      ? ""
-      : `<details class="tn-menu"><summary class="tn-menu-btn" aria-label="Actions for ${esc(entry.name)}">•••</summary>
-          <div class="tn-menu-list" role="menu">
-            ${entry.removed
-              ? `<button type="button" role="menuitem" data-entry-action="restore" data-entry-id="${esc(entry.id)}">Restore</button>`
-              : `<button type="button" role="menuitem" data-entry-action="remove" data-entry-id="${esc(entry.id)}">Remove</button>
-                 <button type="button" role="menuitem" data-entry-action="block" data-entry-id="${esc(entry.id)}">Block</button>`}
+    const menu = entry.actions.length
+      ? `<details class="tn-menu"><summary class="tn-menu-btn" aria-label="Actions for ${esc(entry.name)}">•••</summary>
+      <div class="tn-menu-list" role="menu">
+            ${entry.actions.map((action) => `<button type="button" role="menuitem" data-entry-action="${esc(action)}" data-entry-id="${esc(entry.id)}">${action === "remove" ? "Remove" : action === "block" ? "Block" : "Restore"}</button>`).join("")}
           </div>
-        </details>`;
+        </details>`
+      : "";
     return `<div class="tn-entry${entry.flagged ? " is-flagged" : ""}" data-entry-id="${esc(entry.id)}">
       <div class="tn-entry-player">
         <span class="tn-avatar" aria-hidden="true">${esc(entry.initial)}</span>
         <span class="tn-entry-name"><strong>${esc(entry.name)}</strong>${flag}</span>
       </div>
       <div class="tn-entry-source">${esc(entry.sourceLabel)}</div>
-      <div class="tn-entry-status"><span class="tn-pill tn-pill--${esc(entry.pillClass)}">${esc(entry.statusLabel)}</span></div>
+      <div class="tn-entry-status"><span class="tn-pill tn-pill--${esc(entry.statusTone)}">${esc(entry.statusLabel)}</span></div>
       <div class="tn-entry-actions">${menu}</div>
     </div>`;
   }).join("");
 }
 
-function entriesPanelHtml(vm) {
-  const rows = entryRowsHtml(vm);
-  const canAddEntries = vm.lifecycle === "setup";
-  const addBlocked = vm.full && !vm.waitlistOn;
-  const addLabel = vm.full && vm.waitlistOn ? "Add to waitlist" : "Add";
+export function removedEntriesHtml(vm) {
+  if (!vm.inactiveCount) return "";
+  return `<details class="tn-removed" id="tournament-removed">
+    <summary id="tournament-removed-summary">Removed (${vm.inactiveCount})</summary>
+    <div class="tn-entries" id="tournament-removed-list">${entryRowsHtml(vm, vm.entriesVm.filter((entry) => entry.inactive))}</div>
+  </details>`;
+}
 
-  let empty = "";
-  if (!vm.entriesVm.length) {
-    const copy = vm.lifecycle === "setup" && vm.setupControls?.open
-      ? ["Waiting for viewers.", `Ask viewers to type ${vm.keyword} in chat.`]
-      : vm.lifecycle === "setup"
-        ? ["No entries yet.", "Add players below, or turn on chat signup to collect them from Kick chat."]
-        : ["No entries.", "This tournament collected no entries."];
-    empty = `<div class="tn-empty" id="tournament-entries-empty"><b>${esc(copy[0])}</b><span>${esc(copy[1])}</span></div>`;
-  }
-  const addForm = canAddEntries
+export function entriesEmptyHtml(vm) {
+  if (vm.entriesVm.some((entry) => !entry.inactive)) return "";
+  const copy = vm.lifecycle === "setup" && vm.setupControls?.open
+    ? ["Waiting for viewers.", `Ask viewers to type ${vm.keyword} in chat.`]
+    : vm.lifecycle === "setup"
+      ? ["No entries yet.", "Add players below, or turn on chat signup to collect them from Kick chat."]
+      : ["No entries.", "This tournament collected no entries."];
+  return `<div class="tn-empty" id="tournament-entries-empty"><b>${esc(copy[0])}</b><span>${esc(copy[1])}</span></div>`;
+}
+
+function entriesPanelHtml(vm) {
+  const activeEntries = vm.entriesVm.filter((entry) => !entry.inactive);
+  const rows = entryRowsHtml(vm, activeEntries);
+  const addEntry = vm.addEntry;
+  const addDisabled = !addEntry.enabled;
+  const empty = entriesEmptyHtml(vm);
+  const addForm = addEntry.visible
     ? `<form class="tn-add-entry" id="tournament-add-entry-form" novalidate>
       <label for="tournament-add-entry-name">Add player</label>
       <div class="tn-add-entry-row">
-        <input id="tournament-add-entry-name" name="displayName" type="text" maxlength="80" autocomplete="off" required class="tn-input"${addBlocked ? " disabled" : ""} />
-        <button class="btn btn--accent" id="tournament-add-entry-submit" type="submit"${addBlocked ? " disabled" : ""}>${addLabel}</button>
+        <input id="tournament-add-entry-name" name="displayName" type="text" maxlength="80" autocomplete="off" required class="tn-input"${addDisabled ? " disabled" : ""} />
+        <button class="btn btn--accent" id="tournament-add-entry-submit" type="submit"${addDisabled ? " disabled" : ""}>${esc(addEntry.label)}</button>
       </div>
-      ${addBlocked ? `<p class="tn-add-entry-note">Bracket is full (${vm.activeCount}/${vm.cap}). Raise the signup limit in Settings or turn on Allow waitlist.</p>` : ""}
+      ${addEntry.note ? `<p class="tn-add-entry-note">${esc(addEntry.note)}</p>` : ""}
     </form>`
     : "";
+  const removedSection = removedEntriesHtml(vm);
   return `<section class="tn-panel${vm.activeTab === "entries" ? "" : ""}" id="tournament-panel-entries" role="tabpanel" aria-labelledby="tournament-tab-entries"${vm.activeTab === "entries" ? "" : " hidden"}>
     <div class="tn-panel-head">
       <h2 id="tournament-list-heading">Entries</h2>
       <p class="tn-sub" id="tournament-list-sub">Review tournament entries and their status.</p>
-      <div class="tn-dup-protection">
-        <label class="tn-switch-line"><span class="switch"><input type="checkbox" id="tournament-dup-protection" role="switch"${vm.antiAltEnabled ? " checked" : ""} /><span class="switch-track"></span></span><span>Duplicate protection</span></label>
-        <p class="hint">Flags lookalike accounts; flagged entries in free tournaments stay out of the bracket until allowed in People → Reviews.</p>
-      </div>
+      <details class="tn-advanced" id="tournament-advanced">
+        <summary>Advanced</summary>
+        <div class="tn-dup-protection">
+          <label class="tn-switch-line"><span class="switch"><input type="checkbox" id="tournament-dup-protection" role="switch"${vm.antiAltEnabled ? " checked" : ""}${vm.duplicateProtectionBusy ? " disabled" : ""} /><span class="switch-track"></span></span><span>Duplicate protection</span></label>
+          <p class="hint">Flags lookalike accounts; flagged entries in free tournaments stay out of the bracket until allowed in People → Reviews.</p>
+        </div>
+      </details>
     </div>
     ${addForm}
     ${empty}
-    <div class="tn-entries" id="tournament-entries"${vm.entriesVm.length ? "" : " hidden"}>
+    <div class="tn-entries" id="tournament-entries"${activeEntries.length ? "" : " hidden"}>
       <div class="tn-entry tn-entry--head" role="row">
         <span>Player</span><span>Source</span><span>Status</span><span class="tn-col-actions">Actions</span>
       </div>
       <div id="tournament-entry-list" aria-label="Tournament entries">${rows}</div>
       <table id="tournament-entry-table" hidden><tbody></tbody></table>
     </div>
+    ${removedSection}
   </section>`;
 }
 
 // ---- Bracket panel --------------------------------------------------------
 
 function bracketPanelHtml(vm, bracketHtml) {
-  const sub = `Single elimination · ${vm.tournament.bracket_size}-player bracket`;
+  const sub = `${vm.tournament.bracket_size}-player bracket`;
   const empty = `<div class="tn-empty" id="tournament-bracket-empty"><b>Bracket not created yet.</b><span>Start the tournament from the Entries tab to generate the bracket.</span></div>`;
   return `<section id="tournament-panel-bracket" role="tabpanel" aria-labelledby="tournament-tab-bracket"${vm.activeTab === "bracket" ? "" : " hidden"}>
     <div class="tn-layout">
@@ -450,6 +444,11 @@ function settingsPanelHtml(vm) {
       <h3>Details</h3>
       <dl class="tn-kv-list">${vm.settingsDetailRows.map((r) => kvWithIcon(r)).join("")}</dl>
     </section>
+    <section class="tn-card tn-card--danger">
+      <h3>Delete tournament</h3>
+      <p class="tn-sub">Permanently delete this tournament.</p>
+      <button class="btn btn--ghost tn-danger" id="tournament-delete" type="button">Delete tournament</button>
+    </section>
   </aside>`;
 
   const view = `<div id="tournament-settings-view"${vm.finished ? "" : " hidden"}>
@@ -461,7 +460,6 @@ function settingsPanelHtml(vm) {
     <dl class="tn-kv-list">
       ${kv("Tournament name", esc(t.title || "—"))}
       ${kv("Game", esc(t.game_name || "Not specified"))}
-      ${kv("Bracket type", "Single elimination")}
       ${kv("Bracket size", `${esc(String(t.bracket_size))} players`)}
     </dl>
     <h3 class="tn-group">Registration</h3>
@@ -471,9 +469,6 @@ function settingsPanelHtml(vm) {
       ${kv("Signup limit", esc(t.entry_cap ? String(t.entry_cap) : "Unlimited"))}
       ${kv("Chat registration", esc(vm.chatReg))}
     </dl>
-    <h3 class="tn-group">Rules</h3>
-    <p class="tn-sub">Tournament rules and instructions for participants.</p>
-    <div class="tn-empty tn-empty--flat"><span>No rules added yet.</span></div>
   </div>`;
 
   const form = `<form id="tournament-settings-form" class="tn-form" novalidate${vm.finished ? " hidden" : ""}>
@@ -481,7 +476,8 @@ function settingsPanelHtml(vm) {
     <div class="tn-form-grid">
       <div class="field">
         <label for="tournament-title">Tournament name</label>
-        <input id="tournament-title" name="title" type="text" value="${esc(t.title || "")}" placeholder="Community Tournament" maxlength="120" class="tn-input" />
+        <input id="tournament-title" name="title" type="text" value="${esc(t.title || "")}" placeholder="e.g. Friday Night Cup" maxlength="120" class="tn-input" />
+        <span class="field-error" id="tournament-title-error" role="alert" hidden></span>
       </div>
       <div class="field">
         <label for="tournament-game">Game</label>
@@ -504,6 +500,7 @@ function settingsPanelHtml(vm) {
           <span class="gw-input-prefix">kick.com/</span>
           <input id="tournament-chat-channel" name="chatChannel" type="text" value="${esc(t.chat_channel || "")}" placeholder="${esc(vm.siteChannel || "channelname")}" autocomplete="off" class="tn-input" />
         </div>
+        <span class="field-error" id="tournament-chat-channel-error" role="alert" hidden></span>
         <span class="hint">Chat registration: <span class="tn-live${vm.chatReg === "Active" ? " is-live" : ""}" id="tournament-chat-status">Chat registration ${esc(vm.chatReg.toLowerCase())}</span></span>
       </div>
       <div class="field">
@@ -522,13 +519,15 @@ function settingsPanelHtml(vm) {
         <span class="field-error" id="tournament-entry-cap-error" role="alert" hidden></span>
       </div>
     </div>
-    <h3 class="tn-group">Advanced</h3>
-    <div class="tn-form-grid">
-      <div class="field tn-check">
-        <label for="tournament-waitlist"><input id="tournament-waitlist" name="waitlistEnabled" type="checkbox"${t.waitlist_enabled === true ? " checked" : ""} /> Allow waitlist</label>
-        <span class="hint">When the limit is reached, new signups join a waitlist and move up automatically when a spot opens.</span>
+    <details class="tn-advanced tn-settings-advanced">
+      <summary>Advanced</summary>
+      <div class="tn-form-grid">
+        <div class="field tn-check">
+          <label for="tournament-waitlist"><input id="tournament-waitlist" name="waitlistEnabled" type="checkbox"${t.waitlist_enabled === true ? " checked" : ""} /> Allow waitlist</label>
+          <span class="hint">When the limit is reached, new signups join a waitlist and move up automatically when a spot opens.</span>
+        </div>
       </div>
-    </div>
+    </details>
     <div class="tn-form-bar" id="tournament-settings-bar" hidden>
       <span class="hint">Unsaved changes</span>
       <span class="tn-form-bar-actions">
@@ -594,11 +593,7 @@ export function createDialogHtml({ chatChannel = "", siteChannel = "", chatRegis
       <div class="tn-form-grid tn-form-grid--two">
         <div class="field">
           <label for="tc-title">Tournament name</label>
-          <input id="tc-title" name="title" type="text" value="Community Tournament" maxlength="120" required class="tn-input" />
-        </div>
-        <div class="field">
-          <label for="tc-game">Game</label>
-          <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" class="tn-input" />
+          <input id="tc-title" name="title" type="text" placeholder="e.g. Friday Night Cup" maxlength="120" required class="tn-input" />
         </div>
         <div class="field">
           <label for="tc-bracket-size">Bracket size</label>
@@ -610,29 +605,38 @@ export function createDialogHtml({ chatChannel = "", siteChannel = "", chatRegis
           </select>
           <span class="hint">How many participants play in the bracket.</span>
         </div>
-        <div class="field">
-          <label for="tc-entry-cap">Signup limit</label>
-          <select id="tc-entry-cap" name="entryCapMode" class="v3-select tn-input">
-            <option value="bracket" data-bracket-label selected>Same as bracket size (8)</option>
-            <option value="unlimited">Unlimited</option>
-            <option value="custom">Custom…</option>
-          </select>
-          <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" class="tn-input" hidden />
-          <span class="hint">Defaults to the bracket size.</span>
-        </div>
-        <div class="field">
-          <label for="tc-chat-channel">Kick channel</label>
-          <div class="gw-input-row">
-            <span class="gw-input-prefix">kick.com/</span>
-            <input id="tc-chat-channel" name="chatChannel" type="text" value="${esc(channelValue)}" placeholder="channelname" autocomplete="off" class="tn-input"${connectedChannel ? " readonly" : ""} />
-          </div>
-          ${channelHint}
-        </div>
-        <div class="field">
-          <label for="tc-keyword">Chat command</label>
-          <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tn-input" />
-        </div>
       </div>
+      <details class="tn-more">
+        <summary>More options</summary>
+        <div class="tn-form-grid tn-form-grid--two">
+          <div class="field">
+            <label for="tc-game">Game</label>
+            <input id="tc-game" name="gameName" type="text" placeholder="e.g. Fortnite" maxlength="120" class="tn-input" />
+          </div>
+          <div class="field">
+            <label for="tc-entry-cap">Signup limit</label>
+            <select id="tc-entry-cap" name="entryCapMode" class="v3-select tn-input">
+              <option value="bracket" data-bracket-label selected>Same as bracket size (8)</option>
+              <option value="unlimited">Unlimited</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <input id="tc-entry-cap-custom" name="entryCap" type="number" min="1" placeholder="e.g. 40" inputmode="numeric" aria-label="Custom signup limit" class="tn-input" hidden />
+            <span class="hint">Defaults to the bracket size.</span>
+          </div>
+          <div class="field">
+            <label for="tc-chat-channel">Kick channel</label>
+            <div class="gw-input-row">
+              <span class="gw-input-prefix">kick.com/</span>
+              <input id="tc-chat-channel" name="chatChannel" type="text" value="${esc(channelValue)}" placeholder="channelname" autocomplete="off" class="tn-input"${connectedChannel ? " readonly" : ""} />
+            </div>
+            ${channelHint}
+          </div>
+          <div class="field">
+            <label for="tc-keyword">Chat command</label>
+            <input id="tc-keyword" name="entryKeyword" type="text" value="!join" maxlength="40" class="tn-input" />
+          </div>
+        </div>
+      </details>
       <p class="tn-message is-error" id="tournament-create-error" role="alert" hidden></p>
       <div class="tn-dialog-actions">
         <button class="btn btn--sm btn--ghost" type="button" id="tournament-create-cancel">Cancel</button>
@@ -660,6 +664,7 @@ export function selectDialogHtml({ cap = 0, eligible = 0 } = {}) {
         <p class="hint">Players will be randomly placed in the bracket.</p>
       </div>
       <div id="ts-pane-manual" hidden>
+        <button class="btn btn--sm btn--ghost" id="ts-select-first" type="button">Select first ${esc(cap)}</button>
         <input id="ts-search" type="search" placeholder="Search entries" aria-label="Search entries" autocomplete="off" class="tn-input" />
         <ul id="ts-entry-list" class="tn-select-list"></ul>
         <p class="tn-select-counter" id="ts-counter" aria-live="polite">Selected 0 / ${esc(cap)}</p>
@@ -671,6 +676,23 @@ export function selectDialogHtml({ cap = 0, eligible = 0 } = {}) {
         <button class="btn btn--sm btn--accent" type="button" id="tournament-select-submit">Create bracket</button>
       </div>
     </div>`);
+}
+
+export function deleteDialogHtml({ title = "", warning = "" } = {}) {
+  return dialogShell("tournament-delete-modal", "tournament-delete-heading", `
+    <form class="tn-dialog-card" id="tournament-delete-form" novalidate>
+      <h3 id="tournament-delete-heading">Delete tournament</h3>
+      <p class="tn-sub">${esc(warning)}</p>
+      <div class="field">
+        <label for="td-confirm">Type “${esc(title)}” to confirm</label>
+        <input id="td-confirm" name="confirmTitle" type="text" autocomplete="off" class="tn-input" />
+      </div>
+      <p class="tn-message is-error" id="tournament-delete-error" role="alert" hidden></p>
+      <div class="tn-dialog-actions">
+        <button class="btn btn--sm btn--ghost" type="button" id="tournament-delete-cancel">Cancel</button>
+        <button class="btn btn--sm btn--ghost tn-danger" type="submit" id="tournament-delete-submit" disabled>Delete tournament</button>
+      </div>
+    </form>`);
 }
 
 // Checkbox row for the manual select list — re-rendered on search input.

@@ -14,12 +14,23 @@ const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", 
 const performanceJs = readFileSync(new URL("../assets/dashboard/performance.js", import.meta.url), "utf8");
 const dashboardCss = readFileSync(new URL("../assets/dashboard-v4.css", import.meta.url), "utf8");
 const workerIndex = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+const quickActionsJs = readFileSync(new URL("../assets/dashboard/quick-actions.js", import.meta.url), "utf8");
 
 function dashboardHtml(activePath = "/dashboard") {
   return PAGES.dashboard.Component({ activePath }).toString();
 }
 
 describe("dashboard overview quick actions", () => {
+  it("adds a site-aware tournament action to the global New menu", () => {
+    const html = dashboardHtml();
+    expect(html).toMatch(/data-new="drop"[^>]*>New drop<\/a>[\s\S]*data-new="tournament"[^>]*href="\/dashboard\/giveaways\/tournaments\?new=1">New tournament<\/a>/);
+    expect(quickActionsJs).toContain('tournament: `/dashboard/giveaways/tournaments?new=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`');
+    expect(quickActionsJs).toContain('new CustomEvent("yr:quick-new"');
+    expect(quickActionsJs).toContain('detail: { kind: link.dataset.new }');
+    expect(quickActionsJs).toContain("cancelable: true");
+    expect(quickActionsJs).toContain("if (quickNewEvent.defaultPrevented) event.preventDefault()");
+  });
+
   it("puts the main tasks one click from the Overview", () => {
     const html = dashboardHtml();
     expect(html).toContain('ov-setup');

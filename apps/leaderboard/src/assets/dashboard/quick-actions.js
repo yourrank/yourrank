@@ -34,6 +34,7 @@ export function initQuickActions() {
     const dest = {
       player: `/dashboard/leaderboard/players${sid ? `?board=${encodeURIComponent(sid)}` : ""}`,
       drop: `/dashboard/activities${sid ? `?siteId=${encodeURIComponent(sid)}` : ""}`,
+      tournament: `/dashboard/giveaways/tournaments?new=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`,
       reward: `/dashboard/rewards/shop?new=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`,
       invite: `/dashboard/settings/team?invite=1${sid ? `&siteId=${encodeURIComponent(sid)}` : ""}`,
     };
@@ -49,7 +50,18 @@ export function initQuickActions() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !menu.hidden) { e.preventDefault(); closeMenu(); menuBtn.focus(); }
   });
-  menu.addEventListener("click", closeMenu);
+  menu.addEventListener("click", (event) => {
+    const link = event.target.closest?.('a[data-new="tournament"], a[data-new="player"]');
+    if (link) {
+      const quickNewEvent = new CustomEvent("yr:quick-new", {
+        detail: { kind: link.dataset.new },
+        cancelable: true,
+      });
+      document.dispatchEvent(quickNewEvent);
+      if (quickNewEvent.defaultPrevented) event.preventDefault();
+    }
+    closeMenu();
+  });
   menu.querySelector('[data-new="site"]')?.addEventListener("click", openNewSite);
 
   const copy = $("copySiteLink");

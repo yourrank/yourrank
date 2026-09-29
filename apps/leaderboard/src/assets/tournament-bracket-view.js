@@ -103,12 +103,15 @@ function rowHtml({ seed = null, name, score = "", winner = false, champion = fal
 // footer with Save. `saved` prefills a score correction on a completed card —
 // Save stays disabled and the downstream note hidden until an input event
 // shows the values differ from `data-saved` (the controller owns that).
-function scoringRowsHtml(match, seedBase, { saved = null, winnerName = null } = {}) {
+function scoringRowsHtml(match, seedBase, { saved = null, winnerName = null, pickWinners = false } = {}) {
   const row = (seed, name, player) => {
     const winner = winnerName != null && name === winnerName;
+    const nameContent = pickWinners
+      ? `<button type="button" class="tn-match-name tn-match-pick" data-advance-match="${esc(match.id)}" data-winner-slot="${player}" aria-label="${esc(name)} wins">${esc(name)}</button>`
+      : `<span class="tn-match-name">${winner ? CROWN_ICON : ""}${esc(name)}</span>`;
     return `<div class="tn-match-row${winner ? " is-winner" : ""}">
     ${seed !== null ? `<span class="tn-match-seed">${seed}</span>` : ""}
-    <span class="tn-match-name">${winner ? CROWN_ICON : ""}${esc(name)}</span>
+    ${nameContent}
     <input type="number" min="0" class="tn-match-input" data-score-match="${esc(match.id)}" data-score-player="${player}" value="${esc(saved ? saved[player - 1] : 0)}" aria-label="${esc(name)} score" />
   </div>`;
   };
@@ -153,7 +156,7 @@ function matchCard(match, { finished, isFinal, championName, liveId, mode }) {
       </div>`;
     }
     return `<div ${attrs}>${liveTag}
-      ${scoringRowsHtml(match, seedBase)}
+      ${scoringRowsHtml(match, seedBase, { pickWinners: true })}
     </div>`;
   }
   // completed
@@ -230,7 +233,7 @@ export function renderBracket({ tournament, matches, lifecycle, mode = "embedded
     </section>`;
   }).join("");
   return `<div class="tn-bracket" data-mode="${esc(mode)}">
-    ${hasBye ? `<p class="tn-bracket-note" data-bye-note>BYE: fewer entries than bracket spots, so a player with no opponent advances automatically.</p>` : ""}
+    ${hasBye ? `<p class="tn-bracket-note" data-bye-note>Fewer players than spots, so some players get a BYE and advance automatically.</p>` : ""}
     <div class="tn-bracket-scroll">
       <div class="tn-bracket-grid" style="--rounds:${model.totalRounds};--slots:${slots}">
         <svg class="tn-connectors" aria-hidden="true"></svg>

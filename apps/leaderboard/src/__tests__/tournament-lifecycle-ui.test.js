@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { Window } from "happy-dom";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
 import { clearSession } from "../assets/dashboard/session.js";
+import { entryViews, tournamentLifecycle, tournamentViewState } from "../lib/tournament-state.js";
 
 const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments?siteId=site-1" });
 const { document } = window;
@@ -29,7 +30,10 @@ const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVer
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
 
 const server = {
-  tournaments: [], entries: [], matches: [], requests: [], failSettings: false,
+  tournaments: [], entries: [], matches: [], requests: [], failSettings: false, settingsGate: null,
+  scoreGate: null,
+  settingsError: null,
+  deleteError: null,
   chatRegistration: { connected: false, chatReady: false, channelName: null, externalChannelId: null },
 };
 function reset({ tournaments = [], entries = [], matches = [] } = {}) {
@@ -38,11 +42,16 @@ function reset({ tournaments = [], entries = [], matches = [] } = {}) {
   server.matches = matches.map((m) => ({ ...m }));
   server.requests.length = 0;
   server.failSettings = false;
+  server.settingsGate = null;
+  server.scoreGate = null;
+  server.settingsError = null;
+  server.deleteError = null;
   server.chatRegistration = { connected: false, chatReady: false, channelName: null, externalChannelId: null };
+  window.sessionStorage.clear();
 }
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const base = {
-  id: "t-1", title: "Community Tournament", game_name: "Game", bracket_size: 8, status: "draft",
+  id: "t-1", title: "Friday Night Cup", game_name: "Game", bracket_size: 8, status: "draft",
   signup_state: "closed", entry_cap: null, format: "bracket", anti_alt_enabled: false,
   entry_keyword: "!join", chat_channel: "creator", winner_name: null,
 };
@@ -54,6 +63,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === "/api/auth/me") return json({ ok: true, user });
   if (path === "/api/site/list") return json({ ok: true, sites: [site] });
   if (path === "/api/tournaments" && init.method === "POST") {
+    if (!body.title?.trim()) return json({ error: "Enter a tournament name." }, 400);
     if (![4, 8, 16, 32].includes(body.bracketSize)) return json({ error: "Unsupported bracket size." }, 400);
     const tournament = {
       ...base, id: `t-${server.tournaments.length + 1}`, title: body.title, game_name: body.gameName,
@@ -64,8 +74,25 @@ globalThis.fetch = async (input, init = {}) => {
     server.tournaments.unshift(tournament);
     return json({ ok: true, tournament });
   }
-  if (path === "/api/tournaments") return json({ ok: true, tournaments: server.tournaments, chatRegistration: server.chatRegistration });
-  const current = server.tournaments[0];
+  if (path === "/api/tournaments") {
+    const listed = server.tournaments.map((item) => {
+      const lifecycle = tournamentLifecycle(item, server.matches.length);
+      return {
+        ...item,
+        match_count: server.matches.length,
+        lifecycle,
+        status_label: ({ setup: "Setup", live: "Live", finished: "Finished", cancelled: "Cancelled" })[lifecycle],
+      };
+    });
+    const current = listed.find((item) => !["completed", "cancelled"].includes(item.status)) || listed[0] || null;
+    return json({
+      ok: true,
+      tournaments: listed,
+      current_id: current?.id || null,
+      chatRegistration: server.chatRegistration,
+    });
+  }
+  const current = server.tournaments.find((item) => path.startsWith(`/api/tournaments/${item.id}/`)) || server.tournaments[0];
   if (path.endsWith("/entries")) {
     // The real server marks each row with the authoritative `eligible` flag;
     // fixtures may override it explicitly, otherwise status decides.
@@ -79,28 +106,66 @@ globalThis.fetch = async (input, init = {}) => {
       waitlist: list.filter((e) => e.status === "waitlist").length,
       removed: list.filter((e) => e.status === "removed").length,
       blocked: list.filter((e) => e.status === "blocked").length,
+      inactive: list.filter((e) => ["removed", "blocked"].includes(e.status)).length,
     };
-    return json({ ok: true, entries: list, counts });
+    const lifecycle = tournamentLifecycle(current, server.matches.length);
+    const state = tournamentViewState({ tournament: current, counts, matchCount: server.matches.length });
+    return json({
+      ok: true,
+      entries: entryViews(list, { tournament: current, matches: server.matches, lifecycle }),
+      counts,
+      state,
+    });
   }
   if (path.endsWith("/entries/select")) {
     current.status = "active";
     return json({ ok: true, entries: server.entries });
   }
   if (path.endsWith("/bracket")) return json({ ok: true, tournament: current, matches: server.matches });
-  if (path.endsWith("/score") && init.method === "PATCH") return json({ ok: true, message: "Score corrected." });
-  if (path.endsWith("/signups/open")) { current.signup_state = "open"; return json({ ok: true, tournament: current }); }
-  if (path.endsWith("/signups/lock")) { current.signup_state = "locked"; return json({ ok: true, tournament: current }); }
+  if (path.endsWith("/score") && ["PATCH", "POST"].includes(init.method)) {
+    if (server.scoreGate) await server.scoreGate;
+    return json({
+      ok: true,
+      message: init.method === "PATCH" ? "📝 Score corrected: alpha wins the match." : "Score saved.",
+    });
+  }
+  if (path.endsWith("/signups/open")) {
+    current.signup_state = "open";
+    return json({ ok: true, tournament: current, message: `Chat signups on — viewers can type ${current.entry_keyword || "!join"} in chat.` });
+  }
+  if (path.endsWith("/signups/lock")) {
+    current.signup_state = "locked";
+    return json({ ok: true, tournament: current, message: "Chat signups off — viewers can no longer join from chat." });
+  }
+  if (path.endsWith("/delete") && init.method === "POST") {
+    if (server.deleteError) return json(server.deleteError, 400);
+    if (body.confirmTitle?.trim() !== current.title.trim()) return json({ error: "Type the tournament name exactly to delete it." }, 400);
+    server.tournaments = server.tournaments.filter((item) => item.id !== current.id);
+    return json({ ok: true, deleted: current.id, message: `Deleted “${current.title.trim()}”.` });
+  }
   if (path.endsWith("/settings")) {
+    if (body.title !== undefined && !body.title.trim()) {
+      return json({ ok: false, error: "Enter a tournament name.", field: "title" }, 400);
+    }
+    if (server.settingsError) return json(server.settingsError, 400);
     if (server.failSettings || body.bracketSize === 6) {
-      return json({ error: "Bracket size must be 4, 8, 16, or 32." }, 400);
+      return json({ ok: false, error: "Bracket size must be 4, 8, 16, or 32.", field: "bracketSize" }, 400);
     }
     Object.assign(current, {
       title: body.title || current.title,
       ...(body.bracketSize !== undefined ? { bracket_size: body.bracketSize } : {}),
       ...(body.entryCap !== undefined ? { entry_cap: body.entryCap === "bracket" ? (body.bracketSize ?? current.bracket_size) : body.entryCap === "unlimited" ? null : body.entryCap } : {}),
       ...(body.chatChannel !== undefined ? { chat_channel: body.chatChannel } : {}),
+      ...(body.antiAltEnabled !== undefined ? { anti_alt_enabled: body.antiAltEnabled } : {}),
     });
-    return json({ ok: true, tournament: current });
+    if (server.settingsGate) await server.settingsGate;
+    return json({
+      ok: true,
+      tournament: current,
+      ...(body.antiAltEnabled !== undefined
+        ? { message: current.anti_alt_enabled ? "Duplicate protection on." : "Duplicate protection off." }
+        : {}),
+    });
   }
   if (path === "/api/giveaways/chatroom") return json({ error: "offline" }, 404);
   return json({ ok: true });
@@ -150,14 +215,113 @@ describe("tournament lifecycle UI", () => {
     await flush();
   });
 
-  it("derives the lifecycle from server fields only", () => {
-    expect(mod.lifecycleOf(null)).toBe("none");
-    expect(mod.lifecycleOf({ status: "draft", signup_state: "closed" })).toBe("setup");
-    expect(mod.lifecycleOf({ status: "draft", signup_state: "open" })).toBe("setup");
-    expect(mod.lifecycleOf({ status: "draft", signup_state: "locked" })).toBe("setup");
-    expect(mod.lifecycleOf({ status: "active", signup_state: "locked" }, 4)).toBe("live");
-    expect(mod.lifecycleOf({ status: "completed", signup_state: "locked" }, 4)).toBe("finished");
-    expect(mod.lifecycleOf({ status: "cancelled", signup_state: "closed" })).toBe("cancelled");
+  it("renders lifecycle from the entries state and keeps New available", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    expect(text("tournament-status")).toBe("Setup");
+    expect(visible("tournament-new")).toBe(true);
+
+    reset({
+      tournaments: [{ ...base, status: "active" }],
+      matches: [{ id: "m1", status: "pending" }],
+    });
+    await mod.boot();
+    expect(text("tournament-status")).toBe("Live");
+    expect(visible("tournament-new")).toBe(true);
+  });
+
+  it("switches tournaments and persists the selected id for this site", async () => {
+    reset({
+      tournaments: [
+        { ...base },
+        { ...base, id: "t-2", title: "Finished Cup", status: "completed" },
+      ],
+    });
+    window.sessionStorage.setItem("yr:tournament:site-1", "t-2");
+    await mod.boot();
+    expect(text("tournament-switcher")).toContain("All tournaments (2)");
+    expect($id("tournament-switcher").querySelectorAll("[data-tournament-switch]")).toHaveLength(2);
+    expect(text("tournament-title-display")).toBe("Finished Cup");
+    expect($id("tournament-switcher").querySelector('[data-tournament-switch="t-2"]').getAttribute("aria-current")).toBe("true");
+    const setup = $id("tournament-switcher").querySelector('[data-tournament-switch="t-1"]');
+    setup.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(text("tournament-title-display")).toBe("Friday Night Cup");
+    expect($id("tournament-switcher").querySelector('[data-tournament-switch="t-1"]').getAttribute("aria-current")).toBe("true");
+    expect(window.sessionStorage.getItem("yr:tournament:site-1")).toBe("t-1");
+  });
+
+  it("handles the mounted quick-new events and consumes new=1 once", async () => {
+    const tournamentEvent = new window.CustomEvent("yr:quick-new", {
+      detail: { kind: "tournament" },
+      cancelable: true,
+    });
+    document.dispatchEvent(tournamentEvent);
+    await flush();
+    expect(tournamentEvent.defaultPrevented).toBe(true);
+    expect(visible("tournament-create-modal")).toBe(true);
+    await click("tournament-create-cancel");
+
+    reset({ tournaments: [base] });
+    await mod.boot();
+    const playerEvent = new window.CustomEvent("yr:quick-new", {
+      detail: { kind: "player" },
+      cancelable: true,
+    });
+    document.dispatchEvent(playerEvent);
+    await flush();
+    expect(playerEvent.defaultPrevented).toBe(true);
+    expect(document.activeElement?.id).toBe("tournament-add-entry-name");
+
+    window.history.replaceState({}, "", "/dashboard/giveaways/tournaments?siteId=site-1&new=1");
+    await mod.boot();
+    expect(visible("tournament-create-modal")).toBe(true);
+    expect(window.location.search).toBe("?siteId=site-1");
+  });
+
+  it("keeps the duplicate-protection toggle pending through an entries refresh", async () => {
+    reset({
+      tournaments: [{ ...base }],
+      entries: [{ id: "e1", display_name: "one", source: "chat", status: "pending" }],
+    });
+    await mod.boot();
+    let releaseSettings;
+    server.settingsGate = new Promise((resolve) => { releaseSettings = resolve; });
+
+    $id("tournament-dup-protection").click();
+    await flush();
+
+    const settingsPath = "/api/tournaments/t-1/settings";
+    expect(requestsTo(settingsPath, "POST")).toHaveLength(1);
+    expect(requestsTo(settingsPath, "POST")[0].body).toEqual({ antiAltEnabled: true });
+
+    $id("tournament-entry-list").querySelector("[data-entry-action='remove']")
+      .dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(requestsTo(settingsPath, "POST")).toHaveLength(1);
+    expect($id("tournament-dup-protection").checked).toBe(true);
+
+    releaseSettings();
+    await flush();
+
+    expect($id("tournament-dup-protection").checked).toBe(true);
+    expect($id("tournament-dup-protection").disabled).toBe(false);
+    expect(text("tournament-message")).toBe("Duplicate protection on.");
+  });
+
+  it("reverts duplicate protection and shows the server error when saving fails", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    server.settingsError = { ok: false, error: "Duplicate protection could not be updated." };
+    const toggle = $id("tournament-dup-protection");
+    toggle.checked = true;
+    toggle.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flush();
+    expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(1);
+    expect(toggle.checked).toBe(false);
+    expect(toggle.disabled).toBe(false);
+    expect(text("tournament-message")).toBe("Duplicate protection could not be updated.");
   });
 
   it("shows only the empty state and Create button when no tournament exists", () => {
@@ -184,7 +348,8 @@ describe("tournament lifecycle UI", () => {
     expect($id("tc-bracket-size").value).toBe("8");
     expect($id("tc-entry-cap").value).toBe("bracket");
     expect($id("tc-entry-cap").querySelector('option[value="bracket"]').textContent).toBe("Same as bracket size (8)");
-    expect($id("tc-title").value).toBe("Community Tournament");
+    expect($id("tc-title").value).toBe("");
+    expect($id("tc-title").placeholder).toBe("e.g. Friday Night Cup");
     expect($id("tc-keyword").value).toBe("!join");
     await click("tournament-create-cancel");
     expect(visible("tournament-create-modal")).toBe(false);
@@ -211,9 +376,9 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-workspace")).toBe(true);
     expect(text("tournament-status")).toBe("Setup");
     expect(text("tournament-title-display")).toBe("Friday Cup");
-    expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket · Single elimination");
+    expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket");
     expect($id("tournament-chat-channel").value).toBe("36_ates");
-    expect(text("tournament-fact-keyword")).toBe("!cup");
+    expect($id("tournament-fact-keyword")).toBeNull();
     expect(text("tournament-count")).toBe("0 of 4");
     expect(text("tournament-primary")).toBe("Start tournament");
     expect(text("tournament-primary-reason")).toBe("Add at least 2 players to start.");
@@ -222,8 +387,18 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-entries-empty").textContent).toContain("Add players below, or turn on chat signup to collect them from Kick chat.");
   });
 
+  it("sends a blank create title to the API and shows the backend error", async () => {
+    await click("tournament-create");
+    $id("tc-title").value = "   ";
+    await submit("tournament-create-form");
+    expect(requestsTo("/api/tournaments", "POST")[0].body.title).toBe("");
+    expect(text("tournament-create-error")).toBe("Enter a tournament name.");
+    expect(visible("tournament-create-modal")).toBe(true);
+  });
+
   it("stores an empty game name instead of a placeholder when the field is left blank", async () => {
     await click("tournament-create");
+    $id("tc-title").value = "Friday Cup";
     $id("tc-game").value = "   ";
     await submit("tournament-create-form");
     const [post] = requestsTo("/api/tournaments", "POST");
@@ -234,6 +409,7 @@ describe("tournament lifecycle UI", () => {
 
   it("sends a custom signup limit independently of the bracket size", async () => {
     await click("tournament-create");
+    $id("tc-title").value = "Friday Cup";
     $id("tc-bracket-size").value = "8";
     $id("tc-entry-cap").value = "custom";
     $id("tc-entry-cap").dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -293,6 +469,8 @@ describe("tournament lifecycle UI", () => {
     await flush();
     expect(requestsTo("/api/tournaments/t-1/signups/open", "POST")).toHaveLength(1);
     expect(text("tournament-chat-signup-state")).toBe("On — viewers type !join in chat");
+    expect(text("tournament-message")).toBe("Chat signups on — viewers can type !join in chat.");
+    expect(text("tournament-fact-keyword")).toBe("!join");
 
     // Turn it back off.
     const toggleOff = $id("tournament-chat-signup");
@@ -301,6 +479,8 @@ describe("tournament lifecycle UI", () => {
     await flush();
     expect(requestsTo("/api/tournaments/t-1/signups/lock", "POST")).toHaveLength(1);
     expect(text("tournament-chat-signup-state")).toBe("Off");
+    expect(text("tournament-message")).toBe("Chat signups off — viewers can no longer join from chat.");
+    expect($id("tournament-fact-keyword")).toBeNull();
 
     server.entries = Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, display_name: `viewer${i}`, source: "chat", status: "pending" }));
     await mod.boot();
@@ -496,7 +676,7 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-settings-bar").hidden).toBe(false);
     await click("tournament-settings-discard");
     expect($id("tournament-settings-bar").hidden).toBe(true);
-    expect($id("tournament-title").value).toBe("Community Tournament");
+    expect($id("tournament-title").value).toBe("Friday Night Cup");
     $id("tournament-title").value = "Renamed Cup";
     $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
     await flush();
@@ -518,7 +698,7 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     expect(text("tournament-status")).toBe("Live");
     expect(visible("tournament-primary")).toBe(false);
-    expect(visible("tournament-new")).toBe(false);
+    expect(visible("tournament-new")).toBe(true);
     await click("tournament-tab-bracket");
     expect(visible("tournament-bracket-empty")).toBe(false);
     expect($id("tournament-bracket").querySelectorAll(".tn-match")).toHaveLength(3);
@@ -562,7 +742,7 @@ describe("tournament lifecycle UI", () => {
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 5, player2Score: 3 });
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(0);
-    expect(text("tournament-message")).toBe("Score corrected.");
+    expect(text("tournament-message")).toBe("📝 Score corrected: alpha wins the match.");
   });
 
   it("keeps Save disabled until a corrected score differs from the saved one", async () => {
@@ -611,7 +791,7 @@ describe("tournament lifecycle UI", () => {
       const view = $id("tournament-settings-view").textContent;
       expect(view).toContain("creator");
       expect(view).toContain("40");
-      expect(view).toContain("No rules added yet.");
+      expect(view).not.toContain("Rules");
       $id("tournament-title").value = "X";
       $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
       $id("tournament-entry-cap-mode").value = "";
@@ -741,6 +921,29 @@ describe("tournament lifecycle UI", () => {
     expect(manualReq.body.entryIds).toEqual(["e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7"]);
   });
 
+  it("selects the first bracket-sized set by server eligible_rank", async () => {
+    reset({
+      tournaments: [{ ...base, signup_state: "locked", bracket_size: 4 }],
+      entries: [
+        { id: "later", display_name: "Later", source: "chat", status: "pending", created_at: "2026-02-02" },
+        { id: "first", display_name: "First", source: "chat", status: "pending", created_at: "2026-02-01" },
+        { id: "third", display_name: "Third", source: "chat", status: "pending", created_at: "2026-02-03" },
+        { id: "fourth", display_name: "Fourth", source: "chat", status: "pending", created_at: "2026-02-04" },
+        { id: "fifth", display_name: "Fifth", source: "chat", status: "pending", created_at: "2026-02-05" },
+      ],
+    });
+    await mod.boot();
+    await click("tournament-primary");
+    $id("ts-mode-manual").checked = true;
+    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await flush();
+    await click("ts-select-first");
+    expect(text("ts-counter")).toBe("Selected 4 / 4");
+    expect([...$id("ts-entry-list").querySelectorAll("input:checked")].map((input) => input.value))
+      .toEqual(["later", "first", "third", "fourth"]);
+    expect($id("tournament-select-submit").disabled).toBe(false);
+  });
+
   it("uses the server eligible flag — an approved flagged entrant counts and is selectable", async () => {
     reset({
       tournaments: [{ ...base, signup_state: "locked", bracket_size: 8 }],
@@ -837,6 +1040,99 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-bracket");
     const match = $id("tournament-bracket").querySelector(".tn-match");
     expect(match.querySelectorAll("input[data-score-player]")).toHaveLength(2);
+  });
+
+  it("posts only once when a winner name is double-clicked", async () => {
+    reset({
+      tournaments: [{ ...base, status: "active", signup_state: "locked", bracket_size: 4 }],
+      matches: [
+        { id: "m1", round_number: 1, match_index: 0, player1_name: "Alice", player2_name: "Bob", status: "pending" },
+      ],
+    });
+    await mod.boot();
+    expect(text("tournament-step-label")).toBe("Click the winner's name in the Bracket tab to advance them, or enter scores.");
+    await click("tournament-tab-bracket");
+    const winner = $id("tournament-bracket").querySelector('[data-advance-match="m1"][data-winner-slot="2"]');
+    const otherWinner = $id("tournament-bracket").querySelector('[data-advance-match="m1"][data-winner-slot="1"]');
+    expect(winner.tagName).toBe("BUTTON");
+    expect(winner.getAttribute("aria-label")).toBe("Bob wins");
+    let releaseScore;
+    server.scoreGate = new Promise((resolve) => { releaseScore = resolve; });
+    winner.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(winner.disabled).toBe(true);
+    expect(otherWinner.disabled).toBe(true);
+    winner.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
+    releaseScore();
+    await flush();
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
+    expect(requestsTo("/api/tournaments/t-1/score", "POST")[0].body)
+      .toEqual({ matchId: "m1", winnerSlot: 2 });
+    expect(text("tournament-message")).toBe("Score saved.");
+  });
+
+  it("confirms deletion with a trimmed exact title and displays inline server errors", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    await click("tournament-delete");
+    expect($id("tournament-delete-modal").textContent).toContain("This deletes the tournament and all its entries. This can't be undone.");
+    expect($id("tournament-delete-modal").querySelector('label[for="td-confirm"]').textContent)
+      .toBe('Type “Friday Night Cup” to confirm');
+    $id("td-confirm").value = "  Friday Night Cup  ";
+    $id("td-confirm").dispatchEvent(new window.Event("input", { bubbles: true }));
+    await flush();
+    expect($id("tournament-delete-submit").disabled).toBe(false);
+
+    server.deleteError = { error: "Deletion is temporarily unavailable." };
+    await submit("tournament-delete-form");
+    expect(text("tournament-delete-error")).toBe("Deletion is temporarily unavailable.");
+    expect(visible("tournament-delete-modal")).toBe(true);
+
+    server.deleteError = null;
+    await submit("tournament-delete-form");
+    expect(requestsTo("/api/tournaments/t-1/delete", "POST").at(-1).body)
+      .toEqual({ confirmTitle: "  Friday Night Cup  " });
+    expect(visible("tournament-delete-modal")).toBe(false);
+    expect(visible("tournament-empty")).toBe(true);
+    expect(text("tournament-message")).toBe("Deleted “Friday Night Cup”.");
+    expect(window.sessionStorage.getItem("yr:tournament:site-1")).toBeNull();
+  });
+
+  it("maps settings field errors and retries with the server-provided fix", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    server.settingsError = {
+      ok: false,
+      error: "Set signup limit to 4.",
+      field: "entryCap",
+      fix: { label: "Keep signup limit at 8", settings: { entryCap: 8 } },
+    };
+    await submit("tournament-settings-form");
+    expect(text("tournament-entry-cap-error")).toContain("Set signup limit to 4.");
+    const fix = $id("tournament-settings-fix");
+    expect(fix.textContent).toBe("Keep signup limit at 8");
+    server.settingsError = null;
+    await click("tournament-settings-fix");
+    const settingsPosts = requestsTo("/api/tournaments/t-1/settings", "POST");
+    expect(settingsPosts).toHaveLength(2);
+    expect(settingsPosts[1].body.entryCap).toBe(8);
+  });
+
+  it("shows blank-title settings errors in the title field", async () => {
+    reset({ tournaments: [base] });
+    await mod.boot();
+    await click("tournament-tab-settings");
+    $id("tournament-title").value = "  ";
+    server.settingsError = {
+      ok: false,
+      error: "Enter a tournament name.",
+      field: "title",
+    };
+    await submit("tournament-settings-form");
+    expect(text("tournament-title-error")).toBe("Enter a tournament name.");
+    expect(text("tournament-message")).toBe("");
   });
 });
 
