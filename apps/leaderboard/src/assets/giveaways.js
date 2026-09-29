@@ -45,6 +45,7 @@ if (!window.__yrSpaShell) {
   let draws = [];          // persisted chat_giveaway_draws for `session`
   let responseRulesInFlight = false;
   let currentWinner = null;
+  let capabilities = {};   // server-reported capabilities (e.g. vpnDetection)
   let pollTimer = null;
   let pollInFlight = false;
   let timerInterval = null;
@@ -262,6 +263,7 @@ if (!window.__yrSpaShell) {
       excludePreviousWinners: !!$("gw-opt-skip-past")?.checked,
       winnerRepeat: document.querySelector('input[name="gw-winner-repeat"]:checked')?.value || "once",
       onePerIp: manual ? false : !!$("gw-opt-ip")?.checked,
+      vpnDetection: manual ? false : !!$("gw-opt-vpn")?.checked,
       winnerMustRespond: manual ? false : !!$("gw-opt-claim-req")?.checked,
       responseTimeout: manual ? 60 : Number($("gw-opt-claim-duration")?.value || 60),
       autoReroll: manual ? false : !!$("gw-opt-auto-reroll")?.checked,
@@ -280,6 +282,7 @@ if (!window.__yrSpaShell) {
     }
     if (rules.excludePreviousWinners) parts.push("Exclude past winners");
     if (rules.onePerIp) parts.push("One entry per IP");
+    if (rules.vpnDetection) parts.push("VPN blocked");
     parts.push(rules.winnerMustRespond ? "Winner response required" : "No chat response");
     summary.textContent = parts.join(" · ");
     const advanced = $("gw-advanced-summary");
@@ -289,6 +292,7 @@ if (!window.__yrSpaShell) {
         rules.vipOnly && "VIP only",
         rules.excludePreviousWinners && "Exclude past winners",
         rules.onePerIp && "One per IP",
+        rules.vpnDetection && "VPN blocked",
       ].filter(Boolean);
       advanced.textContent = on.length ? on.join(" · ") : "Off";
     }
@@ -324,7 +328,14 @@ if (!window.__yrSpaShell) {
       if (!verified) $("gw-opt-ip").checked = false;
     }
     if ($("gw-ip-requirement")) $("gw-ip-requirement").textContent = verified ? "Shared connections may exclude people living together." : "Locked — Requires Verified Entry";
-    if ($("gw-vpn-requirement")) $("gw-vpn-requirement").textContent = verified ? "Unavailable — Detection provider required" : "Locked — Requires Verified Entry and a detection provider";
+    if ($("gw-opt-vpn")) {
+      const vpnCapable = verified && capabilities.vpnDetection === true;
+      $("gw-opt-vpn").disabled = !vpnCapable;
+      if (!vpnCapable) $("gw-opt-vpn").checked = false;
+    }
+    if ($("gw-vpn-requirement")) $("gw-vpn-requirement").textContent = verified
+      ? (capabilities.vpnDetection === true ? "Blocks VPN, proxy, Tor and hosting networks (proxycheck.io)." : "Unavailable — PROXYCHECK_API_KEY not configured")
+      : "Locked — Requires Verified Entry";
     if ($("gw-device-requirement")) $("gw-device-requirement").textContent = verified ? "Unavailable — No supported device check" : "Locked — Requires Verified Entry and a supported device check";
     if ($("gw-enable-verified")) $("gw-enable-verified").hidden = verified;
     const mustRespond = rules.winnerMustRespond;
@@ -343,14 +354,14 @@ if (!window.__yrSpaShell) {
       settingsSessionId = null;
       document.querySelector('input[name="gw-entry-mode"][value="chat"]')?.click();
       document.querySelector('input[name="gw-winner-repeat"][value="once"]')?.click();
-      for (const id of ["gw-opt-subscriber", "gw-opt-vip", "gw-opt-skip-past", "gw-opt-ip", "gw-opt-claim-req", "gw-opt-auto-reroll"]) if ($(id)) $(id).checked = false;
+      for (const id of ["gw-opt-subscriber", "gw-opt-vip", "gw-opt-skip-past", "gw-opt-ip", "gw-opt-vpn", "gw-opt-claim-req", "gw-opt-auto-reroll"]) if ($(id)) $(id).checked = false;
     }
     if (session && settingsSessionId !== session.id) {
       settingsSessionId = session.id;
       const r = session.rules || {};
       document.querySelector(`input[name="gw-entry-mode"][value="${["chat", "members", "verified"].includes(r.entryMode) ? r.entryMode : "chat"}"]`)?.click();
       document.querySelector(`input[name="gw-winner-repeat"][value="${r.winnerRepeat === "again" ? "again" : "once"}"]`)?.click();
-      for (const [id, key] of [["gw-opt-subscriber", "subscriberOnly"], ["gw-opt-vip", "vipOnly"], ["gw-opt-skip-past", "excludePreviousWinners"], ["gw-opt-ip", "onePerIp"], ["gw-opt-claim-req", "winnerMustRespond"], ["gw-opt-auto-reroll", "autoReroll"]]) {
+      for (const [id, key] of [["gw-opt-subscriber", "subscriberOnly"], ["gw-opt-vip", "vipOnly"], ["gw-opt-skip-past", "excludePreviousWinners"], ["gw-opt-ip", "onePerIp"], ["gw-opt-vpn", "vpnDetection"], ["gw-opt-claim-req", "winnerMustRespond"], ["gw-opt-auto-reroll", "autoReroll"]]) {
         if ($(id)) $(id).checked = !!r[key];
       }
       if ($("gw-opt-claim-duration")) $("gw-opt-claim-duration").value = String(r.responseTimeout || 60);
@@ -495,6 +506,7 @@ if (!window.__yrSpaShell) {
 
   function applyState(data) {
     connection = data.connection || { connected: false, chatReady: false, channelName: null };
+    if (data.capabilities) capabilities = data.capabilities;
     session = data.session || null;
     entrants = Array.isArray(data.entries) ? data.entries : [];
     draws = Array.isArray(data.draws) ? data.draws : [];

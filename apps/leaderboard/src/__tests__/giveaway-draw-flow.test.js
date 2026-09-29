@@ -775,7 +775,7 @@ describe("Giveaway draw flow", () => {
     await clock.tick(50);
     const start = requestsTo("/api/giveaways/chat/start").at(-1);
     expect(Object.keys(start.body.rules).sort()).toEqual(
-      ["entryMode", "subscriberOnly", "vipOnly", "excludePreviousWinners", "winnerRepeat", "onePerIp", "winnerMustRespond", "responseTimeout", "autoReroll"].sort(),
+      ["entryMode", "subscriberOnly", "vipOnly", "excludePreviousWinners", "winnerRepeat", "onePerIp", "vpnDetection", "winnerMustRespond", "responseTimeout", "autoReroll"].sort(),
     );
   });
 

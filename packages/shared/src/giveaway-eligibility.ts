@@ -10,13 +10,14 @@ export const giveawayRulesSchema = z.object({
   excludePreviousWinners: z.boolean().default(false),
   winnerRepeat: z.enum(["once", "again"]).default("once"),
   onePerIp: z.boolean().default(false),
-  vpnDetection: z.literal(false).default(false),
+  vpnDetection: z.boolean().default(false),
   duplicateDevice: z.literal(false).default(false),
   winnerMustRespond: z.boolean().default(false),
   responseTimeout: z.union([z.literal(30), z.literal(60), z.literal(90), z.literal(120)]).default(60),
   autoReroll: z.boolean().default(false),
 }).strict().superRefine((rules, ctx) => {
   if (rules.onePerIp && rules.entryMode !== "verified") ctx.addIssue({ code: "custom", message: "One account per IP requires Verified Entry." });
+  if (rules.vpnDetection && rules.entryMode !== "verified") ctx.addIssue({ code: "custom", message: "VPN / proxy detection requires Verified Entry." });
   if (rules.autoReroll && !rules.winnerMustRespond) ctx.addIssue({ code: "custom", message: "Auto re-roll requires winner response verification." });
 });
 export type GiveawayRules = z.infer<typeof giveawayRulesSchema>;
@@ -30,6 +31,8 @@ export interface GiveawayParticipant {
   duplicateAccount?: boolean;
   duplicateIp?: boolean;
   ipAvailable?: boolean;
+  vpnCheckAvailable?: boolean;
+  anonymousNetwork?: boolean;
 }
 export function giveawayRules(raw: unknown): GiveawayRules { return giveawayRulesSchema.parse(raw ?? {}); }
 
@@ -49,6 +52,8 @@ export function evaluateGiveawayEligibility(p: GiveawayParticipant, rules: Givea
     if (!p.verified) return { status: "pending_verification", reason: "verification_required" };
     if (!p.viewerId) return reject("not_yourrank_member");
     if (!p.kickLinked) return reject("kick_not_linked");
+    if (rules.vpnDetection && !p.vpnCheckAvailable) return reject("vpn_check_unavailable");
+    if (rules.vpnDetection && p.anonymousNetwork) return reject("vpn_detected");
     if (rules.onePerIp && !p.ipAvailable) return reject("ip_unavailable");
     if (rules.onePerIp && p.duplicateIp) return reject("duplicate_ip");
   }

@@ -133,6 +133,7 @@ bucket_name = "yourrank-reward-images"
 #   LEAD_WEBHOOK_URL        (optional; Discord/Slack ping on a new lead)
 #   DISCORD_MONITORING_WEBHOOK (optional; error reporting + cron summaries)
 #   BACKUP_VERIFICATION_LIMIT_HOURS (optional; defaults to 168 — 7 days)
+#   PROXYCHECK_API_KEY    (optional; enables giveaway VPN/proxy detection via proxycheck.io)
 #   KICK_WEBHOOK_PUBLIC_KEY (required for Kick channel-point credits integration)
 #   KICK_CLIENT_ID          (required for Kick OAuth login)
 #   KICK_CLIENT_SECRET      (required for Kick OAuth login)
