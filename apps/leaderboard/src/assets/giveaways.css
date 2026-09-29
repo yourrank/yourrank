@@ -2269,3 +2269,13 @@
   .engage-row__state { grid-area: state; }
   .engage-row__chevron { grid-area: chevron; }
 }
+
+/* Draw history: a compact audit trail under the draw card. */
+.gw-draw-history { border-top: 1px solid var(--ws-line); padding: var(--ws-space-4) var(--ws-space-5, 20px) var(--ws-space-4); }
+.gw-draw-history-title { font: inherit; font-weight: 700; margin: 0 0 var(--ws-space-2); }
+.gw-draw-history-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ws-space-1); }
+.gw-draw-history-row { display: flex; justify-content: space-between; gap: var(--ws-space-3); font-size: 13px; line-height: 18px; color: var(--ws-text-soft); }
+.gw-draw-history-time { flex: 0 0 auto; }
+
+/* Manual winners never have a chat response to wait for. */
+.gw-winner-manual-hint { margin: var(--ws-space-3) 0 0; }
