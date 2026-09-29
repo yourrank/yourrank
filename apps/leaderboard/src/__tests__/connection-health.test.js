@@ -211,6 +211,20 @@ describe("Kick connection health", () => {
       expect(health.delivery.verified).toBe(false);
     });
 
+    it("reports partial delivery and identifies the first required event", () => {
+      const health = deriveKickConnectionHealth({
+        ...authorized,
+        activeRewardMappings: 2,
+        delivery: { rewardEventsSubscribedAt: null, chatEventsSubscribedAt: checkedAt, checkedAt: null },
+      });
+      expect(health.delivery).toMatchObject({
+        verified: false,
+        required: ["rewardEvents"],
+        requiredLabels: ["reward redemption events"],
+        events: { rewardEvents: "unverified", chatEvents: "subscribed" },
+      });
+    });
+
     it("keeps revoked authorization as reconnect-required even when subscriptions were once confirmed", () => {
       expect(deriveKickConnectionHealth({
         ...authorized,

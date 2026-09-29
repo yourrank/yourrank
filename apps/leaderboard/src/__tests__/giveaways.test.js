@@ -406,3 +406,11 @@ describe("Giveaway Chatroom Handler", () => {
     expect(siteSource).toContain("/api/auth/resend-verification");
   });
 });
+
+describe("prediction dashboard requests", () => {
+  it("scopes prediction history and creation to the selected site", () => {
+    expect(giveawaysSource).toContain('dashboardFetch(sitePath("/api/predictions", siteId))');
+    expect(giveawaysSource).toContain('dashboardFetch(sitePath("/api/predictions", siteId), {');
+    expect(giveawaysSource).not.toMatch(/dashboardFetch\(["']\/api\/predictions["']/);
+  });
+});

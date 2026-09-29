@@ -77,6 +77,26 @@ export class ServerListController {
     }
   }
 
+  clear() {
+    this.request++;
+    this.loading = false;
+    this.items = [];
+    this.page = null;
+    this.total = null;
+    if (this.tbody) {
+      this.tbody.innerHTML = "";
+      this.tbody.removeAttribute("aria-busy");
+      this.tbody.closest("table")?.removeAttribute("aria-busy");
+    }
+    if (this.emptyEl) this.emptyEl.hidden = true;
+    if (this.pageInfo) this.pageInfo.textContent = "";
+    if (this.moreBtn) {
+      this.moreBtn.hidden = true;
+      this.moreBtn.disabled = false;
+      this.moreBtn.textContent = "Load more";
+    }
+  }
+
   params() {
     const params = new URLSearchParams();
     if (this.query) params.set("q", this.query);

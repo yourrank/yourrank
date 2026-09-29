@@ -46,6 +46,7 @@ export function deriveKickDeliveryHealth({
     events,
     required,
     missing,
+    requiredLabels: required.map((event) => EVENT_LABELS[event]),
     missingLabels: missing.map((event) => EVENT_LABELS[event]),
   };
 }
