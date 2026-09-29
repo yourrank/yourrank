@@ -170,6 +170,31 @@ describe("handleRequestLoginCode", () => {
     expect(mockSendEmail.mock.calls[0][1].to).toBe("new@example.com");
   });
 
+  test("signup intent reveals an existing email without sending a code", async () => {
+    mockOne.mockResolvedValueOnce({ id: "u-1", status: "active", locked_until: null });
+    const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "owner@example.com", intent: "signup" }), {}, codeDeps);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      ok: false,
+      error: "This email is already registered.",
+      field: "email",
+      code: "email_registered",
+    });
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  test("login intent keeps the generic response for an existing email", async () => {
+    mockOne.mockResolvedValueOnce({ id: "u-1", status: "active", locked_until: null });
+    const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "owner@example.com", intent: "login" }), {}, codeDeps);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      message: "If that account exists, a sign-in code is on its way.",
+    });
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+  });
+
   test("login intent keeps unknown emails codeless", async () => {
     mockOne.mockResolvedValueOnce(null);
     const res = await handleRequestLoginCode(codeReq("/api/auth/code/request", { email: "nobody@example.com", intent: "login" }), {}, codeDeps);

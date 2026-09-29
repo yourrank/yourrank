@@ -68,6 +68,14 @@ export async function loadBoardShell() {
   const current = siteQuery() || state.ACTIVE_SITE_ID || list[0]?.id || list[0]?.siteId;
   const select = $("sidebarBoardSelect");
   const activeSiteId = current || "";
+  const manageSitesLink = $("manageSitesLink");
+  if (manageSitesLink && manageSitesLink.dataset.manageSitesWired !== "true") {
+    manageSitesLink.dataset.manageSitesWired = "true";
+    manageSitesLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      requestDashboardRoute("boards", "", { query: "" });
+    });
+  }
   renderSiteSelector({
     select,
     sites: list,

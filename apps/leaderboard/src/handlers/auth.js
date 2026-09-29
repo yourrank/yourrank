@@ -484,6 +484,14 @@ export async function handleRequestLoginCode(request, env, deps = {}) {
     // get no code, but the response stays generic either way. An unknown
     // address is eligible only when the visitor declared a signup intent.
     const user = await io.one("SELECT id, status, locked_until FROM users WHERE email=$1", [email]);
+    if (intent === "signup" && user) {
+      return json({
+        ok: false,
+        error: "This email is already registered.",
+        field: "email",
+        code: "email_registered",
+      }, 409);
+    }
     const locked = user?.locked_until && new Date(user.locked_until) > new Date();
     const eligible = user ? (user.status === "active" && !locked) : intent === "signup";
     if (eligible) {

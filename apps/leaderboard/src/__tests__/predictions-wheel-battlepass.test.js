@@ -139,6 +139,34 @@ describe("Predictions, Lucky Wheel & Seasonal Battle Pass", () => {
       expect(body.prediction.min_bet).toBe(20);
     });
 
+    it("keeps a zero-minute manual lock", async () => {
+      mockOne.mockResolvedValueOnce({
+        id: "pred-manual-lock",
+        title: "Manual lock",
+        options: [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }],
+        min_bet: 20,
+        max_bet: 500,
+        status: "open",
+        lock_at: null,
+      });
+
+      const req = new Request("http://localhost/api/predictions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Manual lock",
+          minBet: 20,
+          maxBet: 500,
+          lockMinutes: 0,
+        }),
+      });
+
+      const res = await handleCreatePrediction(req, mockEnv(), deps);
+      expect(res.status).toBe(200);
+      const insertCall = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO predictions"));
+      expect(insertCall[1][5]).toBeNull();
+    });
+
     it("allows Starter to create predictions and keeps Free denied", async () => {
       mockOne.mockResolvedValueOnce({
         id: "pred-starter",

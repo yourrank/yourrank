@@ -38,6 +38,26 @@ const SIGNUP_FORM_HTML = `
     <div class="err" id="err" role="alert" aria-live="assertive"></div>
     <button type="submit" id="submit">Create account</button>
   </form>
+  <button id="methodCode" type="button">Use a code</button>
+  <button id="methodPassword" type="button">Use a password</button>
+  <form id="codeForm" hidden>
+    <div id="codeStep1">
+      <input id="codeEmail" type="email" />
+      <span class="field-err" data-field-err="codeEmail"></span>
+      <input id="codeName" type="text" />
+      <span class="field-err" data-field-err="codeName"></span>
+      <div id="codeErr"></div>
+      <span id="codeSentTo"></span>
+      <button type="submit" id="codeSubmit">Send code</button>
+    </div>
+    <div id="codeStep2" hidden>
+      <input id="code" type="text" />
+      <div id="codeErr2"></div>
+      <button type="submit" id="codeVerify">Create account</button>
+      <button id="codeResend" type="button">Resend code</button>
+      <button id="codeChangeEmail" type="button">Change email</button>
+    </div>
+  </form>
   <a href="/login" data-auth-switch>Sign in</a>`;
 
 function setupAuthPage(markup, fetchImpl, { url }) {
@@ -82,6 +102,13 @@ async function submitSignup(page, { email = "person@example.com", name = "Alex R
   page.document.getElementById("name").value = name;
   page.document.getElementById("password").value = password;
   page.form.dispatchEvent(new page.window.Event("submit", { bubbles: true, cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
+async function submitSignupCode(page, { email = "person@example.com", name = "Alex Rivera" } = {}) {
+  page.document.getElementById("codeEmail").value = email;
+  page.document.getElementById("codeName").value = name;
+  page.document.getElementById("codeForm").dispatchEvent(new page.window.Event("submit", { bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
@@ -242,5 +269,33 @@ describe("duplicate email signup recovery", () => {
     expect(signIn.searchParams.get("next")).toBe("/dashboard/rewards/shop?siteId=site-1");
     expect(signIn.searchParams.get("plan")).toBe("pro");
     expect(signupPayload).not.toHaveProperty("slug");
+  });
+
+  test("email-code signup shows the same safe sign-in recovery without advancing", async () => {
+    const email = "alex@example.com";
+    const page = setupSignupPage(() => jsonResponse(409, {
+      ok: false,
+      error: "This email is already registered.",
+      field: "email",
+      code: "email_registered",
+    })(), {
+      url: "https://staging.yourrank.site/signup?next=%2Fdashboard%2Frewards%2Fshop%3FsiteId%3Dsite-1&plan=starter",
+    });
+
+    await submitSignupCode(page, { email });
+
+    const emailInput = page.document.getElementById("codeEmail");
+    const emailError = page.document.querySelector('[data-field-err="codeEmail"]');
+    const link = emailError.querySelector("a");
+    const signIn = new URL(link.href);
+    expect(emailError.textContent).toBe("This email is already registered. Sign in instead");
+    expect(emailInput.getAttribute("aria-invalid")).toBe("true");
+    expect(page.document.activeElement.id).toBe("codeEmail");
+    expect(page.document.getElementById("codeStep1").hidden).toBe(false);
+    expect(page.document.getElementById("codeStep2").hidden).toBe(true);
+    expect(signIn.pathname).toBe("/login");
+    expect(signIn.searchParams.get("email")).toBe(email);
+    expect(signIn.searchParams.get("next")).toBe("/dashboard/rewards/shop?siteId=site-1");
+    expect(signIn.searchParams.get("plan")).toBe("starter");
   });
 });

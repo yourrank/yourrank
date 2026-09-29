@@ -2,6 +2,7 @@
 /** @jsxImportSource hono/jsx */
 
 import { dashboardNavItems as sharedDashboardNavItems } from "@yourrank/shared/dashboard-nav";
+import { routeById } from "@yourrank/shared/dashboard-routes";
 import { raw } from "hono/html";
 import { dashboardChromeHtml, workspaceSearchHtml } from "@yourrank/shared/dashboard-chrome";
 import { navOwner } from "@yourrank/shared/dashboard-nav";
@@ -26,7 +27,7 @@ export function workspaceAccountTopbarHtml({ context, title = "", help = false }
 }
 
 function workspaceSiteContextHtml() {
-  return '<div class="lb-topbar-hud"><div class="lb-site-command"><div class="lb-board-select-wrap"><span class="lb-board-select-lbl">Current site</span><div class="lb-board-select-row"><select class="lb-board-select" id="sidebarBoardSelect" aria-label="Switch site"></select></div></div></div></div>';
+  return `<div class="lb-topbar-hud"><div class="lb-site-command"><div class="lb-board-select-wrap"><span class="lb-board-select-lbl">Current site</span><div class="lb-board-select-row"><select class="lb-board-select" id="sidebarBoardSelect" aria-label="Switch site"></select><a class="lb-copy-link" id="manageSitesLink" href="${escapeHtml(routeById("boards").canonicalPath)}">Manage sites</a></div></div></div></div>`;
 }
 
 function workspaceAvailabilityHtml(boardContext) {
