@@ -87,7 +87,7 @@ describe("tournament signup cap (Postgres)", () => {
     expect(typeof handleSelectTournamentEntries).toBe("function");
   });
 
-  integrationIt("two concurrent entrants race for the last slot: exactly one wins and the loser hears the bracket is full", async () => {
+  integrationIt("two concurrent entrants race for the last slot: exactly one wins and the loser hears signups are full", async () => {
     const siteId = await seedSite();
     const tournamentId = await seedTournament(siteId, { entryCap: 10, signupState: "open" });
     for (let i = 0; i < 9; i++) {
@@ -105,11 +105,11 @@ describe("tournament signup cap (Postgres)", () => {
     ]);
     const results = outcomes.map((o) => (o.status === "fulfilled" ? o.value : { error: o.reason?.message, status: 500 }));
     const wins = results.filter((r) => r.entry && !r.duplicate);
-    // The loser overflows the cap: "Bracket is full." while signups stay open.
+    // The loser overflows the cap: "Signups are full." while signups stay open.
     const losses = results.filter((r) => r.status === 409 && !r.entry);
     expect(wins).toHaveLength(1);
     expect(losses).toHaveLength(1);
-    expect(losses[0].error).toBe("Bracket is full.");
+    expect(losses[0].error).toBe("Signups are full.");
     expect(losses[0].full).toBe(true);
 
     const [tournament] = await sql`SELECT signup_state FROM tournaments WHERE id=${tournamentId}`;
