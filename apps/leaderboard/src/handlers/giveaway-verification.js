@@ -4,6 +4,7 @@ import { resolveViewer } from "@yourrank/shared/viewer-session";
 import { linkedViewerIdentities } from "@yourrank/shared/viewer-identity";
 import { giveawayRules, giveawayParticipantFacts, evaluateGiveawayEligibility } from "@yourrank/shared/giveaway-eligibility";
 import { giveawayTransaction } from "../chat-giveaway-service.js";
+import { checkAnonymousIp } from "../proxycheck.js";
 import { bad, json, readJson, rateLimit } from "../auth.js";
 import { requestIsSameOrigin } from "../viewer-membership.js";
 import { generateCsrfToken, csrfCookie, SECURE_HTML } from "../middleware/index.js";
@@ -33,7 +34,7 @@ export async function giveawayIpHash(raw, salt) {
 export async function handleGiveawayVerification(request, env, deps = {}) {
   if (!platformRequest(request, env)) return bad("Use the YourRank giveaway verification link.", 404);
   if (!requestIsSameOrigin(request)) return bad("Origin mismatch", 403);
-  const d = { one, query, resolveViewer, transaction: giveawayTransaction, rateLimit, ...deps };
+  const d = { one, query, resolveViewer, transaction: giveawayTransaction, rateLimit, checkIp: checkAnonymousIp, ...deps };
   const body = request.method === "POST" ? (await readJson(request)) || {} : {};
   const queryId = new URL(request.url).searchParams.get("sessionId");
   if (body.sessionId && queryId && body.sessionId !== queryId) return bad("Giveaway link mismatch.", 400);
@@ -46,13 +47,21 @@ export async function handleGiveawayVerification(request, env, deps = {}) {
   const { viewer, cookie } = await d.resolveViewer(request, env);
   const identity = linkedViewerIdentities(viewer).find((i) => i.provider === "kick" && i.linkedAt);
   const base = { giveaway: { id, keyword: session.keyword, community: session.community, status: session.status },
-    signedIn: !!viewer, kickUsername: identity?.username || null, ipCheck: giveawayRules(session.rules).onePerIp };
+    signedIn: !!viewer, kickUsername: identity?.username || null, ipCheck: giveawayRules(session.rules).onePerIp,
+    vpnCheck: giveawayRules(session.rules).vpnDetection };
   if (!viewer || !identity) return privateJson({ ...base, status: "pending_verification", reason: viewer ? "kick_not_linked" : "not_yourrank_member" }, cookie);
   if (!(await d.rateLimit(env, `giveaway-verify:${viewer.id}`, 30, 60)).ok) return bad("Too many requests. Try again shortly.", 429);
   if (request.method !== "POST") {
     const entry = await d.one(`SELECT eligibility_status, eligibility_reason FROM chat_giveaway_entries
       WHERE giveaway_session_id=$1 AND provider='kick' AND provider_user_id=$2`, [id, identity.externalUserId]);
     return privateJson({ ...base, status: entry?.eligibility_status || "pending_verification", reason: entry?.eligibility_reason || (entry ? null : "entry_required") }, cookie);
+  }
+  // The IP lookup is a network call, so it happens BEFORE the transaction:
+  // the session row lock must never be held across it.
+  let vpn = null;
+  if (giveawayRules(session.rules).vpnDetection) {
+    vpn = await d.checkIp(request.headers.get("cf-connecting-ip"), env);
+    if (vpn.ok && vpn.anonymous) console.warn("[giveaway] vpn_detected:", id, vpn.types.join(","));
   }
   const result = await d.transaction(async (run) => {
     const [locked] = await run("SELECT id, site_id, status, rules, verification_salt FROM chat_giveaway_sessions WHERE id=$1 FOR UPDATE", [id]);
@@ -67,7 +76,9 @@ export async function handleGiveawayVerification(request, env, deps = {}) {
     // Failed attempts cannot overwrite an existing eligible account's hash.
     const ipHash = rules.onePerIp ? await giveawayIpHash(request.headers.get("cf-connecting-ip"), locked.verification_salt) : null;
     const eligibility = evaluateGiveawayEligibility({ ...facts, badges: entry.badges, verified: true,
-      ipAvailable: !!ipHash }, rules);
+      ipAvailable: !!ipHash,
+      vpnCheckAvailable: vpn ? vpn.ok : true,
+      anonymousNetwork: vpn?.ok ? vpn.anonymous : false }, rules);
     if (eligibility.status === "eligible" && ipHash) {
       // The session row is locked above, serializing every verification for this giveaway.
       const duplicate = await run(`SELECT id FROM chat_giveaway_entries WHERE giveaway_session_id=$1
@@ -91,6 +102,7 @@ export function handleGiveawayVerificationPage(request, env) {
     <body><main class="wrap"><section class="card"><a href="/me">YourRank account</a><h1>Verify giveaway entry</h1>
     <h2 id="giveaway-community"></h2><p id="giveaway-identity"></p><p id="giveaway-state" role="status" aria-live="polite">Loading your entry…</p>
     <p id="giveaway-ip-notice" hidden>One account per IP is enabled. YourRank stores a giveaway-specific hash, never your raw IP. People sharing a connection may be unable to enter together.</p>
+    <p id="giveaway-vpn-notice" hidden>VPN / proxy check is on. Your connection is checked with proxycheck.io when you verify. Turn off any VPN or proxy first.</p>
     <a class="btn" id="giveaway-signin" hidden>Sign in with Kick</a><button class="btn btn--accent" id="giveaway-verify" type="button" disabled>Verify Entry</button>
     </section></main><script type="module" src="/assets/giveaway-verification.js"></script></body></html>`,
   { headers: { ...SECURE_HTML, "cache-control": "private, no-store", "set-cookie": csrfCookie(token, request) } });

@@ -401,6 +401,21 @@ describe("Chat Giveaway API", () => {
     expect(wrote).toBe(false);
   });
 
+  it("starts verified + VPN detection when the API key is configured", async () => {
+    let wrote = null;
+    const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", {
+      keyword: "!win", rules: { entryMode: "verified", vpnDetection: true, onePerIp: true },
+    }), { PROXYCHECK_API_KEY: "k" }, deps({
+      one: async (sql, params) => {
+        if (String(sql).includes("FROM users")) return { plan: "pro", plan_expires_at: null, status: "active" };
+        wrote = { sql, params }; return { id: "gs-1", site_id: siteA.id, status: "active", rules: params[3] };
+      },
+    }));
+    expect(res.status).toBe(200);
+    expect(wrote).not.toBeNull();
+    expect(wrote.params[3]).toMatchObject({ entryMode: "verified", vpnDetection: true, onePerIp: true });
+  });
+
   it("refuses to start when the chat subscription was not confirmed", async () => {
     const res = await handleChatGiveawayStart(apiRequest("/api/giveaways/chat/start", { keyword: "!win" }), {}, deps({
       loadChatGiveawayConnection: async () => ({ connected: true, chatReady: false, channelName: "streamer", externalChannelId: "111" }),

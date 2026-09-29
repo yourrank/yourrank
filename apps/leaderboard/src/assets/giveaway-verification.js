@@ -11,6 +11,8 @@ const messages = {
   duplicate_ip: "Another account has already verified from this connection.",
   ip_unavailable: "Your connection could not be verified. Please try again.",
   giveaway_closed: "This giveaway is closed. Entries can no longer be verified.",
+  vpn_detected: "VPN or proxy detected. Turn it off, then select Verify Entry again.",
+  vpn_check_unavailable: "The VPN check is temporarily unavailable. Please try again in a minute.",
 };
 async function load(verify = false) {
   const button = $("giveaway-verify");
@@ -26,6 +28,7 @@ async function load(verify = false) {
     $("giveaway-community").textContent = `${data.giveaway.community} · ${data.giveaway.keyword}`;
     $("giveaway-identity").textContent = data.kickUsername ? `Linked Kick account: @${data.kickUsername}` : "";
     $("giveaway-ip-notice").hidden = !data.ipCheck;
+    $("giveaway-vpn-notice").hidden = !data.vpnCheck;
     $("giveaway-state").textContent = data.status === "eligible" ? "Entry verified" : messages[data.reason] || "Your entry is pending verification.";
     const link = $("giveaway-signin");
     link.hidden = data.signedIn && !!data.kickUsername;

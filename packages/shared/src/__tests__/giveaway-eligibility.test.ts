@@ -26,10 +26,18 @@ describe("giveaway eligibility", () => {
     expect(evaluate({ badges: [{ type: "subscriber" }, { type: "vip" }] }, rules({ subscriberOnly: true, vipOnly: true })).status).toBe("eligible");
     expect(evaluate({ previousWinner: true }, rules({ excludePreviousWinners: true })).reason).toBe("previous_winner");
   });
+  it("enforces the VPN/proxy check only for verified entries", () => {
+    const r = rules({ entryMode: "verified", vpnDetection: true });
+    const p = { verified: true, viewerId: "v", kickLinked: true };
+    expect(evaluate({ ...p, vpnCheckAvailable: false }, r).reason).toBe("vpn_check_unavailable");
+    expect(evaluate({ ...p, vpnCheckAvailable: true, anonymousNetwork: true }, r).reason).toBe("vpn_detected");
+    expect(evaluate({ ...p, vpnCheckAvailable: true, anonymousNetwork: false }, r).status).toBe("eligible");
+  });
   it("rejects unsupported or incompatible settings at the server boundary", () => {
     for (const r of [{ onePerIp: true }, { vpnDetection: true }, { duplicateDevice: true }, { minimumAccountAge: 1 }, { autoReroll: true }]) {
       expect(() => rules(r)).toThrow();
     }
+    expect(rules({ entryMode: "verified", vpnDetection: true }).vpnDetection).toBe(true);
     expect(rules({}).winnerRepeat).toBe("once");
     expect(rules({ winnerRepeat: "again" }).winnerRepeat).toBe("again");
     expect(giveawayRulesSchema.safeParse({ winnerRepeat: "sometimes" }).success).toBe(false);

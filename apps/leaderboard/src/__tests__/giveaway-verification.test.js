@@ -8,11 +8,12 @@ const request = (post = true) => new Request(`https://yourrank.site/api/viewer/g
   method: post ? "POST" : "GET", headers: { "content-type": "application/json", "cf-connecting-ip": "192.0.2.1" },
   ...(post ? { body: JSON.stringify({ sessionId: id }) } : {}),
 });
-function setup({ actor = viewer, entry = { id: "entry", badges: [], eligibility_status: "pending_verification" }, duplicate = false, status = "active", owner = "viewer" } = {}) {
+function setup({ actor = viewer, entry = { id: "entry", badges: [], eligibility_status: "pending_verification" }, duplicate = false, status = "active", owner = "viewer", sessionRules = null } = {}) {
   const writes = [];
-  return { writes, one: async () => session, resolveViewer: async () => ({ viewer: actor }), rateLimit: async () => ({ ok: true }),
+  const sess = sessionRules ? { ...session, rules: { ...session.rules, ...sessionRules } } : session;
+  return { writes, one: async () => sess, resolveViewer: async () => ({ viewer: actor }), rateLimit: async () => ({ ok: true }),
     transaction: (fn) => fn(async (sql, params) => {
-      if (sql.startsWith("SELECT id, site_id")) return [{ ...session, status }];
+      if (sql.startsWith("SELECT id, site_id")) return [{ ...sess, status }];
       if (sql.includes("SELECT id, badges")) return entry ? [entry] : [];
       if (sql.includes("AS viewer_id")) return [{ viewer_id: owner, previous_winner: false }];
       if (sql.includes("AND ip_hash")) return duplicate ? [{ id: "other" }] : [];
@@ -62,6 +63,42 @@ describe("giveaway verification boundary", () => {
     expect((await handleGiveawayVerification(new Request(stagingUrl), { ENVIRONMENT: "production" }, setup())).status).toBe(404);
     // production env + platform host unchanged: reaches past the host check
     expect((await handleGiveawayVerification(new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`), { ENVIRONMENT: "production" }, setup())).status).not.toBe(404);
+  });
+  it("runs the VPN/proxy check outside the transaction and maps results to reasons", async () => {
+    const calls = [];
+    const checkIp = (impl) => async (ip) => { calls.push(ip); return impl(); };
+    const rules = { vpnDetection: true };
+    // Detected network -> stored as a rejection with reason vpn_detected.
+    const detected = setup({ sessionRules: rules });
+    const warns = [];
+    const origWarn = console.warn;
+    console.warn = (...a) => warns.push(a.join(" "));
+    let body;
+    try {
+      body = await (await handleGiveawayVerification(request(), {}, { ...detected, checkIp: checkIp(() => ({ ok: true, anonymous: true, types: ["vpn", "proxy"] })) })).json();
+    } finally { console.warn = origWarn; }
+    expect(body).toMatchObject({ status: "rejected", reason: "vpn_detected", vpnCheck: true });
+    expect(detected.writes[0]).toMatchObject({ 0: "entry", 1: "rejected", 2: "vpn_detected" });
+    expect(warns.join("\n")).toContain("vpn_detected");
+    expect(warns.join("\n")).toContain("vpn,proxy");
+    expect(warns.join("\n")).not.toContain("192.0.2.1");
+    // Unavailable check -> vpn_check_unavailable, still recorded as a rejection.
+    const down = setup({ sessionRules: rules });
+    expect(await (await handleGiveawayVerification(request(), {}, { ...down, checkIp: checkIp(() => ({ ok: false, error: "proxycheck_timeout" })) })).json()).toMatchObject({ status: "rejected", reason: "vpn_check_unavailable" });
+    // Clean network -> eligible.
+    const clean = setup({ sessionRules: rules });
+    expect(await (await handleGiveawayVerification(request(), {}, { ...clean, checkIp: checkIp(() => ({ ok: true, anonymous: false, types: [] })) })).json()).toMatchObject({ status: "eligible" });
+    expect(calls).toHaveLength(3);
+  });
+  it("never calls the IP check on GET or when the rule is off", async () => {
+    const calls = [];
+    const checkIp = async () => { calls.push(1); return { ok: true, anonymous: false, types: [] };
+    };
+    // GET path returns before the check regardless of rules.
+    expect(await (await handleGiveawayVerification(request(false), {}, { ...setup({ sessionRules: { vpnDetection: true } }), checkIp })).json()).toMatchObject({ vpnCheck: true });
+    // POST without the rule skips the call entirely.
+    expect(await (await handleGiveawayVerification(request(), {}, { ...setup(), checkIp })).json()).toMatchObject({ status: "eligible", vpnCheck: false });
+    expect(calls).toHaveLength(0);
   });
   it("rejects a body giveaway ID that differs from the signed link ID", async () => {
     const mismatched = new Request(`https://yourrank.site/api/viewer/giveaway?sessionId=${id}`, {

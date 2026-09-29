@@ -128,7 +128,7 @@ export async function handleChatGiveawayState(request, env, deps = {}) {
   const url = new URL(request.url);
   const connection = await d.loadChatGiveawayConnection(d.query, site.id, "kick");
   const view = await loadSessionView(d, site.id, url.searchParams.get("sessionId"));
-  return ok({ connection, capabilities: GIVEAWAY_CAPABILITIES, ...view });
+  return ok({ connection, capabilities: { ...GIVEAWAY_CAPABILITIES, vpnDetection: !!env?.PROXYCHECK_API_KEY }, ...view });
 }
 
 /** POST /api/giveaways/chat/start — create the site's single active session. */
@@ -144,6 +144,9 @@ export async function handleChatGiveawayStart(request, env, deps = {}) {
   if (manual) {
     const rulesError = manualEntryRulesError(parsedRules.data);
     if (rulesError) return bad(rulesError, 400);
+  }
+  if (parsedRules.data.vpnDetection && !env?.PROXYCHECK_API_KEY) {
+    return bad("VPN / proxy detection isn't configured (PROXYCHECK_API_KEY missing).", 400);
   }
   // Basic giveaways are free: keyword, entryMode chat|members, subscriberOnly,
   // winnerRepeat, excludePreviousWinners. Advanced fields require the
