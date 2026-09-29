@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "bun:test";
+import { routeById } from "@yourrank/shared/dashboard-routes";
 import { RewardsChannelPage, RewardsRedemptionsPage } from "../pages/rewards.jsx";
 import { AudienceActivityPage, AudienceMembersPage, AudienceReviewsPage } from "../pages/audience.jsx";
 import { UnifiedSettingsPage } from "../pages/account.jsx";
 import { PAGES } from "../pages.jsx";
+const boardShellJs = readFileSync(new URL("../assets/dashboard/board-shell.js", import.meta.url), "utf8");
 
 const user = { display_name: "Pro user", plan: "pro" };
 
@@ -167,6 +170,8 @@ describe("signed-in shell navigation", () => {
     const html = PAGES.dashboard.Component({ activePath: "/dashboard", user }).toString();
     expect(html).toContain('class="lb-site-command"');
     expect(html).toContain('id="sidebarBoardSelect" aria-label="Switch site"');
+    expect(html).toContain(`id="manageSitesLink" href="${routeById("boards").canonicalPath}">Manage sites</a>`);
+    expect(boardShellJs).toContain('requestDashboardRoute("boards", "", { query: "" })');
     expect(html).not.toContain('id="lbTopbarSitePath"');
     expect(html).not.toContain(">Web address</span>");
     expect(html).toContain('class="lb-availability"');

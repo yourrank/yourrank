@@ -1,6 +1,6 @@
 // Site editing: plan, branding/theme, save, archive, domain, overlay, notifications.
 import { $, esc, getCsrf, guardAuth, logError, timeZoneOffsetLabel, validateScheduleValues, showConfirmModal, showToast, copyToClipboard, flashButton, showLoadError, clearLoadError, ensureDialog } from "./utils.js";
-import { serializeWebhookUrl } from "./notifications.js";
+import { runNotificationTest, serializeWebhookUrl } from "./notifications.js";
 import { resolveViewerTemplate } from "@yourrank/shared/viewer-templates";
 import { state, boardStatus, markDirty, setState, subscribe } from "./state.js";
 import { renderEmpty, setMetricUnknown } from "./states.js";
@@ -2069,9 +2069,13 @@ $("f_font")?.addEventListener("change", () => applyTheme(null, "Font"));
 export function renderNotifications(n) {
   const paid = isPro();
   $("notifyBody").hidden = !paid; $("notifyLock").hidden = paid;
-  // The Telegram block sits outside #notifyBody, so locked plans would otherwise
-  // keep live inputs whose only feedback is a 403 after the request fires.
-  for (const id of ["testTelegram", "f_tgChatId", "f_tgNotify", "settingsWebhookEnabled"]) {
+  for (const id of ["testDiscord", "testTelegram"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.setAttribute("aria-disabled", String(!paid));
+    el.classList.toggle("is-disabled", !paid);
+  }
+  for (const id of ["f_tgChatId", "f_tgNotify", "settingsWebhookEnabled"]) {
     const el = $(id);
     if (el) el.disabled = !paid;
   }
@@ -3211,19 +3215,30 @@ function renderStatsError() {
 // succeeds. This avoids duplicating the logout implementation and keeps the
 // failure/redirect semantics identical everywhere.
 $("upgrade")?.addEventListener("click", (e) => { e.preventDefault(); checkout("pro", e.target); });
-$("testDiscord")?.addEventListener("click", async () => {
-  const s = $("testDiscordStatus"); if (s) s.textContent = "Sending…";
-  try {
-    const r = await fetch("/api/site/notify/test", { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify({ channel: "discord", webhook_url: $("f_webhook")?.value.trim() || undefined, siteId: state.ACTIVE_SITE_ID || undefined }) });
-    const d = await r.json();
-    if (s) s.textContent = d.ok ? "✅ Sent!" : (d.error || "Failed");
-  } catch (e) { if (s) s.textContent = "Network error."; }
-});
-$("testTelegram")?.addEventListener("click", async () => {
-  const s = $("testTelegramStatus"); if (s) s.textContent = "Sending…";
-  try {
-    const r = await fetch("/api/site/notify/test", { method: "POST", credentials: "include", headers: { "content-type": "application/json", "x-csrf-token": getCsrf() }, body: JSON.stringify({ channel: "telegram", chat_id: $("f_tgChatId")?.value.trim() || undefined, siteId: state.ACTIVE_SITE_ID || undefined }) });
-    const d = await r.json();
-    if (s) s.textContent = d.ok ? "✅ Sent!" : (d.error || "Failed");
-  } catch (e) { if (s) s.textContent = "Network error."; }
-});
+if (typeof window !== "undefined" && !window.__yrNotifyTestWired) {
+  window.__yrNotifyTestWired = true;
+  document.addEventListener("click", (e) => {
+    const button = e.target.closest?.("#testTelegram, #testDiscord");
+    if (!button) return;
+    e.preventDefault();
+    const channel = button.id === "testDiscord" ? "discord" : "telegram";
+    const payload = {
+      channel,
+      siteId: state.ACTIVE_SITE_ID || undefined,
+      ...(channel === "discord"
+        ? { webhook_url: $("f_webhook")?.value.trim() || undefined }
+        : { chat_id: $("f_tgChatId")?.value.trim() || undefined }),
+    };
+    void runNotificationTest({
+      button,
+      status: $(`${button.id}Status`),
+      toast: showToast,
+      request: () => fetch("/api/site/notify/test", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json", "x-csrf-token": getCsrf() },
+        body: JSON.stringify(payload),
+      }),
+    });
+  });
+}

@@ -421,6 +421,22 @@ if ((mode === "login" || mode === "signup") && codeForm) {
           if (errBox) errBox.textContent = data.error || "Something went wrong.";
           return;
         }
+        if (mode === "signup" && data.code === "email_registered") {
+          codeEmailInput.setAttribute("aria-invalid", "true");
+          const fieldBox = fieldErrEl("codeEmail");
+          if (fieldBox) {
+            fieldBox.textContent = "This email is already registered. ";
+            const signInParams = new URLSearchParams();
+            if (nextPath) signInParams.set("next", nextPath);
+            if (["free", "starter", "pro", "team"].includes(planParam)) signInParams.set("plan", planParam);
+            const link = document.createElement("a");
+            link.href = `/login?email=${encodeURIComponent(email)}${signInParams.size ? `&${signInParams}` : ""}`;
+            link.textContent = "Sign in instead";
+            fieldBox.appendChild(link);
+          }
+          codeEmailInput.focus();
+          return;
+        }
         if (!data.ok) { showCodeError(codeErr, status, data); return; }
         codeEmail = email;
         codeSentTo.textContent = email;

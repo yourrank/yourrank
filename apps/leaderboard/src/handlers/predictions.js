@@ -117,7 +117,10 @@ export async function handleCreatePrediction(request, env, deps = {}) {
   if (maxBet < minBet) {
     return bad(`Maximum bet (${maxBet}) must be at least the minimum bet (${minBet}).`);
   }
-  const lockMinutes = parseInt(body?.lockMinutes, 10) || 5;
+  const parsedLockMinutes = parseInt(body?.lockMinutes, 10);
+  const lockMinutes = Number.isNaN(parsedLockMinutes) || parsedLockMinutes < 0
+    ? 5
+    : Math.min(parsedLockMinutes, 1440);
   const lockAt = lockMinutes > 0 ? new Date(Date.now() + lockMinutes * 60000).toISOString() : null;
 
   const url = new URL(request.url);
@@ -404,4 +407,3 @@ export async function handleCancelPrediction(request, env, deps = {}) {
 
   return ok({ predictionId, status: "cancelled", message: `Prediction cancelled and ${bets.length} bets refunded.` });
 }
-

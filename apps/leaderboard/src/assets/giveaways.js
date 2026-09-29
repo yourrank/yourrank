@@ -1761,7 +1761,7 @@ if (!window.__yrSpaShell) {
   async function loadPredictions() {
     const activeList = $("pred-active-list");
     try {
-      const res = await dashboardFetch("/api/predictions");
+      const res = await dashboardFetch(sitePath("/api/predictions", siteId));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (activeList) {
@@ -1925,7 +1925,10 @@ if (!window.__yrSpaShell) {
     const opt2 = $("pred-opt-2")?.value?.trim() || "No";
     const minBet = parseInt($("pred-min-bet")?.value, 10) || 10;
     const maxBet = parseInt($("pred-max-bet")?.value, 10) || 500;
-    const lockMinutes = parseInt($("pred-lock-min")?.value, 10) || 5;
+    const parsedLockMinutes = parseInt($("pred-lock-min")?.value, 10);
+    const lockMinutes = Number.isNaN(parsedLockMinutes) || parsedLockMinutes < 0
+      ? 5
+      : Math.min(parsedLockMinutes, 1440);
 
     const options = [
       { id: "yes", label: opt1 },
@@ -1936,7 +1939,7 @@ if (!window.__yrSpaShell) {
     const original = submit?.innerHTML;
     if (submit) { submit.disabled = true; submit.textContent = "Launching…"; }
     try {
-      const res = await dashboardFetch("/api/predictions", {
+      const res = await dashboardFetch(sitePath("/api/predictions", siteId), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, options, minBet, maxBet, lockMinutes }),

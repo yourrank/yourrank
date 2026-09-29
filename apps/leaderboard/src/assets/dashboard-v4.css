@@ -870,7 +870,7 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
   text-transform: uppercase;
   white-space: nowrap;
 }
-.v3-dash[data-auth-workspace] .lb-board-select-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.v3-dash[data-auth-workspace] .lb-board-select-row { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .v3-dash[data-auth-workspace] .lb-topbar-hud .lb-board-select,
 .v3-dash[data-auth-workspace] .lb-board-select {
   width: clamp(120px, 15vw, 200px);
@@ -896,6 +896,30 @@ body:has(.v3-dash[data-auth-workspace]) .lb-shell,
 .v3-dash[data-auth-workspace] .lb-board-select:hover { border-color: var(--ws-chrome-text-soft); }
 .v3-dash[data-auth-workspace] .lb-topbar-hud .lb-board-select:focus-visible,
 .v3-dash[data-auth-workspace] .lb-board-select:focus-visible { border-color: var(--ws-accent); }
+.v3-dash[data-auth-workspace] .lb-board-select-row .lb-board-select { flex: 1; min-width: 72px; width: auto; }
+.v3-dash[data-auth-workspace] .lb-board-select-row .lb-copy-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  flex: 0 0 auto;
+  padding: 0 8px;
+  border: 1px solid var(--ws-line-strong);
+  border-radius: var(--ws-radius-sm);
+  color: var(--ws-text-soft);
+  font: 600 11px/1 var(--ws-sans);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.v3-dash[data-auth-workspace] .lb-board-select-row .lb-copy-link:hover {
+  border-color: var(--ws-accent-line);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent);
+}
+.v3-dash[data-auth-workspace] .lb-board-select-row .lb-copy-link:focus-visible {
+  outline: var(--ws-focus);
+  outline-offset: 2px;
+}
 .v3-dash[data-auth-workspace] .lb-site-path { min-width: 0; overflow: hidden; color: var(--ws-text-soft); font-size: 13px; font-family: var(--ws-sans); text-overflow: ellipsis; white-space: nowrap; }
 .v3-dash[data-auth-workspace] .lb-board-new { display: grid; place-items: center; width: 32px; min-width: 32px; height: 32px; padding: 0; border: 1px solid var(--ws-line-strong); border-radius: var(--ws-radius-sm); background: var(--ws-surface, #ffffff); color: var(--ws-accent); cursor: pointer; transition: all 0.15s ease; }
 .v3-dash[data-auth-workspace] .lb-board-new:hover { border-color: var(--ws-accent-line); background: var(--ws-accent-soft); }
@@ -7604,6 +7628,13 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   min-width: 0;
 }
 
+.v3-dash[data-auth-workspace] #testDiscord.is-disabled,
+.v3-dash[data-auth-workspace] #testTelegram.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: auto;
+}
+
 .v3-dash[data-auth-workspace] .v3-settings-notify-account > .v3-settings-actions {
   margin-top: 0;
 }
@@ -7988,6 +8019,7 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
 }
 
 @media (max-width: 900px) {
+  .v3-dash[data-auth-workspace] .lb-board-select-row .lb-copy-link { min-height: 44px; }
   .v3-dash[data-auth-workspace] .cr-shop-row {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
