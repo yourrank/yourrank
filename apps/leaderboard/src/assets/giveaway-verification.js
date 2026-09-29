@@ -14,14 +14,30 @@ const messages = {
   vpn_detected: "VPN or proxy detected. Turn it off, then select Verify Entry again.",
   vpn_check_unavailable: "The VPN check is temporarily unavailable. Please try again in a minute.",
 };
+// Anti-abuse device signal: the one-way hash rides along on the verify POST.
+// A missing script or a slow fingerprint just means no header.
+async function deviceHeaders() {
+  if (typeof window.YRDeviceSignal?.hash !== "function") return {};
+  try {
+    const hash = await Promise.race([
+      window.YRDeviceSignal.hash(),
+      new Promise((resolve) => setTimeout(() => resolve(null), 500)),
+    ]);
+    return hash ? { "x-yr-device": hash } : {};
+  } catch (err) {
+    console.warn("[device-signal] hash failed", err);
+    return {};
+  }
+}
 async function load(verify = false) {
   const button = $("giveaway-verify");
   button.disabled = true;
   $("giveaway-state").textContent = verify ? "Verifying your entry…" : "Loading your entry…";
   try {
     const csrf = document.cookie.match(/(?:^|;\s*)__csrf=([^;]+)/)?.[1] || "";
+    const device = verify ? await deviceHeaders() : {};
     const response = await fetch(`/api/viewer/giveaway?sessionId=${encodeURIComponent(sessionId || "")}`, verify ? {
-      method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ sessionId }),
+      method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf, ...device }, body: JSON.stringify({ sessionId }),
     } : {});
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Could not load your entry.");

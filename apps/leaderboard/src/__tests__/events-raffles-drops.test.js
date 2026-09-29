@@ -480,4 +480,50 @@ describe("Community Events: Raffles & Flash Code Drops", () => {
     expect(deps.markActive).not.toHaveBeenCalled();
   });
 
+  it("records abuse signals after a successful claim, never on failures", async () => {
+    const successDeps = () => {
+      const recordSignals = mock().mockResolvedValue(undefined);
+      return { ...deps, recordSignals };
+    };
+    const claimRequest = () => new Request("http://localhost/api/events/drops/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ site: "streamer", code: "KICK30" }),
+    });
+    // Success: the recorder runs once, after the commit, with the claim action.
+    let d = successDeps();
+    mockOne.mockResolvedValueOnce({ id: "drop-1", code: "KICK30", points_reward: 30, max_claims: 20, claimed_count: 5, status: "active" });
+    mockOne.mockResolvedValueOnce(null);
+    mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" });
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 });
+    mockOne.mockResolvedValueOnce({ id: "claim-2" });
+    mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 130 });
+    const res = await handleClaimCodeDrop(claimRequest(), mockEnv(), d);
+    expect(res.status).toBe(200);
+    expect(d.recordSignals).toHaveBeenCalledTimes(1);
+    expect(d.recordSignals.mock.calls[0][0]).toMatchObject({ action: "drop_claim", siteId: "site-456", viewerId: "viewer-123" });
+    // An invalid code never reaches recording.
+    d = successDeps();
+    mockOne.mockResolvedValueOnce(null); // no drop found
+    const failed = await handleClaimCodeDrop(claimRequest(), mockEnv(), d);
+    expect(failed.status).toBe(404);
+    expect(d.recordSignals).not.toHaveBeenCalled();
+    // A rejecting recorder still leaves the viewer with the success response.
+    d = successDeps();
+    d.recordSignals = mock().mockRejectedValue(new Error("recorder blew up"));
+    const origError = console.error;
+    console.error = () => {};
+    try {
+      mockOne.mockResolvedValueOnce({ id: "drop-1", code: "KICK30", points_reward: 30, max_claims: 20, claimed_count: 5, status: "active" });
+      mockOne.mockResolvedValueOnce(null);
+      mockOne.mockResolvedValueOnce({ claimed_count: 5, max_claims: 20, status: "active" });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 100 });
+      mockOne.mockResolvedValueOnce({ id: "claim-2" });
+      mockOne.mockResolvedValueOnce({ id: "sv-1", balance: 130 });
+      const res2 = await handleClaimCodeDrop(claimRequest(), mockEnv(), d);
+      expect(res2.status).toBe(200);
+      expect((await res2.json()).ok).toBe(true);
+    } finally { console.error = origError; }
+  });
+
 });

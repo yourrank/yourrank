@@ -769,6 +769,7 @@ ${articleLayout || darkShell ? "" : viewerShell ? `<footer class="viewer-panel-f
 ${viewerShell ? `${articleLayout ? "" : viewerCommunityOverview(ctx)}${section === "home" ? `${isMember ? `<div class="viewer-home-strip">${rewardProgressCard(ctx)}${recentCreditCard(ctx)}</div>` : ''}${homePromo(ctx)}` : ""}<div class="viewer-site-footer">${footer}</div></div>` : drawer({ b, slug, section, siteSections, homeUrl, isCustomDomain, logoUrl, viewer, balance, isMember })}
 ${feedbackModal({ slug, isCustomDomain })}
 <script src="/assets/cookie-consent.js" nonce="${nonce}" defer></script>
+<script src="/assets/device-signal.js" nonce="${nonce}" defer></script>
 <script src="/assets/${viewerShell ? 'viewer-app' : 'site-shell'}.js" nonce="${nonce}" defer></script>
 </body></html>`;
 

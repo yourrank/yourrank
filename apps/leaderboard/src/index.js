@@ -1,4 +1,5 @@
 import { runGiveawayTimeouts } from "./chat-giveaway-service.js";
+import { cleanupIpObservations } from "./abuse-signals.js";
 import { RESERVED_COMMUNITY_HANDLES } from "@yourrank/shared/community-handle";
 import { destroySession, cookieClear, readToken, currentUser, hasLegacyCookie, cookieClearLegacy, rateLimit, rateLimitHeaders, clientIp } from "./auth.js";
 import { sendErrorToDiscord } from "@yourrank/shared/monitoring";
@@ -357,6 +358,7 @@ async function handleScheduled(event, env, ctx) {
   populateEnv(env, { setGlobalEnv: true });
   if (event.cron === "*/5 * * * *") {
     ctx.waitUntil(runGiveawayTimeouts().catch((err) => console.error("[scheduled] giveaway timeout processing failed:", String(err?.message || err))));
+    ctx.waitUntil(cleanupIpObservations().catch((err) => console.error("[scheduled] ip observation cleanup failed:", String(err?.message || err))));
     ctx.waitUntil(
       runAutoReset(env).catch((err) => {
         console.error("[scheduled] auto-reset failed:", err);

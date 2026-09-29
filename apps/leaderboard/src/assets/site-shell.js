@@ -5,6 +5,20 @@
 
 (function initSitePage() {
   "use strict";
+  // Anti-abuse device signal: the one-way hash is sent on mutating viewer
+  // actions. A missing script or a slow fingerprint just means no header.
+  function deviceSignalHeaders() {
+    if (!window.YRDeviceSignal || typeof window.YRDeviceSignal.hash !== "function") return Promise.resolve({});
+    return Promise.race([
+      window.YRDeviceSignal.hash(),
+      new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 500); }),
+    ]).then(function (hash) {
+      return hash ? { "x-yr-device": hash } : {};
+    }).catch(function (err) {
+      console.warn("[device-signal] hash failed", err);
+      return {};
+    });
+  }
   // My Activity tabs. The URL hash is the single selection state: each tab is a
   // hash anchor to its panel, clicks and Back/Forward change the hash, and the
   // controller mirrors the current hash onto exactly one tab/panel. It reads the
@@ -484,12 +498,12 @@
       codeDropButton.setAttribute("aria-busy", "true");
       codeDropButton.textContent = "Claiming…";
       setCodeDropStatus("Checking that code…");
-      fetch("/api/events/drops/claim", {
+      deviceSignalHeaders().then(function (deviceHeaders) { return fetch("/api/events/drops/claim", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        headers: Object.assign({ "content-type": "application/json", "x-csrf-token": readCsrfToken() }, deviceHeaders),
         body: JSON.stringify({ site: codeDropForm.dataset.siteSlug || slug, code: code }),
-      })
+      }); })
         .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
         .then(function (result) {
           if (result.ok && result.data.ok) {
@@ -535,12 +549,12 @@
       checkinButton.setAttribute("aria-busy", "true");
       checkinButton.textContent = "Checking in…";
       setCheckinStatus("Checking in…");
-      fetch("/api/viewer/checkin", {
+      deviceSignalHeaders().then(function (deviceHeaders) { return fetch("/api/viewer/checkin", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "content-type": "application/json", "x-csrf-token": readCsrfToken() },
+        headers: Object.assign({ "content-type": "application/json", "x-csrf-token": readCsrfToken() }, deviceHeaders),
         body: JSON.stringify({ site: checkinSite }),
-      })
+      }); })
         .then(function (res) { return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, data: data }; }); })
         .then(async function (result) {
           if (result.ok && result.data.ok) {

@@ -7,6 +7,7 @@ import { logAudit as defaultLogAudit } from "@yourrank/shared/audit";
 import { markSiteViewerActive as defaultMarkActive } from "@yourrank/shared/plan-usage";
 import { requireViewer as defaultRequireViewer } from "./viewer-auth.js";
 import { resolveJoinableCommunity as defaultResolveJoinableCommunity } from "../viewer-membership.js";
+import { recordAbuseSignals as defaultRecordSignals } from "../abuse-signals.js";
 
 const CHECKIN_AMOUNT_ERROR = "Check-in credits must be a whole number from 1 to 1,000.";
 
@@ -109,6 +110,7 @@ export async function handleViewerCheckin(request, env, deps = {}) {
     requireViewer = defaultRequireViewer,
     resolveJoinableCommunity = defaultResolveJoinableCommunity,
     markActive = defaultMarkActive,
+    recordSignals = defaultRecordSignals,
     now = () => new Date(),
   } = deps;
 
@@ -185,6 +187,10 @@ export async function handleViewerCheckin(request, env, deps = {}) {
   }
 
   await markActive(site.id, viewerId, { one, exec });
+  // Anti-abuse signals record only after a successful check-in commits and
+  // must never fail the viewer's check-in.
+  await recordSignals({ env, request, viewerId, siteId: site.id, action: "checkin" })
+    .catch((err) => console.error("[abuse-signals] record failed:", "checkin", String(err?.message || err)));
   return ok({
     pointsAwarded: outcome.pointsAwarded,
     newBalance: outcome.newBalance,

@@ -50,3 +50,7 @@ VIEWER_DISCORD_OAUTH_ENABLED=false
 DISCORD_CLIENT_ID=
 DISCORD_CLIENT_SECRET=
 DISCORD_REDIRECT_URI=
+
+# Anti-abuse signals: keyed HMAC for stored IP/device hashes.
+# Set a random value, e.g. `openssl rand -hex 32`.
+ABUSE_SIGNAL_HMAC_KEY=
