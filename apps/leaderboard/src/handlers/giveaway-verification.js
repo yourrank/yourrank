@@ -73,8 +73,6 @@ export async function handleGiveawayVerification(request, env, deps = {}) {
       WHERE giveaway_session_id=$1 AND provider='kick' AND provider_user_id=$2 FOR UPDATE`, [id, identity.externalUserId]);
     if (!entry) return { status: "pending_verification", reason: "entry_required" };
     const facts = await giveawayParticipantFacts(run, locked.site_id, identity.externalUserId);
-      // facts.linkedRestricted flows through evaluateGiveawayEligibility → the
-      // generic "not eligible" viewer message (viewers never learn the reason).
     if (facts.viewerId !== viewer.id) return { status: "rejected", reason: "kick_not_linked" };
     if (entry.eligibility_status === "eligible" && entry.viewer_id === viewer.id) return { status: "eligible", reason: null };
     // Failed attempts cannot overwrite an existing eligible account's hash.

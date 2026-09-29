@@ -452,7 +452,7 @@ export async function handleChatGiveawayExcludeLinkedEntries(request, env, deps 
     );
     if (!session) return { error: "Giveaway not found", status: 404 };
     const rows = await run(
-      `SELECT id, eligibility_status FROM chat_giveaway_entries
+      `SELECT id, username, eligibility_status, eligibility_reason FROM chat_giveaway_entries
         WHERE giveaway_session_id = $1 AND id = ANY($2::uuid[]) FOR UPDATE`,
       [session.id, entryIds],
     );
@@ -461,25 +461,32 @@ export async function handleChatGiveawayExcludeLinkedEntries(request, env, deps 
       return { error: "Re-roll before excluding the current winner.", status: 409 };
     }
     const excluded = [];
+    const skipped = [];
     for (const row of rows) {
-      if (row.eligibility_status === "rejected" && row.eligibility_reason === "excluded_linked_account") continue;
+      // Only eligible entries may be excluded: overwriting another rejection
+      // (vpn_detected, duplicate_ip, …) would let "Include again" undo a real
+      // rule, not a linked-account decision.
+      if (row.eligibility_status !== "eligible") {
+        skipped.push(row.id);
+        continue;
+      }
       await run(
         `UPDATE chat_giveaway_entries
             SET eligibility_status='rejected', eligibility_reason='excluded_linked_account'
-          WHERE id=$1`,
+          WHERE id=$1 AND eligibility_status='eligible'`,
         [row.id],
       );
       excluded.push(row.id);
       await run(
         `INSERT INTO audit_log (actor_id, action, entity_type, entity_id, details)
          VALUES ($1, 'giveaway_entry_excluded_linked', 'chat_giveaway_entry', $2, $3::jsonb)`,
-        [user.id, String(row.id), JSON.stringify({ siteId: site.id, sessionId: session.id })],
+        [user.id, String(row.id), JSON.stringify({ siteId: site.id, sessionId: session.id, username: row.username })],
       );
     }
-    return { excluded };
+    return { excluded, skipped };
   });
   if (result.error) return bad(result.error, result.status);
-  return ok({ excluded: result.excluded, ...await loadSessionView(d, site.id, body.sessionId) });
+  return ok({ excluded: result.excluded, skipped: result.skipped, ...await loadSessionView(d, site.id, body.sessionId) });
 }
 
 /** POST /api/giveaways/chat/entries/include — undo an earlier linked exclusion. */

@@ -915,7 +915,7 @@ if (!window.__yrSpaShell) {
       while (parent.get(v) !== v) v = parent.get(v);
       return v;
     };
-    const ordered = [...linked].sort((a, b) => String(a.entered_at).localeCompare(String(b.entered_at)));
+    const ordered = [...linked].sort((a, b) => new Date(a.entered_at) - new Date(b.entered_at));
     for (const entry of ordered) if (!parent.has(entry.id)) parent.set(entry.id, entry.id);
     for (const entry of ordered) {
       for (const link of entry.linked) {
@@ -932,13 +932,14 @@ if (!window.__yrSpaShell) {
       if (!components.has(root)) components.set(root, []);
       components.get(root).push(entry);
     }
-    const keepers = [];
     const excludable = [];
     for (const group of components.values()) {
-      const notExcluded = group.filter((entry) => entry.eligibility_reason !== "excluded_linked_account");
-      if (!notExcluded.length) continue;
-      keepers.push(notExcluded[0]);
-      excludable.push(...notExcluded.slice(1));
+      // Only eligible entries participate: an entry already rejected for
+      // another reason (vpn_detected, duplicate_ip, …) is skipped, and the
+      // keeper is the earliest *eligible* entrant in the component.
+      const eligible = group.filter((entry) => entry.eligibility_status === "eligible");
+      if (!eligible.length) continue;
+      excludable.push(...eligible.slice(1));
     }
     return excludable;
   }
@@ -951,7 +952,7 @@ if (!window.__yrSpaShell) {
     const excludable = linkedExcludePlan();
     banner.hidden = linkedCount === 0;
     const text = $("gw-linked-banner-text");
-    if (text) text.textContent = `${linkedCount} entrants are linked to another entrant.`;
+    if (text) text.textContent = `${linkedCount} entrant${linkedCount === 1 ? " is" : "s are"} linked to another entrant.`;
     const button = $("gw-linked-exclude-all");
     if (button) {
       button.hidden = excludable.length === 0;

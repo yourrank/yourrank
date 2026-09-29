@@ -135,11 +135,13 @@ describe("account link detection (postgres)", () => {
     await sql`INSERT INTO ip_observations (site_id, ip_hash, viewer_id, action, observed_at) VALUES
       (${siteId}, ${ipHash}, ${vj}, 'checkin', now()), (${siteId}, ${ipHash}, ${vk}, 'checkin', now())`;
     await runAccountLinkDetection({ run });
-    await sql`UPDATE account_links SET status='dismissed' WHERE site_id=${siteId} AND viewer_a=${vj} AND viewer_b=${vk}`;
+    const pairFilter = sql`(viewer_a, viewer_b) IN ((${vj}, ${vk}), (${vk}, ${vj}))`;
+    await sql`UPDATE account_links SET status='dismissed' WHERE site_id=${siteId} AND ${pairFilter}`;
     await runAccountLinkDetection({ run });
-    const rows = await sql`SELECT status FROM account_links WHERE site_id=${siteId} AND viewer_a=${vj} AND viewer_b=${vk}`;
+    const rows = await sql`SELECT status FROM account_links WHERE site_id=${siteId} AND ${pairFilter}`;
+    expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe("dismissed");
-    await sql`DELETE FROM account_links WHERE viewer_a=${vj} AND viewer_b=${vk}`;
+    await sql`DELETE FROM account_links WHERE ${pairFilter}`;
     await sql`DELETE FROM device_links WHERE viewer_id IN (${vj}, ${vk})`;
     await sql`DELETE FROM ip_observations WHERE viewer_id IN (${vj}, ${vk})`;
     await sql`DELETE FROM site_viewers WHERE viewer_id IN (${vj}, ${vk})`;

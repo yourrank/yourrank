@@ -73,6 +73,7 @@ export async function giveawayParticipantFacts(run: SqlRunner, siteId: string, p
     EXISTS (SELECT 1 FROM account_links al
       JOIN viewer_identities vi ON vi.provider = 'kick' AND vi.external_user_id = $2
         AND vi.status = 'active' AND vi.linked_at IS NOT NULL
+      JOIN viewers v ON v.id = vi.viewer_id AND v.is_system = false
       WHERE al.site_id = $1 AND al.status = 'restricted'
         AND vi.viewer_id IN (al.viewer_a, al.viewer_b)) AS linked_restricted`, [siteId, providerUserId]) as Array<{ viewer_id: string | null; previous_winner: boolean; linked_restricted: boolean }>;
   return { viewerId: rows[0]?.viewer_id ?? null, kickLinked: !!rows[0]?.viewer_id, previousWinner: !!rows[0]?.previous_winner, linkedRestricted: !!rows[0]?.linked_restricted };

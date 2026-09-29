@@ -1129,6 +1129,31 @@ describe("linked-account exclude/include", () => {
     expect(statements.some((s) => s.text.includes("eligibility_status='eligible'"))).toBe(true);
   });
 
+  it("leaves a vpn_detected rejection untouched and later include still 409s", async () => {
+    const entries = [
+      { id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible", username: "normaluser" },
+      { id: E2, giveaway_session_id: "gs-1", eligibility_status: "rejected", eligibility_reason: "vpn_detected", username: "vpnuser" },
+    ];
+    const { d, statements } = linkedDeps({ entries });
+    const res = await handleChatGiveawayExcludeLinkedEntries(
+      apiRequest("/api/giveaways/chat/entries/exclude", { sessionId: "gs-1", siteId: siteA.id, entryIds: [E1, E2] }), {}, d);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.excluded).toEqual([E1]);
+    expect(body.skipped).toEqual([E2]);
+    // No audit row and no UPDATE for the vpn-rejected entry.
+    const updates = statements.filter((s) => s.text.includes("eligibility_reason='excluded_linked_account'"));
+    expect(updates).toHaveLength(1);
+    expect(updates[0].params[0]).toBe(E1);
+    const audits = statements.filter((s) => s.text.includes("audit_log"));
+    expect(audits).toHaveLength(1);
+    expect(JSON.parse(audits[0].params[2]).username).toBeDefined();
+
+    const res2 = await handleChatGiveawayIncludeLinkedEntry(
+      apiRequest("/api/giveaways/chat/entries/include", { sessionId: "gs-1", siteId: siteA.id, entryId: E2 }), {}, d);
+    expect(res2.status).toBe(409);
+  });
+
   it("include 409s for an entry that was never linked-excluded", async () => {
     const entries = [{ id: E1, giveaway_session_id: "gs-1", eligibility_status: "eligible" }];
     // UPDATE...RETURNING finds nothing (the predicate requires the excluded reason).

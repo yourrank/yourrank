@@ -412,6 +412,31 @@ describe("Giveaway Chatroom Handler", () => {
   });
 });
 
+describe("linked-account giveaway UI", () => {
+  it("renders the banner, badge and include/exclude controls", () => {
+    expect(giveawaysHtml).toContain('id="gw-linked-banner"');
+    expect(giveawaysHtml).toContain('id="gw-linked-banner-text"');
+    expect(giveawaysHtml).toContain('id="gw-linked-exclude-all"');
+    expect(giveawaysCssSource).toContain(".gw-linked-badge");
+    expect(giveawaysCssSource).toContain(".gw-linked-banner");
+    expect(giveawaysSource).toContain("Linked · ");
+    expect(giveawaysSource).toContain("Excluded: linked account");
+    expect(giveawaysSource).toContain("Include again");
+    expect(giveawaysSource).toContain("Exclude linked duplicates (");
+  });
+
+  it("keeps only eligible entries in the bulk-exclude plan and sorts by real dates", () => {
+    // The keeper is the earliest *eligible* entrant per component; entries
+    // already rejected for another reason (vpn_detected, duplicate_ip, …)
+    // must never be excluded or count as the keeper.
+    expect(giveawaysSource).toContain('entry.eligibility_status === "eligible"');
+    expect(giveawaysSource).toContain("eligible.slice(1)");
+    expect(giveawaysSource).toContain("new Date(a.entered_at) - new Date(b.entered_at)");
+    // Banner copy pluralizes.
+    expect(giveawaysSource).toContain('linkedCount === 1 ? " is" : "s are"');
+  });
+});
+
 describe("prediction dashboard requests", () => {
   it("scopes prediction history and creation to the selected site", () => {
     expect(giveawaysSource).toContain('dashboardFetch(sitePath("/api/predictions", siteId))');
