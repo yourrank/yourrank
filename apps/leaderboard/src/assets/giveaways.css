@@ -70,13 +70,25 @@
     flex-shrink: 0;
   }
 
-  #gw-entrants-card .v3-table-scroll {
-    max-height: none;
-    overflow-y: visible;
+  /* The draw card keeps its height; the entrants card takes the rest of the
+     pinned column and only its table body scrolls. */
+  .gw-main > #gw-entrants-card {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 1;
+    min-height: 0;
   }
 
-  #gw-entrants-card thead th {
-    position: static;
+  #gw-entrants-card > * {
+    flex-shrink: 0;
+  }
+
+  #gw-entrants-card > .v3-table-scroll {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
 
   .gw-main .gw-stage-idle {

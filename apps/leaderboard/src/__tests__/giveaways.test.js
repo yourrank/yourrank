@@ -97,6 +97,11 @@ describe("Giveaway Chatroom Handler", () => {
     expect(giveawaysCssSource).toContain("overflow-y: auto;");
     expect(giveawaysCssSource).toContain(".gw-main > * {\n    flex-shrink: 0;");
     expect(giveawaysCssSource).toContain("max-height: min(60vh, 520px);");
+    const desktopCss = giveawaysCssSource.slice(giveawaysCssSource.indexOf("@media (min-width: 961px)"));
+    expect(desktopCss).toContain(".gw-main > #gw-entrants-card {\n    display: flex;\n    flex-direction: column;\n    flex-shrink: 1;\n    min-height: 0;");
+    expect(desktopCss).toContain("#gw-entrants-card > .v3-table-scroll {\n    flex: 0 1 auto;\n    min-height: 0;\n    max-height: none;\n    overflow-y: auto;");
+    expect(desktopCss).not.toContain("overflow-y: visible;");
+    expect(desktopCss).not.toMatch(/#gw-entrants-card thead th \{\s*position: static;/);
     const giveawaysSource = readFileSync(new URL("../assets/giveaways.js", import.meta.url), "utf8");
     expect(giveawaysSource).toContain('document.querySelector(".gw-subnav")');
     expect(giveawaysSource).toContain("--gw-pinned-top");
