@@ -434,7 +434,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const req = new Request("http://localhost/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatChannel: "other" }),
+        body: JSON.stringify({ title: "Friday Cup", chatChannel: "other" }),
       });
 
       const res = await handleCreateTournament(req, mockEnv(), deps);
@@ -462,7 +462,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
         const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatChannel }),
+          body: JSON.stringify({ title: "Friday Cup", chatChannel }),
         }), mockEnv(), deps);
         expect(res.status).toBe(200);
         const insert = mockOne.mock.calls.filter(([sql]) => String(sql).includes("INSERT INTO tournaments")).at(-1);
@@ -482,7 +482,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatChannel: "" }),
+        body: JSON.stringify({ title: "Friday Cup", chatChannel: "" }),
       }), mockEnv(), deps);
       expect(res.status).toBe(200);
       const insert = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO tournaments"));
@@ -501,7 +501,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatChannel: "community" }),
+        body: JSON.stringify({ title: "Friday Cup", chatChannel: "community" }),
       }), mockEnv(), deps);
       expect(res.status).toBe(200);
       const insert = mockOne.mock.calls.find(([sql]) => String(sql).includes("INSERT INTO tournaments"));
@@ -519,7 +519,7 @@ describe("Quests, Duels & Tournaments Suite", () => {
       const res = await handleCreateTournament(new Request("http://localhost/api/tournaments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatChannel: "other" }),
+        body: JSON.stringify({ title: "Friday Cup", chatChannel: "other" }),
       }), mockEnv(), deps);
       expect(res.status).toBe(403);
       expect((await res.json()).code).toBe("entitlement_required");

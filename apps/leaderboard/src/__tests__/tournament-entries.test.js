@@ -3,6 +3,8 @@ import {
   handleAddTournamentEntry,
   handleBlockTournamentEntry,
   handleCreateTournament,
+  handleDeleteTournament,
+  handleGetTournaments,
   handleOpenTournamentSignups,
   handleLockTournamentSignups,
   handleSelectTournamentEntries,
@@ -10,6 +12,7 @@ import {
   handleRemoveTournamentEntry,
   handleRestoreTournamentEntry,
   handleUpdateTournamentSettings,
+  handleUpdateMatchScore,
   addTournamentEntryTx,
 } from "../handlers/tournaments.js";
 
@@ -109,7 +112,9 @@ describe("tournament entry lifecycle", () => {
     }));
     const response = await handleOpenTournamentSignups(request("/api/tournaments/tournament-1/signups/open"), {}, d);
     expect(response.status).toBe(200);
-    expect((await response.json()).tournament.signup_state).toBe("open");
+    const body = await response.json();
+    expect(body.tournament.signup_state).toBe("open");
+    expect(body.message).toBe("Chat signups on — viewers can type !join in chat.");
     expect(d.requireSiteCapabilityImpl).toHaveBeenCalled();
     expect(d.reconcileKickWebhookDelivery).toHaveBeenCalledTimes(1);
   });
@@ -181,6 +186,7 @@ describe("tournament entry lifecycle", () => {
     d.withTransaction = mock(async (fn) => fn(tx));
     const response = await handleLockTournamentSignups(request("/api/tournaments/tournament-1/signups/lock"), {}, d);
     expect(response.status).toBe(200);
+    expect((await response.json()).message).toBe("Chat signups off — viewers can no longer join from chat.");
     const lockDelete = calls.findIndex((sql) => sql.includes("DELETE FROM tournament_open_signups"));
     const stateUpdate = calls.findIndex((sql) => sql.includes("UPDATE tournaments"));
     expect(lockDelete).toBeGreaterThanOrEqual(0);
@@ -292,7 +298,7 @@ describe("tournament entry lifecycle", () => {
     );
     expect(overResponse.status).toBe(409);
     const overBody = await overResponse.json();
-    expect(overBody.error).toBe("Bracket is full.");
+    expect(overBody.error).toBe("Signups are full.");
     expect(overBody.full).toBe(true);
     const overSql = over._mocks.txOne.mock.calls.map(([sql]) => String(sql));
     expect(overSql.some((sql) => sql.includes("INSERT INTO tournament_entries"))).toBe(false);
@@ -457,7 +463,7 @@ describe("tournament entry lifecycle", () => {
       d
     );
     expect(response.status).toBe(409);
-    expect((await response.json()).error).toBe("Bracket is full.");
+    expect((await response.json()).error).toBe("Signups are full.");
     const sql = d._mocks.txOne.mock.calls.map(([statement]) => String(statement));
     expect(sql.some((statement) => statement.includes("signup_state='locked'"))).toBe(false);
     expect(sql.some((statement) => statement.includes("DELETE FROM tournament_open_signups"))).toBe(false);
@@ -608,7 +614,7 @@ describe("tournament entry lifecycle", () => {
     );
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.counts).toEqual({ active: 4, eligible: 3, waitlist: 1, removed: 1, blocked: 1 });
+    expect(body.counts).toEqual({ active: 4, eligible: 3, waitlist: 1, removed: 1, blocked: 1, inactive: 2 });
 
     // The same predicate expression drives the per-row column and the counts
     // filter; a free tournament passes flagOnlyWhenFree=true to both.
@@ -629,6 +635,66 @@ describe("tournament entry lifecycle", () => {
     expect(byName["waiting"].eligible).toBe(false);
     expect(byName["gone"].eligible).toBe(false);
     expect(byName["banned"].eligible).toBe(false);
+  });
+
+  it("returns lifecycle state, inactive counts, and server-computed entry views", async () => {
+    const finished = {
+      ...TOURNAMENT,
+      status: "completed",
+      winner_name: "Alice",
+      bracket_size: 4,
+    };
+    const d = deps({
+      oneValues: [finished, { active: 2, eligible: 0, waitlist: 0, removed: 1, blocked: 1 }],
+      queryValues: [
+        [
+          { id: "a", display_name: "Alice", status: "selected", eligible: false, created_at: "2026-01-01" },
+          { id: "b", display_name: "Bob", status: "selected", eligible: false, created_at: "2026-01-02" },
+          { id: "r", display_name: "Removed", status: "removed", eligible: false },
+          { id: "x", display_name: "Blocked", status: "blocked", eligible: false },
+        ],
+        [{ player1_name: "Alice", player2_name: "Bob", winner_name: "Alice", status: "completed" }],
+      ],
+    });
+    const response = await handleListTournamentEntries(
+      request("/api/tournaments/tournament-1/entries"),
+      {},
+      d
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.counts.inactive).toBe(2);
+    expect(body.state.lifecycle).toBe("finished");
+    expect(body.entries.find((entry) => entry.id === "a").status_label).toBe("Champion");
+    expect(body.entries.find((entry) => entry.id === "b").status_label).toBe("Eliminated");
+    expect(body.entries.find((entry) => entry.id === "x")).toMatchObject({
+      status_label: "Blocked",
+      inactive: true,
+      actions: [],
+    });
+    expect(String(d.query.mock.calls[1][0])).toContain("player1_name, player2_name, winner_name, status");
+  });
+
+  it("permits restoring and removing blocked entries before the tournament ends", async () => {
+    const live = { ...TOURNAMENT, status: "active" };
+    const d = deps({
+      oneValues: [live, { active: 1, eligible: 1, waitlist: 0, removed: 0, blocked: 1 }],
+      queryValues: [
+        [
+          { id: "a", display_name: "Alice", status: "pending", eligible: true },
+          { id: "x", display_name: "Blocked", status: "blocked", eligible: false },
+        ],
+        [{ player1_name: "Alice", player2_name: "Bob", winner_name: null, status: "pending" }],
+      ],
+    });
+    const response = await handleListTournamentEntries(
+      request("/api/tournaments/tournament-1/entries"),
+      {},
+      d
+    );
+    const body = await response.json();
+    expect(body.state.lifecycle).toBe("live");
+    expect(body.entries.find((entry) => entry.id === "x").actions).toEqual(["restore", "remove"]);
   });
 
   it("preserves untouched tournament settings during a partial update", async () => {
@@ -653,7 +719,9 @@ describe("tournament entry lifecycle", () => {
       d
     );
     expect(response.status).toBe(200);
-    expect((await response.json()).tournament).toEqual(updated);
+    const body = await response.json();
+    expect(body.tournament).toEqual(updated);
+    expect(body.message).toBe("Duplicate protection on.");
     const [sql, params] = d._mocks.txOne.mock.calls[2];
     const setClause = sql.split("RETURNING")[0];
     expect(setClause).toContain("anti_alt_enabled");
@@ -714,6 +782,7 @@ describe("tournament entry lifecycle", () => {
     const response = await handleCreateTournament(
       request("/api/tournaments", {
         siteId: "site-1",
+        title: "Community Tournament",
         bracketSize: 4,
         participants: ["Alice", "Bob", "Carol", "Dave"],
       }),
@@ -904,7 +973,45 @@ describe("tournament entry lifecycle", () => {
       d
     );
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toBe("Signup limit cannot be lower than the current 20 registrations.");
+    expect(await response.json()).toMatchObject({
+      error: "Signup limit cannot be lower than the current 20 registrations.",
+      field: "entryCap",
+      fix: { label: "Set signup limit to 20", settings: { entryCap: 20 } },
+    });
+  });
+
+  it("returns the bracket-size field fix when the signup cap follows a smaller bracket", async () => {
+    const stored = { ...TOURNAMENT, status: "draft", signup_state: "closed", bracket_size: 8, entry_cap: 8 };
+    const d = deps({
+      oneValues: [stored, { entries: 0, matches: 0 }],
+      txOneValues: [{ id: stored.id }, { count: 6 }],
+    });
+    const response = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 4 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      ok: false,
+      error: "6 players are already registered — more than a 4-player signup limit. Keep the current signup limit; you'll choose who plays when you start.",
+      field: "bracketSize",
+      fix: { label: "Keep signup limit at 8", settings: { entryCap: 8 } },
+    });
+
+    const unlimited = deps({
+      oneValues: [{ ...stored, entry_cap: null }, { entries: 0, matches: 0 }],
+      txOneValues: [{ id: stored.id }, { count: 6 }],
+    });
+    const unlimitedResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { bracketSize: 4, entryCap: "bracket" }),
+      {},
+      unlimited
+    );
+    expect(await unlimitedResponse.json()).toMatchObject({
+      field: "bracketSize",
+      fix: { label: "Set signup limit to Unlimited", settings: { entryCap: "unlimited" } },
+    });
   });
 
   it("allows a signup limit below the bracket size", async () => {
@@ -979,6 +1086,160 @@ function createDeps(txOne) {
 }
 
 describe("tournament lifecycle foundation", () => {
+  it("rejects blank tournament names on create and settings", async () => {
+    const create = deps();
+    const createResponse = await handleCreateTournament(
+      request("/api/tournaments", { siteId: "site-1", title: "   " }),
+      {},
+      create
+    );
+    expect(createResponse.status).toBe(400);
+    expect((await createResponse.json()).error).toBe("Enter a tournament name.");
+    expect(create.withTransaction).not.toHaveBeenCalled();
+
+    const settings = deps({ oneValues: [TOURNAMENT] });
+    const settingsResponse = await handleUpdateTournamentSettings(
+      request("/api/tournaments/tournament-1/settings", { title: "  " }),
+      {},
+      settings
+    );
+    expect(settingsResponse.status).toBe(400);
+    expect(await settingsResponse.json()).toEqual({
+      ok: false,
+      error: "Enter a tournament name.",
+      field: "title",
+    });
+    expect(settings.withTransaction).not.toHaveBeenCalled();
+  });
+
+  it("lists every tournament with lifecycle labels and selects the first active item", async () => {
+    const listed = [
+      { id: "finished", title: "Finished", status: "completed", match_count: 7 },
+      { id: "cancelled", title: "Cancelled", status: "cancelled", match_count: 0 },
+      { id: "setup", title: "Setup", status: "draft", match_count: 0 },
+      ...Array.from({ length: 19 }, (_, index) => ({
+        id: `other-${index}`,
+        title: `Other ${index}`,
+        status: "draft",
+        match_count: 0,
+      })),
+    ];
+    const d = deps({ queryValues: [listed] });
+    d.getBoardById = mock(async () => ({ id: "site-1", user_id: USER.id }));
+    d.requireSiteOwner = mock(async () => ({ res: null }));
+    const response = await handleGetTournaments(
+      request("/api/tournaments?siteId=site-1"),
+      {},
+      d
+    );
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.tournaments).toHaveLength(22);
+    expect(body.current_id).toBe("setup");
+    expect(body.tournaments[0]).toMatchObject({ lifecycle: "finished", status_label: "Finished" });
+    expect(body.tournaments[1]).toMatchObject({ lifecycle: "cancelled", status_label: "Cancelled" });
+    expect(body.tournaments[2]).toMatchObject({ lifecycle: "setup", status_label: "Setup" });
+    expect(String(d.query.mock.calls[0][0])).not.toContain("LIMIT 20");
+    expect(String(d.query.mock.calls[0][0])).toContain("AS match_count");
+
+    for (const [rows, expectedId] of [
+      [[
+        { id: "terminal-1", title: "Done", status: "completed", match_count: 1 },
+        { id: "terminal-2", title: "Cancelled", status: "cancelled", match_count: 0 },
+      ], "terminal-1"],
+      [[], null],
+    ]) {
+      const fallback = deps({ queryValues: [rows] });
+      fallback.getBoardById = mock(async () => ({ id: "site-1", user_id: USER.id }));
+      fallback.requireSiteOwner = mock(async () => ({ res: null }));
+      const fallbackResponse = await handleGetTournaments(
+        request("/api/tournaments?siteId=site-1"),
+        {},
+        fallback
+      );
+      expect((await fallbackResponse.json()).current_id).toBe(expectedId);
+    }
+  });
+
+  it("deletes only after an exact trimmed title confirmation and audits the result", async () => {
+    const wrong = deps({ oneValues: [TOURNAMENT] });
+    const wrongResponse = await handleDeleteTournament(
+      request("/api/tournaments/tournament-1/delete", { confirmTitle: "Other Cup" }),
+      {},
+      wrong
+    );
+    expect(wrongResponse.status).toBe(400);
+    expect((await wrongResponse.json()).error).toBe("Type the tournament name exactly to delete it.");
+    expect(wrong.withTransaction).not.toHaveBeenCalled();
+    expect(wrong.logAudit).not.toHaveBeenCalled();
+
+    const txOne = mock(async (sql) => {
+      if (String(sql).includes("FOR UPDATE")) return { id: "tournament-1", title: "Friday Cup", status: "active" };
+      if (String(sql).includes("AS entries")) return { entries: 4, matches: 3 };
+      return undefined;
+    });
+    const success = deps({ oneValues: [{ ...TOURNAMENT, title: "Friday Cup", status: "active" }] });
+    success.withTransaction = mock(async (fn) => fn({ one: txOne }));
+    const response = await handleDeleteTournament(
+      request("/api/tournaments/tournament-1/delete", { confirmTitle: " Friday Cup " }),
+      {},
+      success
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true,
+      deleted: "tournament-1",
+      message: "Deleted “Friday Cup”.",
+    });
+    const sql = txOne.mock.calls.map(([statement]) => String(statement));
+    expect(sql).toContain("DELETE FROM tournament_open_signups WHERE tournament_id=$1");
+    expect(sql).toContain("DELETE FROM tournaments WHERE id=$1");
+    expect(success.logAudit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "tournament_delete",
+      entityType: "tournament",
+      entityId: "tournament-1",
+      details: { title: "Friday Cup", lifecycle: "live", entries: 4, matches: 3 },
+    }));
+  });
+
+  it("accepts winnerSlot scores as a 1–0 or 0–1 result", async () => {
+    const match = {
+      id: "match-1",
+      round_number: 2,
+      match_index: 0,
+      player1_name: "Alice",
+      player2_name: "Bob",
+      status: "pending",
+      tournament_id: "tournament-1",
+      tournament_status: "active",
+      bracket_size: 4,
+      site_id: "site-1",
+      site_user_id: USER.id,
+    };
+    const txOne = mock(async (sql) => String(sql).includes("FROM users")
+      ? { plan: "pro", plan_expires_at: null, status: "active" }
+      : match);
+    const txUnsafe = mock(async () => [{ id: "updated" }]);
+    const d = deps();
+    d.withTransaction = mock(async (fn) => fn({ one: txOne, unsafe: txUnsafe }));
+    const response = await handleUpdateMatchScore(
+      request("/api/tournaments/tournament-1/score", { matchId: "match-1", winnerSlot: 2 }),
+      {},
+      d
+    );
+    expect(response.status).toBe(200);
+    expect(txUnsafe.mock.calls[0][1]).toEqual([0, 1, "Bob", "match-1"]);
+
+    const invalid = deps();
+    const invalidResponse = await handleUpdateMatchScore(
+      request("/api/tournaments/tournament-1/score", { matchId: "match-1", winnerSlot: 3 }),
+      {},
+      invalid
+    );
+    expect(invalidResponse.status).toBe(400);
+    expect((await invalidResponse.json()).error).toBe("Choose the winner of this match.");
+    expect(invalid.withTransaction).not.toHaveBeenCalled();
+  });
 
   it("creates an entry-list tournament as a draft with the selected values and chat channel", async () => {
     const txOne = mock(async (sql, params) => ({ id: "tournament-1", status: params[13], bracket_size: params[3] }));
@@ -1013,7 +1274,7 @@ describe("tournament lifecycle foundation", () => {
     const txOne = mock(async (sql, params) => ({ id: "tournament-1", status: params[13] }));
     const { deps: d } = createDeps(txOne);
     const response = await handleCreateTournament(
-      request("/api/tournaments", { siteId: "site-1", bracketSize: 8, entryCap: 40 }),
+      request("/api/tournaments", { siteId: "site-1", title: "Friday Cup", bracketSize: 8, entryCap: 40 }),
       {},
       d
     );
@@ -1026,7 +1287,7 @@ describe("tournament lifecycle foundation", () => {
     const seeded = mock(async (sql, params) => ({ id: "tournament-2", status: params[13] }));
     const { deps: d2 } = createDeps(seeded);
     await handleCreateTournament(
-      request("/api/tournaments", { siteId: "site-1", participants: ["A", "B", "C", "D"] }),
+      request("/api/tournaments", { siteId: "site-1", title: "Seeded Cup", participants: ["A", "B", "C", "D"] }),
       {},
       d2
     );
@@ -1036,13 +1297,13 @@ describe("tournament lifecycle foundation", () => {
   it("rejects an unsupported bracket size instead of falling back", async () => {
     const txOne = mock(async (sql, params) => ({ id: "tournament-1", bracket_size: params[3] }));
     const { deps: d } = createDeps(txOne);
-    const response = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1", bracketSize: 6 }), {}, d);
+    const response = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1", title: "Friday Cup", bracketSize: 6 }), {}, d);
     expect(response.status).toBe(400);
     expect(txOne).not.toHaveBeenCalled();
 
     const defaultTxOne = mock(async (sql, params) => ({ id: "tournament-2", bracket_size: params[3] }));
     const { deps: defaults } = createDeps(defaultTxOne);
-    const okResponse = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1" }), {}, defaults);
+    const okResponse = await handleCreateTournament(request("/api/tournaments", { siteId: "site-1", title: "Friday Cup" }), {}, defaults);
     expect(okResponse.status).toBe(200);
     expect(defaultTxOne.mock.calls[0][1][3]).toBe(8);
   });
@@ -1052,7 +1313,7 @@ describe("tournament lifecycle foundation", () => {
       const txOne = mock(async () => ({ id: "tournament-1" }));
       const { deps: d } = createDeps(txOne);
       const response = await handleCreateTournament(
-        request("/api/tournaments", { siteId: "site-1", format }),
+        request("/api/tournaments", { siteId: "site-1", title: "Friday Cup", format }),
         {},
         d
       );
@@ -1256,7 +1517,7 @@ describe("tournament signup limit + waitlist", () => {
     const txOne = mock(async (sql, params) => ({ id: "tournament-1", bracket_size: params[3] }));
     const { deps: d } = createDeps(txOne);
     const response = await handleCreateTournament(
-      request("/api/tournaments", { siteId: "site-1", bracketSize: 8 }),
+      request("/api/tournaments", { siteId: "site-1", title: "Friday Cup", bracketSize: 8 }),
       {},
       d
     );
@@ -1267,7 +1528,7 @@ describe("tournament signup limit + waitlist", () => {
     const txUnlimited = mock(async (sql, params) => ({ id: "tournament-2", bracket_size: params[3] }));
     const { deps: d2 } = createDeps(txUnlimited);
     await handleCreateTournament(
-      request("/api/tournaments", { siteId: "site-1", bracketSize: 8, entryCap: "unlimited" }),
+      request("/api/tournaments", { siteId: "site-1", title: "Unlimited Cup", bracketSize: 8, entryCap: "unlimited" }),
       {},
       d2
     );

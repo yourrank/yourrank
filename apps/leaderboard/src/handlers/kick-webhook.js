@@ -43,7 +43,7 @@ async function ingestKickChatMessage(payload, env, run = (sql, params) => query(
 const replyFailed = (tournamentId, status, reason) =>
   console.error(JSON.stringify({ event: "tournament_chat_reply_failed", tournamentId, status, reason }));
 
-// Answers a full-bracket !join in chat. Runs strictly after the ingest
+// Answers a full-signup !join in chat. Runs strictly after the ingest
 // transaction commits and never feeds back into the webhook response.
 async function replyTournamentChatOutcome(tournament, env, {
   rateLimit = defaultRateLimit,
@@ -94,8 +94,8 @@ async function replyTournamentChatOutcome(tournament, env, {
     tokenExpiresAt: tokenSet.expiresAt,
   });
   const content = tournament.waitlisted
-    ? `@${tournament.senderUsername} Bracket is full — you're on the waitlist (#${tournament.waitlistPosition}).`
-    : `@${tournament.senderUsername} Bracket is full.`;
+    ? `@${tournament.senderUsername} Signups are full — you're on the waitlist (#${tournament.waitlistPosition}).`
+    : `@${tournament.senderUsername} Signups are full.`;
   try {
     await postChatMessage(tokenSet.accessToken, {
       broadcasterUserId: tournament.broadcasterUserId || connection.external_user_id,
