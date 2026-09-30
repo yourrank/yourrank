@@ -262,12 +262,12 @@ body:has(.v3-dash[data-auth-workspace]),
   background: rgba(255, 255, 255, 0.32);
 }
 
-.v3-dash[data-auth-workspace] a { color: var(--ws-accent); text-underline-offset: 3px; }
-.v3-dash[data-auth-workspace] a:hover { color: var(--ws-accent-hover); }
-.v3-dash[data-auth-workspace] :focus-visible,
-.v3-dash[data-auth-workspace] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible,
-.v3-dash[data-auth-workspace] select:focus-visible,
-.v3-dash[data-auth-workspace] textarea:focus-visible {
+.v3-dash[data-auth-workspace] a:not(:where(.yr-react *)) { color: var(--ws-accent); text-underline-offset: 3px; }
+.v3-dash[data-auth-workspace] a:hover:not(:where(.yr-react *)) { color: var(--ws-accent-hover); }
+.v3-dash[data-auth-workspace] :focus-visible:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus-visible:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] select:focus-visible:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea:focus-visible:not(:where(.yr-react *)) {
   outline: var(--ws-focus-width) solid var(--ws-focus);
   outline-offset: var(--ws-focus-offset);
   box-shadow: none;
@@ -280,11 +280,11 @@ body:has(.v3-dash[data-auth-workspace]),
   outline-color: var(--ws-accent-on-chrome);
 }
 .v3-dash[data-auth-workspace] [hidden] { display: none !important; }
-.v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }
-.v3-dash[data-auth-workspace] h1,
-.v3-dash[data-auth-workspace] h2,
-.v3-dash[data-auth-workspace] h3 { color: var(--ws-text); text-wrap: balance; }
-.v3-dash[data-auth-workspace] p { text-wrap: pretty; }
+.v3-dash[data-auth-workspace] :disabled:not(:where(.yr-react *)) { cursor: not-allowed; opacity: 0.52; }
+.v3-dash[data-auth-workspace] h1:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] h2:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] h3:not(:where(.yr-react *)) { color: var(--ws-text); text-wrap: balance; }
+.v3-dash[data-auth-workspace] p:not(:where(.yr-react *)) { text-wrap: pretty; }
 .v3-dash[data-auth-workspace] code,
 .v3-dash[data-auth-workspace] .mono,
 .v3-dash[data-auth-workspace] .num { font-variant-numeric: tabular-nums; }
@@ -2103,9 +2103,9 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
 .v3-dash[data-auth-workspace] .v3-btn--sm { min-height: 36px; padding: 0 12px; font-size: 14px; }
 .v3-dash[data-auth-workspace] .v3-btn--xs { min-height: 30px; padding: 0 10px; font-size: 14px; }
 
-.v3-dash[data-auth-workspace] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
-.v3-dash[data-auth-workspace] select,
-.v3-dash[data-auth-workspace] textarea {
+.v3-dash[data-auth-workspace] input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] select:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea:not(:where(.yr-react *)) {
   min-height: var(--ws-control-h, 40px);
   border: 1px solid var(--ws-line-strong);
   border-radius: var(--ws-radius-sm);
@@ -2115,38 +2115,38 @@ body[data-wide] .v3-dash[data-auth-workspace] .lb-main { padding-right: var(--ws
   font: 400 14px var(--ws-sans);
   box-shadow: none;
 }
-.v3-dash[data-auth-workspace] textarea { min-height: 96px; padding: 10px 12px; resize: vertical; }
-.v3-dash[data-auth-workspace] input::placeholder,
-.v3-dash[data-auth-workspace] textarea::placeholder { color: var(--ws-text-mute); opacity: 1; }
-.v3-dash[data-auth-workspace] input:hover,
-.v3-dash[data-auth-workspace] select:hover,
-.v3-dash[data-auth-workspace] textarea:hover { border-color: var(--ws-chrome-text-soft); }
-.v3-dash[data-auth-workspace] input:focus,
-.v3-dash[data-auth-workspace] select:focus,
-.v3-dash[data-auth-workspace] textarea:focus { border-color: var(--ws-accent); box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); }
-.v3-dash[data-auth-workspace] input[type="checkbox"],
-.v3-dash[data-auth-workspace] input[type="radio"] { accent-color: var(--ws-accent); }
-.v3-dash[data-auth-workspace] input:disabled,
-.v3-dash[data-auth-workspace] select:disabled,
-.v3-dash[data-auth-workspace] textarea:disabled {
+.v3-dash[data-auth-workspace] textarea:not(:where(.yr-react *)) { min-height: 96px; padding: 10px 12px; resize: vertical; }
+.v3-dash[data-auth-workspace] input:not(:where(.yr-react *))::placeholder,
+.v3-dash[data-auth-workspace] textarea:not(:where(.yr-react *))::placeholder { color: var(--ws-text-mute); opacity: 1; }
+.v3-dash[data-auth-workspace] input:hover:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] select:hover:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea:hover:not(:where(.yr-react *)) { border-color: var(--ws-chrome-text-soft); }
+.v3-dash[data-auth-workspace] input:focus:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] select:focus:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea:focus:not(:where(.yr-react *)) { border-color: var(--ws-accent); box-shadow: 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); }
+.v3-dash[data-auth-workspace] input[type="checkbox"]:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] input[type="radio"]:not(:where(.yr-react *)) { accent-color: var(--ws-accent); }
+.v3-dash[data-auth-workspace] input:disabled:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] select:disabled:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea:disabled:not(:where(.yr-react *)) {
   background: var(--ws-surface-soft);
   color: var(--ws-text-mute);
   border-color: var(--ws-line);
 }
-.v3-dash[data-auth-workspace] input[readonly],
-.v3-dash[data-auth-workspace] textarea[readonly] { background: var(--ws-surface-soft); color: var(--ws-text-soft); }
+.v3-dash[data-auth-workspace] input[readonly]:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] textarea[readonly]:not(:where(.yr-react *)) { background: var(--ws-surface-soft); color: var(--ws-text-soft); }
 /* Autofill repaints controls with the browser's own light scheme; pin the
    field surface and text back to the active theme tokens. */
-.v3-dash[data-auth-workspace] input:-webkit-autofill,
-.v3-dash[data-auth-workspace] select:-webkit-autofill,
-.v3-dash[data-auth-workspace] textarea:-webkit-autofill {
+.v3-dash[data-auth-workspace] input:not(:where(.yr-react *)):-webkit-autofill,
+.v3-dash[data-auth-workspace] select:not(:where(.yr-react *)):-webkit-autofill,
+.v3-dash[data-auth-workspace] textarea:not(:where(.yr-react *)):-webkit-autofill {
   -webkit-text-fill-color: var(--ws-text);
   caret-color: var(--ws-text);
   box-shadow: 0 0 0 1000px var(--ws-surface) inset;
   transition: background-color 9999s ease-in-out 0s;
 }
-.v3-dash[data-auth-workspace] input:-webkit-autofill:focus { box-shadow: 0 0 0 1000px var(--ws-surface) inset, 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); }
-.v3-dash[data-auth-workspace] select option { background: var(--ws-surface); color: var(--ws-text); }
+.v3-dash[data-auth-workspace] input:not(:where(.yr-react *)):-webkit-autofill:focus { box-shadow: 0 0 0 1000px var(--ws-surface) inset, 0 0 0 3px rgb(var(--ws-accent-rgb) / 0.12); }
+.v3-dash[data-auth-workspace] select:not(:where(.yr-react *)) option { background: var(--ws-surface); color: var(--ws-text); }
 .v3-dash[data-auth-workspace] .field label { color: var(--ws-text-soft); font-size: 13px; font-weight: 600; }
 .v3-dash[data-auth-workspace] .hr { border-color: var(--ws-line); }
 
@@ -7979,18 +7979,18 @@ body:has(.v3-dash[data-auth-workspace]) > .preview-modal .preview-frame { flex: 
   font-size: var(--ws-type-body-size);
   line-height: var(--ws-type-body-leading);
 }
-.v3-dash[data-auth-workspace] h1 {
+.v3-dash[data-auth-workspace] h1:not(:where(.yr-react *)) {
   font-size: var(--ws-type-page-size);
   line-height: var(--ws-type-page-leading);
 }
-.v3-dash[data-auth-workspace] h2 {
+.v3-dash[data-auth-workspace] h2:not(:where(.yr-react *)) {
   font-size: var(--ws-type-section-size);
   line-height: var(--ws-type-section-leading);
 }
-.v3-dash[data-auth-workspace] h3,
-.v3-dash[data-auth-workspace] h4,
-.v3-dash[data-auth-workspace] h5,
-.v3-dash[data-auth-workspace] h6 {
+.v3-dash[data-auth-workspace] h3:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] h4:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] h5:not(:where(.yr-react *)),
+.v3-dash[data-auth-workspace] h6:not(:where(.yr-react *)) {
   font-size: var(--ws-type-card-size);
   line-height: var(--ws-type-card-leading);
 }

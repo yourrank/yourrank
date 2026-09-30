@@ -177,7 +177,7 @@
    hidden elements (e.g. the collapsed "New board" form) visible. */
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
-a{color:var(--ink);text-decoration:none}a:hover{color:var(--accent)}
+a:not(:where(.yr-react *)){color:var(--ink);text-decoration:none}a:not(:where(.yr-react *)):hover{color:var(--accent)}
 ::selection{background:var(--accent);color:var(--accent-ink)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}

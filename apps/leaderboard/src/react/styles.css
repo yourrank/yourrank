@@ -1,0 +1,107 @@
+@layer theme, base, utilities;
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
+@source "./";
+
+@keyframes tn-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--yr-react-sans);
+  --font-mono: var(--yr-react-mono);
+}
+
+.yr-react {
+  --background: var(--ws-canvas, #f5f7fa);
+  --foreground: var(--ws-text, #202b3c);
+  --card: var(--ws-surface, #fff);
+  --card-foreground: var(--ws-text, #202b3c);
+  --popover: var(--ws-surface, #fff);
+  --popover-foreground: var(--ws-text, #202b3c);
+  --primary: var(--ws-accent, #4056b9);
+  --primary-foreground: var(--ws-accent-text, #fff);
+  --secondary: var(--ws-surface-soft, #f0f3f8);
+  --secondary-foreground: var(--ws-text, #202b3c);
+  --muted: var(--ws-surface-soft, #f0f3f8);
+  --muted-foreground: var(--ws-text-soft, #536176);
+  --accent: var(--ws-accent-soft, #edf0fc);
+  --accent-foreground: var(--ws-accent, #4056b9);
+  --destructive: var(--ws-danger, #b42318);
+  --border: var(--ws-line, rgb(20 20 12 / 0.1));
+  --input: var(--ws-line-strong, rgb(20 20 12 / 0.16));
+  --ring: var(--ws-focus, var(--ws-accent, #4056b9));
+  --radius: var(--yr-control-radius, 8px);
+  --yr-react-sans: var(--ws-sans, system-ui, sans-serif);
+  --yr-react-mono: var(--ws-mono, ui-monospace, monospace);
+  box-sizing: border-box;
+  min-width: 0;
+  color: var(--foreground);
+  font-family: var(--yr-react-sans);
+  color-scheme: var(--wsd-scheme, light);
+}
+
+.yr-react *,
+.yr-react *::before,
+.yr-react *::after {
+  box-sizing: inherit;
+}
+
+@layer base {
+  .yr-react :where(*, ::before, ::after) {
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--border);
+  }
+
+  .yr-react :where(button, input, select, textarea) {
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .yr-react :where(button) {
+    appearance: none;
+    border-radius: 0;
+    background-color: transparent;
+    cursor: pointer;
+  }
+
+  .yr-react :where(input, select, textarea) {
+    min-width: 0;
+    padding: 0;
+    background-color: transparent;
+  }
+
+  .yr-react :where(h1, h2, h3, p, dl, dd) {
+    margin: 0;
+  }
+
+  .yr-react :where(svg) {
+    flex: none;
+  }
+}

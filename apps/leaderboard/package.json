@@ -2,9 +2,13 @@
   "name": "yourrank-leaderboard",
   "version": "0.1.0",
   "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
     "@types/node": "^20.14.10",
     "esbuild": "0.28.1",
     "eslint": "^8.57.0",
+    "tailwindcss": "4.3.3",
     "typescript": "^5.5.3",
     "wrangler": "4.106.0"
   },
@@ -20,11 +24,19 @@
     "test": "node ../../scripts/test-leaderboard.mjs",
     "lint": "eslint src/ --ext .js",
     "typecheck:games": "tsc -p tsconfig.games.json --noEmit",
+    "typecheck:react": "tsc -p tsconfig.react.json --noEmit",
     "predev": "node build.js"
   },
   "type": "module",
   "dependencies": {
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.47.0",
     "@preact/signals": "2.10.1",
+    "radix-ui": "1.6.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "3.7.0",
     "@yourrank/shared": "workspace:*",
     "hono": "^4.13.5",
     "postgres": "^3.4.9",

@@ -13,12 +13,16 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
 
 const assetsUrl = (rel) => new URL(`../assets/${rel}`, import.meta.url);
+const reactSourceUrl = (rel) => new URL(`../${rel}`, import.meta.url);
+const REACT_SOURCE_MODULES = ["react/pages/tournaments/page.tsx"];
+const moduleUrl = (rel) =>
+  REACT_SOURCE_MODULES.includes(rel) ? reactSourceUrl(rel) : assetsUrl(rel);
 
 // The approved navigation owner. Its own history/location use is the point.
 const NAVIGATION_OWNER = "dashboard/shell.js";
 
-// Dashboard client modules covered by the gate: the persistent-shell modules
-// plus the standalone dashboard document entry modules that share them.
+// Dashboard client modules covered by the gate: the persistent-shell modules,
+// standalone document entries, and source modules for dashboard islands.
 // Public/viewer/auth/admin surfaces (auth.js, viewer-dashboard.js, admin*.js,
 // shell-nav.js, invite.js) are separate non-dashboard surfaces.
 const ENTRY_MODULES = ["dashboard.js", "account.js", "credits.js", "giveaways.js", "tournaments.js"];
@@ -55,7 +59,7 @@ const EXCEPTIONS = {
   "giveaways.js": [
     { match: "location.href = loginRedirectPath(location);", reason: "cross-tab logout on a standalone document: session gone" },
   ],
-  "tournaments.js": [
+  "react/pages/tournaments/page.tsx": [
     { match: 'window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);', reason: "one-shot ?new=1 query scrub after opening the create modal: same document, no navigation" },
   ],
   "dashboard/account.js": [
@@ -92,7 +96,7 @@ function gateFiles() {
   const files = readdirSync(new URL("../assets/dashboard/", import.meta.url))
     .filter((f) => f.endsWith(".js"))
     .map((f) => `dashboard/${f}`);
-  return [...files, ...ENTRY_MODULES];
+  return [...files, ...ENTRY_MODULES, ...REACT_SOURCE_MODULES];
 }
 
 describe("dashboard client navigation gate (PR-5)", () => {
@@ -100,7 +104,7 @@ describe("dashboard client navigation gate (PR-5)", () => {
     const violations = [];
     for (const file of gateFiles()) {
       if (file === NAVIGATION_OWNER) continue;
-      const source = stripComments(readFileSync(assetsUrl(file), "utf8"));
+      const source = stripComments(readFileSync(moduleUrl(file), "utf8"));
       const lines = source.split("\n");
       const allowed = EXCEPTIONS[file] ?? [];
       for (const { name, re } of BANNED) {
@@ -119,7 +123,7 @@ describe("dashboard client navigation gate (PR-5)", () => {
     // Stale exceptions must be deleted, not accumulated: when the code an
     // exception covers goes away, this list shrinks with it.
     for (const [file, entries] of Object.entries(EXCEPTIONS)) {
-      const source = stripComments(readFileSync(assetsUrl(file), "utf8"));
+      const source = stripComments(readFileSync(moduleUrl(file), "utf8"));
       for (const { match } of entries) {
         expect(source, `${file} exception "${match}" no longer matches`).toContain(match);
       }

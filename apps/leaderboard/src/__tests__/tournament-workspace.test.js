@@ -1,30 +1,23 @@
-// Workspace coverage for the redesigned Tournament UI: the real pane markup
-// (renderGiveawaysHtml("tournaments")) runs against the real tournaments.js
-// with an in-memory API. Covers the new header, entries table, bracket
+// Workspace coverage for the React Tournament page with an in-memory API.
+// Covers the new header, entries table, bracket
 // layout + summary aside + full-bracket modal, and the Settings read-only
 // view for finished tournaments.
 //
 // Run: bun test src/__tests__/tournament-workspace.test.js
 
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-import { Window } from "happy-dom";
 import { renderGiveawaysHtml, renderGiveawaysContentHtml } from "../pages/giveaway-pages.js";
-import { clearSession } from "../assets/dashboard/session.js";
 import { entryViews, tournamentLifecycle, tournamentViewState } from "../lib/tournament-state.js";
-
-const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments?siteId=site-1" });
-const { document } = window;
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
-const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
-for (const key of INSTALLED_GLOBALS.slice(0, 15)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
-}
-window.Element.prototype.scrollIntoView = function () {};
-window.Element.prototype.getClientRects = function () { return [{}]; };
-globalThis.localStorage = window.localStorage;
-window.matchMedia = (query) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-globalThis.matchMedia = window.matchMedia;
-window.YRDialog = { trap: () => () => {}, confirm: async () => true };
+import {
+  actAndFlush,
+  clickReactTarget,
+  document,
+  mountTournamentPage,
+  restoreTournamentDomGlobals,
+  setReactInputValue,
+  unmountTournamentPage,
+  window,
+} from "./tournament-react-utils.js";
 
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
@@ -126,24 +119,25 @@ const $id = (id) => document.getElementById(id);
 const text = (id) => $id(id)?.textContent ?? "";
 const visible = (id) => Boolean($id(id)) && !$id(id).hidden;
 const click = async (id) => {
-  $id(id).dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await clickReactTarget($id(id));
 };
-const mod = await import("../assets/tournaments.js");
+const fill = async (id, value) => setReactInputValue($id(id), value);
+const submit = async (id) => actAndFlush(() => $id(id).dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })));
+const mod = { leave: unmountTournamentPage };
 
-function boot(tournament, entries = [], matches = [], entitlementEnabled = true) {
+async function boot(tournament, entries = [], matches = [], entitlementEnabled = true) {
   server.tournament = tournament;
   server.entries = entries.map((e) => ({ ...e }));
   server.matches = matches.map((m) => ({ ...m }));
   server.entitlementEnabled = entitlementEnabled;
   server.entryError = null;
-  clearSession();
-  return mod.enter();
+  window.sessionStorage.clear();
+  await mountTournamentPage({ site });
 }
 
-afterAll(() => {
-  mod.leave();
-  for (const key of INSTALLED_GLOBALS) globalThis[key] = originalGlobals[key];
+afterAll(async () => {
+  await mod.leave();
+  restoreTournamentDomGlobals();
 });
 
 describe("tournament workspace chrome", () => {
@@ -162,8 +156,12 @@ describe("tournament workspace chrome", () => {
     expect($id("tournament-create").disabled).toBe(true);
     expect($id("tournament-create").getAttribute("aria-describedby")).toBe("tournament-plan-lock");
     expect($id("tournament-plan-lock").dataset.planLock).toBe("tournaments");
-    $id("tournament-create").disabled = false;
-    await click("tournament-create");
+    const quickNew = new window.CustomEvent("yr:quick-new", {
+      detail: { kind: "tournament" },
+      cancelable: true,
+    });
+    await actAndFlush(() => document.dispatchEvent(quickNew));
+    expect(quickNew.defaultPrevented).toBe(true);
     expect(text("tournament-message")).toBe("Tournaments is available on Starter and higher plans.");
     expect($id("tournament-create-modal")).toBeNull();
   });
@@ -200,7 +198,7 @@ describe("tournament workspace — completed tournament", () => {
     expect($id("tournament-entry-list").querySelectorAll(".tn-pill--eliminated")).toHaveLength(1);
     expect($id("tournament-entry-list").textContent).toContain("Eliminated");
     expect($id("tournament-entry-list").textContent).toContain("Chat");
-    expect($id("tournament-entry-list").querySelectorAll("details.tn-menu")).toHaveLength(0);
+    expect($id("tournament-entry-list").querySelectorAll('button[aria-label^="Actions for"]')).toHaveLength(0);
     expect($id("tournament-entry-table")).toBeTruthy();
   });
 
@@ -240,14 +238,11 @@ describe("tournament workspace — completed tournament", () => {
     const inlineCount = $id("tournament-bracket").querySelectorAll(".tn-match").length;
     expect($id("tournament-bracket-full").querySelectorAll(".tn-match")).toHaveLength(inlineCount);
     expect($id("tournament-bracket-full").querySelector('.tn-bracket[data-mode="expanded"]')).toBeTruthy();
-    expect(document.documentElement.classList.contains("yr-modal-open")).toBe(true);
     await click("tournament-bracket-close");
     expect($id("tournament-bracket-modal")).toBeNull();
-    expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
-    // Backdrop click also closes.
+    // Escape also closes the portaled dialog.
     await click("tournament-bracket-expand");
-    $id("tournament-bracket-modal").dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await actAndFlush(() => document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect($id("tournament-bracket-modal")).toBeNull();
   });
 
@@ -276,11 +271,12 @@ describe("tournament workspace — editable lifecycles", () => {
       { id: "e2", display_name: "beta", source: "manual", status: "confirmed", eligible: true },
     ]);
     expect(text("tournament-primary")).toBe("Start tournament");
-    expect($id("tournament-primary").dataset.action).toBe("start");
+    expect($id("tournament-primary").disabled).toBe(false);
     const requestStart = server.requests.length;
     // The real dialog.js may have replaced the stub; approve on whatever is live.
-    window.YRDialog.confirm = async () => true;
     await click("tournament-primary");
+    expect(document.body.textContent).toContain("Start with 2 players? Empty spots become BYEs.");
+    await click("tournament-start-confirm");
     await new Promise((resolve) => setTimeout(resolve, 20));
     // 2 eligible players in an 8 bracket: confirm, then start in signup order.
     const selects = server.requests.slice(requestStart).filter(({ path, method }) =>
@@ -294,20 +290,17 @@ describe("tournament workspace — editable lifecycles", () => {
     await boot(draft);
     const form = $id("tournament-add-entry-form");
     expect(form).toBeTruthy();
-    const input = $id("tournament-add-entry-name");
-    input.value = "ManualPlayer";
+    await fill("tournament-add-entry-name", "ManualPlayer");
     const requestStart = server.requests.length;
-    form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await submit("tournament-add-entry-form");
     expect(server.requests.slice(requestStart).some(({ path, method, body }) =>
       path.endsWith("/entries") && method === "POST" && JSON.parse(body).displayName === "ManualPlayer"
     )).toBe(true);
     expect($id("tournament-entry-list").textContent).toContain("ManualPlayer");
 
     server.entryError = "ManualPlayer is already entered.";
-    $id("tournament-add-entry-name").value = "ManualPlayer";
-    $id("tournament-add-entry-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fill("tournament-add-entry-name", "ManualPlayer");
+    await submit("tournament-add-entry-form");
     expect(text("tournament-message")).toBe("ManualPlayer is already entered.");
     expect($id("tournament-add-entry-name").value).toBe("ManualPlayer");
   });
@@ -318,9 +311,7 @@ describe("tournament workspace — editable lifecycles", () => {
     expect(visible("tournament-settings-form")).toBe(true);
     expect(visible("tournament-settings-view")).toBe(false);
     expect($id("tournament-settings-bar").hidden).toBe(true);
-    $id("tournament-title").value = "Renamed Cup";
-    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await fill("tournament-title", "Renamed Cup");
     expect($id("tournament-settings-bar").hidden).toBe(false);
   });
 
@@ -329,37 +320,25 @@ describe("tournament workspace — editable lifecycles", () => {
       { id: "e1", display_name: "viewer1", source: "chat", status: "pending", eligible: true, alt_flag: false },
       { id: "e2", display_name: "viewer2", source: "chat", status: "pending", eligible: true, alt_flag: false },
     ]);
-    const menus = $id("tournament-entry-list").querySelectorAll("details.tn-menu");
+    const menus = $id("tournament-entry-list").querySelectorAll('button[aria-label^="Actions for"]');
     expect(menus).toHaveLength(2);
-    const actions = [...menus[0].querySelectorAll("[data-entry-action]")].map((b) => b.dataset.entryAction);
+    await clickReactTarget(menus[0]);
+    const actions = [...document.querySelectorAll("[data-entry-action]")].map((b) => b.dataset.entryAction);
     expect(actions).toEqual(["remove", "block"]);
-    expect(menus[0].querySelectorAll("[data-entry-id='e1']")).toHaveLength(2);
-    expect(menus[0].querySelector("summary").getAttribute("aria-label")).toContain("viewer1");
+    expect(document.querySelectorAll("[data-entry-id='e1']")).toHaveLength(3);
+    expect(document.querySelectorAll("[data-entry-action][data-entry-id='e1']")).toHaveLength(2);
+    expect(menus[0].getAttribute("aria-label")).toContain("viewer1");
   });
 });
 
-// Last: this test leaves the dialog-script promise pending (happy-dom never
-// loads injected scripts), so it must not precede tests that open modals.
-describe("tournament workspace — bracket modal teardown race", () => {
-  it("leaves no trap or scroll-lock when leave() beats the dialog script", async () => {
+// The last test checks that leaving the island removes its portal content.
+describe("tournament workspace — bracket modal teardown", () => {
+  it("unmounts the portaled dialog when the island leaves", async () => {
     await boot(completed, completedEntries, completedMatches);
     await click("tournament-tab-bracket");
-    const realDialog = window.YRDialog;
-    window.YRDialog = undefined;
-    try {
-      const opened = click("tournament-bracket-expand");
-      // The modal paints immediately; the trap only installs once
-      // ensureDialog() resolves — simulate a navigation winning that race.
-      mod.leave();
-      await opened;
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect($id("tournament-bracket-modal")).toBeNull();
-      expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
-      // Escape on the closed modal must do nothing and not throw.
-      document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      expect($id("tournament-bracket-modal")).toBeNull();
-    } finally {
-      window.YRDialog = realDialog;
-    }
+    await click("tournament-bracket-expand");
+    expect($id("tournament-bracket-modal")).toBeTruthy();
+    await mod.leave();
+    expect($id("tournament-bracket-modal")).toBeNull();
   });
 });
