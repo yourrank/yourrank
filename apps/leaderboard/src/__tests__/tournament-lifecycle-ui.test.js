@@ -1,30 +1,23 @@
-// Behavioral coverage for the Tournament lifecycle UI: the real tournaments.js
-// runs against the rendered Engage markup in a DOM with an in-memory API.
+// Behavioral coverage for the React Tournament page with an in-memory API.
 // Lifecycle is derived from the server's status/signup_state/matches only.
 //
 // Run: bun test src/__tests__/tournament-lifecycle-ui.test.js
 
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { Window } from "happy-dom";
 import { renderGiveawaysHtml } from "../pages/giveaway-pages.js";
-import { clearSession } from "../assets/dashboard/session.js";
 import { entryViews, tournamentLifecycle, tournamentViewState } from "../lib/tournament-state.js";
-
-const window = new Window({ url: "http://localhost/dashboard/giveaways/tournaments?siteId=site-1" });
-const { document } = window;
-const INSTALLED_GLOBALS = ["window", "document", "location", "history", "navigator", "HTMLElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "DOMParser", "getComputedStyle", "matchMedia", "localStorage", "fetch"];
-const originalGlobals = Object.fromEntries(INSTALLED_GLOBALS.map((k) => [k, globalThis[k]]));
-for (const key of INSTALLED_GLOBALS.slice(0, 15)) {
-  globalThis[key] = key === "getComputedStyle" ? window.getComputedStyle.bind(window) : window[key];
-}
-window.Element.prototype.scrollIntoView = function () {};
-window.Element.prototype.getClientRects = function () { return [{}]; };
-globalThis.localStorage = window.localStorage;
-window.matchMedia = (query) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
-globalThis.matchMedia = window.matchMedia;
-// Markup-hosted dialogs use YRDialog.trap; provide the contract without loading the asset.
-window.YRDialog = { trap: () => () => {}, confirm: async () => true };
+import {
+  actAndFlush,
+  clickReactTarget,
+  document,
+  firePointerClick,
+  flushReactUpdates,
+  mountTournamentPage,
+  restoreTournamentDomGlobals,
+  setReactInputValue,
+  unmountTournamentPage,
+  window,
+} from "./tournament-react-utils.js";
 
 const user = { id: "user-1", email: "creator@example.com", plan: "pro", emailVerified: true };
 const site = { id: "site-1", name: "Kick Cup", slug: "kick-cup", published: true, userRole: "owner", kickChannelName: "" };
@@ -179,40 +172,43 @@ const $id = (id) => document.getElementById(id);
 const text = (id) => $id(id)?.textContent.trim();
 const visible = (id) => { const el = $id(id); return Boolean(el) && !el.hidden && !el.closest("[hidden]"); };
 
-async function flush() {
-  for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0));
-}
-
-const mod = await import("../assets/tournaments.js");
-await flush();
+const mod = {
+  boot: () => mountTournamentPage({ site }),
+  leave: unmountTournamentPage,
+};
+await flushReactUpdates();
 
 async function click(id) {
-  $id(id).dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-  await flush();
+  await clickReactTarget($id(id));
 }
 
 async function submit(id) {
-  $id(id).dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
-  await flush();
+  await actAndFlush(() => $id(id).dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })));
 }
 
-afterAll(() => {
-  for (const key of INSTALLED_GLOBALS) globalThis[key] = originalGlobals[key];
+async function fill(id, value) {
+  await setReactInputValue($id(id), value);
+}
+
+async function chooseOption(triggerId, label) {
+  await click(triggerId);
+  const option = [...document.querySelectorAll('[role="option"]')]
+    .find((item) => item.textContent.trim() === label);
+  if (!option) throw new Error(`Option not found: ${label}`);
+  await clickReactTarget(option);
+}
+
+afterAll(async () => {
+  await mod.leave();
+  restoreTournamentDomGlobals();
 });
 
 describe("tournament lifecycle UI", () => {
   beforeEach(async () => {
     reset();
     site.kickChannelName = "";
-    // getSites() caches the parsed site list for the session; drop it so a
-    // per-test kickChannelName is picked up by the next boot.
-    clearSession();
-    // A previous test may leave the create modal open with its focus trap
-    // installed; close it so focus assertions aren't redirected into the modal.
-    const modal = $id("tournament-create-modal");
-    if (modal) await click("tournament-create-cancel");
     await mod.boot();
-    await flush();
+    await flushReactUpdates();
   });
 
   it("renders lifecycle from the entries state and keeps New available", async () => {
@@ -239,16 +235,19 @@ describe("tournament lifecycle UI", () => {
     });
     window.sessionStorage.setItem("yr:tournament:site-1", "t-2");
     await mod.boot();
-    expect(text("tournament-switcher")).toContain("All tournaments (2)");
-    expect($id("tournament-switcher").querySelectorAll("[data-tournament-switch]")).toHaveLength(2);
+    expect($id("tournament-switcher").querySelector("button").getAttribute("aria-label")).toBe("All tournaments (2)");
     expect(text("tournament-title-display")).toBe("Finished Cup");
-    expect($id("tournament-switcher").querySelector('[data-tournament-switch="t-2"]').getAttribute("aria-current")).toBe("true");
-    const setup = $id("tournament-switcher").querySelector('[data-tournament-switch="t-1"]');
-    setup.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
+    await clickReactTarget($id("tournament-switcher").querySelector("button"));
+    const initialItems = [...document.querySelectorAll("[data-tournament-switch]")];
+    expect(initialItems).toHaveLength(2);
+    expect(initialItems.find((item) => item.dataset.tournamentSwitch === "t-2").getAttribute("aria-current")).toBe("true");
+    const setup = initialItems.find((item) => item.dataset.tournamentSwitch === "t-1");
+    await clickReactTarget(setup);
+    await flushReactUpdates();
     expect(text("tournament-title-display")).toBe("Friday Night Cup");
-    expect($id("tournament-switcher").querySelector('[data-tournament-switch="t-1"]').getAttribute("aria-current")).toBe("true");
     expect(window.sessionStorage.getItem("yr:tournament:site-1")).toBe("t-1");
+    await clickReactTarget($id("tournament-switcher").querySelector("button"));
+    expect(document.querySelector('[data-tournament-switch="t-1"]').getAttribute("aria-current")).toBe("true");
   });
 
   it("handles the mounted quick-new events and consumes new=1 once", async () => {
@@ -256,8 +255,7 @@ describe("tournament lifecycle UI", () => {
       detail: { kind: "tournament" },
       cancelable: true,
     });
-    document.dispatchEvent(tournamentEvent);
-    await flush();
+    await actAndFlush(() => document.dispatchEvent(tournamentEvent));
     expect(tournamentEvent.defaultPrevented).toBe(true);
     expect(visible("tournament-create-modal")).toBe(true);
     await click("tournament-create-cancel");
@@ -268,8 +266,7 @@ describe("tournament lifecycle UI", () => {
       detail: { kind: "player" },
       cancelable: true,
     });
-    document.dispatchEvent(playerEvent);
-    await flush();
+    await actAndFlush(() => document.dispatchEvent(playerEvent));
     expect(playerEvent.defaultPrevented).toBe(true);
     expect(document.activeElement?.id).toBe("tournament-add-entry-name");
 
@@ -288,24 +285,23 @@ describe("tournament lifecycle UI", () => {
     let releaseSettings;
     server.settingsGate = new Promise((resolve) => { releaseSettings = resolve; });
 
-    $id("tournament-dup-protection").click();
-    await flush();
+    await clickReactTarget($id("tournament-advanced").querySelector("button"));
+    await clickReactTarget($id("tournament-dup-protection"));
 
     const settingsPath = "/api/tournaments/t-1/settings";
     expect(requestsTo(settingsPath, "POST")).toHaveLength(1);
     expect(requestsTo(settingsPath, "POST")[0].body).toEqual({ antiAltEnabled: true });
 
-    $id("tournament-entry-list").querySelector("[data-entry-action='remove']")
-      .dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
+    const row = $id("tournament-entry-list").querySelector(".tn-entry");
+    await clickReactTarget(row.querySelector("button[aria-label^='Actions for']"));
+    await clickReactTarget(document.querySelector("[data-entry-action='remove']"));
 
     expect(requestsTo(settingsPath, "POST")).toHaveLength(1);
-    expect($id("tournament-dup-protection").checked).toBe(true);
+    expect($id("tournament-dup-protection").getAttribute("aria-checked")).toBe("true");
 
-    releaseSettings();
-    await flush();
+    await actAndFlush(() => releaseSettings());
 
-    expect($id("tournament-dup-protection").checked).toBe(true);
+    expect($id("tournament-dup-protection").getAttribute("aria-checked")).toBe("true");
     expect($id("tournament-dup-protection").disabled).toBe(false);
     expect(text("tournament-message")).toBe("Duplicate protection on.");
   });
@@ -314,12 +310,11 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [base] });
     await mod.boot();
     server.settingsError = { ok: false, error: "Duplicate protection could not be updated." };
+    await clickReactTarget($id("tournament-advanced").querySelector("button"));
     const toggle = $id("tournament-dup-protection");
-    toggle.checked = true;
-    toggle.dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    await clickReactTarget(toggle);
     expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(1);
-    expect(toggle.checked).toBe(false);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(toggle.disabled).toBe(false);
     expect(text("tournament-message")).toBe("Duplicate protection could not be updated.");
   });
@@ -342,15 +337,16 @@ describe("tournament lifecycle UI", () => {
     expect(visible("tournament-create-modal")).toBe(true);
     expect($id("tournament-create-modal").classList.contains("tn-dialog")).toBe(true);
     expect(visible("tournament-empty")).toBe(true);
-    const sizes = [...$id("tc-bracket-size").options].map((o) => Number(o.value));
-    expect(sizes).toEqual([4, 8, 16, 32]);
+    expect(text("tc-bracket-size")).toBe("8 players");
     expect($id("tc-format")).toBeNull();
-    expect($id("tc-bracket-size").value).toBe("8");
-    expect($id("tc-entry-cap").value).toBe("bracket");
-    expect($id("tc-entry-cap").querySelector('option[value="bracket"]').textContent).toBe("Same as bracket size (8)");
     expect($id("tc-title").value).toBe("");
     expect($id("tc-title").placeholder).toBe("e.g. Friday Night Cup");
-    expect($id("tc-keyword").value).toBe("!join");
+    expect($id("tc-keyword")).toBeNull();
+    await click("tc-more-trigger");
+    expect(text("tc-entry-cap")).toBe("Same as bracket size (8)");
+    await click("tc-entry-cap");
+    expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent.trim()))
+      .toEqual(["Same as bracket size (8)", "Unlimited", "Custom…"]);
     await click("tournament-create-cancel");
     expect(visible("tournament-create-modal")).toBe(false);
     expect(requestsTo("/api/tournaments", "POST")).toHaveLength(0);
@@ -358,11 +354,12 @@ describe("tournament lifecycle UI", () => {
 
   it("sends the selected values to the API and renders the Draft state", async () => {
     await click("tournament-create");
-    $id("tc-title").value = "Friday Cup";
-    $id("tc-game").value = "Fortnite";
-    $id("tc-bracket-size").value = "4";
-    $id("tc-chat-channel").value = "36_ates";
-    $id("tc-keyword").value = "!cup";
+    await fill("tc-title", "Friday Cup");
+    await click("tc-more-trigger");
+    await fill("tc-game", "Fortnite");
+    await chooseOption("tc-bracket-size", "4 players");
+    await fill("tc-chat-channel", "36_ates");
+    await fill("tc-keyword", "!cup");
     await submit("tournament-create-form");
 
     const [post] = requestsTo("/api/tournaments", "POST");
@@ -377,7 +374,6 @@ describe("tournament lifecycle UI", () => {
     expect(text("tournament-status")).toBe("Setup");
     expect(text("tournament-title-display")).toBe("Friday Cup");
     expect(text("tournament-meta")).toBe("Fortnite · 4-player bracket");
-    expect($id("tournament-chat-channel").value).toBe("36_ates");
     expect($id("tournament-fact-keyword")).toBeNull();
     expect(text("tournament-count")).toBe("0 of 4");
     expect(text("tournament-primary")).toBe("Start tournament");
@@ -385,11 +381,13 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-primary").disabled).toBe(true);
     expect($id("tournament-entries-empty").textContent).toContain("No entries yet.");
     expect($id("tournament-entries-empty").textContent).toContain("Add players below, or turn on chat signup to collect them from Kick chat.");
+    await click("tournament-tab-settings");
+    expect($id("tournament-chat-channel").value).toBe("36_ates");
   });
 
   it("sends a blank create title to the API and shows the backend error", async () => {
     await click("tournament-create");
-    $id("tc-title").value = "   ";
+    await fill("tc-title", "   ");
     await submit("tournament-create-form");
     expect(requestsTo("/api/tournaments", "POST")[0].body.title).toBe("");
     expect(text("tournament-create-error")).toBe("Enter a tournament name.");
@@ -398,8 +396,9 @@ describe("tournament lifecycle UI", () => {
 
   it("stores an empty game name instead of a placeholder when the field is left blank", async () => {
     await click("tournament-create");
-    $id("tc-title").value = "Friday Cup";
-    $id("tc-game").value = "   ";
+    await fill("tc-title", "Friday Cup");
+    await click("tc-more-trigger");
+    await fill("tc-game", "   ");
     await submit("tournament-create-form");
     const [post] = requestsTo("/api/tournaments", "POST");
     expect(post.body.gameName).toBe("");
@@ -409,13 +408,11 @@ describe("tournament lifecycle UI", () => {
 
   it("sends a custom signup limit independently of the bracket size", async () => {
     await click("tournament-create");
-    $id("tc-title").value = "Friday Cup";
-    $id("tc-bracket-size").value = "8";
-    $id("tc-entry-cap").value = "custom";
-    $id("tc-entry-cap").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    await fill("tc-title", "Friday Cup");
+    await click("tc-more-trigger");
+    await chooseOption("tc-entry-cap", "Custom…");
     expect(visible("tc-entry-cap-custom")).toBe(true);
-    $id("tc-entry-cap-custom").value = "40";
+    await fill("tc-entry-cap-custom", "40");
     await submit("tournament-create-form");
     const [post] = requestsTo("/api/tournaments", "POST");
     expect(post.body.bracketSize).toBe(8);
@@ -426,14 +423,11 @@ describe("tournament lifecycle UI", () => {
 
   it("refuses to submit an unsupported bracket size", async () => {
     await click("tournament-create");
-    const option = document.createElement("option");
-    option.value = "6";
-    $id("tc-bracket-size").appendChild(option);
-    $id("tc-bracket-size").value = "6";
-    await submit("tournament-create-form");
+    await click("tc-bracket-size");
+    const sizes = [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent.trim());
+    expect(sizes).toEqual(["4 players", "8 players", "16 players", "32 players"]);
     expect(requestsTo("/api/tournaments", "POST")).toHaveLength(0);
     expect(visible("tournament-create-modal")).toBe(true);
-    expect(text("tournament-create-error")).toContain("4, 8, 16, 32");
   });
 
   it("keeps the bracket empty message clean and settings out of the main flow", async () => {
@@ -463,10 +457,8 @@ describe("tournament lifecycle UI", () => {
 
     // Turn on chat signup via the switch — it POSTs signups/open.
     const toggle = $id("tournament-chat-signup");
-    expect(toggle.checked).toBe(false);
-    toggle.checked = true;
-    toggle.dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    await clickReactTarget(toggle);
     expect(requestsTo("/api/tournaments/t-1/signups/open", "POST")).toHaveLength(1);
     expect(text("tournament-chat-signup-state")).toBe("On — viewers type !join in chat");
     expect(text("tournament-message")).toBe("Chat signups on — viewers can type !join in chat.");
@@ -474,9 +466,7 @@ describe("tournament lifecycle UI", () => {
 
     // Turn it back off.
     const toggleOff = $id("tournament-chat-signup");
-    toggleOff.checked = false;
-    toggleOff.dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    await clickReactTarget(toggleOff);
     expect(requestsTo("/api/tournaments/t-1/signups/lock", "POST")).toHaveLength(1);
     expect(text("tournament-chat-signup-state")).toBe("Off");
     expect(text("tournament-message")).toBe("Chat signups off — viewers can no longer join from chat.");
@@ -492,9 +482,11 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(false);
 
-    window.YRDialog.confirm = async () => true;
     await click("tournament-tab-entries");
     await click("tournament-primary");
+    expect($id("tournament-start-confirm").textContent).toContain("Start tournament");
+    expect(document.body.textContent).toContain("Start with 5 players? Empty spots become BYEs.");
+    await click("tournament-start-confirm");
     const [pick] = requestsTo("/api/tournaments/t-1/entries/select", "POST");
     expect(pick.body).toEqual({ mode: "all", seeding: "signup" });
   });
@@ -502,6 +494,7 @@ describe("tournament lifecycle UI", () => {
   it("derives chat registration status from the server, never the socket", async () => {
     reset({ tournaments: [base] });
     await mod.boot();
+    await click("tournament-tab-settings");
     expect(text("tournament-chat-status")).toBe("Chat registration off");
 
     // Open but no confirmed Kick chat delivery: unavailable, and the browser
@@ -509,16 +502,19 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [{ ...base, signup_state: "open" }] });
     server.chatRegistration = { connected: true, chatReady: false, channelName: "creator", externalChannelId: "111" };
     await mod.boot();
+    await click("tournament-tab-settings");
     expect(text("tournament-chat-status")).toBe("Chat registration unavailable");
     expect($id("tournament-chat-status").classList.contains("is-live")).toBe(false);
 
     server.chatRegistration = { connected: true, chatReady: true, channelName: "creator", externalChannelId: "111" };
     await mod.boot();
+    await click("tournament-tab-settings");
     expect(text("tournament-chat-status")).toBe("Chat registration active");
     expect($id("tournament-chat-status").classList.contains("is-live")).toBe(true);
     // A channel mismatch keeps it unavailable.
     server.chatRegistration = { connected: true, chatReady: true, channelName: "other", externalChannelId: "999" };
     await mod.boot();
+    await click("tournament-tab-settings");
     expect(text("tournament-chat-status")).toBe("Chat registration unavailable");
     expect(requestsTo("/api/tournaments/t-1/entries", "POST")).toHaveLength(0);
   });
@@ -540,9 +536,9 @@ describe("tournament lifecycle UI", () => {
 
   it("offers the connected site channel without presenting it as saved", async () => {
     site.kickChannelName = "36-ates";
-    clearSession();
     reset({ tournaments: [{ ...base, chat_channel: null }] });
     await mod.boot();
+    await click("tournament-tab-settings");
     // The site channel is only a suggestion: nothing is stored yet.
     expect($id("tournament-chat-channel").value).toBe("");
     expect($id("tournament-chat-channel").placeholder).toBe("36-ates");
@@ -559,9 +555,9 @@ describe("tournament lifecycle UI", () => {
 
   it("prefers the stored tournament channel over the site channel", async () => {
     site.kickChannelName = "other-channel";
-    clearSession();
     reset({ tournaments: [{ ...base, chat_channel: "saved-channel" }] });
     await mod.boot();
+    await click("tournament-tab-settings");
     expect($id("tournament-chat-channel").value).toBe("saved-channel");
     expect($id("tournament-chat-signup").disabled).toBe(false);
     expect(JSON.stringify(server.requests)).not.toContain("other-channel");
@@ -572,7 +568,7 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     const toggle = $id("tournament-chat-signup");
     expect(toggle.disabled).toBe(false);
-    expect(toggle.checked).toBe(false);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
     expect(text("tournament-chat-signup-state")).toBe("Off");
   });
 
@@ -583,7 +579,7 @@ describe("tournament lifecycle UI", () => {
     await click("tournament-tab-settings");
     expect($id("tournament-bracket-size").disabled).toBe(false);
     expect($id("tournament-entry-cap-mode").disabled).toBe(false);
-    $id("tournament-bracket-size").value = "16";
+    await chooseOption("tournament-bracket-size", "16 players");
     await submit("tournament-settings-form");
     const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
     expect(req.body.bracketSize).toBe(16);
@@ -611,13 +607,11 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-settings");
     // entry_cap null → Unlimited.
-    expect($id("tournament-entry-cap-mode").value).toBe("unlimited");
-    expect($id("tournament-entry-cap").hidden).toBe(true);
-    $id("tournament-entry-cap-mode").value = "custom";
-    $id("tournament-entry-cap-mode").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
-    expect($id("tournament-entry-cap").hidden).toBe(false);
-    $id("tournament-entry-cap").value = "40";
+    expect(text("tournament-entry-cap-mode")).toBe("Unlimited");
+    expect($id("tournament-entry-cap")).toBeNull();
+    await chooseOption("tournament-entry-cap-mode", "Custom…");
+    expect(visible("tournament-entry-cap")).toBe(true);
+    await fill("tournament-entry-cap", "40");
     await submit("tournament-settings-form");
     const [req] = requestsTo("/api/tournaments/t-1/settings", "POST");
     expect(req.body.entryCap).toBe(40);
@@ -626,16 +620,14 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [{ ...base, entry_cap: 8 }] });
     await mod.boot();
     await click("tournament-tab-settings");
-    expect($id("tournament-entry-cap-mode").value).toBe("bracket");
-    expect($id("tournament-entry-cap").hidden).toBe(true);
+    expect(text("tournament-entry-cap-mode")).toBe("Same as bracket size (8)");
+    expect($id("tournament-entry-cap")).toBeNull();
 
     reset({ tournaments: [{ ...base, entry_cap: 40 }] });
     await mod.boot();
     await click("tournament-tab-settings");
-    // happy-dom misreports .value/.selected when the last option is selected;
-    // check the selected attribute directly.
-    expect($id("tournament-entry-cap-mode").querySelector('option[value="custom"]').hasAttribute("selected")).toBe(true);
-    expect($id("tournament-entry-cap").hidden).toBe(false);
+    expect(text("tournament-entry-cap-mode")).toBe("Custom…");
+    expect(visible("tournament-entry-cap")).toBe(true);
     expect($id("tournament-entry-cap").value).toBe("40");
   });
 
@@ -643,13 +635,16 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [base] });
     await mod.boot();
     await click("tournament-tab-settings");
-    const controls = $id("tournament-settings-form").querySelectorAll("select, input");
-    for (const el of controls) {
-      if (el.type === "checkbox") continue;
-      expect(el.classList.contains("tn-input")).toBe(true);
+    for (const id of [
+      "tournament-title",
+      "tournament-game",
+      "tournament-bracket-size",
+      "tournament-chat-channel",
+      "tournament-keyword",
+      "tournament-entry-cap-mode",
+    ]) {
+      expect($id(id).classList.contains("tn-input")).toBe(true);
     }
-    const css = readFileSync(new URL("../assets/tournaments.css", import.meta.url), "utf8");
-    expect(css).toMatch(/\.tn-input[^{]*\{[^}]*width:\s*100%/);
   });
 
   it("shows a field error on a rejected save without touching the summary", async () => {
@@ -657,7 +652,7 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-settings");
     server.failSettings = true;
-    $id("tournament-bracket-size").value = "16";
+    await chooseOption("tournament-bracket-size", "16 players");
     await submit("tournament-settings-form");
     expect(visible("tournament-bracket-size-error")).toBe(true);
     expect(text("tournament-bracket-size-error")).toContain("Bracket size");
@@ -670,16 +665,12 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-settings");
     expect($id("tournament-settings-bar").hidden).toBe(true);
-    $id("tournament-title").value = "Renamed Cup";
-    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await fill("tournament-title", "Renamed Cup");
     expect($id("tournament-settings-bar").hidden).toBe(false);
     await click("tournament-settings-discard");
     expect($id("tournament-settings-bar").hidden).toBe(true);
     expect($id("tournament-title").value).toBe("Friday Night Cup");
-    $id("tournament-title").value = "Renamed Cup";
-    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await fill("tournament-title", "Renamed Cup");
     await submit("tournament-settings-form");
     expect($id("tournament-settings-bar").hidden).toBe(true);
     expect(visible("tournament-settings-saved")).toBe(true);
@@ -729,15 +720,11 @@ describe("tournament lifecycle UI", () => {
     expect(save().disabled).toBe(true);
     expect(note().hidden).toBe(true);
     // Editing an input unlocks Save and reveals the downstream note.
-    card().querySelector('[data-score-player="1"]').value = "5";
-    card().querySelector('[data-score-player="1"]').dispatchEvent(new window.Event("input", { bubbles: true }));
-    card().querySelector('[data-score-player="2"]').value = "3";
-    card().querySelector('[data-score-player="2"]').dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await setReactInputValue(card().querySelector('[data-score-player="1"]'), "5");
+    await setReactInputValue(card().querySelector('[data-score-player="2"]'), "3");
     expect(save().disabled).toBe(false);
     expect(note().hidden).toBe(false);
-    save().dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
+    await clickReactTarget(save());
     const patches = requestsTo("/api/tournaments/t-1/score", "PATCH");
     expect(patches).toHaveLength(1);
     expect(patches[0].body).toEqual({ matchId: "m1", player1Score: 5, player2Score: 3 });
@@ -758,23 +745,19 @@ describe("tournament lifecycle UI", () => {
     const card = () => $id("tournament-bracket").querySelector('.tn-match[data-match-id="m1"]');
     const save = () => card().querySelector(".tn-match-save");
     const note = () => card().querySelector(".tn-match-note");
-    const input = (player, value) => {
+    const input = async (player, value) => {
       const el = card().querySelector(`[data-score-player="${player}"]`);
-      el.value = value;
-      el.dispatchEvent(new window.Event("input", { bubbles: true }));
+      await setReactInputValue(el, value);
     };
     expect(save().disabled).toBe(true);
     // A changed value unlocks Save; returning it to the saved score re-locks.
-    input(1, "7");
-    await flush();
+    await input(1, "7");
     expect(save().disabled).toBe(false);
     expect(note().hidden).toBe(false);
-    input(1, "2");
-    await flush();
+    await input(1, "2");
     expect(save().disabled).toBe(true);
     expect(note().hidden).toBe(true);
-    save().dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
+    await clickReactTarget(save());
     expect(requestsTo("/api/tournaments/t-1/score", "PATCH")).toHaveLength(0);
   });
 
@@ -792,13 +775,8 @@ describe("tournament lifecycle UI", () => {
       expect(view).toContain("creator");
       expect(view).toContain("40");
       expect(view).not.toContain("Rules");
-      $id("tournament-title").value = "X";
-      $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
-      $id("tournament-entry-cap-mode").value = "";
-      $id("tournament-entry-cap-mode").dispatchEvent(new window.Event("change", { bubbles: true }));
-      await flush();
       expect($id("tournament-settings-bar").hidden).toBe(true);
-      await submit("tournament-settings-form");
+      expect($id("tournament-settings-form")).toBeNull();
       expect(requestsTo("/api/tournaments/t-1/settings", "POST")).toHaveLength(0);
     });
   }
@@ -844,7 +822,7 @@ describe("tournament lifecycle UI", () => {
 
     // Lowering the capacity below the eligible count routes Start to the modal.
     await click("tournament-tab-settings");
-    $id("tournament-bracket-size").value = "4";
+    await chooseOption("tournament-bracket-size", "4 players");
     await submit("tournament-settings-form");
     expect(requestsTo("/api/tournaments/t-1/settings", "POST")[0].body.bracketSize).toBe(4);
     await click("tournament-tab-entries");
@@ -867,7 +845,6 @@ describe("tournament lifecycle UI", () => {
     expect(visible("ts-pane-manual")).toBe(false);
 
     // Random submit posts mode only.
-    window.YRDialog.confirm = async () => true;
     await click("tournament-select-submit");
     const [randomReq] = requestsTo("/api/tournaments/t-1/entries/select", "POST");
     expect(randomReq.body).toEqual({ mode: "random", seeding: "signup" });
@@ -880,36 +857,26 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-primary");
-    $id("ts-mode-manual").checked = true;
-    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    await clickReactTarget($id("ts-mode-manual"));
     expect(visible("ts-pane-manual")).toBe(true);
-    expect($id("ts-entry-list").querySelectorAll("input[type=checkbox]")).toHaveLength(22);
+    expect($id("ts-entry-list").querySelectorAll('[role="checkbox"]')).toHaveLength(22);
     expect(text("ts-counter")).toBe("Selected 0 / 8");
     expect($id("tournament-select-submit").disabled).toBe(true);
 
     // Search filters the list client-side.
-    $id("ts-search").value = "player1";
-    $id("ts-search").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
-    expect($id("ts-entry-list").querySelectorAll("input[type=checkbox]")).toHaveLength(10);
-    $id("ts-search").value = "";
-    $id("ts-search").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await fill("ts-search", "player1");
+    expect($id("ts-entry-list").querySelectorAll('[role="checkbox"]')).toHaveLength(10);
+    await fill("ts-search", "");
 
-    const boxes = [...$id("ts-entry-list").querySelectorAll("input[type=checkbox]")];
+    const boxes = [...$id("ts-entry-list").querySelectorAll('[role="checkbox"]')];
     for (const box of boxes.slice(0, 6)) {
-      box.checked = true;
-      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await clickReactTarget(box);
     }
-    await flush();
     expect(text("ts-counter")).toBe("Selected 6 / 8");
     expect($id("tournament-select-submit").disabled).toBe(true);
     for (const box of boxes.slice(6, 8)) {
-      box.checked = true;
-      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await clickReactTarget(box);
     }
-    await flush();
     expect(text("ts-counter")).toBe("Selected 8 / 8");
     expect($id("tournament-select-submit").disabled).toBe(false);
 
@@ -934,12 +901,10 @@ describe("tournament lifecycle UI", () => {
     });
     await mod.boot();
     await click("tournament-primary");
-    $id("ts-mode-manual").checked = true;
-    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
+    await clickReactTarget($id("ts-mode-manual"));
     await click("ts-select-first");
     expect(text("ts-counter")).toBe("Selected 4 / 4");
-    expect([...$id("ts-entry-list").querySelectorAll("input:checked")].map((input) => input.value))
+    expect([...$id("ts-entry-list").querySelectorAll('[role="checkbox"][aria-checked="true"]')].map((input) => input.getAttribute("value")))
       .toEqual(["later", "first", "third", "fourth"]);
     expect($id("tournament-select-submit").disabled).toBe(false);
   });
@@ -970,20 +935,16 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     expect(text("tournament-primary")).toBe("Start tournament");
     await click("tournament-primary");
-    $id("ts-mode-manual").checked = true;
-    $id("ts-mode-manual").dispatchEvent(new window.Event("change", { bubbles: true }));
-    await flush();
-    const boxes = [...$id("ts-entry-list").querySelectorAll("input[type=checkbox]")];
+    await clickReactTarget($id("ts-mode-manual"));
+    const boxes = [...$id("ts-entry-list").querySelectorAll('[role="checkbox"]')];
     // The 9 eligible rows are listed; the ineligible one is not.
     expect(boxes).toHaveLength(9);
-    expect(boxes.map((b) => b.value)).toContain("flag");
-    expect(boxes.map((b) => b.value)).not.toContain("inel");
+    expect(boxes.map((b) => b.getAttribute("value"))).toContain("flag");
+    expect(boxes.map((b) => b.getAttribute("value"))).not.toContain("inel");
 
-    for (const box of boxes.filter((b) => b.value !== "e0")) {
-      box.checked = true;
-      box.dispatchEvent(new window.Event("change", { bubbles: true }));
+    for (const box of boxes.filter((b) => b.getAttribute("value") !== "e0")) {
+      await clickReactTarget(box);
     }
-    await flush();
     expect(text("ts-counter")).toBe("Selected 8 / 8");
     await click("tournament-select-submit");
     const reqs = requestsTo("/api/tournaments/t-1/entries/select", "POST");
@@ -1058,13 +1019,12 @@ describe("tournament lifecycle UI", () => {
     expect(winner.getAttribute("aria-label")).toBe("Bob wins");
     let releaseScore;
     server.scoreGate = new Promise((resolve) => { releaseScore = resolve; });
-    winner.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await actAndFlush(() => firePointerClick(winner));
     expect(winner.disabled).toBe(true);
     expect(otherWinner.disabled).toBe(true);
-    winner.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
+    await actAndFlush(() => firePointerClick(winner));
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
-    releaseScore();
-    await flush();
+    await actAndFlush(() => releaseScore());
     expect(requestsTo("/api/tournaments/t-1/score", "POST")).toHaveLength(1);
     expect(requestsTo("/api/tournaments/t-1/score", "POST")[0].body)
       .toEqual({ matchId: "m1", winnerSlot: 2 });
@@ -1079,9 +1039,7 @@ describe("tournament lifecycle UI", () => {
     expect($id("tournament-delete-modal").textContent).toContain("This deletes the tournament and all its entries. This can't be undone.");
     expect($id("tournament-delete-modal").querySelector('label[for="td-confirm"]').textContent)
       .toBe('Type “Friday Night Cup” to confirm');
-    $id("td-confirm").value = "  Friday Night Cup  ";
-    $id("td-confirm").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await fill("td-confirm", "  Friday Night Cup  ");
     expect($id("tournament-delete-submit").disabled).toBe(false);
 
     server.deleteError = { error: "Deletion is temporarily unavailable." };
@@ -1124,7 +1082,7 @@ describe("tournament lifecycle UI", () => {
     reset({ tournaments: [base] });
     await mod.boot();
     await click("tournament-tab-settings");
-    $id("tournament-title").value = "  ";
+    await fill("tournament-title", "  ");
     server.settingsError = {
       ok: false,
       error: "Enter a tournament name.",
@@ -1144,25 +1102,23 @@ describe("tournament lifecycle UI", () => {
     await mod.boot();
     await click("tournament-tab-settings");
     // Dirty the form while the settings tab is visible.
-    $id("tournament-title").value = "Typed but unsaved";
-    $id("tournament-title").dispatchEvent(new window.Event("input", { bubbles: true }));
-    await flush();
+    await fill("tournament-title", "Typed but unsaved");
     expect($id("tournament-settings-bar").hidden).toBe(false);
     // An entry action is one loadEntries() path — the same refresh the 15s
     // poll and chat webhook take. The form must keep its edit and the bar.
-    const formNode = $id("tournament-settings-form");
     server.entries = [
       { id: "e1", display_name: "one", source: "chat", status: "pending" },
       { id: "e2", display_name: "two", source: "chat", status: "pending" },
     ];
-    const removeBtn = $id("tournament-entry-list").querySelector("[data-entry-action='remove']");
-    removeBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true, cancelable: true }));
-    await flush();
-    expect($id("tournament-settings-form")).toBe(formNode);
-    expect($id("tournament-title").value).toBe("Typed but unsaved");
-    expect($id("tournament-settings-bar").hidden).toBe(false);
+    await click("tournament-tab-entries");
+    const row = $id("tournament-entry-list").querySelector(".tn-entry");
+    await clickReactTarget(row.querySelector("button[aria-label^='Actions for']"));
+    await clickReactTarget(document.querySelector("[data-entry-action='remove']"));
     // The data updates still landed.
     expect(text("tournament-count")).toBe("2");
     expect(text("tournament-tab-entries")).toBe("Entries (2)");
     expect($id("tournament-entry-list").textContent).toContain("two");
+    await click("tournament-tab-settings");
+    expect($id("tournament-title").value).toBe("Typed but unsaved");
+    expect($id("tournament-settings-bar").hidden).toBe(false);
   });

@@ -143,12 +143,12 @@ describe("design tokens", () => {
       expect(declared(sources.dashboard, name), name).toBe(value);
     }
     const scale = sources.dashboard.slice(sources.dashboard.indexOf("/* Canonical operator workspace type scale. */"));
-    expect(scale).toContain("h1 {\n  font-size: var(--ws-type-page-size);");
-    expect(scale).toContain("h2 {\n  font-size: var(--ws-type-section-size);");
-    expect(scale).toContain("h3,\n.v3-dash[data-auth-workspace] h4");
+    expect(scale).toContain("h1:not(:where(.yr-react *)) {\n  font-size: var(--ws-type-page-size);");
+    expect(scale).toContain("h2:not(:where(.yr-react *)) {\n  font-size: var(--ws-type-section-size);");
+    expect(scale).toContain("h3:not(:where(.yr-react *)),\n.v3-dash[data-auth-workspace] h4:not(:where(.yr-react *))");
     expect(scale).toContain("font-size: var(--ws-type-card-size);");
     expect(scale).toContain("font-size: var(--ws-type-meta-size);");
-    const sectionHeading = scale.match(/\.v3-dash\[data-auth-workspace\] h2\s*\{([^}]*)\}/)?.[1] || "";
+    const sectionHeading = scale.match(/\.v3-dash\[data-auth-workspace\] h2:not\(:where\(\.yr-react \*\)\)\s*\{([^}]*)\}/)?.[1] || "";
     expect(sectionHeading).toContain("font-size: var(--ws-type-section-size);");
     expect(scale).not.toMatch(/\.v3-section-head h2[\s\S]*?font-size:\s*var\(--ws-type-card-size\)/);
     expect(sources.dashboard).toContain("font: 700 var(--ws-type-page-size)/var(--ws-type-page-leading) var(--ws-sans);");
@@ -330,13 +330,13 @@ describe("dashboard design foundation", () => {
       }
     }
     expect(sources.dashboard).toContain(
-      ".v3-dash[data-auth-workspace] :focus-visible,\n.v3-dash[data-auth-workspace] input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] select:focus-visible,\n.v3-dash[data-auth-workspace] textarea:focus-visible {\n  outline: var(--ws-focus-width) solid var(--ws-focus);\n  outline-offset: var(--ws-focus-offset);"
+      ".v3-dash[data-auth-workspace] :focus-visible:not(:where(.yr-react *)),\n.v3-dash[data-auth-workspace] input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible:not(:where(.yr-react *)),\n.v3-dash[data-auth-workspace] select:focus-visible:not(:where(.yr-react *)),\n.v3-dash[data-auth-workspace] textarea:focus-visible:not(:where(.yr-react *)) {\n  outline: var(--ws-focus-width) solid var(--ws-focus);\n  outline-offset: var(--ws-focus-offset);"
     );
     expect(sources.dashboard).toContain(
       ".v3-dash[data-auth-workspace] .lb-side :focus-visible,\n.v3-dash[data-auth-workspace] .lb-side input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"color\"]):focus-visible,\n.v3-dash[data-auth-workspace] .lb-side select:focus-visible,\n.v3-dash[data-auth-workspace] .lb-side textarea:focus-visible,\n.v3-dash[data-auth-workspace] .lb-pub-toggle:has(input:focus-visible) {\n  outline-color: var(--ws-accent-on-chrome);\n}"
     );
     expect(declared(sources.dashboard, "--ws-accent-on-chrome")).toBe("var(--wsd-accent, #304398)");
-    expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled { cursor: not-allowed; opacity: 0.52; }");
+    expect(sources.dashboard).toContain(".v3-dash[data-auth-workspace] :disabled:not(:where(.yr-react *)) { cursor: not-allowed; opacity: 0.52; }");
     expect(sources.devinSystem || "").toContain("body:not(:has(.v3-dash[data-auth-workspace])) :focus-visible");
   });
 

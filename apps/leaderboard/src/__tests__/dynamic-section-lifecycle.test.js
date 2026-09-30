@@ -1,8 +1,6 @@
-// Lifecycle coverage for the dynamic-section loader: the real loader,
-// routes table and boot modules run in a DOM against an in-memory API, so
-// SPA fragment navigation exercises the same enter/leave path the browser
-// uses. Regression: a tab route must boot its tab-specific owner too
-// (tournaments.js owns #tournament-app, not giveaways.js).
+// Lifecycle coverage for the dynamic-section loader: SPA fragment navigation
+// must mount and unmount the Tournaments React island through its tab owner.
+// Page data and behavior are covered in tournament-lifecycle-ui.test.js.
 //
 // Run: bun test src/__tests__/dynamic-section-lifecycle.test.js
 
@@ -49,14 +47,12 @@ const FRAGMENTS = {
   "/dashboard/activities": () => ActivitiesPage({ fragment: true }).toString(),
 };
 
-const requests = [];
 let fragmentStatus = 200;
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 globalThis.fetch = async (input) => {
   const raw = String(input);
   const path = raw.split("?")[0];
-  requests.push(path.startsWith("/dashboard/_content") ? `${path}?${raw.split("?")[1] || ""}` : path);
   if (path === "/dashboard/_content") {
     if (fragmentStatus !== 200) return json({ error: "boom" }, fragmentStatus);
     const target = decodeURIComponent(new URLSearchParams(raw.split("?")[1]).get("path") || "").split("?")[0];
@@ -78,7 +74,9 @@ globalThis.fetch = async (input) => {
   if (path === "/api/giveaways/chatroom") return json({ error: "offline" }, 404);
   return json({ ok: true });
 };
-const requestsTo = (match) => requests.filter((r) => r.includes(match));
+const flushReactUpdates = async () => {
+  for (let index = 0; index < 12; index += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
 document.body.innerHTML = `<h1 data-chrome-h1>Home</h1><div id="lbDynamic" hidden></div>`;
 const $id = (id) => document.getElementById(id);
@@ -106,18 +104,15 @@ describe("dynamic-section lifecycle", () => {
   });
 
   it("boots the tab owner on the tournaments route, leaves it, and re-enters", async () => {
-    const before = requestsTo("/api/tournaments").length;
     expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    expect(requestsTo("/api/tournaments").length).toBeGreaterThan(before);
+    await flushReactUpdates();
     expect(ds.isDynamicActive()).toBe(true);
     expect($id("tournament-app")).toBeTruthy();
-    // Draft tournament → workspace visible, empty state hidden.
-    expect($id("tournament-workspace").hidden).toBe(false);
-    expect($id("tournament-empty").hidden).toBe(true);
-    expect($id("tournament-title-display").textContent).toContain("Community Cup");
+    expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
 
     // Away to Activities: tournaments leave runs, activities enter succeeds.
     expect(await ds.loadDynamicSection("activities", "overview")).toBe(true);
+    expect($id("tournament-app")).toBeNull();
     expect($id("act-live-loading").hidden).toBe(true);
     expect($id("act-live-error").hidden).toBe(true);
     expect($id("act-live-list").hidden).toBe(false);
@@ -125,18 +120,18 @@ describe("dynamic-section lifecycle", () => {
     expect($id("act-history-empty").hidden).toBe(false);
     expect(document.documentElement.classList.contains("yr-modal-open")).toBe(false);
 
-    // Back to Tournaments: re-enter refetches rather than replaying stale DOM.
-    const mid = requestsTo("/api/tournaments").length;
+    // Back to Tournaments: the tab owner mounts a fresh React island.
     expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    expect(requestsTo("/api/tournaments").length).toBeGreaterThan(mid);
-    expect($id("tournament-workspace").hidden).toBe(false);
+    await flushReactUpdates();
+    expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
     expect(ds.isDynamicActive()).toBe(true);
 
     // Explicit leave detaches the section; a later load still initializes.
     ds.leaveDynamicSection();
     expect(ds.isDynamicActive()).toBe(false);
     expect(await ds.loadDynamicSection("giveaways", "tournaments")).toBe(true);
-    expect($id("tournament-workspace").hidden).toBe(false);
+    await flushReactUpdates();
+    expect($id("tournament-root").querySelector("#tournament-empty, #tournament-workspace")).toBeTruthy();
   });
 
   it("shows a generic error body with Retry for fragment failures", async () => {

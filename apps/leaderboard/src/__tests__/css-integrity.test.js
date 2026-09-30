@@ -217,7 +217,7 @@ describe("shared UI primitives", () => {
   ].filter(([, source]) => source.includes("app.css"));
 
   it("defines the button component", () => {
-    expect(ui).toMatch(/\.btn,\s*\.yr-ui button\s*\{/);
+    expect(ui).toMatch(/\.btn,\s*\.yr-ui button:not\(:where\(\.yr-react \*\)\)\s*\{/);
   });
 
   it("loads ui.css wherever app.css is loaded", () => {
@@ -306,7 +306,7 @@ describe("shared button variants", () => {
 
   it("only claims buttons that declare no appearance of their own", () => {
     expect(ui).not.toMatch(/\.yr-ui button:not\(\.ghost\)/);
-    expect(ui).toMatch(/\.yr-ui button:not\(\[class\]\)\s*(,|\{)/);
+    expect(ui).toMatch(/\.yr-ui button:not\(\[class\]\):not\(:where\(\.yr-react \*\)\)\s*(,|\{)/);
   });
 
   it("defines every variant for both anchors and buttons", () => {
@@ -317,7 +317,7 @@ describe("shared button variants", () => {
   });
 
   it("keeps a clickable cell of text looking like text", () => {
-    expect(ui).toMatch(/\.link-button,\s*\.yr-ui button\.link-button\s*\{[^}]*background:\s*none/);
+    expect(ui).toMatch(/\.link-button,\s*\.yr-ui button\.link-button:not\(:where\(\.yr-react \*\)\)\s*\{[^}]*background:\s*none/);
   });
 });
 
@@ -357,7 +357,7 @@ describe("shared action contract", () => {
   it("defaults controls to 44px and narrow-screen form submits to 48px", () => {
     expect(ui).toMatch(/--yr-control-height:\s*44px/);
     expect(ui).toMatch(/--yr-form-action-height:\s*48px/);
-    expect(ui).toMatch(/form \.btn\[type=""\],\s*\.yr-ui form button\[type=""\]\s*\{\s*min-height:\s*var\(--yr-form-action-height, 48px\)/);
+    expect(ui).toMatch(/form \.btn\[type=""\],\s*\.yr-ui form button\[type=""\]:not\(:where\(\.yr-react \*\)\)\s*\{\s*min-height:\s*var\(--yr-form-action-height, 48px\)/);
     expect(dash).toMatch(/--ws-control-h:\s*40px/);
   });
 
@@ -370,7 +370,7 @@ describe("shared action contract", () => {
   });
 
   it("uses one outline focus treatment instead of a box-shadow ring", () => {
-    expect(ui).toMatch(/\.btn:focus-visible,\s*\.yr-ui button:focus-visible\s*\{\s*outline:\s*var\(--yr-focus-ring\);\s*outline-offset:\s*var\(--yr-focus-offset\);\s*box-shadow:\s*none;?\s*\}/);
+    expect(ui).toMatch(/\.btn:focus-visible,\s*\.yr-ui button:focus-visible:not\(:where\(\.yr-react \*\)\)\s*\{\s*outline:\s*var\(--yr-focus-ring\);\s*outline-offset:\s*var\(--yr-focus-offset\);\s*box-shadow:\s*none;?\s*\}/);
     expect(ui).toMatch(/--yr-focus-ring:\s*2px solid var\(--yr-accent, var\(--accent\)\)/);
     expect(shell).toMatch(/\.yr-btn:focus-visible, \.yr-act:focus-visible \{ outline: 2px solid var\(--yr-primary-hover\); outline-offset: 2px; \}/);
     expect(viewer).toMatch(/\.viewer-shell \.btn:focus-visible\{outline:2px solid var\(--yr-primary-hover\);outline-offset:2px\}/);
@@ -378,20 +378,20 @@ describe("shared action contract", () => {
 
   it("renders the pending spinner from aria-busy alone and retires the helper class", () => {
     for (const [name, css] of [["ui", ui], ["site-shell", shell], ["viewer-shell", viewer], ["dashboard-v4", dash]]) {
-      expect(css, name).toMatch(/\[aria-busy=""\]::before\s*\{[^}]*animation:/);
+      expect(css, name).toMatch(/\[aria-busy=""\](?::not\(:where\(\.yr-react \*\)\))?::before\s*\{[^}]*animation:/);
       expect(css, name).not.toContain("btn--loading");
     }
     for (const [file, source] of scripts) expect(source, file).not.toContain("btn--loading");
   });
 
   it("makes busy and aria-disabled controls inert without collapsing them", () => {
-    expect(ui).toMatch(/\.btn\[aria-busy=""\],\s*\.yr-ui button\[aria-busy=""\]\s*\{[^}]*pointer-events:\s*none/);
-    expect(ui).toMatch(/\.btn\[aria-disabled=""\],\s*\.yr-ui button\[aria-disabled=""\]\s*\{\s*pointer-events:\s*none/);
+    expect(ui).toMatch(/\.btn\[aria-busy=""\],\s*\.yr-ui button\[aria-busy=""\]:not\(:where\(\.yr-react \*\)\)\s*\{[^}]*pointer-events:\s*none/);
+    expect(ui).toMatch(/\.btn\[aria-disabled=""\],\s*\.yr-ui button\[aria-disabled=""\]:not\(:where\(\.yr-react \*\)\)\s*\{\s*pointer-events:\s*none/);
     expect(shell).toMatch(/\.yr-btn\[aria-busy=""\], \.yr-act\[aria-busy=""\] \{[^}]*pointer-events: none/);
     expect(shell).toMatch(/\.yr-btn\[aria-disabled=""\], \.yr-act\[aria-disabled=""\] \{ pointer-events: none; \}/);
     expect(viewer).toMatch(/\.viewer-shell \.btn\[aria-busy=""\]\{[^}]*pointer-events:none/);
     // the spinner is a flex item that must not shrink the label or grow the control
-    expect(ui).toMatch(/\[aria-busy=""\]::before\s*\{[^}]*flex:\s*none/);
+    expect(ui).toMatch(/\[aria-busy=""\](?::not\(:where\(\.yr-react \*\)\))?::before[^{}]*\{[^}]*flex:\s*none/);
     expect(ui).not.toMatch(/\[aria-busy=""\][^{]*\{[^}]*(?:display:\s*none|min-height:\s*0|height:\s*0)/);
   });
 
